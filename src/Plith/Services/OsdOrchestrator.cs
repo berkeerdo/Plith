@@ -12,10 +12,9 @@ public sealed class OsdOrchestrator : IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(30);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(3);
-    private static readonly TimeSpan VisibleFor = TimeSpan.FromSeconds(2);
-    private const int MonitoredBusIndex = 0; // Bus A1 — the one bound to volume keys.
 
     private readonly OsdWindow _osd;
+    private readonly SettingsService _settings;
     private readonly Dispatcher _dispatcher;
     private readonly VoicemeeterClient _voicemeeter = new();
     private readonly MediaSessionClient _media = new();
@@ -30,13 +29,21 @@ public sealed class OsdOrchestrator : IDisposable
 
     private volatile bool _disposed;
 
-    public OsdOrchestrator(OsdWindow osd)
+    private TimeSpan VisibleFor => TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
+    private int MonitoredBusIndex => _settings.Current.MonitoredBusIndex;
+
+    public OsdOrchestrator(OsdWindow osd, SettingsService settings)
     {
         _osd = osd;
+        _settings = settings;
         _dispatcher = osd.Dispatcher;
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _osd.MediaCommandInvoked += OnMediaCommandInvoked;
+
+        // Re-baseline when the user switches monitored bus from the settings window — otherwise
+        // the next dirty tick fires against the OLD bus's cached value and pops the OSD spuriously.
+        _settings.Changed += OnSettingsChanged;
     }
 
     public void Start()
@@ -46,6 +53,14 @@ public sealed class OsdOrchestrator : IDisposable
 
         _media.Changed += OnMediaChanged;
         _ = _media.StartAsync(); // fire-and-forget — failures degrade silently inside StartAsync
+    }
+
+    private void OnSettingsChanged(SettingsModel _)
+    {
+        // Force a baseline re-read so a bus change doesn't pop the OSD with the new bus's
+        // current value as if it were a user-driven change.
+        _lastGainDb = null;
+        _lastMuted = null;
     }
 
     #region Voicemeeter polling
@@ -114,11 +129,13 @@ public sealed class OsdOrchestrator : IDisposable
         }
         if (_disposed) return;
 
-        // Update the view-model silently — so when the OSD does appear (for a volume change
-        // or a button click), the media card already reflects the current track. We deliberately
-        // do NOT auto-show the OSD on track changes: surfacing a popup every time Spotify
-        // advances would be intrusive. Media surfaces interactively, not reactively.
+        // Always update the VM silently so the card reflects current track whenever the OSD
+        // does show. Auto-show on media is opt-in via settings — off by default since surfacing
+        // a popup every Spotify advance is intrusive.
         _osd.ViewModel.Media.Apply(snapshot);
+
+        if (_settings.Current.AutoShowOnMedia && snapshot.HasSession)
+            _osd.ShowOsd(VisibleFor);
     }
 
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
@@ -140,6 +157,7 @@ public sealed class OsdOrchestrator : IDisposable
     {
         _disposed = true;
         _pollTimer.Stop();
+        _settings.Changed -= OnSettingsChanged;
         _osd.MediaCommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
         _media.Dispose();

@@ -7,27 +7,62 @@
              d:DataContext="{d:DesignInstance Type=vm:MediaViewModel}"
              mc:Ignorable="d">
     <UserControl.Resources>
+        <!-- Transport buttons — tight, icon-only, hover/pressed states only via background -->
         <Style x:Key="MediaButtonStyle" TargetType="Button">
-            <Setter Property="Width" Value="36" />
-            <Setter Property="Height" Value="36" />
+            <Setter Property="Width" Value="32" />
+            <Setter Property="Height" Value="32" />
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
-            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+            <Setter Property="Foreground" Value="{StaticResource OsdTextPrimary}" />
             <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
-            <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontSize" Value="13" />
             <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="bd"
-                                CornerRadius="18"
+                                CornerRadius="16"
                                 Background="{TemplateBinding Background}">
                             <ContentPresenter HorizontalAlignment="Center"
-                                              VerticalAlignment="Center" />
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{TemplateBinding Foreground}"
+                                              TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                              TextElement.FontSize="{TemplateBinding FontSize}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="bd" Property="Background" Value="#22FFFFFF" />
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource OsdHighlight}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- Play/Pause gets accent treatment so it reads as the primary action -->
+        <Style x:Key="PlayPauseButtonStyle" TargetType="Button" BasedOn="{StaticResource MediaButtonStyle}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="FontSize" Value="14" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd"
+                                CornerRadius="17"
+                                Background="{StaticResource OsdHighlight}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center"
+                                              TextElement.Foreground="{StaticResource OsdTextPrimary}"
+                                              TextElement.FontFamily="{TemplateBinding FontFamily}"
+                                              TextElement.FontSize="{TemplateBinding FontSize}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="#26FFFFFF" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
                                 <Setter TargetName="bd" Property="Background" Value="#33FFFFFF" />
@@ -42,23 +77,28 @@
     <Grid Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibilityConverter}}">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
-            <ColumnDefinition Width="12" />
+            <ColumnDefinition Width="14" />
             <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="10" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Album art -->
+        <!-- Album art with subtle drop shadow + rounded clip -->
         <Border Grid.Column="0"
-                Width="48" Height="48"
-                CornerRadius="6"
-                Background="#33FFFFFF"
-                ClipToBounds="True">
+                Width="44" Height="44"
+                CornerRadius="8"
+                Background="#22FFFFFF"
+                ClipToBounds="True"
+                SnapsToDevicePixels="True">
+            <Border.Effect>
+                <DropShadowEffect ShadowDepth="0" BlurRadius="10" Opacity="0.35" Color="Black" />
+            </Border.Effect>
             <Grid>
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
-                           FontSize="20"
-                           Foreground="{StaticResource TextSecondary}"
+                           FontSize="18"
+                           Foreground="{StaticResource OsdTextTertiary}"
                            Text="&#xE940;"
                            Visibility="{Binding HasAlbumArt, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
                 <Image Source="{Binding AlbumArt}"
@@ -71,24 +111,32 @@
         <StackPanel Grid.Column="2"
                     VerticalAlignment="Center"
                     Orientation="Vertical">
-            <TextBlock Style="{StaticResource CardValueStyle}"
-                       FontSize="14"
+            <TextBlock Style="{StaticResource OsdTrackNameStyle}"
                        TextTrimming="CharacterEllipsis"
                        Text="{Binding Title}" />
-            <TextBlock Style="{StaticResource CardLabelStyle}"
-                       FontSize="12"
-                       Margin="0,2,0,0"
+            <TextBlock Style="{StaticResource OsdTrackArtistStyle}"
+                       Margin="0,3,0,0"
                        TextTrimming="CharacterEllipsis"
                        Text="{Binding Artist}" />
         </StackPanel>
 
-        <!-- Transport controls -->
-        <StackPanel Grid.Column="3"
+        <!-- Transport controls — prev / play-pause (primary) / next -->
+        <StackPanel Grid.Column="4"
                     Orientation="Horizontal"
                     VerticalAlignment="Center">
-            <Button x:Name="PrevButton" Style="{StaticResource MediaButtonStyle}" Content="&#xE892;" ToolTip="Previous" />
-            <Button x:Name="PlayPauseButton" Style="{StaticResource MediaButtonStyle}" Content="{Binding PlayPauseGlyph}" ToolTip="Play / Pause" />
-            <Button x:Name="NextButton" Style="{StaticResource MediaButtonStyle}" Content="&#xE893;" ToolTip="Next" />
+            <Button x:Name="PrevButton"
+                    Style="{StaticResource MediaButtonStyle}"
+                    Content="&#xE892;"
+                    ToolTip="Previous" />
+            <Button x:Name="PlayPauseButton"
+                    Style="{StaticResource PlayPauseButtonStyle}"
+                    Margin="2,0"
+                    Content="{Binding PlayPauseGlyph}"
+                    ToolTip="Play / Pause" />
+            <Button x:Name="NextButton"
+                    Style="{StaticResource MediaButtonStyle}"
+                    Content="&#xE893;"
+                    ToolTip="Next" />
         </StackPanel>
     </Grid>
 </UserControl>

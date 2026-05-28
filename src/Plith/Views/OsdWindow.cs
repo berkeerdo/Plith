@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Plith.Services;
 using Plith.ViewModels;
 using WpfScreenHelper;
 
@@ -18,11 +19,12 @@ namespace Plith.Views;
 /// </summary>
 public sealed class OsdWindow : Window
 {
-    private const double BottomMarginDip = 96;
+    private const double EdgeMarginDip = 96;
     private const int FadeInMs = 140;
     private const int FadeOutMs = 220;
 
     private readonly OsdContent _content;
+    private readonly SettingsService _settings;
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -32,8 +34,10 @@ public sealed class OsdWindow : Window
 
     public event EventHandler<MediaCommand>? MediaCommandInvoked;
 
-    public OsdWindow()
+    public OsdWindow(SettingsService settings)
     {
+        _settings = settings;
+
         WindowStyle = WindowStyle.None;
         AllowsTransparency = true;
         Background = Brushes.Transparent;
@@ -50,26 +54,28 @@ public sealed class OsdWindow : Window
         _content.MediaCommandInvoked += (s, cmd) => MediaCommandInvoked?.Invoke(this, cmd);
         Content = _content;
 
-        // Show the window once (invisible, opacity 0) so the native handle is created and
-        // first-frame measurement is done before the user triggers a change.
         Loaded += (_, _) => Reposition();
 
         // Hover keeps the OSD alive: pause auto-hide while the user is interacting, and
         // restart the timer with a fresh full duration when the mouse leaves.
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
+
+        // Reposition when the user picks a new position in settings.
+        _settings.Changed += _ => Dispatcher.BeginInvoke(Reposition);
     }
 
     private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
+        if (!_settings.Current.HoverKeepAlive) return;
         _hideTimer?.Stop();
-        // Cancel any in-flight fade-out so hovering mid-fade pulls the OSD back to full opacity.
         BeginAnimation(OpacityProperty, null);
         Opacity = 1.0;
     }
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
+        if (!_settings.Current.HoverKeepAlive) return;
         if (_currentVisibleFor <= TimeSpan.Zero) return;
         // If we're already fading out (timer expired before the user moved away), don't
         // re-arm — that would launch a second opacity animation that competes with the
@@ -93,12 +99,8 @@ public sealed class OsdWindow : Window
     public void ShowOsd(TimeSpan visibleFor)
     {
         // App.xaml.cs Show()s the window once at startup and we never Hide() it (FadeOutAndHide
-        // only zeroes Opacity), so the handle is always alive by the time we get here. No need
-        // to call Show() defensively — and skipping it avoids any latent BandWindow-vs-Window
-        // interaction if the Phase 4 game-mode path is ever wired back in.
+        // only zeroes Opacity), so the handle is always alive by the time we get here.
 
-        // Bump generation so any in-flight fade-out Completed handler from a previous cycle
-        // sees a stale generation and skips its reset — otherwise rapid re-trigger blanks the OSD.
         _showGeneration++;
         _isFadingOut = false;
         _currentVisibleFor = visibleFor;
@@ -116,13 +118,11 @@ public sealed class OsdWindow : Window
         }
         else
         {
-            // Cancel any in-flight fade-out so a fresh value re-anchors the OSD at full opacity.
             BeginAnimation(OpacityProperty, null);
             Opacity = 1.0;
         }
 
-        // If the mouse is hovering over the OSD, don't arm the hide timer — wait for MouseLeave.
-        if (IsMouseOver) return;
+        if (_settings.Current.HoverKeepAlive && IsMouseOver) return;
         RestartHideTimer(visibleFor);
     }
 
@@ -136,8 +136,6 @@ public sealed class OsdWindow : Window
         };
         fadeOut.Completed += (_, _) =>
         {
-            // Keep the window alive (just hidden) so the next Show is instant — avoid Hide()
-            // since that triggers a full close/reopen cycle. Just leave Opacity at 0.
             if (_showGeneration == gen)
             {
                 Opacity = 0;
@@ -153,14 +151,19 @@ public sealed class OsdWindow : Window
         if (screen is null) return;
         var area = screen.WorkingArea;
 
-        // UpdateLayout forces measurement so DesiredSize/ActualWidth are correct on first call.
         _content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
         _content.UpdateLayout();
         var w = _content.DesiredSize.Width;
         var h = _content.DesiredSize.Height;
         if (w == 0 || h == 0) return;
 
-        Left = area.Left + (area.Width - w) / 2;
-        Top = area.Bottom - h - BottomMarginDip;
+        (Left, Top) = _settings.Current.Position switch
+        {
+            OsdPosition.BottomCenter => (area.Left + (area.Width - w) / 2, area.Bottom - h - EdgeMarginDip),
+            OsdPosition.BottomRight  => (area.Right - w - EdgeMarginDip,   area.Bottom - h - EdgeMarginDip),
+            OsdPosition.TopCenter    => (area.Left + (area.Width - w) / 2, area.Top + EdgeMarginDip),
+            OsdPosition.TopRight     => (area.Right - w - EdgeMarginDip,   area.Top + EdgeMarginDip),
+            _                        => (area.Left + (area.Width - w) / 2, area.Bottom - h - EdgeMarginDip),
+        };
     }
 }
