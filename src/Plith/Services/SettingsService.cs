@@ -42,6 +42,7 @@ public sealed class SettingsService
                 ShowDurationMs = ParseInt(data[SectionOsd]["ShowDurationMs"], 2000, 500, 10000),
                 Position = ParseEnum(data[SectionOsd]["Position"], OsdPosition.BottomCenter),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
+                AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
             };
@@ -61,6 +62,7 @@ public sealed class SettingsService
         data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString();
         data[SectionOsd]["Position"] = m.Position.ToString();
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString();
+        data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();
         data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString();
         data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString();
         _parser.WriteFile(_path, data);

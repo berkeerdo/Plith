@@ -1,31 +1,37 @@
 using System.Windows;
 using System.Windows.Threading;
+using Plith.ViewModels;
 using Plith.Views;
 
 namespace Plith.Services;
 
 /// <summary>
-/// Owns the polling loop (Voicemeeter) and the push subscription (SMTC), funnels both into
-/// a single OSD show pipeline, and routes media-button clicks to the SMTC session.
+/// Owns the polling loop (Voicemeeter), the push subscription (SMTC), and the push
+/// subscription (Windows Core Audio), and funnels whichever source the user picked
+/// into a single OSD show pipeline. Routes media-button clicks back to the SMTC session.
 /// </summary>
 public sealed class OsdOrchestrator : IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(30);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(3);
 
+    private enum ActiveSource { None, Voicemeeter, Windows }
+
     private readonly OsdWindow _osd;
     private readonly SettingsService _settings;
     private readonly Dispatcher _dispatcher;
     private readonly VoicemeeterClient _voicemeeter = new();
+    private readonly WindowsAudioClient _windowsAudio = new();
     private readonly MediaSessionClient _media = new();
     private readonly DispatcherTimer _pollTimer;
     private DateTime _nextReconnect = DateTime.MinValue;
 
-    // Last-known values for the monitored bus. ShowOsd is gated on an actual change vs
-    // these — count-based dirty suppression eats real user inputs that race the engine
-    // seed pulses fired right after login. Value comparison is deterministic.
-    private float? _lastGainDb;
+    // Last-known values for the *active* source. Reset on every source swap so the next
+    // snapshot establishes a baseline silently rather than popping with whatever the new
+    // source's current value happens to be.
+    private float? _lastNormalized;
     private bool? _lastMuted;
+    private ActiveSource _activeSource = ActiveSource.None;
 
     private volatile bool _disposed;
 
@@ -40,59 +46,83 @@ public sealed class OsdOrchestrator : IDisposable
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _osd.MediaCommandInvoked += OnMediaCommandInvoked;
-
-        // Re-baseline when the user switches monitored bus from the settings window — otherwise
-        // the next dirty tick fires against the OLD bus's cached value and pops the OSD spuriously.
         _settings.Changed += OnSettingsChanged;
+        _windowsAudio.Changed += OnWindowsAudioChanged;
     }
 
     public void Start()
     {
         _pollTimer.Start();
         TryConnectVoicemeeter();
+        ReconcileActiveSource();
 
         _media.Changed += OnMediaChanged;
-        _ = _media.StartAsync(); // fire-and-forget — failures degrade silently inside StartAsync
+        _ = _media.StartAsync();
     }
 
     private void OnSettingsChanged(SettingsModel _)
     {
-        // Force a baseline re-read so a bus change doesn't pop the OSD with the new bus's
-        // current value as if it were a user-driven change.
-        _lastGainDb = null;
+        // Mode may have changed (e.g. Auto → ForceWindows) — re-pick the active source.
+        ReconcileActiveSource();
+        // Bus index might have changed too — reset cache so the new bus's value is the baseline.
+        _lastNormalized = null;
         _lastMuted = null;
+    }
+
+    /// <summary>
+    /// Picks the active source based on user preference + Voicemeeter availability,
+    /// and attaches / detaches the Windows client accordingly.
+    /// </summary>
+    private void ReconcileActiveSource()
+    {
+        var desired = _settings.Current.AudioSource switch
+        {
+            AudioSourceMode.ForceVoicemeeter => _voicemeeter.IsLoggedIn ? ActiveSource.Voicemeeter : ActiveSource.None,
+            AudioSourceMode.ForceWindows => ActiveSource.Windows,
+            _ /* Auto */                  => _voicemeeter.IsLoggedIn ? ActiveSource.Voicemeeter : ActiveSource.Windows,
+        };
+
+        if (desired == _activeSource) return;
+        _lastNormalized = null;
+        _lastMuted = null;
+
+        if (desired == ActiveSource.Windows)
+        {
+            // Only commit the source change if NAudio actually attached. A failed Start() leaves
+            // _activeSource at None so the next Reconcile re-tries instead of getting stuck
+            // permanently silent because the early-return on the next call sees no change.
+            if (_windowsAudio.IsAttached || _windowsAudio.Start())
+                _activeSource = ActiveSource.Windows;
+            else
+                _activeSource = ActiveSource.None;
+        }
+        else
+        {
+            if (_windowsAudio.IsAttached) _windowsAudio.Stop();
+            _activeSource = desired;
+        }
     }
 
     #region Voicemeeter polling
 
     private void OnPollTick(object? sender, EventArgs e)
     {
-        if (!_voicemeeter.IsLoggedIn)
+        if (_activeSource == ActiveSource.Voicemeeter && _voicemeeter.IsLoggedIn)
         {
-            if (DateTime.UtcNow >= _nextReconnect) TryConnectVoicemeeter();
-            return;
+            // VBVMR_IsParametersDirty is an edge-triggered self-clearing latch — consume it
+            // while VM is still the active source. ConsumeDirtyFlag also detects a dead engine
+            // (negative return) and flips _loggedIn to false, which the Reconcile below catches.
+            bool dirty = _voicemeeter.ConsumeDirtyFlag();
+            if (dirty && _voicemeeter.TryGetSnapshot(VoicemeeterRail.Bus, MonitoredBusIndex, out var snap))
+                HandleVoicemeeterChange(snap);
         }
 
-        if (!_voicemeeter.ConsumeDirtyFlag()) return;
+        // Reconcile after the consume call so a VM-just-died transition flips us to the Windows
+        // fallback on the same tick.
+        ReconcileActiveSource();
 
-        if (!_voicemeeter.TryGetSnapshot(VoicemeeterRail.Bus, MonitoredBusIndex, out var snap))
-            return;
-
-        _osd.ViewModel.Apply(snap);
-
-        // Only pop the OSD when the values actually changed from what we last saw — this
-        // filters out the engine-seed pulses Voicemeeter fires after login (no value delta
-        // there) while still catching every real user-driven change. The first read after
-        // login establishes the baseline silently.
-        bool isFirstRead = _lastGainDb is null;
-        bool changed = isFirstRead
-            || Math.Abs(_lastGainDb!.Value - snap.GainDb) > 0.001f
-            || _lastMuted != snap.Muted;
-
-        _lastGainDb = snap.GainDb;
-        _lastMuted = snap.Muted;
-
-        if (changed && !isFirstRead) _osd.ShowOsd(VisibleFor);
+        if (!_voicemeeter.IsLoggedIn && DateTime.UtcNow >= _nextReconnect)
+            TryConnectVoicemeeter();
     }
 
     private void TryConnectVoicemeeter()
@@ -102,10 +132,10 @@ public sealed class OsdOrchestrator : IDisposable
         {
             if (_voicemeeter.TryLogin())
             {
-                // Force a baseline read on the next tick by clearing the cached values; the
-                // very first snapshot then establishes the reference point with no OSD pop.
-                _lastGainDb = null;
+                _lastNormalized = null;
                 _lastMuted = null;
+                // VM just came online — in Auto mode, switch over to it.
+                ReconcileActiveSource();
             }
         }
         catch
@@ -116,12 +146,61 @@ public sealed class OsdOrchestrator : IDisposable
 
     #endregion
 
+    #region Windows audio push
+
+    private void OnWindowsAudioChanged(WindowsAudioSnapshot snapshot)
+    {
+        // NAudio's OnVolumeNotification fires on a COM (MTA) thread; bounce to the dispatcher.
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => { if (!_disposed) OnWindowsAudioChanged(snapshot); });
+            return;
+        }
+        if (_disposed) return;
+        if (_activeSource != ActiveSource.Windows) return;
+
+        // Windows reports a 0..1 scalar; show it as the matching percent.
+        var text = $"{snapshot.ScalarVolume * 100:0}%";
+        HandleValueChange(snapshot.DeviceLabel, snapshot.ScalarVolume, text, snapshot.Muted);
+    }
+
+    #endregion
+
+    #region Common change handling
+
+    private void HandleVoicemeeterChange(VoicemeeterParameterSnapshot snap)
+    {
+        double normalized = (Math.Clamp(snap.GainDb, OsdViewModel.VoicemeeterMinDb, OsdViewModel.VoicemeeterMaxDb)
+                            - OsdViewModel.VoicemeeterMinDb)
+                          / (OsdViewModel.VoicemeeterMaxDb - OsdViewModel.VoicemeeterMinDb);
+        string text = $"{snap.GainDb:+0.0;-0.0;0.0} dB";
+        HandleValueChange(snap.Label, normalized, text, snap.Muted);
+    }
+
+    /// <summary>
+    /// Applies a normalized 0..1 value + a pre-formatted display string. Suppresses the first
+    /// read after a source attach so the OSD doesn't pop on a baseline; pops on any real change.
+    /// </summary>
+    private void HandleValueChange(string label, double normalized, string text, bool muted)
+    {
+        bool isFirstRead = _lastNormalized is null;
+        bool changed = isFirstRead
+            || Math.Abs(_lastNormalized!.Value - normalized) > 0.0005
+            || _lastMuted != muted;
+
+        _lastNormalized = (float)normalized;
+        _lastMuted = muted;
+
+        _osd.ViewModel.Apply(label, normalized, text, muted);
+        if (changed && !isFirstRead) _osd.ShowOsd(VisibleFor);
+    }
+
+    #endregion
+
     #region Media session push
 
     private void OnMediaChanged(MediaSnapshot snapshot)
     {
-        // WinRT events fire on threadpool threads; bounce to the UI thread before touching VM/UI.
-        // The _disposed guard prevents a queued callback from touching the OSD after teardown.
         if (!_dispatcher.CheckAccess())
         {
             _dispatcher.BeginInvoke(() => { if (!_disposed) OnMediaChanged(snapshot); });
@@ -129,9 +208,6 @@ public sealed class OsdOrchestrator : IDisposable
         }
         if (_disposed) return;
 
-        // Always update the VM silently so the card reflects current track whenever the OSD
-        // does show. Auto-show on media is opt-in via settings — off by default since surfacing
-        // a popup every Spotify advance is intrusive.
         _osd.ViewModel.Media.Apply(snapshot);
 
         if (_settings.Current.AutoShowOnMedia && snapshot.HasSession)
@@ -147,7 +223,6 @@ public sealed class OsdOrchestrator : IDisposable
             MediaCommand.SkipNext => _media.SkipNextAsync(),
             _ => Task.FromResult(false),
         };
-        // Pressing a button means the user is actively engaging — keep the OSD visible.
         _osd.ShowOsd(VisibleFor);
     }
 
@@ -160,7 +235,9 @@ public sealed class OsdOrchestrator : IDisposable
         _settings.Changed -= OnSettingsChanged;
         _osd.MediaCommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
+        _windowsAudio.Changed -= OnWindowsAudioChanged;
         _media.Dispose();
+        _windowsAudio.Dispose();
         _voicemeeter.Dispose();
     }
 }

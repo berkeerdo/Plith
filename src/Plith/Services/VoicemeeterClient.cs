@@ -44,8 +44,21 @@ public sealed class VoicemeeterClient : IDisposable
         _loggedIn = false;
     }
 
-    /// <summary>Non-blocking dirty check; returns true exactly once per parameter mutation batch.</summary>
-    public bool ConsumeDirtyFlag() => _loggedIn && VBVMR_IsParametersDirty() > 0;
+    /// <summary>Non-blocking dirty check; returns true exactly once per parameter mutation batch.
+    /// A negative return from the API means the Voicemeeter engine went away (user closed the app),
+    /// so we drop the cached login state — the orchestrator's next reconcile pass will fall back
+    /// to the Windows endpoint.</summary>
+    public bool ConsumeDirtyFlag()
+    {
+        if (!_loggedIn) return false;
+        int rc = VBVMR_IsParametersDirty();
+        if (rc < 0)
+        {
+            _loggedIn = false;
+            return false;
+        }
+        return rc > 0;
+    }
 
     // VBVMR_GetParameterStringA requires a caller-allocated buffer of at least 512 bytes per
     // VB-Audio's header. Reused across calls — the polling cadence is single-threaded on the UI

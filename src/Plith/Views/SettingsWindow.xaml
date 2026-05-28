@@ -27,6 +27,11 @@
                 <x:Type TypeName="svc:OsdPosition" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="AudioSources" MethodName="GetValues" ObjectType="{x:Type svc:AudioSourceMode}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="svc:AudioSourceMode" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -178,22 +183,44 @@
                 <!-- ============== Audio ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Audio source" Margin="4,18,0,10" />
                 <Border Style="{StaticResource CardStyle}">
-                    <Border Style="{StaticResource RowLastStyle}">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Style="{StaticResource RowLabelStyle}" Text="Monitored Voicemeeter bus" />
-                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Which bus drives the OSD. A1 is the default route the volume keys land on." />
-                            </StackPanel>
-                            <ComboBox x:Name="BusCombo"
-                                      Grid.Column="1"
-                                      VerticalAlignment="Center"
-                                      Style="{StaticResource ModernComboStyle}" />
-                        </Grid>
-                    </Border>
+                    <StackPanel>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Audio source" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Auto prefers Voicemeeter when it's running and falls back to the Windows default endpoint." />
+                                </StackPanel>
+                                <ComboBox x:Name="SourceCombo"
+                                          Grid.Column="1"
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ModernComboStyle}"
+                                          ItemsSource="{Binding Source={StaticResource AudioSources}}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowLastStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Monitored Voicemeeter bus" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Which bus drives the OSD when Voicemeeter is the active source. A1 is the default route the volume keys land on." />
+                                </StackPanel>
+                                <ComboBox x:Name="BusCombo"
+                                          Grid.Column="1"
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ModernComboStyle}" />
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
                 </Border>
 
                 <!-- ============== Media ============== -->

@@ -5,30 +5,30 @@ using Plith.Services;
 
 namespace Plith.ViewModels;
 
+/// <summary>
+/// Source-agnostic view model the OSD binds to. The orchestrator computes the normalized bar
+/// fill and the display text from whichever source produced the change — Voicemeeter is dB,
+/// Windows endpoint is percent — and just hands the formatted result to <see cref="Apply"/>.
+/// </summary>
 public sealed class OsdViewModel : INotifyPropertyChanged
 {
-    public const float MinDb = -60f;
-    public const float MaxDb = 12f;
+    public const float VoicemeeterMinDb = -60f;
+    public const float VoicemeeterMaxDb = 12f;
 
     public MediaViewModel Media { get; } = new();
 
     private string _label = "Bus A1";
     public string Label { get => _label; set => Set(ref _label, value); }
 
-    private float _gainDb = 0f;
-    public float GainDb
+    private double _gainNormalized;
+    public double GainNormalized
     {
-        get => _gainDb;
-        set
-        {
-            if (Set(ref _gainDb, value))
-            {
-                OnPropertyChanged(nameof(GainNormalized));
-                OnPropertyChanged(nameof(GainText));
-                OnPropertyChanged(nameof(GainColor));
-            }
-        }
+        get => _gainNormalized;
+        set => Set(ref _gainNormalized, Math.Clamp(value, 0, 1));
     }
+
+    private string _gainText = "0.0 dB";
+    public string GainText { get => _gainText; set => Set(ref _gainText, value); }
 
     private bool _muted;
     public bool Muted
@@ -41,36 +41,25 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         }
     }
 
-    public double GainNormalized
-    {
-        get
-        {
-            var clamped = Math.Clamp(_gainDb, MinDb, MaxDb);
-            return (clamped - MinDb) / (MaxDb - MinDb);
-        }
-    }
+    public Brush GainColor => _muted
+        ? new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80))
+        : new SolidColorBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
 
-    public string GainText => Muted ? "MUTED" : $"{_gainDb:+0.0;-0.0;0.0} dB";
-
-    public Brush GainColor
-    {
-        get
-        {
-            if (Muted) return new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80));
-            return _gainDb switch
-            {
-                <= 0f  => new SolidColorBrush(Color.FromRgb(0x4A, 0xD6, 0x95)), // green
-                <= 6f  => new SolidColorBrush(Color.FromRgb(0xF5, 0xC2, 0x42)), // amber
-                _      => new SolidColorBrush(Color.FromRgb(0xE5, 0x4B, 0x4B)), // red
-            };
-        }
-    }
-
+    /// <summary>Voicemeeter back-compat path — derives normalized + dB text from the snapshot.</summary>
     public void Apply(VoicemeeterParameterSnapshot snapshot)
     {
-        Label = snapshot.Label;
-        GainDb = snapshot.GainDb;
-        Muted = snapshot.Muted;
+        double normalized = (Math.Clamp(snapshot.GainDb, VoicemeeterMinDb, VoicemeeterMaxDb) - VoicemeeterMinDb)
+                          / (VoicemeeterMaxDb - VoicemeeterMinDb);
+        string text = snapshot.Muted ? "MUTED" : $"{snapshot.GainDb:+0.0;-0.0;0.0} dB";
+        Apply(snapshot.Label, normalized, text, snapshot.Muted);
+    }
+
+    public void Apply(string label, double normalized, string text, bool muted)
+    {
+        Label = label;
+        GainNormalized = normalized;
+        GainText = muted ? "MUTED" : text;
+        Muted = muted;
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;

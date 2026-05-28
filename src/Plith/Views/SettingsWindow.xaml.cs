@@ -63,6 +63,7 @@ public partial class SettingsWindow : Window
         DurationSlider.Value = m.ShowDurationMs;
         PositionCombo.SelectedItem = m.Position;
         HoverToggle.IsChecked = m.HoverKeepAlive;
+        SourceCombo.SelectedItem = m.AudioSource;
         BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
         AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
         AutoStartToggle.IsChecked = m.AutoStart;
@@ -74,6 +75,7 @@ public partial class SettingsWindow : Window
         m.ShowDurationMs = (int)Math.Round(DurationSlider.Value);
         if (PositionCombo.SelectedItem is OsdPosition pos) m.Position = pos;
         m.HoverKeepAlive = HoverToggle.IsChecked == true;
+        if (SourceCombo.SelectedItem is AudioSourceMode src) m.AudioSource = src;
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;

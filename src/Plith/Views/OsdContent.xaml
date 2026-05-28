@@ -48,6 +48,7 @@
                                    Text="{Binding GainText}" />
                         <TextBlock Style="{StaticResource OsdLabelStyle}"
                                    VerticalAlignment="Center"
+                                   TextTrimming="CharacterEllipsis"
                                    Text="{Binding Label}" />
                     </DockPanel>
 

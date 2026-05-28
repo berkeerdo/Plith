@@ -24,6 +24,7 @@
 
   <ItemGroup>
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
+    <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="WpfScreenHelper" Version="1.1.0" />
     <PackageReference Include="ini-parser-netstandard" Version="2.5.2" />
   </ItemGroup>

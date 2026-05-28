@@ -10,6 +10,7 @@ public partial class App : Application
     private TrayIconHost? _trayHost;
     private OsdOrchestrator? _orchestrator;
     private OsdWindow? _osd;
+    private NativeFlyoutSuppressor? _flyoutSuppressor;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -27,12 +28,19 @@ public partial class App : Application
         _orchestrator = new OsdOrchestrator(_osd, _settings);
         _orchestrator.Start();
 
+        // Suppress the native Windows volume flyout system-wide so Plith's OSD is the only one
+        // the user sees. Runs whether Voicemeeter is active or not — Windows still pops its
+        // flyout on raw volume keys regardless of who's listening to the endpoint.
+        _flyoutSuppressor = new NativeFlyoutSuppressor();
+        _flyoutSuppressor.Start();
+
         _trayHost = new TrayIconHost(this, _settings);
         _trayHost.Initialize();
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _flyoutSuppressor?.Dispose();
         _orchestrator?.Dispose();
         _trayHost?.Dispose();
         base.OnExit(e);
