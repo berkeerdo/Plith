@@ -183,6 +183,9 @@ public partial class BandWindow : ContentControl, IWndProcObject
         var extStyles = (int)(
             ExtendedWindowStyles.WS_EX_LAYERED |
             ExtendedWindowStyles.WS_EX_NOREDIRECTIONBITMAP |
+            // TOOLWINDOW is always wanted: this is an overlay, never a primary app window.
+            // Without it, the OSD shows up in the taskbar and Alt+Tab as if it were a real app.
+            ExtendedWindowStyles.WS_EX_TOOLWINDOW |
             (IsClickThrough ? ExtendedWindowStyles.WS_EX_TRANSPARENT : 0) |
             (Activatable ? 0 : ExtendedWindowStyles.WS_EX_NOACTIVATE) |
             (TopMost ? ExtendedWindowStyles.WS_EX_TOPMOST : 0));
@@ -323,17 +326,19 @@ public partial class BandWindow : ContentControl, IWndProcObject
         Visibility = Visibility.Visible;
         _isVisibilityChanging = false;
 
+        // Always show without activating, even when Activatable=true. Activatable governs whether
+        // WPF input routing works (NOACTIVATE blocks the WPF child's mouse hit-testing), not
+        // whether we proactively steal focus. Showing without activation keeps the user's game
+        // or app in the foreground.
         if (TopMost)
         {
             SetWindowPos(Handle, (nint)(-1), 0, 0, 0, 0,
-                (Activatable ? 0 : SWP.NOACTIVATE) | SWP.NOMOVE | SWP.NOSIZE |
-                SWP.NOOWNERZORDER | SWP.SHOWWINDOW);
+                SWP.NOACTIVATE | SWP.NOMOVE | SWP.NOSIZE | SWP.NOOWNERZORDER | SWP.SHOWWINDOW);
         }
         else
         {
-            ShowWindow(Handle, (int)(Activatable ? ShowWindowCommands.Show : ShowWindowCommands.ShowNoActivate));
+            ShowWindow(Handle, (int)ShowWindowCommands.ShowNoActivate);
         }
-        if (Activatable) SetForegroundWindow(Handle);
         RepositionHwndSource();
         Shown?.Invoke(this, EventArgs.Empty);
     }

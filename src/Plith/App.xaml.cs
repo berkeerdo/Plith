@@ -15,6 +15,7 @@ public partial class App : Application
         base.OnStartup(e);
 
         _osd = new OsdWindow();
+        _osd.Show();   // create the native handle now so first ShowOsd is instant; Opacity=0 keeps it invisible
         _orchestrator = new OsdOrchestrator(_osd);
         _orchestrator.Start();
 

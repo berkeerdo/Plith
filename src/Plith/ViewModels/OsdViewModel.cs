@@ -10,6 +10,8 @@ public sealed class OsdViewModel : INotifyPropertyChanged
     public const float MinDb = -60f;
     public const float MaxDb = 12f;
 
+    public MediaViewModel Media { get; } = new();
+
     private string _label = "Bus A1";
     public string Label { get => _label; set => Set(ref _label, value); }
 
