@@ -159,8 +159,10 @@ public sealed class OsdOrchestrator : IDisposable
         if (_disposed) return;
         if (_activeSource != ActiveSource.Windows) return;
 
-        // Windows reports a 0..1 scalar; show it as the matching percent.
-        var text = $"{snapshot.ScalarVolume * 100:0}%";
+        // Windows reports a 0..1 scalar; show it as the matching percent. InvariantCulture
+        // keeps the digit-only output consistent across locales.
+        var text = (snapshot.ScalarVolume * 100).ToString("0",
+            System.Globalization.CultureInfo.InvariantCulture) + "%";
         HandleValueChange(snapshot.DeviceLabel, snapshot.ScalarVolume, text, snapshot.Muted);
     }
 
@@ -173,7 +175,11 @@ public sealed class OsdOrchestrator : IDisposable
         double normalized = (Math.Clamp(snap.GainDb, OsdViewModel.VoicemeeterMinDb, OsdViewModel.VoicemeeterMaxDb)
                             - OsdViewModel.VoicemeeterMinDb)
                           / (OsdViewModel.VoicemeeterMaxDb - OsdViewModel.VoicemeeterMinDb);
-        string text = $"{snap.GainDb:+0.0;-0.0;0.0} dB";
+        // Invariant-culture formatting so the dB readout stays "0.0 dB" everywhere — the
+        // CurrentCulture variant surfaces "0,0 dB" on tr-TR/de-DE/fr-FR machines, which
+        // violates audio-engineering convention.
+        string text = snap.GainDb.ToString("+0.0;-0.0;0.0",
+            System.Globalization.CultureInfo.InvariantCulture) + " dB";
         HandleValueChange(snap.Label, normalized, text, snap.Muted);
     }
 

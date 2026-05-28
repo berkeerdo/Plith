@@ -44,7 +44,7 @@ public sealed class SettingsModel
 
     /// <summary>If true, a media event (track change, play/pause from the source app) pops the OSD.
     /// Default off — surfacing every Spotify advance is intrusive.</summary>
-    public bool AutoShowOnMedia { get; set; } = false;
+    public bool AutoShowOnMedia { get; set; }
 
     /// <summary>If true, mouse over the OSD pauses the hide timer.</summary>
     public bool HoverKeepAlive { get; set; } = true;
@@ -53,10 +53,10 @@ public sealed class SettingsModel
     public AudioSourceMode AudioSource { get; set; } = AudioSourceMode.Auto;
 
     /// <summary>Index of the Voicemeeter bus to monitor (0 = A1, 1 = A2, etc.). Only used when the active source is Voicemeeter.</summary>
-    public int MonitoredBusIndex { get; set; } = 0;
+    public int MonitoredBusIndex { get; set; }
 
     /// <summary>If true, a registry Run entry launches Plith on Windows login.</summary>
-    public bool AutoStart { get; set; } = false;
+    public bool AutoStart { get; set; }
 
     /// <summary>System-wide hotkey that summons the OSD with whatever values it currently holds.</summary>
     public HotkeyCombo SummonHotkey { get; set; } = HotkeyCombo.None;

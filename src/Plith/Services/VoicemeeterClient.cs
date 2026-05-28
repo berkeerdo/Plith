@@ -40,7 +40,7 @@ public sealed class VoicemeeterClient : IDisposable
     public void Logout()
     {
         if (!_loggedIn) return;
-        try { VBVMR_Logout(); } catch { /* swallow on shutdown */ }
+        try { _ = VBVMR_Logout(); } catch { /* swallow on shutdown */ }
         _loggedIn = false;
     }
 
@@ -73,10 +73,10 @@ public sealed class VoicemeeterClient : IDisposable
         string prefix = rail == VoicemeeterRail.Bus ? $"Bus[{index}]" : $"Strip[{index}]";
 
         if (VBVMR_GetParameterFloat($"{prefix}.Gain", out float gain) != 0) return false;
-        VBVMR_GetParameterFloat($"{prefix}.Mute", out float mute);
+        _ = VBVMR_GetParameterFloat($"{prefix}.Mute", out float mute);
 
         Array.Clear(_labelBuffer);
-        VBVMR_GetParameterStringA($"{prefix}.Label", _labelBuffer);
+        _ = VBVMR_GetParameterStringA($"{prefix}.Label", _labelBuffer);
         int nullIdx = Array.IndexOf(_labelBuffer, (byte)0);
         var label = Encoding.Latin1.GetString(_labelBuffer, 0, nullIdx >= 0 ? nullIdx : _labelBuffer.Length);
         if (string.IsNullOrWhiteSpace(label))
@@ -90,7 +90,7 @@ public sealed class VoicemeeterClient : IDisposable
     {
         0 => "A1", 1 => "A2", 2 => "A3", 3 => "A4",
         4 => "A5", 5 => "B1", 6 => "B2", 7 => "B3",
-        _ => index.ToString(),
+        _ => index.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
 
     #region DllImports
@@ -104,10 +104,10 @@ public sealed class VoicemeeterClient : IDisposable
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
     private static extern int VBVMR_IsParametersDirty();
 
-    [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi)]
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     private static extern int VBVMR_GetParameterFloat([MarshalAs(UnmanagedType.LPStr)] string paramName, out float value);
 
-    [DllImport(DllName, CallingConvention = CallingConvention.StdCall)]
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     private static extern int VBVMR_GetParameterStringA(
         [MarshalAs(UnmanagedType.LPStr)] string paramName,
         [In, Out] byte[] szString);

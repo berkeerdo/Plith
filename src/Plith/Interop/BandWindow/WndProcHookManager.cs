@@ -5,7 +5,7 @@ internal interface IWndProcObject { }
 
 public interface IWndProcHookHandler
 {
-    uint OnHwndCreated(nint hWnd, out bool register);
+    uint OnHwndCreated(nint hWnd, out bool registerHook);
     nint OnWndProc(nint hWnd, uint msg, nint wParam, nint lParam);
 }
 
@@ -34,8 +34,8 @@ public class WndProcHookManager
     {
         foreach (var h in _hookHandlers)
         {
-            var msg = h.OnHwndCreated(hWnd, out var register);
-            if (register) _hooks[msg] = h.OnWndProc;
+            var msg = h.OnHwndCreated(hWnd, out var registerHook);
+            if (registerHook) _hooks[msg] = h.OnWndProc;
         }
     }
 

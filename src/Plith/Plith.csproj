@@ -21,6 +21,19 @@
     <Description>Modern Windows audio OSD with Voicemeeter-first design and media controls baked in.</Description>
     <Version>0.1.0</Version>
     <ApplicationIcon>Resources\icons\plith.ico</ApplicationIcon>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!--
+      Suppressions with justification:
+      CA1707 — Win32 constants intentionally use ALL_CAPS_WITH_UNDERSCORES (WS_POPUP,
+               WM_DESTROY, etc.) so they map 1:1 to MSDN documentation. Renaming
+               obscures the interop contract.
+      CA1838 — NativeFlyoutSuppressor uses StringBuilder for GetClassName; replacement
+               by char[] is tracked but the suppressor itself is currently disabled
+               (Explorer wedge issue). Re-evaluate when re-enabled in Phase 4 polish.
+    -->
+    <NoWarn>$(NoWarn);CA1707;CA1838</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

@@ -39,6 +39,11 @@ public delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
 /// <c>CreateWindowInBand</c> API, enabling reliable topmost-over-fullscreen rendering.
 /// Falls back to <c>CreateWindowEx</c> when CreateWindowInBand is unavailable.
 /// </summary>
+// CA1001: BandWindow owns _hwndSource (IDisposable). It's released in OnAppExit
+// (App.Exit handler wired in BandWindowExt). The class doesn't implement IDisposable
+// because WPF FrameworkElement lifecycle is owned by the visual tree, not by callers.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "_hwndSource is released in the Application.Exit handler wired by BandWindowExt; WPF visual tree owns the rest of the lifecycle.")]
 public partial class BandWindow : ContentControl, IWndProcObject
 {
     private readonly WndProc _wndProcDelegate;
@@ -252,7 +257,7 @@ public partial class BandWindow : ContentControl, IWndProcObject
             case WindowMessage.WM_DPICHANGED:
                 if (HasSourceCreated && _hwndSource is not null)
                 {
-                    SendMessage(_hwndSource.Handle, WindowMessage.WM_DPICHANGED, wParam, lParam);
+                    _ = SendMessage(_hwndSource.Handle, WindowMessage.WM_DPICHANGED, wParam, lParam);
                     ShowWindow(_hwndSource.Handle, (int)ShowWindowCommands.Show);
                 }
                 break;

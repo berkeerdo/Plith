@@ -4,6 +4,11 @@ using Plith.Views;
 
 namespace Plith;
 
+// CA1001: App holds disposable fields but isn't IDisposable. WPF owns the Application
+// lifecycle and calls OnExit on shutdown, where we explicitly Dispose them; making App
+// IDisposable doesn't fit the WPF pattern. Justified suppression.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "Disposable fields are released in OnExit, matching the WPF Application lifecycle.")]
 public partial class App : Application
 {
     private SettingsService? _settings;

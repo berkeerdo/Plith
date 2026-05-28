@@ -53,7 +53,7 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         AlbumArt = DecodeThumbnail(snapshot.ThumbnailBytes);
     }
 
-    private static BitmapSource? DecodeThumbnail(byte[]? bytes)
+    private static BitmapImage? DecodeThumbnail(byte[]? bytes)
     {
         if (bytes is null || bytes.Length == 0) return null;
         try

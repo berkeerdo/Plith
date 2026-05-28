@@ -107,7 +107,7 @@ public sealed class NativeFlyoutSuppressor : IDisposable
 
     private bool IsOwnedByShellProcess(nint hwnd)
     {
-        GetWindowThreadProcessId(hwnd, out uint pid);
+        _ = GetWindowThreadProcessId(hwnd, out uint pid);
         if (pid == 0) return false;
 
         if (!_pidNameCache.TryGetValue(pid, out var name))

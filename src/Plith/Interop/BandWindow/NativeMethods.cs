@@ -119,7 +119,7 @@ public static partial class NativeMethods
     // Undocumented Windows API exported from user32.dll on Windows 10+.
     // Creates a window with a specific Z-order band, enabling true topmost-over-fullscreen behavior.
     [DllImport("user32.dll", SetLastError = true, EntryPoint = "CreateWindowInBand", CharSet = CharSet.Unicode)]
-    public static extern nint CreateWindowInBand(
+    internal static extern nint CreateWindowInBand(
         int dwExStyle, ushort atomBomb, [MarshalAs(UnmanagedType.LPWStr)] string lpWindowName,
         uint dwStyle, int x, int y, int nWidth, int nHeight,
         nint hWndParent, nint hMenu, nint hInstance, nint lpParam, int dwBand);

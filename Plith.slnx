@@ -2,4 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/Plith/Plith.csproj" />
   </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Plith.Tests/Plith.Tests.csproj" />
+  </Folder>
 </Solution>

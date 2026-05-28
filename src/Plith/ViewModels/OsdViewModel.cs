@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Globalization;
 using System.Runtime.CompilerServices;
 using System.Windows.Media;
 using Plith.Services;
@@ -45,12 +46,17 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         ? new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80))
         : new SolidColorBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
 
-    /// <summary>Voicemeeter back-compat path — derives normalized + dB text from the snapshot.</summary>
+    /// <summary>Voicemeeter back-compat path — derives normalized + dB text from the snapshot.
+    /// Decibel values use InvariantCulture: technical / audio-engineering convention is the
+    /// period separator regardless of host locale, and the previous CurrentCulture behaviour
+    /// surfaced "0,0 dB" on tr-TR / de-DE / fr-FR machines.</summary>
     public void Apply(VoicemeeterParameterSnapshot snapshot)
     {
         double normalized = (Math.Clamp(snapshot.GainDb, VoicemeeterMinDb, VoicemeeterMaxDb) - VoicemeeterMinDb)
                           / (VoicemeeterMaxDb - VoicemeeterMinDb);
-        string text = snapshot.Muted ? "MUTED" : $"{snapshot.GainDb:+0.0;-0.0;0.0} dB";
+        string text = snapshot.Muted
+            ? "MUTED"
+            : snapshot.GainDb.ToString("+0.0;-0.0;0.0", CultureInfo.InvariantCulture) + " dB";
         Apply(snapshot.Label, normalized, text, snapshot.Muted);
     }
 

@@ -1,0 +1,160 @@
+using System.Globalization;
+using System.IO;
+using Plith.Services;
+
+namespace Plith.Tests;
+
+public class SettingsServiceTests
+{
+    [Fact]
+    public void Load_MissingFile_ReturnsDefaults()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+
+        Assert.Equal(2000, svc.Current.ShowDurationMs);
+        Assert.Equal(OsdPosition.BottomCenter, svc.Current.Position);
+        Assert.True(svc.Current.HoverKeepAlive);
+        Assert.Equal(AudioSourceMode.Auto, svc.Current.AudioSource);
+        Assert.Equal(0, svc.Current.MonitoredBusIndex);
+        Assert.False(svc.Current.AutoShowOnMedia);
+        Assert.False(svc.Current.AutoStart);
+        Assert.Equal(HotkeyCombo.None, svc.Current.SummonHotkey);
+    }
+
+    [Fact]
+    public void Save_Then_Load_RoundTripsAllFields()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+
+        var m = new SettingsModel
+        {
+            ShowDurationMs = 5000,
+            Position = OsdPosition.TopRight,
+            HoverKeepAlive = false,
+            AudioSource = AudioSourceMode.ForceVoicemeeter,
+            MonitoredBusIndex = 3,
+            AutoShowOnMedia = true,
+            AutoStart = true,
+            SummonHotkey = HotkeyCombo.CtrlAltV,
+        };
+        svc.Save(m);
+
+        var svc2 = new SettingsService(dir.IniPath);
+        svc2.Load();
+
+        Assert.Equal(5000, svc2.Current.ShowDurationMs);
+        Assert.Equal(OsdPosition.TopRight, svc2.Current.Position);
+        Assert.False(svc2.Current.HoverKeepAlive);
+        Assert.Equal(AudioSourceMode.ForceVoicemeeter, svc2.Current.AudioSource);
+        Assert.Equal(3, svc2.Current.MonitoredBusIndex);
+        Assert.True(svc2.Current.AutoShowOnMedia);
+        Assert.True(svc2.Current.AutoStart);
+        Assert.Equal(HotkeyCombo.CtrlAltV, svc2.Current.SummonHotkey);
+    }
+
+    [Fact]
+    public void Save_OnTrTrCulture_IsLocaleIndependent()
+    {
+        using var dir = new TempIniDir();
+        using var culture = new CulturalContext("tr-TR");
+
+        var svc = new SettingsService(dir.IniPath);
+        var m = svc.Current.Clone();
+        m.ShowDurationMs = 1234;
+        m.AutoStart = true;
+        svc.Save(m);
+
+        var ini = File.ReadAllText(dir.IniPath);
+        Assert.Contains("ShowDurationMs = 1234", ini, StringComparison.Ordinal);
+        Assert.Contains("AutoStart = True", ini, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Load_CorruptIni_FallsBackToDefaults()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, "not actually ini\nfile  ===\n[broken");
+
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.Equal(2000, svc.Current.ShowDurationMs);
+        Assert.Equal(OsdPosition.BottomCenter, svc.Current.Position);
+    }
+
+    [Fact]
+    public void Load_OutOfRangeValues_AreClamped()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [Osd]
+            ShowDurationMs = 99999
+
+            [Audio]
+            MonitoredBusIndex = -5
+            """);
+
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.InRange(svc.Current.ShowDurationMs, 500, 10000);
+        Assert.InRange(svc.Current.MonitoredBusIndex, 0, 31);
+    }
+
+    [Fact]
+    public void Save_RaisesChangedEvent_WithUpdatedSnapshot()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        SettingsModel? snapshot = null;
+        svc.Changed += m => snapshot = m;
+
+        var modified = svc.Current.Clone();
+        modified.ShowDurationMs = 7777;
+        svc.Save(modified);
+
+        Assert.NotNull(snapshot);
+        Assert.Equal(7777, snapshot!.ShowDurationMs);
+        Assert.NotSame(modified, snapshot);
+    }
+
+    [Fact]
+    public void Clone_ProducesIndependentCopy()
+    {
+        var m = new SettingsModel { ShowDurationMs = 3000, AutoStart = true };
+        var c = m.Clone();
+        c.ShowDurationMs = 9999;
+        Assert.Equal(3000, m.ShowDurationMs);
+        Assert.True(c.AutoStart);
+    }
+}
+
+internal sealed class TempIniDir : IDisposable
+{
+    public string IniPath { get; }
+    private readonly string _dir;
+
+    public TempIniDir()
+    {
+        _dir = Path.Combine(Path.GetTempPath(), "PlithTests-" + Guid.NewGuid());
+        Directory.CreateDirectory(_dir);
+        IniPath = Path.Combine(_dir, "config.ini");
+    }
+
+    public void Dispose()
+    {
+        try { Directory.Delete(_dir, recursive: true); } catch { }
+    }
+}
+
+internal sealed class CulturalContext : IDisposable
+{
+    private readonly CultureInfo _original;
+    public CulturalContext(string name)
+    {
+        _original = CultureInfo.CurrentCulture;
+        CultureInfo.CurrentCulture = new CultureInfo(name);
+    }
+    public void Dispose() => CultureInfo.CurrentCulture = _original;
+}

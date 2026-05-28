@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.IO;
 using IniParser;
 using IniParser.Model;
@@ -23,11 +24,19 @@ public sealed class SettingsService
 
     public event Action<SettingsModel>? Changed;
 
-    public SettingsService()
+    public SettingsService() : this(DefaultPath()) { }
+
+    /// <summary>Test-friendly ctor: caller supplies the INI path explicitly.</summary>
+    public SettingsService(string iniPath)
+    {
+        _path = iniPath;
+        Directory.CreateDirectory(Path.GetDirectoryName(_path)!);
+    }
+
+    private static string DefaultPath()
     {
         var dir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Plith");
-        Directory.CreateDirectory(dir);
-        _path = Path.Combine(dir, "config.ini");
+        return Path.Combine(dir, "config.ini");
     }
 
     public void Load()
@@ -59,14 +68,18 @@ public sealed class SettingsService
     public void Save(SettingsModel m)
     {
         var data = new IniData();
-        data[SectionGeneral]["AutoStart"] = m.AutoStart.ToString();
-        data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString();
+        // INI persistence is locale-agnostic — config.ini written on a tr-TR machine
+        // must read identically on en-US, so all numeric/bool/enum conversions use
+        // CultureInfo.InvariantCulture and "G" formatting throughout.
+        var inv = CultureInfo.InvariantCulture;
+        data[SectionGeneral]["AutoStart"] = m.AutoStart.ToString(inv);
+        data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString(inv);
         data[SectionOsd]["Position"] = m.Position.ToString();
-        data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString();
+        data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["SummonHotkey"] = m.SummonHotkey.ToString();
         data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();
-        data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString();
-        data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString();
+        data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString(inv);
+        data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString(inv);
         _parser.WriteFile(_path, data);
 
         Current = m.Clone();
