@@ -55,10 +55,11 @@ public partial class App : Application
     private void ApplyHotkeyFromSettings(SettingsModel m)
     {
         if (_hotkey is null) return;
-        if (!_hotkey.Apply(m.SummonHotkey))
+        if (!_hotkey.Apply(m.SummonHotkeyMods, m.SummonHotkeyKey))
         {
             System.Diagnostics.Trace.WriteLine(
-                $"Plith: hotkey {m.SummonHotkey} unavailable — already owned by another process.");
+                "Plith: hotkey " + HotkeyService.FormatCombo(m.SummonHotkeyMods, m.SummonHotkeyKey)
+                + " unavailable — already owned by another process.");
         }
     }
 

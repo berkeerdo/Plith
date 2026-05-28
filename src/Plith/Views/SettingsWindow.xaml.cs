@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Threading;
 using Plith.Services;
@@ -11,6 +12,11 @@ public partial class SettingsWindow : Window
     private readonly SettingsService _settings;
     private bool _loadingFromModel;
     private DispatcherTimer? _savedPulseTimer;
+
+    // Captured combo for the in-progress hotkey recording. Apply on first valid KeyDown.
+    private uint _capturedMods;
+    private int _capturedKey;
+    private bool _isCapturingHotkey;
 
     public SettingsWindow(SettingsService settings)
     {
@@ -27,6 +33,9 @@ public partial class SettingsWindow : Window
         WireAutoSave();
         LoadIntoUi(_settings.Current);
 
+        HotkeyCaptureButton.Click += (_, _) => StartHotkeyCapture();
+        HotkeyClearButton.Click += (_, _) => ClearHotkey();
+
         MinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
         MaximizeButton.Click += (_, _) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         CloseButton.Click += (_, _) => Close();
@@ -37,17 +46,119 @@ public partial class SettingsWindow : Window
             MaximizeButton.ToolTip = WindowState == WindowState.Maximized ? "Restore" : "Maximize";
         };
 
-        // Esc closes (auto-save model — there's nothing to discard).
-        PreviewKeyDown += (_, e) =>
-        {
-            if (e.Key == System.Windows.Input.Key.Escape)
-            {
-                Close();
-                e.Handled = true;
-            }
-        };
-
+        PreviewKeyDown += OnPreviewKeyDown;
         SourceInitialized += (_, _) => ApplyRoundedCorners();
+    }
+
+    private void OnPreviewKeyDown(object sender, KeyEventArgs e)
+    {
+        // While the user is recording a hotkey, swallow the key event and process it as a
+        // capture instead of letting Esc close the window or letters reach the OSD.
+        if (_isCapturingHotkey)
+        {
+            CaptureHotkeyKeyDown(e);
+            return;
+        }
+        if (e.Key == Key.Escape)
+        {
+            Close();
+            e.Handled = true;
+        }
+    }
+
+    private void StartHotkeyCapture()
+    {
+        _isCapturingHotkey = true;
+        _capturedMods = 0;
+        _capturedKey = 0;
+        HotkeyCaptureButton.Content = "Press a combo…";
+        HotkeyCaptureButton.FontStyle = FontStyles.Italic;
+        HotkeyClearButton.Visibility = Visibility.Collapsed;
+        Keyboard.Focus(HotkeyCaptureButton);
+    }
+
+    private void CaptureHotkeyKeyDown(KeyEventArgs e)
+    {
+        // Esc cancels capture without changing the existing binding.
+        if (e.Key == Key.Escape)
+        {
+            EndHotkeyCapture(cancelled: true);
+            e.Handled = true;
+            return;
+        }
+
+        // The actual key arrives in SystemKey when the Alt modifier is held.
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+
+        // Pure-modifier presses (Ctrl alone, Shift alone, …) don't constitute a complete
+        // combo — let the user keep holding modifiers and wait for the trigger key.
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt
+                or Key.LeftShift or Key.RightShift or Key.LWin or Key.RWin
+                or Key.None or Key.System)
+        {
+            e.Handled = true;
+            return;
+        }
+
+        var mods = Keyboard.Modifiers;
+        uint modsMask =
+            ((mods & ModifierKeys.Control) != 0 ? (uint)HotkeyService.HotkeyMods.Control : 0) |
+            ((mods & ModifierKeys.Alt) != 0     ? (uint)HotkeyService.HotkeyMods.Alt     : 0) |
+            ((mods & ModifierKeys.Shift) != 0   ? (uint)HotkeyService.HotkeyMods.Shift   : 0) |
+            ((mods & ModifierKeys.Windows) != 0 ? (uint)HotkeyService.HotkeyMods.Win     : 0);
+
+        // A summon-hotkey must include at least one modifier — bare letter keys would conflict
+        // with normal typing the moment the user focuses any input control.
+        if (modsMask == 0)
+        {
+            HotkeyCaptureButton.Content = "Need a modifier (Ctrl / Alt / Shift)";
+            e.Handled = true;
+            return;
+        }
+
+        _capturedMods = modsMask;
+        _capturedKey = KeyInterop.VirtualKeyFromKey(key);
+        EndHotkeyCapture(cancelled: false);
+        AutoSave();
+        e.Handled = true;
+    }
+
+    private void EndHotkeyCapture(bool cancelled)
+    {
+        _isCapturingHotkey = false;
+        HotkeyCaptureButton.FontStyle = FontStyles.Normal;
+
+        if (cancelled)
+        {
+            // Restore the visual to whatever was previously saved.
+            RefreshHotkeyButton(_settings.Current.SummonHotkeyMods, _settings.Current.SummonHotkeyKey);
+            return;
+        }
+
+        RefreshHotkeyButton(_capturedMods, _capturedKey);
+    }
+
+    private void RefreshHotkeyButton(uint mods, int vk)
+    {
+        var label = HotkeyService.FormatCombo(mods, vk);
+        if (string.IsNullOrEmpty(label))
+        {
+            HotkeyCaptureButton.Content = "Not set";
+            HotkeyClearButton.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            HotkeyCaptureButton.Content = label;
+            HotkeyClearButton.Visibility = Visibility.Visible;
+        }
+    }
+
+    private void ClearHotkey()
+    {
+        _capturedMods = 0;
+        _capturedKey = 0;
+        RefreshHotkeyButton(0, 0);
+        AutoSave();
     }
 
     [DllImport("dwmapi.dll")]
@@ -75,7 +186,9 @@ public partial class SettingsWindow : Window
             OpacitySlider.Value = m.OsdOpacityPercent;
             ColorThresholdsToggle.IsChecked = m.UseColorThresholds;
             CompactToggle.IsChecked = m.CompactMode;
-            HotkeyComboBox.SelectedItem = m.SummonHotkey;
+            _capturedMods = m.SummonHotkeyMods;
+            _capturedKey = m.SummonHotkeyKey;
+            RefreshHotkeyButton(m.SummonHotkeyMods, m.SummonHotkeyKey);
             SourceCombo.SelectedItem = m.AudioSource;
             BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
@@ -118,7 +231,7 @@ public partial class SettingsWindow : Window
         ColorThresholdsToggle.Unchecked += (_, _) => AutoSave();
         CompactToggle.Checked += (_, _) => AutoSave();
         CompactToggle.Unchecked += (_, _) => AutoSave();
-        HotkeyComboBox.SelectionChanged += (_, _) => AutoSave();
+        // Hotkey button is wired through StartHotkeyCapture/ClearHotkey, not a SelectionChanged.
         SourceCombo.SelectionChanged += (_, _) => AutoSave();
         BusCombo.SelectionChanged += (_, _) => AutoSave();
         AutoShowMediaToggle.Checked += (_, _) => AutoSave();
@@ -160,7 +273,8 @@ public partial class SettingsWindow : Window
         m.OsdOpacityPercent = (int)Math.Round(OpacitySlider.Value);
         m.UseColorThresholds = ColorThresholdsToggle.IsChecked == true;
         m.CompactMode = CompactToggle.IsChecked == true;
-        if (HotkeyComboBox.SelectedItem is HotkeyCombo hk) m.SummonHotkey = hk;
+        m.SummonHotkeyMods = _capturedMods;
+        m.SummonHotkeyKey = _capturedKey;
         if (SourceCombo.SelectedItem is AudioSourceMode src) m.AudioSource = src;
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;

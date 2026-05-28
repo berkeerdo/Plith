@@ -20,7 +20,9 @@ public class SettingsServiceTests
         Assert.Equal(0, svc.Current.MonitoredBusIndex);
         Assert.False(svc.Current.AutoShowOnMedia);
         Assert.False(svc.Current.AutoStart);
-        Assert.Equal(HotkeyCombo.None, svc.Current.SummonHotkey);
+        Assert.Equal((uint)0, svc.Current.SummonHotkeyMods);
+        Assert.Equal(0, svc.Current.SummonHotkeyKey);
+        Assert.False(svc.Current.HasSummonHotkey);
     }
 
     [Fact]
@@ -41,7 +43,8 @@ public class SettingsServiceTests
             MonitoredBusIndex = 3,
             AutoShowOnMedia = true,
             AutoStart = true,
-            SummonHotkey = HotkeyCombo.CtrlAltV,
+            SummonHotkeyMods = 0x03,   // Ctrl | Alt
+            SummonHotkeyKey = 0x56,    // V
         };
         svc.Save(m);
 
@@ -58,7 +61,44 @@ public class SettingsServiceTests
         Assert.Equal(3, svc2.Current.MonitoredBusIndex);
         Assert.True(svc2.Current.AutoShowOnMedia);
         Assert.True(svc2.Current.AutoStart);
-        Assert.Equal(HotkeyCombo.CtrlAltV, svc2.Current.SummonHotkey);
+        Assert.Equal((uint)0x03, svc2.Current.SummonHotkeyMods);
+        Assert.Equal(0x56, svc2.Current.SummonHotkeyKey);
+        Assert.True(svc2.Current.HasSummonHotkey);
+    }
+
+    [Fact]
+    public void Load_LegacyHotkeyEnum_IsMigratedToRawFields()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [Osd]
+            SummonHotkey = CtrlAltV
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+
+        // CtrlAltV migrates to Ctrl|Alt (mods = 6) + V (vk = 0x56)
+        Assert.Equal((uint)0x03, svc.Current.SummonHotkeyMods);
+        Assert.Equal(0x56, svc.Current.SummonHotkeyKey);
+    }
+
+    [Fact]
+    public void Save_ClearsLegacyHotkeyEnumKey()
+    {
+        using var dir = new TempIniDir();
+        // Start with a legacy-style file
+        File.WriteAllText(dir.IniPath, """
+            [Osd]
+            SummonHotkey = CtrlAltV
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        svc.Save(svc.Current.Clone());
+
+        var ini = File.ReadAllText(dir.IniPath);
+        Assert.DoesNotContain("SummonHotkey =", ini, StringComparison.Ordinal);
+        Assert.Contains("SummonHotkeyMods", ini, StringComparison.Ordinal);
+        Assert.Contains("SummonHotkeyKey", ini, StringComparison.Ordinal);
     }
 
     [Fact]

@@ -57,8 +57,18 @@ public sealed class SettingsService
                 AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
-                SummonHotkey = ParseEnum(data[SectionOsd]["SummonHotkey"], HotkeyCombo.None),
+                SummonHotkeyMods = ParseUInt(data[SectionOsd]["SummonHotkeyMods"], 0),
+                SummonHotkeyKey = ParseInt(data[SectionOsd]["SummonHotkeyKey"], 0, 0, 255),
             };
+            // Migration: older config files only persisted the SummonHotkey enum string. If
+            // the new raw fields are absent (still both 0) but the enum was set, translate it
+            // so users don't lose their hotkey choice on upgrade.
+            if (m.SummonHotkeyMods == 0 && m.SummonHotkeyKey == 0)
+            {
+                var (mods, vk) = HotkeyService.MigrateLegacy(data[SectionOsd]["SummonHotkey"]);
+                m.SummonHotkeyMods = mods;
+                m.SummonHotkeyKey = vk;
+            }
             Current = m;
         }
         catch
@@ -82,7 +92,10 @@ public sealed class SettingsService
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
         data[SectionOsd]["CompactMode"] = m.CompactMode.ToString(inv);
-        data[SectionOsd]["SummonHotkey"] = m.SummonHotkey.ToString();
+        data[SectionOsd]["SummonHotkeyMods"] = m.SummonHotkeyMods.ToString(inv);
+        data[SectionOsd]["SummonHotkeyKey"] = m.SummonHotkeyKey.ToString(inv);
+        // Strip the legacy enum key on save so we don't keep a stale value around.
+        data[SectionOsd].RemoveKey("SummonHotkey");
         data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();
         data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString(inv);
         data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString(inv);
@@ -96,7 +109,10 @@ public sealed class SettingsService
         => bool.TryParse(s, out var v) ? v : fallback;
 
     private static int ParseInt(string? s, int fallback, int min, int max)
-        => int.TryParse(s, out var v) ? Math.Clamp(v, min, max) : fallback;
+        => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(v, min, max) : fallback;
+
+    private static uint ParseUInt(string? s, uint fallback)
+        => uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : fallback;
 
     private static T ParseEnum<T>(string? s, T fallback) where T : struct, Enum
         => Enum.TryParse<T>(s, ignoreCase: true, out var v) ? v : fallback;

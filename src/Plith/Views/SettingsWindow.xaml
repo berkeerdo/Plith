@@ -33,11 +33,6 @@
                 <x:Type TypeName="svc:AudioSourceMode" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
-        <ObjectDataProvider x:Key="HotkeyCombos" MethodName="GetValues" ObjectType="{x:Type svc:HotkeyCombo}">
-            <ObjectDataProvider.MethodParameters>
-                <x:Type TypeName="svc:HotkeyCombo" />
-            </ObjectDataProvider.MethodParameters>
-        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -266,11 +261,22 @@
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Summon hotkey" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="System-wide shortcut that pops the OSD with the current values. Choose a combo your other apps don't use." />
                                 </StackPanel>
-                                <ComboBox x:Name="HotkeyComboBox"
-                                          Grid.Column="1"
-                                          VerticalAlignment="Center"
-                                          Style="{StaticResource ModernComboStyle}"
-                                          ItemsSource="{Binding Source={StaticResource HotkeyCombos}}" />
+                                <StackPanel Grid.Column="1"
+                                            Orientation="Horizontal"
+                                            VerticalAlignment="Center">
+                                    <Button x:Name="HotkeyCaptureButton"
+                                            Style="{StaticResource HotkeyCaptureButtonStyle}"
+                                            Content="Not set" />
+                                    <Button x:Name="HotkeyClearButton"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="Clear"
+                                            FontSize="11"
+                                            MinHeight="34"
+                                            MinWidth="60"
+                                            Padding="10,0"
+                                            Margin="6,0,0,0"
+                                            Visibility="Collapsed" />
+                                </StackPanel>
                             </Grid>
                         </Border>
 

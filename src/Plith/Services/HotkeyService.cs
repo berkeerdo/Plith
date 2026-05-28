@@ -1,4 +1,6 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using System.Windows.Input;
 using System.Windows.Interop;
 
@@ -7,9 +9,9 @@ namespace Plith.Services;
 /// <summary>
 /// Registers a system-wide hotkey via RegisterHotKey and re-raises it as the
 /// <see cref="Pressed"/> event. Uses a hidden message-only window so the hotkey
-/// receiver is independent of any UI window's lifecycle. The combo is
-/// reconfigurable at runtime — <see cref="Apply"/> unregisters the old binding
-/// and applies the new one in one step.
+/// receiver is independent of any UI window's lifecycle. The combo is fully
+/// configurable at runtime — <see cref="Apply"/> unregisters the previous
+/// binding and applies the new (mods, vk) in one atomic step.
 /// </summary>
 public sealed class HotkeyService : IDisposable
 {
@@ -17,8 +19,9 @@ public sealed class HotkeyService : IDisposable
     private const int HotkeyId = 1;
 
     [Flags]
-    private enum HotkeyModifiers : uint
+    public enum HotkeyMods : uint
     {
+        None = 0,
         Alt = 0x0001,
         Control = 0x0002,
         Shift = 0x0004,
@@ -28,54 +31,79 @@ public sealed class HotkeyService : IDisposable
 
     private HwndSource? _source;
     private bool _isRegistered;
-    private HotkeyCombo _activeCombo;
+    private uint _activeMods;
+    private int _activeKey;
     private bool _disposed;
 
     public event Action? Pressed;
 
-    /// <summary>Currently-bound combo, or <see cref="HotkeyCombo.None"/> if nothing is registered.</summary>
-    public HotkeyCombo ActiveCombo => _isRegistered ? _activeCombo : HotkeyCombo.None;
+    public uint ActiveMods => _isRegistered ? _activeMods : 0;
+    public int ActiveKey => _isRegistered ? _activeKey : 0;
 
     /// <summary>
-    /// Swaps the active hotkey to <paramref name="combo"/>. Returns false when Windows refuses
-    /// the registration (another process owns it) — the previous binding is also cleared in
-    /// that case, so the caller gets a clean "nothing is bound" state.
+    /// Swap the active hotkey to (<paramref name="mods"/>, <paramref name="vk"/>).
+    /// Pass both as 0 to unbind. Returns false when Windows refuses the new binding
+    /// (another process already owns it); the previous binding is also cleared in that
+    /// case so the caller gets a clean 'nothing bound' state.
     /// </summary>
-    public bool Apply(HotkeyCombo combo)
+    public bool Apply(uint mods, int vk)
     {
         if (_disposed) return false;
 
         try { EnsureMessageWindow(); }
-        catch { return false; }   // HwndSource ctor can throw if WPF dispatcher is in a bad state.
+        catch { return false; }
         if (_source is null) return false;
 
         if (_isRegistered)
         {
-            UnregisterHotKey(_source.Handle, HotkeyId);
+            _ = UnregisterHotKey(_source.Handle, HotkeyId);
             _isRegistered = false;
         }
 
-        if (combo == HotkeyCombo.None) { _activeCombo = HotkeyCombo.None; return true; }
-
-        var (mods, vk) = MapCombo(combo);
-        if (RegisterHotKey(_source.Handle, HotkeyId, (uint)(mods | HotkeyModifiers.NoRepeat), (uint)vk))
+        if (mods == 0 || vk == 0)
         {
-            _isRegistered = true;
-            _activeCombo = combo;
+            _activeMods = 0;
+            _activeKey = 0;
             return true;
         }
 
-        _activeCombo = HotkeyCombo.None;
+        if (RegisterHotKey(_source.Handle, HotkeyId, mods | (uint)HotkeyMods.NoRepeat, (uint)vk))
+        {
+            _isRegistered = true;
+            _activeMods = mods;
+            _activeKey = vk;
+            return true;
+        }
+
+        _activeMods = 0;
+        _activeKey = 0;
         return false;
     }
 
-    private static (HotkeyModifiers mods, int vk) MapCombo(HotkeyCombo combo) => combo switch
+    /// <summary>Format a (mods, vk) pair as a user-facing string, e.g. 'Ctrl+Alt+V'.
+    /// Returns an empty string when nothing is bound.</summary>
+    public static string FormatCombo(uint mods, int vk)
     {
-        HotkeyCombo.CtrlAltV   => (HotkeyModifiers.Control | HotkeyModifiers.Alt,   KeyInterop.VirtualKeyFromKey(Key.V)),
-        HotkeyCombo.CtrlShiftV => (HotkeyModifiers.Control | HotkeyModifiers.Shift, KeyInterop.VirtualKeyFromKey(Key.V)),
-        HotkeyCombo.AltShiftV  => (HotkeyModifiers.Alt     | HotkeyModifiers.Shift, KeyInterop.VirtualKeyFromKey(Key.V)),
-        HotkeyCombo.CtrlAltM   => (HotkeyModifiers.Control | HotkeyModifiers.Alt,   KeyInterop.VirtualKeyFromKey(Key.M)),
-        _                      => (0, 0),
+        if (mods == 0 || vk == 0) return "";
+        var sb = new StringBuilder();
+        if ((mods & (uint)HotkeyMods.Control) != 0) sb.Append("Ctrl+");
+        if ((mods & (uint)HotkeyMods.Alt) != 0) sb.Append("Alt+");
+        if ((mods & (uint)HotkeyMods.Shift) != 0) sb.Append("Shift+");
+        if ((mods & (uint)HotkeyMods.Win) != 0) sb.Append("Win+");
+        try { sb.Append(KeyInterop.KeyFromVirtualKey(vk).ToString()); }
+        catch { sb.Append("Key(" + vk.ToString(CultureInfo.InvariantCulture) + ")"); }
+        return sb.ToString();
+    }
+
+    /// <summary>Migrate a legacy [Osd]SummonHotkey enum string from older config.ini
+    /// files into (mods, vk). Returns (0, 0) when the value is missing or unknown.</summary>
+    public static (uint mods, int vk) MigrateLegacy(string? legacy) => legacy switch
+    {
+        "CtrlAltV"   => ((uint)(HotkeyMods.Control | HotkeyMods.Alt),   KeyInterop.VirtualKeyFromKey(Key.V)),
+        "CtrlShiftV" => ((uint)(HotkeyMods.Control | HotkeyMods.Shift), KeyInterop.VirtualKeyFromKey(Key.V)),
+        "AltShiftV"  => ((uint)(HotkeyMods.Alt     | HotkeyMods.Shift), KeyInterop.VirtualKeyFromKey(Key.V)),
+        "CtrlAltM"   => ((uint)(HotkeyMods.Control | HotkeyMods.Alt),   KeyInterop.VirtualKeyFromKey(Key.M)),
+        _            => (0, 0),
     };
 
     private void EnsureMessageWindow()
@@ -108,7 +136,7 @@ public sealed class HotkeyService : IDisposable
         {
             if (_isRegistered)
             {
-                try { UnregisterHotKey(_source.Handle, HotkeyId); } catch { }
+                try { _ = UnregisterHotKey(_source.Handle, HotkeyId); } catch { }
                 _isRegistered = false;
             }
             _source.Dispose();

@@ -18,14 +18,9 @@ public enum AudioSourceMode
     ForceWindows,
 }
 
-/// <summary>
-/// Preset hotkey combinations the user can pick to summon the OSD. Curated to a
-/// short list of combos that are usually free across common third-party apps; a
-/// fully custom capture UI is deferred.
-/// Note: Win+&lt;letter&gt; combos are intentionally absent because Windows reserves
-/// the Win modifier with most letter keys and RegisterHotKey refuses them.
-/// </summary>
-public enum HotkeyCombo
+// Legacy enum kept only to migrate INI files that pre-date the free-form capture UI.
+// New code uses raw (mods, vk) on SettingsModel instead.
+internal enum LegacyHotkeyCombo
 {
     None,
     CtrlAltV,
@@ -71,8 +66,17 @@ public sealed class SettingsModel
     /// <summary>If true, a registry Run entry launches Plith on Windows login.</summary>
     public bool AutoStart { get; set; }
 
-    /// <summary>System-wide hotkey that summons the OSD with whatever values it currently holds.</summary>
-    public HotkeyCombo SummonHotkey { get; set; } = HotkeyCombo.None;
+    /// <summary>Bitmask of modifier keys for the summon hotkey. 0 = no hotkey bound.
+    /// Bit layout matches the RegisterHotKey API: Alt=1, Ctrl=2, Shift=4, Win=8.</summary>
+    public uint SummonHotkeyMods { get; set; }
+
+    /// <summary>Virtual-key code for the summon hotkey (e.g. 0x56 = 'V', 0x70 = F1).
+    /// 0 = no hotkey bound. Both this and <see cref="SummonHotkeyMods"/> must be non-zero
+    /// for the hotkey to register.</summary>
+    public int SummonHotkeyKey { get; set; }
+
+    /// <summary>True when both the modifier mask and the virtual key are set.</summary>
+    public bool HasSummonHotkey => SummonHotkeyMods != 0 && SummonHotkeyKey != 0;
 
     public SettingsModel Clone() => new()
     {
@@ -86,6 +90,7 @@ public sealed class SettingsModel
         AudioSource = AudioSource,
         MonitoredBusIndex = MonitoredBusIndex,
         AutoStart = AutoStart,
-        SummonHotkey = SummonHotkey,
+        SummonHotkeyMods = SummonHotkeyMods,
+        SummonHotkeyKey = SummonHotkeyKey,
     };
 }
