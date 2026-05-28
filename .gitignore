@@ -53,3 +53,4 @@ release/
 # Throwaway icon previews + logo concept exports (regenerable from tools/*.py)
 tools/preview-*.png
 tools/logo-*.png
+tools/gallery/

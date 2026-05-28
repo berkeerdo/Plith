@@ -1,9 +1,11 @@
 """
-Generates the Plith application icon — Concept D (Stacked overlay).
+Generates the Plith application icon — Sound emission concept (PV04 from the
+pill-variations gallery).
 
-Design intent: a small accent-green pill floats above a wider muted pill,
-on a dark rounded square. The literal Plith metaphor — an OSD layer above
-whatever is underneath. Strong silhouette at 16x16.
+Design intent: an accent-green pill on the left containing small internal
+waveform bars, with two-to-three trailing bars to the right shrinking
+outward like sound emanating from the source. Universal 'audio source +
+emission' read; distinctive silhouette no other audio app uses verbatim.
 
 Run after design changes:
     python tools/generate-icon.py
@@ -21,12 +23,10 @@ SIZES = [16, 24, 32, 48, 64, 128, 256]
 
 ACCENT = (74, 214, 149, 255)          # #4AD695
 SURFACE = (22, 22, 22, 255)           # #161616
-MUTED = (90, 90, 90, 255)             # #5A5A5A
-WHITE = (245, 245, 245, 255)
 
 
 def render(size: int) -> Image.Image:
-    # Render at 4x supersample then downsample with LANCZOS for crisp edges.
+    # 4x supersample then LANCZOS downsample for crisp edges at small sizes.
     scale = 4
     canvas = size * scale
     img = Image.new("RGBA", (canvas, canvas), (0, 0, 0, 0))
@@ -42,7 +42,7 @@ def render(size: int) -> Image.Image:
         radius=r, fill=SURFACE,
     )
 
-    # Subtle inner shadow at the bottom for depth.
+    # Subtle inner shadow for depth.
     shadow_h = max(1, canvas // 8)
     shadow = Image.new("RGBA", (canvas, shadow_h), (0, 0, 0, 0))
     sd = ImageDraw.Draw(shadow)
@@ -53,45 +53,57 @@ def render(size: int) -> Image.Image:
 
     cx, cy = canvas / 2, canvas / 2
 
-    # Tiny / small sizes: skip the indicator dot, slightly thicker pills so the two-layer
-    # silhouette still reads after downsample.
-    if size <= 24:
-        pill_h = canvas * 0.16
-        top_w = canvas * 0.46
-        bot_w = canvas * 0.66
-        gap = canvas * 0.10
-        draw_dot = False
+    # Pill geometry — slightly different proportions at small sizes to keep the internal
+    # waveform readable after downsample.
+    tiny = size <= 24
+
+    if tiny:
+        pill_w = canvas * 0.50
+        pill_h = canvas * 0.34
+        bars_inside = [0.10, 0.18, 0.12]
+        inside_bar_w = canvas * 0.045
+        # Single trailing bar at small sizes; multiple would smudge.
+        emission_heights = [0.18]
+        emission_bar_w = canvas * 0.045
+        emission_gap = canvas * 0.05
     else:
-        pill_h = canvas * 0.12
-        top_w = canvas * 0.42
-        bot_w = canvas * 0.64
-        gap = canvas * 0.08
-        draw_dot = True
+        pill_w = canvas * 0.46
+        pill_h = canvas * 0.28
+        bars_inside = [0.08, 0.14, 0.10, 0.16, 0.08]
+        inside_bar_w = canvas * 0.028
+        emission_heights = [0.18, 0.14, 0.10]
+        emission_bar_w = canvas * 0.028
+        emission_gap = canvas * 0.035
 
-    top_y0 = cy - gap / 2 - pill_h
-    top_y1 = cy - gap / 2
-    bot_y0 = cy + gap / 2
-    bot_y1 = cy + gap / 2 + pill_h
-
-    # Bottom layer (the "screen content" beneath)
+    # The pill is shifted left so the emission bars have room on the right.
+    pill_cx = cx - canvas * 0.10
     d.rounded_rectangle(
-        [(cx - bot_w / 2, bot_y0), (cx + bot_w / 2, bot_y1)],
-        radius=pill_h / 2, fill=MUTED,
-    )
-
-    # Top layer (the Plith OSD floating)
-    d.rounded_rectangle(
-        [(cx - top_w / 2, top_y0), (cx + top_w / 2, top_y1)],
+        [(pill_cx - pill_w / 2, cy - pill_h / 2),
+         (pill_cx + pill_w / 2, cy + pill_h / 2)],
         radius=pill_h / 2, fill=ACCENT,
     )
 
-    # Tiny live-indicator dot to the right of the top pill — drops out at small sizes where
-    # it would alias into a smudge.
-    if draw_dot:
-        dot_r = pill_h * 0.32
-        dx = cx + top_w / 2 + pill_h * 0.42
-        dy = (top_y0 + top_y1) / 2
-        d.ellipse([(dx - dot_r, dy - dot_r), (dx + dot_r, dy + dot_r)], fill=WHITE)
+    # Internal waveform bars (surface colour) inside the pill.
+    spacing_inside = inside_bar_w * 0.6
+    total_inside_w = len(bars_inside) * inside_bar_w + (len(bars_inside) - 1) * spacing_inside
+    start_inside = pill_cx - total_inside_w / 2
+    for i, h in enumerate(bars_inside):
+        bx = start_inside + i * (inside_bar_w + spacing_inside)
+        hpx = canvas * h
+        d.rounded_rectangle(
+            [(bx, cy - hpx / 2), (bx + inside_bar_w, cy + hpx / 2)],
+            radius=inside_bar_w / 2, fill=SURFACE,
+        )
+
+    # Emission bars on the right — accent colour, shrinking outward.
+    first_x = pill_cx + pill_w / 2 + emission_gap
+    for i, h in enumerate(emission_heights):
+        bx = first_x + i * (emission_bar_w + emission_gap)
+        hpx = canvas * h
+        d.rounded_rectangle(
+            [(bx, cy - hpx / 2), (bx + emission_bar_w, cy + hpx / 2)],
+            radius=emission_bar_w / 2, fill=ACCENT,
+        )
 
     return img.resize((size, size), Image.LANCZOS)
 
