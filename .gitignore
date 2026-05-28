@@ -49,3 +49,6 @@ Desktop.ini
 *.zip
 dist/
 release/
+
+# Throwaway icon previews (regenerable from tools/preview-icon.py)
+tools/preview-*.png

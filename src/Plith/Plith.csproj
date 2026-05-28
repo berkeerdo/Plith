@@ -20,7 +20,12 @@
     <Product>Plith</Product>
     <Description>Modern Windows audio OSD with Voicemeeter-first design and media controls baked in.</Description>
     <Version>0.1.0</Version>
+    <ApplicationIcon>Resources\icons\plith.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Resource Include="Resources\icons\plith.ico" />
+  </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />

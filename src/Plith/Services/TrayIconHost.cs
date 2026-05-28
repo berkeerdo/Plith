@@ -1,4 +1,5 @@
 using System.Drawing;
+using System.IO;
 using System.Windows;
 using Hardcodet.Wpf.TaskbarNotification;
 using Plith.Views;
@@ -23,7 +24,7 @@ public sealed class TrayIconHost : IDisposable
         _tray = new TaskbarIcon
         {
             ToolTipText = "Plith",
-            Icon = SystemIcons.Application, // Replace with branded icon in Phase 4.
+            Icon = LoadBrandIcon() ?? SystemIcons.Application,
         };
 
         var menu = new System.Windows.Controls.ContextMenu();
@@ -59,4 +60,23 @@ public sealed class TrayIconHost : IDisposable
     }
 
     public void Dispose() => _tray?.Dispose();
+
+    private static Icon? LoadBrandIcon()
+    {
+        try
+        {
+            var uri = new Uri("pack://application:,,,/Resources/icons/plith.ico", UriKind.Absolute);
+            using var stream = Application.GetResourceStream(uri)?.Stream;
+            if (stream is null) return null;
+            using var ms = new MemoryStream();
+            stream.CopyTo(ms);
+            ms.Position = 0;
+            return new Icon(ms);
+        }
+        catch
+        {
+            return null;
+        }
+    }
 }
+
