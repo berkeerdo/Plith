@@ -24,15 +24,19 @@
             </Border.Effect>
             <StackPanel Orientation="Vertical">
 
-                <!-- Media row (collapses when there's no SMTC session) -->
-                <views:MediaCard x:Name="MediaCardControl"
-                                 DataContext="{Binding Media}" />
+                <!-- Media row. The Visibility binding lives on the wrapper Border so it can
+                     resolve against OsdViewModel; the inner MediaCard overrides DataContext to
+                     Media for its own bindings. -->
+                <Border Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibilityConverter}}">
+                    <views:MediaCard x:Name="MediaCardControl"
+                                     DataContext="{Binding Media}" />
+                </Border>
 
                 <!-- Divider between media + volume; collapses with the card -->
                 <Border Height="1"
                         Margin="0,14,0,14"
                         Background="{StaticResource OsdDivider}"
-                        Visibility="{Binding Media.HasSession, Converter={StaticResource BoolToVisibilityConverter}}" />
+                        Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <!-- Volume row -->
                 <Grid>

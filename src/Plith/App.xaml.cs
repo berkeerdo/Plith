@@ -67,6 +67,7 @@ public partial class App : Application
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
         _hotkey?.Dispose();
         _orchestrator?.Dispose();
+        _osd?.AllowShutdown();    // unblock OnClosing so real shutdown can destroy the window
         _trayHost?.Dispose();
         base.OnExit(e);
     }

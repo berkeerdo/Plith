@@ -39,17 +39,35 @@ public sealed class MediaViewModel : INotifyPropertyChanged
     }
 
     private bool _hasSession;
-    public bool HasSession { get => _hasSession; set => Set(ref _hasSession, value); }
+    public bool HasSession
+    {
+        get => _hasSession;
+        set
+        {
+            if (Set(ref _hasSession, value))
+                HasSessionChanged?.Invoke();
+        }
+    }
+
+    /// <summary>Raised whenever HasSession flips, so the parent OsdViewModel can recompute
+    /// <c>ShowMediaCard</c> (which depends on HasSession + CompactMode). Always fires from
+    /// the setter, so callers that go around <see cref="Apply"/> still get the notification.</summary>
+    public event Action? HasSessionChanged;
 
     /// <summary>Segoe Fluent Icons glyph for the play/pause toggle button (U+E769 Pause / U+E768 Play).</summary>
     public string PlayPauseGlyph => _isPlaying ? "" : "";
 
+    /// <summary>
+    /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher
+    /// thread — the orchestrator marshals SMTC threadpool callbacks before invoking this,
+    /// so any future caller has to match that contract.
+    /// </summary>
     public void Apply(MediaSnapshot snapshot)
     {
         Title = snapshot.Title;
         Artist = snapshot.Artist;
         IsPlaying = snapshot.IsPlaying;
-        HasSession = snapshot.HasSession;
+        HasSession = snapshot.HasSession;   // setter raises HasSessionChanged on actual change
         AlbumArt = DecodeThumbnail(snapshot.ThumbnailBytes);
     }
 

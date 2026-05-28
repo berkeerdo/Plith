@@ -34,6 +34,9 @@ public class SettingsServiceTests
             ShowDurationMs = 5000,
             Position = OsdPosition.TopRight,
             HoverKeepAlive = false,
+            OsdOpacityPercent = 75,
+            UseColorThresholds = true,
+            CompactMode = true,
             AudioSource = AudioSourceMode.ForceVoicemeeter,
             MonitoredBusIndex = 3,
             AutoShowOnMedia = true,
@@ -48,11 +51,40 @@ public class SettingsServiceTests
         Assert.Equal(5000, svc2.Current.ShowDurationMs);
         Assert.Equal(OsdPosition.TopRight, svc2.Current.Position);
         Assert.False(svc2.Current.HoverKeepAlive);
+        Assert.Equal(75, svc2.Current.OsdOpacityPercent);
+        Assert.True(svc2.Current.UseColorThresholds);
+        Assert.True(svc2.Current.CompactMode);
         Assert.Equal(AudioSourceMode.ForceVoicemeeter, svc2.Current.AudioSource);
         Assert.Equal(3, svc2.Current.MonitoredBusIndex);
         Assert.True(svc2.Current.AutoShowOnMedia);
         Assert.True(svc2.Current.AutoStart);
         Assert.Equal(HotkeyCombo.CtrlAltV, svc2.Current.SummonHotkey);
+    }
+
+    [Fact]
+    public void Load_OpacityOutOfRange_IsClamped()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [Osd]
+            OsdOpacityPercent = 200
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.InRange(svc.Current.OsdOpacityPercent, 50, 100);
+    }
+
+    [Fact]
+    public void Load_OpacityNegative_IsClamped()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [Osd]
+            OsdOpacityPercent = -5
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.InRange(svc.Current.OsdOpacityPercent, 50, 100);
     }
 
     [Fact]

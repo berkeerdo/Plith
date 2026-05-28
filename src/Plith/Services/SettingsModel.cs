@@ -49,6 +49,19 @@ public sealed class SettingsModel
     /// <summary>If true, mouse over the OSD pauses the hide timer.</summary>
     public bool HoverKeepAlive { get; set; } = true;
 
+    /// <summary>OSD card opacity at rest, 50–100 percent. Below 50 the OSD is hard to read.</summary>
+    public int OsdOpacityPercent { get; set; } = 100;
+
+    /// <summary>If true, the volume bar colour reflects level — green at safe levels, amber
+    /// near the top, red into the "too loud" zone. Off by default since the constant accent
+    /// green is calmer and consistent with the rest of the UI.</summary>
+    public bool UseColorThresholds { get; set; }
+
+    /// <summary>If true, the OSD never shows the media card, even when a SMTC session is
+    /// active. Useful on small or vertical screens, or for users who only want the volume
+    /// part. Off by default.</summary>
+    public bool CompactMode { get; set; }
+
     /// <summary>How Plith picks between Voicemeeter and the Windows default endpoint.</summary>
     public AudioSourceMode AudioSource { get; set; } = AudioSourceMode.Auto;
 
@@ -67,6 +80,9 @@ public sealed class SettingsModel
         Position = Position,
         AutoShowOnMedia = AutoShowOnMedia,
         HoverKeepAlive = HoverKeepAlive,
+        OsdOpacityPercent = OsdOpacityPercent,
+        UseColorThresholds = UseColorThresholds,
+        CompactMode = CompactMode,
         AudioSource = AudioSource,
         MonitoredBusIndex = MonitoredBusIndex,
         AutoStart = AutoStart,

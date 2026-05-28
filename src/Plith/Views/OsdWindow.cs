@@ -1,4 +1,6 @@
+using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -61,8 +63,62 @@ public sealed class OsdWindow : Window
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
 
-        // Reposition when the user picks a new position in settings.
-        _settings.Changed += _ => Dispatcher.BeginInvoke(Reposition);
+        // Reposition when the user picks a new position in settings, and propagate the new
+        // colour-threshold / compact-mode preferences into the view-model so the UI updates
+        // without requiring an OSD pop to materialise them.
+        _settings.Changed += m => Dispatcher.BeginInvoke(() =>
+        {
+            ViewModel.UseColorThresholds = m.UseColorThresholds;
+            ViewModel.CompactMode = m.CompactMode;
+            Reposition();
+        });
+
+        // Seed initial values so the OSD reflects saved settings before the first Changed event.
+        ViewModel.UseColorThresholds = _settings.Current.UseColorThresholds;
+        ViewModel.CompactMode = _settings.Current.CompactMode;
+
+        // Hide from Alt+Tab. ShowInTaskbar=false hides the taskbar entry but not the Alt+Tab
+        // chooser — that needs WS_EX_TOOLWINDOW, applied after the HWND exists.
+        SourceInitialized += (_, _) => ApplyToolWindow();
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        // Cancel any user-initiated close (Alt+F4 from Alt+Tab, etc.) so the OSD survives —
+        // a closed window stops responding to ShowOsd and the app appears alive but mute.
+        // Real shutdown comes through Application.Shutdown / OnExit which destroys the window
+        // bypassing this event.
+        if (!_isShuttingDown)
+        {
+            e.Cancel = true;
+            Opacity = 0;
+        }
+        base.OnClosing(e);
+    }
+
+    private bool _isShuttingDown;
+
+    /// <summary>Called by App.OnExit so the window can actually go away on real shutdown.</summary>
+    public void AllowShutdown() => _isShuttingDown = true;
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW")]
+    private static extern nint GetWindowLongPtr(nint hWnd, int nIndex);
+
+    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
+    private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
+
+    private const int GWL_EXSTYLE = -20;
+    private const long WS_EX_TOOLWINDOW = 0x00000080L;
+    private const long WS_EX_APPWINDOW = 0x00040000L;
+
+    private void ApplyToolWindow()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == 0) return;
+        long ex = GetWindowLongPtr(hwnd, GWL_EXSTYLE).ToInt64();
+        ex |= WS_EX_TOOLWINDOW;
+        ex &= ~WS_EX_APPWINDOW;
+        SetWindowLongPtr(hwnd, GWL_EXSTYLE, new nint(ex));
     }
 
     private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
@@ -70,7 +126,7 @@ public sealed class OsdWindow : Window
         if (!_settings.Current.HoverKeepAlive) return;
         _hideTimer?.Stop();
         BeginAnimation(OpacityProperty, null);
-        Opacity = 1.0;
+        Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
     }
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
@@ -104,13 +160,15 @@ public sealed class OsdWindow : Window
         _showGeneration++;
         _isFadingOut = false;
         _currentVisibleFor = visibleFor;
-        bool wasHidden = Opacity < 0.99;
+        // Target opacity from settings — 50..100 % maps to 0.50..1.00. Below 0.50 is hard to read.
+        double targetOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+        bool wasHidden = Opacity < targetOpacity - 0.01;
 
         if (wasHidden)
         {
             Reposition();
             BeginAnimation(OpacityProperty, null);
-            var fadeIn = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(FadeInMs))
+            var fadeIn = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(FadeInMs))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             };
@@ -119,7 +177,7 @@ public sealed class OsdWindow : Window
         else
         {
             BeginAnimation(OpacityProperty, null);
-            Opacity = 1.0;
+            Opacity = targetOpacity;
         }
 
         if (_settings.Current.HoverKeepAlive && IsMouseOver) return;

@@ -16,7 +16,40 @@ public sealed class OsdViewModel : INotifyPropertyChanged
     public const float VoicemeeterMinDb = -60f;
     public const float VoicemeeterMaxDb = 12f;
 
-    public MediaViewModel Media { get; } = new();
+    public MediaViewModel Media { get; }
+
+    public OsdViewModel()
+    {
+        Media = new MediaViewModel();
+        // ShowMediaCard depends on Media.HasSession too — bubble that change up.
+        Media.HasSessionChanged += () => OnPropertyChanged(nameof(ShowMediaCard));
+    }
+
+    private bool _useColorThresholds;
+    public bool UseColorThresholds
+    {
+        get => _useColorThresholds;
+        set
+        {
+            if (Set(ref _useColorThresholds, value))
+                OnPropertyChanged(nameof(GainColor));
+        }
+    }
+
+    private bool _compactMode;
+    public bool CompactMode
+    {
+        get => _compactMode;
+        set
+        {
+            if (Set(ref _compactMode, value))
+                OnPropertyChanged(nameof(ShowMediaCard));
+        }
+    }
+
+    /// <summary>The media card is shown only when there's an active session AND the user hasn't
+    /// asked for compact mode.</summary>
+    public bool ShowMediaCard => Media.HasSession && !_compactMode;
 
     private string _label = "Bus A1";
     public string Label { get => _label; set => Set(ref _label, value); }
@@ -25,7 +58,11 @@ public sealed class OsdViewModel : INotifyPropertyChanged
     public double GainNormalized
     {
         get => _gainNormalized;
-        set => Set(ref _gainNormalized, Math.Clamp(value, 0, 1));
+        set
+        {
+            if (Set(ref _gainNormalized, Math.Clamp(value, 0, 1)))
+                OnPropertyChanged(nameof(GainColor));
+        }
     }
 
     private string _gainText = "0.0 dB";
@@ -42,9 +79,38 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         }
     }
 
-    public Brush GainColor => _muted
-        ? new SolidColorBrush(Color.FromRgb(0x80, 0x80, 0x80))
-        : new SolidColorBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
+    // Cached frozen brushes so the GainColor getter is allocation-free in the hot path —
+    // it fires on every poll tick (tens of Hz) and on every binding refresh. Frozen brushes
+    // are also cross-thread safe and skip the WPF render-thread copy.
+    private static readonly SolidColorBrush BrushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
+    private static readonly SolidColorBrush BrushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
+    private static readonly SolidColorBrush BrushAmber = FreezeBrush(Color.FromRgb(0xF5, 0xC2, 0x42));
+    private static readonly SolidColorBrush BrushRed = FreezeBrush(Color.FromRgb(0xE5, 0x4B, 0x4B));
+
+    private static SolidColorBrush FreezeBrush(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
+    }
+
+    public Brush GainColor
+    {
+        get
+        {
+            if (_muted) return BrushMuted;
+            if (!_useColorThresholds) return BrushGreen;
+            return _gainNormalized switch
+            {
+                // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
+                // 0.70 ≈ -7 dB on the VM scale, 70 % on the Windows scale.
+                // 0.90 ≈  6 dB on the VM scale, 90 % on the Windows scale.
+                <= 0.70 => BrushGreen,
+                <= 0.90 => BrushAmber,
+                _       => BrushRed,
+            };
+        }
+    }
 
     /// <summary>Voicemeeter back-compat path — derives normalized + dB text from the snapshot.
     /// Decibel values use InvariantCulture: technical / audio-engineering convention is the

@@ -2,9 +2,10 @@
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
         xmlns:svc="clr-namespace:Plith.Services"
+        xmlns:views="clr-namespace:Plith.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Plith Settings"
-        Width="560" Height="680" MinWidth="520" MinHeight="560"
+        Width="900" Height="700" MinWidth="780" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
@@ -115,12 +116,24 @@
             </StackPanel>
         </Border>
 
-        <!-- Scrollable content -->
-        <ScrollViewer Grid.Row="2"
-                      VerticalScrollBarVisibility="Auto"
-                      HorizontalScrollBarVisibility="Disabled"
-                      Padding="32,24">
-            <StackPanel MaxWidth="640" HorizontalAlignment="Stretch">
+        <!-- Split content: settings list on the left, live preview on the right -->
+        <Grid Grid.Row="2">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" MinWidth="460" />
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="320" MinWidth="280" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="1"
+                    Width="1"
+                    Background="{StaticResource CardBorder}"
+                    Margin="0,16,0,16" />
+
+            <ScrollViewer Grid.Column="0"
+                          VerticalScrollBarVisibility="Auto"
+                          HorizontalScrollBarVisibility="Disabled"
+                          Padding="32,24,24,24">
+                <StackPanel HorizontalAlignment="Stretch">
 
                 <!-- ============== OSD ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="On-screen display" Margin="4,0,0,10" />
@@ -181,6 +194,63 @@
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Pause the auto-hide timer while the mouse is over the OSD." />
                                 </StackPanel>
                                 <CheckBox x:Name="HoverToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" MinWidth="68" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Opacity" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="OSD card opacity at rest. 50 % is the minimum readable level." />
+                                    <Slider x:Name="OpacitySlider"
+                                            Style="{StaticResource ModernSliderStyle}"
+                                            Margin="0,14,0,0"
+                                            Minimum="50" Maximum="100"
+                                            Value="100" />
+                                </StackPanel>
+                                <TextBlock Grid.Column="1"
+                                           Style="{StaticResource ValueTagStyle}"
+                                           VerticalAlignment="Top"
+                                           TextAlignment="Right">
+                                    <Run Text="{Binding ElementName=OpacitySlider, Path=Value, StringFormat={}{0:0}}" />
+                                    <Run Text=" %" Foreground="{StaticResource TextSecondary}" />
+                                </TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Color thresholds" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Volume bar turns amber near the top, red into the loud zone. Off keeps a calm constant green." />
+                                </StackPanel>
+                                <CheckBox x:Name="ColorThresholdsToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Compact mode" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Hide the media card so the OSD only shows the volume bar." />
+                                </StackPanel>
+                                <CheckBox x:Name="CompactToggle"
                                           Grid.Column="1"
                                           Style="{StaticResource ToggleSwitchStyle}" />
                             </Grid>
@@ -290,10 +360,16 @@
                     </Border>
                 </Border>
 
-            </StackPanel>
-        </ScrollViewer>
+                </StackPanel>
+            </ScrollViewer>
 
-        <!-- Sticky footer with keyboard hints -->
+            <views:SettingsPreview x:Name="Preview"
+                                    Grid.Column="2"
+                                    Margin="24,24,32,24" />
+        </Grid>
+
+        <!-- Sticky footer: auto-save indicator + Esc hint. No Save / Cancel buttons —
+             every change persists immediately. -->
         <Border Grid.Row="3"
                 Background="{StaticResource HeaderBg}"
                 BorderBrush="{StaticResource CardBorder}"
@@ -301,24 +377,37 @@
                 Padding="32,16">
             <Grid>
                 <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="*" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                <!-- Saved indicator: a tiny accent dot + label, opacity pulses on change. -->
+                <StackPanel x:Name="SavedIndicator"
+                            Grid.Column="0"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center"
+                            Opacity="0.55">
+                    <Border Width="6" Height="6"
+                            CornerRadius="3"
+                            Background="{StaticResource Accent}"
+                            VerticalAlignment="Center" />
+                    <TextBlock Style="{StaticResource RowHintStyle}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               Text="All settings saved" />
+                </StackPanel>
+
+                <StackPanel Grid.Column="2"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center">
                     <Border Style="{StaticResource KbdHintStyle}">
                         <TextBlock Style="{StaticResource KbdHintTextStyle}" Text="Esc" />
                     </Border>
-                    <TextBlock Style="{StaticResource RowHintStyle}" Margin="8,0,16,0" Text="dismiss" VerticalAlignment="Center" />
-                    <Border Style="{StaticResource KbdHintStyle}">
-                        <TextBlock Style="{StaticResource KbdHintTextStyle}" Text="Enter" />
-                    </Border>
-                    <TextBlock Style="{StaticResource RowHintStyle}" Margin="8,0,0,0" Text="save" VerticalAlignment="Center" />
-                </StackPanel>
-
-                <StackPanel Grid.Column="1" Orientation="Horizontal" HorizontalAlignment="Right">
-                    <Button x:Name="CancelButton" Style="{StaticResource GhostButtonStyle}" Content="Cancel" Margin="0,0,10,0" />
-                    <Button x:Name="SaveButton" Style="{StaticResource PrimaryButtonStyle}" Content="Save changes" IsDefault="True" />
+                    <TextBlock Style="{StaticResource RowHintStyle}"
+                               Margin="8,0,0,0"
+                               VerticalAlignment="Center"
+                               Text="close" />
                 </StackPanel>
             </Grid>
         </Border>

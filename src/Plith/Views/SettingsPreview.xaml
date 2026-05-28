@@ -1,0 +1,144 @@
+<UserControl x:Class="Plith.Views.SettingsPreview"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Plith.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:OsdViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             UseLayoutRounding="True">
+    <UserControl.Resources>
+        <vm:NormalizedToWidthConverter x:Key="NormConv" />
+        <vm:BoolToVisibilityConverter x:Key="BoolToVisibility" />
+    </UserControl.Resources>
+    <Grid Background="Transparent">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Section header -->
+        <StackPanel Grid.Row="0" Margin="0,0,0,16">
+            <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Live preview" />
+            <TextBlock Style="{StaticResource SubtitleStyle}"
+                       FontSize="12"
+                       Margin="0,4,0,0"
+                       Text="The card below reflects your settings in real time." />
+        </StackPanel>
+
+        <!-- Preview surface — visualises the screen edges + the OSD card -->
+        <Border Grid.Row="1"
+                Background="#080808"
+                BorderBrush="{StaticResource CardBorder}"
+                BorderThickness="1"
+                CornerRadius="14"
+                ClipToBounds="True">
+            <Grid x:Name="PreviewSurface" Margin="20">
+                <!-- Position dot diagram in the four corners + centre rows so the user can see
+                     where the OSD anchors. -->
+                <Canvas x:Name="PositionCanvas" IsHitTestVisible="False" />
+
+                <!-- The mini OSD card itself — same XAML structure as OsdContent but at preview
+                     scale, no animations, no fade. -->
+                <Border x:Name="MiniCard"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Bottom"
+                        CornerRadius="10"
+                        Padding="14,12"
+                        Background="{StaticResource OsdSurfaceBrush}"
+                        BorderBrush="{StaticResource OsdBorder}"
+                        BorderThickness="1"
+                        MinWidth="220">
+                    <Border.Effect>
+                        <DropShadowEffect ShadowDepth="0" BlurRadius="18" Opacity="0.45" Color="Black" />
+                    </Border.Effect>
+                    <StackPanel Orientation="Vertical">
+
+                        <!-- Mini media row -->
+                        <Border x:Name="MiniMediaRow"
+                                Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibility}}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="Auto" />
+                                    <ColumnDefinition Width="10" />
+                                    <ColumnDefinition Width="*" />
+                                </Grid.ColumnDefinitions>
+                                <Border Grid.Column="0"
+                                        Width="28" Height="28"
+                                        CornerRadius="5"
+                                        Background="#22FFFFFF" />
+                                <StackPanel Grid.Column="2" VerticalAlignment="Center">
+                                    <TextBlock FontFamily="{StaticResource OsdUiFont}"
+                                               FontSize="11"
+                                               FontWeight="SemiBold"
+                                               Foreground="{StaticResource OsdTextPrimary}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="Sample track" />
+                                    <TextBlock FontFamily="{StaticResource OsdUiFont}"
+                                               FontSize="10"
+                                               Margin="0,2,0,0"
+                                               Foreground="{StaticResource OsdTextSecondary}"
+                                               TextTrimming="CharacterEllipsis"
+                                               Text="Sample artist" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Height="1"
+                                Margin="0,10,0,10"
+                                Background="{StaticResource OsdDivider}"
+                                Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibility}}" />
+
+                        <!-- Mini volume row -->
+                        <Grid>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="6" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+
+                            <DockPanel Grid.Row="0" LastChildFill="True">
+                                <TextBlock DockPanel.Dock="Right"
+                                           FontFamily="{StaticResource OsdUiFont}"
+                                           FontSize="14"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource OsdTextPrimary}"
+                                           Text="{Binding GainText}" />
+                                <TextBlock FontFamily="{StaticResource OsdUiFont}"
+                                           FontSize="10"
+                                           FontWeight="SemiBold"
+                                           Foreground="{StaticResource OsdTextTertiary}"
+                                           VerticalAlignment="Center"
+                                           Typography.Capitals="AllSmallCaps"
+                                           Text="{Binding Label}" />
+                            </DockPanel>
+
+                            <Grid Grid.Row="2" Height="4">
+                                <Border CornerRadius="2" Background="{StaticResource OsdTrackBg}" />
+                                <Border HorizontalAlignment="Left"
+                                        CornerRadius="2"
+                                        Background="{Binding GainColor}">
+                                    <Border.Width>
+                                        <MultiBinding Converter="{StaticResource NormConv}">
+                                            <Binding Path="GainNormalized" />
+                                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                                        </MultiBinding>
+                                    </Border.Width>
+                                </Border>
+                            </Grid>
+                        </Grid>
+
+                    </StackPanel>
+                </Border>
+            </Grid>
+        </Border>
+
+        <!-- Caption hint -->
+        <TextBlock Grid.Row="2"
+                   Margin="0,12,0,0"
+                   Style="{StaticResource RowHintStyle}"
+                   FontSize="11"
+                   Text="Preview values are samples; live data still drives the real OSD." />
+    </Grid>
+</UserControl>
