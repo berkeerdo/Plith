@@ -45,6 +45,7 @@ public sealed class SettingsService
                 AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
+                SummonHotkey = ParseEnum(data[SectionOsd]["SummonHotkey"], HotkeyCombo.None),
             };
             Current = m;
         }
@@ -62,6 +63,7 @@ public sealed class SettingsService
         data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString();
         data[SectionOsd]["Position"] = m.Position.ToString();
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString();
+        data[SectionOsd]["SummonHotkey"] = m.SummonHotkey.ToString();
         data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();
         data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString();
         data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString();

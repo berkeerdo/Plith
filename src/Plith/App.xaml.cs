@@ -11,6 +11,7 @@ public partial class App : Application
     private OsdOrchestrator? _orchestrator;
     private OsdWindow? _osd;
     private NativeFlyoutSuppressor? _flyoutSuppressor;
+    private HotkeyService? _hotkey;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -36,10 +37,30 @@ public partial class App : Application
 
         _trayHost = new TrayIconHost(this, _settings);
         _trayHost.Initialize();
+
+        // The summon hotkey pops the OSD with whatever values the view-model currently holds —
+        // useful for one-handed media skips without touching the volume wheel. Default is None
+        // (off); the user picks a combo in the settings window and we re-apply on every change.
+        _hotkey = new HotkeyService();
+        _hotkey.Pressed += () => _osd?.ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
+        ApplyHotkeyFromSettings(_settings.Current);
+        _settings.Changed += ApplyHotkeyFromSettings;
+    }
+
+    private void ApplyHotkeyFromSettings(SettingsModel m)
+    {
+        if (_hotkey is null) return;
+        if (!_hotkey.Apply(m.SummonHotkey))
+        {
+            System.Diagnostics.Trace.WriteLine(
+                $"Plith: hotkey {m.SummonHotkey} unavailable — already owned by another process.");
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
+        _hotkey?.Dispose();
         _flyoutSuppressor?.Dispose();
         _orchestrator?.Dispose();
         _trayHost?.Dispose();

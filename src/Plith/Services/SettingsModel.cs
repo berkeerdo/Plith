@@ -18,6 +18,22 @@ public enum AudioSourceMode
     ForceWindows,
 }
 
+/// <summary>
+/// Preset hotkey combinations the user can pick to summon the OSD. Curated to a
+/// short list of combos that are usually free across common third-party apps; a
+/// fully custom capture UI is deferred.
+/// Note: Win+&lt;letter&gt; combos are intentionally absent because Windows reserves
+/// the Win modifier with most letter keys and RegisterHotKey refuses them.
+/// </summary>
+public enum HotkeyCombo
+{
+    None,
+    CtrlAltV,
+    CtrlShiftV,
+    AltShiftV,
+    CtrlAltM,
+}
+
 public sealed class SettingsModel
 {
     /// <summary>How long the OSD stays visible after the last change, in milliseconds.</summary>
@@ -42,6 +58,9 @@ public sealed class SettingsModel
     /// <summary>If true, a registry Run entry launches Plith on Windows login.</summary>
     public bool AutoStart { get; set; } = false;
 
+    /// <summary>System-wide hotkey that summons the OSD with whatever values it currently holds.</summary>
+    public HotkeyCombo SummonHotkey { get; set; } = HotkeyCombo.None;
+
     public SettingsModel Clone() => new()
     {
         ShowDurationMs = ShowDurationMs,
@@ -51,5 +70,6 @@ public sealed class SettingsModel
         AudioSource = AudioSource,
         MonitoredBusIndex = MonitoredBusIndex,
         AutoStart = AutoStart,
+        SummonHotkey = SummonHotkey,
     };
 }

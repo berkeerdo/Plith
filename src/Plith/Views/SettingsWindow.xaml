@@ -32,6 +32,11 @@
                 <x:Type TypeName="svc:AudioSourceMode" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="HotkeyCombos" MethodName="GetValues" ObjectType="{x:Type svc:HotkeyCombo}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="svc:HotkeyCombo" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -161,7 +166,7 @@
                             </Grid>
                         </Border>
 
-                        <Border Style="{StaticResource RowLastStyle}">
+                        <Border Style="{StaticResource RowStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -174,6 +179,24 @@
                                 <CheckBox x:Name="HoverToggle"
                                           Grid.Column="1"
                                           Style="{StaticResource ToggleSwitchStyle}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowLastStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Summon hotkey" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="System-wide shortcut that pops the OSD with the current values. Choose a combo your other apps don't use." />
+                                </StackPanel>
+                                <ComboBox x:Name="HotkeyComboBox"
+                                          Grid.Column="1"
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ModernComboStyle}"
+                                          ItemsSource="{Binding Source={StaticResource HotkeyCombos}}" />
                             </Grid>
                         </Border>
 
