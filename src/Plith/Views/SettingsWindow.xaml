@@ -89,6 +89,10 @@
                             Style="{StaticResource CaptionButtonStyle}"
                             Content="&#xE921;"
                             ToolTip="Minimize" />
+                    <Button x:Name="MaximizeButton"
+                            Style="{StaticResource CaptionButtonStyle}"
+                            Content="&#xE922;"
+                            ToolTip="Maximize" />
                     <Button x:Name="CloseButton"
                             Style="{StaticResource CloseCaptionButtonStyle}"
                             Content="&#xE8BB;"

@@ -27,7 +27,15 @@ public partial class SettingsWindow : Window
         CancelButton.Click += (_, _) => Close();
 
         MinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
+        MaximizeButton.Click += (_, _) => WindowState = WindowState == WindowState.Maximized ? WindowState.Normal : WindowState.Maximized;
         CloseButton.Click += (_, _) => Close();
+
+        // Swap maximize / restore glyph as the window state changes so the icon matches the action.
+        StateChanged += (_, _) =>
+        {
+            MaximizeButton.Content = WindowState == WindowState.Maximized ? "" : "";
+            MaximizeButton.ToolTip = WindowState == WindowState.Maximized ? "Restore" : "Maximize";
+        };
 
         // Esc dismisses without saving.
         PreviewKeyDown += (_, e) =>
