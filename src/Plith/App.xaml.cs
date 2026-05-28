@@ -10,7 +10,6 @@ public partial class App : Application
     private TrayIconHost? _trayHost;
     private OsdOrchestrator? _orchestrator;
     private OsdWindow? _osd;
-    private NativeFlyoutSuppressor? _flyoutSuppressor;
     private HotkeyService? _hotkey;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -29,11 +28,12 @@ public partial class App : Application
         _orchestrator = new OsdOrchestrator(_osd, _settings);
         _orchestrator.Start();
 
-        // Suppress the native Windows volume flyout system-wide so Plith's OSD is the only one
-        // the user sees. Runs whether Voicemeeter is active or not — Windows still pops its
-        // flyout on raw volume keys regardless of who's listening to the endpoint.
-        _flyoutSuppressor = new NativeFlyoutSuppressor();
-        _flyoutSuppressor.Start();
+        // NativeFlyoutSuppressor is intentionally NOT started. The class-and-process
+        // matching net was wide enough on Win11 26200 to hide non-flyout shell windows
+        // (Start menu, taskbar popups) owned by Explorer, breaking the desktop until
+        // Plith was killed. The service stays in the codebase for a future, properly
+        // narrow opt-in implementation; for now both OSDs co-exist on volume change,
+        // which is strictly better UX than a wedged Windows shell.
 
         _trayHost = new TrayIconHost(this, _settings);
         _trayHost.Initialize();
@@ -61,7 +61,6 @@ public partial class App : Application
     {
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
         _hotkey?.Dispose();
-        _flyoutSuppressor?.Dispose();
         _orchestrator?.Dispose();
         _trayHost?.Dispose();
         base.OnExit(e);
