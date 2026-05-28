@@ -78,16 +78,10 @@ public partial class SettingsWindow : Window
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;
 
-        // Apply registry change in a try/finally with the Save so a throwing Changed subscriber
-        // or a failing INI write doesn't leave INI and registry out of sync. Either both succeed
-        // visibly or the user sees an error.
-        try
-        {
-            _settings.Save(m);
-        }
-        finally
-        {
-            AutoStartService.Apply(m.AutoStart);
-        }
+        // If Save throws (disk full, INI locked), the registry must NOT advance — keeping the
+        // pair in sync favors "both stay old" over "registry new, INI old." A finally block
+        // would do exactly the wrong thing here, so the calls are sequential by design.
+        _settings.Save(m);
+        AutoStartService.Apply(m.AutoStart);
     }
 }
