@@ -1,0 +1,198 @@
+<div align="center">
+
+<img src="src/Plith/Resources/icons/plith.ico" width="96" height="96" alt="Plith" />
+
+# Plith
+
+**A modern Windows audio OSD with Voicemeeter-first design and media controls baked in.**
+
+[![License: MIT](https://img.shields.io/badge/license-MIT-4AD695?style=flat-square)](LICENSE)
+[![.NET 10](https://img.shields.io/badge/.NET-10.0-512BD4?style=flat-square)](https://dotnet.microsoft.com/)
+[![Windows 11](https://img.shields.io/badge/Windows-10%2F11-0078D6?style=flat-square)](https://www.microsoft.com/windows)
+
+</div>
+
+---
+
+Windows' aging volume flyout, replaced by a quiet, rounded card that surfaces what's actually changing —
+Voicemeeter bus levels, the Windows default endpoint, and whatever's playing in Spotify / YouTube / Brave —
+without taking your attention away from the thing you were already doing.
+
+```
+┌─────────────────────────────────────────┐
+│  ▓▓ Now playing      Title    [⏮ ⏯ ⏭]  │
+│  ─────────────────────────────────────  │
+│  BUS A1               +3.0 dB           │
+│  ████████████████████░░░░░░░             │
+└─────────────────────────────────────────┘
+                bottom-center
+```
+
+## Features
+
+- **Voicemeeter-first.** Polls `VoicemeeterRemote64.dll` directly; reads Bus A1 by default,
+  any bus from 0 to 31 by configuration. Detects when the Voicemeeter engine starts or stops
+  and switches sources without restart.
+- **Windows Core Audio fallback.** When Voicemeeter isn't running, Plith listens to the
+  Windows default render endpoint via NAudio. Default-device swap (plug in headphones,
+  switch output) reattaches transparently via `IMMNotificationClient`.
+- **Media (SMTC) integration.** Album art, title, artist, and play / pause / next / previous
+  buttons for whatever app is publishing into `GlobalSystemMediaTransportControlsSession` —
+  Spotify, YouTube in Brave / Edge / Chrome, the Windows app, Twitch web player, etc.
+  The buttons route back to the original session.
+- **Settings window.** Linear / Raycast-tier dark UI with a custom titlebar, Win11 rounded
+  corners, and a thin overlay scrollbar. Configurable knobs: show duration (500 ms – 10 s),
+  position (BottomCenter / BottomRight / TopCenter / TopRight), hover keep-alive, monitored
+  bus index, audio-source mode (Auto / ForceVoicemeeter / ForceWindows), media auto-show
+  toggle, launch on Windows login, summon hotkey.
+- **Summon hotkey.** A configurable system-wide hotkey (Ctrl+Alt+V, Ctrl+Shift+V,
+  Alt+Shift+V, or Ctrl+Alt+M) pops the OSD with whatever values it currently holds —
+  useful for one-handed media skips without touching the volume wheel first.
+- **Auto-start on Windows login.** Toggles a per-user `HKCU\Software\Microsoft\Windows\CurrentVersion\Run`
+  registry entry so Plith launches with Windows.
+- **Branded tray icon.** Modern accent-green sound-emission mark; double-click opens
+  Settings; right-click for Settings + Exit.
+
+### Visible-over-fullscreen
+
+Plith uses a regular topmost WPF window (`ShowInTaskbar=false`, `ShowActivated=false`) so the
+OSD floats above the desktop and over **fullscreen-borderless** games, which is what nearly
+all modern titles ship with. **Fullscreen-exclusive** mode would need the BandWindow +
+UIAccess path; that infrastructure is in the codebase but disabled, waiting on a signed
+binary in a future release.
+
+## Configuration
+
+Settings persist to `%LOCALAPPDATA%\Plith\config.ini`. The file is INI-encoded and written
+with `CultureInfo.InvariantCulture`, so values are identical across machine locales:
+
+```ini
+[General]
+AutoStart = False
+
+[Osd]
+ShowDurationMs = 2000
+Position = BottomCenter
+HoverKeepAlive = True
+SummonHotkey = None
+
+[Audio]
+AudioSource = Auto
+MonitoredBusIndex = 0
+
+[Media]
+AutoShowOnMedia = False
+```
+
+Open the Settings window from the tray icon (right-click → Settings… or double-click the icon).
+
+## Build from source
+
+Plith targets **.NET 10 on Windows 10 build 22000 (Windows 11 21H2) or newer**.
+
+```powershell
+# Requires: .NET 10 SDK
+# winget install Microsoft.DotNet.SDK.10
+
+git clone https://github.com/berkeerdo/Plith.git
+cd Plith
+dotnet build src/Plith/Plith.csproj -c Release
+dotnet run --project src/Plith
+```
+
+For a redistributable single-file build:
+
+```powershell
+# Framework-dependent (~26 MB, end user needs .NET 10 runtime)
+dotnet publish src/Plith/Plith.csproj -c Release -r win-x64 `
+  -p:PublishSingleFile=true -p:SelfContained=false `
+  -o dist/release-fdep
+
+# Self-contained (~83 MB, no .NET runtime needed)
+dotnet publish src/Plith/Plith.csproj -c Release -r win-x64 `
+  -p:PublishSingleFile=true -p:SelfContained=true `
+  -p:EnableCompressionInSingleFile=true `
+  -o dist/release-sc
+```
+
+WPF + .NET 10 does not support `PublishTrimmed=true` (SDK error NETSDK1168), so size
+optimization stops at the single-file bundle.
+
+### Run the tests
+
+```powershell
+dotnet test tests/Plith.Tests/Plith.Tests.csproj
+```
+
+## Architecture
+
+```
+src/Plith/
+├── Services/
+│   ├── VoicemeeterClient.cs        # P/Invoke + 30 ms polling loop
+│   ├── WindowsAudioClient.cs       # NAudio + IMMNotificationClient
+│   ├── MediaSessionClient.cs       # CsWinRT SMTC wrapper
+│   ├── OsdOrchestrator.cs          # Source state machine + funnels into one OSD pipeline
+│   ├── SettingsService.cs          # INI-backed config
+│   ├── AutoStartService.cs         # HKCU Run registry toggle
+│   ├── HotkeyService.cs            # RegisterHotKey + hidden HWND_MESSAGE window
+│   ├── TrayIconHost.cs             # Hardcodet.NotifyIcon + context menu
+│   └── NativeFlyoutSuppressor.cs   # SetWinEventHook (currently disabled)
+├── ViewModels/
+│   ├── OsdViewModel.cs             # Source-agnostic: Label, GainNormalized, GainText
+│   ├── MediaViewModel.cs           # Title, Artist, AlbumArt, IsPlaying
+│   └── BoolToVisibilityConverters.cs
+├── Views/
+│   ├── OsdWindow.cs                # Topmost WPF Window, fade in/out, position dispatch
+│   ├── OsdContent.xaml             # Card layout (media row + volume row)
+│   ├── MediaCard.xaml              # Album art + title/artist + transport buttons
+│   └── SettingsWindow.xaml         # Custom-titlebar Settings UI
+├── Interop/
+│   ├── Mica.cs                     # DwmSetWindowAttribute Mica/Acrylic backdrop helper
+│   └── BandWindow/                 # Topmost-over-fullscreen infrastructure (currently inactive)
+└── Resources/
+    ├── Theme.xaml                  # OSD palette
+    ├── SettingsTheme.xaml          # Settings palette + control templates
+    └── icons/plith.ico             # Multi-resolution app icon
+```
+
+## Tech stack
+
+- **WPF + .NET 10 (LTS)** for the UI and OSD window.
+- **NAudio** for the Windows Core Audio (`MMDeviceEnumerator`, `IAudioEndpointVolume`,
+  `IMMNotificationClient`) wrapper.
+- **CsWinRT** for `Windows.Media.Control.GlobalSystemMediaTransportControlsSession`
+  (target framework `net10.0-windows10.0.22000.0` brings the projection in automatically).
+- **`Hardcodet.NotifyIcon.Wpf`** for the tray icon.
+- **`WpfScreenHelper`** for multi-monitor screen rectangles.
+- **`ini-parser-netstandard`** for the config file.
+
+The BandWindow and `WndProcHookManager` interop layer is adapted from the MIT-licensed
+[VoicemeeterFancyOSD](https://github.com/A-tG/VoicemeeterFancyOSD) (see `NOTICE.md`),
+with our own modern WPF user controls and view-models written from scratch.
+
+## Roadmap
+
+- **Phase 4c-3.** OSD opacity slider, animation speed knob, color thresholds (green / amber
+  / red on the volume bar above 0 dB and 6 dB), compact mode that hides the media card.
+- **Phase 4c-4.** Code signing (SignPath.io OSS path or a paid certificate) and an MSIX
+  installer so the download survives Norton / SmartScreen without manual exception.
+- **Phase 4d.** Game mode — re-enable the BandWindow path with a UIAccess-signed binary
+  installed under Program Files for rendering above fullscreen-exclusive games.
+- **Phase 4e.** Settings: custom hotkey capture UI (free-form combo instead of preset list),
+  light theme variant that follows the system theme.
+
+## Credits
+
+- The Host / Bridge / `BandWindow` topmost-over-fullscreen technique is adapted from
+  [VoicemeeterFancyOSD](https://github.com/A-tG/VoicemeeterFancyOSD) — MIT, A-tG and
+  contributors. See [`NOTICE.md`](NOTICE.md) for the full attribution.
+- The native-flyout-hide approach (suppressor, currently inactive) is inspired by
+  [ModernFlyouts](https://github.com/ModernFlyouts-Community/ModernFlyouts).
+- `VoicemeeterRemote64.dll` ships with the user's Voicemeeter installation by
+  [VB-Audio Software](https://vb-audio.com/Voicemeeter/) (Vincent Burel) and is not
+  redistributed by Plith.
+
+## License
+
+[MIT](LICENSE) — see the file for the full text.
