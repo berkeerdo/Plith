@@ -1,0 +1,51 @@
+# Build outputs
+[Bb]in/
+[Oo]bj/
+[Oo]ut/
+[Pp]ublish/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# Visual Studio / Rider
+.vs/
+.idea/
+*.swp
+*.swo
+
+# Tooling
+.vscode/
+.cache/
+
+# NuGet
+*.nupkg
+*.snupkg
+packages/
+*.lock.json
+
+# Test results
+[Tt]est[Rr]esult*/
+*.coverage
+*.coveragexml
+
+# .NET workloads
+.dotnet/
+
+# Local config
+config.local.ini
+*.local
+
+# OS noise
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+
+# Logs
+*.log
+
+# Distribution / release artifacts (committed in Releases instead)
+*.zip
+dist/
+release/
