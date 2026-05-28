@@ -1,0 +1,47 @@
+<UserControl x:Class="Plith.Views.OsdContent"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:vm="clr-namespace:Plith.ViewModels"
+             d:DataContext="{d:DesignInstance Type=vm:OsdViewModel}"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             mc:Ignorable="d"
+             Width="420">
+    <Border CornerRadius="16"
+            Padding="20,16"
+            Background="{StaticResource SurfaceBrush}">
+        <Grid>
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="12" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <DockPanel Grid.Row="0" LastChildFill="True">
+                <TextBlock DockPanel.Dock="Right"
+                           Style="{StaticResource CardValueStyle}"
+                           Text="{Binding GainText}" />
+                <TextBlock Style="{StaticResource CardLabelStyle}"
+                           VerticalAlignment="Center"
+                           Text="{Binding Label}" />
+            </DockPanel>
+
+            <Grid Grid.Row="2" Height="6">
+                <Border CornerRadius="3" Background="{StaticResource TrackBrush}" />
+                <Border HorizontalAlignment="Left"
+                        CornerRadius="3"
+                        Background="{Binding GainColor}">
+                    <Border.Width>
+                        <MultiBinding>
+                            <MultiBinding.Converter>
+                                <vm:NormalizedToWidthConverter />
+                            </MultiBinding.Converter>
+                            <Binding Path="GainNormalized" />
+                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                        </MultiBinding>
+                    </Border.Width>
+                </Border>
+            </Grid>
+        </Grid>
+    </Border>
+</UserControl>
