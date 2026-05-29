@@ -107,9 +107,27 @@ public sealed class OsdWindow : Window
     [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW")]
     private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
 
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern bool SetWindowPos(nint hWnd, nint hWndInsertAfter, int X, int Y, int cx, int cy, uint uFlags);
+
     private const int GWL_EXSTYLE = -20;
     private const long WS_EX_TOOLWINDOW = 0x00000080L;
     private const long WS_EX_APPWINDOW = 0x00040000L;
+
+    private static readonly nint HWND_TOPMOST = -1;
+    private const uint SWP_NOSIZE = 0x0001;
+    private const uint SWP_NOMOVE = 0x0002;
+    private const uint SWP_NOACTIVATE = 0x0010;
+
+    /// <summary>Re-assert HWND_TOPMOST so a game / video player that raised itself topmost
+    /// after our last ShowOsd doesn't sit above us. Safe to call repeatedly: SetWindowPos
+    /// with NOACTIVATE leaves the foreground window's focus untouched.</summary>
+    public void ReassertTopmost()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == 0) return;
+        _ = SetWindowPos(hwnd, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE);
+    }
 
     private void ApplyToolWindow()
     {
@@ -179,6 +197,11 @@ public sealed class OsdWindow : Window
             BeginAnimation(OpacityProperty, null);
             Opacity = targetOpacity;
         }
+
+        // WPF maps Topmost=true to WS_EX_TOPMOST on first Show, but never re-asserts.
+        // A focused topmost window that came up after our initial Show can sit ahead of us
+        // in the z-order. Force-promote on every ShowOsd to win those races.
+        ReassertTopmost();
 
         if (_settings.Current.HoverKeepAlive && IsMouseOver) return;
         RestartHideTimer(visibleFor);

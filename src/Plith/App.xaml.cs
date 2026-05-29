@@ -17,6 +17,7 @@ public partial class App : Application
     private OsdWindow? _osd;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
+    private ForegroundWatcher? _foregroundWatcher;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -41,6 +42,11 @@ public partial class App : Application
         _osd.Show();   // create the native handle now so first ShowOsd is instant; Opacity=0 keeps it invisible
         _orchestrator = new OsdOrchestrator(_osd, _settings);
         _orchestrator.Start();
+
+        // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
+        // video player popping a topmost window mid-OSD doesn't steal the z-order ahead of us.
+        _foregroundWatcher = new ForegroundWatcher(_osd);
+        _foregroundWatcher.Start();
 
         // NativeFlyoutSuppressor is intentionally NOT started. The class-and-process
         // matching net was wide enough on Win11 26200 to hide non-flyout shell windows
@@ -77,6 +83,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
+        _foregroundWatcher?.Dispose();
         _hotkey?.Dispose();
         _theme?.Dispose();
         _orchestrator?.Dispose();

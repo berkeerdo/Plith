@@ -14,6 +14,11 @@ public sealed class OsdOrchestrator : IDisposable
 {
     private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(30);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(3);
+    // Boot race: if Plith launches before the audio service is fully wired,
+    // WindowsAudioClient.Start() reports success but OnVolumeNotification callbacks
+    // never come. The watchdog forces one Stop+Start after 10 s of silence so the
+    // user doesn't have to manually relaunch after a cold boot.
+    private static readonly TimeSpan AudioWatchdogDelay = TimeSpan.FromSeconds(10);
 
     private enum ActiveSource { None, Voicemeeter, Windows }
 
@@ -25,6 +30,8 @@ public sealed class OsdOrchestrator : IDisposable
     private readonly MediaSessionClient _media = new();
     private readonly DispatcherTimer _pollTimer;
     private DateTime _nextReconnect = DateTime.MinValue;
+    private DispatcherTimer? _audioWatchdogTimer;
+    private bool _windowsHadEventSinceActivation;
 
     // Last-known values for the *active* source. Reset on every source swap so the next
     // snapshot establishes a baseline silently rather than popping with whatever the new
@@ -92,15 +99,47 @@ public sealed class OsdOrchestrator : IDisposable
             // _activeSource at None so the next Reconcile re-tries instead of getting stuck
             // permanently silent because the early-return on the next call sees no change.
             if (_windowsAudio.IsAttached || _windowsAudio.Start())
+            {
                 _activeSource = ActiveSource.Windows;
+                ArmAudioWatchdog();
+            }
             else
+            {
                 _activeSource = ActiveSource.None;
+            }
         }
         else
         {
             if (_windowsAudio.IsAttached) _windowsAudio.Stop();
             _activeSource = desired;
+            _audioWatchdogTimer?.Stop();
         }
+    }
+
+    /// <summary>Start (or restart) the silence-watchdog one-shot so it fires exactly
+    /// <see cref="AudioWatchdogDelay"/> after Windows becomes the active source. If a real
+    /// volume event arrives before then, <see cref="OnWindowsAudioChanged"/> sets the seen
+    /// flag and the timer's tick is a no-op.</summary>
+    private void ArmAudioWatchdog()
+    {
+        _windowsHadEventSinceActivation = false;
+        _audioWatchdogTimer?.Stop();
+        _audioWatchdogTimer = new DispatcherTimer { Interval = AudioWatchdogDelay };
+        _audioWatchdogTimer.Tick += (_, _) =>
+        {
+            _audioWatchdogTimer!.Stop();
+            if (_disposed) return;
+            if (_activeSource != ActiveSource.Windows) return;
+            if (_windowsHadEventSinceActivation) return;
+            // No events after the watchdog window — assume the subscription registered
+            // against an audio endpoint that wasn't fully wired yet. Re-Start picks up
+            // the now-ready endpoint.
+            System.Diagnostics.Trace.WriteLine(
+                "Plith: Windows audio watchdog: no events in 10 s after activation, re-subscribing.");
+            _windowsAudio.Stop();
+            _ = _windowsAudio.Start();
+        };
+        _audioWatchdogTimer.Start();
     }
 
     #region Voicemeeter polling
@@ -158,6 +197,8 @@ public sealed class OsdOrchestrator : IDisposable
         }
         if (_disposed) return;
         if (_activeSource != ActiveSource.Windows) return;
+        // Tell the watchdog the subscription is alive so it can stand down silently.
+        _windowsHadEventSinceActivation = true;
 
         // Windows reports a 0..1 scalar; show it as the matching percent. InvariantCulture
         // keeps the digit-only output consistent across locales.
@@ -238,6 +279,7 @@ public sealed class OsdOrchestrator : IDisposable
     {
         _disposed = true;
         _pollTimer.Stop();
+        _audioWatchdogTimer?.Stop();
         _settings.Changed -= OnSettingsChanged;
         _osd.MediaCommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
