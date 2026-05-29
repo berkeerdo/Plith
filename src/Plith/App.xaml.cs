@@ -40,16 +40,18 @@ public partial class App : Application
         // narrow opt-in implementation; for now both OSDs co-exist on volume change,
         // which is strictly better UX than a wedged Windows shell.
 
-        _trayHost = new TrayIconHost(this, _settings);
-        _trayHost.Initialize();
-
         // The summon hotkey pops the OSD with whatever values the view-model currently holds —
         // useful for one-handed media skips without touching the volume wheel. Default is None
         // (off); the user picks a combo in the settings window and we re-apply on every change.
+        // _hotkey is created BEFORE _trayHost so the tray can hand the service to SettingsWindow
+        // for the binding-conflict warning.
         _hotkey = new HotkeyService();
         _hotkey.Pressed += () => _osd?.ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
+
+        _trayHost = new TrayIconHost(this, _settings, _hotkey);
+        _trayHost.Initialize();
     }
 
     private void ApplyHotkeyFromSettings(SettingsModel m)

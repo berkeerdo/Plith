@@ -46,4 +46,14 @@ public class HotkeyServiceTests
         Assert.Equal(((uint)0, 0), HotkeyService.MigrateLegacy(""));
         Assert.Equal(((uint)0, 0), HotkeyService.MigrateLegacy("NonsenseValue"));
     }
+
+    [Fact]
+    public void IsBound_StartsFalse_AndActiveFieldsZero()
+    {
+        // Ctor must not register anything; nothing is bound until Apply succeeds.
+        using var svc = new HotkeyService();
+        Assert.False(svc.IsBound);
+        Assert.Equal((uint)0, svc.ActiveMods);
+        Assert.Equal(0, svc.ActiveKey);
+    }
 }

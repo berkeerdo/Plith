@@ -34,6 +34,8 @@
     <SolidColorBrush x:Key="ButtonGhost" Color="#1F1F1F" />
     <SolidColorBrush x:Key="ButtonGhostHover" Color="#2A2A2A" />
 
+    <SolidColorBrush x:Key="ErrorText" Color="#F87171" />
+
     <FontFamily x:Key="UiFont">Segoe UI Variable, Segoe UI</FontFamily>
 
     <!-- ============================================================

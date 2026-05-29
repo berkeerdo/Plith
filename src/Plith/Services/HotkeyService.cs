@@ -37,8 +37,17 @@ public sealed class HotkeyService : IDisposable
 
     public event Action? Pressed;
 
+    /// <summary>Fired after every <see cref="Apply"/> attempt — success or failure.
+    /// Subscribers should re-query <see cref="IsBound"/> rather than rely on a payload,
+    /// so the event can also be raised from internal paths that don't have a result bool.</summary>
+    public event Action? BindingChanged;
+
     public uint ActiveMods => _isRegistered ? _activeMods : 0;
     public int ActiveKey => _isRegistered ? _activeKey : 0;
+
+    /// <summary>True when a system-wide hotkey is currently registered. False while nothing
+    /// is bound — including the case where the user picked a combo but Windows refused it.</summary>
+    public bool IsBound => _isRegistered;
 
     /// <summary>
     /// Swap the active hotkey to (<paramref name="mods"/>, <paramref name="vk"/>).
@@ -60,24 +69,29 @@ public sealed class HotkeyService : IDisposable
             _isRegistered = false;
         }
 
+        bool ok;
         if (mods == 0 || vk == 0)
         {
             _activeMods = 0;
             _activeKey = 0;
-            return true;
+            ok = true;
         }
-
-        if (RegisterHotKey(_source.Handle, HotkeyId, mods | (uint)HotkeyMods.NoRepeat, (uint)vk))
+        else if (RegisterHotKey(_source.Handle, HotkeyId, mods | (uint)HotkeyMods.NoRepeat, (uint)vk))
         {
             _isRegistered = true;
             _activeMods = mods;
             _activeKey = vk;
-            return true;
+            ok = true;
+        }
+        else
+        {
+            _activeMods = 0;
+            _activeKey = 0;
+            ok = false;
         }
 
-        _activeMods = 0;
-        _activeKey = 0;
-        return false;
+        BindingChanged?.Invoke();
+        return ok;
     }
 
     /// <summary>Format a (mods, vk) pair as a user-facing string, e.g. 'Ctrl+Alt+V'.

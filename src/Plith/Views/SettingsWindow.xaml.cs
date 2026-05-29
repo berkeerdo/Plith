@@ -10,6 +10,7 @@ namespace Plith.Views;
 public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settings;
+    private readonly HotkeyService _hotkey;
     private bool _loadingFromModel;
     private DispatcherTimer? _savedPulseTimer;
 
@@ -18,9 +19,10 @@ public partial class SettingsWindow : Window
     private int _capturedKey;
     private bool _isCapturingHotkey;
 
-    public SettingsWindow(SettingsService settings)
+    public SettingsWindow(SettingsService settings, HotkeyService hotkey)
     {
         _settings = settings;
+        _hotkey = hotkey;
         InitializeComponent();
 
         BusCombo.ItemsSource = new[]
@@ -48,6 +50,36 @@ public partial class SettingsWindow : Window
 
         PreviewKeyDown += OnPreviewKeyDown;
         SourceInitialized += (_, _) => ApplyRoundedCorners();
+
+        // BindingChanged fires after App.ApplyHotkeyFromSettings has talked to Windows,
+        // so this is the only place that knows whether the user's combo was accepted.
+        _hotkey.BindingChanged += OnHotkeyBindingChanged;
+        Closed += (_, _) => _hotkey.BindingChanged -= OnHotkeyBindingChanged;
+        UpdateHotkeyConflictWarning();
+    }
+
+    private void OnHotkeyBindingChanged()
+    {
+        // BindingChanged can be raised from a non-UI thread in principle (Apply runs on
+        // whichever dispatcher loaded the message window). Marshal to ours before touching XAML.
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(UpdateHotkeyConflictWarning));
+            return;
+        }
+        UpdateHotkeyConflictWarning();
+    }
+
+    private void UpdateHotkeyConflictWarning()
+    {
+        var m = _settings.Current;
+        bool wantsHotkey = m.HasSummonHotkey;
+        bool isActive = _hotkey.IsBound
+                        && _hotkey.ActiveMods == m.SummonHotkeyMods
+                        && _hotkey.ActiveKey == m.SummonHotkeyKey;
+        HotkeyConflictWarning.Visibility = wantsHotkey && !isActive
+            ? Visibility.Visible
+            : Visibility.Collapsed;
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
