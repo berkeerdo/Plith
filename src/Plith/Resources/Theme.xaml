@@ -7,22 +7,9 @@
 
     <FontFamily x:Key="OsdUiFont">Segoe UI Variable, Segoe UI</FontFamily>
 
-    <!-- Surface gets a subtle gradient so the card has depth without losing the modern flat feel -->
-    <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#F0181818" Offset="0" />
-        <GradientStop Color="#F0111111" Offset="1" />
-    </LinearGradientBrush>
+    <!-- OSD palette brushes live in OsdPalette.Dark.xaml / OsdPalette.Light.xaml so the
+         active theme can be swapped at runtime; all references below use DynamicResource. -->
 
-    <SolidColorBrush x:Key="OsdBorder" Color="#2A2A2A" />
-    <SolidColorBrush x:Key="OsdHighlight" Color="#1AFFFFFF" />
-
-    <SolidColorBrush x:Key="OsdTextPrimary" Color="#F5F5F5" />
-    <SolidColorBrush x:Key="OsdTextSecondary" Color="#A1A1AA" />
-    <SolidColorBrush x:Key="OsdTextTertiary" Color="#71717A" />
-
-    <SolidColorBrush x:Key="OsdTrackBg" Color="#22FFFFFF" />
-    <SolidColorBrush x:Key="OsdAccent" Color="#4AD695" />
-    <SolidColorBrush x:Key="OsdDivider" Color="#1AFFFFFF" />
 
     <!-- ============================================================
          Typography — OSD-specific styles. Tabular numbers for dB.
@@ -32,7 +19,7 @@
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource OsdTextTertiary}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsdTextTertiary}" />
         <Setter Property="Typography.Capitals" Value="AllSmallCaps" />
     </Style>
 
@@ -40,7 +27,7 @@
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
         <Setter Property="FontSize" Value="20" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource OsdTextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsdTextPrimary}" />
         <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
     </Style>
 
@@ -48,13 +35,13 @@
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource OsdTextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsdTextPrimary}" />
     </Style>
 
     <Style x:Key="OsdTrackArtistStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
         <Setter Property="FontSize" Value="11" />
-        <Setter Property="Foreground" Value="{StaticResource OsdTextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsdTextSecondary}" />
     </Style>
 
     <!-- Back-compat names kept so legacy bindings still resolve -->

@@ -9,8 +9,8 @@
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ResizeMode="CanResize"
-        Background="{StaticResource WindowBg}"
-        Foreground="{StaticResource TextPrimary}"
+        Background="{DynamicResource WindowBg}"
+        Foreground="{DynamicResource TextPrimary}"
         FontFamily="{StaticResource UiFont}"
         TextOptions.TextFormattingMode="Ideal"
         TextOptions.TextRenderingMode="ClearType"
@@ -33,6 +33,11 @@
                 <x:Type TypeName="svc:AudioSourceMode" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="ThemeModes" MethodName="GetValues" ObjectType="{x:Type svc:ThemeMode}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="svc:ThemeMode" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -44,7 +49,7 @@
         </Grid.RowDefinitions>
 
         <!-- Custom titlebar — drag region with accent dot, title, and caption buttons -->
-        <Border Grid.Row="0" Background="{StaticResource HeaderBg}">
+        <Border Grid.Row="0" Background="{DynamicResource HeaderBg}">
             <Grid>
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
@@ -57,23 +62,23 @@
                             Margin="18,0,0,0">
                     <Border Width="6" Height="6"
                             CornerRadius="3"
-                            Background="{StaticResource Accent}"
+                            Background="{DynamicResource Accent}"
                             VerticalAlignment="Center"
                             Margin="0,0,10,0" />
                     <TextBlock Text="Plith"
                                FontFamily="{StaticResource UiFont}"
                                FontWeight="SemiBold"
                                FontSize="13"
-                               Foreground="{StaticResource TextPrimary}"
+                               Foreground="{DynamicResource TextPrimary}"
                                VerticalAlignment="Center" />
                     <TextBlock Text="·"
-                               Foreground="{StaticResource TextTertiary}"
+                               Foreground="{DynamicResource TextTertiary}"
                                Margin="8,0"
                                VerticalAlignment="Center" />
                     <TextBlock Text="Settings"
                                FontFamily="{StaticResource UiFont}"
                                FontSize="13"
-                               Foreground="{StaticResource TextSecondary}"
+                               Foreground="{DynamicResource TextSecondary}"
                                VerticalAlignment="Center" />
                 </StackPanel>
 
@@ -99,8 +104,8 @@
 
         <!-- Header text + subtitle -->
         <Border Grid.Row="1"
-                Background="{StaticResource HeaderBg}"
-                BorderBrush="{StaticResource CardBorder}"
+                Background="{DynamicResource HeaderBg}"
+                BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="0,0,0,1"
                 Padding="32,12,32,22">
             <StackPanel>
@@ -121,7 +126,7 @@
 
             <Border Grid.Column="1"
                     Width="1"
-                    Background="{StaticResource CardBorder}"
+                    Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />
 
             <ScrollViewer Grid.Column="0"
@@ -130,8 +135,32 @@
                           Padding="32,24,24,24">
                 <StackPanel HorizontalAlignment="Stretch">
 
+                <!-- ============== Appearance ============== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Appearance" Margin="4,0,0,10" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+                        <Border Style="{StaticResource RowLastStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Theme" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Dark and Light affect this Settings window. Auto follows your Windows app theme live. The OSD overlay stays dark in every mode for readability over games." />
+                                </StackPanel>
+                                <ComboBox x:Name="ThemeCombo"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ModernComboStyle}"
+                                          ItemsSource="{Binding Source={StaticResource ThemeModes}}"
+                                          VerticalAlignment="Center" />
+                            </Grid>
+                        </Border>
+                    </StackPanel>
+                </Border>
+
                 <!-- ============== OSD ============== -->
-                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="On-screen display" Margin="4,0,0,10" />
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="On-screen display" Margin="4,18,0,10" />
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
 
@@ -155,7 +184,7 @@
                                            VerticalAlignment="Top"
                                            TextAlignment="Right">
                                     <Run Text="{Binding ElementName=DurationSlider, Path=Value, StringFormat={}{0:0}}" />
-                                    <Run Text=" ms" Foreground="{StaticResource TextSecondary}" />
+                                    <Run Text=" ms" Foreground="{DynamicResource TextSecondary}" />
                                 </TextBlock>
                             </Grid>
                         </Border>
@@ -214,7 +243,7 @@
                                            VerticalAlignment="Top"
                                            TextAlignment="Right">
                                     <Run Text="{Binding ElementName=OpacitySlider, Path=Value, StringFormat={}{0:0}}" />
-                                    <Run Text=" %" Foreground="{StaticResource TextSecondary}" />
+                                    <Run Text=" %" Foreground="{DynamicResource TextSecondary}" />
                                 </TextBlock>
                             </Grid>
                         </Border>
@@ -285,7 +314,7 @@
                                            Grid.Row="1" Grid.Column="1"
                                            HorizontalAlignment="Right"
                                            Margin="0,8,0,0"
-                                           Foreground="{StaticResource ErrorText}"
+                                           Foreground="{DynamicResource ErrorText}"
                                            FontSize="11"
                                            FontWeight="Medium"
                                            Visibility="Collapsed"
@@ -390,8 +419,8 @@
         <!-- Sticky footer: auto-save indicator + Esc hint. No Save / Cancel buttons —
              every change persists immediately. -->
         <Border Grid.Row="3"
-                Background="{StaticResource HeaderBg}"
-                BorderBrush="{StaticResource CardBorder}"
+                Background="{DynamicResource HeaderBg}"
+                BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="0,1,0,0"
                 Padding="32,16">
             <Grid>
@@ -409,7 +438,7 @@
                             Opacity="0.55">
                     <Border Width="6" Height="6"
                             CornerRadius="3"
-                            Background="{StaticResource Accent}"
+                            Background="{DynamicResource Accent}"
                             VerticalAlignment="Center" />
                     <TextBlock Style="{StaticResource RowHintStyle}"
                                Margin="8,0,0,0"

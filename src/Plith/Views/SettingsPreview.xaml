@@ -30,7 +30,7 @@
         <!-- Preview surface — visualises the screen edges + the OSD card -->
         <Border Grid.Row="1"
                 Background="#080808"
-                BorderBrush="{StaticResource CardBorder}"
+                BorderBrush="{DynamicResource CardBorder}"
                 BorderThickness="1"
                 CornerRadius="14"
                 ClipToBounds="True">
@@ -46,8 +46,8 @@
                         VerticalAlignment="Bottom"
                         CornerRadius="10"
                         Padding="14,12"
-                        Background="{StaticResource OsdSurfaceBrush}"
-                        BorderBrush="{StaticResource OsdBorder}"
+                        Background="{DynamicResource OsdSurfaceBrush}"
+                        BorderBrush="{DynamicResource OsdBorder}"
                         BorderThickness="1"
                         MinWidth="220">
                     <Border.Effect>
@@ -72,13 +72,13 @@
                                     <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                                FontSize="11"
                                                FontWeight="SemiBold"
-                                               Foreground="{StaticResource OsdTextPrimary}"
+                                               Foreground="{DynamicResource OsdTextPrimary}"
                                                TextTrimming="CharacterEllipsis"
                                                Text="Sample track" />
                                     <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                                FontSize="10"
                                                Margin="0,2,0,0"
-                                               Foreground="{StaticResource OsdTextSecondary}"
+                                               Foreground="{DynamicResource OsdTextSecondary}"
                                                TextTrimming="CharacterEllipsis"
                                                Text="Sample artist" />
                                 </StackPanel>
@@ -87,7 +87,7 @@
 
                         <Border Height="1"
                                 Margin="0,10,0,10"
-                                Background="{StaticResource OsdDivider}"
+                                Background="{DynamicResource OsdDivider}"
                                 Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibility}}" />
 
                         <!-- Mini volume row -->
@@ -103,19 +103,19 @@
                                            FontFamily="{StaticResource OsdUiFont}"
                                            FontSize="14"
                                            FontWeight="SemiBold"
-                                           Foreground="{StaticResource OsdTextPrimary}"
+                                           Foreground="{DynamicResource OsdTextPrimary}"
                                            Text="{Binding GainText}" />
                                 <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
-                                           Foreground="{StaticResource OsdTextTertiary}"
+                                           Foreground="{DynamicResource OsdTextTertiary}"
                                            VerticalAlignment="Center"
                                            Typography.Capitals="AllSmallCaps"
                                            Text="{Binding Label}" />
                             </DockPanel>
 
                             <Grid Grid.Row="2" Height="4">
-                                <Border CornerRadius="2" Background="{StaticResource OsdTrackBg}" />
+                                <Border CornerRadius="2" Background="{DynamicResource OsdTrackBg}" />
                                 <Border HorizontalAlignment="Left"
                                         CornerRadius="2"
                                         Background="{Binding GainColor}">

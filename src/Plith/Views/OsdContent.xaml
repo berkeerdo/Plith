@@ -15,8 +15,8 @@
     <Grid Margin="14">
         <Border CornerRadius="14"
                 Padding="20,16"
-                Background="{StaticResource OsdSurfaceBrush}"
-                BorderBrush="{StaticResource OsdBorder}"
+                Background="{DynamicResource OsdSurfaceBrush}"
+                BorderBrush="{DynamicResource OsdBorder}"
                 BorderThickness="1"
                 SnapsToDevicePixels="True">
             <Border.Effect>
@@ -35,7 +35,7 @@
                 <!-- Divider between media + volume; collapses with the card -->
                 <Border Height="1"
                         Margin="0,14,0,14"
-                        Background="{StaticResource OsdDivider}"
+                        Background="{DynamicResource OsdDivider}"
                         Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibilityConverter}}" />
 
                 <!-- Volume row -->
@@ -57,7 +57,7 @@
                     </DockPanel>
 
                     <Grid Grid.Row="2" Height="6">
-                        <Border CornerRadius="3" Background="{StaticResource OsdTrackBg}" />
+                        <Border CornerRadius="3" Background="{DynamicResource OsdTrackBg}" />
                         <Border HorizontalAlignment="Left"
                                 CornerRadius="3"
                                 Background="{Binding GainColor}">

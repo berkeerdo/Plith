@@ -1,0 +1,29 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Dark OSD overlay palette — default. -->
+
+    <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
+        <GradientStop Color="#F0181818" Offset="0" />
+        <GradientStop Color="#F0111111" Offset="1" />
+    </LinearGradientBrush>
+
+    <SolidColorBrush x:Key="OsdBorder" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="OsdHighlight" Color="#1AFFFFFF" />
+
+    <SolidColorBrush x:Key="OsdTextPrimary" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="OsdTextSecondary" Color="#A1A1AA" />
+    <SolidColorBrush x:Key="OsdTextTertiary" Color="#71717A" />
+
+    <SolidColorBrush x:Key="OsdTrackBg" Color="#22FFFFFF" />
+    <SolidColorBrush x:Key="OsdAccent" Color="#4AD695" />
+    <SolidColorBrush x:Key="OsdDivider" Color="#1AFFFFFF" />
+
+    <!-- Volume bar threshold colours when UseColorThresholds is on. The view model picks
+         the right key based on the current normalised level. -->
+    <SolidColorBrush x:Key="OsdGainMuted" Color="#808080" />
+    <SolidColorBrush x:Key="OsdGainGreen" Color="#4AD695" />
+    <SolidColorBrush x:Key="OsdGainAmber" Color="#F5C242" />
+    <SolidColorBrush x:Key="OsdGainRed" Color="#E54B4B" />
+
+</ResourceDictionary>

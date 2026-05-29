@@ -5,7 +5,14 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- OSD overlay palette. Swapped by ThemeService between OsdPalette.Dark.xaml
+                     and OsdPalette.Light.xaml at runtime. Theme.xaml references every Osd*
+                     brush via DynamicResource so the swap reaches the OSD window live. -->
+                <ResourceDictionary Source="Resources/OsdPalette.Dark.xaml" />
                 <ResourceDictionary Source="Resources/Theme.xaml" />
+                <!-- Settings window palette. Same dynamic-swap pattern as the OSD palette
+                     above; SettingsTheme.xaml references every brush via DynamicResource. -->
+                <ResourceDictionary Source="Resources/Palette.Dark.xaml" />
                 <ResourceDictionary Source="Resources/SettingsTheme.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

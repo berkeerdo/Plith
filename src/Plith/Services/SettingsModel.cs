@@ -18,6 +18,16 @@ public enum AudioSourceMode
     ForceWindows,
 }
 
+public enum ThemeMode
+{
+    /// <summary>Always dark — current behaviour.</summary>
+    Dark,
+    /// <summary>Always light.</summary>
+    Light,
+    /// <summary>Follow Windows' apps-use-light-theme setting; flips live on system change.</summary>
+    Auto,
+}
+
 // Legacy enum kept only to migrate INI files that pre-date the free-form capture UI.
 // New code uses raw (mods, vk) on SettingsModel instead.
 internal enum LegacyHotkeyCombo
@@ -78,6 +88,10 @@ public sealed class SettingsModel
     /// <summary>True when both the modifier mask and the virtual key are set.</summary>
     public bool HasSummonHotkey => SummonHotkeyMods != 0 && SummonHotkeyKey != 0;
 
+    /// <summary>Theme applied to both the Settings window and the OSD overlay.
+    /// Auto follows the Windows apps-use-light-theme preference live.</summary>
+    public ThemeMode Theme { get; set; } = ThemeMode.Dark;
+
     public SettingsModel Clone() => new()
     {
         ShowDurationMs = ShowDurationMs,
@@ -92,5 +106,6 @@ public sealed class SettingsModel
         AutoStart = AutoStart,
         SummonHotkeyMods = SummonHotkeyMods,
         SummonHotkeyKey = SummonHotkeyKey,
+        Theme = Theme,
     };
 }

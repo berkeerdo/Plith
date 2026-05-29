@@ -2,39 +2,8 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework">
 
-    <!-- ============================================================
-         Palette — Linear / Raycast-tier dark.
-         Designed for the dark theme only; every control sets explicit
-         brushes so SystemColors never leak in on light-mode hosts.
-         ============================================================ -->
-
-    <SolidColorBrush x:Key="WindowBg" Color="#0A0A0A" />
-    <SolidColorBrush x:Key="HeaderBg" Color="#0E0E0E" />
-    <SolidColorBrush x:Key="CardBg" Color="#161616" />
-    <SolidColorBrush x:Key="CardBgHover" Color="#1B1B1B" />
-    <SolidColorBrush x:Key="CardBorder" Color="#1F1F1F" />
-    <SolidColorBrush x:Key="CardBorderStrong" Color="#2A2A2A" />
-    <SolidColorBrush x:Key="Divider" Color="#1A1A1A" />
-
-    <SolidColorBrush x:Key="TextPrimary" Color="#F5F5F5" />
-    <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
-    <SolidColorBrush x:Key="TextTertiary" Color="#71717A" />
-    <SolidColorBrush x:Key="TextDisabled" Color="#52525B" />
-
-    <SolidColorBrush x:Key="Accent" Color="#4AD695" />
-    <SolidColorBrush x:Key="AccentHover" Color="#5BE0A5" />
-    <SolidColorBrush x:Key="AccentPressed" Color="#3FBF85" />
-    <SolidColorBrush x:Key="AccentGlow" Color="#1A4AD695" />
-
-    <SolidColorBrush x:Key="TrackInactive" Color="#2A2A2A" />
-    <SolidColorBrush x:Key="ThumbColor" Color="#F5F5F5" />
-    <SolidColorBrush x:Key="OverlayHover" Color="#0AFFFFFF" />
-    <SolidColorBrush x:Key="OverlayPressed" Color="#14FFFFFF" />
-
-    <SolidColorBrush x:Key="ButtonGhost" Color="#1F1F1F" />
-    <SolidColorBrush x:Key="ButtonGhostHover" Color="#2A2A2A" />
-
-    <SolidColorBrush x:Key="ErrorText" Color="#F87171" />
+    <!-- Palette brushes live in Palette.Dark.xaml / Palette.Light.xaml so the active
+         theme can be swapped at runtime; every reference below uses DynamicResource. -->
 
     <FontFamily x:Key="UiFont">Segoe UI Variable, Segoe UI</FontFamily>
 
@@ -46,7 +15,7 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="24" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
     </Style>
 
@@ -54,14 +23,14 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="Normal" />
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
     </Style>
 
     <Style x:Key="SectionHeaderStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="11" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource TextTertiary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextTertiary}" />
         <Setter Property="Typography.Capitals" Value="AllSmallCaps" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
     </Style>
@@ -70,14 +39,14 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
     <Style x:Key="RowHintStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="12" />
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
         <Setter Property="Margin" Value="0,3,0,0" />
         <Setter Property="TextWrapping" Value="Wrap" />
     </Style>
@@ -86,7 +55,7 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="12" />
         <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
     </Style>
 
@@ -95,8 +64,8 @@
          ============================================================ -->
 
     <Style x:Key="CardStyle" TargetType="Border">
-        <Setter Property="Background" Value="{StaticResource CardBg}" />
-        <Setter Property="BorderBrush" Value="{StaticResource CardBorder}" />
+        <Setter Property="Background" Value="{DynamicResource CardBg}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorder}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="CornerRadius" Value="10" />
         <Setter Property="Padding" Value="20,8" />
@@ -108,7 +77,7 @@
     <Style x:Key="RowStyle" TargetType="Border">
         <Setter Property="Padding" Value="0,12" />
         <Setter Property="BorderThickness" Value="0,0,0,1" />
-        <Setter Property="BorderBrush" Value="{StaticResource Divider}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource Divider}" />
     </Style>
 
     <Style x:Key="RowLastStyle" TargetType="Border" BasedOn="{StaticResource RowStyle}">
@@ -130,7 +99,7 @@
                     <Border x:Name="track"
                             Width="36" Height="20"
                             CornerRadius="10"
-                            Background="{StaticResource TrackInactive}"
+                            Background="{DynamicResource TrackInactive}"
                             BorderBrush="#33FFFFFF"
                             BorderThickness="1"
                             SnapsToDevicePixels="True">
@@ -138,7 +107,7 @@
                             <Border x:Name="thumb"
                                     Width="14" Height="14"
                                     CornerRadius="7"
-                                    Background="{StaticResource ThumbColor}"
+                                    Background="{DynamicResource ThumbColor}"
                                     HorizontalAlignment="Left"
                                     Margin="2,0,0,0"
                                     RenderTransformOrigin="0.5,0.5">
@@ -150,8 +119,8 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsChecked" Value="True">
-                            <Setter TargetName="track" Property="Background" Value="{StaticResource Accent}" />
-                            <Setter TargetName="track" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            <Setter TargetName="track" Property="Background" Value="{DynamicResource Accent}" />
+                            <Setter TargetName="track" Property="BorderBrush" Value="{DynamicResource Accent}" />
                             <Trigger.EnterActions>
                                 <BeginStoryboard>
                                     <Storyboard>
@@ -201,8 +170,8 @@
             <Setter.Value>
                 <ControlTemplate TargetType="Thumb">
                     <Grid>
-                        <Ellipse x:Name="halo" Width="22" Height="22" Fill="{StaticResource AccentGlow}" Opacity="0" />
-                        <Ellipse x:Name="thumb" Width="14" Height="14" Fill="{StaticResource ThumbColor}" />
+                        <Ellipse x:Name="halo" Width="22" Height="22" Fill="{DynamicResource AccentGlow}" Opacity="0" />
+                        <Ellipse x:Name="thumb" Width="14" Height="14" Fill="{DynamicResource ThumbColor}" />
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
@@ -227,7 +196,7 @@
                         </Grid.RowDefinitions>
                         <Border Height="4"
                                 CornerRadius="2"
-                                Background="{StaticResource TrackInactive}"
+                                Background="{DynamicResource TrackInactive}"
                                 VerticalAlignment="Center" />
                         <Track x:Name="PART_Track" Grid.Row="0">
                             <Track.DecreaseRepeatButton>
@@ -236,7 +205,7 @@
                                         <ControlTemplate TargetType="RepeatButton">
                                             <Border Height="4"
                                                     CornerRadius="2"
-                                                    Background="{StaticResource Accent}" />
+                                                    Background="{DynamicResource Accent}" />
                                         </ControlTemplate>
                                     </RepeatButton.Template>
                                 </RepeatButton>
@@ -268,7 +237,7 @@
     <Style x:Key="ComboBoxItemStyle" TargetType="ComboBoxItem">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Padding" Value="12,8" />
         <Setter Property="Cursor" Value="Hand" />
@@ -284,11 +253,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsHighlighted" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource OverlayHover}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource OverlayHover}" />
                         </Trigger>
                         <Trigger Property="IsSelected" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentGlow}" />
-                            <Setter Property="Foreground" Value="{StaticResource Accent}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentGlow}" />
+                            <Setter Property="Foreground" Value="{DynamicResource Accent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -299,9 +268,9 @@
     <Style x:Key="ModernComboStyle" TargetType="ComboBox">
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-        <Setter Property="Background" Value="{StaticResource ButtonGhost}" />
-        <Setter Property="BorderBrush" Value="{StaticResource CardBorderStrong}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource ButtonGhost}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrong}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="MinWidth" Value="180" />
         <Setter Property="Height" Value="34" />
@@ -335,7 +304,7 @@
                                   HorizontalAlignment="Center"
                                   VerticalAlignment="Center"
                                   Data="M 0,0 L 4,4 L 8,0"
-                                  Stroke="{StaticResource TextSecondary}"
+                                  Stroke="{DynamicResource TextSecondary}"
                                   StrokeThickness="1.4"
                                   StrokeStartLineCap="Round"
                                   StrokeEndLineCap="Round" />
@@ -360,8 +329,8 @@
                                PopupAnimation="Fade"
                                Focusable="False">
                             <Border MinWidth="{Binding ActualWidth, RelativeSource={RelativeSource TemplatedParent}}"
-                                    Background="{StaticResource CardBg}"
-                                    BorderBrush="{StaticResource CardBorderStrong}"
+                                    Background="{DynamicResource CardBg}"
+                                    BorderBrush="{DynamicResource CardBorderStrong}"
                                     BorderThickness="1"
                                     CornerRadius="8"
                                     Margin="0,6,0,0"
@@ -377,11 +346,11 @@
                     </Grid>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource ButtonGhostHover}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ButtonGhostHover}" />
                             <Setter TargetName="bd" Property="BorderBrush" Value="#3FFFFFFF" />
                         </Trigger>
                         <Trigger Property="IsDropDownOpen" Value="True">
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -398,7 +367,7 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="Foreground" Value="#0A0A0A" />
-        <Setter Property="Background" Value="{StaticResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource Accent}" />
         <Setter Property="Padding" Value="22,9" />
         <Setter Property="MinHeight" Value="34" />
         <Setter Property="MinWidth" Value="96" />
@@ -424,10 +393,10 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentHover}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentHover}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentPressed}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource AccentPressed}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -436,8 +405,8 @@
     </Style>
 
     <Style x:Key="GhostButtonStyle" TargetType="Button" BasedOn="{StaticResource PrimaryButtonStyle}">
-        <Setter Property="Background" Value="{StaticResource ButtonGhost}" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource ButtonGhost}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
         <Setter Property="FontWeight" Value="Medium" />
     </Style>
 
@@ -447,9 +416,9 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontSize" Value="13" />
         <Setter Property="FontWeight" Value="Medium" />
-        <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
-        <Setter Property="Background" Value="{StaticResource ButtonGhost}" />
-        <Setter Property="BorderBrush" Value="{StaticResource CardBorderStrong}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
+        <Setter Property="Background" Value="{DynamicResource ButtonGhost}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrong}" />
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="MinHeight" Value="34" />
         <Setter Property="MinWidth" Value="160" />
@@ -479,11 +448,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource ButtonGhostHover}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource ButtonGhostHover}" />
                             <Setter TargetName="bd" Property="BorderBrush" Value="#3FFFFFFF" />
                         </Trigger>
                         <Trigger Property="IsKeyboardFocused" Value="True">
-                            <Setter TargetName="bd" Property="BorderBrush" Value="{StaticResource Accent}" />
+                            <Setter TargetName="bd" Property="BorderBrush" Value="{DynamicResource Accent}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
@@ -565,7 +534,7 @@
         <Setter Property="FontFamily" Value="Cascadia Code, Consolas, Segoe UI" />
         <Setter Property="FontSize" Value="10" />
         <Setter Property="FontWeight" Value="SemiBold" />
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
         <Setter Property="VerticalAlignment" Value="Center" />
     </Style>
 
@@ -579,7 +548,7 @@
         <Setter Property="Height" Value="32" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="Foreground" Value="{StaticResource TextSecondary}" />
+        <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
         <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
         <Setter Property="FontSize" Value="10" />
         <Setter Property="Cursor" Value="Hand" />
@@ -600,11 +569,11 @@
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource OverlayHover}" />
-                            <Setter Property="Foreground" Value="{StaticResource TextPrimary}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource OverlayHover}" />
+                            <Setter Property="Foreground" Value="{DynamicResource TextPrimary}" />
                         </Trigger>
                         <Trigger Property="IsPressed" Value="True">
-                            <Setter TargetName="bd" Property="Background" Value="{StaticResource OverlayPressed}" />
+                            <Setter TargetName="bd" Property="Background" Value="{DynamicResource OverlayPressed}" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>

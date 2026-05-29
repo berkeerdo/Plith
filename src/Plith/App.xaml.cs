@@ -16,6 +16,7 @@ public partial class App : Application
     private OsdOrchestrator? _orchestrator;
     private OsdWindow? _osd;
     private HotkeyService? _hotkey;
+    private ThemeService? _theme;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -27,6 +28,14 @@ public partial class App : Application
         // Reconcile the registry Run entry with the saved preference on every launch — the
         // user could have manually edited the INI between sessions, or moved the binary.
         AutoStartService.Apply(_settings.Current.AutoStart);
+
+        // ThemeService must start before any Window is shown so the first paint already
+        // uses the active palette; otherwise a Light user would see a one-frame dark flash.
+        _theme = new ThemeService(this, _settings);
+        _theme.Start();
+        // The OSD viewmodel caches threshold brush references for the hot-path GainColor
+        // getter; tell it to re-resolve from the active palette every time the theme swaps.
+        _theme.ThemeApplied += () => _osd?.ViewModel.RefreshThresholdBrushes();
 
         _osd = new OsdWindow(_settings);
         _osd.Show();   // create the native handle now so first ShowOsd is instant; Opacity=0 keeps it invisible
@@ -50,7 +59,7 @@ public partial class App : Application
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
 
-        _trayHost = new TrayIconHost(this, _settings, _hotkey);
+        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme);
         _trayHost.Initialize();
     }
 
@@ -69,6 +78,7 @@ public partial class App : Application
     {
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
         _hotkey?.Dispose();
+        _theme?.Dispose();
         _orchestrator?.Dispose();
         _osd?.AllowShutdown();    // unblock OnClosing so real shutdown can destroy the window
         _trayHost?.Dispose();

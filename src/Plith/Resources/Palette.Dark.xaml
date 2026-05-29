@@ -1,0 +1,34 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Dark palette — Linear / Raycast-tier. Default theme. -->
+
+    <SolidColorBrush x:Key="WindowBg" Color="#0A0A0A" />
+    <SolidColorBrush x:Key="HeaderBg" Color="#0E0E0E" />
+    <SolidColorBrush x:Key="CardBg" Color="#161616" />
+    <SolidColorBrush x:Key="CardBgHover" Color="#1B1B1B" />
+    <SolidColorBrush x:Key="CardBorder" Color="#1F1F1F" />
+    <SolidColorBrush x:Key="CardBorderStrong" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="Divider" Color="#1A1A1A" />
+
+    <SolidColorBrush x:Key="TextPrimary" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
+    <SolidColorBrush x:Key="TextTertiary" Color="#71717A" />
+    <SolidColorBrush x:Key="TextDisabled" Color="#52525B" />
+
+    <SolidColorBrush x:Key="Accent" Color="#4AD695" />
+    <SolidColorBrush x:Key="AccentHover" Color="#5BE0A5" />
+    <SolidColorBrush x:Key="AccentPressed" Color="#3FBF85" />
+    <SolidColorBrush x:Key="AccentGlow" Color="#1A4AD695" />
+
+    <SolidColorBrush x:Key="TrackInactive" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="ThumbColor" Color="#F5F5F5" />
+    <SolidColorBrush x:Key="OverlayHover" Color="#0AFFFFFF" />
+    <SolidColorBrush x:Key="OverlayPressed" Color="#14FFFFFF" />
+
+    <SolidColorBrush x:Key="ButtonGhost" Color="#1F1F1F" />
+    <SolidColorBrush x:Key="ButtonGhostHover" Color="#2A2A2A" />
+
+    <SolidColorBrush x:Key="ErrorText" Color="#F87171" />
+
+</ResourceDictionary>

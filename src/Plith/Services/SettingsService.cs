@@ -48,6 +48,7 @@ public sealed class SettingsService
             var m = new SettingsModel
             {
                 AutoStart = ParseBool(data[SectionGeneral]["AutoStart"], false),
+                Theme = ParseEnum(data[SectionGeneral]["Theme"], ThemeMode.Dark),
                 ShowDurationMs = ParseInt(data[SectionOsd]["ShowDurationMs"], 2000, 500, 10000),
                 Position = ParseEnum(data[SectionOsd]["Position"], OsdPosition.BottomCenter),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
@@ -86,6 +87,7 @@ public sealed class SettingsService
         // CultureInfo.InvariantCulture and "G" formatting throughout.
         var inv = CultureInfo.InvariantCulture;
         data[SectionGeneral]["AutoStart"] = m.AutoStart.ToString(inv);
+        data[SectionGeneral]["Theme"] = m.Theme.ToString();
         data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString(inv);
         data[SectionOsd]["Position"] = m.Position.ToString();
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);

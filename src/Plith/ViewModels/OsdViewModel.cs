@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Globalization;
 using System.Runtime.CompilerServices;
+using System.Windows;
 using System.Windows.Media;
 using Plith.Services;
 
@@ -23,6 +24,7 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         Media = new MediaViewModel();
         // ShowMediaCard depends on Media.HasSession too — bubble that change up.
         Media.HasSessionChanged += () => OnPropertyChanged(nameof(ShowMediaCard));
+        RefreshThresholdBrushes();
     }
 
     private bool _useColorThresholds;
@@ -79,13 +81,19 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         }
     }
 
-    // Cached frozen brushes so the GainColor getter is allocation-free in the hot path —
-    // it fires on every poll tick (tens of Hz) and on every binding refresh. Frozen brushes
-    // are also cross-thread safe and skip the WPF render-thread copy.
-    private static readonly SolidColorBrush BrushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
-    private static readonly SolidColorBrush BrushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
-    private static readonly SolidColorBrush BrushAmber = FreezeBrush(Color.FromRgb(0xF5, 0xC2, 0x42));
-    private static readonly SolidColorBrush BrushRed = FreezeBrush(Color.FromRgb(0xE5, 0x4B, 0x4B));
+    // Cached threshold brush references resolved from the active OSD palette ResourceDictionary.
+    // The XAML brushes themselves are shared instances; we cache the refs so GainColor stays
+    // allocation-free in the hot path. RefreshThresholdBrushes() must be called whenever the
+    // theme palette swaps (the ThemeService raises ThemeApplied for that).
+    //
+    // Seeds match the dark-theme OsdGain* keys so unit tests (which run without an
+    // Application.Current and therefore can't resolve from XAML resources) still observe the
+    // expected colour-mapping logic. In production these are overwritten on the first
+    // RefreshThresholdBrushes() call from the OsdViewModel ctor.
+    private Brush _brushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
+    private Brush _brushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
+    private Brush _brushAmber = FreezeBrush(Color.FromRgb(0xF5, 0xC2, 0x42));
+    private Brush _brushRed = FreezeBrush(Color.FromRgb(0xE5, 0x4B, 0x4B));
 
     private static SolidColorBrush FreezeBrush(Color c)
     {
@@ -94,20 +102,39 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         return b;
     }
 
+    /// <summary>Re-resolves the four threshold brushes from <see cref="Application.Current"/>'s
+    /// resources and fires <see cref="PropertyChanged"/> for <c>GainColor</c>. Call this after
+    /// a theme palette swap so the volume bar picks up the new variant.</summary>
+    public void RefreshThresholdBrushes()
+    {
+        _brushMuted = ResolveBrush("OsdGainMuted", _brushMuted);
+        _brushGreen = ResolveBrush("OsdGainGreen", _brushGreen);
+        _brushAmber = ResolveBrush("OsdGainAmber", _brushAmber);
+        _brushRed = ResolveBrush("OsdGainRed", _brushRed);
+        OnPropertyChanged(nameof(GainColor));
+    }
+
+    private static Brush ResolveBrush(string key, Brush fallback)
+    {
+        // Application.Current is null in unit tests / the XAML designer; keep the previous
+        // resolved value (or the seed fallback) rather than crash.
+        return Application.Current?.TryFindResource(key) is Brush b ? b : fallback;
+    }
+
     public Brush GainColor
     {
         get
         {
-            if (_muted) return BrushMuted;
-            if (!_useColorThresholds) return BrushGreen;
+            if (_muted) return _brushMuted;
+            if (!_useColorThresholds) return _brushGreen;
             return _gainNormalized switch
             {
                 // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
                 // 0.70 ≈ -7 dB on the VM scale, 70 % on the Windows scale.
                 // 0.90 ≈  6 dB on the VM scale, 90 % on the Windows scale.
-                <= 0.70 => BrushGreen,
-                <= 0.90 => BrushAmber,
-                _       => BrushRed,
+                <= 0.70 => _brushGreen,
+                <= 0.90 => _brushAmber,
+                _       => _brushRed,
             };
         }
     }

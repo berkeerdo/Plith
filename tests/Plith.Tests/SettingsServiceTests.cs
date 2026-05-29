@@ -23,6 +23,7 @@ public class SettingsServiceTests
         Assert.Equal((uint)0, svc.Current.SummonHotkeyMods);
         Assert.Equal(0, svc.Current.SummonHotkeyKey);
         Assert.False(svc.Current.HasSummonHotkey);
+        Assert.Equal(ThemeMode.Dark, svc.Current.Theme);
     }
 
     [Fact]
@@ -45,6 +46,7 @@ public class SettingsServiceTests
             AutoStart = true,
             SummonHotkeyMods = 0x03,   // Ctrl | Alt
             SummonHotkeyKey = 0x56,    // V
+            Theme = ThemeMode.Light,
         };
         svc.Save(m);
 
@@ -64,6 +66,20 @@ public class SettingsServiceTests
         Assert.Equal((uint)0x03, svc2.Current.SummonHotkeyMods);
         Assert.Equal(0x56, svc2.Current.SummonHotkeyKey);
         Assert.True(svc2.Current.HasSummonHotkey);
+        Assert.Equal(ThemeMode.Light, svc2.Current.Theme);
+    }
+
+    [Fact]
+    public void Load_UnknownThemeValue_FallsBackToDark()
+    {
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [General]
+            Theme = NeonRainbow
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.Equal(ThemeMode.Dark, svc.Current.Theme);
     }
 
     [Fact]

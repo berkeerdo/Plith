@@ -11,6 +11,7 @@ public partial class SettingsWindow : Window
 {
     private readonly SettingsService _settings;
     private readonly HotkeyService _hotkey;
+    private readonly ThemeService _theme;
     private bool _loadingFromModel;
     private DispatcherTimer? _savedPulseTimer;
 
@@ -19,10 +20,11 @@ public partial class SettingsWindow : Window
     private int _capturedKey;
     private bool _isCapturingHotkey;
 
-    public SettingsWindow(SettingsService settings, HotkeyService hotkey)
+    public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme)
     {
         _settings = settings;
         _hotkey = hotkey;
+        _theme = theme;
         InitializeComponent();
 
         BusCombo.ItemsSource = new[]
@@ -49,13 +51,35 @@ public partial class SettingsWindow : Window
         };
 
         PreviewKeyDown += OnPreviewKeyDown;
-        SourceInitialized += (_, _) => ApplyRoundedCorners();
+        SourceInitialized += (_, _) =>
+        {
+            ApplyRoundedCorners();
+            ApplyImmersiveDarkMode();
+        };
 
         // BindingChanged fires after App.ApplyHotkeyFromSettings has talked to Windows,
         // so this is the only place that knows whether the user's combo was accepted.
         _hotkey.BindingChanged += OnHotkeyBindingChanged;
-        Closed += (_, _) => _hotkey.BindingChanged -= OnHotkeyBindingChanged;
+        _theme.ThemeApplied += OnThemeApplied;
+        Closed += (_, _) =>
+        {
+            _hotkey.BindingChanged -= OnHotkeyBindingChanged;
+            _theme.ThemeApplied -= OnThemeApplied;
+        };
         UpdateHotkeyConflictWarning();
+    }
+
+    private void OnThemeApplied()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnThemeApplied));
+            return;
+        }
+        ApplyImmersiveDarkMode();
+        // The mini OSD card in the preview pane caches threshold brushes per the OSD viewmodel
+        // contract; refresh it in tandem with the main OSD so the bar colour matches the swap.
+        Preview?.PreviewViewModel.RefreshThresholdBrushes();
     }
 
     private void OnHotkeyBindingChanged()
@@ -196,6 +220,7 @@ public partial class SettingsWindow : Window
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(nint hwnd, int attr, ref int value, int size);
 
+    private const int DWMWA_USE_IMMERSIVE_DARK_MODE = 20;
     private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
     private const int DWMWCP_ROUND = 2;
 
@@ -205,6 +230,17 @@ public partial class SettingsWindow : Window
         if (hwnd == 0) return;
         int pref = DWMWCP_ROUND;
         _ = DwmSetWindowAttribute(hwnd, DWMWA_WINDOW_CORNER_PREFERENCE, ref pref, sizeof(int));
+    }
+
+    private void ApplyImmersiveDarkMode()
+    {
+        // Aligns the title bar / Mica tint with the active palette. Without this, a Light
+        // theme would still get a dark title bar (carried over from the system default for
+        // WPF windows). Safe to call on every theme apply — the attribute is idempotent.
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == 0) return;
+        int dark = _theme.IsEffectiveDark ? 1 : 0;
+        _ = DwmSetWindowAttribute(hwnd, DWMWA_USE_IMMERSIVE_DARK_MODE, ref dark, sizeof(int));
     }
 
     private void LoadIntoUi(SettingsModel m)
@@ -225,6 +261,7 @@ public partial class SettingsWindow : Window
             BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
             AutoStartToggle.IsChecked = m.AutoStart;
+            ThemeCombo.SelectedItem = m.Theme;
         }
         finally
         {
@@ -270,6 +307,7 @@ public partial class SettingsWindow : Window
         AutoShowMediaToggle.Unchecked += (_, _) => AutoSave();
         AutoStartToggle.Checked += (_, _) => AutoSave();
         AutoStartToggle.Unchecked += (_, _) => AutoSave();
+        ThemeCombo.SelectionChanged += (_, _) => AutoSave();
     }
 
     private void AutoSave()
@@ -311,6 +349,7 @@ public partial class SettingsWindow : Window
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;
+        if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
 
         _settings.Save(m);
         AutoStartService.Apply(m.AutoStart);
