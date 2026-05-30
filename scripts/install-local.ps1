@@ -19,15 +19,17 @@ $publishDir = Join-Path $repoRoot 'publish'
 $installDir = Join-Path $env:ProgramFiles 'Plith'
 
 # 1. Resolve signtool. Windows SDK or VS Build Tools must be installed.
-$signtool = Get-Command signtool.exe -ErrorAction SilentlyContinue
-if (-not $signtool) {
+$signtoolPath = $null
+$cmd = Get-Command signtool.exe -ErrorAction SilentlyContinue
+if ($cmd) { $signtoolPath = $cmd.Source }
+if (-not $signtoolPath) {
     $candidates = Get-ChildItem -Path "${env:ProgramFiles(x86)}\Windows Kits\10\bin" `
         -Filter 'signtool.exe' -Recurse -ErrorAction SilentlyContinue |
         Where-Object { $_.FullName -match 'x64' } |
         Sort-Object FullName -Descending
-    if ($candidates) { $signtool = $candidates[0] }
+    if ($candidates) { $signtoolPath = $candidates[0].FullName }
 }
-if (-not $signtool) {
+if (-not $signtoolPath) {
     throw "signtool.exe not found. Install the Windows 10/11 SDK or VS Build Tools (workload: 'Desktop development with C++') and re-run."
 }
 
@@ -51,7 +53,7 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
 #    assembly does).
 $exePath = Join-Path $publishDir 'Plith.exe'
 Write-Host "Signing $exePath..."
-& $signtool.Source sign /sha1 $thumb /fd SHA256 `
+& $signtoolPath sign /sha1 $thumb /fd SHA256 `
     /tr 'http://timestamp.digicert.com' /td SHA256 $exePath | Out-Host
 if ($LASTEXITCODE -ne 0) { throw "signtool failed." }
 
@@ -62,11 +64,15 @@ if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installD
 # robocopy uses non-zero success codes; 0-7 are non-error.
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE." }
 
-# 7. Launch. Plith's AutoStartService.Apply rewrites the HKCU\Run entry to the
-#    new path on every startup, so no manual registry edit is needed here.
+# 7. Launch via explorer.exe so the new process runs in the user context (not admin),
+#    which is what UIAccess binaries need to register their privilege correctly.
+#    Direct Start-Process from elevated PowerShell fails with "A referral was returned
+#    from the server" because UIAccess + admin parent = invalid token combo.
+#    Plith's AutoStartService.Apply rewrites the HKCU\Run entry to the new path on
+#    every startup, so no manual registry edit is needed here.
 $installedExe = Join-Path $installDir 'Plith.exe'
 Write-Host "Launching $installedExe..."
-Start-Process -FilePath $installedExe
+Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$installedExe`""
 
 Write-Host ""
 Write-Host "Done. Open Settings and check the Game mode badge -- it should now read 'Active'."

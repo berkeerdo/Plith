@@ -36,22 +36,29 @@ if (-not $cert) {
 # 2. Persist thumbprint for install-local.ps1.
 Set-Content -Path $thumbFile -Value $cert.Thumbprint -NoNewline
 
-# 3. Ensure public cert is in LocalMachine\TrustedPublisher so Windows honors UIAccess.
-$installed = Get-ChildItem -Path Cert:\LocalMachine\TrustedPublisher |
-    Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+# 3. Ensure public cert is in BOTH stores so Windows honors UIAccess.
+#    TrustedPublisher alone is not enough for a self-signed cert — uiAccess validation
+#    walks the chain and rejects the binary if the signing cert is not also a trusted
+#    root. Without Root the binary silently fails to launch from Program Files.
+$tempCer = [IO.Path]::Combine($env:TEMP, "Plith.cer")
+$exported = $false
 
-if (-not $installed) {
-    Write-Host "Importing public cert into LocalMachine\TrustedPublisher..."
-    $tempCer = [IO.Path]::Combine($env:TEMP, "Plith.cer")
-    try {
-        Export-Certificate -Cert $cert -FilePath $tempCer | Out-Null
-        Import-Certificate -FilePath $tempCer -CertStoreLocation Cert:\LocalMachine\TrustedPublisher | Out-Null
-    } finally {
-        Remove-Item -Path $tempCer -ErrorAction SilentlyContinue
+foreach ($storeName in 'TrustedPublisher', 'Root') {
+    $store = "Cert:\LocalMachine\$storeName"
+    $present = Get-ChildItem -Path $store | Where-Object { $_.Thumbprint -eq $cert.Thumbprint }
+    if ($present) {
+        Write-Host "Public cert already in LocalMachine\$storeName."
+        continue
     }
-} else {
-    Write-Host "Public cert already trusted in LocalMachine\TrustedPublisher."
+    if (-not $exported) {
+        Export-Certificate -Cert $cert -FilePath $tempCer | Out-Null
+        $exported = $true
+    }
+    Write-Host "Importing public cert into LocalMachine\$storeName..."
+    Import-Certificate -FilePath $tempCer -CertStoreLocation $store | Out-Null
 }
+
+if ($exported) { Remove-Item -Path $tempCer -ErrorAction SilentlyContinue }
 
 # Final stdout: thumbprint, so caller can `$thumb = & setup-cert.ps1 | Select-Object -Last 1`.
 $cert.Thumbprint
