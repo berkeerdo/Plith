@@ -408,6 +408,34 @@
                     </Border>
                 </Border>
 
+                <!-- ============== Game mode ============== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Game mode" Margin="4,18,0,10" />
+                <Border Style="{StaticResource CardStyle}">
+                    <Border Style="{StaticResource RowLastStyle}">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <Border x:Name="GameModeDot"
+                                    Grid.Column="0"
+                                    Width="8" Height="8"
+                                    CornerRadius="4"
+                                    VerticalAlignment="Top"
+                                    Margin="0,6,12,0"
+                                    Background="{DynamicResource WarningAmber}" />
+                            <StackPanel Grid.Column="1">
+                                <TextBlock x:Name="GameModeStatusLabel"
+                                           Style="{StaticResource RowLabelStyle}"
+                                           Text="Game mode: Limited" />
+                                <TextBlock x:Name="GameModeHint"
+                                           Style="{StaticResource RowHintStyle}"
+                                           Text="Run scripts\install-local.ps1 (admin) to install Plith with UIAccess and draw over exclusive fullscreen games." />
+                            </StackPanel>
+                        </Grid>
+                    </Border>
+                </Border>
+
                 </StackPanel>
             </ScrollViewer>
 

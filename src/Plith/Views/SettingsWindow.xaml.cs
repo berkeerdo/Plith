@@ -67,6 +67,19 @@ public partial class SettingsWindow : Window
             _theme.ThemeApplied -= OnThemeApplied;
         };
         UpdateHotkeyConflictWarning();
+        ApplyGameModeStatus();
+    }
+
+    private void ApplyGameModeStatus()
+    {
+        bool active = UiAccessProbe.IsGameModeActive();
+        GameModeDot.Background = (System.Windows.Media.Brush)FindResource(active ? "Accent" : "WarningAmber");
+        GameModeStatusLabel.Text = active
+            ? "Game mode: Active"
+            : "Game mode: Limited";
+        GameModeHint.Text = active
+            ? "Plith is signed and running from a trusted location — OSD draws over exclusive fullscreen games."
+            : @"Run scripts\install-local.ps1 (admin) to install Plith with UIAccess and draw over exclusive fullscreen games.";
     }
 
     private void OnThemeApplied()
