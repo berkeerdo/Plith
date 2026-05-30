@@ -53,13 +53,39 @@ without taking your attention away from the thing you were already doing.
 - **Branded tray icon.** Modern accent-green sound-emission mark; double-click opens
   Settings; right-click for Settings + Exit.
 
-### Visible-over-fullscreen
+### Game mode (works over fullscreen games)
 
-Plith uses a regular topmost WPF window (`ShowInTaskbar=false`, `ShowActivated=false`) so the
-OSD floats above the desktop and over **fullscreen-borderless** games, which is what nearly
-all modern titles ship with. **Fullscreen-exclusive** mode would need the BandWindow +
-UIAccess path; that infrastructure is in the codebase but disabled, waiting on a signed
-binary in a future release.
+By default — running from `bin\` or any unsigned build — Plith uses a regular topmost
+window so the OSD floats over **fullscreen-borderless** games, which is what nearly all
+modern titles ship with. To draw over **exclusive fullscreen** games as well, Plith needs
+the Windows UIAccess privilege, which requires a digitally signed binary installed to
+`\Program Files\`.
+
+The included PowerShell script handles both — generates a self-signed cert, signs Plith,
+and installs it to `\Program Files\Plith\`:
+
+```powershell
+# Right-click PowerShell → Run as administrator
+pwsh scripts\install-local.ps1
+```
+
+Open Settings after launch — the Game mode badge at the bottom flips from amber
+"Limited" to green "Active". The OSD now uses `CreateWindowInBand` in Windows'
+UIAccess z-band and draws above exclusive fullscreen games.
+
+To uninstall:
+
+```powershell
+pwsh scripts\uninstall-local.ps1
+```
+
+**Anti-cheat note.** Plith is a passive overlay — it reads no game memory, injects
+no input, and uses only documented Windows APIs (with one exception: `CreateWindowInBand`,
+also used by MSI Afterburner, RTSS, and FancyOSD). Tools that use equivalent techniques
+run on millions of PCs without anti-cheat issues. However, some games' anti-cheats
+(Vanguard for Valorant, EAC for several titles) may treat any UIAccess overlay with
+suspicion. If you play competitive ranked matches in such games, exit Plith from the
+tray icon beforehand.
 
 ## Configuration
 
