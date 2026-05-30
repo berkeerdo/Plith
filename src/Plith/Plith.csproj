@@ -16,6 +16,10 @@
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
     <StartupObject>Plith.Program</StartupObject>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+    <!-- Release builds pick the uiAccess=true manifest so install-local.ps1 + signtool can
+         earn UIAccess from Windows after install to \Program Files\. Debug stays at false
+         so unsigned dev launches (dotnet run from bin\) don't trip Windows' elevation check. -->
+    <ApplicationManifest Condition="'$(Configuration)' == 'Release'">app.release.manifest</ApplicationManifest>
     <Authors>Plith</Authors>
     <Product>Plith</Product>
     <Description>Modern Windows audio OSD with Voicemeeter-first design and media controls baked in.</Description>

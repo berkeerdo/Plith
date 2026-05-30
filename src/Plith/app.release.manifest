@@ -5,10 +5,11 @@
   <trustInfo xmlns="urn:schemas-microsoft-com:asm.v2">
     <security>
       <requestedPrivileges xmlns="urn:schemas-microsoft-com:asm.v3">
-        <!-- Debug manifest: uiAccess=false so unsigned dev builds (dotnet run from bin\)
-             can launch normally. The Release config picks app.release.manifest via csproj
-             condition, which sets uiAccess=true for the signed Program Files install. -->
-        <requestedExecutionLevel level="asInvoker" uiAccess="false" />
+        <!-- Release manifest: uiAccess=true. Honored by Windows only when the binary is
+             signed AND installed to a trusted location (\Program Files\). scripts\install-local.ps1
+             handles both. Unsigned Release builds refuse to launch with "requires elevation" —
+             that's why Debug uses a separate manifest with uiAccess=false. -->
+        <requestedExecutionLevel level="asInvoker" uiAccess="true" />
       </requestedPrivileges>
     </security>
   </trustInfo>
