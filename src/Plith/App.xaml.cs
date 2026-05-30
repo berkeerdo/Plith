@@ -14,7 +14,7 @@ public partial class App : Application
     private SettingsService? _settings;
     private TrayIconHost? _trayHost;
     private OsdOrchestrator? _orchestrator;
-    private OsdWindow? _osd;
+    private OsdHost? _osd;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
     private ForegroundWatcher? _foregroundWatcher;
@@ -38,8 +38,7 @@ public partial class App : Application
         // getter; tell it to re-resolve from the active palette every time the theme swaps.
         _theme.ThemeApplied += () => _osd?.ViewModel.RefreshThresholdBrushes();
 
-        _osd = new OsdWindow(_settings);
-        _osd.Show();   // create the native handle now so first ShowOsd is instant; Opacity=0 keeps it invisible
+        _osd = new OsdHost(_settings);   // ctor calls CreateWindow() so first ShowOsd is instant
         _orchestrator = new OsdOrchestrator(_osd, _settings);
         _orchestrator.Start();
 
@@ -87,7 +86,7 @@ public partial class App : Application
         _hotkey?.Dispose();
         _theme?.Dispose();
         _orchestrator?.Dispose();
-        _osd?.AllowShutdown();    // unblock OnClosing so real shutdown can destroy the window
+        // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
         _trayHost?.Dispose();
         base.OnExit(e);
     }

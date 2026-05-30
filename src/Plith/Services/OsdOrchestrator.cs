@@ -22,7 +22,7 @@ public sealed class OsdOrchestrator : IDisposable
 
     private enum ActiveSource { None, Voicemeeter, Windows }
 
-    private readonly OsdWindow _osd;
+    private readonly OsdHost _osd;
     private readonly SettingsService _settings;
     private readonly Dispatcher _dispatcher;
     private readonly VoicemeeterClient _voicemeeter = new();
@@ -45,7 +45,7 @@ public sealed class OsdOrchestrator : IDisposable
     private TimeSpan VisibleFor => TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
     private int MonitoredBusIndex => _settings.Current.MonitoredBusIndex;
 
-    public OsdOrchestrator(OsdWindow osd, SettingsService settings)
+    public OsdOrchestrator(OsdHost osd, SettingsService settings)
     {
         _osd = osd;
         _settings = settings;

@@ -24,7 +24,7 @@ public sealed class ForegroundWatcher : IDisposable
     // throttle window so we don't hammer SetWindowPos on switcher animations.
     private static readonly TimeSpan ThrottleWindow = TimeSpan.FromMilliseconds(150);
 
-    private readonly OsdWindow _osd;
+    private readonly OsdHost _osd;
     private readonly Dispatcher _dispatcher;
     private nint _hook;
     // Held in a field so the GC doesn't collect the delegate while the native hook is live.
@@ -32,7 +32,7 @@ public sealed class ForegroundWatcher : IDisposable
     private DateTime _lastReassertUtc = DateTime.MinValue;
     private bool _disposed;
 
-    public ForegroundWatcher(OsdWindow osd)
+    public ForegroundWatcher(OsdHost osd)
     {
         _osd = osd;
         _dispatcher = osd.Dispatcher;
