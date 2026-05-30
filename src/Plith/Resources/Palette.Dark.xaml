@@ -30,5 +30,6 @@
     <SolidColorBrush x:Key="ButtonGhostHover" Color="#2A2A2A" />
 
     <SolidColorBrush x:Key="ErrorText" Color="#F87171" />
+    <SolidColorBrush x:Key="WarningAmber" Color="#F5C242" />
 
 </ResourceDictionary>
