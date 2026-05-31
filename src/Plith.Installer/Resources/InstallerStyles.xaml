@@ -72,4 +72,78 @@
         </Setter>
     </Style>
 
+    <!-- Step row template for ProgressPage / UninstallProgressPage. The dot color and glyph
+         depend on InstallStepViewModel.Status. -->
+    <DataTemplate x:Key="StepRowTemplate">
+        <Grid Margin="0,6">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="24" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Status indicator. We render one of four glyphs/dots based on Status -->
+            <Grid Grid.Column="0" Width="14" Height="14" HorizontalAlignment="Center">
+                <!-- Pending: hollow circle -->
+                <Ellipse Width="10" Height="10"
+                         Stroke="{DynamicResource TextTertiary}"
+                         StrokeThickness="1.5"
+                         Visibility="{Binding Status, Converter={StaticResource StatusToVis}, ConverterParameter=Pending}" />
+                <!-- Running: filled accent dot with pulsing scale -->
+                <Ellipse Width="10" Height="10"
+                         Fill="{DynamicResource Accent}"
+                         RenderTransformOrigin="0.5,0.5"
+                         Visibility="{Binding Status, Converter={StaticResource StatusToVis}, ConverterParameter=Running}">
+                    <Ellipse.RenderTransform>
+                        <ScaleTransform />
+                    </Ellipse.RenderTransform>
+                    <Ellipse.Triggers>
+                        <EventTrigger RoutedEvent="Ellipse.Loaded">
+                            <BeginStoryboard>
+                                <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleX)"
+                                                     From="0.85" To="1.15" Duration="0:0:0.6">
+                                        <DoubleAnimation.EasingFunction>
+                                            <SineEase EasingMode="EaseInOut" />
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                    <DoubleAnimation Storyboard.TargetProperty="(UIElement.RenderTransform).(ScaleTransform.ScaleY)"
+                                                     From="0.85" To="1.15" Duration="0:0:0.6">
+                                        <DoubleAnimation.EasingFunction>
+                                            <SineEase EasingMode="EaseInOut" />
+                                        </DoubleAnimation.EasingFunction>
+                                    </DoubleAnimation>
+                                </Storyboard>
+                            </BeginStoryboard>
+                        </EventTrigger>
+                    </Ellipse.Triggers>
+                </Ellipse>
+                <!-- Done: checkmark text glyph in accent -->
+                <TextBlock Text="✓"
+                           FontFamily="Segoe UI"
+                           FontWeight="Bold"
+                           FontSize="13"
+                           Foreground="{DynamicResource Accent}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="{Binding Status, Converter={StaticResource StatusToVis}, ConverterParameter=Done}" />
+                <!-- Failed: warning glyph in amber -->
+                <TextBlock Text="⚠"
+                           FontFamily="Segoe UI Symbol"
+                           FontSize="12"
+                           Foreground="{DynamicResource WarningAmber}"
+                           HorizontalAlignment="Center"
+                           VerticalAlignment="Center"
+                           Visibility="{Binding Status, Converter={StaticResource StatusToVis}, ConverterParameter=Failed}" />
+            </Grid>
+
+            <TextBlock Grid.Column="1"
+                       Text="{Binding Title}"
+                       FontFamily="{StaticResource UiFont}"
+                       FontSize="13"
+                       Foreground="{DynamicResource TextPrimary}"
+                       VerticalAlignment="Center"
+                       Margin="8,0,0,0" />
+        </Grid>
+    </DataTemplate>
+
 </ResourceDictionary>
