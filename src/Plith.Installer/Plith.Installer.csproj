@@ -21,6 +21,7 @@
     <Version>0.1.0</Version>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
+    <!-- Recommended (not All) — matches src/Plith/Plith.csproj's strict-but-pragmatic stance. -->
     <AnalysisMode>Recommended</AnalysisMode>
     <!--
       Suppressions with justification:
@@ -29,7 +30,9 @@
     <NoWarn>$(NoWarn);CA1707</NoWarn>
   </PropertyGroup>
 
-  <!-- Linked resources from src/Plith — single source of truth -->
+  <!-- Linked resources from src/Plith — single source of truth.
+       Dark palette only: the installer is a short-lived premium wizard and is dark-only
+       by design, matching the OSD's behaviour. Light palette is intentionally not linked. -->
   <ItemGroup>
     <Page Include="..\Plith\Resources\Palette.Dark.xaml">
       <Link>Resources\Palette.Dark.xaml</Link>
