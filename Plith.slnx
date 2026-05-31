@@ -1,8 +1,10 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Plith/Plith.csproj" />
+    <Project Path="src/Plith.Installer/Plith.Installer.csproj" />
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/Plith.Tests/Plith.Tests.csproj" />
+    <Project Path="tests/Plith.Installer.Tests/Plith.Installer.Tests.csproj" />
   </Folder>
 </Solution>
