@@ -14,7 +14,7 @@ public sealed class RegistryService
 
     /// <summary>Writes the Add/Remove Programs entry. UninstallString points at the
     /// installer copied to ProgramFiles\Plith\Setup\Plith-Uninstaller.exe with --uninstall.</summary>
-    public static void WriteUninstallEntry(string installDir, string installedExePath, string version, string uninstallerPath)
+    public void WriteUninstallEntry(string installDir, string installedExePath, string version, string uninstallerPath)
     {
         using var key = Registry.LocalMachine.CreateSubKey(UninstallKeyPath, writable: true)
             ?? throw new InvalidOperationException(
@@ -31,18 +31,18 @@ public sealed class RegistryService
         key.SetValue("EstimatedSize", ComputeEstimatedKb(installDir), RegistryValueKind.DWord);
     }
 
-    public static void RemoveUninstallEntry()
+    public void RemoveUninstallEntry()
     {
         Registry.LocalMachine.DeleteSubKeyTree(UninstallKeyPath, throwOnMissingSubKey: false);
     }
 
-    public static void WriteAutoStart(string installedExePath)
+    public void WriteAutoStart(string installedExePath)
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
         key?.SetValue("Plith", $"\"{installedExePath}\"", RegistryValueKind.String);
     }
 
-    public static void RemoveAutoStart()
+    public void RemoveAutoStart()
     {
         using var key = Registry.CurrentUser.OpenSubKey(RunKeyPath, writable: true);
         key?.DeleteValue("Plith", throwOnMissingValue: false);

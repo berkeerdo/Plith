@@ -13,7 +13,7 @@ public sealed class ShortcutService
         Environment.GetFolderPath(Environment.SpecialFolder.CommonStartMenu),
         "Programs", "Plith.lnk");
 
-    public static void CreateStartMenuShortcut(string targetExePath, string description)
+    public void CreateStartMenuShortcut(string targetExePath, string description)
     {
         var wshType = Type.GetTypeFromProgID("WScript.Shell")
             ?? throw new InvalidOperationException("WScript.Shell COM type not available.");
@@ -31,7 +31,7 @@ public sealed class ShortcutService
 #pragma warning restore CA1711, CA1812
     }
 
-    public static void RemoveStartMenuShortcut()
+    public void RemoveStartMenuShortcut()
     {
         if (File.Exists(StartMenuShortcutPath))
             File.Delete(StartMenuShortcutPath);

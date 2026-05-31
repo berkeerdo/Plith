@@ -26,8 +26,11 @@
     <!--
       Suppressions with justification:
       CA1707 — Win32 constants intentionally use ALL_CAPS_WITH_UNDERSCORES.
+      CA1822 — Service classes follow a DI/instance pattern even when individual methods
+               happen not to read this. The orchestrator holds instance references and
+               calls them through the variables, which requires non-static methods.
     -->
-    <NoWarn>$(NoWarn);CA1707</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1822</NoWarn>
   </PropertyGroup>
 
   <!-- Linked resources from src/Plith — single source of truth.
