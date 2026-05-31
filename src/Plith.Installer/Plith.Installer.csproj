@@ -1,0 +1,52 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <RootNamespace>Plith.Installer</RootNamespace>
+    <AssemblyName>Plith.Installer</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <UseWindowsForms>false</UseWindowsForms>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Resources\icons\plith.ico</ApplicationIcon>
+    <Authors>Plith</Authors>
+    <Product>Plith Setup</Product>
+    <Description>Plith setup wizard.</Description>
+    <Version>0.1.0</Version>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+    <!--
+      Suppressions with justification:
+      CA1707 — Win32 constants intentionally use ALL_CAPS_WITH_UNDERSCORES.
+    -->
+    <NoWarn>$(NoWarn);CA1707</NoWarn>
+  </PropertyGroup>
+
+  <!-- Linked resources from src/Plith — single source of truth -->
+  <ItemGroup>
+    <Page Include="..\Plith\Resources\Palette.Dark.xaml">
+      <Link>Resources\Palette.Dark.xaml</Link>
+    </Page>
+    <Page Include="..\Plith\Resources\Theme.xaml">
+      <Link>Resources\Theme.xaml</Link>
+    </Page>
+    <Resource Include="..\Plith\Resources\icons\plith.ico">
+      <Link>Resources\icons\plith.ico</Link>
+    </Resource>
+  </ItemGroup>
+
+  <!-- Embedded resource placeholder — populated by PublishPlithAndEmbed target (Task 2) -->
+  <ItemGroup>
+    <None Include="Resources\Embedded\PlithBundle.zip" Condition="Exists('Resources\Embedded\PlithBundle.zip')">
+      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
+</Project>

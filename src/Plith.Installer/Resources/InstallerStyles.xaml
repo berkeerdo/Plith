@@ -1,0 +1,7 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Page-specific installer styles populated by later tasks (step list template, hero icons,
+         large accent button). Empty for now so MainWindow can reference it without errors. -->
+
+</ResourceDictionary>
