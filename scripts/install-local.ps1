@@ -64,15 +64,49 @@ if (-not (Test-Path $installDir)) { New-Item -ItemType Directory -Path $installD
 # robocopy uses non-zero success codes; 0-7 are non-error.
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with code $LASTEXITCODE." }
 
-# 7. Launch via explorer.exe so the new process runs in the user context (not admin),
+$installedExe = Join-Path $installDir 'Plith.exe'
+
+# 7. Create Start menu shortcut so Plith appears in Windows search + Recent Apps.
+$startMenu = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs'
+$shortcutPath = Join-Path $startMenu 'Plith.lnk'
+Write-Host "Creating Start menu shortcut..."
+$wsh = New-Object -ComObject WScript.Shell
+$shortcut = $wsh.CreateShortcut($shortcutPath)
+$shortcut.TargetPath = $installedExe
+$shortcut.WorkingDirectory = $installDir
+$shortcut.IconLocation = $installedExe
+$shortcut.Description = 'Modern Windows audio OSD with Voicemeeter-first design and media controls.'
+$shortcut.Save()
+
+# 8. Register in Add/Remove Programs (Settings -> Apps -> Installed apps).
+#    UninstallString points at the uninstall script through pwsh -ExecutionPolicy Bypass
+#    so the Windows uninstall button just works without ceremony.
+$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Plith'
+$uninstallScript = Join-Path $PSScriptRoot 'uninstall-local.ps1'
+Write-Host "Registering Add/Remove Programs entry..."
+if (-not (Test-Path $uninstallKey)) { New-Item -Path $uninstallKey -Force | Out-Null }
+$version = (Get-Item $installedExe).VersionInfo.ProductVersion
+Set-ItemProperty -Path $uninstallKey -Name 'DisplayName'     -Value 'Plith'
+Set-ItemProperty -Path $uninstallKey -Name 'DisplayVersion'  -Value ($version ?? '0.1.0')
+Set-ItemProperty -Path $uninstallKey -Name 'Publisher'       -Value 'Plith Self-Signed'
+Set-ItemProperty -Path $uninstallKey -Name 'InstallLocation' -Value $installDir
+Set-ItemProperty -Path $uninstallKey -Name 'DisplayIcon'     -Value $installedExe
+Set-ItemProperty -Path $uninstallKey -Name 'UninstallString' `
+    -Value "pwsh.exe -NoProfile -ExecutionPolicy Bypass -File `"$uninstallScript`""
+Set-ItemProperty -Path $uninstallKey -Name 'NoModify'        -Value 1 -Type DWord
+Set-ItemProperty -Path $uninstallKey -Name 'NoRepair'        -Value 1 -Type DWord
+$estimatedKb = [int]((Get-ChildItem $installDir -Recurse | Measure-Object Length -Sum).Sum / 1KB)
+Set-ItemProperty -Path $uninstallKey -Name 'EstimatedSize'   -Value $estimatedKb -Type DWord
+
+# 9. Launch via explorer.exe so the new process runs in the user context (not admin),
 #    which is what UIAccess binaries need to register their privilege correctly.
 #    Direct Start-Process from elevated PowerShell fails with "A referral was returned
 #    from the server" because UIAccess + admin parent = invalid token combo.
 #    Plith's AutoStartService.Apply rewrites the HKCU\Run entry to the new path on
 #    every startup, so no manual registry edit is needed here.
-$installedExe = Join-Path $installDir 'Plith.exe'
 Write-Host "Launching $installedExe..."
 Start-Process -FilePath 'explorer.exe' -ArgumentList "`"$installedExe`""
 
 Write-Host ""
-Write-Host "Done. Open Settings and check the Game mode badge -- it should now read 'Active'."
+Write-Host "Done. Plith is in Start menu (search 'Plith') and Add/Remove Programs."
+Write-Host "Open Settings and check the Game mode badge -- it should now read 'Active'."

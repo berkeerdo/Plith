@@ -16,7 +16,21 @@ $installDir = Join-Path $env:ProgramFiles 'Plith'
 # 1. Stop Plith if running.
 Get-Process -Name Plith -ErrorAction SilentlyContinue | Stop-Process -Force
 
-# 2. Remove install directory.
+# 2. Remove Start menu shortcut.
+$shortcutPath = Join-Path $env:ProgramData 'Microsoft\Windows\Start Menu\Programs\Plith.lnk'
+if (Test-Path $shortcutPath) {
+    Remove-Item -Path $shortcutPath -Force
+    Write-Host "Removed Start menu shortcut."
+}
+
+# 3. Remove Add/Remove Programs entry.
+$uninstallKey = 'HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\Plith'
+if (Test-Path $uninstallKey) {
+    Remove-Item -Path $uninstallKey -Recurse -Force
+    Write-Host "Removed Add/Remove Programs entry."
+}
+
+# 4. Remove install directory.
 if (Test-Path $installDir) {
     Write-Host "Removing $installDir..."
     Remove-Item -Path $installDir -Recurse -Force
@@ -24,7 +38,7 @@ if (Test-Path $installDir) {
     Write-Host "$installDir not found -- nothing to remove."
 }
 
-# 3. Clean up the HKCU\Run autostart entry that pointed at the now-deleted exe.
+# 5. Clean up the HKCU\Run autostart entry that pointed at the now-deleted exe.
 $runKey = 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Run'
 $runValue = Get-ItemProperty -Path $runKey -Name 'Plith' -ErrorAction SilentlyContinue
 if ($runValue) {
@@ -32,4 +46,4 @@ if ($runValue) {
     Write-Host "Removed HKCU\Run autostart entry."
 }
 
-Write-Host "Done. Cert remains in CurrentUser\My + LocalMachine\TrustedPublisher for next install."
+Write-Host "Done. Cert remains in CurrentUser\My + LocalMachine\TrustedPublisher + LocalMachine\Root for next install."
