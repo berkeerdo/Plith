@@ -15,10 +15,12 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
-        <!-- Icon -->
+        <!-- Icon — source is the 256px PNG so WPF downscales rather than
+             upscaling a small ICO entry; HighQuality uses bicubic sampling. -->
         <Image Grid.Row="0"
-               Source="pack://application:,,,/Resources/icons/plith.ico"
+               Source="pack://application:,,,/Resources/icons/plith-256.png"
                Width="64" Height="64"
+               RenderOptions.BitmapScalingMode="HighQuality"
                HorizontalAlignment="Center"
                Margin="0,4,0,12" />
 

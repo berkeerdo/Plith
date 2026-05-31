@@ -48,6 +48,9 @@
     <Resource Include="..\Plith\Resources\icons\plith.ico">
       <Link>Resources\icons\plith.ico</Link>
     </Resource>
+    <Resource Include="..\Plith\Resources\icons\plith-256.png">
+      <Link>Resources\icons\plith-256.png</Link>
+    </Resource>
   </ItemGroup>
 
   <!-- Pre-build target: publish Plith Release, zip the output, embed as resource.
