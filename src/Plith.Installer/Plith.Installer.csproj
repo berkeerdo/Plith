@@ -14,7 +14,7 @@
     <Platforms>x64</Platforms>
     <PlatformTarget>x64</PlatformTarget>
     <ApplicationManifest>app.manifest</ApplicationManifest>
-    <ApplicationIcon>Resources\icons\plith.ico</ApplicationIcon>
+    <ApplicationIcon>..\Plith\Resources\icons\plith.ico</ApplicationIcon>
     <Authors>Plith</Authors>
     <Product>Plith Setup</Product>
     <Description>Plith setup wizard.</Description>
@@ -32,13 +32,15 @@
 
   <!-- Linked resources from src/Plith — single source of truth.
        Dark palette only: the installer is a short-lived premium wizard and is dark-only
-       by design, matching the OSD's behaviour. Light palette is intentionally not linked. -->
+       by design, matching the OSD's behaviour. Light palette is intentionally not linked.
+       SettingsTheme.xaml provides UiFont, CaptionButtonStyle, CloseCaptionButtonStyle,
+       and all shared control styles used by the installer shell. -->
   <ItemGroup>
     <Page Include="..\Plith\Resources\Palette.Dark.xaml">
       <Link>Resources\Palette.Dark.xaml</Link>
     </Page>
-    <Page Include="..\Plith\Resources\Theme.xaml">
-      <Link>Resources\Theme.xaml</Link>
+    <Page Include="..\Plith\Resources\SettingsTheme.xaml">
+      <Link>Resources\SettingsTheme.xaml</Link>
     </Page>
     <Resource Include="..\Plith\Resources\icons\plith.ico">
       <Link>Resources\icons\plith.ico</Link>
