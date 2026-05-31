@@ -23,14 +23,19 @@ public sealed class InstallDetector
 
     public string InstalledExePath => _installedExePath;
 
-    /// <summary>Returns the ProductVersion of the installed Plith.exe, or null if not installed.</summary>
+    /// <summary>Returns the ProductVersion of the installed Plith.exe, or null if not installed.
+    /// Strips any SemVer build-metadata suffix (text after '+') so the result is
+    /// suitable for direct display (e.g. "0.1.0", not "0.1.0+76906d7...").</summary>
     public string? GetInstalledVersion()
     {
         if (!File.Exists(_installedExePath)) return null;
         try
         {
             var info = FileVersionInfo.GetVersionInfo(_installedExePath);
-            return info.ProductVersion ?? info.FileVersion;
+            var raw = info.ProductVersion ?? info.FileVersion;
+            if (raw is null) return null;
+            var plus = raw.IndexOf('+', StringComparison.Ordinal);
+            return plus >= 0 ? raw[..plus] : raw;
         }
         catch
         {

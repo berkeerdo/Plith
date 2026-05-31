@@ -39,6 +39,9 @@ if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
 $installerExe = Join-Path $releaseDir 'Plith.Installer.exe'
 $version = (Get-Item $installerExe).VersionInfo.ProductVersion
 if (-not $version) { $version = '0.1.0' }
+# Strip SemVer build-metadata suffix (text after '+') so the filename stays compact.
+$plusIdx = $version.IndexOf('+')
+if ($plusIdx -ge 0) { $version = $version.Substring(0, $plusIdx) }
 $setupExe = Join-Path $releaseDir "Plith-Setup-$version.exe"
 Move-Item -Path $installerExe -Destination $setupExe -Force
 
