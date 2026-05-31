@@ -9,6 +9,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
+$current = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+if (-not $current.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+    throw "build-release.ps1 requires administrator privileges (CertService tests + signtool cert lookup). Right-click PowerShell -> Run as administrator."
+}
+
 $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $installerProj = Join-Path $repoRoot 'src\Plith.Installer\Plith.Installer.csproj'
 $plithTests = Join-Path $repoRoot 'tests\Plith.Tests\Plith.Tests.csproj'
