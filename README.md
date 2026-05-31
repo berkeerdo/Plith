@@ -53,31 +53,25 @@ without taking your attention away from the thing you were already doing.
 - **Branded tray icon.** Modern accent-green sound-emission mark; double-click opens
   Settings; right-click for Settings + Exit.
 
+### Install
+
+Download the latest `Plith-Setup-<version>.exe` from the [Releases](https://github.com/berkeerdo/Plith/releases) page
+and double-click. The wizard handles cert setup, signing, and Program Files install
+automatically.
+
+Windows will show "Microsoft Defender SmartScreen prevented an unrecognized app from
+starting" the first time — Plith is signed with a self-signed certificate, not a public
+CA. Click **More info → Run anyway** to continue.
+
+After install, Plith appears in Start menu search and Add/Remove Programs.
+
 ### Game mode (works over fullscreen games)
 
-By default — running from `bin\` or any unsigned build — Plith uses a regular topmost
-window so the OSD floats over **fullscreen-borderless** games, which is what nearly all
-modern titles ship with. To draw over **exclusive fullscreen** games as well, Plith needs
-the Windows UIAccess privilege, which requires a digitally signed binary installed to
-`\Program Files\`.
-
-The included PowerShell script handles both — generates a self-signed cert, signs Plith,
-and installs it to `\Program Files\Plith\`:
-
-```powershell
-# Right-click PowerShell → Run as administrator
-pwsh scripts\install-local.ps1
-```
-
-Open Settings after launch — the Game mode badge at the bottom flips from amber
-"Limited" to green "Active". The OSD now uses `CreateWindowInBand` in Windows'
-UIAccess z-band and draws above exclusive fullscreen games.
-
-To uninstall:
-
-```powershell
-pwsh scripts\uninstall-local.ps1
-```
+After the install above completes, Plith earns the Windows UIAccess privilege via the
+self-signed certificate and installs to `\Program Files\Plith\`. Open Settings — the
+Game mode badge at the bottom reads green **"Active"**. The OSD now uses
+`CreateWindowInBand` in Windows' UIAccess z-band and draws above exclusive fullscreen
+games, not just borderless ones.
 
 **Anti-cheat note.** Plith is a passive overlay — it reads no game memory, injects
 no input, and uses only documented Windows APIs (with one exception: `CreateWindowInBand`,
@@ -86,6 +80,24 @@ run on millions of PCs without anti-cheat issues. However, some games' anti-chea
 (Vanguard for Valorant, EAC for several titles) may treat any UIAccess overlay with
 suspicion. If you play competitive ranked matches in such games, exit Plith from the
 tray icon beforehand.
+
+### Uninstall
+
+**Settings → Apps → Installed apps → Plith → Uninstall**, or double-click
+`Plith-Uninstaller.exe` in `C:\Program Files\Plith\Setup\`. The wizard removes the
+install dir, Start menu shortcut, and Add/Remove Programs entry. The self-signed
+code-signing certificate is left in `CurrentUser\My + LocalMachine\TrustedPublisher +
+LocalMachine\Root` so a future re-install is one-step. To remove the cert manually,
+open `certmgr.msc` and look for `CN=Plith Self-Signed`.
+
+### Build a release artifact
+
+```powershell
+# From an admin PowerShell (cert lookup may require it)
+pwsh scripts\build-release.ps1
+```
+
+Produces `release/Plith-Setup-<version>.exe`, signed with the self-signed cert.
 
 ## Configuration
 
