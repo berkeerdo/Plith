@@ -153,8 +153,8 @@ public sealed class InstallOrchestrator
     {
         _vm.Steps.Clear();
         _vm.Steps.Add(new InstallStepViewModel { Title = "Stopping Plith" });
-        _vm.Steps.Add(new InstallStepViewModel { Title = "Removing files" });
         _vm.Steps.Add(new InstallStepViewModel { Title = "Cleaning up registry" });
+        _vm.Steps.Add(new InstallStepViewModel { Title = "Removing files" });
         _vm.Progress = 0;
     }
 
@@ -174,18 +174,22 @@ public sealed class InstallOrchestrator
                 }
             });
 
+            // Registry cleanup BEFORE self-delete spawn — if a transient registry failure
+            // throws after we've spawned the delete, the user's autostart entry would
+            // dangle pointing at a deleted exe. By spawning self-delete last (which
+            // commits the no-return), every observable failure mode keeps state coherent.
             await RunStep(1, () =>
             {
-                _shortcut.RemoveStartMenuShortcut();
-                // Spawn the self-delete child process for InstallDir — runs AFTER this process exits.
-                // The child waits 3 s then removes Program Files\Plith\ including this uninstaller binary.
-                SpawnSelfDelete();
+                _registry.RemoveAutoStart();
+                _registry.RemoveUninstallEntry();
             });
 
             await RunStep(2, () =>
             {
-                _registry.RemoveAutoStart();
-                _registry.RemoveUninstallEntry();
+                _shortcut.RemoveStartMenuShortcut();
+                // Spawn the self-delete child process for InstallDir — runs AFTER this process exits.
+                // The child waits 8 s then removes Program Files\Plith\ including this uninstaller binary.
+                SpawnSelfDelete();
             });
 
             _log.Info("Uninstall: done");
