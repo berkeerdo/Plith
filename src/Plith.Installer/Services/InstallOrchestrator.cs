@@ -201,14 +201,18 @@ public sealed class InstallOrchestrator
     {
         // Spawned cmd.exe outlives this process (Plith-Uninstaller.exe) and deletes the
         // install dir which contains this binary. Standard Windows uninstaller pattern.
+        // 8 s timeout (not 3) — slow disks + AV scanning the deleted exe can outlast a
+        // shorter wait, leaving Setup\Plith-Uninstaller.exe orphaned. Explicit CWD =
+        // C:\Windows so cmd doesn't inherit the install dir and block its own rd.
         var psi = new ProcessStartInfo("cmd.exe")
         {
             UseShellExecute = false,
             CreateNoWindow = true,
             WindowStyle = ProcessWindowStyle.Hidden,
+            WorkingDirectory = Environment.GetFolderPath(Environment.SpecialFolder.Windows),
         };
         psi.ArgumentList.Add("/c");
-        psi.ArgumentList.Add($"timeout /t 3 /nobreak >nul && rd /s /q \"{InstallDir}\"");
+        psi.ArgumentList.Add($"timeout /t 8 /nobreak >nul && rd /s /q \"{InstallDir}\"");
         Process.Start(psi);
     }
 }
