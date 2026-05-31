@@ -21,7 +21,11 @@ public partial class App : Application
     {
         base.OnStartup(e);
 
-        _singleInstanceMutex = new Mutex(initiallyOwned: true, SingleInstanceMutexName, out bool createdNew);
+        // initiallyOwned: false because we only need the mutex as a system-wide existence flag —
+        // checking createdNew is what tells us we're the first instance. Owning the mutex would
+        // require ReleaseMutex() from the same thread on shutdown, which throws if this is the
+        // second-instance path that never acquired ownership.
+        _singleInstanceMutex = new Mutex(initiallyOwned: false, SingleInstanceMutexName, out bool createdNew);
         if (!createdNew)
         {
             MessageBox.Show("Plith Setup is already running.",
@@ -38,7 +42,6 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _singleInstanceMutex?.ReleaseMutex();
         _singleInstanceMutex?.Dispose();
         base.OnExit(e);
     }
