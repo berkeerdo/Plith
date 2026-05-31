@@ -45,11 +45,30 @@
     </Resource>
   </ItemGroup>
 
-  <!-- Embedded resource placeholder — populated by PublishPlithAndEmbed target (Task 2) -->
+  <!-- Pre-build target: publish Plith Release, zip the output, embed as resource.
+       Triggers on every build so the embedded bundle is always current. Out-of-date
+       checking is delegated to the Exec invocation (dotnet publish is itself incremental). -->
+  <Target Name="PublishPlithAndEmbed" BeforeTargets="PrepareForBuild">
+    <PropertyGroup>
+      <PlithStagingDir>$(MSBuildThisFileDirectory)Resources\Embedded\staging</PlithStagingDir>
+      <PlithBundleZip>$(MSBuildThisFileDirectory)Resources\Embedded\PlithBundle.zip</PlithBundleZip>
+    </PropertyGroup>
+
+    <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\Plith\Plith.csproj&quot; -c Release -o &quot;$(PlithStagingDir)&quot; -p:PublishSingleFile=false -p:SelfContained=false"
+          ConsoleToMSBuild="true" />
+
+    <Delete Files="$(PlithBundleZip)" Condition="Exists('$(PlithBundleZip)')" />
+
+    <ZipDirectory SourceDirectory="$(PlithStagingDir)"
+                  DestinationFile="$(PlithBundleZip)" />
+
+    <RemoveDir Directories="$(PlithStagingDir)" />
+  </Target>
+
   <ItemGroup>
-    <None Include="Resources\Embedded\PlithBundle.zip" Condition="Exists('Resources\Embedded\PlithBundle.zip')">
-      <CopyToOutputDirectory>Never</CopyToOutputDirectory>
-    </None>
+    <EmbeddedResource Include="Resources\Embedded\PlithBundle.zip" Condition="Exists('Resources\Embedded\PlithBundle.zip')">
+      <LogicalName>PlithBundle.zip</LogicalName>
+    </EmbeddedResource>
   </ItemGroup>
 
 </Project>
