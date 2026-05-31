@@ -9,7 +9,11 @@ public class CertServiceTests : IDisposable
 {
     private readonly TempCertStore _certCleanup = new();
 
-    public void Dispose() => _certCleanup.Dispose();
+    public void Dispose()
+    {
+        _certCleanup.Dispose();
+        GC.SuppressFinalize(this);
+    }
 
     [Fact]
     public void EnsureCert_creates_cert_when_none_exists_and_returns_thumbprint()

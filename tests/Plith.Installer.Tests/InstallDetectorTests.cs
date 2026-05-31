@@ -25,7 +25,7 @@ public class InstallDetectorTests
         // We can use the currently-running test host as a stand-in — it has FileVersionInfo
         // and exists on disk. Asserting the parsed version is just "not null + non-empty"
         // because we don't control the test host's version.
-        var testHostExe = System.Diagnostics.Process.GetCurrentProcess().MainModule!.FileName;
+        var testHostExe = Environment.ProcessPath!;
         var detector = new InstallDetector(testHostExe);
 
         var version = detector.GetInstalledVersion();
