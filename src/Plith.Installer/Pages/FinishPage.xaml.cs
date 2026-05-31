@@ -19,14 +19,14 @@ public partial class FinishPage : UserControl
 
         OpenPlithButton.Visibility = vm.OpenAfterInstall ? Visibility.Visible : Visibility.Collapsed;
 
-        OpenPlithButton.Click += (_, _) =>
+        OpenPlithButton.Click += (_, _) => LaunchPlithAndExit(installedExePath);
+
+        // M2 + I5: also fire the launch automatically if the user opted in. The button
+        // remains visible as a fallback affordance while the new process is spinning up.
+        if (vm.OpenAfterInstall)
         {
-            // Launch via explorer.exe so the new process runs in the user context (not admin).
-            // Direct Process.Start from an elevated installer fails for UIAccess binaries
-            // ("A referral was returned from the server").
-            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{installedExePath}\""));
-            Application.Current.Shutdown();
-        };
+            Loaded += (_, _) => LaunchPlithAndExit(installedExePath);
+        }
 
         GitHubButton.Click += (_, _) => Process.Start(new ProcessStartInfo("https://github.com/berkeerdo/Plith") { UseShellExecute = true });
         CloseButton.Click += (_, _) => Application.Current.Shutdown();
@@ -35,5 +35,22 @@ public partial class FinishPage : UserControl
         {
             if (TryFindResource("SlideFadeIn") is Storyboard sb) sb.Begin(this);
         };
+    }
+
+    private static void LaunchPlithAndExit(string installedExePath)
+    {
+        try
+        {
+            // Launch via explorer.exe so the new process runs in the user context (not admin).
+            // Direct Process.Start from an elevated installer fails for UIAccess binaries
+            // ("A referral was returned from the server").
+            Process.Start(new ProcessStartInfo("explorer.exe", $"\"{installedExePath}\""));
+        }
+        catch
+        {
+            // explorer killed by malware / locked down — fall through to Shutdown so the
+            // wizard doesn't hang on an unhandled exception.
+        }
+        Application.Current.Shutdown();
     }
 }
