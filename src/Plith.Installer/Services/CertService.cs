@@ -38,7 +38,10 @@ public sealed class CertService
         store.Open(OpenFlags.ReadOnly);
         foreach (var existing in store.Certificates)
         {
-            if (existing.Subject == _subject && existing.NotAfter > DateTime.UtcNow)
+            // HasPrivateKey guard: a public-only cert (private key deleted/exported) would
+            // return a thumbprint that SignTool can't actually use — fail at generation
+            // instead, not deep in the install pipeline.
+            if (existing.Subject == _subject && existing.NotAfter > DateTime.UtcNow && existing.HasPrivateKey)
                 return existing;
         }
         return null;
