@@ -1,17 +1,18 @@
 using System.Threading;
 using System.Windows;
+using Plith.Installer.Pages;
+using Plith.Installer.Services;
+using Plith.Installer.ViewModels;
 
 namespace Plith.Installer;
 
-// CA1001: App owns _singleInstanceMutex but WPF Application cannot implement IDisposable.
-// The mutex is released and disposed in OnExit, which is the correct WPF lifetime hook.
 #pragma warning disable CA1001
+// App holds a disposable Mutex but cannot implement IDisposable — WPF Application's
+// lifecycle is owned by the framework. Mutex disposed in OnExit instead. Suppression
+// scoped to the type declaration where CA1001 fires.
 public partial class App : Application
-{
 #pragma warning restore CA1001
-    // Single-instance mutex — prevents two installer windows competing for the cert store
-    // and the install dir. Mutex named with a unique GUID so it doesn't collide with any
-    // other software using a "Plith" mutex name.
+{
     private const string SingleInstanceMutexName = "Global\\Plith.Installer.SingleInstance.7F9C8E1A";
     private Mutex? _singleInstanceMutex;
 
@@ -36,8 +37,77 @@ public partial class App : Application
 
         IsUninstallMode = e.Args.Length > 0 && e.Args[0] == "--uninstall";
 
+        var log = new LogService();
+        var vm = new InstallerViewModel();
+        var cert = new CertService();
+        var signtool = new SignToolWrapper(log);
+        var shortcut = new ShortcutService();
+        var registry = new RegistryService();
+        var orchestrator = new InstallOrchestrator(log, cert, signtool, shortcut, registry, vm);
+
         var window = new MainWindow();
         window.Show();
+
+        if (IsUninstallMode)
+            RouteUninstallFlow(window, vm, orchestrator, log);
+        else
+            RouteInstallFlow(window, vm, orchestrator, log);
+    }
+
+    private static void RouteInstallFlow(MainWindow window, InstallerViewModel vm,
+        InstallOrchestrator orchestrator, LogService log)
+    {
+        var detector = new InstallDetector();
+        var existing = detector.GetInstalledVersion();
+        vm.NewVersion = typeof(App).Assembly.GetName().Version?.ToString(3) ?? "0.1.0";
+
+        if (existing is null) vm.Mode = InstallerMode.FreshInstall;
+        else if (existing == vm.NewVersion) { vm.Mode = InstallerMode.Reinstall; vm.ExistingVersion = existing; }
+        else { vm.Mode = InstallerMode.Update; vm.ExistingVersion = existing; }
+
+        var welcome = new WelcomePage(vm);
+        welcome.PrimaryClicked += async (_, _) =>
+        {
+            orchestrator.PrepareSteps();
+            window.NavigateTo(new ProgressPage(vm, vm.Mode == InstallerMode.Update
+                ? "Updating Plith…"
+                : "Installing Plith…"));
+            try
+            {
+                await orchestrator.RunInstallAsync();
+                window.NavigateTo(new FinishPage(vm, InstallOrchestrator.InstalledExe));
+            }
+#pragma warning disable CA1031
+            catch
+#pragma warning restore CA1031
+            {
+                window.NavigateTo(new ErrorPage(vm, log));
+            }
+        };
+        window.NavigateTo(welcome);
+    }
+
+    private static void RouteUninstallFlow(MainWindow window, InstallerViewModel vm,
+        InstallOrchestrator orchestrator, LogService log)
+    {
+        var confirm = new UninstallConfirmPage();
+        confirm.UninstallClicked += async (_, _) =>
+        {
+            orchestrator.PrepareUninstallSteps();
+            window.NavigateTo(new ProgressPage(vm, "Uninstalling Plith…"));
+            try
+            {
+                await orchestrator.RunUninstallAsync();
+                window.NavigateTo(new UninstallFinishPage());
+            }
+#pragma warning disable CA1031
+            catch
+#pragma warning restore CA1031
+            {
+                window.NavigateTo(new ErrorPage(vm, log));
+            }
+        };
+        window.NavigateTo(confirm);
     }
 
     protected override void OnExit(ExitEventArgs e)
