@@ -1,7 +1,6 @@
 <Application x:Class="Plith.Installer.App"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
-             xmlns:vm="clr-namespace:Plith.Installer.ViewModels"
              ShutdownMode="OnMainWindowClose">
     <Application.Resources>
         <ResourceDictionary>
@@ -11,7 +10,6 @@
                 <ResourceDictionary Source="Resources/Animations.xaml" />
                 <ResourceDictionary Source="Resources/InstallerStyles.xaml" />
             </ResourceDictionary.MergedDictionaries>
-            <vm:StatusToVisibilityConverter x:Key="StatusToVis" />
         </ResourceDictionary>
     </Application.Resources>
 </Application>
