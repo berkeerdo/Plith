@@ -24,9 +24,10 @@ public sealed class OsdOrchestrator : IDisposable
 
     private readonly OsdHost _osd;
     private readonly SettingsService _settings;
+    private readonly DiagnosticLog? _log;
     private readonly Dispatcher _dispatcher;
     private readonly VoicemeeterClient _voicemeeter = new();
-    private readonly WindowsAudioClient _windowsAudio = new();
+    private readonly WindowsAudioClient _windowsAudio;
     private readonly MediaSessionClient _media = new();
     private readonly DispatcherTimer _pollTimer;
     private DateTime _nextReconnect = DateTime.MinValue;
@@ -45,11 +46,13 @@ public sealed class OsdOrchestrator : IDisposable
     private TimeSpan VisibleFor => TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
     private int MonitoredBusIndex => _settings.Current.MonitoredBusIndex;
 
-    public OsdOrchestrator(OsdHost osd, SettingsService settings)
+    public OsdOrchestrator(OsdHost osd, SettingsService settings, DiagnosticLog? log = null)
     {
         _osd = osd;
         _settings = settings;
+        _log = log;
         _dispatcher = osd.Dispatcher;
+        _windowsAudio = new WindowsAudioClient(log);
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _osd.MediaCommandInvoked += OnMediaCommandInvoked;
@@ -89,6 +92,7 @@ public sealed class OsdOrchestrator : IDisposable
             _ /* Auto */                  => _voicemeeter.IsLoggedIn ? ActiveSource.Voicemeeter : ActiveSource.Windows,
         };
 
+        _log?.Info("Orchestrator", $"ReconcileActiveSource: desired={desired} current={_activeSource} vmLoggedIn={_voicemeeter.IsLoggedIn}");
         if (desired == _activeSource) return;
         _lastNormalized = null;
         _lastMuted = null;
@@ -98,7 +102,9 @@ public sealed class OsdOrchestrator : IDisposable
             // Only commit the source change if NAudio actually attached. A failed Start() leaves
             // _activeSource at None so the next Reconcile re-tries instead of getting stuck
             // permanently silent because the early-return on the next call sees no change.
-            if (_windowsAudio.IsAttached || _windowsAudio.Start())
+            bool started = _windowsAudio.IsAttached || _windowsAudio.Start();
+            _log?.Info("Orchestrator", $"Windows source commit: started={started} alreadyAttached={_windowsAudio.IsAttached}");
+            if (started)
             {
                 _activeSource = ActiveSource.Windows;
                 ArmAudioWatchdog();
@@ -106,6 +112,7 @@ public sealed class OsdOrchestrator : IDisposable
             else
             {
                 _activeSource = ActiveSource.None;
+                _log?.Warn("Orchestrator", "WindowsAudioClient.Start() failed — _activeSource left at None for retry");
             }
         }
         else
@@ -125,17 +132,22 @@ public sealed class OsdOrchestrator : IDisposable
         _windowsHadEventSinceActivation = false;
         _audioWatchdogTimer?.Stop();
         _audioWatchdogTimer = new DispatcherTimer { Interval = AudioWatchdogDelay };
+        _log?.Info("Watchdog", $"Armed for {AudioWatchdogDelay.TotalSeconds}s");
         _audioWatchdogTimer.Tick += (_, _) =>
         {
             _audioWatchdogTimer!.Stop();
+            _log?.Info("Watchdog", $"Tick: disposed={_disposed} activeSource={_activeSource} sawEvent={_windowsHadEventSinceActivation}");
             if (_disposed) return;
             if (_activeSource != ActiveSource.Windows) return;
-            if (_windowsHadEventSinceActivation) return;
+            if (_windowsHadEventSinceActivation)
+            {
+                _log?.Info("Watchdog", "Standing down — events arrived");
+                return;
+            }
+            _log?.Warn("Watchdog", "No events after activation — re-subscribing WindowsAudio");
             // No events after the watchdog window — assume the subscription registered
             // against an audio endpoint that wasn't fully wired yet. Re-Start picks up
             // the now-ready endpoint.
-            System.Diagnostics.Trace.WriteLine(
-                "Plith: Windows audio watchdog: no events in 10 s after activation, re-subscribing.");
             _windowsAudio.Stop();
             _ = _windowsAudio.Start();
         };
@@ -171,6 +183,7 @@ public sealed class OsdOrchestrator : IDisposable
         {
             if (_voicemeeter.TryLogin())
             {
+                _log?.Info("Voicemeeter", "TryLogin succeeded");
                 _lastNormalized = null;
                 _lastMuted = null;
                 // VM just came online — in Auto mode, switch over to it.
@@ -197,6 +210,10 @@ public sealed class OsdOrchestrator : IDisposable
         }
         if (_disposed) return;
         if (_activeSource != ActiveSource.Windows) return;
+        if (!_windowsHadEventSinceActivation)
+        {
+            _log?.Info("WindowsAudio", $"First volume event received — device='{snapshot.DeviceLabel}'");
+        }
         // Tell the watchdog the subscription is alive so it can stand down silently.
         _windowsHadEventSinceActivation = true;
 

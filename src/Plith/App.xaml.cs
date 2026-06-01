@@ -11,6 +11,7 @@ namespace Plith;
     Justification = "Disposable fields are released in OnExit, matching the WPF Application lifecycle.")]
 public partial class App : Application
 {
+    private DiagnosticLog? _diagnosticLog;
     private SettingsService? _settings;
     private TrayIconHost? _trayHost;
     private OsdOrchestrator? _orchestrator;
@@ -22,6 +23,9 @@ public partial class App : Application
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+
+        _diagnosticLog = new DiagnosticLog();
+        _diagnosticLog.Info("App", "OnStartup begin — Plith.exe path: " + Environment.ProcessPath);
 
         _settings = new SettingsService();
         _settings.Load();
@@ -39,13 +43,15 @@ public partial class App : Application
         _theme.ThemeApplied += () => _osd?.ViewModel.RefreshThresholdBrushes();
 
         _osd = new OsdHost(_settings);   // ctor calls CreateWindow() so first ShowOsd is instant
-        _orchestrator = new OsdOrchestrator(_osd, _settings);
+        _orchestrator = new OsdOrchestrator(_osd, _settings, _diagnosticLog);
         _orchestrator.Start();
+        _diagnosticLog.Info("App", "OsdOrchestrator started");
 
         // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
         // video player popping a topmost window mid-OSD doesn't steal the z-order ahead of us.
         _foregroundWatcher = new ForegroundWatcher(_osd);
         _foregroundWatcher.Start();
+        _diagnosticLog.Info("App", "ForegroundWatcher started");
 
         // NativeFlyoutSuppressor is intentionally NOT started. The class-and-process
         // matching net was wide enough on Win11 26200 to hide non-flyout shell windows
@@ -81,6 +87,7 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _diagnosticLog?.Info("App", "OnExit");
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
         _foregroundWatcher?.Dispose();
         _hotkey?.Dispose();

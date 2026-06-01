@@ -15,10 +15,16 @@ public sealed record WindowsAudioSnapshot(string DeviceLabel, float ScalarVolume
 /// </summary>
 public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 {
+    private readonly DiagnosticLog? _log;
     private MMDeviceEnumerator? _enumerator;
     private MMDevice? _device;
     private AudioEndpointVolume? _volume;
     private bool _disposed;
+
+    public WindowsAudioClient(DiagnosticLog? log = null)
+    {
+        _log = log;
+    }
 
     // Serializes the Detach + Attach sequences. COM can fire two OnDefaultDeviceChanged
     // callbacks on different MTA threads in quick succession (rapid headset plug/unplug),
@@ -36,15 +42,18 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     {
         lock (_attachLock)
         {
-            if (IsAttached) return true;
+            if (IsAttached) { _log?.Info("WindowsAudio", "Start: already attached"); return true; }
             try
             {
+                _log?.Info("WindowsAudio", "Start: creating MMDeviceEnumerator + RegisterEndpointNotificationCallback");
                 _enumerator = new MMDeviceEnumerator();
                 _enumerator.RegisterEndpointNotificationCallback(this);
                 AttachToCurrentDefault();
+                _log?.Info("WindowsAudio", $"Start: attached to '{_device?.FriendlyName ?? "?"}'");
             }
-            catch
+            catch (Exception ex)
             {
+                _log?.Error("WindowsAudio", $"Start failed: {ex.GetType().Name}: {ex.Message}");
                 // No audio endpoint (headless box, broken driver). Caller will fall back or retry.
                 StopInternal();
                 return false;
@@ -124,9 +133,8 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 
     public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
     {
-        // Only react to the role we attach to. Other roles (Console / Communications) typically
-        // change in parallel for the same device but reacting on Multimedia alone is sufficient.
         if (flow != DataFlow.Render || role != Role.Multimedia) return;
+        _log?.Info("WindowsAudio", $"OnDefaultDeviceChanged: new device id={defaultDeviceId}");
 
         lock (_attachLock)
         {
