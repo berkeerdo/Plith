@@ -92,8 +92,12 @@ public sealed class OsdOrchestrator : IDisposable
             _ /* Auto */                  => _voicemeeter.IsLoggedIn ? ActiveSource.Voicemeeter : ActiveSource.Windows,
         };
 
-        _log?.Info("Orchestrator", $"ReconcileActiveSource: desired={desired} current={_activeSource} vmLoggedIn={_voicemeeter.IsLoggedIn}");
         if (desired == _activeSource) return;
+
+        // Log only when an actual transition happens — this method is called from the
+        // 30 ms poll tick, and logging on every call floods the file in seconds.
+        _log?.Info("Orchestrator", $"Source transition: {_activeSource} -> {desired} (vmLoggedIn={_voicemeeter.IsLoggedIn})");
+
         _lastNormalized = null;
         _lastMuted = null;
 
