@@ -26,6 +26,12 @@ public sealed class VoicemeeterClient : IDisposable
     private bool _loggedIn;
     private bool _disposed;
 
+    // Cold-boot tolerance: VBVMR_IsParametersDirty can return -1 for ~100-300ms while the
+    // VM engine finishes its own initialization. Don't declare the engine dead on a single
+    // transient error — require N consecutive failures.
+    private const int TransientErrorThreshold = 5;
+    private int _consecutiveDirtyErrors;
+
     public bool IsLoggedIn => _loggedIn;
 
     public bool TryLogin()
@@ -34,6 +40,7 @@ public sealed class VoicemeeterClient : IDisposable
         EnsureDllResolverRegistered();
         var rc = VBVMR_Login();
         _loggedIn = rc == 0 || rc == 1; // 1 = engine already launched in app mode
+        if (_loggedIn) _consecutiveDirtyErrors = 0;
         return _loggedIn;
     }
 
@@ -45,18 +52,28 @@ public sealed class VoicemeeterClient : IDisposable
     }
 
     /// <summary>Non-blocking dirty check; returns true exactly once per parameter mutation batch.
-    /// A negative return from the API means the Voicemeeter engine went away (user closed the app),
-    /// so we drop the cached login state — the orchestrator's next reconcile pass will fall back
-    /// to the Windows endpoint.</summary>
+    /// A negative return from the API can mean the Voicemeeter engine went away (user closed the
+    /// app), but on a cold boot it returns -1 transiently for ~100-300 ms while the engine finishes
+    /// its own initialization. We require <see cref="TransientErrorThreshold"/> consecutive negative
+    /// returns before declaring the engine dead and dropping the cached login state — the
+    /// orchestrator's next reconcile pass will then fall back to the Windows endpoint.</summary>
     public bool ConsumeDirtyFlag()
     {
         if (!_loggedIn) return false;
         int rc = VBVMR_IsParametersDirty();
         if (rc < 0)
         {
-            _loggedIn = false;
+            _consecutiveDirtyErrors++;
+            if (_consecutiveDirtyErrors >= TransientErrorThreshold)
+            {
+                // 5 consecutive transient errors at 30ms poll cadence = ~150ms of failure.
+                // Engine is genuinely gone; flip logged-in so orchestrator can fall back.
+                _loggedIn = false;
+            }
             return false;
         }
+        // Any successful read clears the streak.
+        _consecutiveDirtyErrors = 0;
         return rc > 0;
     }
 

@@ -16,9 +16,9 @@ public sealed class OsdOrchestrator : IDisposable
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(3);
     // Boot race: if Plith launches before the audio service is fully wired,
     // WindowsAudioClient.Start() reports success but OnVolumeNotification callbacks
-    // never come. The watchdog forces one Stop+Start after 10 s of silence so the
+    // never come. The watchdog forces one Stop+Start after 5 s of silence so the
     // user doesn't have to manually relaunch after a cold boot.
-    private static readonly TimeSpan AudioWatchdogDelay = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan AudioWatchdogDelay = TimeSpan.FromSeconds(5);
 
     private enum ActiveSource { None, Voicemeeter, Windows }
 
@@ -185,18 +185,19 @@ public sealed class OsdOrchestrator : IDisposable
         _nextReconnect = DateTime.UtcNow + ReconnectInterval;
         try
         {
-            if (_voicemeeter.TryLogin())
+            bool ok = _voicemeeter.TryLogin();
+            _log?.Info("Voicemeeter", $"TryLogin attempt: result={ok}");
+            if (ok)
             {
-                _log?.Info("Voicemeeter", "TryLogin succeeded");
                 _lastNormalized = null;
                 _lastMuted = null;
                 // VM just came online — in Auto mode, switch over to it.
                 ReconcileActiveSource();
             }
         }
-        catch
+        catch (Exception ex)
         {
-            // Voicemeeter DLL not present (yet). Will retry on next reconnect window.
+            _log?.Warn("Voicemeeter", $"TryLogin threw: {ex.GetType().Name}: {ex.Message}");
         }
     }
 
