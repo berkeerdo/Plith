@@ -205,6 +205,11 @@ public sealed class OsdOrchestrator : IDisposable
 
     #region Windows audio push
 
+    /// <summary>Fires whenever WindowsAudioClient produces a snapshot — used by
+    /// NativeFlyoutSuppressor to open a 400 ms suppression window for the Windows
+    /// native volume OSD.</summary>
+    public event Action? WindowsVolumeEvent;
+
     private void OnWindowsAudioChanged(WindowsAudioSnapshot snapshot)
     {
         // NAudio's OnVolumeNotification fires on a COM (MTA) thread; bounce to the dispatcher.
@@ -214,6 +219,12 @@ public sealed class OsdOrchestrator : IDisposable
             return;
         }
         if (_disposed) return;
+
+        // Even if Windows isn't our active source right now, the Windows audio API saw a
+        // volume change — which means the native OSD is about to pop. Open the suppression
+        // window unconditionally.
+        WindowsVolumeEvent?.Invoke();
+
         if (_activeSource != ActiveSource.Windows) return;
         if (!_windowsHadEventSinceActivation)
         {

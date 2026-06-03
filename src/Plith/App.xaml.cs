@@ -19,6 +19,7 @@ public partial class App : Application
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
     private ForegroundWatcher? _foregroundWatcher;
+    private NativeFlyoutSuppressor? _flyoutSuppressor;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -53,12 +54,14 @@ public partial class App : Application
         _foregroundWatcher.Start();
         _diagnosticLog.Info("App", "ForegroundWatcher started");
 
-        // NativeFlyoutSuppressor is intentionally NOT started. The class-and-process
-        // matching net was wide enough on Win11 26200 to hide non-flyout shell windows
-        // (Start menu, taskbar popups) owned by Explorer, breaking the desktop until
-        // Plith was killed. The service stays in the codebase for a future, properly
-        // narrow opt-in implementation; for now both OSDs co-exist on volume change,
-        // which is strictly better UX than a wedged Windows shell.
+        // NativeFlyoutSuppressor uses a four-filter design (class + process + ZBID
+        // ImmersiveNotifications + volume-event-coupled 400 ms window) so it hides ONLY
+        // the volume OSD, not Start menu / taskbar / brightness / toasts. The orchestrator
+        // forwards every Windows volume event into the suppressor's window opener.
+        _flyoutSuppressor = new NativeFlyoutSuppressor(_diagnosticLog);
+        _flyoutSuppressor.Start();
+        _orchestrator.WindowsVolumeEvent += _flyoutSuppressor.OpenSuppressionWindow;
+        _diagnosticLog?.Info("App", "NativeFlyoutSuppressor started");
 
         // The summon hotkey pops the OSD with whatever values the view-model currently holds —
         // useful for one-handed media skips without touching the volume wheel. Default is None
@@ -93,6 +96,7 @@ public partial class App : Application
         _hotkey?.Dispose();
         _theme?.Dispose();
         _orchestrator?.Dispose();
+        _flyoutSuppressor?.Dispose();
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
         _trayHost?.Dispose();
         base.OnExit(e);
