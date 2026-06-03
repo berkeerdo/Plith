@@ -26,11 +26,16 @@ public sealed class VoicemeeterClient : IDisposable
     private bool _loggedIn;
     private bool _disposed;
 
-    // Cold-boot tolerance: VBVMR_IsParametersDirty can return -1 for ~100-300ms while the
-    // VM engine finishes its own initialization. Don't declare the engine dead on a single
-    // transient error — require N consecutive failures.
+    // Cold-boot tolerance: VBVMR_IsParametersDirty can return -1 for several seconds while
+    // the VM engine finishes its own initialization. We use two guards:
+    //   1) Grace period — for the first 3 s after a successful Login, ignore -1 returns
+    //      entirely. Don't increment the counter, don't flip _loggedIn.
+    //   2) Counter — after the grace period, require 5 consecutive negative returns
+    //      (~150 ms at 30 ms poll cadence) before declaring the engine dead.
+    private static readonly TimeSpan PostLoginGracePeriod = TimeSpan.FromSeconds(3);
     private const int TransientErrorThreshold = 5;
     private int _consecutiveDirtyErrors;
+    private DateTime _graceEndsUtc;
 
     public bool IsLoggedIn => _loggedIn;
 
@@ -38,9 +43,19 @@ public sealed class VoicemeeterClient : IDisposable
     {
         if (_loggedIn) return true;
         EnsureDllResolverRegistered();
+
+        // Defensive logout — if a previous death-detection cycle flipped our cache to false
+        // without telling VBVMR (or if some prior state lingers), the next Login can return
+        // -2 "unexpected login" forever. Try Logout first so VBVMR's internal state matches.
+        try { _ = VBVMR_Logout(); } catch { /* not previously logged in — fine */ }
+
         var rc = VBVMR_Login();
         _loggedIn = rc == 0 || rc == 1; // 1 = engine already launched in app mode
-        if (_loggedIn) _consecutiveDirtyErrors = 0;
+        if (_loggedIn)
+        {
+            _consecutiveDirtyErrors = 0;
+            _graceEndsUtc = DateTime.UtcNow + PostLoginGracePeriod;
+        }
         return _loggedIn;
     }
 
@@ -63,11 +78,16 @@ public sealed class VoicemeeterClient : IDisposable
         int rc = VBVMR_IsParametersDirty();
         if (rc < 0)
         {
+            // Grace period: VM engine is still warming up. Don't penalise transient errors.
+            if (DateTime.UtcNow < _graceEndsUtc) return false;
+
             _consecutiveDirtyErrors++;
             if (_consecutiveDirtyErrors >= TransientErrorThreshold)
             {
-                // 5 consecutive transient errors at 30ms poll cadence = ~150ms of failure.
-                // Engine is genuinely gone; flip logged-in so orchestrator can fall back.
+                // 5 consecutive negatives after grace = ~150 ms of failure. Engine is
+                // genuinely gone. Call Logout to sync VBVMR's internal state with our
+                // cache so a future TryLogin can succeed when the engine comes back.
+                try { _ = VBVMR_Logout(); } catch { }
                 _loggedIn = false;
             }
             return false;

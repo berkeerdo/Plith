@@ -123,24 +123,59 @@ public sealed class NativeFlyoutSuppressor : IDisposable
                             uint dwEventThread, uint dwmsEventTime)
     {
         if (hwnd == 0) return;
-        // Only top-level window shows are relevant; child object shows (OBJID values) are noise.
         if (idObject != 0 /* OBJID_WINDOW */ || idChild != 0) return;
-
-        // Filter 4 (cheapest, check first): only suppress within the volume-coupled window.
         if (DateTime.UtcNow > _suppressionWindowEndsUtc) return;
 
-        // Filter 1: class name.
-        if (!IsHostClass(hwnd)) return;
+        // While the suppression window is open, log every candidate window the shell shows
+        // so we can see which class/process/band combination the volume flyout actually
+        // uses on this Windows build. Filtering happens BELOW the log so we still hide it.
+        var className = GetClassNameSafe(hwnd);
+        var procName = GetProcessNameSafe(hwnd);
+        var band = GetBandSafe(hwnd);
+        bool classOk = IsHostClass(hwnd);
+        bool procOk = IsOwnedByShellProcess(hwnd);
+        bool bandOk = IsInImmersiveNotificationsBand(hwnd);
+        _log?.Info("FlyoutSuppressor",
+            $"Candidate: hwnd=0x{hwnd:X} class='{className}' proc='{procName}' band=0x{band:X} " +
+            $"classOk={classOk} procOk={procOk} bandOk={bandOk}");
 
-        // Filter 3: z-band (must be IMMERSIVE_NOTIFICATIONS). Falls back to allow if the
-        // undocumented GetWindowBand isn't available on this Windows build.
-        if (!IsInImmersiveNotificationsBand(hwnd)) return;
-
-        // Filter 2: owning process (most expensive — Process.GetProcessById). Last.
-        if (!IsOwnedByShellProcess(hwnd)) return;
+        if (!classOk) return;
+        if (!bandOk) return;
+        if (!procOk) return;
 
         _log?.Info("FlyoutSuppressor", $"Hiding flyout hwnd=0x{hwnd:X}");
         ShowWindow(hwnd, SW_HIDE);
+    }
+
+    private static string GetClassNameSafe(nint hwnd)
+    {
+        var sb = new StringBuilder(64);
+        return GetClassName(hwnd, sb, sb.Capacity) > 0 ? sb.ToString() : string.Empty;
+    }
+
+    private string GetProcessNameSafe(nint hwnd)
+    {
+        _ = GetWindowThreadProcessId(hwnd, out uint pid);
+        if (pid == 0) return string.Empty;
+        if (_pidNameCache.TryGetValue(pid, out var name)) return name;
+        try
+        {
+            using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
+            name = proc.ProcessName;
+        }
+        catch
+        {
+            name = string.Empty;
+        }
+        _pidNameCache[pid] = name;
+        return name;
+    }
+
+    private uint GetBandSafe(nint hwnd)
+    {
+        if (_getWindowBand is null) return 0xFFFFFFFF;   // unknown
+        try { return _getWindowBand(hwnd, out uint band) ? band : 0xFFFFFFFF; }
+        catch { return 0xFFFFFFFF; }
     }
 
     private static bool IsHostClass(nint hwnd)
