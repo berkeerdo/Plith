@@ -186,7 +186,7 @@ public sealed class OsdOrchestrator : IDisposable
         try
         {
             bool ok = _voicemeeter.TryLogin();
-            _log?.Info("Voicemeeter", $"TryLogin attempt: result={ok}");
+            _log?.Info("Voicemeeter", $"TryLogin attempt: result={ok} rc={_voicemeeter.LastLoginReturnCode}");
             if (ok)
             {
                 _lastNormalized = null;

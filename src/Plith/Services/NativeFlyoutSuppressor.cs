@@ -20,6 +20,7 @@ namespace Plith.Services;
 /// </summary>
 public sealed class NativeFlyoutSuppressor : IDisposable
 {
+    private const uint EVENT_OBJECT_CREATE = 0x8000;
     private const uint EVENT_OBJECT_SHOW = 0x8002;
     private const uint EVENT_OBJECT_LOCATIONCHANGE = 0x800B;
     private const uint WINEVENT_OUTOFCONTEXT = 0x0000;
@@ -62,6 +63,7 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     private readonly DiagnosticLog? _log;
 
     private nint _showHook;
+    private nint _createHook;
     private nint _locationHook;
     private WinEventDelegate? _delegate;   // keep a managed reference so the GC doesn't collect it
     private DateTime _suppressionWindowEndsUtc;
@@ -86,6 +88,7 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     public void OpenSuppressionWindow()
     {
         _suppressionWindowEndsUtc = DateTime.UtcNow + SuppressionWindowDuration;
+        _log?.Info("FlyoutSuppressor", $"Suppression window opened +{SuppressionWindowDuration.TotalMilliseconds:F0}ms");
     }
 
     public void Start()
@@ -94,11 +97,17 @@ public sealed class NativeFlyoutSuppressor : IDisposable
         _delegate = OnWinEvent;
         ResolveGetWindowBand();
 
-        // EVENT_OBJECT_SHOW catches freshly-created flyout windows. EVENT_OBJECT_LOCATIONCHANGE
-        // catches the case where the flyout is a long-lived pre-created window that simply moves
-        // on-screen when the user presses a volume key — show wouldn't fire there.
+        // Three hooks because the volume flyout has used different patterns across Windows
+        // builds: SHOW for newly-created flyout windows (old Win10), LOCATIONCHANGE for
+        // long-lived pre-created windows that simply move on-screen on a key press, and
+        // CREATE for Win11 builds that re-create the bridge window per show.
         _showHook = SetWinEventHook(
             EVENT_OBJECT_SHOW, EVENT_OBJECT_SHOW,
+            0, _delegate, 0, 0,
+            WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
+
+        _createHook = SetWinEventHook(
+            EVENT_OBJECT_CREATE, EVENT_OBJECT_CREATE,
             0, _delegate, 0, 0,
             WINEVENT_OUTOFCONTEXT | WINEVENT_SKIPOWNPROCESS);
 
@@ -113,6 +122,7 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     public void Stop()
     {
         if (_showHook != 0) { UnhookWinEvent(_showHook); _showHook = 0; }
+        if (_createHook != 0) { UnhookWinEvent(_createHook); _createHook = 0; }
         if (_locationHook != 0) { UnhookWinEvent(_locationHook); _locationHook = 0; }
         _delegate = null;
         _pidNameCache.Clear();
@@ -124,21 +134,28 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     {
         if (hwnd == 0) return;
         if (idObject != 0 /* OBJID_WINDOW */ || idChild != 0) return;
-        if (DateTime.UtcNow > _suppressionWindowEndsUtc) return;
 
-        // While the suppression window is open, log every candidate window the shell shows
-        // so we can see which class/process/band combination the volume flyout actually
-        // uses on this Windows build. Filtering happens BELOW the log so we still hide it.
+        bool inWindow = DateTime.UtcNow <= _suppressionWindowEndsUtc;
+
         var className = GetClassNameSafe(hwnd);
+        bool classOk = IsHostClassName(className);
+
+        // Outside the suppression window we only log candidates whose class matches our
+        // flyout-host shortlist. Those are diagnostically interesting (they tell us if the
+        // actual flyout was created/shown well outside our 400 ms window). Logging every
+        // location-change for every shell window outside the window would flood the file.
+        if (!inWindow && !classOk) return;
+
         var procName = GetProcessNameSafe(hwnd);
         var band = GetBandSafe(hwnd);
-        bool classOk = IsHostClass(hwnd);
-        bool procOk = IsOwnedByShellProcess(hwnd);
-        bool bandOk = IsInImmersiveNotificationsBand(hwnd);
-        _log?.Info("FlyoutSuppressor",
-            $"Candidate: hwnd=0x{hwnd:X} class='{className}' proc='{procName}' band=0x{band:X} " +
-            $"classOk={classOk} procOk={procOk} bandOk={bandOk}");
+        bool procOk = IsShellProcessName(procName);
+        bool bandOk = IsImmersiveNotificationsBand(band);
 
+        _log?.Info("FlyoutSuppressor",
+            $"Candidate: ev=0x{eventType:X} hwnd=0x{hwnd:X} class='{className}' proc='{procName}' " +
+            $"band=0x{band:X} classOk={classOk} procOk={procOk} bandOk={bandOk} inWindow={inWindow}");
+
+        if (!inWindow) return;
         if (!classOk) return;
         if (!bandOk) return;
         if (!procOk) return;
@@ -178,49 +195,21 @@ public sealed class NativeFlyoutSuppressor : IDisposable
         catch { return 0xFFFFFFFF; }
     }
 
-    private static bool IsHostClass(nint hwnd)
+    private static bool IsHostClassName(string name)
     {
-        var sb = new StringBuilder(64);
-        if (GetClassName(hwnd, sb, sb.Capacity) == 0) return false;
-        var name = sb.ToString();
         for (int i = 0; i < HostClasses.Length; i++)
             if (string.Equals(name, HostClasses[i], StringComparison.Ordinal)) return true;
         return false;
     }
 
-    private bool IsInImmersiveNotificationsBand(nint hwnd)
+    // When GetWindowBand isn't available, GetBandSafe returns 0xFFFFFFFF (unknown) — we
+    // treat unknown as "allow" so older Windows where the export doesn't exist still benefit
+    // from class+process filtering. Treating unknown as "match" is safer than "reject" here.
+    private bool IsImmersiveNotificationsBand(uint band) =>
+        _getWindowBand is null || band == 0xFFFFFFFF || band == ZBID_IMMERSIVE_NOTIFICATIONS;
+
+    private static bool IsShellProcessName(string name)
     {
-        if (_getWindowBand is null) return true; // can't tell on this Windows version — allow
-        try
-        {
-            if (!_getWindowBand(hwnd, out uint band)) return false;
-            return band == ZBID_IMMERSIVE_NOTIFICATIONS;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    private bool IsOwnedByShellProcess(nint hwnd)
-    {
-        _ = GetWindowThreadProcessId(hwnd, out uint pid);
-        if (pid == 0) return false;
-
-        if (!_pidNameCache.TryGetValue(pid, out var name))
-        {
-            try
-            {
-                using var proc = System.Diagnostics.Process.GetProcessById((int)pid);
-                name = proc.ProcessName;
-            }
-            catch
-            {
-                name = string.Empty;
-            }
-            _pidNameCache[pid] = name;
-        }
-
         for (int i = 0; i < OwningProcessNames.Length; i++)
             if (string.Equals(name, OwningProcessNames[i], StringComparison.OrdinalIgnoreCase))
                 return true;

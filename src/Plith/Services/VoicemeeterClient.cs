@@ -27,15 +27,22 @@ public sealed class VoicemeeterClient : IDisposable
     private bool _disposed;
 
     // Cold-boot tolerance: VBVMR_IsParametersDirty can return -1 for several seconds while
-    // the VM engine finishes its own initialization. We use two guards:
-    //   1) Grace period — for the first 3 s after a successful Login, ignore -1 returns
-    //      entirely. Don't increment the counter, don't flip _loggedIn.
-    //   2) Counter — after the grace period, require 5 consecutive negative returns
-    //      (~150 ms at 30 ms poll cadence) before declaring the engine dead.
-    private static readonly TimeSpan PostLoginGracePeriod = TimeSpan.FromSeconds(3);
+    // the VM engine finishes its own initialization. Two cases need different patience:
+    //   - rc==0 from Login: engine was already running. 5 s of grace is plenty.
+    //   - rc==1 from Login: VBVMR JUST LAUNCHED the engine in app mode for us. Empirically
+    //     this can take 10-20 s to be ready on a cold boot. Repeatedly Logout/Login during
+    //     that window resets the engine and prevents it from ever finishing init — so we
+    //     need a long grace AND we don't call Logout when we declare death.
+    private static readonly TimeSpan PostLoginGraceAlreadyRunning = TimeSpan.FromSeconds(5);
+    private static readonly TimeSpan PostLoginGraceJustLaunched = TimeSpan.FromSeconds(30);
     private const int TransientErrorThreshold = 5;
     private int _consecutiveDirtyErrors;
     private DateTime _graceEndsUtc;
+
+    /// <summary>Last raw return code from VBVMR_Login, surfaced for diagnostics so the
+    /// orchestrator log can distinguish "engine already running" (0) from "we launched it"
+    /// (1) from error states (-1, -2). int.MinValue means Login was never attempted.</summary>
+    public int LastLoginReturnCode { get; private set; } = int.MinValue;
 
     public bool IsLoggedIn => _loggedIn;
 
@@ -50,11 +57,15 @@ public sealed class VoicemeeterClient : IDisposable
         try { _ = VBVMR_Logout(); } catch { /* not previously logged in — fine */ }
 
         var rc = VBVMR_Login();
-        _loggedIn = rc == 0 || rc == 1; // 1 = engine already launched in app mode
+        LastLoginReturnCode = rc;
+        _loggedIn = rc == 0 || rc == 1;
         if (_loggedIn)
         {
             _consecutiveDirtyErrors = 0;
-            _graceEndsUtc = DateTime.UtcNow + PostLoginGracePeriod;
+            // rc==1 means VBVMR is launching the engine for us — give it real time before
+            // we start counting dirty-check failures against it.
+            var grace = rc == 1 ? PostLoginGraceJustLaunched : PostLoginGraceAlreadyRunning;
+            _graceEndsUtc = DateTime.UtcNow + grace;
         }
         return _loggedIn;
     }
@@ -68,10 +79,11 @@ public sealed class VoicemeeterClient : IDisposable
 
     /// <summary>Non-blocking dirty check; returns true exactly once per parameter mutation batch.
     /// A negative return from the API can mean the Voicemeeter engine went away (user closed the
-    /// app), but on a cold boot it returns -1 transiently for ~100-300 ms while the engine finishes
-    /// its own initialization. We require <see cref="TransientErrorThreshold"/> consecutive negative
-    /// returns before declaring the engine dead and dropping the cached login state — the
-    /// orchestrator's next reconcile pass will then fall back to the Windows endpoint.</summary>
+    /// app), but on a cold boot it returns -1 transiently for many seconds while the engine
+    /// finishes its own initialization. We require <see cref="TransientErrorThreshold"/>
+    /// consecutive negative returns AFTER the post-Login grace expires before declaring the
+    /// engine dead and dropping the cached login state — the orchestrator's next reconcile pass
+    /// will then fall back to the Windows endpoint.</summary>
     public bool ConsumeDirtyFlag()
     {
         if (!_loggedIn) return false;
@@ -84,10 +96,13 @@ public sealed class VoicemeeterClient : IDisposable
             _consecutiveDirtyErrors++;
             if (_consecutiveDirtyErrors >= TransientErrorThreshold)
             {
-                // 5 consecutive negatives after grace = ~150 ms of failure. Engine is
-                // genuinely gone. Call Logout to sync VBVMR's internal state with our
-                // cache so a future TryLogin can succeed when the engine comes back.
-                try { _ = VBVMR_Logout(); } catch { }
+                // 5 consecutive negatives after grace = engine is genuinely gone.
+                // We deliberately do NOT call VBVMR_Logout here: calling Logout/Login
+                // repeatedly while the engine is mid-initialization (rc==1 case) was
+                // observed to interrupt the engine's own init and trap it in a never-ready
+                // state, producing a 3-second flap loop. Just flip our cache — the next
+                // TryLogin starts with a defensive Logout, which is the only safe place
+                // to call it (right before Login, so the new state is consistent).
                 _loggedIn = false;
             }
             return false;
