@@ -20,6 +20,7 @@ public partial class App : Application
     private ThemeService? _theme;
     private ForegroundWatcher? _foregroundWatcher;
     private NativeFlyoutSuppressor? _flyoutSuppressor;
+    private VolumeKeyHook? _volumeKeyHook;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -63,6 +64,22 @@ public partial class App : Application
         _orchestrator.WindowsVolumeEvent += _flyoutSuppressor.OpenSuppressionWindow;
         _diagnosticLog?.Info("App", "NativeFlyoutSuppressor started");
 
+        // Volume-key low-level hook: opens the suppression window on the KEY DOWN event,
+        // several ms before Windows renders its flyout. Closes the race that the audio-
+        // notification-driven trigger loses on Win11 (audio API callback arrives ~400 ms
+        // after the flyout is already on-screen). Also fires the OSD immediately for a
+        // pinned endpoint that the volume key doesn't actually target — better than
+        // showing nothing while the user presses keys.
+        _volumeKeyHook = new VolumeKeyHook(_diagnosticLog);
+        _volumeKeyHook.VolumeKeyPressed += () =>
+        {
+            _flyoutSuppressor?.OpenSuppressionWindow();
+            // Bounce to the UI dispatcher — VolumeKeyPressed runs on the Windows hook thread.
+            Dispatcher.BeginInvoke(() => _osd?.ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs)));
+        };
+        _volumeKeyHook.Start();
+        _diagnosticLog?.Info("App", "VolumeKeyHook started");
+
         // The summon hotkey pops the OSD with whatever values the view-model currently holds —
         // useful for one-handed media skips without touching the volume wheel. Default is None
         // (off); the user picks a combo in the settings window and we re-apply on every change.
@@ -93,6 +110,7 @@ public partial class App : Application
         _diagnosticLog?.Info("App", "OnExit");
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
         _foregroundWatcher?.Dispose();
+        _volumeKeyHook?.Dispose();
         _hotkey?.Dispose();
         _theme?.Dispose();
         _orchestrator?.Dispose();
@@ -100,5 +118,11 @@ public partial class App : Application
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
         _trayHost?.Dispose();
         base.OnExit(e);
+        // Force-exit before the GC finalizer thread runs — WinRT COM objects (SMTC session
+        // via MediaSessionClient) crash from Finalize when the COM apartment has already
+        // been torn down. Manifests as ".NET Runtime unhandled exception in
+        // WinRT.IObjectReference.Finalize / GC.RunFinalizers" during shutdown. All our own
+        // cleanup already ran above; skipping finalizers here loses nothing meaningful.
+        Environment.Exit(e.ApplicationExitCode);
     }
 }

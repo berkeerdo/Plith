@@ -27,10 +27,11 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     private const int SW_HIDE = 0;
 
-    // ZBID_IMMERSIVE_NOTIFICATIONS — the band used by volume / brightness / network /
-    // some toast flyouts. Per ADeltaX's Windows z-order documentation. Start menu is
-    // ZBID_DEFAULT (0x0), taskbar tools ZBID_SYSTEM_TOOLS (0x10).
-    private const uint ZBID_IMMERSIVE_NOTIFICATIONS = 0x4;
+    // Historically the volume / brightness / network flyouts lived in
+    // ZBID_IMMERSIVE_NOTIFICATIONS (0x4). Recent Win11 builds moved them to newer bands
+    // (0x11 = system-tools-adjacent, 0x12 = shell-owned island widget). We accept the
+    // whole set the shell has used, keyed off class+process still doing most of the work.
+    private static readonly uint[] FlyoutBands = new uint[] { 0x4, 0x10, 0x11, 0x12 };
 
     // Suppression window after a Windows volume event. Long enough to catch the flyout
     // even on slow systems where show is delayed; short enough that a brightness key
@@ -137,30 +138,24 @@ public sealed class NativeFlyoutSuppressor : IDisposable
 
         bool inWindow = DateTime.UtcNow <= _suppressionWindowEndsUtc;
 
-        var className = GetClassNameSafe(hwnd);
-        bool classOk = IsHostClassName(className);
+        // Cheapest checks first, skip disk I/O and P/Invoke on the vast majority of shell
+        // events. LOCATIONCHANGE fires thousands of times per second on a busy desktop
+        // (Task Manager row updates, Explorer popups, teams, VS Code); logging or resolving
+        // process names for all of them starves the UI dispatcher and appears as a hang.
+        if (!inWindow) return;
 
-        // Outside the suppression window we only log candidates whose class matches our
-        // flyout-host shortlist. Those are diagnostically interesting (they tell us if the
-        // actual flyout was created/shown well outside our 400 ms window). Logging every
-        // location-change for every shell window outside the window would flood the file.
-        if (!inWindow && !classOk) return;
+        var className = GetClassNameSafe(hwnd);
+        if (!IsHostClassName(className)) return;
 
         var procName = GetProcessNameSafe(hwnd);
+        if (!IsShellProcessName(procName)) return;
+
         var band = GetBandSafe(hwnd);
-        bool procOk = IsShellProcessName(procName);
-        bool bandOk = IsImmersiveNotificationsBand(band);
+        if (!IsImmersiveNotificationsBand(band)) return;
 
+        // Log only the events that actually pass ALL filters — real suppression targets.
         _log?.Info("FlyoutSuppressor",
-            $"Candidate: ev=0x{eventType:X} hwnd=0x{hwnd:X} class='{className}' proc='{procName}' " +
-            $"band=0x{band:X} classOk={classOk} procOk={procOk} bandOk={bandOk} inWindow={inWindow}");
-
-        if (!inWindow) return;
-        if (!classOk) return;
-        if (!bandOk) return;
-        if (!procOk) return;
-
-        _log?.Info("FlyoutSuppressor", $"Hiding flyout hwnd=0x{hwnd:X}");
+            $"Hiding flyout hwnd=0x{hwnd:X} ev=0x{eventType:X} class='{className}' proc='{procName}' band=0x{band:X}");
         ShowWindow(hwnd, SW_HIDE);
     }
 
@@ -205,8 +200,12 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     // When GetWindowBand isn't available, GetBandSafe returns 0xFFFFFFFF (unknown) — we
     // treat unknown as "allow" so older Windows where the export doesn't exist still benefit
     // from class+process filtering. Treating unknown as "match" is safer than "reject" here.
-    private bool IsImmersiveNotificationsBand(uint band) =>
-        _getWindowBand is null || band == 0xFFFFFFFF || band == ZBID_IMMERSIVE_NOTIFICATIONS;
+    private bool IsImmersiveNotificationsBand(uint band)
+    {
+        if (_getWindowBand is null || band == 0xFFFFFFFF) return true;
+        for (int i = 0; i < FlyoutBands.Length; i++) if (FlyoutBands[i] == band) return true;
+        return false;
+    }
 
     private static bool IsShellProcessName(string name)
     {
