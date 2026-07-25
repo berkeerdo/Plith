@@ -57,6 +57,7 @@ public sealed class SettingsService
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
                 AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
+                MonitoredWindowsEndpointId = data[SectionAudio]["MonitoredWindowsEndpointId"] ?? string.Empty,
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
                 SummonHotkeyMods = ParseUInt(data[SectionOsd]["SummonHotkeyMods"], 0),
                 SummonHotkeyKey = ParseInt(data[SectionOsd]["SummonHotkeyKey"], 0, 0, 255),
@@ -100,6 +101,7 @@ public sealed class SettingsService
         data[SectionOsd].RemoveKey("SummonHotkey");
         data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();
         data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString(inv);
+        data[SectionAudio]["MonitoredWindowsEndpointId"] = m.MonitoredWindowsEndpointId ?? string.Empty;
         data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString(inv);
         _parser.WriteFile(_path, data);
 

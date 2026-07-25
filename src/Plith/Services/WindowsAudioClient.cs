@@ -6,6 +6,9 @@ namespace Plith.Services;
 
 public sealed record WindowsAudioSnapshot(string DeviceLabel, float ScalarVolume, bool Muted);
 
+/// <summary>A single active render endpoint the user can pick in Settings.</summary>
+public sealed record WindowsAudioEndpointInfo(string Id, string FriendlyName);
+
 /// <summary>
 /// Wraps the Core Audio API default render endpoint via NAudio.
 /// <see cref="AudioEndpointVolume.OnVolumeNotification"/> fires on a COM (MTA) thread,
@@ -20,6 +23,11 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     private MMDevice? _device;
     private AudioEndpointVolume? _volume;
     private bool _disposed;
+
+    // When non-null and non-empty, the client pins to this specific endpoint by ID and
+    // ignores OS default-device swaps. When null / empty, it follows Windows' default
+    // render endpoint (original behavior).
+    private string? _targetEndpointId;
 
     public WindowsAudioClient(DiagnosticLog? log = null)
     {
@@ -67,9 +75,110 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     {
         var en = _enumerator;
         if (en is null) return;
+
+        // Pinned mode: try the user-selected endpoint first. If it isn't active anymore
+        // (unplugged, disabled), silently fall through to the default endpoint so the OSD
+        // keeps working instead of going dark until the user re-picks in Settings.
+        if (!string.IsNullOrEmpty(_targetEndpointId))
+        {
+            try
+            {
+                var pinned = en.GetDevice(_targetEndpointId);
+                if (pinned is not null && pinned.State == DeviceState.Active)
+                {
+                    _device = pinned;
+                    _volume = pinned.AudioEndpointVolume;
+                    _volume.OnVolumeNotification += OnNotification;
+                    _log?.Info("WindowsAudio", $"Attached to pinned endpoint '{pinned.FriendlyName}'");
+                    return;
+                }
+                _log?.Warn("WindowsAudio", $"Pinned endpoint '{_targetEndpointId}' not active — falling back to default");
+                pinned?.Dispose();
+            }
+            catch (Exception ex)
+            {
+                _log?.Warn("WindowsAudio", $"Pinned endpoint lookup failed: {ex.GetType().Name}: {ex.Message} — falling back to default");
+            }
+        }
+
         _device = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         _volume = _device.AudioEndpointVolume;
         _volume.OnVolumeNotification += OnNotification;
+    }
+
+    /// <summary>Repoint the client to a different render endpoint. Pass null or empty to
+    /// go back to following the OS default. Safe to call at any time; performs a locked
+    /// detach + attach cycle and emits a fresh snapshot on success.</summary>
+    public void SetTargetEndpoint(string? endpointId)
+    {
+        var next = string.IsNullOrWhiteSpace(endpointId) ? null : endpointId;
+        lock (_attachLock)
+        {
+            if (_targetEndpointId == next) return;
+            _targetEndpointId = next;
+            if (_enumerator is null) return; // not started yet — Start will honor _targetEndpointId
+            try
+            {
+                DetachFromCurrentDevice();
+                AttachToCurrentDefault();
+            }
+            catch (Exception ex)
+            {
+                _log?.Error("WindowsAudio", $"SetTargetEndpoint reattach failed: {ex.GetType().Name}: {ex.Message}");
+                DetachFromCurrentDevice();
+                return;
+            }
+        }
+        EmitSnapshot();
+    }
+
+    /// <summary>Enumerates every active render endpoint on the machine. Used by Settings
+    /// to populate the endpoint picker. Static because it does not need an attached client.</summary>
+    public static IReadOnlyList<WindowsAudioEndpointInfo> EnumerateRenderEndpoints()
+    {
+        var list = new List<WindowsAudioEndpointInfo>();
+        try
+        {
+            using var en = new MMDeviceEnumerator();
+            var devs = en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
+            foreach (var d in devs)
+            {
+                try { list.Add(new WindowsAudioEndpointInfo(d.ID, ShortenFriendlyName(d.FriendlyName ?? "Unknown device"))); }
+                finally { d.Dispose(); }
+            }
+        }
+        catch
+        {
+            // Headless / broken audio stack — return whatever we managed to collect.
+        }
+        return list;
+    }
+
+    /// <summary>Strips the parenthesized adapter suffix Windows appends to endpoint names,
+    /// e.g. "SteelSeries Sonar - Chat (SteelSeries Sonar Virtual Audio Device)" →
+    /// "SteelSeries Sonar - Chat". Keeps single-adapter endpoints intact
+    /// (e.g. "Hoparlör (Realtek(R) Audio)" → "Hoparlör (Realtek)") so identical-named
+    /// endpoints on different drivers stay distinguishable. Used only for display —
+    /// the raw endpoint id is what's persisted and matched.</summary>
+    private static string ShortenFriendlyName(string full)
+    {
+        int paren = full.LastIndexOf(" (", StringComparison.Ordinal);
+        if (paren <= 0) return full;
+        var head = full.Substring(0, paren);
+        var tail = full.Substring(paren + 2, full.Length - paren - 3); // strip " (" and trailing ")"
+        // If the head already contains the adapter descriptor (Sonar Chat / Sonar Gaming /
+        // Sonar Media all bundle the driver name in parens), drop the tail entirely.
+        if (head.Contains(tail, StringComparison.OrdinalIgnoreCase)) return head;
+        // Otherwise keep a shortened adapter hint so duplicates stay tellable.
+        // Pull the first two words out of the adapter descriptor.
+        var words = tail.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var shortAdapter = words.Length switch
+        {
+            0 => tail,
+            1 => words[0],
+            _ => words[0] + " " + words[1],
+        };
+        return $"{head} ({shortAdapter})";
     }
 
     private void DetachFromCurrentDevice()
@@ -134,6 +243,14 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     public void OnDefaultDeviceChanged(DataFlow flow, Role role, string defaultDeviceId)
     {
         if (flow != DataFlow.Render || role != Role.Multimedia) return;
+        // If the user pinned a specific endpoint, changes to the OS default don't concern us —
+        // Sonar users pinning "Chat" don't want the OSD to jump when Windows re-picks default
+        // Speakers on a headset unplug.
+        if (!string.IsNullOrEmpty(_targetEndpointId))
+        {
+            _log?.Info("WindowsAudio", $"OnDefaultDeviceChanged ignored (pinned to {_targetEndpointId})");
+            return;
+        }
         _log?.Info("WindowsAudio", $"OnDefaultDeviceChanged: new device id={defaultDeviceId}");
 
         lock (_attachLock)
@@ -156,7 +273,31 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         EmitSnapshot();
     }
 
-    public void OnDeviceStateChanged(string deviceId, DeviceState newState) { }
+    public void OnDeviceStateChanged(string deviceId, DeviceState newState)
+    {
+        // When our pinned endpoint disappears (Sonar restart, device unplug), the current
+        // device handle is stale — reattach so the picker falls back to default silently.
+        // Also handles the reverse: pinned endpoint comes back active → resume it.
+        if (string.IsNullOrEmpty(_targetEndpointId)) return;
+        if (!string.Equals(deviceId, _targetEndpointId, StringComparison.OrdinalIgnoreCase)) return;
+
+        _log?.Info("WindowsAudio", $"OnDeviceStateChanged: pinned endpoint {deviceId} -> {newState}");
+        lock (_attachLock)
+        {
+            if (_disposed || _enumerator is null) return;
+            try
+            {
+                DetachFromCurrentDevice();
+                AttachToCurrentDefault();
+            }
+            catch
+            {
+                DetachFromCurrentDevice();
+                return;
+            }
+        }
+        EmitSnapshot();
+    }
     public void OnDeviceAdded(string pwstrDeviceId) { }
     public void OnDeviceRemoved(string deviceId) { }
     public void OnPropertyValueChanged(string pwstrDeviceId, PropertyKey key) { }

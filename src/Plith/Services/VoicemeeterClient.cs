@@ -46,6 +46,20 @@ public sealed class VoicemeeterClient : IDisposable
 
     public bool IsLoggedIn => _loggedIn;
 
+    /// <summary>Returns true when a Voicemeeter installation is present on this machine.
+    /// Checked against the same registry + default-path fallback used by the DLL resolver,
+    /// plus a probe that the DLL file itself exists so a half-removed install (registry key
+    /// left behind but binaries gone) reports false. Cheap enough to call on every settings
+    /// window open; result is not cached because the user can install/uninstall between calls.</summary>
+    public static bool IsInstalled
+    {
+        get
+        {
+            var dir = TryGetVoicemeeterInstallPath();
+            return dir is not null && File.Exists(Path.Combine(dir, DllName));
+        }
+    }
+
     public bool TryLogin()
     {
         if (_loggedIn) return true;

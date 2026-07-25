@@ -53,6 +53,7 @@ public sealed class OsdOrchestrator : IDisposable
         _log = log;
         _dispatcher = osd.Dispatcher;
         _windowsAudio = new WindowsAudioClient(log);
+        _windowsAudio.SetTargetEndpoint(_settings.Current.MonitoredWindowsEndpointId);
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _osd.MediaCommandInvoked += OnMediaCommandInvoked;
@@ -63,15 +64,20 @@ public sealed class OsdOrchestrator : IDisposable
     public void Start()
     {
         _pollTimer.Start();
-        TryConnectVoicemeeter();
+        // Skip the Voicemeeter login attempt when the DLL isn't on disk — otherwise the
+        // resolver logs a failure every 3 s forever on machines that have never had it.
+        if (VoicemeeterClient.IsInstalled) TryConnectVoicemeeter();
         ReconcileActiveSource();
 
         _media.Changed += OnMediaChanged;
         _ = _media.StartAsync();
     }
 
-    private void OnSettingsChanged(SettingsModel _)
+    private void OnSettingsChanged(SettingsModel m)
     {
+        // Push endpoint id down first — SetTargetEndpoint is a no-op when unchanged, so the
+        // hot path (user only changed opacity, hotkey, theme) doesn't churn the audio client.
+        _windowsAudio.SetTargetEndpoint(m.MonitoredWindowsEndpointId);
         // Mode may have changed (e.g. Auto → ForceWindows) — re-pick the active source.
         ReconcileActiveSource();
         // Bus index might have changed too — reset cache so the new bus's value is the baseline.
@@ -85,7 +91,13 @@ public sealed class OsdOrchestrator : IDisposable
     /// </summary>
     private void ReconcileActiveSource()
     {
-        var desired = _settings.Current.AudioSource switch
+        // When Voicemeeter isn't installed on this machine, every mode collapses to Windows —
+        // ForceVoicemeeter would otherwise leave the OSD permanently silent, and Auto's
+        // "fall back to Windows" branch is the only viable path anyway.
+        var mode = VoicemeeterClient.IsInstalled
+            ? _settings.Current.AudioSource
+            : AudioSourceMode.ForceWindows;
+        var desired = mode switch
         {
             AudioSourceMode.ForceVoicemeeter => _voicemeeter.IsLoggedIn ? ActiveSource.Voicemeeter : ActiveSource.None,
             AudioSourceMode.ForceWindows => ActiveSource.Windows,
@@ -176,7 +188,9 @@ public sealed class OsdOrchestrator : IDisposable
         // fallback on the same tick.
         ReconcileActiveSource();
 
-        if (!_voicemeeter.IsLoggedIn && DateTime.UtcNow >= _nextReconnect)
+        if (VoicemeeterClient.IsInstalled
+            && !_voicemeeter.IsLoggedIn
+            && DateTime.UtcNow >= _nextReconnect)
             TryConnectVoicemeeter();
     }
 

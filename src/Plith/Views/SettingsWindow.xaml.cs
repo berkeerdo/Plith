@@ -1,3 +1,5 @@
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -32,6 +34,16 @@ public partial class SettingsWindow : Window
             "A1 (0)", "A2 (1)", "A3 (2)", "A4 (3)", "A5 (4)",
             "B1 (5)", "B2 (6)", "B3 (7)",
         };
+
+        PopulateEndpointCombo();
+
+        // Plith stays a general-purpose OSD — every backend Plith knows how to read stays
+        // visible in the picker even when that backend isn't on the machine. Instead of
+        // hiding controls, we surface a small hint that names which backend is live right
+        // now, and disable the Voicemeeter bus picker when Voicemeeter can't be reached
+        // (still visible so the user sees the option exists).
+        UpdateAudioSourceHint();
+        BusCombo.IsEnabled = VoicemeeterClient.IsInstalled;
 
         WirePreview();
         WireAutoSave();
@@ -68,6 +80,46 @@ public partial class SettingsWindow : Window
         };
         UpdateHotkeyConflictWarning();
         ApplyGameModeStatus();
+    }
+
+    private void SelectEndpointById(string? id)
+    {
+        // Match against the id we persisted; if it's gone (device removed since last run),
+        // fall back to the Default sentinel so the OSD still shows something meaningful.
+        var items = EndpointCombo.ItemsSource as IEnumerable<WindowsAudioEndpointInfo>;
+        if (items is null) return;
+        WindowsAudioEndpointInfo? match = null;
+        foreach (var e in items)
+        {
+            if (string.Equals(e.Id, id ?? string.Empty, StringComparison.OrdinalIgnoreCase)) { match = e; break; }
+        }
+        EndpointCombo.SelectedItem = match ?? items.FirstOrDefault();
+    }
+
+    private void PopulateEndpointCombo()
+    {
+        // "Default" sentinel + every active Windows render endpoint. Enumerated on window
+        // open so Sonar (which registers new endpoints when its Streamer mode toggles) is
+        // always current. If the persisted endpoint id no longer exists, selection falls
+        // back to Default silently — the user sees the picker at Default and can re-pick.
+        var items = new List<WindowsAudioEndpointInfo>
+        {
+            new(string.Empty, "Default (follow Windows)"),
+        };
+        items.AddRange(WindowsAudioClient.EnumerateRenderEndpoints());
+        EndpointCombo.ItemsSource = items;
+    }
+
+    private void UpdateAudioSourceHint()
+    {
+        // Reports which backend Plith is currently reading, so users who juggle multiple
+        // mixers (Voicemeeter, SteelSeries Sonar exposed as Windows endpoints, plain Windows)
+        // can see at a glance whether their preferred source is live.
+        string vmState = VoicemeeterClient.IsInstalled ? "installed" : "not installed";
+        AudioSourceHint.Text =
+            $"Auto uses Voicemeeter when it's running, otherwise the Windows default endpoint " +
+            $"(this is where SteelSeries Sonar / VoiceMeeter alternatives surface). " +
+            $"Voicemeeter: {vmState}.";
     }
 
     private void ApplyGameModeStatus()
@@ -272,6 +324,7 @@ public partial class SettingsWindow : Window
             RefreshHotkeyButton(m.SummonHotkeyMods, m.SummonHotkeyKey);
             SourceCombo.SelectedItem = m.AudioSource;
             BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
+            SelectEndpointById(m.MonitoredWindowsEndpointId);
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
             AutoStartToggle.IsChecked = m.AutoStart;
             ThemeCombo.SelectedItem = m.Theme;
@@ -316,6 +369,7 @@ public partial class SettingsWindow : Window
         // Hotkey button is wired through StartHotkeyCapture/ClearHotkey, not a SelectionChanged.
         SourceCombo.SelectionChanged += (_, _) => AutoSave();
         BusCombo.SelectionChanged += (_, _) => AutoSave();
+        EndpointCombo.SelectionChanged += (_, _) => AutoSave();
         AutoShowMediaToggle.Checked += (_, _) => AutoSave();
         AutoShowMediaToggle.Unchecked += (_, _) => AutoSave();
         AutoStartToggle.Checked += (_, _) => AutoSave();
@@ -360,6 +414,7 @@ public partial class SettingsWindow : Window
         m.SummonHotkeyKey = _capturedKey;
         if (SourceCombo.SelectedItem is AudioSourceMode src) m.AudioSource = src;
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
+        m.MonitoredWindowsEndpointId = (EndpointCombo.SelectedItem as WindowsAudioEndpointInfo)?.Id ?? string.Empty;
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;

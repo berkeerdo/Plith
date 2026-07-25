@@ -8,6 +8,7 @@
         Width="900" Height="700" MinWidth="780" MinHeight="600"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
+        ShowInTaskbar="False"
         ResizeMode="CanResize"
         Background="{DynamicResource WindowBg}"
         Foreground="{DynamicResource TextPrimary}"
@@ -330,7 +331,7 @@
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
 
-                        <Border Style="{StaticResource RowStyle}">
+                        <Border x:Name="AudioSourceRow" Style="{StaticResource RowStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -338,7 +339,9 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Audio source" />
-                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Auto prefers Voicemeeter when it's running and falls back to the Windows default endpoint." />
+                                    <TextBlock x:Name="AudioSourceHint"
+                                               Style="{StaticResource RowHintStyle}"
+                                               Text="Auto prefers Voicemeeter when it's running and falls back to the Windows default endpoint." />
                                 </StackPanel>
                                 <ComboBox x:Name="SourceCombo"
                                           Grid.Column="1"
@@ -348,7 +351,32 @@
                             </Grid>
                         </Border>
 
-                        <Border Style="{StaticResource RowLastStyle}">
+                        <Border x:Name="WindowsEndpointRow" Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Windows endpoint" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Which render device the OSD tracks. Default follows Windows; pick a Sonar channel to lock onto it." />
+                                </StackPanel>
+                                <ComboBox x:Name="EndpointCombo"
+                                          Grid.Column="1"
+                                          MaxWidth="260"
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ModernComboStyle}">
+                                    <ComboBox.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding FriendlyName}"
+                                                       TextTrimming="CharacterEllipsis" />
+                                        </DataTemplate>
+                                    </ComboBox.ItemTemplate>
+                                </ComboBox>
+                            </Grid>
+                        </Border>
+
+                        <Border x:Name="MonitoredBusRow" Style="{StaticResource RowLastStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />

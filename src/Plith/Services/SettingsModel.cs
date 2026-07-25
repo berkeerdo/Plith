@@ -73,6 +73,12 @@ public sealed class SettingsModel
     /// <summary>Index of the Voicemeeter bus to monitor (0 = A1, 1 = A2, etc.). Only used when the active source is Voicemeeter.</summary>
     public int MonitoredBusIndex { get; set; }
 
+    /// <summary>Windows Core Audio endpoint ID to pin, or empty to follow the OS default
+    /// render device. Used only when the active source is Windows. Lets users of multi-
+    /// channel mixers (SteelSeries Sonar's Chat / Game / Media channels, VoiceMeeter
+    /// substitutes) monitor a specific channel instead of whatever Windows picks.</summary>
+    public string MonitoredWindowsEndpointId { get; set; } = string.Empty;
+
     /// <summary>If true, a registry Run entry launches Plith on Windows login.</summary>
     public bool AutoStart { get; set; }
 
@@ -103,6 +109,7 @@ public sealed class SettingsModel
         CompactMode = CompactMode,
         AudioSource = AudioSource,
         MonitoredBusIndex = MonitoredBusIndex,
+        MonitoredWindowsEndpointId = MonitoredWindowsEndpointId,
         AutoStart = AutoStart,
         SummonHotkeyMods = SummonHotkeyMods,
         SummonHotkeyKey = SummonHotkeyKey,
