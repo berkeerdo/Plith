@@ -3,7 +3,11 @@
 Modern Windows audio OSD with Voicemeeter-first design + integrated media controls. Replaces Windows' aging volume flyout with a Mica/rounded overlay that works over fullscreen games and shows now-playing media inline.
 
 ## Status
-**Planning complete, implementation not started.** Bootstrap will create `src/Plith/` WPF project on Day 1.
+**Phases 1–4f shipped.** Voicemeeter + Windows Core Audio + SMTC media integration,
+Settings UI with live theming, Game mode (UIAccess-signed BandWindow), free-form
+hotkey capture, mixer-agnostic endpoint pinning (Sonar / Unify / Wave Link channels),
+Win11-safe native flyout suppression, WH_KEYBOARD_LL hook. Remaining: Phase 4c-4
+(MSIX + SignPath OSS cert) and optional Phase 4g (Sonar HTTP API deep integration).
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).

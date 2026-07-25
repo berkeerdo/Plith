@@ -36,15 +36,24 @@ without taking your attention away from the thing you were already doing.
 - **Windows Core Audio fallback.** When Voicemeeter isn't running, Plith listens to the
   Windows default render endpoint via NAudio. Default-device swap (plug in headphones,
   switch output) reattaches transparently via `IMMNotificationClient`.
+- **Mixer-agnostic endpoint pinning.** Any Windows render endpoint can be pinned as the
+  OSD source instead of following the OS default — surface a single SteelSeries Sonar
+  channel (Chat / Game / Media), a Rode Unify submix, an Elgato Wave Link input, or a
+  VB-Cable line. When pinned, default-device swaps are ignored; when the pinned endpoint
+  goes away (Sonar restart, device unplug) Plith silently falls back to the default and
+  resumes on the pinned device the moment it returns.
 - **Media (SMTC) integration.** Album art, title, artist, and play / pause / next / previous
   buttons for whatever app is publishing into `GlobalSystemMediaTransportControlsSession` —
   Spotify, YouTube in Brave / Edge / Chrome, the Windows app, Twitch web player, etc.
   The buttons route back to the original session.
-- **Settings window.** Linear / Raycast-tier dark UI with a custom titlebar, Win11 rounded
-  corners, and a thin overlay scrollbar. Configurable knobs: show duration (500 ms – 10 s),
-  position (BottomCenter / BottomRight / TopCenter / TopRight), hover keep-alive, monitored
-  bus index, audio-source mode (Auto / ForceVoicemeeter / ForceWindows), media auto-show
-  toggle, launch on Windows login, summon hotkey.
+- **Settings window.** Linear / Raycast-tier UI with a custom titlebar, Win11 rounded
+  corners, and a thin overlay scrollbar. Follows Windows' light/dark theme live (or
+  can be pinned to Dark / Light). Tray-anchored (`ShowInTaskbar=false`), never leaves
+  an entry in the alt-tab list. Configurable knobs: show duration (500 ms – 10 s),
+  position (BottomCenter / BottomRight / TopCenter / TopRight), hover keep-alive,
+  opacity, color-thresholds toggle, compact mode, audio-source mode (Auto /
+  ForceVoicemeeter / ForceWindows), monitored Voicemeeter bus, Windows endpoint pin,
+  media auto-show toggle, launch on Windows login, free-form summon hotkey.
 - **Summon hotkey.** A configurable system-wide hotkey (Ctrl+Alt+V, Ctrl+Shift+V,
   Alt+Shift+V, or Ctrl+Alt+M) pops the OSD with whatever values it currently holds —
   useful for one-handed media skips without touching the volume wheel first.
@@ -211,14 +220,18 @@ with our own modern WPF user controls and view-models written from scratch.
 
 ## Roadmap
 
-- **Phase 4c-3.** OSD opacity slider, animation speed knob, color thresholds (green / amber
-  / red on the volume bar above 0 dB and 6 dB), compact mode that hides the media card.
-- **Phase 4c-4.** Code signing (SignPath.io OSS path or a paid certificate) and an MSIX
-  installer so the download survives Norton / SmartScreen without manual exception.
-- **Phase 4d.** Game mode — re-enable the BandWindow path with a UIAccess-signed binary
-  installed under Program Files for rendering above fullscreen-exclusive games.
-- **Phase 4e.** Settings: custom hotkey capture UI (free-form combo instead of preset list),
-  light theme variant that follows the system theme.
+- ~~**Phase 4c-3.** OSD opacity slider, color thresholds, compact mode.~~ **Done.**
+- ~~**Phase 4d.** Game mode — BandWindow + UIAccess-signed binary.~~ **Done.**
+- ~~**Phase 4e.** Free-form hotkey capture UI, light-theme variant.~~ **Done.**
+- ~~**Phase 4f.** Mixer-agnostic endpoint pinning (Sonar / Unify / Wave Link / VB-Cable
+  channels), Voicemeeter auto-detection, Win11-safe native flyout suppression
+  (new z-bands + low-level keyboard hook so the flyout is intercepted before it
+  paints).~~ **Done.**
+- **Phase 4c-4.** Code signing via SignPath.io OSS path (or a paid certificate) and an
+  MSIX installer so the download survives Norton / SmartScreen without manual exception.
+- **Phase 4g.** Optional Sonar HTTP API integration — surface Sonar-specific labels
+  ("Master +3 dB", "Chat mute") in the OSD when Sonar is running, alongside the
+  existing endpoint-level view.
 
 ## Credits
 
