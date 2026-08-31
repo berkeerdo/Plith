@@ -16,6 +16,7 @@ public sealed class SettingsService
     private const string SectionOsd = "Osd";
     private const string SectionAudio = "Audio";
     private const string SectionMedia = "Media";
+    private const string SectionAppearance = "Appearance";
 
     private readonly string _path;
     private readonly FileIniDataParser _parser = new();
@@ -64,6 +65,12 @@ public sealed class SettingsService
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
                 SummonHotkeyMods = ParseUInt(data[SectionOsd]["SummonHotkeyMods"], 0),
                 SummonHotkeyKey = ParseInt(data[SectionOsd]["SummonHotkeyKey"], 0, 0, 255),
+                AccentThemeId = string.IsNullOrWhiteSpace(data[SectionAppearance]["AccentThemeId"])
+                    ? AccentTheme.DefaultId
+                    : data[SectionAppearance]["AccentThemeId"],
+                CustomAccentColor = string.IsNullOrWhiteSpace(data[SectionAppearance]["CustomAccentColor"])
+                    ? null
+                    : data[SectionAppearance]["CustomAccentColor"],
             };
             // Migration: older config files only persisted the SummonHotkey enum string. If
             // the new raw fields are absent (still both 0) but the enum was set, translate it
@@ -109,6 +116,20 @@ public sealed class SettingsService
         data[SectionAudio]["MonitoredBusIndex"] = m.MonitoredBusIndex.ToString(inv);
         data[SectionAudio]["MonitoredWindowsEndpointId"] = m.MonitoredWindowsEndpointId ?? string.Empty;
         data[SectionMedia]["AutoShowOnMedia"] = m.AutoShowOnMedia.ToString(inv);
+        data[SectionAppearance]["AccentThemeId"] = string.IsNullOrWhiteSpace(m.AccentThemeId)
+            ? AccentTheme.DefaultId
+            : m.AccentThemeId;
+        // Persist the last picked custom hex whenever one exists, even if a preset is the
+        // active id. Keeps the user's custom colour intact when they toggle through presets
+        // and back to Custom — otherwise the popup would open on the fallback each time.
+        if (!string.IsNullOrWhiteSpace(m.CustomAccentColor))
+        {
+            data[SectionAppearance]["CustomAccentColor"] = m.CustomAccentColor;
+        }
+        else
+        {
+            data[SectionAppearance].RemoveKey("CustomAccentColor");
+        }
         _parser.WriteFile(_path, data);
 
         Current = m.Clone();

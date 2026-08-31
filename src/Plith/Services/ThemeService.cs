@@ -1,18 +1,21 @@
 using System.Linq;
 using System.Windows;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace Plith.Services;
 
 /// <summary>
-/// Owns the Settings window theme. Swaps the active palette ResourceDictionary
-/// in <see cref="Application.Resources"/> between <c>Palette.Dark.xaml</c> and
-/// <c>Palette.Light.xaml</c> in response to <see cref="SettingsModel.Theme"/> or
-/// the Windows apps-use-light-theme preference (for <see cref="ThemeMode.Auto"/>).
-/// Every Settings XAML brush is bound via <c>DynamicResource</c>, so the swap
-/// propagates without re-creating any windows. The OSD overlay theme is independent
-/// and intentionally stays dark.
+/// Owns both the palette polarity (dark / light) and the accent overlay for the
+/// Settings window and the OSD. Swaps the active palette ResourceDictionary in
+/// <see cref="Application.Resources"/> between the dark and light variants in
+/// response to <see cref="SettingsModel.Theme"/> or the Windows apps-use-light-
+/// theme preference (for <see cref="ThemeMode.Auto"/>), and stacks an accent
+/// override dictionary at the end so the Theme Studio's picked colour beats the
+/// palette's baked-in accent without touching the raw XAML files. Every Settings
+/// brush is bound via <c>DynamicResource</c>, so both swaps propagate live
+/// without re-creating any windows.
 /// </summary>
 public sealed class ThemeService : IDisposable
 {
@@ -25,11 +28,20 @@ public sealed class ThemeService : IDisposable
     private static readonly Uri OsdLightUri = new(
         "pack://application:,,,/Resources/OsdPalette.Light.xaml", UriKind.Absolute);
 
+    // Brush keys the accent override replaces. Kept as constants so the surface is
+    // greppable and easy to expand if new accent-sensitive brushes get added later.
+    private const string KeyAccent = "Accent";
+    private const string KeyAccentHover = "AccentHover";
+    private const string KeyAccentPressed = "AccentPressed";
+    private const string KeyAccentGlow = "AccentGlow";
+    private const string KeyOsdAccent = "OsdAccent";
+
     private readonly Application _app;
     private readonly SettingsService _settings;
 
     private ResourceDictionary? _activeSettingsPalette;
     private ResourceDictionary? _activeOsdPalette;
+    private ResourceDictionary? _accentOverride;
     private bool _isEffectiveDark = true;
     private bool _started;
     private bool _disposed;
@@ -79,17 +91,57 @@ public sealed class ThemeService : IDisposable
         }
         _activeOsdPalette ??= FindLoadedOsdPalette();
 
-        if (wantsDark == _isEffectiveDark && _activeSettingsPalette is not null && _activeOsdPalette is not null)
-            return;
+        // Palette swap. When polarity is already correct, both slots are populated,
+        // and there is no accent override yet-to-be-applied, we can short-circuit. We
+        // still fall through to ApplyAccentOverride when the accent picker changes,
+        // because polarity is unchanged there but the accent brushes need refreshing.
+        if (wantsDark != _isEffectiveDark || _activeSettingsPalette is null || _activeOsdPalette is null)
+        {
+            var merged = _app.Resources.MergedDictionaries;
+            _activeSettingsPalette = SwapPalette(merged, _activeSettingsPalette,
+                wantsDark ? SettingsDarkUri : SettingsLightUri);
+            _activeOsdPalette = SwapPalette(merged, _activeOsdPalette,
+                wantsDark ? OsdDarkUri : OsdLightUri);
+            _isEffectiveDark = wantsDark;
+        }
+
+        // Rebuild + re-append the accent override so it sits after any palette dictionary
+        // (last-added wins in MergedDictionaries lookup) even if the polarity swap moved
+        // things around. Always safe to run: cheap, idempotent, and the only source of truth
+        // for the currently applied accent.
+        ApplyAccentOverride();
+
+        ThemeApplied?.Invoke();
+    }
+
+    private void ApplyAccentOverride()
+    {
+        var s = _settings.Current;
+        var baseColor = AccentTheme.ResolveBase(s.AccentThemeId, s.CustomAccentColor);
+        var derived = AccentTheme.Derive(baseColor, _isEffectiveDark);
+
+        var dict = new ResourceDictionary
+        {
+            [KeyAccent]        = FrozenBrush(derived.Accent),
+            [KeyAccentHover]   = FrozenBrush(derived.Hover),
+            [KeyAccentPressed] = FrozenBrush(derived.Pressed),
+            [KeyAccentGlow]    = FrozenBrush(derived.Glow),
+            // OSD accent gets the same base colour — OSD bg stays palette-driven so
+            // contrast is already handled by the OsdPalette.* files.
+            [KeyOsdAccent]     = FrozenBrush(derived.Accent),
+        };
 
         var merged = _app.Resources.MergedDictionaries;
-        _activeSettingsPalette = SwapPalette(merged, _activeSettingsPalette,
-            wantsDark ? SettingsDarkUri : SettingsLightUri);
-        _activeOsdPalette = SwapPalette(merged, _activeOsdPalette,
-            wantsDark ? OsdDarkUri : OsdLightUri);
+        if (_accentOverride is not null) merged.Remove(_accentOverride);
+        merged.Add(dict);
+        _accentOverride = dict;
+    }
 
-        _isEffectiveDark = wantsDark;
-        ThemeApplied?.Invoke();
+    private static SolidColorBrush FrozenBrush(Color c)
+    {
+        var b = new SolidColorBrush(c);
+        b.Freeze();
+        return b;
     }
 
     private static ResourceDictionary SwapPalette(

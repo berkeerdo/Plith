@@ -216,6 +216,82 @@ public class SettingsServiceTests
         Assert.Equal(3000, m.ShowDurationMs);
         Assert.True(c.AutoStart);
     }
+
+    [Fact]
+    public void Load_MissingFile_DefaultsAccentToEmerald()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+
+        Assert.Equal(AccentTheme.DefaultId, svc.Current.AccentThemeId);
+        Assert.Null(svc.Current.CustomAccentColor);
+    }
+
+    [Fact]
+    public void Save_Then_Load_RoundTripsAccentPreset()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        var m = svc.Current.Clone();
+        m.AccentThemeId = "lime";
+        svc.Save(m);
+
+        var svc2 = new SettingsService(dir.IniPath);
+        svc2.Load();
+        Assert.Equal("lime", svc2.Current.AccentThemeId);
+        Assert.Null(svc2.Current.CustomAccentColor);
+    }
+
+    [Fact]
+    public void Save_Then_Load_RoundTripsCustomAccent()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        var m = svc.Current.Clone();
+        m.AccentThemeId = AccentTheme.CustomId;
+        m.CustomAccentColor = "#7AA2F7";
+        svc.Save(m);
+
+        var svc2 = new SettingsService(dir.IniPath);
+        svc2.Load();
+        Assert.Equal(AccentTheme.CustomId, svc2.Current.AccentThemeId);
+        Assert.Equal("#7AA2F7", svc2.Current.CustomAccentColor);
+    }
+
+    [Fact]
+    public void Save_KeepsCustomHex_EvenWhenPresetIsActive()
+    {
+        // Design choice: switching to a preset must not erase the last custom colour.
+        // The popup re-opens on the last picked hex when the user returns to Custom.
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        var m = svc.Current.Clone();
+        m.AccentThemeId = "lime";
+        m.CustomAccentColor = "#CAFF33";
+        svc.Save(m);
+
+        var svc2 = new SettingsService(dir.IniPath);
+        svc2.Load();
+        Assert.Equal("lime", svc2.Current.AccentThemeId);
+        Assert.Equal("#CAFF33", svc2.Current.CustomAccentColor);
+    }
+
+    [Fact]
+    public void Load_UnknownAccentId_IsAcceptedVerbatim()
+    {
+        // Ids from future / older builds should survive a round-trip without being
+        // coerced to Emerald — the picker just won't show a selection ring for them,
+        // and ThemeService.ResolveBase falls back to Emerald at apply-time.
+        using var dir = new TempIniDir();
+        File.WriteAllText(dir.IniPath, """
+            [Appearance]
+            AccentThemeId = future-preset-99
+            """);
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();
+        Assert.Equal("future-preset-99", svc.Current.AccentThemeId);
+    }
 }
 
 internal sealed class TempIniDir : IDisposable

@@ -3,8 +3,10 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Plith.Services;
 
@@ -17,8 +19,15 @@ public partial class SettingsWindow : Window
     private readonly ThemeService _theme;
     private readonly OsdHost _osd;
     private readonly UpdateCheckService _updates = new();
+    private readonly List<AccentSwatch> _accentSwatches = new();
     private bool _loadingFromModel;
+    private bool _loadingCustomPickerFromModel;
     private DispatcherTimer? _savedPulseTimer;
+
+    // Row entry for each preset + the single custom swatch in the accent picker.
+    // Kept as a mutable record so RefreshAccentSelection can flip visuals in-place
+    // without rebuilding the WrapPanel on every settings change.
+    private sealed record AccentSwatch(string Id, Border Root, Border Fill, TextBlock Tick, TextBlock? PlusIcon, bool IsCustom);
 
     // Captured combo for the in-progress hotkey recording. Apply on first valid KeyDown.
     private uint _capturedMods;
@@ -90,6 +99,8 @@ public partial class SettingsWindow : Window
         ApplyGameModeStatus();
         WireUpdateCheck();
         WirePositionEditor();
+        BuildAccentSwatches();
+        WireAccentPicker();
     }
 
     private void WirePositionEditor()
@@ -292,6 +303,9 @@ public partial class SettingsWindow : Window
         // The mini OSD card in the preview pane caches threshold brushes per the OSD viewmodel
         // contract; refresh it in tandem with the main OSD so the bar colour matches the swap.
         Preview?.PreviewViewModel.RefreshThresholdBrushes();
+        // A palette polarity flip also changes the derived Accent brush, so the selection
+        // ring on the current swatch needs to redraw with the new colour.
+        RefreshAccentSelection();
     }
 
     private void OnHotkeyBindingChanged()
@@ -329,6 +343,15 @@ public partial class SettingsWindow : Window
         }
         if (e.Key == Key.Escape)
         {
+            // Esc dismisses the custom-colour popup before it closes the whole window,
+            // matching the "innermost overlay wins" convention users already have from
+            // the position overlay picker.
+            if (CustomAccentPopup?.IsOpen == true)
+            {
+                CustomAccentPopup.IsOpen = false;
+                e.Handled = true;
+                return;
+            }
             Close();
             e.Handled = true;
         }
@@ -570,5 +593,342 @@ public partial class SettingsWindow : Window
 
         _settings.Save(m);
         AutoStartService.Apply(m.AutoStart);
+    }
+
+    // =============================================================================
+    //   Accent Theme Studio
+    // =============================================================================
+    //
+    // The Appearance card carries a WrapPanel of preset swatches plus one Custom
+    // swatch that opens the HSL popup declared next to it in XAML. Selection and
+    // hover state live entirely on the swatch objects — no VMs, no bindings — so
+    // theme swaps and settings-file loads can update the picker with a single
+    // RefreshAccentSelection call.
+    //
+    // Persistence + live-apply path:
+    //   click preset  → _settings.Save(m.AccentThemeId = id) → ThemeService.Apply
+    //                   rebuilds the accent override → every DynamicResource'd
+    //                   brush in both the Settings window and the OSD updates.
+    //   drag slider   → same, with m.CustomAccentColor = hex.
+    // -----------------------------------------------------------------------------
+
+    private void BuildAccentSwatches()
+    {
+        AccentSwatchPanel.Children.Clear();
+        _accentSwatches.Clear();
+
+        foreach (var preset in AccentTheme.Presets)
+        {
+            var sw = CreateSwatch(preset.Id, preset.DisplayName, preset.BaseColor, isCustom: false);
+            _accentSwatches.Add(sw);
+            AccentSwatchPanel.Children.Add(sw.Root);
+        }
+
+        var custom = CreateCustomSwatch();
+        _accentSwatches.Add(custom);
+        AccentSwatchPanel.Children.Add(custom.Root);
+
+        RefreshAccentSelection();
+    }
+
+    private AccentSwatch CreateSwatch(string id, string tooltip, Color baseColor, bool isCustom)
+    {
+        // Outer border reserves 2px for the halo-style selection ring. The inner
+        // Fill is smaller so the ring reads as a highlight around a solid dot
+        // instead of a coloured border on the swatch itself.
+        var root = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(20),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(2),
+            Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 0, 8, 8),
+            ToolTip = tooltip,
+        };
+        var grid = new Grid();
+        var fill = new Border
+        {
+            Width = 28,
+            Height = 28,
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(baseColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        var tick = new TextBlock
+        {
+            Text = "", // Segoe MDL2 Assets "CheckMark"
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 14,
+            Foreground = ContrastText(baseColor),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+        };
+        grid.Children.Add(fill);
+        grid.Children.Add(tick);
+        root.Child = grid;
+
+        // MouseLeftButtonUp instead of PreviewMouseLeftButtonDown so drag-selection
+        // in the parent doesn't accidentally commit a preset — the user has to fully
+        // click on the swatch.
+        root.MouseLeftButtonUp += (_, _) => OnSwatchClicked(id, isCustom);
+
+        return new AccentSwatch(id, root, fill, tick, PlusIcon: null, IsCustom: isCustom);
+    }
+
+    private AccentSwatch CreateCustomSwatch()
+    {
+        var settings = _settings.Current;
+        var currentCustom = AccentTheme.ParseHexColor(
+            settings.CustomAccentColor,
+            AccentTheme.ResolveBase(AccentTheme.DefaultId, null));
+
+        var root = new Border
+        {
+            Width = 40,
+            Height = 40,
+            CornerRadius = new CornerRadius(20),
+            Background = Brushes.Transparent,
+            BorderBrush = Brushes.Transparent,
+            BorderThickness = new Thickness(2),
+            Cursor = Cursors.Hand,
+            Margin = new Thickness(0, 0, 8, 8),
+            ToolTip = "Custom color",
+        };
+        var grid = new Grid();
+        var fill = new Border
+        {
+            Width = 28,
+            Height = 28,
+            CornerRadius = new CornerRadius(14),
+            Background = new SolidColorBrush(currentCustom),
+            BorderBrush = (Brush)FindResource("CardBorderStrong"),
+            BorderThickness = new Thickness(1),
+        };
+        // "+" glyph shows when the user hasn't picked a custom colour yet, cueing the
+        // affordance. It's hidden as soon as they commit one so the swatch just reads
+        // as a colour.
+        var plus = new TextBlock
+        {
+            Text = "", // MDL2 "Add"
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 12,
+            Foreground = ContrastText(currentCustom),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+        };
+        var tick = new TextBlock
+        {
+            Text = "",
+            FontFamily = new FontFamily("Segoe MDL2 Assets"),
+            FontSize = 14,
+            Foreground = ContrastText(currentCustom),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            IsHitTestVisible = false,
+            Visibility = Visibility.Collapsed,
+        };
+        grid.Children.Add(fill);
+        grid.Children.Add(plus);
+        grid.Children.Add(tick);
+        root.Child = grid;
+
+        root.MouseLeftButtonUp += (_, _) => OnSwatchClicked(AccentTheme.CustomId, isCustom: true);
+
+        return new AccentSwatch(AccentTheme.CustomId, root, fill, tick, plus, IsCustom: true);
+    }
+
+    private void OnSwatchClicked(string id, bool isCustom)
+    {
+        // Preserve the user's custom colour when switching to a preset: keep it on the
+        // in-memory model so re-picking Custom later opens the popup on the last value.
+        var m = _settings.Current.Clone();
+        m.AccentThemeId = id;
+        _settings.Save(m);
+        // ThemeService listens on SettingsService.Changed and calls Apply -> rebuild
+        // accent override -> refresh every DynamicResource'd Accent* brush in both
+        // this window and the OSD. Nothing else to do for the theme itself.
+        RefreshAccentSelection();
+        PulseSavedIndicator();
+
+        if (isCustom)
+        {
+            SyncCustomPickerFromCurrent();
+            CustomAccentPopup.IsOpen = true;
+            CustomHexBox.Focus();
+        }
+        else
+        {
+            CustomAccentPopup.IsOpen = false;
+        }
+    }
+
+    private void WireAccentPicker()
+    {
+        CustomHueSlider.ValueChanged += (_, _) => OnCustomSliderChanged();
+        CustomSatSlider.ValueChanged += (_, _) => OnCustomSliderChanged();
+        CustomLumSlider.ValueChanged += (_, _) => OnCustomSliderChanged();
+        CustomHexBox.LostFocus += (_, _) => OnCustomHexChanged();
+        CustomHexBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                OnCustomHexChanged();
+                e.Handled = true;
+            }
+        };
+    }
+
+    private void SyncCustomPickerFromCurrent()
+    {
+        // Start point: the user's saved custom colour if any, otherwise the current
+        // preset's base — so the popup doesn't jump to a colour that has nothing to
+        // do with what they're looking at.
+        var m = _settings.Current;
+        var start = AccentTheme.TryParseHexColor(m.CustomAccentColor, out var saved)
+            ? saved
+            : AccentTheme.ResolveBase(
+                string.Equals(m.AccentThemeId, AccentTheme.CustomId, StringComparison.OrdinalIgnoreCase)
+                    ? AccentTheme.DefaultId
+                    : m.AccentThemeId,
+                null);
+
+        _loadingCustomPickerFromModel = true;
+        try
+        {
+            var (h, s, l) = AccentTheme.RgbToHsl(start);
+            CustomHueSlider.Value = h;
+            CustomSatSlider.Value = s * 100.0;
+            CustomLumSlider.Value = l * 100.0;
+            CustomHexBox.Text = AccentTheme.ToHex(start);
+        }
+        finally
+        {
+            _loadingCustomPickerFromModel = false;
+        }
+        UpdateCustomLabels(start);
+    }
+
+    private void OnCustomSliderChanged()
+    {
+        if (_loadingCustomPickerFromModel) return;
+        double h = CustomHueSlider.Value;
+        double s = CustomSatSlider.Value / 100.0;
+        double l = CustomLumSlider.Value / 100.0;
+        var color = AccentTheme.HslToRgb(h, s, l);
+        ApplyCustomColor(color, updateHex: true, updateSliders: false);
+    }
+
+    private void OnCustomHexChanged()
+    {
+        if (_loadingCustomPickerFromModel) return;
+        if (!AccentTheme.TryParseHexColor(CustomHexBox.Text, out var color))
+        {
+            // Restore last-known-good hex on invalid input so the box never sits in a
+            // "you typed nonsense" state.
+            CustomHexBox.Text = AccentTheme.ToHex(
+                AccentTheme.ParseHexColor(_settings.Current.CustomAccentColor,
+                    AccentTheme.ResolveBase(AccentTheme.DefaultId, null)));
+            return;
+        }
+        ApplyCustomColor(color, updateHex: false, updateSliders: true);
+    }
+
+    private void ApplyCustomColor(Color color, bool updateHex, bool updateSliders)
+    {
+        _loadingCustomPickerFromModel = true;
+        try
+        {
+            if (updateSliders)
+            {
+                var (h, s, l) = AccentTheme.RgbToHsl(color);
+                CustomHueSlider.Value = h;
+                CustomSatSlider.Value = s * 100.0;
+                CustomLumSlider.Value = l * 100.0;
+            }
+            if (updateHex)
+            {
+                CustomHexBox.Text = AccentTheme.ToHex(color);
+            }
+            UpdateCustomLabels(color);
+        }
+        finally
+        {
+            _loadingCustomPickerFromModel = false;
+        }
+
+        var m = _settings.Current.Clone();
+        m.AccentThemeId = AccentTheme.CustomId;
+        m.CustomAccentColor = AccentTheme.ToHex(color);
+        _settings.Save(m);
+        RefreshAccentSelection();
+        PulseSavedIndicator();
+    }
+
+    private void UpdateCustomLabels(Color color)
+    {
+        var (h, s, l) = AccentTheme.RgbToHsl(color);
+        CustomHueValue.Text = $"{h:0}°";
+        CustomSatValue.Text = $"{s * 100:0}";
+        CustomLumValue.Text = $"{l * 100:0}";
+        CustomPreviewSwatch.Background = new SolidColorBrush(color);
+    }
+
+    private void RefreshAccentSelection()
+    {
+        var id = _settings.Current.AccentThemeId ?? AccentTheme.DefaultId;
+        // Selection ring uses the currently applied Accent brush so it matches the
+        // rest of the UI (and shifts on dark/light swap alongside everything else).
+        var accentBrush = (Brush)FindResource("Accent");
+
+        foreach (var sw in _accentSwatches)
+        {
+            bool selected = string.Equals(sw.Id, id, StringComparison.OrdinalIgnoreCase);
+            sw.Root.BorderBrush = selected ? accentBrush : Brushes.Transparent;
+            sw.Tick.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
+        }
+
+        // Refresh custom swatch appearance from settings — the user may have picked a
+        // new hex, or cleared it by switching to a preset (in which case the swatch
+        // still remembers the last hex, only the picked-mode flag flips).
+        var custom = _accentSwatches.LastOrDefault(s => s.IsCustom);
+        if (custom is not null)
+        {
+            var customColor = AccentTheme.ParseHexColor(
+                _settings.Current.CustomAccentColor,
+                AccentTheme.ResolveBase(AccentTheme.DefaultId, null));
+            custom.Fill.Background = new SolidColorBrush(customColor);
+            var contrast = ContrastText(customColor);
+            custom.Tick.Foreground = contrast;
+            if (custom.PlusIcon is not null)
+            {
+                custom.PlusIcon.Foreground = contrast;
+                // Hide the "+" hint whenever a custom colour is stored — the fill itself
+                // is the affordance at that point.
+                custom.PlusIcon.Visibility = string.IsNullOrWhiteSpace(_settings.Current.CustomAccentColor)
+                    ? Visibility.Visible
+                    : Visibility.Collapsed;
+                // Don't stack the "+" on top of the tick when this swatch is selected.
+                if (string.Equals(id, AccentTheme.CustomId, StringComparison.OrdinalIgnoreCase))
+                    custom.PlusIcon.Visibility = Visibility.Collapsed;
+            }
+        }
+    }
+
+    // Rec.601 luma is close enough for a pass/fail readability decision against pure
+    // black vs pure white overlay glyphs on a coloured swatch. Threshold picked so
+    // Praxvon Lime (#CAFF33, luma 218) shows black text, Emerald (#4AD695, luma 175)
+    // shows black text, and Violet (#BD93F9, luma 158) also picks black — while any
+    // saturated dark tone gets white.
+    private static SolidColorBrush ContrastText(Color bg)
+    {
+        double luma = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B;
+        return luma > 150 ? Brushes.Black : Brushes.White;
     }
 }

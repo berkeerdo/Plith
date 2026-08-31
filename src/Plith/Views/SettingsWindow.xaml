@@ -140,7 +140,7 @@
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Appearance" Margin="4,0,0,10" />
                 <Border Style="{StaticResource CardStyle}">
                     <StackPanel>
-                        <Border Style="{StaticResource RowLastStyle}">
+                        <Border Style="{StaticResource RowStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
@@ -156,6 +156,115 @@
                                           ItemsSource="{Binding Source={StaticResource ThemeModes}}"
                                           VerticalAlignment="Center" />
                             </Grid>
+                        </Border>
+
+                        <!-- Theme Studio: 8 preset accent swatches + a Custom slot that opens
+                             an HSL picker popup. Swatches are built in code-behind so click,
+                             selection ring, and preview-tick states can be driven from one
+                             list rather than N x N XAML permutations. -->
+                        <Border Style="{StaticResource RowLastStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource RowLabelStyle}" Text="Accent color" />
+                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Tints buttons, sliders, and the OSD volume bar. Backgrounds stay palette-driven so contrast never breaks." />
+                                <WrapPanel x:Name="AccentSwatchPanel"
+                                           Orientation="Horizontal"
+                                           Margin="0,14,0,0" />
+                                <Popup x:Name="CustomAccentPopup"
+                                       PlacementTarget="{Binding ElementName=AccentSwatchPanel}"
+                                       Placement="Bottom"
+                                       StaysOpen="False"
+                                       AllowsTransparency="True"
+                                       PopupAnimation="Fade"
+                                       HorizontalOffset="0"
+                                       VerticalOffset="6">
+                                    <Border Background="{DynamicResource CardBg}"
+                                            BorderBrush="{DynamicResource CardBorderStrong}"
+                                            BorderThickness="1"
+                                            CornerRadius="10"
+                                            Padding="18"
+                                            SnapsToDevicePixels="True">
+                                        <StackPanel Width="264">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Style="{StaticResource RowLabelStyle}" Text="Custom accent" />
+                                                <Border x:Name="CustomPreviewSwatch"
+                                                        Grid.Column="1"
+                                                        Width="24" Height="24"
+                                                        CornerRadius="12"
+                                                        Background="{DynamicResource Accent}"
+                                                        BorderBrush="{DynamicResource CardBorderStrong}"
+                                                        BorderThickness="1" />
+                                            </Grid>
+                                            <TextBlock Style="{StaticResource RowHintStyle}" Text="Drag the sliders or paste a hex code." />
+
+                                            <!-- Hue -->
+                                            <Grid Margin="0,14,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="36" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="H" Style="{StaticResource RowHintStyle}" Margin="0" VerticalAlignment="Center" />
+                                                <Slider x:Name="CustomHueSlider"
+                                                        Grid.Column="1"
+                                                        Style="{StaticResource ModernSliderStyle}"
+                                                        Minimum="0" Maximum="360"
+                                                        Margin="8,0,8,0"
+                                                        VerticalAlignment="Center" />
+                                                <TextBlock x:Name="CustomHueValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <!-- Saturation -->
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="36" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="S" Style="{StaticResource RowHintStyle}" Margin="0" VerticalAlignment="Center" />
+                                                <Slider x:Name="CustomSatSlider"
+                                                        Grid.Column="1"
+                                                        Style="{StaticResource ModernSliderStyle}"
+                                                        Minimum="0" Maximum="100"
+                                                        Margin="8,0,8,0"
+                                                        VerticalAlignment="Center" />
+                                                <TextBlock x:Name="CustomSatValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
+                                            <!-- Luminance -->
+                                            <Grid Margin="0,8,0,0">
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="16" />
+                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" MinWidth="36" />
+                                                </Grid.ColumnDefinitions>
+                                                <TextBlock Grid.Column="0" Text="L" Style="{StaticResource RowHintStyle}" Margin="0" VerticalAlignment="Center" />
+                                                <Slider x:Name="CustomLumSlider"
+                                                        Grid.Column="1"
+                                                        Style="{StaticResource ModernSliderStyle}"
+                                                        Minimum="0" Maximum="100"
+                                                        Margin="8,0,8,0"
+                                                        VerticalAlignment="Center" />
+                                                <TextBlock x:Name="CustomLumValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
+                                            </Grid>
+
+                                            <!-- Hex box -->
+                                            <TextBox x:Name="CustomHexBox"
+                                                     Margin="0,14,0,0"
+                                                     Padding="10,7"
+                                                     Background="{DynamicResource ButtonGhost}"
+                                                     Foreground="{DynamicResource TextPrimary}"
+                                                     CaretBrush="{DynamicResource TextPrimary}"
+                                                     BorderBrush="{DynamicResource CardBorderStrong}"
+                                                     BorderThickness="1"
+                                                     FontFamily="Consolas, Cascadia Mono, Segoe UI"
+                                                     FontSize="12"
+                                                     MaxLength="9" />
+                                        </StackPanel>
+                                    </Border>
+                                </Popup>
+                            </StackPanel>
                         </Border>
                     </StackPanel>
                 </Border>

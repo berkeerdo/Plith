@@ -113,6 +113,15 @@ public sealed class SettingsModel
     /// Auto follows the Windows apps-use-light-theme preference live.</summary>
     public ThemeMode Theme { get; set; } = ThemeMode.Dark;
 
+    /// <summary>Id of the accent preset picked from the Theme Studio in Settings,
+    /// or <see cref="AccentTheme.CustomId"/> when the user brought their own colour.
+    /// Applies to both Settings and the OSD accent surfaces (bg stays palette-driven).</summary>
+    public string AccentThemeId { get; set; } = AccentTheme.DefaultId;
+
+    /// <summary>Hex "#RRGGBB" used only when <see cref="AccentThemeId"/> == "custom".
+    /// Null / empty for every other preset. Persisted so a custom pick survives restarts.</summary>
+    public string? CustomAccentColor { get; set; }
+
     public SettingsModel Clone() => new()
     {
         ShowDurationMs = ShowDurationMs,
@@ -132,5 +141,7 @@ public sealed class SettingsModel
         SummonHotkeyMods = SummonHotkeyMods,
         SummonHotkeyKey = SummonHotkeyKey,
         Theme = Theme,
+        AccentThemeId = AccentThemeId,
+        CustomAccentColor = CustomAccentColor,
     };
 }
