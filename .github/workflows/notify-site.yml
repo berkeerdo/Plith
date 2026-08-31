@@ -17,10 +17,15 @@ jobs:
     timeout-minutes: 3
     steps:
       - name: Trigger plith-site Deploy workflow
+        # Pass the tag through an env var, never inline via ${{ }}. A tag name is
+        # attacker-controllable text (whoever can push a tag chooses it); expanding
+        # it directly into a shell script is a classic GitHub Actions script-
+        # injection sink. Bash sees a plain $TAG_NAME variable, no code eval.
         env:
           GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+          TAG_NAME: ${{ github.event.release.tag_name }}
         run: |
           gh workflow run "Deploy plith.app" \
             --repo berkeerdo/plith-site \
             --ref main
-          echo "plith-site deploy triggered for release ${{ github.event.release.tag_name }}"
+          echo "plith-site deploy triggered for release $TAG_NAME"
