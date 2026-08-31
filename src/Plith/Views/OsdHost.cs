@@ -22,13 +22,14 @@ public sealed class OsdHost : BandWindow
     private const int FadeInMs = 140;
     private const int FadeOutMs = 220;
 
-    // Distance in DIPs at which a drag snaps to the nearest 3x3 grid hotspot. Small
-    // enough that free positioning still feels free, large enough that the user can
-    // reliably lock the OSD to the classic preset corners without pixel-hunting.
-    private const double SnapThresholdDip = 40;
+    // Magnet radius: while dragging or free-clicking, the OSD's center snaps to the
+    // nearest 3x3 hotspot when it's within this many DIPs. Roomy enough for a strong
+    // "pull" feel without preventing fine placement (Alt bypasses it completely).
+    private const double SnapThresholdDip = 80;
 
     private readonly OsdContent _content;
     private readonly SettingsService _settings;
+    private readonly DiagnosticLog? _log = new();
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -36,12 +37,8 @@ public sealed class OsdHost : BandWindow
 
     // Edit-mode state. Only touched from the UI dispatcher.
     private bool _isEditMode;
-    private bool _isDragging;
-    private Point _dragMouseStart;
-    private double _dragOsdStartLeft;
-    private double _dragOsdStartTop;
     private SettingsModel? _preEditSnapshot;
-    private bool _preEditClickThrough;
+    private readonly List<PositionOverlayWindow> _overlays = new();
 
     public OsdViewModel ViewModel { get; } = new();
 
@@ -208,16 +205,22 @@ public sealed class OsdHost : BandWindow
         };
     }
 
-    // Custom is stored as 0..1 fractions of the placeable range (working area minus OSD
-    // size). Clamping to [0,1] tolerates a resolution shrink between saving and restoring
-    // without the OSD ending up drawn off-screen.
+    // Custom is stored as 0..1 fractions of the monitor working area, marking the
+    // CENTRE of the OSD (not its top-left corner). This keeps the OSD visually
+    // anchored when its content grows or shrinks (media card appearing / going away):
+    // the centre stays fixed and the edges expand/contract symmetrically, so a card
+    // dragged to the right side never overflows the screen when a longer media title
+    // makes it wider. Clamped to a legal top-left range after applying the centre so
+    // the OSD stays on-screen if the resolution shrinks or the content maxes out.
     private static (double left, double top) CustomAnchor(Rect area, double w, double h, double px, double py)
     {
-        var placeableW = Math.Max(0, area.Width - w);
-        var placeableH = Math.Max(0, area.Height - h);
         px = Math.Clamp(px, 0.0, 1.0);
         py = Math.Clamp(py, 0.0, 1.0);
-        return (area.Left + placeableW * px, area.Top + placeableH * py);
+        var centerX = area.Left + area.Width * px;
+        var centerY = area.Top + area.Height * py;
+        var left = Math.Clamp(centerX - w / 2, area.Left, Math.Max(area.Left, area.Right - w));
+        var top = Math.Clamp(centerY - h / 2, area.Top, Math.Max(area.Top, area.Bottom - h));
+        return (left, top);
     }
 
     // Choose the monitor a Custom-positioned OSD anchors on. Match by device name so a
@@ -242,52 +245,80 @@ public sealed class OsdHost : BandWindow
     /// so Settings can bind Save/Cancel button visibility to it.</summary>
     public bool IsInEditMode => _isEditMode;
 
-    /// <summary>Enter drag-to-position mode: pin the OSD visible, capture drag input on
-    /// the content, and stop hover/fade behaviour. If the user was on a preset, seed the
-    /// current pixel position from that preset so the OSD sits where they expect before
-    /// the first move.</summary>
+    /// <summary>Enter overlay-driven position mode: dim every monitor with a
+    /// PositionOverlayWindow (grid hotspots, Save/Cancel toolbar, and full drag
+    /// detection over the OSD rectangle). Overlay tells the OSD where to move by
+    /// firing PositionRequested; OsdHost applies snap/clamp and pushes the new
+    /// rectangle back to every overlay so drag hit-testing stays accurate.</summary>
     public void EnterPositionEditMode()
     {
         if (_isEditMode) return;
         _isEditMode = true;
         _preEditSnapshot = _settings.Current.Clone();
-        _preEditClickThrough = IsClickThrough;
 
         _hideTimer?.Stop();
         _isFadingOut = false;
 
-        // Make sure the OSD is on-screen at whatever its current preset would render.
-        Reposition();
-
-        // Show fully opaque so the user sees exactly what visitors will see.
+        // Full opacity so the OSD is unmistakably visible above the dim layer.
         BeginAnimation(OpacityProperty, null);
         Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+        Reposition();
         Show();
         ReassertTopmost();
 
-        IsClickThrough = false;
-        _content.Cursor = Cursors.SizeAll;
-        _content.MouseLeftButtonDown += OnEditMouseDown;
-        _content.MouseMove += OnEditMouseMove;
-        _content.MouseLeftButtonUp += OnEditMouseUp;
+        // Drag handling lives ENTIRELY inside PositionOverlayWindow: the overlay
+        // owns the click surface (we know it does because hotspots work) and simply
+        // checks whether the mouse-down landed inside the OSD's current rectangle.
+        // That means the OSD itself does not need to receive clicks - keep it in
+        // its normal click-through state so we do not fight the DWM/LAYERED hit-
+        // test rules the OSD was originally built for.
+        _log?.Info("OsdHost", "EnterPositionEditMode - drag lives on overlay canvas");
+
+        // One overlay per monitor - hotspots and toolbar. Note: in UIAccess=false
+        // builds the OSD is a regular Topmost window (not a band window), so the
+        // last-shown Topmost wins the z-race. Overlays would end up ABOVE the OSD,
+        // eating every click before it can reach the drag handlers - the reason
+        // drag would appear dead while hotspot clicks still worked. Reassert OSD
+        // topmost AFTER the overlays are created so the click surface goes back on
+        // top of the dim layer.
+        foreach (var screen in Screen.AllScreens)
+        {
+            var overlay = new PositionOverlayWindow(screen);
+            overlay.PositionRequested += OnOverlayClickRequested;
+            overlay.SaveRequested += OnOverlaySaveRequested;
+            overlay.CancelRequested += OnOverlayCancelRequested;
+            overlay.Show();
+            _overlays.Add(overlay);
+        }
+        ReassertTopmost();
+        BroadcastOsdRect();
+        _log?.Info("OsdHost", $"overlays shown ({_overlays.Count}); OSD topmost reasserted; rect published");
+
+        // Focus lands on the primary overlay so Esc / Enter shortcuts fire immediately.
+        var primary = Screen.PrimaryScreen?.WorkingArea.Left ?? 0;
+        var focus = _overlays.Find(o => Math.Abs(o.Left - primary) < 0.5) ?? _overlays[0];
+        focus.Activate();
+        _ = focus.Focus();
 
         EditModeChanged?.Invoke(true);
     }
 
-    /// <summary>Leave edit mode. When <paramref name="save"/> is true the current pixel
-    /// position is translated into monitor-relative fractions and persisted; when false
-    /// the pre-edit settings snapshot is restored.</summary>
+    /// <summary>Programmatic exit from position edit mode. When <paramref name="save"/>
+    /// is true the current OSD position is persisted as Custom (centre-anchored
+    /// fractions), otherwise the pre-edit settings snapshot is restored.</summary>
     public void ExitPositionEditMode(bool save)
     {
         if (!_isEditMode) return;
 
-        _content.MouseLeftButtonDown -= OnEditMouseDown;
-        _content.MouseMove -= OnEditMouseMove;
-        _content.MouseLeftButtonUp -= OnEditMouseUp;
-        if (_content.IsMouseCaptured) _content.ReleaseMouseCapture();
-        _content.Cursor = null;
-        IsClickThrough = _preEditClickThrough;
-        _isDragging = false;
+        foreach (var overlay in _overlays)
+        {
+            overlay.PositionRequested -= OnOverlayClickRequested;
+            overlay.SaveRequested -= OnOverlaySaveRequested;
+            overlay.CancelRequested -= OnOverlayCancelRequested;
+            overlay.Close();
+        }
+        _overlays.Clear();
+
         _isEditMode = false;
 
         if (save)
@@ -302,108 +333,99 @@ public sealed class OsdHost : BandWindow
 
         EditModeChanged?.Invoke(false);
 
-        // Give the user a short preview at the new position before it fades.
         ShowOsd(TimeSpan.FromMilliseconds(Math.Max(_settings.Current.ShowDurationMs, 1500)));
     }
 
-    private void OnEditMouseDown(object sender, MouseButtonEventArgs e)
+    private void OnOverlaySaveRequested() => ExitPositionEditMode(save: true);
+    private void OnOverlayCancelRequested() => ExitPositionEditMode(save: false);
+
+    // Overlay is the source of truth for snap decisions now (it already knows the
+    // OSD rectangle from UpdateOsdRect). Whatever centre it emits is applied as-is;
+    // mid-drag moves are unsnapped for smoothness, release-time and hotspot clicks
+    // arrive already snapped to their target.
+    private void OnOverlayClickRequested(Screen screen, Point absoluteCenter)
     {
-        _isDragging = true;
-        _dragMouseStart = e.GetPosition(this);
-        _dragOsdStartLeft = Left;
-        _dragOsdStartTop = Top;
-        _content.CaptureMouse();
-        e.Handled = true;
+        var (w, h) = MeasuredOsdSize();
+        SetOsdCenteredAt(screen.WorkingArea, w, h, absoluteCenter.X, absoluteCenter.Y);
     }
 
-    private void OnEditMouseMove(object sender, System.Windows.Input.MouseEventArgs e)
+    // Nine snap targets = {EdgeMarginDip, center, opposite-EdgeMarginDip} on each axis.
+    // Target values are OSD CENTRES (matching the persistence semantics), so a corner
+    // hotspot's centre sits EdgeMarginDip + w/2 from the working-area edge.
+    private static (double cx, double cy) MaybeSnapCenter(Rect area, double w, double h, double cx, double cy)
     {
-        if (!_isDragging) return;
-        var current = e.GetPosition(this);
-        var dx = current.X - _dragMouseStart.X;
-        var dy = current.Y - _dragMouseStart.Y;
+        // Alt = free placement, no magnet.
+        if ((Keyboard.Modifiers & ModifierKeys.Alt) != 0) return (cx, cy);
 
-        var proposedLeft = _dragOsdStartLeft + dx;
-        var proposedTop = _dragOsdStartTop + dy;
-
-        var screen = ResolveEditScreenForPoint(proposedLeft, proposedTop);
-        if (screen is null) return;
-        var area = screen.WorkingArea;
-
-        var w = _content.ActualWidth;
-        var h = _content.ActualHeight;
-
-        // Snap to the 3x3 grid unless Alt is held (free positioning for fine-tuning).
-        bool freeMove = (Keyboard.Modifiers & ModifierKeys.Alt) != 0;
-        if (!freeMove)
+        double[] cxTargets =
         {
-            (proposedLeft, proposedTop) = SnapToGrid(area, w, h, proposedLeft, proposedTop);
+            area.Left + EdgeMarginDip + w / 2,       // left column centre
+            area.Left + area.Width / 2,               // centre column centre
+            area.Right - EdgeMarginDip - w / 2,       // right column centre
+        };
+        double[] cyTargets =
+        {
+            area.Top + EdgeMarginDip + h / 2,        // top row centre
+            area.Top + area.Height / 2,               // middle row centre
+            area.Bottom - EdgeMarginDip - h / 2,      // bottom row centre
+        };
+        foreach (var tx in cxTargets)
+            if (Math.Abs(cx - tx) < SnapThresholdDip) { cx = tx; break; }
+        foreach (var ty in cyTargets)
+            if (Math.Abs(cy - ty) < SnapThresholdDip) { cy = ty; break; }
+        return (cx, cy);
+    }
+
+    private void SetOsdCenteredAt(Rect area, double w, double h, double cx, double cy)
+    {
+        var left = Math.Clamp(cx - w / 2, area.Left, Math.Max(area.Left, area.Right - w));
+        var top = Math.Clamp(cy - h / 2, area.Top, Math.Max(area.Top, area.Bottom - h));
+        Left = left;
+        Top = top;
+        ReassertTopmost();
+        BroadcastOsdRect();
+    }
+
+    // Push the OSD's current absolute rectangle to every overlay so their drag hit-
+    // test knows where the card sits. Called on Enter and after every reposition.
+    private void BroadcastOsdRect()
+    {
+        var (w, h) = MeasuredOsdSize();
+        var rect = new Rect(Left, Top, w, h);
+        foreach (var overlay in _overlays) overlay.UpdateOsdRect(rect);
+    }
+
+    private (double w, double h) MeasuredOsdSize()
+    {
+        var w = _content.ActualWidth > 0 ? _content.ActualWidth : _content.DesiredSize.Width;
+        var h = _content.ActualHeight > 0 ? _content.ActualHeight : _content.DesiredSize.Height;
+        if (w == 0 || h == 0)
+        {
+            _content.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+            _content.UpdateLayout();
+            w = _content.DesiredSize.Width;
+            h = _content.DesiredSize.Height;
         }
-
-        // Never let the user drag the OSD off the screen entirely.
-        proposedLeft = Math.Clamp(proposedLeft, area.Left, Math.Max(area.Left, area.Right - w));
-        proposedTop = Math.Clamp(proposedTop, area.Top, Math.Max(area.Top, area.Bottom - h));
-
-        Left = proposedLeft;
-        Top = proposedTop;
+        return (w, h);
     }
 
-    private void OnEditMouseUp(object sender, MouseButtonEventArgs e)
-    {
-        if (!_isDragging) return;
-        _isDragging = false;
-        if (_content.IsMouseCaptured) _content.ReleaseMouseCapture();
-        e.Handled = true;
-    }
-
-    // Nine hotspots per monitor: {edge, center, opposite-edge} on each axis with a
-    // constant EdgeMarginDip inset so snapped positions never sit right against the
-    // taskbar. Snap only fires when the current coordinate is within SnapThresholdDip.
-    private static (double left, double top) SnapToGrid(Rect area, double w, double h, double left, double top)
-    {
-        double[] xTargets =
-        {
-            area.Left + EdgeMarginDip,                            // left column
-            area.Left + (area.Width - w) / 2,                     // center column
-            area.Right - w - EdgeMarginDip,                       // right column
-        };
-        double[] yTargets =
-        {
-            area.Top + EdgeMarginDip,                             // top row
-            area.Top + (area.Height - h) / 2,                     // middle row
-            area.Bottom - h - EdgeMarginDip,                      // bottom row
-        };
-
-        foreach (var x in xTargets)
-            if (Math.Abs(left - x) < SnapThresholdDip) { left = x; break; }
-        foreach (var y in yTargets)
-            if (Math.Abs(top - y) < SnapThresholdDip) { top = y; break; }
-        return (left, top);
-    }
-
-    // WpfScreenHelper's Screen.FromPoint expects DIP coordinates, matching the DIP-space
-    // Left/Top used throughout this file. Multi-monitor: as the drag crosses a bezel the
-    // resolved screen flips, and the snap grid + clamps switch to the new monitor.
-    private static Screen? ResolveEditScreenForPoint(double left, double top)
-    {
-        try { return Screen.FromPoint(new Point(left, top)); }
-        catch { return Screen.PrimaryScreen; }
-    }
-
+    // Store the OSD's CENTRE as a fraction of the target monitor's working area (not
+    // the top-left corner). Reposition() rebuilds Left/Top from those fractions using
+    // the OSD's current size, so a content-size change (media card appearing) leaves
+    // the OSD visually anchored on the same point.
     private void PersistCurrentPositionAsCustom()
     {
-        var screen = ResolveEditScreenForPoint(Left, Top) ?? Screen.PrimaryScreen;
+        var (w, h) = MeasuredOsdSize();
+        var centerX = Left + w / 2;
+        var centerY = Top + h / 2;
+        var screen = Screen.FromPoint(new Point(centerX, centerY)) ?? Screen.PrimaryScreen;
         if (screen is null) return;
         var area = screen.WorkingArea;
-        var w = _content.ActualWidth;
-        var h = _content.ActualHeight;
-        var placeableW = Math.Max(1, area.Width - w);
-        var placeableH = Math.Max(1, area.Height - h);
 
         var m = _settings.Current.Clone();
         m.Position = OsdPosition.Custom;
-        m.CustomPositionXPercent = Math.Clamp((Left - area.Left) / placeableW, 0.0, 1.0);
-        m.CustomPositionYPercent = Math.Clamp((Top - area.Top) / placeableH, 0.0, 1.0);
+        m.CustomPositionXPercent = Math.Clamp((centerX - area.Left) / area.Width, 0.0, 1.0);
+        m.CustomPositionYPercent = Math.Clamp((centerY - area.Top) / area.Height, 0.0, 1.0);
         m.CustomPositionMonitorDeviceName = screen.DeviceName ?? string.Empty;
         _settings.Save(m);
     }

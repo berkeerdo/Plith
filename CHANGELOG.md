@@ -3,6 +3,33 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.4] - 2026-08-31
+
+### Changed
+- **Position editor is now an overlay picker with real drag-and-drop.** The
+  Position combo box is gone. Settings has a single "Set position" button that
+  dims every monitor, shows nine snap hotspots on a 3x3 grid, and lets you
+  grab the OSD card and drag it anywhere. Release near a hotspot to magnet-
+  snap; hold Alt to bypass snapping; click a hotspot directly to jump. Save
+  or Cancel from a floating toolbar that automatically hops to whichever
+  screen side is opposite the OSD so it never hides underneath.
+- **Custom position now stores the OSD's centre**, not its top-left corner.
+  A media card appearing or disappearing changes the OSD's width; the old
+  top-left anchor could push a right-side placement off-screen when the card
+  grew. Anchoring on centre keeps the OSD visually pinned to the same point
+  through content resizes.
+
+### Fixed
+- **Installer can now overwrite locked files in Program Files.** The
+  overwrite path now retries with exponential back-off and, if the file is
+  still locked (typically Norton or Windows Defender holding a scan handle),
+  renames the old copy aside with `MoveFileEx MOVEFILE_DELAY_UNTIL_REBOOT`
+  and drops the new bytes at the original path. The earlier retry loop
+  filtered out its final attempt so the sideline fallback was never reached
+  even after it existed - now the loop always falls through on the last try.
+- **Preview redraws after saving a Custom position** so the Settings preview
+  card matches the new placement instead of showing the old preset.
+
 ## [0.1.3] - 2026-08-31
 
 ### Fixed

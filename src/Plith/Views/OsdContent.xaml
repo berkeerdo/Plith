@@ -11,8 +11,10 @@
              TextOptions.TextFormattingMode="Ideal"
              TextOptions.TextRenderingMode="ClearType"
              UseLayoutRounding="True">
-    <!-- Outer margin reserves space for the drop-shadow so it doesn't get clipped at window bounds -->
-    <Grid Margin="14">
+    <!-- Outer margin reserves space for the drop-shadow so it doesn't get clipped at window bounds.
+         Background=Transparent so the whole area (including margins) accepts hit-tests -
+         needed by the position editor's drag grab, which was only firing on the inner Border. -->
+    <Grid Margin="14" Background="Transparent">
         <Border CornerRadius="14"
                 Padding="20,16"
                 Background="{DynamicResource OsdSurfaceBrush}"

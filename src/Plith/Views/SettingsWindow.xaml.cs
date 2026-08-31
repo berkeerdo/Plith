@@ -94,13 +94,10 @@ public partial class SettingsWindow : Window
 
     private void WirePositionEditor()
     {
-        PositionEditButton.Click += (_, _) => _osd.EnterPositionEditMode();
-        PositionSaveButton.Click += (_, _) => _osd.ExitPositionEditMode(save: true);
-        PositionCancelButton.Click += (_, _) => _osd.ExitPositionEditMode(save: false);
+        OpenPositionOverlayButton.Click += (_, _) => _osd.EnterPositionEditMode();
         _osd.EditModeChanged += OnOsdEditModeChanged;
-        PositionCombo.SelectionChanged += (_, _) => UpdatePositionEditorVisibility();
         Closed += (_, _) => _osd.EditModeChanged -= OnOsdEditModeChanged;
-        UpdatePositionEditorVisibility();
+        RefreshPositionSummary();
     }
 
     private void OnOsdEditModeChanged(bool isEditing)
@@ -110,23 +107,22 @@ public partial class SettingsWindow : Window
             Dispatcher.BeginInvoke(new Action<bool>(OnOsdEditModeChanged), isEditing);
             return;
         }
-        PositionEditButton.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
-        PositionSaveButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        PositionCancelButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
-        PositionEditHint.Text = isEditing
-            ? "Drag the OSD anywhere - it snaps to a 3x3 grid. Hold Alt for free placement. Save keeps it here, Cancel restores the previous position."
-            : "Drag the OSD anywhere on any monitor. It snaps to a 3x3 grid; hold Alt for free placement.";
-        // Selecting the position combo while in edit mode is confusing - lock it until
-        // the user commits or cancels.
-        PositionCombo.IsEnabled = !isEditing;
+        // Grey the button out while the overlay is open, and hide the Settings window
+        // itself so its own chrome doesn't sit on top of the overlay hotspots.
+        OpenPositionOverlayButton.IsEnabled = !isEditing;
+        OpenPositionOverlayButton.Content = isEditing ? "Overlay open..." : "Set position";
+        if (isEditing) Hide();
+        else { Show(); Activate(); RefreshPositionSummary(); }
     }
 
-    private void UpdatePositionEditorVisibility()
+    private void RefreshPositionSummary()
     {
-        // The editor row only makes sense for Custom - preset corners already know
-        // where to sit and don't need drag input.
-        bool showEditor = PositionCombo.SelectedItem is OsdPosition p && p == OsdPosition.Custom;
-        PositionEditRow.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
+        var m = _settings.Current;
+        PositionSummary.Text = m.Position switch
+        {
+            OsdPosition.Custom => "Position: Custom (drag-placed). Click 'Set position' to move it again.",
+            _                  => $"Position: {m.Position}. Click 'Set position' to open the overlay picker.",
+        };
     }
 
     private void WireUpdateCheck()
@@ -465,7 +461,6 @@ public partial class SettingsWindow : Window
         try
         {
             DurationSlider.Value = m.ShowDurationMs;
-            PositionCombo.SelectedItem = m.Position;
             HoverToggle.IsChecked = m.HoverKeepAlive;
             OpacitySlider.Value = m.OsdOpacityPercent;
             ColorThresholdsToggle.IsChecked = m.UseColorThresholds;
@@ -494,7 +489,10 @@ public partial class SettingsWindow : Window
         ColorThresholdsToggle.Unchecked += (_, _) => SyncPreview();
         CompactToggle.Checked += (_, _) => SyncPreview();
         CompactToggle.Unchecked += (_, _) => SyncPreview();
-        PositionCombo.SelectionChanged += (_, _) => SyncPreview();
+        // Position no longer lives in a combo - it changes via the overlay picker,
+        // which persists through SettingsService. Hook the model event so the
+        // preview thumbnail refreshes when the overlay commits a new position.
+        _settings.Changed += _ => Dispatcher.BeginInvoke(new Action(SyncPreview));
     }
 
     private void SyncPreview()
@@ -503,13 +501,12 @@ public partial class SettingsWindow : Window
         Preview.UpdateOpacity(OpacitySlider.Value / 100.0);
         Preview.UpdateColorThresholds(ColorThresholdsToggle.IsChecked == true);
         Preview.UpdateCompact(CompactToggle.IsChecked == true);
-        if (PositionCombo.SelectedItem is OsdPosition pos) Preview.UpdatePosition(pos);
+        Preview.UpdatePosition(_settings.Current.Position);
     }
 
     private void WireAutoSave()
     {
         DurationSlider.ValueChanged += (_, _) => AutoSave();
-        PositionCombo.SelectionChanged += (_, _) => AutoSave();
         HoverToggle.Checked += (_, _) => AutoSave();
         HoverToggle.Unchecked += (_, _) => AutoSave();
         OpacitySlider.ValueChanged += (_, _) => AutoSave();
@@ -556,7 +553,8 @@ public partial class SettingsWindow : Window
     {
         var m = _settings.Current.Clone();
         m.ShowDurationMs = (int)Math.Round(DurationSlider.Value);
-        if (PositionCombo.SelectedItem is OsdPosition pos) m.Position = pos;
+        // Position is owned by the overlay picker (persisted directly through
+        // SettingsService.Save from OsdHost); we leave m.Position untouched here.
         m.HoverKeepAlive = HoverToggle.IsChecked == true;
         m.OsdOpacityPercent = (int)Math.Round(OpacitySlider.Value);
         m.UseColorThresholds = ColorThresholdsToggle.IsChecked == true;

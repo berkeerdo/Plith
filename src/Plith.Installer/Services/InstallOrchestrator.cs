@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.IO;
+using System.Runtime.InteropServices;
 using Plith.Installer.ViewModels;
 
 namespace Plith.Installer.Services;
@@ -100,12 +101,17 @@ public sealed class InstallOrchestrator
             catch { }
 #pragma warning restore CA1031
         }
+        // Windows keeps a memory-mapped view of a .NET process's DLLs alive briefly
+        // after the process exits; overwriting them immediately trips
+        // UnauthorizedAccessException even though the .exe is gone. A short cushion
+        // lets the OS drop those views before MirrorCopy walks the tree.
+        System.Threading.Thread.Sleep(1500);
 
         Directory.CreateDirectory(InstallDir);
         Directory.CreateDirectory(UninstallerDir);
 
         MirrorCopy(StageDir, InstallDir);
-        File.Copy(Environment.ProcessPath!, UninstallerExe, overwrite: true);
+        CopyWithRetry(Environment.ProcessPath!, UninstallerExe);
 
         if (_vm.AutoStartEnabled) _registry.WriteAutoStart(InstalledExe);
         else _registry.RemoveAutoStart();
@@ -131,7 +137,7 @@ public sealed class InstallOrchestrator
             var relative = Path.GetRelativePath(source, sourceFile);
             var targetFile = Path.Combine(target, relative);
             Directory.CreateDirectory(Path.GetDirectoryName(targetFile)!);
-            File.Copy(sourceFile, targetFile, overwrite: true);
+            CopyWithRetry(sourceFile, targetFile);
         }
 
         // Mirror semantics: delete target-only files (except the Setup\ subdir which holds
@@ -197,6 +203,62 @@ public sealed class InstallOrchestrator
             throw;
         }
     }
+
+    // File.Copy with exponential backoff for the common "target was locked a moment ago"
+    // case. Overwriting a DLL right after the process that had it loaded exits routinely
+    // fails with UnauthorizedAccessException / IOException on Windows because the OS
+    // hasn't yet released its memory-mapped view; AV scanners produce the same transient
+    // lock. If short waits don't clear the lock, fall through to the sideline dance
+    // which handles a persistently-held target (Norton scanning our binary, Explorer
+    // extracting an icon, etc.).
+    private static void CopyWithRetry(string source, string target)
+    {
+        const int maxAttempts = 4;
+        int delayMs = 250;
+        for (int attempt = 1; attempt <= maxAttempts; attempt++)
+        {
+            try
+            {
+                File.Copy(source, target, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                // Swallow every attempt: on the last one we still want to fall through
+                // to CopyOverLockedFile below rather than rethrow. Previously the
+                // filter had 'attempt < maxAttempts' and the final throw skipped the
+                // sideline dance entirely, defeating the whole point of the fallback.
+                if (attempt == maxAttempts) break;
+                System.Threading.Thread.Sleep(delayMs);
+                delayMs *= 2;
+            }
+        }
+        CopyOverLockedFile(source, target);
+    }
+
+    // Rename dance for a persistently-locked target. Windows lets us RENAME a file
+    // whose handles were opened with FILE_SHARE_DELETE (the default for loaded .NET
+    // assemblies and everything AV scanners open) even when File.Copy overwrite hits
+    // the same handle with a sharing violation. Move the old copy aside, drop the
+    // new bytes at the original path, and ask Windows to delete the sideline on next
+    // reboot. The application starts using the new bytes immediately; the sideline
+    // is cleaned up automatically when the machine restarts.
+    private static void CopyOverLockedFile(string source, string target)
+    {
+        if (File.Exists(target))
+        {
+            var sideline = string.Concat(target, ".pending-delete-",
+                Guid.NewGuid().ToString("N").AsSpan(0, 8));
+            File.Move(target, sideline);
+            _ = MoveFileEx(sideline, null, MOVEFILE_DELAY_UNTIL_REBOOT);
+        }
+        File.Copy(source, target, overwrite: false);
+    }
+
+    private const uint MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
+
+    [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern bool MoveFileEx(string lpExistingFileName, string? lpNewFileName, uint dwFlags);
 
     private static void SpawnSelfDelete()
     {

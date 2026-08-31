@@ -191,52 +191,23 @@
                         </Border>
 
                         <Border Style="{StaticResource RowStyle}">
-                            <StackPanel>
-                                <Grid>
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                        <TextBlock Style="{StaticResource RowLabelStyle}" Text="Position" />
-                                        <TextBlock Style="{StaticResource RowHintStyle}" Text="Anchor to a preset corner, or pick Custom and drag the OSD to any monitor." />
-                                    </StackPanel>
-                                    <ComboBox x:Name="PositionCombo"
-                                              Grid.Column="1"
-                                              VerticalAlignment="Center"
-                                              Style="{StaticResource ModernComboStyle}"
-                                              ItemsSource="{Binding Source={StaticResource OsdPositions}}" />
-                                </Grid>
-                                <Grid x:Name="PositionEditRow" Margin="0,10,0,0" Visibility="Collapsed">
-                                    <Grid.ColumnDefinitions>
-                                        <ColumnDefinition Width="*" />
-                                        <ColumnDefinition Width="Auto" />
-                                    </Grid.ColumnDefinitions>
-                                    <TextBlock x:Name="PositionEditHint"
-                                               Grid.Column="0"
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Position" />
+                                    <TextBlock x:Name="PositionSummary"
                                                Style="{StaticResource RowHintStyle}"
-                                               VerticalAlignment="Center"
-                                               Text="Drag the OSD anywhere on any monitor. It snaps to a 3x3 grid; hold Alt for free placement." />
-                                    <StackPanel Grid.Column="1"
-                                                Orientation="Horizontal"
-                                                HorizontalAlignment="Right"
-                                                VerticalAlignment="Center">
-                                        <Button x:Name="PositionEditButton"
-                                                Content="Drag to position"
-                                                Padding="12,5"
-                                                Margin="0,0,8,0" />
-                                        <Button x:Name="PositionCancelButton"
-                                                Content="Cancel"
-                                                Padding="12,5"
-                                                Margin="0,0,8,0"
-                                                Visibility="Collapsed" />
-                                        <Button x:Name="PositionSaveButton"
-                                                Content="Save position"
-                                                Padding="12,5"
-                                                Visibility="Collapsed" />
-                                    </StackPanel>
-                                </Grid>
-                            </StackPanel>
+                                               Text="Click 'Set position' to place the OSD anywhere on any monitor. A dim overlay with nine snap hotspots opens over your desktop." />
+                                </StackPanel>
+                                <Button x:Name="OpenPositionOverlayButton"
+                                        Grid.Column="1"
+                                        Content="Set position"
+                                        Padding="18,8"
+                                        VerticalAlignment="Center" />
+                            </Grid>
                         </Border>
 
                         <Border Style="{StaticResource RowStyle}">
