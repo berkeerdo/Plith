@@ -1,0 +1,26 @@
+name: Notify plith-site on release
+
+# Fires the moment a GitHub Release goes public on this repo (not just tag-push;
+# specifically the "Published" event on the release itself). Triggers the sister
+# plith-site repo to rebuild+redeploy, so the website's version pill + download
+# link surface the new binary without waiting for the 6-hourly cron.
+
+on:
+  release:
+    types: [published]
+
+permissions: {}   # no default GITHUB_TOKEN scopes; we use a PAT for the cross-repo call
+
+jobs:
+  trigger:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Trigger plith-site Deploy workflow
+        env:
+          GH_TOKEN: ${{ secrets.SITE_DISPATCH_TOKEN }}
+        run: |
+          gh workflow run "Deploy plith.app" \
+            --repo berkeerdo/plith-site \
+            --ref main
+          echo "plith-site deploy triggered for release ${{ github.event.release.tag_name }}"
