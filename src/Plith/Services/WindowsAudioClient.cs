@@ -48,6 +48,8 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 
     public bool Start()
     {
+        MMDeviceEnumerator? enToDrain = null;
+        bool ok = false;
         lock (_attachLock)
         {
             if (IsAttached) { _log?.Info("WindowsAudio", "Start: already attached"); return true; }
@@ -58,17 +60,25 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
                 _enumerator.RegisterEndpointNotificationCallback(this);
                 AttachToCurrentDefault();
                 _log?.Info("WindowsAudio", $"Start: attached to '{_device?.FriendlyName ?? "?"}'");
+                ok = true;
             }
             catch (Exception ex)
             {
                 _log?.Error("WindowsAudio", $"Start failed: {ex.GetType().Name}: {ex.Message}");
                 // No audio endpoint (headless box, broken driver). Caller will fall back or retry.
-                StopInternal();
-                return false;
+                // Detach happens under the lock; enumerator drain must be outside the lock
+                // (see the note on Stop() for the deadlock this avoids).
+                DetachFromCurrentDevice();
+                enToDrain = Interlocked.Exchange(ref _enumerator, null);
             }
         }
-        EmitSnapshot();
-        return true;
+        if (enToDrain is not null)
+        {
+            try { enToDrain.UnregisterEndpointNotificationCallback(this); } catch { }
+            enToDrain.Dispose();
+        }
+        if (ok) EmitSnapshot();
+        return ok;
     }
 
     private void AttachToCurrentDefault()
@@ -199,13 +209,21 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 
     public void Stop()
     {
-        lock (_attachLock) StopInternal();
-    }
-
-    private void StopInternal()
-    {
-        DetachFromCurrentDevice();
-        var en = Interlocked.Exchange(ref _enumerator, null);
+        MMDeviceEnumerator? en;
+        lock (_attachLock)
+        {
+            DetachFromCurrentDevice();
+            en = Interlocked.Exchange(ref _enumerator, null);
+        }
+        // Drain the enumerator OUTSIDE the lock. UnregisterEndpointNotificationCallback
+        // synchronously waits for any in-flight MTA callback (OnDefaultDeviceChanged /
+        // OnDeviceStateChanged) to return before it completes. Those callbacks acquire
+        // _attachLock at entry; if we held the lock across the unregister call, the
+        // callback would wait on the lock, the unregister would wait on the callback,
+        // and the UI thread would deadlock — freezing shutdown and (via WH_KEYBOARD_LL
+        // starvation) making the whole system feel unresponsive. Releasing the lock and
+        // clearing _enumerator to null lets the callback take the lock, see the null,
+        // and exit fast so the unregister can complete.
         if (en is not null)
         {
             try { en.UnregisterEndpointNotificationCallback(this); } catch { }

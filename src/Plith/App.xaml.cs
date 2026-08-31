@@ -107,22 +107,36 @@ public partial class App : Application
 
     protected override void OnExit(ExitEventArgs e)
     {
-        _diagnosticLog?.Info("App", "OnExit");
+        _diagnosticLog?.Info("App", "OnExit — begin");
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
-        _foregroundWatcher?.Dispose();
-        _volumeKeyHook?.Dispose();
-        _hotkey?.Dispose();
-        _theme?.Dispose();
-        _orchestrator?.Dispose();
-        _flyoutSuppressor?.Dispose();
+
+        // Per-step logging: shutdown hangs used to freeze silently after "OnExit". Wrapping
+        // each Dispose lets the next hang report the exact culprit step in plith.log.
+        DisposeStep("ForegroundWatcher", () => _foregroundWatcher?.Dispose());
+        DisposeStep("VolumeKeyHook",     () => _volumeKeyHook?.Dispose());
+        DisposeStep("HotkeyService",     () => _hotkey?.Dispose());
+        DisposeStep("ThemeService",      () => _theme?.Dispose());
+        DisposeStep("Orchestrator",      () => _orchestrator?.Dispose());
+        DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
-        _trayHost?.Dispose();
+        DisposeStep("TrayIconHost",      () => _trayHost?.Dispose());
+
+        _diagnosticLog?.Info("App", "OnExit — base.OnExit");
         base.OnExit(e);
+        _diagnosticLog?.Info("App", "OnExit — Environment.Exit");
         // Force-exit before the GC finalizer thread runs — WinRT COM objects (SMTC session
         // via MediaSessionClient) crash from Finalize when the COM apartment has already
         // been torn down. Manifests as ".NET Runtime unhandled exception in
         // WinRT.IObjectReference.Finalize / GC.RunFinalizers" during shutdown. All our own
         // cleanup already ran above; skipping finalizers here loses nothing meaningful.
         Environment.Exit(e.ApplicationExitCode);
+    }
+
+    private void DisposeStep(string name, Action action)
+    {
+        _diagnosticLog?.Info("App", $"Disposing {name}");
+        try { action(); }
+        catch (Exception ex) { _diagnosticLog?.Warn("App", $"{name} threw: {ex.GetType().Name}: {ex.Message}"); }
+        _diagnosticLog?.Info("App", $"Disposed {name}");
     }
 }

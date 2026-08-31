@@ -1,6 +1,7 @@
 using System.Drawing;
 using System.IO;
 using System.Windows;
+using System.Windows.Threading;
 using Hardcodet.Wpf.TaskbarNotification;
 using Plith.Views;
 
@@ -40,7 +41,13 @@ public sealed class TrayIconHost : IDisposable
         menu.Items.Add(new System.Windows.Controls.Separator());
 
         var exit = new System.Windows.Controls.MenuItem { Header = "Exit" };
-        exit.Click += (_, _) => _app.Shutdown();
+        // Post Shutdown at Background priority instead of calling it inline. Calling
+        // Application.Shutdown() from inside a ContextMenu.Click handler starts the
+        // shutdown flow while the popup is still mid-close, which can wedge the
+        // dispatcher on the tray-popup HWND teardown. Deferring one dispatcher turn
+        // lets the popup fully close first, then OnExit runs cleanly.
+        exit.Click += (_, _) => _app.Dispatcher.BeginInvoke(
+            new Action(_app.Shutdown), DispatcherPriority.Background);
         menu.Items.Add(exit);
 
         _tray.ContextMenu = menu;
