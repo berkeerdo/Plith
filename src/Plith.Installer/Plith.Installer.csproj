@@ -18,7 +18,7 @@
     <Authors>Plith</Authors>
     <Product>Plith Setup</Product>
     <Description>Plith setup wizard.</Description>
-    <Version>0.1.4</Version>
+    <Version>0.1.3</Version>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <!-- Recommended (not All) — matches src/Plith/Plith.csproj's strict-but-pragmatic stance. -->

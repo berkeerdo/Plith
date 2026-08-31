@@ -3,56 +3,46 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.4] - 2026-08-31
+## [0.1.3] - 2026-08-31
+
+### Added
+- **Overlay position picker with drag-and-drop.** Settings has a single
+  "Set position" button that dims every monitor, shows nine snap hotspots
+  on a 3x3 grid, and lets you grab the OSD card and drag it anywhere.
+  Release near a hotspot to magnet-snap; hold Alt to bypass; click a
+  hotspot directly to jump. Save / Cancel from a floating toolbar that
+  automatically hops to whichever screen side is opposite the OSD so it
+  never hides underneath. The old Position combo box is gone.
+- **Multi-monitor awareness for Custom positions.** The monitor's Windows
+  device name (`\\.\DISPLAY2`, ...) is saved alongside the fractional
+  coordinates, so the OSD stays on the display the user dropped it on
+  across restarts. Falls back to the primary monitor silently when that
+  display is unplugged.
 
 ### Changed
-- **Position editor is now an overlay picker with real drag-and-drop.** The
-  Position combo box is gone. Settings has a single "Set position" button that
-  dims every monitor, shows nine snap hotspots on a 3x3 grid, and lets you
-  grab the OSD card and drag it anywhere. Release near a hotspot to magnet-
-  snap; hold Alt to bypass snapping; click a hotspot directly to jump. Save
-  or Cancel from a floating toolbar that automatically hops to whichever
-  screen side is opposite the OSD so it never hides underneath.
 - **Custom position now stores the OSD's centre**, not its top-left corner.
   A media card appearing or disappearing changes the OSD's width; the old
-  top-left anchor could push a right-side placement off-screen when the card
-  grew. Anchoring on centre keeps the OSD visually pinned to the same point
-  through content resizes.
+  top-left anchor could push a right-side placement off-screen when the
+  card grew. Anchoring on centre keeps the OSD visually pinned to the same
+  point through content resizes.
 
 ### Fixed
+- **OSD not centered / off-position on high-DPI displays.**
+  `BandWindow.SetPosition` was passing DIP coordinates straight to Win32's
+  `SetWindowPos`, which expects physical pixels. On 100% DPI the two are
+  equal so the bug never surfaced; on 125% / 150% / 175% the OSD landed
+  roughly `1/dpi` of the way across the screen (top-left-ish) instead of at
+  the selected corner. `SetPosition` now multiplies by the current monitor's
+  DPI scale, matching the size path.
 - **Installer can now overwrite locked files in Program Files.** The
   overwrite path now retries with exponential back-off and, if the file is
   still locked (typically Norton or Windows Defender holding a scan handle),
   renames the old copy aside with `MoveFileEx MOVEFILE_DELAY_UNTIL_REBOOT`
   and drops the new bytes at the original path. The earlier retry loop
   filtered out its final attempt so the sideline fallback was never reached
-  even after it existed - now the loop always falls through on the last try.
-- **Preview redraws after saving a Custom position** so the Settings preview
-  card matches the new placement instead of showing the old preset.
-
-## [0.1.3] - 2026-08-31
-
-### Fixed
-- **OSD not centered / off-position on high-DPI displays.** `BandWindow.SetPosition`
-  was passing DIP coordinates straight to Win32's `SetWindowPos`, which expects
-  physical pixels. On 100% DPI the two are equal so the bug never surfaced; on
-  125% / 150% / 175% the OSD landed roughly `1/dpi` of the way across the
-  screen (top-left-ish) instead of at the selected corner. `SetPosition` now
-  multiplies by the current monitor's DPI scale, matching the size path.
-
-### Added
-- **Drag-to-position with 3x3 magnetic snapping.** Settings gains a "Custom"
-  position mode: click "Drag to position", grab the OSD, and drop it anywhere
-  on any monitor. The OSD snaps to a 3x3 grid of hotspots as it approaches
-  them; hold Alt for pixel-precise free placement. "Save position" commits;
-  "Cancel" restores the previous setting. Coordinates persist as fractions of
-  the monitor's working area so a resolution change or an unplug-and-back-in
-  keeps the OSD in the same relative spot.
-- **Multi-monitor awareness for Custom positions.** The monitor's Windows
-  device name (`\\.\DISPLAY2`, ...) is saved alongside the fractional
-  coordinates, so the OSD stays on the display the user dropped it on across
-  restarts. Falls back to the primary monitor silently when that display is
-  unplugged.
+  even after it existed; now it always falls through on the last try.
+- **Settings preview redraws after saving a Custom position** so it shows
+  the new placement instead of the old preset.
 
 ## [0.1.2] - 2026-08-31
 
