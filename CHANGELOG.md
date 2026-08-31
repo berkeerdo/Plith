@@ -3,6 +3,34 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.2] - 2026-08-31
+
+### Fixed
+- **Tray Exit deadlock that appeared to freeze the whole system.**
+  `WindowsAudioClient.Stop` held its lock across
+  `UnregisterEndpointNotificationCallback`, which synchronously waits for any
+  in-flight COM MTA callback to return. Those callbacks reacquire the same
+  lock at entry, so the UI dispatcher deadlocked. The frozen dispatcher then
+  starved the `WH_KEYBOARD_LL` hook, making every keystroke wait on
+  `LowLevelHooksTimeout`. Draining the enumerator outside the lock resolves
+  it. `App.OnExit` also gained per-step Dispose logging so any future
+  shutdown hang points at the exact culprit.
+
+### Changed
+- **Installer no longer needs the Windows 10/11 SDK on the target machine.**
+  `Plith.exe` is now signed with the developer's code-signing cert at build
+  time and the cert's public key is embedded in the installer. Install-time
+  signing (and `SignToolWrapper`) is gone; `CertService` just registers the
+  embedded cert in `LocalMachine\Root` + `TrustedPublisher` so the pre-signed
+  binary validates for UIAccess.
+
+### Added
+- **In-app update checker.** Settings gains an "Updates" card that queries
+  GitHub Releases, downloads the matching `Plith-Setup-*.exe` asset with
+  progress, launches it via UAC, and exits Plith so the update swap
+  doesn't collide with a running binary. A "Release notes" button opens
+  the release page in the default browser.
+
 ## [0.1.1] - 2026-08-05
 
 ### Added
