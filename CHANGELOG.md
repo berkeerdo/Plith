@@ -3,6 +3,30 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.3] - 2026-08-31
+
+### Fixed
+- **OSD not centered / off-position on high-DPI displays.** `BandWindow.SetPosition`
+  was passing DIP coordinates straight to Win32's `SetWindowPos`, which expects
+  physical pixels. On 100% DPI the two are equal so the bug never surfaced; on
+  125% / 150% / 175% the OSD landed roughly `1/dpi` of the way across the
+  screen (top-left-ish) instead of at the selected corner. `SetPosition` now
+  multiplies by the current monitor's DPI scale, matching the size path.
+
+### Added
+- **Drag-to-position with 3x3 magnetic snapping.** Settings gains a "Custom"
+  position mode: click "Drag to position", grab the OSD, and drop it anywhere
+  on any monitor. The OSD snaps to a 3x3 grid of hotspots as it approaches
+  them; hold Alt for pixel-precise free placement. "Save position" commits;
+  "Cancel" restores the previous setting. Coordinates persist as fractions of
+  the monitor's working area so a resolution change or an unplug-and-back-in
+  keeps the OSD in the same relative spot.
+- **Multi-monitor awareness for Custom positions.** The monitor's Windows
+  device name (`\\.\DISPLAY2`, ...) is saved alongside the fractional
+  coordinates, so the OSD stays on the display the user dropped it on across
+  restarts. Falls back to the primary monitor silently when that display is
+  unplugged.
+
 ## [0.1.2] - 2026-08-31
 
 ### Fixed

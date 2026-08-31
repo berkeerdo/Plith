@@ -23,7 +23,7 @@
     <Authors>Plith</Authors>
     <Product>Plith</Product>
     <Description>Modern Windows audio OSD with Voicemeeter-first design and media controls baked in.</Description>
-    <Version>0.1.2</Version>
+    <Version>0.1.3</Version>
     <ApplicationIcon>Resources\icons\plith.ico</ApplicationIcon>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>

@@ -13,15 +13,17 @@ public sealed class TrayIconHost : IDisposable
     private readonly SettingsService _settings;
     private readonly HotkeyService _hotkey;
     private readonly ThemeService _theme;
+    private readonly OsdHost _osd;
     private TaskbarIcon? _tray;
     private SettingsWindow? _settingsWindow;
 
-    public TrayIconHost(Application app, SettingsService settings, HotkeyService hotkey, ThemeService theme)
+    public TrayIconHost(Application app, SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd)
     {
         _app = app;
         _settings = settings;
         _hotkey = hotkey;
         _theme = theme;
+        _osd = osd;
     }
 
     public void Initialize()
@@ -65,7 +67,7 @@ public sealed class TrayIconHost : IDisposable
             _settingsWindow.Activate();
             return;
         }
-        _settingsWindow = new SettingsWindow(_settings, _hotkey, _theme);
+        _settingsWindow = new SettingsWindow(_settings, _hotkey, _theme, _osd);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
     }

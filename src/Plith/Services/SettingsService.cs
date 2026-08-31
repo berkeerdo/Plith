@@ -51,6 +51,9 @@ public sealed class SettingsService
                 Theme = ParseEnum(data[SectionGeneral]["Theme"], ThemeMode.Dark),
                 ShowDurationMs = ParseInt(data[SectionOsd]["ShowDurationMs"], 2000, 500, 10000),
                 Position = ParseEnum(data[SectionOsd]["Position"], OsdPosition.BottomCenter),
+                CustomPositionXPercent = ParseDouble(data[SectionOsd]["CustomPositionXPercent"], 0.0, 0.0, 1.0),
+                CustomPositionYPercent = ParseDouble(data[SectionOsd]["CustomPositionYPercent"], 0.9, 0.0, 1.0),
+                CustomPositionMonitorDeviceName = data[SectionOsd]["CustomPositionMonitorDeviceName"] ?? string.Empty,
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
@@ -91,6 +94,9 @@ public sealed class SettingsService
         data[SectionGeneral]["Theme"] = m.Theme.ToString();
         data[SectionOsd]["ShowDurationMs"] = m.ShowDurationMs.ToString(inv);
         data[SectionOsd]["Position"] = m.Position.ToString();
+        data[SectionOsd]["CustomPositionXPercent"] = m.CustomPositionXPercent.ToString("G", inv);
+        data[SectionOsd]["CustomPositionYPercent"] = m.CustomPositionYPercent.ToString("G", inv);
+        data[SectionOsd]["CustomPositionMonitorDeviceName"] = m.CustomPositionMonitorDeviceName ?? string.Empty;
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
@@ -114,6 +120,9 @@ public sealed class SettingsService
 
     private static int ParseInt(string? s, int fallback, int min, int max)
         => int.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(v, min, max) : fallback;
+
+    private static double ParseDouble(string? s, double fallback, double min, double max)
+        => double.TryParse(s, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? Math.Clamp(v, min, max) : fallback;
 
     private static uint ParseUInt(string? s, uint fallback)
         => uint.TryParse(s, NumberStyles.Integer, CultureInfo.InvariantCulture, out var v) ? v : fallback;

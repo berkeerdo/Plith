@@ -15,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly SettingsService _settings;
     private readonly HotkeyService _hotkey;
     private readonly ThemeService _theme;
+    private readonly OsdHost _osd;
     private readonly UpdateCheckService _updates = new();
     private bool _loadingFromModel;
     private DispatcherTimer? _savedPulseTimer;
@@ -28,11 +29,12 @@ public partial class SettingsWindow : Window
     // don't have to hit GitHub twice per user flow.
     private UpdateInfo? _lastUpdateInfo;
 
-    public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme)
+    public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd)
     {
         _settings = settings;
         _hotkey = hotkey;
         _theme = theme;
+        _osd = osd;
         InitializeComponent();
 
         BusCombo.ItemsSource = new[]
@@ -87,6 +89,44 @@ public partial class SettingsWindow : Window
         UpdateHotkeyConflictWarning();
         ApplyGameModeStatus();
         WireUpdateCheck();
+        WirePositionEditor();
+    }
+
+    private void WirePositionEditor()
+    {
+        PositionEditButton.Click += (_, _) => _osd.EnterPositionEditMode();
+        PositionSaveButton.Click += (_, _) => _osd.ExitPositionEditMode(save: true);
+        PositionCancelButton.Click += (_, _) => _osd.ExitPositionEditMode(save: false);
+        _osd.EditModeChanged += OnOsdEditModeChanged;
+        PositionCombo.SelectionChanged += (_, _) => UpdatePositionEditorVisibility();
+        Closed += (_, _) => _osd.EditModeChanged -= OnOsdEditModeChanged;
+        UpdatePositionEditorVisibility();
+    }
+
+    private void OnOsdEditModeChanged(bool isEditing)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action<bool>(OnOsdEditModeChanged), isEditing);
+            return;
+        }
+        PositionEditButton.Visibility = isEditing ? Visibility.Collapsed : Visibility.Visible;
+        PositionSaveButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
+        PositionCancelButton.Visibility = isEditing ? Visibility.Visible : Visibility.Collapsed;
+        PositionEditHint.Text = isEditing
+            ? "Drag the OSD anywhere - it snaps to a 3x3 grid. Hold Alt for free placement. Save keeps it here, Cancel restores the previous position."
+            : "Drag the OSD anywhere on any monitor. It snaps to a 3x3 grid; hold Alt for free placement.";
+        // Selecting the position combo while in edit mode is confusing - lock it until
+        // the user commits or cancels.
+        PositionCombo.IsEnabled = !isEditing;
+    }
+
+    private void UpdatePositionEditorVisibility()
+    {
+        // The editor row only makes sense for Custom - preset corners already know
+        // where to sit and don't need drag input.
+        bool showEditor = PositionCombo.SelectedItem is OsdPosition p && p == OsdPosition.Custom;
+        PositionEditRow.Visibility = showEditor ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void WireUpdateCheck()

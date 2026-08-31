@@ -6,6 +6,10 @@ public enum OsdPosition
     BottomRight,
     TopCenter,
     TopRight,
+    /// <summary>User-picked coordinates from the drag-to-position editor. Stored as
+    /// resolution-independent fractions of the target monitor's working area so a
+    /// resolution change keeps the OSD in the same relative spot.</summary>
+    Custom,
 }
 
 public enum AudioSourceMode
@@ -44,8 +48,19 @@ public sealed class SettingsModel
     /// <summary>How long the OSD stays visible after the last change, in milliseconds.</summary>
     public int ShowDurationMs { get; set; } = 2000;
 
-    /// <summary>Where on the primary screen the OSD anchors.</summary>
+    /// <summary>Which anchor rule the OSD uses on screen.</summary>
     public OsdPosition Position { get; set; } = OsdPosition.BottomCenter;
+
+    /// <summary>0..1 fraction of the target monitor's working area, applied to the OSD's
+    /// top-left corner when <see cref="Position"/> is <see cref="OsdPosition.Custom"/>.
+    /// Kept resolution-independent so the OSD stays put across monitor / DPI changes.</summary>
+    public double CustomPositionXPercent { get; set; }
+    public double CustomPositionYPercent { get; set; } = 0.9;
+
+    /// <summary>Windows device name of the monitor the user placed the OSD on
+    /// (e.g. "\\.\DISPLAY2"). Empty means "primary". Restored across app launches by
+    /// name; falls back to primary silently if the monitor is unplugged.</summary>
+    public string CustomPositionMonitorDeviceName { get; set; } = string.Empty;
 
     /// <summary>If true, a media event (track change, play/pause from the source app) pops the OSD.
     /// Default off — surfacing every Spotify advance is intrusive.</summary>
@@ -102,6 +117,9 @@ public sealed class SettingsModel
     {
         ShowDurationMs = ShowDurationMs,
         Position = Position,
+        CustomPositionXPercent = CustomPositionXPercent,
+        CustomPositionYPercent = CustomPositionYPercent,
+        CustomPositionMonitorDeviceName = CustomPositionMonitorDeviceName,
         AutoShowOnMedia = AutoShowOnMedia,
         HoverKeepAlive = HoverKeepAlive,
         OsdOpacityPercent = OsdOpacityPercent,

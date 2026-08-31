@@ -315,11 +315,20 @@ public partial class BandWindow : ContentControl, IWndProcObject
     protected void SetPosition(double x, double y)
     {
         if (!HasSourceCreated) return;
+        // SetWindowPos takes physical pixels. Callers pass DIPs (WPF-space) since Left/Top
+        // are DependencyProperties treated as WPF units elsewhere. Multiplying by _dpiScale
+        // matches the size path a few lines up in DpiChangedInternal, which was already
+        // scaling width/height into pixels. Without this the OSD lands ~1/dpi of the way
+        // across the screen on 125% / 150% / 175% displays instead of at the target corner.
         SetWindowPos(Handle, 0,
-            (int)Math.Round(x), (int)Math.Round(y),
+            (int)Math.Round(x * _dpiScale), (int)Math.Round(y * _dpiScale),
             0, 0, SWP.NOZORDER | SWP.NOSIZE | SWP.NOACTIVATE);
         UpdateWindow(Handle);
     }
+
+    /// <summary>Current DPI scale factor of the monitor hosting this window (1.0 at 100%,
+    /// 1.25 at 125%, ...). Kept in sync by DpiChangedInternal.</summary>
+    public double DpiScale => _dpiScale;
 
     protected virtual void OnSourceCreated() => SourceCreated?.Invoke(this, EventArgs.Empty);
 
