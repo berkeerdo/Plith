@@ -16,17 +16,15 @@ public sealed class InstallOrchestrator
 
     private readonly LogService _log;
     private readonly CertService _cert;
-    private readonly SignToolWrapper _signtool;
     private readonly ShortcutService _shortcut;
     private readonly RegistryService _registry;
     private readonly InstallerViewModel _vm;
 
-    public InstallOrchestrator(LogService log, CertService cert, SignToolWrapper signtool,
+    public InstallOrchestrator(LogService log, CertService cert,
         ShortcutService shortcut, RegistryService registry, InstallerViewModel vm)
     {
         _log = log;
         _cert = cert;
-        _signtool = signtool;
         _shortcut = shortcut;
         _registry = registry;
         _vm = vm;
@@ -35,9 +33,8 @@ public sealed class InstallOrchestrator
     public void PrepareSteps()
     {
         _vm.Steps.Clear();
-        _vm.Steps.Add(new InstallStepViewModel { Title = "Setting up certificate" });
+        _vm.Steps.Add(new InstallStepViewModel { Title = "Registering trust" });
         _vm.Steps.Add(new InstallStepViewModel { Title = "Extracting Plith files" });
-        _vm.Steps.Add(new InstallStepViewModel { Title = "Signing executable" });
         _vm.Steps.Add(new InstallStepViewModel { Title = "Copying to Program Files" });
         _vm.Steps.Add(new InstallStepViewModel { Title = "Registering Plith" });
         _vm.Progress = 0;
@@ -48,11 +45,11 @@ public sealed class InstallOrchestrator
         _log.Info("Install: starting");
         try
         {
-            string thumbprint = await RunStep(0, () => _cert.EnsureCert());
+            string thumbprint = await RunStep(0, () => _cert.InstallTrust());
+            _log.Info($"Install: registered trust for cert thumbprint {thumbprint}");
             await RunStep(1, () => ExtractBundle());
-            await RunStep(2, () => _signtool.Sign(Path.Combine(StageDir, "Plith.exe"), thumbprint));
-            await RunStep(3, () => CopyToProgramFiles());
-            await RunStep(4, () => RegisterPlith());
+            await RunStep(2, () => CopyToProgramFiles());
+            await RunStep(3, () => RegisterPlith());
             _log.Info("Install: done");
         }
         catch (Exception ex)

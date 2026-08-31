@@ -40,10 +40,9 @@ public partial class App : Application
         var log = new LogService();
         var vm = new InstallerViewModel();
         var cert = new CertService();
-        var signtool = new SignToolWrapper(log);
         var shortcut = new ShortcutService();
         var registry = new RegistryService();
-        var orchestrator = new InstallOrchestrator(log, cert, signtool, shortcut, registry, vm);
+        var orchestrator = new InstallOrchestrator(log, cert, shortcut, registry, vm);
 
         var window = new MainWindow();
         window.Show();

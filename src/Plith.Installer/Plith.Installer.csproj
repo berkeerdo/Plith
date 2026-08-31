@@ -53,16 +53,23 @@
     </Resource>
   </ItemGroup>
 
-  <!-- Pre-build target: publish Plith Release, zip the output, embed as resource.
-       Triggers on every build so the embedded bundle is always current. Out-of-date
-       checking is delegated to the Exec invocation (dotnet publish is itself incremental). -->
+  <!-- Pre-build target: publish Plith Release, sign Plith.exe with the developer's
+       code-signing cert, zip the output, embed as resource. The cert's public key
+       is also exported here and embedded so the installer can register it in the
+       end user's trust stores without invoking signtool at install time.
+       Triggers on every build so the embedded bundle is always current. -->
   <Target Name="PublishPlithAndEmbed" BeforeTargets="PrepareForBuild">
     <PropertyGroup>
       <PlithStagingDir>$(MSBuildThisFileDirectory)Resources\Embedded\staging</PlithStagingDir>
       <PlithBundleZip>$(MSBuildThisFileDirectory)Resources\Embedded\PlithBundle.zip</PlithBundleZip>
+      <PlithCertPublic>$(MSBuildThisFileDirectory)Resources\Embedded\plith-cert.cer</PlithCertPublic>
+      <PlithSignScript>$(MSBuildThisFileDirectory)..\..\scripts\sign-plith.ps1</PlithSignScript>
     </PropertyGroup>
 
     <Exec Command="dotnet publish &quot;$(MSBuildThisFileDirectory)..\Plith\Plith.csproj&quot; -c Release -o &quot;$(PlithStagingDir)&quot; -p:PublishSingleFile=false -p:SelfContained=false"
+          ConsoleToMSBuild="true" />
+
+    <Exec Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(PlithSignScript)&quot; -PlithExe &quot;$(PlithStagingDir)\Plith.exe&quot; -CertOutput &quot;$(PlithCertPublic)&quot;"
           ConsoleToMSBuild="true" />
 
     <Delete Files="$(PlithBundleZip)" Condition="Exists('$(PlithBundleZip)')" />
@@ -76,6 +83,9 @@
   <ItemGroup>
     <EmbeddedResource Include="Resources\Embedded\PlithBundle.zip" Condition="Exists('Resources\Embedded\PlithBundle.zip')">
       <LogicalName>PlithBundle.zip</LogicalName>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Resources\Embedded\plith-cert.cer" Condition="Exists('Resources\Embedded\plith-cert.cer')">
+      <LogicalName>plith-cert.cer</LogicalName>
     </EmbeddedResource>
   </ItemGroup>
 

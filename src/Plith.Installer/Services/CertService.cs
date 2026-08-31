@@ -1,76 +1,56 @@
-using System.Security.Cryptography;
+using System.IO;
+using System.Reflection;
 using System.Security.Cryptography.X509Certificates;
 
 namespace Plith.Installer.Services;
 
 /// <summary>
-/// Self-signed code-signing cert lifecycle. EnsureCert returns the thumbprint of a
-/// usable cert — reusing an existing CN=Plith Self-Signed entry in CurrentUser\My
-/// when present, or generating a new 5-year cert otherwise. Imports the public cert
-/// into BOTH LocalMachine\TrustedPublisher AND LocalMachine\Root so the UIAccess
-/// chain validates (Phase 4h lessons learned: TrustedPublisher alone is not enough).
+/// Registers the embedded developer code-signing certificate into LocalMachine trust
+/// stores so the pre-signed Plith.exe validates on the end user's machine. This
+/// replaces the previous per-user cert-generation + signtool pipeline: signing now
+/// happens once at build time, and installs no longer need the Windows SDK.
+///
+/// The .cer is bundled as an EmbeddedResource (LogicalName 'plith-cert.cer') by
+/// Plith.Installer.csproj's PublishPlithAndEmbed target. Adding it to both
+/// LocalMachine\Root and LocalMachine\TrustedPublisher is required for the UIAccess
+/// chain to validate (Phase 4h lessons learned: TrustedPublisher alone is not enough).
 /// </summary>
 public sealed class CertService
 {
-    public const string DefaultSubject = "CN=Plith Self-Signed";
+    public const string EmbeddedCertResourceName = "plith-cert.cer";
 
-    private static readonly Oid CodeSigningOid = new("1.3.6.1.5.5.7.3.3");
-    private readonly string _subject;
+    private readonly Assembly _resourceAssembly;
 
-    public CertService(string? subjectName = null)
+    public CertService()
+        : this(typeof(CertService).Assembly) { }
+
+    /// <summary>Test seam - inject an alternate assembly whose resources contain a test cert.</summary>
+    public CertService(Assembly resourceAssembly)
     {
-        _subject = subjectName ?? DefaultSubject;
+        _resourceAssembly = resourceAssembly;
     }
 
-    /// <summary>Find or create a usable cert; ensure it's also in LocalMachine\TrustedPublisher
-    /// + LocalMachine\Root; return its SHA-1 thumbprint.</summary>
-    public string EnsureCert()
+    /// <summary>Load the embedded public cert, ensure it's present in LocalMachine\Root
+    /// and LocalMachine\TrustedPublisher, and return its SHA-1 thumbprint for logging.
+    /// Idempotent: repeated calls are cheap because the store lookups short-circuit.</summary>
+    public string InstallTrust()
     {
-        var cert = FindExisting() ?? CreateAndPersist();
+        var cert = LoadEmbeddedCert();
         EnsureInLocalMachineStore(cert, StoreName.TrustedPublisher);
         EnsureInLocalMachineStore(cert, StoreName.Root);
         return cert.Thumbprint!;
     }
 
-    private X509Certificate2? FindExisting()
+    private X509Certificate2 LoadEmbeddedCert()
     {
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadOnly);
-        foreach (var existing in store.Certificates)
-        {
-            // HasPrivateKey guard: a public-only cert (private key deleted/exported) would
-            // return a thumbprint that SignTool can't actually use — fail at generation
-            // instead, not deep in the install pipeline.
-            if (existing.Subject == _subject && existing.NotAfter > DateTime.UtcNow && existing.HasPrivateKey)
-                return existing;
-        }
-        return null;
-    }
-
-    private X509Certificate2 CreateAndPersist()
-    {
-        using var rsa = RSA.Create(2048);
-        var req = new CertificateRequest(_subject, rsa, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1);
-        req.CertificateExtensions.Add(new X509KeyUsageExtension(
-            X509KeyUsageFlags.DigitalSignature, critical: true));
-        req.CertificateExtensions.Add(new X509EnhancedKeyUsageExtension(
-            new OidCollection { CodeSigningOid }, critical: true));
-
-        var notBefore = DateTimeOffset.UtcNow.AddMinutes(-5);   // tolerate slight clock skew
-        var notAfter = notBefore.AddYears(5);
-        var cert = req.CreateSelfSigned(notBefore, notAfter);
-        cert.FriendlyName = "Plith Code Signing";
-
-        // Re-load with persisted private key. CreateSelfSigned returns an ephemeral key by
-        // default; signing tools and SignTool need the key to be in the user's key store.
-        var pfx = cert.Export(X509ContentType.Pfx);
-        var persisted = X509CertificateLoader.LoadPkcs12(pfx, password: null,
-            X509KeyStorageFlags.PersistKeySet | X509KeyStorageFlags.UserKeySet | X509KeyStorageFlags.Exportable);
-
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadWrite);
-        store.Add(persisted);
-        return persisted;
+        using var stream = _resourceAssembly.GetManifestResourceStream(EmbeddedCertResourceName)
+            ?? throw new InvalidOperationException(
+                $"Embedded resource '{EmbeddedCertResourceName}' not found. " +
+                "The build-time signing target (PublishPlithAndEmbed -> sign-plith.ps1) " +
+                "did not produce Resources/Embedded/plith-cert.cer.");
+        using var ms = new MemoryStream();
+        stream.CopyTo(ms);
+        return X509CertificateLoader.LoadCertificate(ms.ToArray());
     }
 
     private static void EnsureInLocalMachineStore(X509Certificate2 cert, StoreName storeName)
@@ -79,9 +59,6 @@ public sealed class CertService
         store.Open(OpenFlags.ReadWrite);
         var existing = store.Certificates.Find(X509FindType.FindByThumbprint, cert.Thumbprint!, validOnly: false);
         if (existing.Count > 0) return;
-
-        // Public-only copy — never put the private key in LocalMachine stores.
-        var publicOnly = X509CertificateLoader.LoadCertificate(cert.Export(X509ContentType.Cert));
-        store.Add(publicOnly);
+        store.Add(cert);
     }
 }

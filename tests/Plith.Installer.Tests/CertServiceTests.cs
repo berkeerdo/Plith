@@ -1,46 +1,23 @@
-using System.Security.Cryptography.X509Certificates;
+using System.Reflection;
 using Plith.Installer.Services;
-using Plith.Installer.Tests.TestHelpers;
 using Xunit;
 
 namespace Plith.Installer.Tests;
 
-public class CertServiceTests : IDisposable
+// Trust-store side effects (Root + TrustedPublisher install) require elevation and are
+// verified end-to-end by running the installer itself, not here. Unit tests cover only
+// the resource-loading contract.
+public class CertServiceTests
 {
-    private readonly TempCertStore _certCleanup = new();
-
-    public void Dispose()
-    {
-        _certCleanup.Dispose();
-        GC.SuppressFinalize(this);
-    }
-
     [Fact]
-    public void EnsureCert_creates_cert_when_none_exists_and_returns_thumbprint()
+    public void InstallTrust_throws_when_embedded_cert_resource_is_missing()
     {
-        TempCertStore.RemoveAll();   // ensure clean slate
-        var svc = new CertService(subjectName: TempCertStore.TestSubject);
+        // xUnit's own assembly does not carry a 'plith-cert.cer' resource, so it makes a
+        // safe stand-in for an assembly that lacks the embedded cert.
+        var assemblyWithoutCert = typeof(FactAttribute).Assembly;
+        var svc = new CertService(assemblyWithoutCert);
 
-        var thumbprint = svc.EnsureCert();
-
-        Assert.NotNull(thumbprint);
-        Assert.Equal(40, thumbprint.Length);   // SHA-1 thumbprint hex = 40 chars
-
-        using var store = new X509Store(StoreName.My, StoreLocation.CurrentUser);
-        store.Open(OpenFlags.ReadOnly);
-        var found = store.Certificates.Find(X509FindType.FindByThumbprint, thumbprint, validOnly: false);
-        Assert.Single(found);
-    }
-
-    [Fact]
-    public void EnsureCert_returns_existing_thumbprint_when_cert_already_present()
-    {
-        TempCertStore.RemoveAll();
-        var svc = new CertService(subjectName: TempCertStore.TestSubject);
-        var first = svc.EnsureCert();
-
-        var second = svc.EnsureCert();
-
-        Assert.Equal(first, second);
+        var ex = Assert.Throws<InvalidOperationException>(() => svc.InstallTrust());
+        Assert.Contains(CertService.EmbeddedCertResourceName, ex.Message, StringComparison.Ordinal);
     }
 }

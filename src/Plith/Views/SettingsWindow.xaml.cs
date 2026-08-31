@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
@@ -14,6 +15,7 @@ public partial class SettingsWindow : Window
     private readonly SettingsService _settings;
     private readonly HotkeyService _hotkey;
     private readonly ThemeService _theme;
+    private readonly UpdateCheckService _updates = new();
     private bool _loadingFromModel;
     private DispatcherTimer? _savedPulseTimer;
 
@@ -21,6 +23,10 @@ public partial class SettingsWindow : Window
     private uint _capturedMods;
     private int _capturedKey;
     private bool _isCapturingHotkey;
+
+    // Latest CheckAsync result held between the check button and the download button so we
+    // don't have to hit GitHub twice per user flow.
+    private UpdateInfo? _lastUpdateInfo;
 
     public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme)
     {
@@ -80,6 +86,111 @@ public partial class SettingsWindow : Window
         };
         UpdateHotkeyConflictWarning();
         ApplyGameModeStatus();
+        WireUpdateCheck();
+    }
+
+    private void WireUpdateCheck()
+    {
+        var currentVersion = typeof(SettingsWindow).Assembly.GetName().Version?.ToString(3) ?? "0.0.0";
+        UpdateStatusLabel.Text = $"Version {currentVersion}";
+        UpdateCheckButton.Click += async (_, _) => await RunUpdateCheckAsync();
+        UpdateOpenPageButton.Click += (_, _) => OpenReleasePage();
+        UpdateDownloadButton.Click += async (_, _) => await RunUpdateDownloadAsync();
+    }
+
+    private async Task RunUpdateCheckAsync()
+    {
+        UpdateCheckButton.IsEnabled = false;
+        UpdateStatusLabel.Text = "Checking GitHub…";
+        UpdateStatusHint.Text = "Downloads from GitHub releases and runs the installer.";
+        UpdateActionRow.Visibility = Visibility.Collapsed;
+        try
+        {
+            var info = await _updates.CheckAsync();
+            _lastUpdateInfo = info;
+
+            if (info is null)
+            {
+                UpdateStatusLabel.Text = "Update check failed";
+                UpdateStatusHint.Text = "Network error or GitHub API unreachable. Try again later.";
+                return;
+            }
+
+            if (!info.IsAvailable)
+            {
+                UpdateStatusLabel.Text = $"You're up to date — v{info.CurrentVersion}";
+                UpdateStatusHint.Text = $"Latest release on GitHub is v{info.LatestVersion}.";
+                return;
+            }
+
+            UpdateStatusLabel.Text = $"Update available: v{info.LatestVersion}";
+            UpdateStatusHint.Text = info.InstallerAssetUrl is null
+                ? "Release published but no installer asset attached — use Release notes."
+                : $"Currently on v{info.CurrentVersion}. Click Download and install to apply.";
+            UpdateActionRow.Visibility = Visibility.Visible;
+            UpdateDownloadButton.IsEnabled = info.InstallerAssetUrl is not null;
+        }
+        finally
+        {
+            UpdateCheckButton.IsEnabled = true;
+        }
+    }
+
+    private void OpenReleasePage()
+    {
+        if (_lastUpdateInfo?.ReleasePageUrl is not { Length: > 0 } url) return;
+        try
+        {
+            Process.Start(new ProcessStartInfo(url) { UseShellExecute = true });
+        }
+        catch { /* the user can copy the URL from the status text if the shell fails */ }
+    }
+
+    private async Task RunUpdateDownloadAsync()
+    {
+        if (_lastUpdateInfo?.InstallerAssetUrl is not { Length: > 0 } assetUrl) return;
+
+        UpdateDownloadButton.IsEnabled = false;
+        UpdateCheckButton.IsEnabled = false;
+        UpdateProgressBar.Visibility = Visibility.Visible;
+        UpdateProgressBar.Value = 0;
+        UpdateStatusHint.Text = "Downloading installer…";
+
+        var progress = new Progress<double>(p =>
+        {
+            UpdateProgressBar.Value = p;
+            UpdateStatusHint.Text = $"Downloading installer… {p * 100:F0}%";
+        });
+
+        var path = await _updates.DownloadInstallerAsync(assetUrl, _lastUpdateInfo.InstallerAssetSize, progress);
+        if (path is null)
+        {
+            UpdateStatusHint.Text = "Download failed. Check plith.log or try Release notes.";
+            UpdateProgressBar.Visibility = Visibility.Collapsed;
+            UpdateDownloadButton.IsEnabled = true;
+            UpdateCheckButton.IsEnabled = true;
+            return;
+        }
+
+        UpdateStatusHint.Text = "Launching installer — Plith will exit.";
+        try
+        {
+            // The installer needs UAC because it writes to Program Files. UseShellExecute + RunAs
+            // gets the elevation prompt. Plith exits immediately after so the installer's file
+            // replace step doesn't collide with our own binary being held open.
+            Process.Start(new ProcessStartInfo(path)
+            {
+                UseShellExecute = true,
+                Verb = "runas",
+            });
+            Application.Current.Shutdown();
+        }
+        catch (Exception ex)
+        {
+            UpdateStatusHint.Text = $"Failed to start installer: {ex.Message}";
+            UpdateDownloadButton.IsEnabled = true;
+            UpdateCheckButton.IsEnabled = true;
+        }
     }
 
     private void SelectEndpointById(string? id)
