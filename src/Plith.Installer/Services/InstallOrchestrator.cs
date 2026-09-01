@@ -346,10 +346,29 @@ public sealed class InstallOrchestrator
 
         // Retry loop exhausted. Try MoveFileEx REPLACE_EXISTING — atomic kernel-level
         // replacement that occasionally succeeds against ACL / attribute issues that
-        // trip File.Copy. If it works we're done; otherwise fall through to the
-        // sideline dance.
+        // trip File.Copy. If it works we're done; otherwise fall through.
         if (TryReplaceViaMoveFileEx(source, target))
             return;
+
+        // Terminal ACL escalation. When Windows says ACCESS_DENIED and no process
+        // holds the file, the file's ACL has been rewritten (AV quarantine, previous
+        // failed install, SmartScreen — all of these can DENY Administrators write).
+        // Run the equivalent of `takeown /f + icacls /grant Administrators:F`
+        // directly and retry the copy. This is what commercial installers do quietly
+        // behind the scenes.
+        if (IsAccessDenied(lastError) && TryReclaimOwnership(target))
+        {
+            try
+            {
+                TryClearReadOnly(target);
+                File.Copy(source, target, overwrite: true);
+                return;
+            }
+            catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+            {
+                lastError = ex;
+            }
+        }
 
         try
         {
@@ -380,6 +399,57 @@ public sealed class InstallOrchestrator
                 File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
         }
         catch { /* best effort — if we can't even read attributes, the copy will fail with a real message */ }
+    }
+
+    private static bool IsAccessDenied(Exception? ex)
+    {
+        // .NET wraps the Win32 code in Exception.HResult with the 0x8007 facility.
+        // 5 = ERROR_ACCESS_DENIED. UnauthorizedAccessException without a specific
+        // HResult still matches by type — the escalation is safe either way.
+        if (ex is null) return false;
+        int code = ex.HResult & 0xFFFF;
+        return code == 5 || ex is UnauthorizedAccessException;
+    }
+
+    // Runs takeown /f <path> /a && icacls <path> /grant Administrators:F. Both are
+    // built-in Windows commands available on every SKU. Best-effort: any failure
+    // returns false and the caller falls through to the sideline dance.
+    private static bool TryReclaimOwnership(string target)
+    {
+        // /a on takeown assigns ownership to the Administrators group (not the
+        // running user) so subsequent installs by a different admin still work.
+        bool tookOwnership = RunElevatedTool("takeown.exe",
+            $"/F \"{target}\" /A");
+        // *S-1-5-32-544 is the well-known Administrators SID. Using the SID
+        // instead of the group name avoids locale issues (BUILTIN\Administrators
+        // vs BUILTIN\Yöneticiler on tr-TR systems).
+        bool grantedAccess = RunElevatedTool("icacls.exe",
+            $"\"{target}\" /grant *S-1-5-32-544:F /C /Q");
+        return tookOwnership && grantedAccess;
+    }
+
+    private static bool RunElevatedTool(string exe, string args)
+    {
+        try
+        {
+            var psi = new ProcessStartInfo(exe, args)
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is null) return false;
+            if (!proc.WaitForExit(5000))
+            {
+                try { proc.Kill(); } catch { /* zombie */ }
+                return false;
+            }
+            return proc.ExitCode == 0;
+        }
+        catch { return false; }
     }
 
     private static bool TryReplaceViaMoveFileEx(string source, string target)
