@@ -292,29 +292,36 @@ public sealed class InstallOrchestrator
         }
     }
 
-    // File.Copy with exponential backoff for the common "target was locked a moment ago"
-    // case. Overwriting a DLL right after the process that had it loaded exits routinely
-    // fails with UnauthorizedAccessException / IOException on Windows because the OS
-    // hasn't yet released its memory-mapped view; AV scanners produce the same transient
-    // lock. If short waits don't clear the lock, fall through to the sideline dance
-    // which handles a persistently-held target (Norton scanning our binary, Explorer
-    // extracting an icon, etc.). If even THAT fails, the caller gets an actionable
-    // message so the UI can surface a fix path instead of a raw stack.
+    // Multi-strategy overwrite. Failures we've seen in the wild fall into three
+    // separate buckets and one strategy doesn't cover all three:
     //
-    // Attempt cadence: 250 / 500 / 1000 / 2000 / 2000 / 2000 / 2000 / 2000 = ~12 s of
-    // waits before falling through — up from the previous 3.75 s. Observed Norton-plus-
-    // running-Plith holds tend to clear inside 5-10 s; the extra headroom converts most
-    // "installer says access denied" cases into "installer paused for a few seconds
-    // then succeeded".
+    //   1. Sharing violation — a process (or the OS kernel via memory-mapped section)
+    //      has the file open without FILE_SHARE_WRITE. File.Copy overwrite fails.
+    //      Handled by the retry loop and the sideline rename dance.
+    //
+    //   2. ReadOnly attribute — AV quarantine or a previous install artifact set the
+    //      ReadOnly bit. File.Copy overwrite fails with UnauthorizedAccessException
+    //      even though nobody is holding the file. Handled by clearing the attribute
+    //      before each attempt.
+    //
+    //   3. Restrictive ACL — a previous install / quarantine changed ownership or
+    //      denied write to Administrators. File.Copy fails, so does File.Move.
+    //      MoveFileEx REPLACE_EXISTING takes a different kernel path and sometimes
+    //      succeeds where File.Copy doesn't — worth trying before giving up.
+    //
+    // The order below is: quickest safe hop first, most invasive last.
     internal static void CopyWithRetry(string source, string target)
     {
-        // Short-circuit: if source and target already carry the exact same bytes there
-        // is nothing to write. Third-party DLLs that don't change between two Plith
-        // releases (Hardcodet.NotifyIcon.Wpf, NAudio, WpfScreenHelper, ini-parser, the
-        // Windows runtime bits) hit this on every upgrade — and those are ALSO the files
-        // most likely to still be memory-mapped or under AV scan from the prior install,
-        // so skipping them removes the single biggest source of install-lock failures.
+        // Short-circuit: identical content means no work. Third-party DLLs that
+        // don't change between releases skip the whole overwrite dance — and those
+        // are the files most likely to still be memory-mapped from the prior install.
         if (IsIdenticalContent(source, target)) return;
+
+        // Clear the ReadOnly attribute up front — cheap, side-effect-free if the bit
+        // isn't set. AV quarantine occasionally leaves this flipped on binaries it
+        // scanned, which turns File.Copy overwrite into UnauthorizedAccessException
+        // even when no process holds the file.
+        TryClearReadOnly(target);
 
         const int maxAttempts = 8;
         const int maxDelayMs = 2000;
@@ -330,28 +337,89 @@ public sealed class InstallOrchestrator
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
                 lastError = ex;
-                // Swallow every attempt: on the last one we still want to fall through
-                // to CopyOverLockedFile below rather than rethrow. Previously the
-                // filter had 'attempt < maxAttempts' and the final throw skipped the
-                // sideline dance entirely, defeating the whole point of the fallback.
                 if (attempt == maxAttempts) break;
                 System.Threading.Thread.Sleep(delayMs);
                 delayMs = Math.Min(delayMs * 2, maxDelayMs);
+                TryClearReadOnly(target);
             }
         }
+
+        // Retry loop exhausted. Try MoveFileEx REPLACE_EXISTING — atomic kernel-level
+        // replacement that occasionally succeeds against ACL / attribute issues that
+        // trip File.Copy. If it works we're done; otherwise fall through to the
+        // sideline dance.
+        if (TryReplaceViaMoveFileEx(source, target))
+            return;
+
         try
         {
             CopyOverLockedFile(source, target);
+            return;
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            // Enrich the terminal error with the actual holders as reported by
-            // Windows Restart Manager. Users go from "some file is locked" to
-            // "Norton has it open" — enough to act on without guessing.
-            IReadOnlyList<string> holders = Array.Empty<string>();
-            try { holders = RestartManagerService.EnumerateHolders(new[] { target }); } catch { }
-            throw new InstallLockedFileException(target, holders, lastError ?? ex);
+            lastError = ex;
         }
+
+        // Every strategy exhausted. Enrich the error with Restart Manager's holder
+        // list AND the raw Win32 error code — the code is what tells the user (and
+        // us in support) whether this was a lock (32, sharing violation), a
+        // permissions problem (5, access denied), a missing directory (2, 3), etc.
+        IReadOnlyList<string> holders = Array.Empty<string>();
+        try { holders = RestartManagerService.EnumerateHolders(new[] { target }); } catch { }
+        throw new InstallLockedFileException(target, holders, DescribeWin32Error(lastError!), lastError!);
+    }
+
+    private static void TryClearReadOnly(string path)
+    {
+        try
+        {
+            if (!File.Exists(path)) return;
+            var attrs = File.GetAttributes(path);
+            if ((attrs & FileAttributes.ReadOnly) != 0)
+                File.SetAttributes(path, attrs & ~FileAttributes.ReadOnly);
+        }
+        catch { /* best effort — if we can't even read attributes, the copy will fail with a real message */ }
+    }
+
+    private static bool TryReplaceViaMoveFileEx(string source, string target)
+    {
+        // MOVEFILE_REPLACE_EXISTING | MOVEFILE_COPY_ALLOWED (cross-volume) |
+        // MOVEFILE_WRITE_THROUGH (block until flush). The combination behaves like
+        // Windows Explorer's "replace file" — succeeds against many ACL / attribute
+        // edge cases File.Copy overwrite can't cross. We do NOT want to fall through
+        // silently on failure: return true only when the move actually reports success.
+        const uint REPLACE_EXISTING = 0x1;
+        const uint COPY_ALLOWED = 0x2;
+        const uint WRITE_THROUGH = 0x8;
+        try
+        {
+            return MoveFileEx(source, target, REPLACE_EXISTING | COPY_ALLOWED | WRITE_THROUGH);
+        }
+        catch { return false; }
+    }
+
+    // Extracts the underlying Win32 error code from a .NET IO / UAE exception so
+    // the terminal error message can surface it. .NET wraps the Win32 code in
+    // Exception.HResult (0x8007xxxx); the low 16 bits are the actual code.
+    private static string DescribeWin32Error(Exception ex)
+    {
+        int hresult = ex.HResult;
+        int code = hresult & 0xFFFF;
+        string name = code switch
+        {
+            2 => "ERROR_FILE_NOT_FOUND",
+            3 => "ERROR_PATH_NOT_FOUND",
+            5 => "ERROR_ACCESS_DENIED (permissions / ACL / read-only)",
+            19 => "ERROR_WRITE_PROTECT",
+            32 => "ERROR_SHARING_VIOLATION (another process holds it)",
+            33 => "ERROR_LOCK_VIOLATION",
+            80 => "ERROR_FILE_EXISTS",
+            145 => "ERROR_DIR_NOT_EMPTY",
+            206 => "ERROR_FILENAME_EXCED_RANGE",
+            _ => $"Win32 error code {code}",
+        };
+        return name;
     }
 
     // Length + SHA-256 comparison. Fast-fails on any I/O or permission error and
@@ -405,6 +473,7 @@ public sealed class InstallOrchestrator
     private const uint MOVEFILE_DELAY_UNTIL_REBOOT = 0x4;
 
     [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool MoveFileEx(string lpExistingFileName, string? lpNewFileName, uint dwFlags);
 
     private static void SpawnSelfDelete()
