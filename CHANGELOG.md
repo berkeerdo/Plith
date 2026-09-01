@@ -49,6 +49,16 @@ All notable changes to Plith are documented here. Format loosely follows
   and points at the exact Norton exclusion location to add
   `%ProgramFiles%\Plith` to — shown directly on the failure screen
   instead of a `MoveFile` stack.
+- **Windows Restart Manager integration.** The installer now uses the
+  same OS service Windows Installer, Chocolatey, and Windows Update
+  use to figure out which processes hold the install-dir files. Before
+  the copy step: `RmShutdown` sends WM_CLOSE (then TerminateProcess as
+  fallback) to every non-critical holder, so Plith stragglers and
+  Explorer preview handlers close cleanly on their own. On terminal
+  failure: `RmGetList` names the surviving holders (Norton, System,
+  Windows Defender — whatever RM sees) and the error message quotes
+  them verbatim — the user finally sees "Norton has it open" instead
+  of guessing at a mystery "some file is locked" wall.
 
 ## [0.1.4] - 2026-09-01
 

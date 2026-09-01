@@ -102,6 +102,14 @@ public sealed class InstallOrchestrator
         // of continuing into a guaranteed UnauthorizedAccessException down the line.
         EnsurePlithIsClosed();
 
+        // Ask Windows Restart Manager to shut down any NON-critical process still
+        // holding the existing install-dir files. RM sends WM_CLOSE first, then
+        // TerminateProcess; it skips services and critical processes (Norton,
+        // Windows Defender, System). That's exactly what we need — Plith stragglers
+        // and Explorer preview handlers get closed cleanly, AV keeps running but at
+        // least stops being the mysterious "unknown holder".
+        AskRestartManagerToReleaseInstallDir();
+
         // Windows keeps a memory-mapped view of a .NET process's DLLs alive briefly
         // after the process exits; overwriting them immediately trips
         // UnauthorizedAccessException even though the .exe is gone. AV scanning on
@@ -117,6 +125,35 @@ public sealed class InstallOrchestrator
 
         if (_vm.AutoStartEnabled) _registry.WriteAutoStart(InstalledExe);
         else _registry.RemoveAutoStart();
+    }
+
+    private void AskRestartManagerToReleaseInstallDir()
+    {
+        if (!Directory.Exists(InstallDir)) return;
+        try
+        {
+            // Cap at 60 files — Restart Manager has a fixed cap on registered
+            // resources per session and the full Plith install has ~30 files anyway.
+            var existing = new List<string>();
+            foreach (var file in Directory.EnumerateFiles(InstallDir, "*", SearchOption.AllDirectories))
+            {
+                existing.Add(file);
+                if (existing.Count >= 60) break;
+            }
+            if (existing.Count == 0) return;
+
+            var holders = RestartManagerService.CloseHolders(existing);
+            if (holders.Count > 0)
+                _log.Info($"Install: Restart Manager identified holders: {string.Join(", ", holders)}");
+            else
+                _log.Info("Install: Restart Manager: no processes held install files");
+        }
+        catch (Exception ex)
+        {
+            // RM is a best-effort optimisation. If the API itself fails (missing
+            // dll, permission fluke) we still fall through to the retry loop.
+            _log.Warn($"Install: Restart Manager query failed: {ex.Message}");
+        }
     }
 
     // Multi-round kill with verification, up to ~15 s total. UIAccess-signed Plith
@@ -308,7 +345,12 @@ public sealed class InstallOrchestrator
         }
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
-            throw new InstallLockedFileException(target, lastError ?? ex);
+            // Enrich the terminal error with the actual holders as reported by
+            // Windows Restart Manager. Users go from "some file is locked" to
+            // "Norton has it open" — enough to act on without guessing.
+            IReadOnlyList<string> holders = Array.Empty<string>();
+            try { holders = RestartManagerService.EnumerateHolders(new[] { target }); } catch { }
+            throw new InstallLockedFileException(target, holders, lastError ?? ex);
         }
     }
 

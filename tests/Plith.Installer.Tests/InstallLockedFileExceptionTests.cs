@@ -14,6 +14,38 @@ public class InstallLockedFileExceptionTests
     }
 
     [Fact]
+    public void Message_NamesSingleHolder_WhenRestartManagerFoundOne()
+    {
+        // Restart Manager reported one process holding the file — the message should
+        // quote it verbatim so the user sees who to close instead of guessing.
+        var ex = new InstallLockedFileException(
+            @"C:\Program Files\Plith\Plith.exe",
+            new[] { "Norton Security" },
+            new IOException("test"));
+        Assert.Contains("'Norton Security' has it open", ex.Message, StringComparison.Ordinal);
+        Assert.Equal(new[] { "Norton Security" }, ex.Holders);
+    }
+
+    [Fact]
+    public void Message_ListsMultipleHolders()
+    {
+        var ex = new InstallLockedFileException(
+            @"C:\Program Files\Plith\Plith.exe",
+            new[] { "Norton Security", "Windows Explorer" },
+            new IOException("test"));
+        Assert.Contains("Norton Security, Windows Explorer", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void Message_FallsBackToGenericHolderClause_WhenListIsEmpty()
+    {
+        // RM couldn't reach the OS or nothing was reported. The message should still
+        // hand the user their fix path — no naked "unknown" wording.
+        var ex = new InstallLockedFileException(@"x", Array.Empty<string>(), new IOException("test"));
+        Assert.Contains("Plith is probably still holding it", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public void Message_SurfacesTrayExitHint()
     {
         // Users always land here because they left Plith running. Make sure the
