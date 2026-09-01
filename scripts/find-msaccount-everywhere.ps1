@@ -23,6 +23,8 @@ function Report([string]$location, [string]$detail) {
     if ($detail) { Write-Host "       $detail" -ForegroundColor DarkYellow }
 }
 
+function Skipped([string]$m) { Write-Host "  ..$m" -ForegroundColor DarkGray }
+
 # 1. OneAuth accounts subdir
 Write-Host ""
 Write-Host "=== OneAuth accounts ===" -ForegroundColor Cyan
@@ -184,8 +186,6 @@ if (Test-Path $peh) {
 } else {
     Skipped "PeopleExperienceHost package absent"
 }
-
-function Skipped([string]$m) { Write-Host "  ..$m" -ForegroundColor DarkGray }
 
 # 12. IdentityCRL Immersive (deep MSA token cache)
 Write-Host ""
