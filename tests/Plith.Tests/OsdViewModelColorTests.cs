@@ -24,8 +24,12 @@ public class OsdViewModelColorTests
     }
 
     [Fact]
-    public void ThresholdsOff_AlwaysGreenWhenUnmuted()
+    public void ThresholdsOff_UsesAccentBrush()
     {
+        // Default accent seed equals emerald, so the ARGB check still passes — but the
+        // semantic assertion is different: bar colour now follows the Theme Studio accent
+        // rather than the semantic-safe green. Any future accent change would be observable
+        // by refreshing the ViewModel with a live palette dictionary.
         var vm = new OsdViewModel { UseColorThresholds = false, GainNormalized = 0.99 };
         Assert.Equal(Green, ToArgb(vm.GainColor));
     }

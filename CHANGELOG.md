@@ -27,9 +27,11 @@ All notable changes to Plith are documented here. Format loosely follows
   HSL math tuned per surface — brighter on dark backgrounds, darker on
   light ones with a luminance clamp so bright accents (like Praxvon
   Lime) stay readable on white cards. The OSD's card background stays
-  palette-driven so contrast over games never breaks, and
-  `OsdGainGreen` — the "safe volume" threshold colour — is intentionally
-  unchanged so the volume-bar semantics stay legible across every accent.
+  palette-driven so contrast over games never breaks. With colour
+  thresholds off (the default), the OSD volume bar itself follows the
+  picked accent; with thresholds on, the semantic green / amber / red
+  set kicks in unchanged so the loudness cue keeps its meaning across
+  every accent.
 - **`config.ini` gains an `[Appearance]` section** with `AccentThemeId`
   and (optionally) `CustomAccentColor`. Unknown ids from newer builds
   survive a round-trip without being coerced to Emerald so downgrades

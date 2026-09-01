@@ -81,16 +81,18 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         }
     }
 
-    // Cached threshold brush references resolved from the active OSD palette ResourceDictionary.
+    // Cached brush references resolved from the active OSD palette ResourceDictionary.
     // The XAML brushes themselves are shared instances; we cache the refs so GainColor stays
     // allocation-free in the hot path. RefreshThresholdBrushes() must be called whenever the
-    // theme palette swaps (the ThemeService raises ThemeApplied for that).
+    // theme palette or the Theme Studio accent swaps (the ThemeService raises ThemeApplied
+    // for both).
     //
-    // Seeds match the dark-theme OsdGain* keys so unit tests (which run without an
-    // Application.Current and therefore can't resolve from XAML resources) still observe the
-    // expected colour-mapping logic. In production these are overwritten on the first
+    // Seeds match the dark-theme keys so unit tests (which run without an Application.Current
+    // and therefore can't resolve from XAML resources) still observe the expected colour-
+    // mapping logic. In production these are overwritten on the first
     // RefreshThresholdBrushes() call from the OsdViewModel ctor.
     private Brush _brushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
+    private Brush _brushAccent = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
     private Brush _brushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
     private Brush _brushAmber = FreezeBrush(Color.FromRgb(0xF5, 0xC2, 0x42));
     private Brush _brushRed = FreezeBrush(Color.FromRgb(0xE5, 0x4B, 0x4B));
@@ -102,12 +104,15 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         return b;
     }
 
-    /// <summary>Re-resolves the four threshold brushes from <see cref="Application.Current"/>'s
-    /// resources and fires <see cref="PropertyChanged"/> for <c>GainColor</c>. Call this after
-    /// a theme palette swap so the volume bar picks up the new variant.</summary>
+    /// <summary>Re-resolves every OSD-facing brush (accent + threshold set) from
+    /// <see cref="Application.Current"/>'s resources and fires <see cref="PropertyChanged"/>
+    /// for <c>GainColor</c>. Call this after a theme palette swap OR an accent change so
+    /// the volume bar picks up the new tint. Named "Threshold" for historical reasons;
+    /// accent is included here because the same event triggers both refreshes.</summary>
     public void RefreshThresholdBrushes()
     {
         _brushMuted = ResolveBrush("OsdGainMuted", _brushMuted);
+        _brushAccent = ResolveBrush("OsdAccent", _brushAccent);
         _brushGreen = ResolveBrush("OsdGainGreen", _brushGreen);
         _brushAmber = ResolveBrush("OsdGainAmber", _brushAmber);
         _brushRed = ResolveBrush("OsdGainRed", _brushRed);
@@ -126,7 +131,13 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         get
         {
             if (_muted) return _brushMuted;
-            if (!_useColorThresholds) return _brushGreen;
+            // Thresholds OFF (the default): the volume bar is the OSD's headline surface,
+            // so it takes whichever accent the user picked in the Theme Studio. That's
+            // what makes the picker feel real — before this, the bar stayed emerald no
+            // matter what preset was selected.
+            if (!_useColorThresholds) return _brushAccent;
+            // Thresholds ON: semantic loudness cue — green / amber / red — trumps accent
+            // because the safety signal is the whole point of the mode.
             return _gainNormalized switch
             {
                 // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
