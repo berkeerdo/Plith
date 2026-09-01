@@ -130,7 +130,83 @@ try {
     }
 } catch {}
 
-# 9. Local AppData search (targeted files, not full recursive)
+# 9. MSA Broker Plugin (separate from AAD broker — this is the personal
+#    @hotmail.com account broker specifically, likely holdout source)
+Write-Host ""
+Write-Host "=== MSA Broker Plugin (Microsoft.MicrosoftAccountBrokerPlugin) ===" -ForegroundColor Cyan
+$msaBroker = "$env:LOCALAPPDATA\Packages\Microsoft.MicrosoftAccountBrokerPlugin_cw5n1h2txyewy"
+if (Test-Path $msaBroker) {
+    Get-ChildItem $msaBroker -Recurse -File -EA 0 | ForEach-Object {
+        try {
+            $b = [IO.File]::ReadAllBytes($_.FullName)
+            $t1 = [Text.Encoding]::Unicode.GetString($b)
+            $t2 = [Text.Encoding]::UTF8.GetString($b)
+            if (($t1 -match [regex]::Escape($Email)) -or ($t2 -match [regex]::Escape($Email))) {
+                Report $_.FullName "MSA broker file references email"
+            }
+        } catch {}
+    }
+} else {
+    Skipped "MSA broker package folder absent"
+}
+
+# 10. WinRT PasswordVault (separate from Credential Manager — different API,
+#     survives cmdkey /delete because it's not in the same store)
+Write-Host ""
+Write-Host "=== WinRT PasswordVault ===" -ForegroundColor Cyan
+try {
+    Add-Type -AssemblyName Windows.Security -EA SilentlyContinue
+    [Windows.Security.Credentials.PasswordVault, Windows.Security.Credentials, ContentType=WindowsRuntime] > $null
+    $vault = New-Object Windows.Security.Credentials.PasswordVault
+    $all = $vault.RetrieveAll()
+    foreach ($c in $all) {
+        if (($c.UserName -match [regex]::Escape($Email)) -or ($c.Resource -match [regex]::Escape($Email))) {
+            Report "PasswordVault" "resource=$($c.Resource) user=$($c.UserName)"
+        }
+    }
+} catch {
+    Skipped "PasswordVault API unavailable: $($_.Exception.Message)"
+}
+
+# 11. PeopleExperienceHost (People app + Start Menu account tile source)
+Write-Host ""
+Write-Host "=== PeopleExperienceHost ===" -ForegroundColor Cyan
+$peh = "$env:LOCALAPPDATA\Packages\Microsoft.Windows.PeopleExperienceHost_cw5n1h2txyewy"
+if (Test-Path $peh) {
+    Get-ChildItem $peh -Recurse -File -EA 0 | Select-Object -First 200 | ForEach-Object {
+        try {
+            $raw = Get-Content $_.FullName -Raw -EA 0 -TotalCount 200
+            if ($raw -and ($raw -match [regex]::Escape($Email))) {
+                Report $_.FullName "PeopleExperienceHost file references email"
+            }
+        } catch {}
+    }
+} else {
+    Skipped "PeopleExperienceHost package absent"
+}
+
+function Skipped([string]$m) { Write-Host "  ..$m" -ForegroundColor DarkGray }
+
+# 12. IdentityCRL Immersive (deep MSA token cache)
+Write-Host ""
+Write-Host "=== IdentityCRL Immersive tokens ===" -ForegroundColor Cyan
+$immersive = 'HKCU:\Software\Microsoft\IdentityCRL\Immersive'
+if (Test-Path $immersive) {
+    Get-ChildItem $immersive -Recurse -EA 0 | ForEach-Object {
+        if ($_.Name -match [regex]::Escape($Email)) {
+            Report $_.Name "IdentityCRL Immersive subkey path"
+        }
+        $p = Get-ItemProperty $_.PSPath -EA 0
+        if ($p) {
+            $blob = "$($p | Out-String)"
+            if ($blob -match [regex]::Escape($Email)) {
+                Report $_.Name "IdentityCRL Immersive subkey value"
+            }
+        }
+    }
+}
+
+# 13. Local AppData search (targeted files, not full recursive)
 Write-Host ""
 Write-Host "=== AppData targeted config files ===" -ForegroundColor Cyan
 $targets = @(
