@@ -15,7 +15,11 @@
 #                                    even elevated admin from a plain Remove-Item)
 #   4. AccountPicture registry      HKLM:\...\AccountPicture\Users\<SID>\Image*
 #   5. IdentityStore\Cache          HKLM:\...\IdentityStore\Cache\<SID>\<providers>
-#   6. Start Menu / Shell hosts     killed so the tile rebuilds from clean state
+#   6. IdentityCRL StoredIdentities HKCU:\...\IdentityCRL\StoredIdentities\<email>
+#      + WAM broker plugin state    (this is what shows the account in Settings >
+#                                    Email & accounts with a greyed-out Remove
+#                                    button. Kill it and the entry vanishes.)
+#   7. Start Menu / Shell hosts     killed so the tile rebuilds from clean state
 #
 # Layers NOT touched:
 #   - Windows sign-in account       your local sari\sari stays untouched
@@ -170,9 +174,88 @@ if (Test-Path $idCache) {
 }
 
 # ---------------------------------------------------------------------------
-# 6. Restart Start Menu + Explorer so the tile rebuilds from clean state
+# 6. IdentityCRL StoredIdentities + WAM broker plugin registration
+#    This is the layer that keeps the "greyed-out Remove button" showing in
+#    Settings > Email & accounts. When a Microsoft account is registered as a
+#    Windows-level identity (via 'Add a Microsoft account'), it lives under
+#    HKCU:\Software\Microsoft\IdentityCRL\StoredIdentities\<email>\ and in the
+#    WAM broker plugin's own state. Settings reads from those places and
+#    refuses to remove entries it thinks are load-bearing. Nuking the entry
+#    de-registers the account entirely — Windows forgets it and the Settings
+#    row disappears.
 # ---------------------------------------------------------------------------
-Step "Layer 6/6 - Restart shell hosts"
+Step "Layer 6/7 - IdentityCRL / WAM registration"
+$idcrl = "HKCU:\Software\Microsoft\IdentityCRL\StoredIdentities\$Email"
+if (Test-Path $idcrl) {
+    if ($DryRun) { Warn "would delete $idcrl" }
+    else {
+        try {
+            # Back up to Desktop first — this is a system registration, prudent to keep a copy.
+            $bakFile = Join-Path $env:USERPROFILE "Desktop\IdentityCRL-$Email-$(Get-Date -Format 'yyyyMMdd-HHmmss').reg"
+            & reg export "HKCU\Software\Microsoft\IdentityCRL\StoredIdentities\$Email" $bakFile /y 2>&1 | Out-Null
+            OK "backed up to $bakFile"
+            Remove-Item $idcrl -Recurse -Force -EA Stop
+            OK "deleted $idcrl"
+        } catch {
+            Warn "couldn't delete $idcrl : $($_.Exception.Message)"
+        }
+    }
+} else {
+    Skipped "no StoredIdentities entry at $idcrl"
+}
+
+# Also purge the WAM broker plugin's per-account state — a second place the
+# Settings UI reads. Files are named by an internal account id, so we grep
+# them for the email and delete matches.
+$wamRoot = "$env:LOCALAPPDATA\Packages\Microsoft.AAD.BrokerPlugin_cw5n1h2txyewy\AC\TokenBroker\Accounts"
+if (Test-Path $wamRoot) {
+    $wamHits = @()
+    Get-ChildItem $wamRoot -File -EA 0 | ForEach-Object {
+        try {
+            $t = [Text.Encoding]::Unicode.GetString([IO.File]::ReadAllBytes($_.FullName))
+            if ($t -match [regex]::Escape($Email)) { $wamHits += $_.FullName }
+        } catch {}
+    }
+    if ($wamHits.Count -eq 0) {
+        Skipped "no WAM broker files reference '$Email'"
+    } else {
+        foreach ($f in $wamHits) {
+            if ($DryRun) { Warn "would delete $f" }
+            else {
+                try { Remove-Item $f -Force -EA Stop; OK "deleted WAM file $(Split-Path $f -Leaf)" }
+                catch { Warn "couldn't delete $f : $($_.Exception.Message)" }
+            }
+        }
+    }
+}
+
+# Also purge Xbox / Store cached account bindings (they hold "primary" claim
+# on Microsoft accounts and are why the Remove button greys out).
+$storeCaches = @(
+    "$env:LOCALAPPDATA\Packages\Microsoft.WindowsStore_8wekyb3d8bbwe\LocalCache\Local\Microsoft\WindowsStore\StoreAcct.json",
+    "$env:LOCALAPPDATA\Microsoft\XboxLive\XLIRegistry.dat"
+)
+foreach ($p in $storeCaches) {
+    if (Test-Path $p) {
+        try {
+            $content = Get-Content $p -Raw -EA Stop
+            if ($content -match [regex]::Escape($Email)) {
+                if ($DryRun) { Warn "would clear $p (references '$Email')" }
+                else {
+                    Remove-Item $p -Force -EA Stop
+                    OK "cleared Store/Xbox cache $p"
+                }
+            } else {
+                Skipped "Store/Xbox cache $p exists but doesn't reference '$Email'"
+            }
+        } catch {}
+    }
+}
+
+# ---------------------------------------------------------------------------
+# 7. Restart Start Menu + Explorer so the tile rebuilds from clean state
+# ---------------------------------------------------------------------------
+Step "Layer 7/7 - Restart shell hosts"
 if ($SkipStartMenuKick) {
     Skipped "skipped by -SkipStartMenuKick"
 } elseif ($DryRun) {
@@ -188,23 +271,22 @@ if ($SkipStartMenuKick) {
 
 Write-Host ""
 Write-Host "==================================================" -ForegroundColor Yellow
-Write-Host "  DONE. Two manual UI steps still needed:" -ForegroundColor Yellow
+Write-Host "  DONE. One manual step still needed:" -ForegroundColor Yellow
 Write-Host "==================================================" -ForegroundColor Yellow
 Write-Host ""
-Write-Host "  A) The Settings > Email & accounts entry for '$Email' may STILL"
-Write-Host "     show up because Windows registered it via the 'Add a Microsoft"
-Write-Host "     account' flow, which lives in the account database we can't"
-Write-Host "     surgically edit from PowerShell without breaking anything."
+Write-Host "  Restart Windows one full time. The Start Menu account tile and"
+Write-Host "  the Settings > Email & accounts list both cache their entries"
+Write-Host "  in memory; the restart clears that cache and Windows re-reads"
+Write-Host "  from the (now-clean) registry / disk state."
 Write-Host ""
-Write-Host "     Manual: Settings > Accounts > Email & accounts"
-Write-Host "             -> click $Email -> if 'Remove' greyed / missing:"
-Write-Host "               1. change 'Sign in options' to"
-Write-Host "                  'All apps need to ask me to use this account'"
-Write-Host "               2. reload the page (F5 the Settings app)"
-Write-Host "               3. 'Remove' should now appear -> Remove"
+Write-Host "  After restart, verify:"
+Write-Host "    - Start > click your avatar (bottom left of Start menu):"
+Write-Host "      should show 'listlessem@hotmail.com' or a default silhouette"
+Write-Host "    - Settings > Accounts > Email & accounts:"
+Write-Host "      '$Email' should be gone entirely"
 Write-Host ""
-Write-Host "  B) Restart Windows one full time. The Start Menu account tile"
-Write-Host "     picture cache lives in a couple of places that only refresh"
-Write-Host "     on next login. After the restart the tile should show the"
-Write-Host "     default silhouette + your listlessem@hotmail.com account."
+Write-Host "  If '$Email' is somehow STILL there after restart, run this"
+Write-Host "  script again — Windows may have partially re-populated from a"
+Write-Host "  running app that had a live token. Sign out of that app first"
+Write-Host "  (Store, Xbox, Teams, Outlook) then re-run."
 Write-Host ""
