@@ -2,27 +2,34 @@
 # defense-in-depth guardrails. Safer than the naive "exclude everything dev"
 # approach.
 #
-# What we exclude (low risk, high scan cost):
+# What we exclude — folders (medium-risk items included per user preference for
+# lower scan overhead; user accepts the trade-off, ASR rules below compensate):
 #   - C:\Projects                — your own repos; only trusted sources cloned here
 #   - %USERPROFILE%\.dotnet      — SDK install cache (Microsoft-signed content)
 #   - %USERPROFILE%\.nuget       — NuGet package cache (signed feed)
+#   - %USERPROFILE%\.npm         — npm cache (supply chain risk — real 2018-2024
+#                                  compromises; ASR rules + eventual npm audit
+#                                  are the mitigation)
 #   - %LOCALAPPDATA%\Temp\.net   — .NET single-file self-extract stage
 #   - %LOCALAPPDATA%\NuGet       — NuGet's second cache location
+#   - %LOCALAPPDATA%\Programs\Microsoft VS Code   IDE + extensions (medium risk:
+#                                                 malicious extension attack path)
+#   - %LOCALAPPDATA%\JetBrains                    Same
 #
 # What we exclude by PROCESS (compile-only, no living-off-the-land value):
 #   - dotnet.exe / MSBuild.exe / VBCSCompiler.exe   .NET build pipeline
 #   - node.exe                                       Node runtime (bundlers, tests)
 #
-# What we DELIBERATELY DO NOT exclude:
-#   - powershell.exe, pwsh.exe   PowerShell is the #1 attacker toolkit. Defender's
-#                                behavioral engine catches malicious PS activity;
-#                                excluding this process disables that shield.
-#   - Code.exe, devenv.exe       IDE extensions self-update through here. A single
-#                                malicious extension would then land unscanned.
-#   - %USERPROFILE%\.npm         npm's supply chain has real compromise history;
-#                                scanning package extract is worth the overhead.
-#   - %LOCALAPPDATA%\Programs\Microsoft VS Code     IDE binaries + extensions.
-#   - %LOCALAPPDATA%\JetBrains                      Same.
+# What we DELIBERATELY DO NOT exclude even at user request:
+#   - powershell.exe, pwsh.exe   PowerShell is the #1 attacker toolkit — even
+#                                after ASR, excluding this process disables
+#                                Defender's behavioral engine on the vector
+#                                attackers use most. Non-negotiable.
+#   - Code.exe, devenv.exe       IDE extensions self-update through here.
+#                                Excluding the PROCESS is worse than excluding
+#                                the folder: everything IDE reads/writes goes
+#                                unscanned. Folder exclusion above is the
+#                                more surgical trade the user opted into.
 #
 # We also enable a set of Defender Attack Surface Reduction (ASR) rules that
 # compensate for the exclusions above by blocking common malware behaviors
@@ -56,8 +63,11 @@ $folders = @(
     'C:\Projects',
     "$env:USERPROFILE\.dotnet",
     "$env:USERPROFILE\.nuget",
+    "$env:USERPROFILE\.npm",
     "$env:LOCALAPPDATA\Temp\.net",
-    "$env:LOCALAPPDATA\NuGet"
+    "$env:LOCALAPPDATA\NuGet",
+    "$env:LOCALAPPDATA\Programs\Microsoft VS Code",
+    "$env:LOCALAPPDATA\JetBrains"
 )
 
 # ---------------------------------------------------------------------------
