@@ -40,7 +40,7 @@ public partial class App : Application
         var log = new LogService();
         var vm = new InstallerViewModel();
         var cert = new CertService();
-        var shortcut = new ShortcutService();
+        var shortcut = new ShortcutService(log);
         var registry = new RegistryService();
         var orchestrator = new InstallOrchestrator(log, cert, shortcut, registry, vm);
 
