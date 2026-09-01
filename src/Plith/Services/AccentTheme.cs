@@ -16,6 +16,18 @@ public sealed record AccentPreset(string Id, string DisplayName, Color BaseColor
 /// The names map 1:1 to the palette dictionary keys the theme service overrides.</summary>
 public sealed record AccentDerived(Color Accent, Color Hover, Color Pressed, Color Glow);
 
+/// <summary>Surface tones derived from a base accent so the entire OSD card can be
+/// tinted from the picked colour instead of only its bar. The alpha channel is
+/// applied downstream by the theme service — this record carries opaque colours,
+/// and ThemeService wraps them with the right F0 / 40 alpha to match the existing
+/// gradient / track semi-transparency.</summary>
+public sealed record OsdSurfaceDerived(
+    Color SurfaceStart,
+    Color SurfaceEnd,
+    Color Border,
+    Color TrackBg,
+    Color Divider);
+
 /// <summary>
 /// Palette-independent accent registry and derivation math. The Settings picker
 /// stores an id ("emerald", "lime", ..., or "custom" plus a hex string) and the
@@ -88,6 +100,41 @@ public static class AccentTheme
             : HslToRgb(h, s, System.Math.Max(0.0, l - 0.12));
         var glow = Color.FromArgb(0x1A, accent.R, accent.G, accent.B);
         return new AccentDerived(accent, hover, pressed, glow);
+    }
+
+    /// <summary>
+    /// Derives the tinted OSD card surfaces from a base accent so the whole overlay
+    /// feels themed, not just the volume bar. Dark surfaces sit at L≈0.07-0.11 so
+    /// the OSD stays readable over exclusive-fullscreen games; light surfaces sit
+    /// at L≈0.90-0.94 so they stay legible on bright content. Saturation is damped
+    /// so loud primaries (lime, magenta) don't turn the whole card into a beacon —
+    /// the bar itself still sits at the full accent tone for contrast.
+    /// </summary>
+    public static OsdSurfaceDerived DeriveOsdSurfaces(Color baseColor, bool isDarkBg)
+    {
+        var (h, s, _) = RgbToHsl(baseColor);
+
+        if (isDarkBg)
+        {
+            // Darker surfaces tolerate more saturation than lighter ones without
+            // shouting; still cap so a highly saturated pick reads as a tint, not paint.
+            double surfSat = System.Math.Min(s, 0.55);
+            return new OsdSurfaceDerived(
+                SurfaceStart: HslToRgb(h, surfSat, 0.11),
+                SurfaceEnd:   HslToRgb(h, surfSat, 0.07),
+                Border:       HslToRgb(h, surfSat, 0.22),
+                TrackBg:      HslToRgb(h, surfSat, 0.28),
+                Divider:      HslToRgb(h, surfSat, 0.20));
+        }
+        // Light surfaces bleach out fast — hold saturation lower so the tint stays
+        // "a note of colour" instead of turning into pastel highlighter.
+        double lightSat = System.Math.Min(s, 0.35);
+        return new OsdSurfaceDerived(
+            SurfaceStart: HslToRgb(h, lightSat, 0.95),
+            SurfaceEnd:   HslToRgb(h, lightSat, 0.90),
+            Border:       HslToRgb(h, lightSat, 0.78),
+            TrackBg:      HslToRgb(h, lightSat, 0.84),
+            Divider:      HslToRgb(h, lightSat, 0.82));
     }
 
     /// <summary>Parses "#RRGGBB" / "RRGGBB" / "#AARRGGBB". Returns <paramref name="fallback"/>

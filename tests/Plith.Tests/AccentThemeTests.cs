@@ -135,6 +135,52 @@ public class AccentThemeTests
     }
 
     [Fact]
+    public void DeriveOsdSurfaces_DarkBg_KeepsSurfacesInDarkRange()
+    {
+        // Dark OSD surfaces must stay dark enough to read over exclusive-fullscreen
+        // games. Cap at L <= 0.15 for the surface stops so a bright pick doesn't
+        // wash out gameplay.
+        foreach (var preset in AccentTheme.Presets)
+        {
+            var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDarkBg: true);
+            var (_, _, lStart) = AccentTheme.RgbToHsl(osd.SurfaceStart);
+            var (_, _, lEnd) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
+            Assert.True(lStart <= 0.15 + 0.001,
+                $"{preset.Id} SurfaceStart luminance {lStart:F3} exceeded 0.15 on dark bg");
+            Assert.True(lEnd <= 0.15 + 0.001,
+                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} exceeded 0.15 on dark bg");
+        }
+    }
+
+    [Fact]
+    public void DeriveOsdSurfaces_LightBg_KeepsSurfacesInLightRange()
+    {
+        foreach (var preset in AccentTheme.Presets)
+        {
+            var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDarkBg: false);
+            var (_, _, lStart) = AccentTheme.RgbToHsl(osd.SurfaceStart);
+            var (_, _, lEnd) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
+            Assert.True(lStart >= 0.85 - 0.001,
+                $"{preset.Id} SurfaceStart luminance {lStart:F3} below 0.85 on light bg");
+            Assert.True(lEnd >= 0.85 - 0.001,
+                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} below 0.85 on light bg");
+        }
+    }
+
+    [Fact]
+    public void DeriveOsdSurfaces_PreservesAccentHue()
+    {
+        // Sky (#7AA2F7, hue ~220) tinted for a dark card must still read as blue-ish —
+        // i.e. the surface hue is close to the base hue, not shifted into a different
+        // colour family by the desaturation clamp.
+        var sky = Color.FromRgb(0x7A, 0xA2, 0xF7);
+        var (baseH, _, _) = AccentTheme.RgbToHsl(sky);
+        var osd = AccentTheme.DeriveOsdSurfaces(sky, isDarkBg: true);
+        var (surfH, _, _) = AccentTheme.RgbToHsl(osd.SurfaceStart);
+        Assert.InRange(surfH, baseH - 2, baseH + 2);
+    }
+
+    [Fact]
     public void HslToRgb_ZeroSaturation_IsAchromaticGrey()
     {
         // Regression: the achromatic short-circuit path was easy to skip and would

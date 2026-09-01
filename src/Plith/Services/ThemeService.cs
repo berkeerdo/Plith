@@ -1,7 +1,6 @@
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
-using System.Windows.Threading;
 using Microsoft.Win32;
 
 namespace Plith.Services;
@@ -35,6 +34,18 @@ public sealed class ThemeService : IDisposable
     private const string KeyAccentPressed = "AccentPressed";
     private const string KeyAccentGlow = "AccentGlow";
     private const string KeyOsdAccent = "OsdAccent";
+    // OSD surface keys — overriding these tints the whole card, not just the bar.
+    private const string KeyOsdSurface = "OsdSurfaceBrush";
+    private const string KeyOsdBorder = "OsdBorder";
+    private const string KeyOsdTrackBg = "OsdTrackBg";
+    private const string KeyOsdDivider = "OsdDivider";
+
+    // Alpha channels match the values the base OsdPalette.*.xaml files already use, so
+    // swapping in a tinted brush keeps the same drop-shadow-over-game translucency the
+    // OSD had before the Theme Studio landed.
+    private const byte OsdSurfaceAlpha = 0xF0;
+    private const byte OsdTrackAlpha = 0x40;
+    private const byte OsdDividerAlpha = 0x40;
 
     private readonly Application _app;
     private readonly SettingsService _settings;
@@ -119,6 +130,7 @@ public sealed class ThemeService : IDisposable
         var s = _settings.Current;
         var baseColor = AccentTheme.ResolveBase(s.AccentThemeId, s.CustomAccentColor);
         var derived = AccentTheme.Derive(baseColor, _isEffectiveDark);
+        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, _isEffectiveDark);
 
         var dict = new ResourceDictionary
         {
@@ -126,9 +138,15 @@ public sealed class ThemeService : IDisposable
             [KeyAccentHover]   = FrozenBrush(derived.Hover),
             [KeyAccentPressed] = FrozenBrush(derived.Pressed),
             [KeyAccentGlow]    = FrozenBrush(derived.Glow),
-            // OSD accent gets the same base colour — OSD bg stays palette-driven so
-            // contrast is already handled by the OsdPalette.* files.
+            // OSD accent uses the raw derived accent (bright) so the volume bar
+            // pops off the tinted card behind it.
             [KeyOsdAccent]     = FrozenBrush(derived.Accent),
+            // Whole-card tint. The surface is a two-stop gradient so it keeps the
+            // vertical modeling the original palette had, only hue-shifted.
+            [KeyOsdSurface]    = BuildOsdSurfaceBrush(osd),
+            [KeyOsdBorder]     = FrozenBrush(osd.Border),
+            [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(osd.TrackBg, OsdTrackAlpha)),
+            [KeyOsdDivider]    = FrozenBrush(WithAlpha(osd.Divider, OsdDividerAlpha)),
         };
 
         var merged = _app.Resources.MergedDictionaries;
@@ -136,6 +154,20 @@ public sealed class ThemeService : IDisposable
         merged.Add(dict);
         _accentOverride = dict;
     }
+
+    private static LinearGradientBrush BuildOsdSurfaceBrush(OsdSurfaceDerived s)
+    {
+        // Vertical top-to-bottom gradient, matching the original OsdSurfaceBrush's
+        // StartPoint / EndPoint. Alpha F0 keeps the same subtle translucency over games.
+        var brush = new LinearGradientBrush(
+            WithAlpha(s.SurfaceStart, OsdSurfaceAlpha),
+            WithAlpha(s.SurfaceEnd, OsdSurfaceAlpha),
+            new Point(0, 0), new Point(0, 1));
+        brush.Freeze();
+        return brush;
+    }
+
+    private static Color WithAlpha(Color c, byte a) => Color.FromArgb(a, c.R, c.G, c.B);
 
     private static SolidColorBrush FrozenBrush(Color c)
     {

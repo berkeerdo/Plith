@@ -21,17 +21,25 @@ All notable changes to Plith are documented here. Format loosely follows
 - **`ThemeService` now stacks an accent-override `ResourceDictionary` at
   the tail of `Application.Resources.MergedDictionaries` after every
   palette swap.** The dark / light palettes continue to swap the way
-  they did in 0.1.3; the override just replaces `Accent`, `AccentHover`,
-  `AccentPressed`, `AccentGlow` (Settings) and `OsdAccent` (OSD) with
-  brushes derived from the picked colour. Hover / pressed variants use
-  HSL math tuned per surface — brighter on dark backgrounds, darker on
-  light ones with a luminance clamp so bright accents (like Praxvon
-  Lime) stay readable on white cards. The OSD's card background stays
-  palette-driven so contrast over games never breaks. With colour
-  thresholds off (the default), the OSD volume bar itself follows the
-  picked accent; with thresholds on, the semantic green / amber / red
-  set kicks in unchanged so the loudness cue keeps its meaning across
-  every accent.
+  they did in 0.1.3; the override replaces the four Settings accent
+  brushes (`Accent`, `AccentHover`, `AccentPressed`, `AccentGlow`) plus
+  the OSD's `OsdAccent`, `OsdSurfaceBrush`, `OsdBorder`, `OsdTrackBg`,
+  and `OsdDivider` with brushes derived from the picked colour.
+- **The entire OSD card is now tinted from the picked accent** — a deep
+  hue-shifted dark on the dark theme (L≈0.07-0.11, capped saturation so
+  loud primaries like Praxvon Lime read as a tint rather than paint), a
+  pale tint on the light theme. Semi-transparency stays where it was
+  (F0 on the surface gradient) so the overlay still floats over games
+  the way it did before. The volume bar sits at the full accent tone
+  so it pops off the tinted card.
+- **Hover / pressed variants for Settings buttons use HSL math tuned
+  per surface** — brighter on dark backgrounds, darker on light ones,
+  with a luminance clamp so bright accents stay readable on white
+  cards.
+- **Volume bar routing:** with colour thresholds off (the default), the
+  bar follows the picked accent; with thresholds on, the semantic
+  green / amber / red set kicks in unchanged so the loudness cue keeps
+  its meaning across every accent.
 - **`config.ini` gains an `[Appearance]` section** with `AccentThemeId`
   and (optionally) `CustomAccentColor`. Unknown ids from newer builds
   survive a round-trip without being coerced to Emerald so downgrades
