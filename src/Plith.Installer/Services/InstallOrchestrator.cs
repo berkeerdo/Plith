@@ -157,15 +157,20 @@ public sealed class InstallOrchestrator
     }
 
     // Multi-round kill with verification, up to ~15 s total. UIAccess-signed Plith
-    // running from Program Files takes longer to unwind than a plain user-mode
-    // process — the tray plus WinRT SMTC finalizer plus the WH_KEYBOARD_LL hook
-    // each need their own shutdown steps, and a Norton scan running concurrently
-    // can extend WaitForExit past a naive 5 s cap. If a process refuses to die
-    // (permissions, protected handle) or a new one spawns in between (the tray
-    // auto-restart edge case), we surface a clear error that names Plith and points
-    // the user at the tray-Exit action.
+    // running from Program Files needs SeDebugPrivilege for a normal admin token to
+    // terminate it — Process.Kill routes through the .NET runtime which does NOT
+    // enable that privilege by default and reports "Access is denied" for the
+    // whole tree even though the caller is elevated. We escalate in three ways:
+    //
+    //   1. First round: plain Process.Kill with SeDebugPrivilege enabled process-wide.
+    //   2. If that still fails: taskkill /F /IM Plith.exe /T — the Windows built-in
+    //      that uses a slightly different privilege path and often wins where the
+    //      managed API loses on UIAccess targets.
+    //   3. Final round with the same escalation. If a process STILL survives, we
+    //      surface PlithStillRunningException naming the tray-Exit action.
     private void EnsurePlithIsClosed()
     {
+        EnableSeDebugPrivilege();
         const int rounds = 3;
         int survivingCount = 0;
         for (int round = 1; round <= rounds; round++)
@@ -183,9 +188,7 @@ public sealed class InstallOrchestrator
                 }
                 catch (Exception ex)
                 {
-                    // Log but keep trying the remaining processes — a partial kill
-                    // is still better than skipping every subsequent one.
-                    _log.Warn($"Install: kill failed for pid {proc.Id}: {ex.Message}");
+                    _log.Warn($"Install: Process.Kill failed for pid {proc.Id}: {ex.Message}; retrying with taskkill /F /T");
                 }
                 finally
                 {
@@ -193,9 +196,15 @@ public sealed class InstallOrchestrator
                 }
             }
 
-            // Give Windows a moment to notify the parent about the exit + let a
-            // stubborn tray try to restart itself. Longer wait between rounds
-            // improves odds a lingering process actually stays dead.
+            // Second-shot: shell out to taskkill /F /IM Plith.exe /T. This is the
+            // exact fallback the Windows Installer service uses when its own
+            // TerminateProcess call is refused. /F = force, /T = kill child tree,
+            // /IM matches by image name so we don't need the PIDs.
+            bool killed = RunTaskkill();
+            _log.Info($"Install: taskkill /F /IM Plith.exe /T -> {(killed ? "OK" : "FAIL")}");
+
+            // Give Windows a moment to update the process table + let a stubborn
+            // tray try (and fail) to restart itself before we re-enumerate.
             System.Threading.Thread.Sleep(750);
 
             survivingCount = Process.GetProcessesByName("Plith").Length;
@@ -203,6 +212,114 @@ public sealed class InstallOrchestrator
         }
 
         throw new PlithStillRunningException(survivingCount);
+    }
+
+    // Enables SeDebugPrivilege on the calling process so subsequent Process.Kill /
+    // taskkill calls can target UIAccess-signed processes. Called once at the top
+    // of EnsurePlithIsClosed; the privilege stays enabled for the rest of the
+    // install session. Fails silently if the token doesn't grant it (the elevated
+    // admin token normally does).
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool OpenProcessToken(IntPtr ProcessHandle, uint DesiredAccess, out IntPtr TokenHandle);
+
+    [DllImport("advapi32.dll", SetLastError = true, CharSet = CharSet.Unicode)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool LookupPrivilegeValue(string? lpSystemName, string lpName, out LUID lpLuid);
+
+    [DllImport("advapi32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool AdjustTokenPrivileges(IntPtr TokenHandle, [MarshalAs(UnmanagedType.Bool)] bool DisableAllPrivileges,
+        ref TOKEN_PRIVILEGES NewState, uint BufferLength, IntPtr PreviousState, IntPtr ReturnLength);
+
+    [DllImport("kernel32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool CloseHandle(IntPtr hObject);
+
+    [DllImport("kernel32.dll")]
+    private static extern IntPtr GetCurrentProcess();
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct LUID { public uint LowPart; public int HighPart; }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct TOKEN_PRIVILEGES
+    {
+        public uint PrivilegeCount;
+        public LUID Luid;
+        public uint Attributes;
+    }
+
+    private const uint TOKEN_ADJUST_PRIVILEGES = 0x0020;
+    private const uint TOKEN_QUERY = 0x0008;
+    private const uint SE_PRIVILEGE_ENABLED = 0x00000002;
+    private const string SE_DEBUG_NAME = "SeDebugPrivilege";
+
+    private void EnableSeDebugPrivilege()
+    {
+        IntPtr token = IntPtr.Zero;
+        try
+        {
+            if (!OpenProcessToken(GetCurrentProcess(), TOKEN_ADJUST_PRIVILEGES | TOKEN_QUERY, out token))
+            {
+                _log.Warn($"Install: OpenProcessToken failed (Win32 {Marshal.GetLastWin32Error()})");
+                return;
+            }
+            if (!LookupPrivilegeValue(null, SE_DEBUG_NAME, out var luid))
+            {
+                _log.Warn($"Install: LookupPrivilegeValue(SeDebugPrivilege) failed (Win32 {Marshal.GetLastWin32Error()})");
+                return;
+            }
+            var tp = new TOKEN_PRIVILEGES
+            {
+                PrivilegeCount = 1,
+                Luid = luid,
+                Attributes = SE_PRIVILEGE_ENABLED,
+            };
+            if (!AdjustTokenPrivileges(token, false, ref tp, (uint)Marshal.SizeOf<TOKEN_PRIVILEGES>(), IntPtr.Zero, IntPtr.Zero))
+            {
+                _log.Warn($"Install: AdjustTokenPrivileges failed (Win32 {Marshal.GetLastWin32Error()})");
+                return;
+            }
+            // Even if AdjustTokenPrivileges returns true, LastError can be
+            // ERROR_NOT_ALL_ASSIGNED (1300) meaning the privilege isn't in the
+            // token. Log it — but continue; taskkill fallback still runs.
+            int err = Marshal.GetLastWin32Error();
+            if (err == 1300)
+                _log.Warn("Install: SeDebugPrivilege not present in token (ERROR_NOT_ALL_ASSIGNED)");
+            else
+                _log.Info("Install: SeDebugPrivilege enabled");
+        }
+        finally
+        {
+            if (token != IntPtr.Zero) CloseHandle(token);
+        }
+    }
+
+    private static bool RunTaskkill()
+    {
+        try
+        {
+            var psi = new ProcessStartInfo("taskkill.exe", "/F /IM Plith.exe /T")
+            {
+                UseShellExecute = false,
+                CreateNoWindow = true,
+                RedirectStandardOutput = true,
+                RedirectStandardError = true,
+                WindowStyle = ProcessWindowStyle.Hidden,
+            };
+            using var proc = Process.Start(psi);
+            if (proc is null) return false;
+            if (!proc.WaitForExit(8000))
+            {
+                try { proc.Kill(); } catch { /* zombie */ }
+                return false;
+            }
+            // 0 = ok, 128 = process not found (also ok — nothing to kill),
+            // 1 = "the process could not be terminated" (bad).
+            return proc.ExitCode == 0 || proc.ExitCode == 128;
+        }
+        catch { return false; }
     }
 
     private void RegisterPlith()
