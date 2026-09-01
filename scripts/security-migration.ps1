@@ -81,16 +81,11 @@ if ($Phase -eq 'Prep') {
         Warn "One or more firewall profiles are OFF. They will be enabled in the Finish phase."
     }
 
-    Step "Downloading Malwarebytes free installer to Desktop"
-    $mbUrl = 'https://downloads.malwarebytes.com/file/mb-windows'
-    $mbPath = Join-Path $env:USERPROFILE 'Desktop\MBSetup.exe'
-    try {
-        Invoke-WebRequest -Uri $mbUrl -OutFile $mbPath -UseBasicParsing
-        OK "Downloaded to $mbPath ($([Math]::Round((Get-Item $mbPath).Length / 1MB, 1)) MB)"
-    } catch {
-        Warn "Download failed: $($_.Exception.Message)"
-        Warn "You can install Malwarebytes manually later in the Finish phase."
-    }
+    Step "Preparing Microsoft Safety Scanner reminder (ad-hoc backup scan)"
+    Write-Host "  No third-party AV will be installed. Defender alone is sufficient."
+    Write-Host "  For monthly ad-hoc second-opinion scans, download Microsoft Safety Scanner:"
+    Write-Host "    https://learn.microsoft.com/en-us/defender-endpoint/safety-scanner-download"
+    Write-Host "  It's a single .exe from Microsoft — no install, expires every 10 days, always fresh."
 
     Write-Host ""
     Write-Host "==================================================" -ForegroundColor Yellow
@@ -182,17 +177,18 @@ if ($Phase -eq 'Finish') {
         Warn "Couldn't set Explorer SmartScreen: $($_.Exception.Message)"
     }
 
-    Step "Installing Malwarebytes (on-demand backup scanner)"
-    $mbPath = Join-Path $env:USERPROFILE 'Desktop\MBSetup.exe'
-    if (Test-Path $mbPath) {
-        try {
-            Start-Process -FilePath $mbPath -Wait
-            OK "Malwarebytes installer completed. Free version is fine; on-demand scan only."
-        } catch {
-            Warn "Malwarebytes installer failed: $($_.Exception.Message)"
-        }
-    } else {
-        Warn "MBSetup.exe not on Desktop. Download from https://www.malwarebytes.com/mwb-download when you have time."
+    Step "Downloading Microsoft Safety Scanner to Desktop (optional monthly scan)"
+    # Microsoft's own one-shot scanner. No install, expires every 10 days so
+    # each download is signature-fresh. No third-party trust required — signed
+    # by Microsoft, only lives on disk until you delete it.
+    $ssPath = Join-Path $env:USERPROFILE 'Desktop\MSERT.exe'
+    try {
+        Invoke-WebRequest -Uri 'https://go.microsoft.com/fwlink/?LinkId=212732' `
+                          -OutFile $ssPath -UseBasicParsing -ErrorAction Stop
+        OK "Downloaded to $ssPath. Run it monthly, delete after scan."
+    } catch {
+        Warn "Safety Scanner download failed: $($_.Exception.Message)"
+        Warn "Get it later from: https://learn.microsoft.com/en-us/defender-endpoint/safety-scanner-download"
     }
 
     Step "Post-migration summary"
@@ -207,9 +203,12 @@ if ($Phase -eq 'Finish') {
     Write-Host ""
     Write-Host "  Kept installed: Norton Utilities Ultimate, Norton Driver Updater"
     Write-Host ""
+    Write-Host "  Monthly maintenance: run MSERT.exe on Desktop for a second-opinion scan"
+    Write-Host "  (re-download it when it expires — the URL is in the Prep phase output)."
+    Write-Host ""
     Write-Host "  Recommended browser extensions (install manually):"
     Write-Host "    - uBlock Origin      (ad + malware blocker)"
-    Write-Host "    - Bitwarden / 1Password extension (password autofill)"
+    Write-Host "    - 1Password extension (you already have 1Password)"
     Write-Host ""
     Write-Host "SUCCESS: Security migration complete." -ForegroundColor Green
     exit 0
