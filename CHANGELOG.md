@@ -23,14 +23,32 @@ All notable changes to Plith are documented here. Format loosely follows
   was too optimistic for UIAccess-signed Plith unwinding under an
   active Norton scan — the running tray held image sections a moment
   longer than the copy loop tolerated, and the fallback sideline
-  rename never got a chance to catch up. Kill grace is up to 5 s, the
-  post-kill cushion is up to 5 s, and the retry loop widens to eight
-  attempts spanning ~12 s. When the sideline rename ALSO fails, the
-  installer now throws an `InstallLockedFileException` whose message
-  names the file, tells the user to Exit Plith from the tray, and
-  points at the exact Norton exclusion list to add
-  `%ProgramFiles%\Plith` to — surfacing that directly in the failure
-  screen instead of a `MoveFile` stack.
+  rename never got a chance to catch up. Kill grace is up to 5 s per
+  process across three verification rounds, the post-kill cushion is
+  5 s, and the retry loop widens to eight attempts spanning ~12 s.
+- **Identical files short-circuit past the copy loop.** Third-party
+  DLLs that don't change between two Plith releases
+  (`Hardcodet.NotifyIcon.Wpf`, `NAudio`, `WpfScreenHelper`, the
+  runtime bits) hit this on every upgrade — and those are also the
+  files most likely to still be memory-mapped or under AV scan from
+  the prior install. Length + SHA-256 comparison against the source
+  skips the write entirely when the bytes already match, removing the
+  single biggest source of install-lock failures.
+- **Preflight kill fails loud instead of quietly slipping past.** The
+  old `catch { }` around `Process.Kill` swallowed permission /
+  protected-handle failures and let the copy step continue into a
+  guaranteed `UnauthorizedAccessException`. `EnsurePlithIsClosed` now
+  runs up to three kill rounds and, if a Plith process still refuses
+  to die, throws `PlithStillRunningException` before touching a single
+  file. Its message names Plith, points at the tray-Exit action, and
+  mentions Task Manager as the fallback for hidden tray icons.
+- **`InstallLockedFileException` for the terminal case.** When even
+  the sideline rename can't win the race (a persistently-held file
+  where nothing else survived), the installer surfaces a message that
+  names the locked file, tells the user to Exit Plith from the tray,
+  and points at the exact Norton exclusion location to add
+  `%ProgramFiles%\Plith` to — shown directly on the failure screen
+  instead of a `MoveFile` stack.
 
 ## [0.1.4] - 2026-09-01
 

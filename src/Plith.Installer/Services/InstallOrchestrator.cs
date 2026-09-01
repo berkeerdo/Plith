@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using Plith.Installer.ViewModels;
 
 namespace Plith.Installer.Services;
@@ -94,18 +95,13 @@ public sealed class InstallOrchestrator
 
     private void CopyToProgramFiles()
     {
-        foreach (var proc in Process.GetProcessesByName("Plith"))
-        {
-            // 5 s WaitForExit (up from 2 s) — UIAccess-signed Plith running from
-            // Program Files takes longer to unwind than a plain user-mode process:
-            // the elevated tray plus the WinRT SMTC finalizer plus the WH_KEYBOARD_LL
-            // hook each need their own shutdown steps, and a 2 s ceiling would race
-            // through them under Norton contention.
-            try { proc.Kill(entireProcessTree: true); proc.WaitForExit(5000); }
-#pragma warning disable CA1031 // Do not catch general exception types
-            catch { }
-#pragma warning restore CA1031
-        }
+        // Make sure every Plith process is really dead BEFORE touching a single file.
+        // Historically the kill happened here with a catch{} that swallowed every
+        // failure, and the copy loop then ran into the same locked files. If Plith
+        // survives our attempts, throw with a message that names the fix path instead
+        // of continuing into a guaranteed UnauthorizedAccessException down the line.
+        EnsurePlithIsClosed();
+
         // Windows keeps a memory-mapped view of a .NET process's DLLs alive briefly
         // after the process exits; overwriting them immediately trips
         // UnauthorizedAccessException even though the .exe is gone. AV scanning on
@@ -121,6 +117,55 @@ public sealed class InstallOrchestrator
 
         if (_vm.AutoStartEnabled) _registry.WriteAutoStart(InstalledExe);
         else _registry.RemoveAutoStart();
+    }
+
+    // Multi-round kill with verification, up to ~15 s total. UIAccess-signed Plith
+    // running from Program Files takes longer to unwind than a plain user-mode
+    // process — the tray plus WinRT SMTC finalizer plus the WH_KEYBOARD_LL hook
+    // each need their own shutdown steps, and a Norton scan running concurrently
+    // can extend WaitForExit past a naive 5 s cap. If a process refuses to die
+    // (permissions, protected handle) or a new one spawns in between (the tray
+    // auto-restart edge case), we surface a clear error that names Plith and points
+    // the user at the tray-Exit action.
+    private void EnsurePlithIsClosed()
+    {
+        const int rounds = 3;
+        int survivingCount = 0;
+        for (int round = 1; round <= rounds; round++)
+        {
+            var procs = Process.GetProcessesByName("Plith");
+            if (procs.Length == 0) return;
+
+            _log.Info($"Install: killing {procs.Length} Plith process(es), round {round}/{rounds}");
+            foreach (var proc in procs)
+            {
+                try
+                {
+                    proc.Kill(entireProcessTree: true);
+                    proc.WaitForExit(5000);
+                }
+                catch (Exception ex)
+                {
+                    // Log but keep trying the remaining processes — a partial kill
+                    // is still better than skipping every subsequent one.
+                    _log.Warn($"Install: kill failed for pid {proc.Id}: {ex.Message}");
+                }
+                finally
+                {
+                    proc.Dispose();
+                }
+            }
+
+            // Give Windows a moment to notify the parent about the exit + let a
+            // stubborn tray try to restart itself. Longer wait between rounds
+            // improves odds a lingering process actually stays dead.
+            System.Threading.Thread.Sleep(750);
+
+            survivingCount = Process.GetProcessesByName("Plith").Length;
+            if (survivingCount == 0) return;
+        }
+
+        throw new PlithStillRunningException(survivingCount);
     }
 
     private void RegisterPlith()
@@ -226,6 +271,14 @@ public sealed class InstallOrchestrator
     // then succeeded".
     internal static void CopyWithRetry(string source, string target)
     {
+        // Short-circuit: if source and target already carry the exact same bytes there
+        // is nothing to write. Third-party DLLs that don't change between two Plith
+        // releases (Hardcodet.NotifyIcon.Wpf, NAudio, WpfScreenHelper, ini-parser, the
+        // Windows runtime bits) hit this on every upgrade — and those are ALSO the files
+        // most likely to still be memory-mapped or under AV scan from the prior install,
+        // so skipping them removes the single biggest source of install-lock failures.
+        if (IsIdenticalContent(source, target)) return;
+
         const int maxAttempts = 8;
         const int maxDelayMs = 2000;
         int delayMs = 250;
@@ -256,6 +309,35 @@ public sealed class InstallOrchestrator
         catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
         {
             throw new InstallLockedFileException(target, lastError ?? ex);
+        }
+    }
+
+    // Length + SHA-256 comparison. Fast-fails on any I/O or permission error and
+    // returns false, so the caller falls through to the real copy. If Norton has the
+    // target open share-deny-write we can still usually open it share-read, which is
+    // enough for hashing — the whole point is to detect "no work needed" cheaply.
+    private static bool IsIdenticalContent(string source, string target)
+    {
+        try
+        {
+            if (!File.Exists(target)) return false;
+            var srcInfo = new FileInfo(source);
+            var tgtInfo = new FileInfo(target);
+            if (srcInfo.Length != tgtInfo.Length) return false;
+
+            using var sha = SHA256.Create();
+            byte[] srcHash;
+            byte[] tgtHash;
+            using (var s = new FileStream(source, FileMode.Open, FileAccess.Read, FileShare.Read))
+                srcHash = sha.ComputeHash(s);
+            using (var t = new FileStream(target, FileMode.Open, FileAccess.Read,
+                FileShare.ReadWrite | FileShare.Delete))
+                tgtHash = sha.ComputeHash(t);
+            return srcHash.AsSpan().SequenceEqual(tgtHash);
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            return false;
         }
     }
 

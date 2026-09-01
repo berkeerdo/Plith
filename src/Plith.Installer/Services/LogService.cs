@@ -26,6 +26,8 @@ public sealed class LogService
 
     public void Info(string message) => Write("INFO", message);
 
+    public void Warn(string message) => Write("WARN", message);
+
     public void Error(string step, Exception ex)
     {
         Write("ERROR", $"step={step} type={ex.GetType().Name} message={ex.Message}");
