@@ -114,9 +114,26 @@ if ($NoLaunch) {
 # --- 5. Launch installer ---------------------------------------------------
 # Note: the installer is a GUI process. We fire and forget rather than
 # waiting on it, so this script exits and the user drives the wizard.
+#
+# We're already elevated (checked at step 0) so DO NOT re-elevate via
+# -Verb RunAs — that goes through a different security path and fails with
+# "Access is denied" when the caller already has admin. Plain Start-Process
+# inherits the current elevated token.
 Step "Launching installer"
-Start-Process -FilePath $launcher -Verb RunAs
-Write-Host "  Installer launched — follow the wizard. Post-install verification below runs after you finish."
+$launched = $false
+try {
+    Start-Process -FilePath $launcher
+    $launched = $true
+    Write-Host "  Installer launched — follow the wizard. Post-install verification below runs after you finish."
+} catch {
+    Write-Warning "  Auto-launch failed: $($_.Exception.Message)"
+    Write-Host ""
+    Write-Host "  Launch it manually:" -ForegroundColor Yellow
+    Write-Host "    & '$launcher'"
+    Write-Host ""
+    Write-Host "  Or open the folder in Explorer and double-click Plith-Installer.exe:"
+    Write-Host "    explorer.exe '$extractDir'"
+}
 
 # --- 6. Post-install verification -----------------------------------------
 # Poll for a fresh Plith.exe with a version >= what we just built. Times out
