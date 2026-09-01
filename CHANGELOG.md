@@ -3,6 +3,38 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.4] - 2026-09-01
+
+### Added
+- **Accent theme studio in Settings.** A new "Accent color" row in the
+  Appearance card carries eight curated presets — Emerald (the historical
+  default), Praxvon Lime, Sky, Frost, Violet, Peach, Amber, and Rose —
+  plus a Custom slot that opens an HSL slider popup with a hex input
+  for any colour the user wants. Selection is live: the Settings window
+  and the OSD accent surfaces both update the moment a swatch is picked
+  or a slider is dragged, no restart or window reopen required. The last
+  chosen custom hex is preserved when switching back and forth between
+  presets so the popup opens on the previous value instead of jumping
+  to a default.
+
+### Changed
+- **`ThemeService` now stacks an accent-override `ResourceDictionary` at
+  the tail of `Application.Resources.MergedDictionaries` after every
+  palette swap.** The dark / light palettes continue to swap the way
+  they did in 0.1.3; the override just replaces `Accent`, `AccentHover`,
+  `AccentPressed`, `AccentGlow` (Settings) and `OsdAccent` (OSD) with
+  brushes derived from the picked colour. Hover / pressed variants use
+  HSL math tuned per surface — brighter on dark backgrounds, darker on
+  light ones with a luminance clamp so bright accents (like Praxvon
+  Lime) stay readable on white cards. The OSD's card background stays
+  palette-driven so contrast over games never breaks, and
+  `OsdGainGreen` — the "safe volume" threshold colour — is intentionally
+  unchanged so the volume-bar semantics stay legible across every accent.
+- **`config.ini` gains an `[Appearance]` section** with `AccentThemeId`
+  and (optionally) `CustomAccentColor`. Unknown ids from newer builds
+  survive a round-trip without being coerced to Emerald so downgrades
+  don't silently rewrite the user's colour.
+
 ## [0.1.3] - 2026-08-31
 
 ### Added
@@ -124,5 +156,8 @@ Initial public release.
 - Installer wizard: self-signed certificate setup, code signing, Program
   Files install, UIAccess enablement for Game mode.
 
+[0.1.4]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.4
+[0.1.3]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.3
+[0.1.2]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.2
 [0.1.1]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.1
 [0.1.0]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.0
