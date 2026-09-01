@@ -29,11 +29,18 @@ public sealed class OsdHost : BandWindow
 
     private readonly OsdContent _content;
     private readonly SettingsService _settings;
+    private readonly ThemeService _theme;
     private readonly DiagnosticLog? _log = new();
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
     private bool _isFadingOut;
+
+    // Local mirror of ThemeService.BuildAccentOverride(). Lives on this ContentControl's
+    // own Resources.MergedDictionaries so DynamicResource lookups inside OsdContent hit
+    // it before walking up. See the comment on ThemeService.BuildAccentOverride for why
+    // we can't rely on Application.Resources changes reaching an HwndSource RootVisual.
+    private ResourceDictionary? _accentOverride;
 
     // Edit-mode state. Only touched from the UI dispatcher.
     private bool _isEditMode;
@@ -48,9 +55,10 @@ public sealed class OsdHost : BandWindow
     /// can flip its Edit/Save/Cancel button state.</summary>
     public event Action<bool>? EditModeChanged;
 
-    public OsdHost(SettingsService settings)
+    public OsdHost(SettingsService settings, ThemeService theme)
     {
         _settings = settings;
+        _theme = theme;
 
         ZBandID = NativeMethods.GetTopMostZBandID();
         TopMost = true;
@@ -62,6 +70,12 @@ public sealed class OsdHost : BandWindow
         _content = new OsdContent { DataContext = ViewModel };
         _content.MediaCommandInvoked += (s, cmd) => MediaCommandInvoked?.Invoke(this, cmd);
         Content = _content;
+
+        // Seed the local accent mirror BEFORE the HwndSource is created (in CreateWindow
+        // below) so the very first paint already uses the picked accent. Subsequent
+        // updates come from ThemeService.ThemeApplied.
+        RefreshAccentMirror();
+        _theme.ThemeApplied += OnThemeApplied;
 
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
@@ -81,6 +95,31 @@ public sealed class OsdHost : BandWindow
         // Pre-create the native HWND so the first ShowOsd is instant.
         // BandWindow.CreateWindow is idempotent if HasSourceCreated is already true.
         CreateWindow();
+    }
+
+    private void OnThemeApplied()
+    {
+        // Marshal to the UI thread in case ThemeApplied ever fires from a different
+        // context (Windows preference watcher already dispatches, but defend anyway).
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(RefreshAccentMirror));
+            return;
+        }
+        RefreshAccentMirror();
+    }
+
+    private void RefreshAccentMirror()
+    {
+        var dict = _theme.BuildAccentOverride();
+        if (_accentOverride is not null)
+            Resources.MergedDictionaries.Remove(_accentOverride);
+        Resources.MergedDictionaries.Add(dict);
+        _accentOverride = dict;
+        // The tinted surface changes the card padding illusion but doesn't move geometry;
+        // still, force a re-measure so a redraw is queued right away rather than waiting
+        // for the next natural render pass. Cheap — no layout invalidation upstream.
+        _content?.InvalidateVisual();
     }
 
     [DllImport("user32.dll", SetLastError = true)]

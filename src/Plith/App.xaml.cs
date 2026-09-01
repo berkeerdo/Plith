@@ -44,7 +44,7 @@ public partial class App : Application
         // getter; tell it to re-resolve from the active palette every time the theme swaps.
         _theme.ThemeApplied += () => _osd?.ViewModel.RefreshThresholdBrushes();
 
-        _osd = new OsdHost(_settings);   // ctor calls CreateWindow() so first ShowOsd is instant
+        _osd = new OsdHost(_settings, _theme);   // ctor calls CreateWindow() so first ShowOsd is instant
         _orchestrator = new OsdOrchestrator(_osd, _settings, _diagnosticLog);
         _orchestrator.Start();
         _diagnosticLog.Info("App", "OsdOrchestrator started");

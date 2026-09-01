@@ -127,12 +127,31 @@ public sealed class ThemeService : IDisposable
 
     private void ApplyAccentOverride()
     {
+        var dict = BuildAccentOverride();
+        var merged = _app.Resources.MergedDictionaries;
+        if (_accentOverride is not null) merged.Remove(_accentOverride);
+        merged.Add(dict);
+        _accentOverride = dict;
+    }
+
+    /// <summary>
+    /// Returns a fresh <see cref="ResourceDictionary"/> containing the current derived
+    /// accent + OSD-surface brushes. Called by <see cref="ApplyAccentOverride"/> for the
+    /// Application-level slot; also called by <see cref="Plith.Views.OsdHost"/> to mirror
+    /// the same brushes into its own <c>Resources.MergedDictionaries</c>, because a
+    /// BandWindow (HwndSource with a custom RootVisual) does NOT reliably receive
+    /// notifications when <see cref="Application.Resources"/> is mutated —
+    /// DynamicResource references inside the OSD only see local-tree changes. Each
+    /// caller adds a distinct copy so ResourceDictionary parent-ownership stays clean.
+    /// </summary>
+    public ResourceDictionary BuildAccentOverride()
+    {
         var s = _settings.Current;
         var baseColor = AccentTheme.ResolveBase(s.AccentThemeId, s.CustomAccentColor);
         var derived = AccentTheme.Derive(baseColor, _isEffectiveDark);
         var osd = AccentTheme.DeriveOsdSurfaces(baseColor, _isEffectiveDark);
 
-        var dict = new ResourceDictionary
+        return new ResourceDictionary
         {
             [KeyAccent]        = FrozenBrush(derived.Accent),
             [KeyAccentHover]   = FrozenBrush(derived.Hover),
@@ -148,11 +167,6 @@ public sealed class ThemeService : IDisposable
             [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(osd.TrackBg, OsdTrackAlpha)),
             [KeyOsdDivider]    = FrozenBrush(WithAlpha(osd.Divider, OsdDividerAlpha)),
         };
-
-        var merged = _app.Resources.MergedDictionaries;
-        if (_accentOverride is not null) merged.Remove(_accentOverride);
-        merged.Add(dict);
-        _accentOverride = dict;
     }
 
     private static LinearGradientBrush BuildOsdSurfaceBrush(OsdSurfaceDerived s)

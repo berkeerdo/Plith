@@ -3,6 +3,22 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.1.5] - 2026-09-01
+
+### Fixed
+- **Theme Studio picks now actually reach the OSD overlay.** The 0.1.4
+  release wired the accent-override `ResourceDictionary` into
+  `Application.Resources`, but the OSD is a `BandWindow` — a WPF
+  `HwndSource` with a custom `RootVisual` — and its
+  `DynamicResource` references do not receive change notifications
+  when a merged dictionary is added to the app-level resources. The
+  Settings window and the Settings preview both saw the new accent
+  live; the actual on-screen OSD kept its default palette. `OsdHost`
+  now mirrors `ThemeService.BuildAccentOverride` into its own
+  `Resources.MergedDictionaries` on every `ThemeApplied` (and once at
+  construction), so DynamicResource lookups inside `OsdContent` hit
+  the tinted surfaces immediately.
+
 ## [0.1.4] - 2026-09-01
 
 ### Added
@@ -166,6 +182,7 @@ Initial public release.
 - Installer wizard: self-signed certificate setup, code signing, Program
   Files install, UIAccess enablement for Game mode.
 
+[0.1.5]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.5
 [0.1.4]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.4
 [0.1.3]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.3
 [0.1.2]: https://github.com/berkeerdo/Plith/releases/tag/v0.1.2
