@@ -96,16 +96,22 @@ public sealed class InstallOrchestrator
     {
         foreach (var proc in Process.GetProcessesByName("Plith"))
         {
-            try { proc.Kill(entireProcessTree: true); proc.WaitForExit(2000); }
+            // 5 s WaitForExit (up from 2 s) — UIAccess-signed Plith running from
+            // Program Files takes longer to unwind than a plain user-mode process:
+            // the elevated tray plus the WinRT SMTC finalizer plus the WH_KEYBOARD_LL
+            // hook each need their own shutdown steps, and a 2 s ceiling would race
+            // through them under Norton contention.
+            try { proc.Kill(entireProcessTree: true); proc.WaitForExit(5000); }
 #pragma warning disable CA1031 // Do not catch general exception types
             catch { }
 #pragma warning restore CA1031
         }
         // Windows keeps a memory-mapped view of a .NET process's DLLs alive briefly
         // after the process exits; overwriting them immediately trips
-        // UnauthorizedAccessException even though the .exe is gone. A short cushion
-        // lets the OS drop those views before MirrorCopy walks the tree.
-        System.Threading.Thread.Sleep(1500);
+        // UnauthorizedAccessException even though the .exe is gone. AV scanning on
+        // a fresh EXE compounds the delay. 5 s (up from 1.5 s) covers the observed
+        // worst case where the old build cached under Norton scan blocks the write.
+        System.Threading.Thread.Sleep(5000);
 
         Directory.CreateDirectory(InstallDir);
         Directory.CreateDirectory(UninstallerDir);
@@ -210,11 +216,20 @@ public sealed class InstallOrchestrator
     // hasn't yet released its memory-mapped view; AV scanners produce the same transient
     // lock. If short waits don't clear the lock, fall through to the sideline dance
     // which handles a persistently-held target (Norton scanning our binary, Explorer
-    // extracting an icon, etc.).
-    private static void CopyWithRetry(string source, string target)
+    // extracting an icon, etc.). If even THAT fails, the caller gets an actionable
+    // message so the UI can surface a fix path instead of a raw stack.
+    //
+    // Attempt cadence: 250 / 500 / 1000 / 2000 / 2000 / 2000 / 2000 / 2000 = ~12 s of
+    // waits before falling through — up from the previous 3.75 s. Observed Norton-plus-
+    // running-Plith holds tend to clear inside 5-10 s; the extra headroom converts most
+    // "installer says access denied" cases into "installer paused for a few seconds
+    // then succeeded".
+    internal static void CopyWithRetry(string source, string target)
     {
-        const int maxAttempts = 4;
+        const int maxAttempts = 8;
+        const int maxDelayMs = 2000;
         int delayMs = 250;
+        Exception? lastError = null;
         for (int attempt = 1; attempt <= maxAttempts; attempt++)
         {
             try
@@ -224,16 +239,24 @@ public sealed class InstallOrchestrator
             }
             catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
             {
+                lastError = ex;
                 // Swallow every attempt: on the last one we still want to fall through
                 // to CopyOverLockedFile below rather than rethrow. Previously the
                 // filter had 'attempt < maxAttempts' and the final throw skipped the
                 // sideline dance entirely, defeating the whole point of the fallback.
                 if (attempt == maxAttempts) break;
                 System.Threading.Thread.Sleep(delayMs);
-                delayMs *= 2;
+                delayMs = Math.Min(delayMs * 2, maxDelayMs);
             }
         }
-        CopyOverLockedFile(source, target);
+        try
+        {
+            CopyOverLockedFile(source, target);
+        }
+        catch (Exception ex) when (ex is IOException || ex is UnauthorizedAccessException)
+        {
+            throw new InstallLockedFileException(target, lastError ?? ex);
+        }
     }
 
     // Rename dance for a persistently-locked target. Windows lets us RENAME a file

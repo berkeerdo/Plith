@@ -18,6 +18,19 @@ All notable changes to Plith are documented here. Format loosely follows
   `Resources.MergedDictionaries` on every `ThemeApplied` (and once at
   construction), so DynamicResource lookups inside `OsdContent` hit
   the tinted surfaces immediately.
+- **Installer no longer bails with a raw stack trace when a target
+  file is locked.** `Process.Kill + WaitForExit(2000) + Sleep(1500)`
+  was too optimistic for UIAccess-signed Plith unwinding under an
+  active Norton scan — the running tray held image sections a moment
+  longer than the copy loop tolerated, and the fallback sideline
+  rename never got a chance to catch up. Kill grace is up to 5 s, the
+  post-kill cushion is up to 5 s, and the retry loop widens to eight
+  attempts spanning ~12 s. When the sideline rename ALSO fails, the
+  installer now throws an `InstallLockedFileException` whose message
+  names the file, tells the user to Exit Plith from the tray, and
+  points at the exact Norton exclusion list to add
+  `%ProgramFiles%\Plith` to — surfacing that directly in the failure
+  screen instead of a `MoveFile` stack.
 
 ## [0.1.4] - 2026-09-01
 
