@@ -9,10 +9,26 @@ namespace Plith.ViewModels;
 public sealed class MediaViewModel : INotifyPropertyChanged
 {
     private string _title = "";
-    public string Title { get => _title; set => Set(ref _title, value); }
+    public string Title
+    {
+        get => _title;
+        set
+        {
+            if (Set(ref _title, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private string _artist = "";
-    public string Artist { get => _artist; set => Set(ref _artist, value); }
+    public string Artist
+    {
+        get => _artist;
+        set
+        {
+            if (Set(ref _artist, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private BitmapSource? _albumArt;
     public BitmapSource? AlbumArt
@@ -37,6 +53,7 @@ public sealed class MediaViewModel : INotifyPropertyChanged
             {
                 OnPropertyChanged(nameof(PlayPauseGlyph));
                 OnPropertyChanged(nameof(PlayPauseLabel));
+                OnPropertyChanged(nameof(AccessibleSummary));
             }
         }
     }
@@ -48,9 +65,17 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _hasSession, value))
+            {
                 HasSessionChanged?.Invoke();
+                OnPropertyChanged(nameof(AccessibleSummary));
+            }
         }
     }
+
+    /// <summary>Live-region text for the media card.</summary>
+    public string AccessibleSummary => _hasSession
+        ? $"{_title} by {_artist}, {(_isPlaying ? "playing" : "paused")}"
+        : string.Empty;
 
     /// <summary>Raised whenever HasSession flips, so MediaCard can recompute its
     /// <c>IsVisible</c> (which depends on HasSession + CompactMode). Always fires from

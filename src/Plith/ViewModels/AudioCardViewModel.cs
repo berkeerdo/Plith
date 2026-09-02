@@ -31,7 +31,15 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
     }
 
     private string _label = "Bus A1";
-    public string Label { get => _label; set => Set(ref _label, value); }
+    public string Label
+    {
+        get => _label;
+        set
+        {
+            if (Set(ref _label, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private double _gainNormalized;
     public double GainNormalized
@@ -45,7 +53,15 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
     }
 
     private string _gainText = "0.0 dB";
-    public string GainText { get => _gainText; set => Set(ref _gainText, value); }
+    public string GainText
+    {
+        get => _gainText;
+        set
+        {
+            if (Set(ref _gainText, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private bool _muted;
     public bool Muted
@@ -54,9 +70,16 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _muted, value))
+            {
                 OnPropertyChanged(nameof(GainColor));
+                OnPropertyChanged(nameof(AccessibleSummary));
+            }
         }
     }
+
+    /// <summary>What a screen reader announces when the volume changes. The OSD never takes
+    /// focus, so this live-region text is the only audio feedback a non-sighted user gets.</summary>
+    public string AccessibleSummary => _muted ? $"{_label}, muted" : $"{_label}, {_gainText}";
 
     // Cached brush references resolved from the active OSD palette ResourceDictionary.
     // The XAML brushes themselves are shared instances; we cache the refs so GainColor stays
@@ -67,7 +90,7 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
     // Seeds match the dark-theme keys so unit tests (which run without an Application.Current
     // and therefore can't resolve from XAML resources) still observe the expected colour-
     // mapping logic. In production these are overwritten on the first
-    // RefreshThresholdBrushes() call, which this type's own ctor makes.
+    // RefreshThresholdBrushes() call, which AudioCardViewModel's own ctor makes.
     private Brush _brushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
     private Brush _brushAccent = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
     private Brush _brushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));

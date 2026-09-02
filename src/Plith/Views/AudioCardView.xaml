@@ -6,7 +6,8 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:AudioCardViewModel}"
              mc:Ignorable="d">
-    <Grid>
+    <Grid AutomationProperties.Name="{Binding AccessibleSummary}"
+          AutomationProperties.LiveSetting="Polite">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="10" />

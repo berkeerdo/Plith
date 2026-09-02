@@ -74,7 +74,8 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid>
+    <Grid AutomationProperties.Name="{Binding AccessibleSummary}"
+          AutomationProperties.LiveSetting="Polite">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="14" />
