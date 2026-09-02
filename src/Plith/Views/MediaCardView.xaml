@@ -94,12 +94,14 @@
                 <DropShadowEffect ShadowDepth="0" BlurRadius="10" Opacity="0.35" Color="Black" />
             </Border.Effect>
             <Grid>
+                <!-- Decorative album-art placeholder glyph: automation name explicitly empty -->
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                            FontSize="18"
                            Foreground="{DynamicResource OsdTextTertiary}"
                            Text="&#xE940;"
+                           AutomationProperties.Name=""
                            Visibility="{Binding HasAlbumArt, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
                 <Image Source="{Binding AlbumArt}"
                        Stretch="UniformToFill"
@@ -127,15 +129,18 @@
             <Button x:Name="PrevButton"
                     Style="{StaticResource MediaButtonStyle}"
                     Content="&#xE892;"
+                    AutomationProperties.Name="Previous track"
                     ToolTip="Previous" />
             <Button x:Name="PlayPauseButton"
                     Style="{StaticResource PlayPauseButtonStyle}"
                     Margin="2,0"
                     Content="{Binding PlayPauseGlyph}"
+                    AutomationProperties.Name="{Binding PlayPauseLabel}"
                     ToolTip="Play / Pause" />
             <Button x:Name="NextButton"
                     Style="{StaticResource MediaButtonStyle}"
                     Content="&#xE893;"
+                    AutomationProperties.Name="Next track"
                     ToolTip="Next" />
         </StackPanel>
     </Grid>
