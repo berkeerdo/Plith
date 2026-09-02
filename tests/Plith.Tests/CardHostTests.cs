@@ -200,4 +200,54 @@ public class CardHostTests
 
         Assert.Equal(1, hidden.ThemeChangedCount);
     }
+
+    [Fact]
+    public void MiddleCardGoingInvisible_CollapsesVisibleCardsInOrder()
+    {
+        var host = new CardHost(NewSettings());
+        var first = new FakeCard("first", 10);
+        var middle = new FakeCard("middle", 20);
+        var last = new FakeCard("last", 30);
+        host.Register(first);
+        host.Register(middle);
+        host.Register(last);
+
+        middle.IsVisible = false;
+
+        Assert.Equal(new[] { "first", "last" }, host.VisibleCards.Select(c => c.Id));
+    }
+
+    [Fact]
+    public void MiddleCardComingBackVisible_ReinsertsAtItsOrderPosition()
+    {
+        var host = new CardHost(NewSettings());
+        var first = new FakeCard("first", 10);
+        var middle = new FakeCard("middle", 20);
+        var last = new FakeCard("last", 30);
+        host.Register(first);
+        host.Register(middle);
+        host.Register(last);
+
+        middle.IsVisible = false;
+        middle.IsVisible = true;
+
+        Assert.Equal(new[] { "first", "middle", "last" }, host.VisibleCards.Select(c => c.Id));
+    }
+
+    [Fact]
+    public void LastCardGoingInvisible_ShrinksVisibleCards()
+    {
+        var host = new CardHost(NewSettings());
+        var first = new FakeCard("first", 10);
+        var middle = new FakeCard("middle", 20);
+        var last = new FakeCard("last", 30);
+        host.Register(first);
+        host.Register(middle);
+        host.Register(last);
+
+        last.IsVisible = false;
+
+        Assert.Equal(new[] { "first", "middle" }, host.VisibleCards.Select(c => c.Id));
+        Assert.Equal(2, host.VisibleCards.Count);
+    }
 }
