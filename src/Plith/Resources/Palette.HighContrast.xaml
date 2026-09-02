@@ -15,7 +15,14 @@
          would make an error or warning read as clickable. Both usages already sit next to
          explanatory text (the hotkey conflict message, the "Game mode: Limited" label), so
          WindowTextColor loses no information a user actually reads. Do not "unify" these two
-         groups — they diverge on purpose. -->
+         groups — they diverge on purpose.
+
+         Known limitation: these {x:Static SystemColors...} bindings resolve once, when this
+         dictionary is loaded/swapped in — they are not live. SystemParameters.StaticPropertyChanged
+         only fires for the HighContrast on/off transition, and ThemeService.Apply short-circuits
+         when the palette kind hasn't changed, so switching between two high-contrast themes
+         (e.g. Black -> White) at runtime leaves these colours stale until Plith restarts.
+         Forcing a reload on every SystemColors change is a Phase 6 decision, not fixed here. -->
 
     <SolidColorBrush x:Key="WindowBg" Color="{x:Static SystemColors.WindowColor}" />
     <SolidColorBrush x:Key="HeaderBg" Color="{x:Static SystemColors.WindowColor}" />

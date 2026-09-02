@@ -11,7 +11,7 @@ namespace Plith.Services;
 /// <see cref="ThemeMode"/> setting: <see cref="HighContrast"/> can be reached from any
 /// <see cref="ThemeMode"/> whenever Windows high contrast is active, and overrides it.
 /// </summary>
-public enum PaletteKind
+internal enum PaletteKind
 {
     Dark,
     Light,

@@ -13,9 +13,9 @@ public partial class MediaCardView : UserControl
         NextButton.Click += (_, _) => Request(MediaCommand.SkipNext);
     }
 
-    // The DataContext is supplied by whoever hosts this view — an explicit assignment today,
-    // an implicit DataTemplate from Task 6 on. Either way the view-model is the only channel
-    // out, so a null DataContext (designer, or a not-yet-bound container) is a silent no-op.
+    // The DataContext is supplied implicitly by the DataTemplate that resolves this view from
+    // MediaViewModel — this class never assigns it. The view-model is the only channel out,
+    // so a null DataContext (designer, or a not-yet-bound container) is a silent no-op.
     private void Request(MediaCommand command) => (DataContext as MediaViewModel)?.RequestCommand(command);
 }
 

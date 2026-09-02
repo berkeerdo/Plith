@@ -9,8 +9,7 @@ public sealed record MediaSnapshot(
     string Artist,
     byte[]? ThumbnailBytes,
     bool IsPlaying,
-    bool HasSession,
-    string SourceAppUserModelId = "");
+    bool HasSession);
 
 /// <summary>
 /// Wraps Windows.Media.Control (SMTC) — the system-wide media session manager that
@@ -145,7 +144,7 @@ public sealed class MediaSessionClient : IDisposable
         CurrentSourceAppUserModelId = aumid;
         IsCurrentSessionPlaying = playing;
 
-        Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true, aumid));
+        Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true));
     }
 
     private static async Task<byte[]?> ReadThumbnailAsync(IRandomAccessStreamReference thumbRef, CancellationToken ct)

@@ -60,9 +60,12 @@ public sealed class SettingsService
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
                 HideDuringFullscreenVideo = ParseBool(data[SectionOsd]["HideDuringFullscreenVideo"], true),
-                FullscreenVideoHideList = string.IsNullOrWhiteSpace(data[SectionOsd]["FullscreenVideoHideList"])
-                    ? "mpv,PotPlayerMini64"
-                    : data[SectionOsd]["FullscreenVideoHideList"],
+                // Distinguish "key absent" (fresh config / pre-upgrade file — default applies)
+                // from "key present but empty" (user deliberately cleared the hide list — an
+                // empty list is the correct, intentional value and must round-trip as such).
+                FullscreenVideoHideList = data[SectionOsd].ContainsKey("FullscreenVideoHideList")
+                    ? data[SectionOsd]["FullscreenVideoHideList"]
+                    : "mpv,PotPlayerMini64",
                 AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
                 MonitoredWindowsEndpointId = data[SectionAudio]["MonitoredWindowsEndpointId"] ?? string.Empty,
