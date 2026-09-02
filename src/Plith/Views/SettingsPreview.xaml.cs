@@ -17,12 +17,10 @@ public partial class SettingsPreview : UserControl
 
     public SettingsPreview()
     {
-        PreviewViewModel = new OsdViewModel
-        {
-            Label = "Bus A1",
-            GainText = "+3.0 dB",
-            GainNormalized = 0.85,
-        };
+        PreviewViewModel = new OsdViewModel();
+        PreviewViewModel.Audio.Label = "Bus A1";
+        PreviewViewModel.Audio.GainText = "+3.0 dB";
+        PreviewViewModel.Audio.GainNormalized = 0.85;
         PreviewViewModel.Media.Title = "Sample track";
         PreviewViewModel.Media.Artist = "Sample artist";
         PreviewViewModel.Media.HasSession = true;
@@ -56,6 +54,6 @@ public partial class SettingsPreview : UserControl
 
     public void UpdateCompact(bool compact) => PreviewViewModel.CompactMode = compact;
 
-    public void UpdateColorThresholds(bool thresholds) => PreviewViewModel.UseColorThresholds = thresholds;
+    public void UpdateColorThresholds(bool thresholds) => PreviewViewModel.Audio.UseColorThresholds = thresholds;
 
 }

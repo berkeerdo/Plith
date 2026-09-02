@@ -42,7 +42,7 @@ public partial class App : Application
         _theme.Start();
         // The OSD viewmodel caches threshold brush references for the hot-path GainColor
         // getter; tell it to re-resolve from the active palette every time the theme swaps.
-        _theme.ThemeApplied += () => _osd?.ViewModel.RefreshThresholdBrushes();
+        _theme.ThemeApplied += () => _osd?.ViewModel.Audio.RefreshThresholdBrushes();
 
         _osd = new OsdHost(_settings, _theme);   // ctor calls CreateWindow() so first ShowOsd is instant
         _orchestrator = new OsdOrchestrator(_osd, _settings, _diagnosticLog);

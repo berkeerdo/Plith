@@ -104,24 +104,24 @@
                                            FontSize="14"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource OsdTextPrimary}"
-                                           Text="{Binding GainText}" />
+                                           Text="{Binding Audio.GainText}" />
                                 <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource OsdTextTertiary}"
                                            VerticalAlignment="Center"
                                            Typography.Capitals="AllSmallCaps"
-                                           Text="{Binding Label}" />
+                                           Text="{Binding Audio.Label}" />
                             </DockPanel>
 
                             <Grid Grid.Row="2" Height="4">
                                 <Border CornerRadius="2" Background="{DynamicResource OsdTrackBg}" />
                                 <Border HorizontalAlignment="Left"
                                         CornerRadius="2"
-                                        Background="{Binding GainColor}">
+                                        Background="{Binding Audio.GainColor}">
                                     <Border.Width>
                                         <MultiBinding Converter="{StaticResource NormConv}">
-                                            <Binding Path="GainNormalized" />
+                                            <Binding Path="Audio.GainNormalized" />
                                             <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
                                         </MultiBinding>
                                     </Border.Width>

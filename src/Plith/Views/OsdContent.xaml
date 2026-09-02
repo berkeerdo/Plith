@@ -51,24 +51,24 @@
                     <DockPanel Grid.Row="0" LastChildFill="True">
                         <TextBlock DockPanel.Dock="Right"
                                    Style="{StaticResource OsdValueStyle}"
-                                   Text="{Binding GainText}" />
+                                   Text="{Binding Audio.GainText}" />
                         <TextBlock Style="{StaticResource OsdLabelStyle}"
                                    VerticalAlignment="Center"
                                    TextTrimming="CharacterEllipsis"
-                                   Text="{Binding Label}" />
+                                   Text="{Binding Audio.Label}" />
                     </DockPanel>
 
                     <Grid Grid.Row="2" Height="6">
                         <Border CornerRadius="3" Background="{DynamicResource OsdTrackBg}" />
                         <Border HorizontalAlignment="Left"
                                 CornerRadius="3"
-                                Background="{Binding GainColor}">
+                                Background="{Binding Audio.GainColor}">
                             <Border.Width>
                                 <MultiBinding>
                                     <MultiBinding.Converter>
                                         <vm:NormalizedToWidthConverter />
                                     </MultiBinding.Converter>
-                                    <Binding Path="GainNormalized" />
+                                    <Binding Path="Audio.GainNormalized" />
                                     <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
                                 </MultiBinding>
                             </Border.Width>

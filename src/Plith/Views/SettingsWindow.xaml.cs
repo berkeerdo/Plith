@@ -302,7 +302,7 @@ public partial class SettingsWindow : Window
         ApplyImmersiveDarkMode();
         // The mini OSD card in the preview pane caches threshold brushes per the OSD viewmodel
         // contract; refresh it in tandem with the main OSD so the bar colour matches the swap.
-        Preview?.PreviewViewModel.RefreshThresholdBrushes();
+        Preview?.PreviewViewModel.Audio.RefreshThresholdBrushes();
         // A palette polarity flip also changes the derived Accent brush, so the selection
         // ring on the current swatch needs to redraw with the new colour.
         RefreshAccentSelection();

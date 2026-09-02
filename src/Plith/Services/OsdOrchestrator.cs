@@ -260,9 +260,9 @@ public sealed class OsdOrchestrator : IDisposable
 
     private void HandleVoicemeeterChange(VoicemeeterParameterSnapshot snap)
     {
-        double normalized = (Math.Clamp(snap.GainDb, OsdViewModel.VoicemeeterMinDb, OsdViewModel.VoicemeeterMaxDb)
-                            - OsdViewModel.VoicemeeterMinDb)
-                          / (OsdViewModel.VoicemeeterMaxDb - OsdViewModel.VoicemeeterMinDb);
+        double normalized = (Math.Clamp(snap.GainDb, AudioCardViewModel.VoicemeeterMinDb, AudioCardViewModel.VoicemeeterMaxDb)
+                            - AudioCardViewModel.VoicemeeterMinDb)
+                          / (AudioCardViewModel.VoicemeeterMaxDb - AudioCardViewModel.VoicemeeterMinDb);
         // Invariant-culture formatting so the dB readout stays "0.0 dB" everywhere — the
         // CurrentCulture variant surfaces "0,0 dB" on tr-TR/de-DE/fr-FR machines, which
         // violates audio-engineering convention.
@@ -285,7 +285,7 @@ public sealed class OsdOrchestrator : IDisposable
         _lastNormalized = (float)normalized;
         _lastMuted = muted;
 
-        _osd.ViewModel.Apply(label, normalized, text, muted);
+        _osd.ViewModel.Audio.Apply(label, normalized, text, muted);
         if (changed && !isFirstRead) _osd.ShowOsd(VisibleFor);
     }
 

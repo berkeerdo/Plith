@@ -84,12 +84,12 @@ public sealed class OsdHost : BandWindow
         // updates without requiring a pop to materialise them. Same pattern as OsdWindow.
         _settings.Changed += m => Dispatcher.BeginInvoke(() =>
         {
-            ViewModel.UseColorThresholds = m.UseColorThresholds;
+            ViewModel.Audio.UseColorThresholds = m.UseColorThresholds;
             ViewModel.CompactMode = m.CompactMode;
             Reposition();
         });
 
-        ViewModel.UseColorThresholds = _settings.Current.UseColorThresholds;
+        ViewModel.Audio.UseColorThresholds = _settings.Current.UseColorThresholds;
         ViewModel.CompactMode = _settings.Current.CompactMode;
 
         // Pre-create the native HWND so the first ShowOsd is instant.
