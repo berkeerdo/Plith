@@ -296,15 +296,15 @@ public class SettingsServiceTests
     [Fact]
     public void FullscreenVideoSettings_RoundTripThroughIni()
     {
-        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
-        var svc = new SettingsService(path);
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
 
         var m = svc.Current.Clone();
         m.HideDuringFullscreenVideo = false;
         m.FullscreenVideoHideList = "mpv,vlc";
         svc.Save(m);
 
-        var reloaded = new SettingsService(path);
+        var reloaded = new SettingsService(dir.IniPath);
         reloaded.Load();
 
         Assert.False(reloaded.Current.HideDuringFullscreenVideo);
@@ -314,7 +314,8 @@ public class SettingsServiceTests
     [Fact]
     public void FullscreenVideoSettings_DefaultToEnabledWithSeededHideList()
     {
-        var svc = new SettingsService(Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini"));
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
         svc.Load();   // no file on disk -> defaults
 
         Assert.True(svc.Current.HideDuringFullscreenVideo);

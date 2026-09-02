@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
 using Plith.Cards;
@@ -44,6 +45,9 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
 
     public void Start()
     {
+        // A second call would overwrite _hook and leak the first native hook permanently.
+        if (_hook != 0 || _disposed) return;
+
         _callback = OnForegroundChanged;
         _hook = SetWinEventHook(
             EVENT_SYSTEM_FOREGROUND, EVENT_SYSTEM_FOREGROUND,
@@ -58,7 +62,20 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
 
     private void OnForegroundChanged(
         nint hWinEventHook, uint eventType, nint hwnd,
-        int idObject, int idChild, uint idEventThread, uint dwmsEventTime) => Evaluate();
+        int idObject, int idChild, uint idEventThread, uint dwmsEventTime)
+    {
+        // This is a reverse-P/Invoke target: an exception escaping it (e.g. from a
+        // SuppressionChanged subscriber like CardHost -> OsdHost's WPF animation code)
+        // would unwind through a native frame, which is a process-level crash, not a
+        // logged warning. Catch here rather than folding this into Evaluate's own try —
+        // that try guards the detection inputs only, and catching a subscriber's
+        // exception there would incorrectly reset _suppressed's edge state.
+        try { Evaluate(); }
+        catch (Exception ex)
+        {
+            _log?.Warn("FullscreenVideo", $"OnForegroundChanged threw: {ex.GetType().Name}: {ex.Message}");
+        }
+    }
 
     private void Evaluate()
     {
@@ -143,12 +160,31 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         var aumid = _media.CurrentSourceAppUserModelId;
         if (string.IsNullOrWhiteSpace(aumid)) return false;
 
-        return aumid.Contains(processName, StringComparison.OrdinalIgnoreCase)
-            || processName.Contains(aumid, StringComparison.OrdinalIgnoreCase);
+        // Equality on the filename stem, not Contains: a substring test against a long
+        // packaged AUMID (e.g. "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic")
+        // would accept any short/generic foreground process name that happens to appear
+        // inside it, letting a focused borderless-windowed game get falsely credited with
+        // a media session actually owned by something else playing in the background —
+        // and with no D3D veto available for a borderless window, this predicate is the
+        // only thing standing between that game and suppression. Win32 AUMIDs like
+        // "chrome.exe" or full-path AUMIDs all still reduce to the process name via
+        // GetFileNameWithoutExtension; packaged AUMIDs simply won't match, which fails
+        // toward showing the OSD — the safe direction. Do not loosen this back to Contains.
+        return string.Equals(
+            Path.GetFileNameWithoutExtension(aumid),
+            processName,
+            StringComparison.OrdinalIgnoreCase);
     }
 
+    // On a failed HRESULT, every other failure path in this file fails toward showing the
+    // OSD — but returning 0 here would REMOVE the D3D exclusive-fullscreen veto (0 !=
+    // QUNS_RUNNING_D3D_FULL_SCREEN), which fails the wrong way for the one case this
+    // feature must never touch: an actual game. Fail toward the veto being engaged instead,
+    // so an interop failure still shows the OSD via ShouldSuppress's D3D check.
     private static uint QueryNotificationState()
-        => SHQueryUserNotificationState(out var state) == 0 ? state : 0;
+        => SHQueryUserNotificationState(out var state) == 0
+            ? state
+            : FullscreenVideoDetector.QUNS_RUNNING_D3D_FULL_SCREEN;
 
     public void Dispose()
     {

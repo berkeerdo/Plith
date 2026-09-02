@@ -543,6 +543,17 @@ public partial class SettingsWindow : Window
         FullscreenVideoToggle.Checked += (_, _) => AutoSave();
         FullscreenVideoToggle.Unchecked += (_, _) => AutoSave();
         FullscreenHideListBox.LostFocus += (_, _) => AutoSave();
+        // Matches CustomHexBox's pattern: LostFocus alone means an edit followed by
+        // Alt+F4 (rather than tabbing/clicking away first) is lost. Enter commits without
+        // requiring focus to leave the box.
+        FullscreenHideListBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                AutoSave();
+                e.Handled = true;
+            }
+        };
         // Hotkey button is wired through StartHotkeyCapture/ClearHotkey, not a SelectionChanged.
         SourceCombo.SelectionChanged += (_, _) => AutoSave();
         BusCombo.SelectionChanged += (_, _) => AutoSave();
