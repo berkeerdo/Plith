@@ -80,20 +80,20 @@
                                   IsChecked="{Binding GameModeEnabled}"
                                   Foreground="{DynamicResource TextPrimary}"
                                   AutomationProperties.Name="Game mode (UIAccess)"
-                                  AutomationProperties.HelpText="{Binding ElementName=GameModeHintText, Path=Text}" />
+                                  AutomationProperties.HelpText="Draws the OSD over fullscreen games. Installs a self-signed certificate that is only trusted on this machine." />
                         <TextBlock Text="?"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource TextTertiary}"
                                    Margin="6,0,0,0"
                                    ToolTip="Plith uses a self-signed certificate to enable UIAccess. The cert is only trusted on this machine."
                                    AutomationProperties.Name="" />
-                        <!-- Decorative help glyph: its ToolTip duplicates the surrounding
-                             prose and it isn't itself an interactive control, so it carries
-                             an explicit empty name rather than announcing a lone "?". -->
+                        <!-- Decorative help glyph: not itself an interactive control, and
+                             the trust-caveat information its ToolTip carries for sighted
+                             users now also lives in GameModeCheck's HelpText, so an empty
+                             automation name here doesn't silence anything unique. -->
                     </StackPanel>
                 </Grid>
-                <TextBlock x:Name="GameModeHintText"
-                           Text="OSD over fullscreen games"
+                <TextBlock Text="OSD over fullscreen games"
                            FontSize="11"
                            Foreground="{DynamicResource TextTertiary}"
                            Margin="22,-2,0,8" />
