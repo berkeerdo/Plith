@@ -27,11 +27,11 @@
             <StackPanel Orientation="Vertical">
 
                 <!-- Media row. The Visibility binding lives on the wrapper Border so it can
-                     resolve against OsdViewModel; the inner MediaCard overrides DataContext to
+                     resolve against OsdViewModel; the inner MediaCardView overrides DataContext to
                      Media for its own bindings. -->
                 <Border Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibilityConverter}}">
-                    <views:MediaCard x:Name="MediaCardControl"
-                                     DataContext="{Binding Media}" />
+                    <views:MediaCardView x:Name="MediaCardControl"
+                                         DataContext="{Binding Media}" />
                 </Border>
 
                 <!-- Divider between media + volume; collapses with the card -->

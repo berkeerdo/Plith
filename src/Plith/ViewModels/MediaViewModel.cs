@@ -34,7 +34,10 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _isPlaying, value))
+            {
                 OnPropertyChanged(nameof(PlayPauseGlyph));
+                OnPropertyChanged(nameof(PlayPauseLabel));
+            }
         }
     }
 
@@ -56,6 +59,19 @@ public sealed class MediaViewModel : INotifyPropertyChanged
 
     /// <summary>Segoe Fluent Icons glyph for the play/pause toggle button (U+E769 Pause / U+E768 Play).</summary>
     public string PlayPauseGlyph => _isPlaying ? "" : "";
+
+    /// <summary>Screen-reader label for the play/pause toggle. The glyph beside it is a Segoe
+    /// Fluent Icons private-use codepoint, which a screen reader would otherwise read aloud
+    /// verbatim — this is the only text a non-sighted user gets for that button.</summary>
+    public string PlayPauseLabel => _isPlaying ? "Pause" : "Play";
+
+    /// <summary>Raised when the user clicks a transport button. The view calls
+    /// <see cref="RequestCommand"/> on its DataContext rather than surfacing an event on the
+    /// UserControl, because under CardHost the view is created by a DataTemplate and no owner
+    /// holds a named reference to it.</summary>
+    public event Action<Plith.Views.MediaCommand>? CommandRequested;
+
+    public void RequestCommand(Plith.Views.MediaCommand command) => CommandRequested?.Invoke(command);
 
     /// <summary>
     /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher
