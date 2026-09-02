@@ -14,6 +14,9 @@
                      above; SettingsTheme.xaml references every brush via DynamicResource. -->
                 <ResourceDictionary Source="Resources/Palette.Dark.xaml" />
                 <ResourceDictionary Source="Resources/SettingsTheme.xaml" />
+                <!-- Card view templates. Merged last so the implicit DataTemplates can
+                     reference brush keys declared by the palette/theme dictionaries above. -->
+                <ResourceDictionary Source="Resources/CardTemplates.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

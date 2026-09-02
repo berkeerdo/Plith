@@ -67,7 +67,7 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
     // Seeds match the dark-theme keys so unit tests (which run without an Application.Current
     // and therefore can't resolve from XAML resources) still observe the expected colour-
     // mapping logic. In production these are overwritten on the first
-    // RefreshThresholdBrushes() call from the OsdViewModel ctor.
+    // RefreshThresholdBrushes() call, which this type's own ctor makes.
     private Brush _brushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
     private Brush _brushAccent = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
     private Brush _brushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));

@@ -1,4 +1,5 @@
 using System.Windows;
+using Plith.Cards;
 using Plith.Services;
 using Plith.Views;
 
@@ -16,6 +17,10 @@ public partial class App : Application
     private TrayIconHost? _trayHost;
     private OsdOrchestrator? _orchestrator;
     private OsdHost? _osd;
+    private CardHost? _cardHost;
+    private AudioCard? _audioCard;
+    private MediaCard? _mediaCard;
+    private MediaSessionClient? _mediaSession;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
     private ForegroundWatcher? _foregroundWatcher;
@@ -40,12 +45,26 @@ public partial class App : Application
         // uses the active palette; otherwise a Light user would see a one-frame dark flash.
         _theme = new ThemeService(this, _settings);
         _theme.Start();
-        // The OSD viewmodel caches threshold brush references for the hot-path GainColor
-        // getter; tell it to re-resolve from the active palette every time the theme swaps.
-        _theme.ThemeApplied += () => _osd?.ViewModel.Audio.RefreshThresholdBrushes();
+        // Cards cache brush references for hot-path getters; fan a palette/accent swap out to
+        // every one of them, visible or not.
+        _theme.ThemeApplied += () => _cardHost?.NotifyThemeChanged();
 
-        _osd = new OsdHost(_settings, _theme);   // ctor calls CreateWindow() so first ShowOsd is instant
-        _orchestrator = new OsdOrchestrator(_osd, _settings, _diagnosticLog);
+        // One SMTC client shared by every consumer; App owns its lifetime.
+        _mediaSession = new MediaSessionClient();
+
+        _audioCard = new AudioCard(_settings);
+        _mediaCard = new MediaCard(_settings);
+
+        _cardHost = new CardHost(_settings);
+        _cardHost.Register(_mediaCard);   // Order 10 — renders above
+        _cardHost.Register(_audioCard);   // Order 20
+
+        _osd = new OsdHost(_settings, _theme, _cardHost);   // ctor calls CreateWindow() so first ShowOsd is instant
+        _cardHost.ShowRequested += d => _osd.ShowOsd(d);
+        _cardHost.HideRequested += () => _osd.HideOsd();
+        _cardHost.Start();
+
+        _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
         _orchestrator.Start();
         _diagnosticLog.Info("App", "OsdOrchestrator started");
 
@@ -75,7 +94,7 @@ public partial class App : Application
         {
             _flyoutSuppressor?.OpenSuppressionWindow();
             // Bounce to the UI dispatcher — VolumeKeyPressed runs on the Windows hook thread.
-            Dispatcher.BeginInvoke(() => _osd?.ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs)));
+            Dispatcher.BeginInvoke(() => _cardHost?.RequestShow(new ShowRequest(ShowReason.VolumeKey)));
         };
         _volumeKeyHook.Start();
         _diagnosticLog?.Info("App", "VolumeKeyHook started");
@@ -86,7 +105,7 @@ public partial class App : Application
         // _hotkey is created BEFORE _trayHost so the tray can hand the service to SettingsWindow
         // for the binding-conflict warning.
         _hotkey = new HotkeyService();
-        _hotkey.Pressed += () => _osd?.ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
+        _hotkey.Pressed += () => _cardHost?.RequestShow(new ShowRequest(ShowReason.SummonHotkey));
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
 
@@ -117,6 +136,10 @@ public partial class App : Application
         DisposeStep("HotkeyService",     () => _hotkey?.Dispose());
         DisposeStep("ThemeService",      () => _theme?.Dispose());
         DisposeStep("Orchestrator",      () => _orchestrator?.Dispose());
+        // Order matters: the orchestrator must stop feeding cards before CardHost deactivates
+        // them, and the shared SMTC client outlives both.
+        DisposeStep("CardHost",           () => _cardHost?.Dispose());
+        DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
         DisposeStep("TrayIconHost",      () => _trayHost?.Dispose());

@@ -52,8 +52,8 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         }
     }
 
-    /// <summary>Raised whenever HasSession flips, so the parent OsdViewModel can recompute
-    /// <c>ShowMediaCard</c> (which depends on HasSession + CompactMode). Always fires from
+    /// <summary>Raised whenever HasSession flips, so MediaCard can recompute its
+    /// <c>IsVisible</c> (which depends on HasSession + CompactMode). Always fires from
     /// the setter, so callers that go around <see cref="Apply"/> still get the notification.</summary>
     public event Action? HasSessionChanged;
 
