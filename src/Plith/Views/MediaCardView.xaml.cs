@@ -1,4 +1,5 @@
 using System.Windows.Controls;
+using Plith.Cards;
 using Plith.ViewModels;
 
 namespace Plith.Views;
@@ -18,5 +19,3 @@ public partial class MediaCardView : UserControl
     // so a null DataContext (designer, or a not-yet-bound container) is a silent no-op.
     private void Request(MediaCommand command) => (DataContext as MediaViewModel)?.RequestCommand(command);
 }
-
-public enum MediaCommand { SkipPrevious, TogglePlayPause, SkipNext }

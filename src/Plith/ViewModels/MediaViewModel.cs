@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
+using Plith.Cards;
 using Plith.Services;
 
 namespace Plith.ViewModels;
@@ -94,9 +95,9 @@ public sealed class MediaViewModel : INotifyPropertyChanged
     /// <see cref="RequestCommand"/> on its DataContext rather than surfacing an event on the
     /// UserControl, because under CardHost the view is created by a DataTemplate and no owner
     /// holds a named reference to it.</summary>
-    public event Action<Plith.Views.MediaCommand>? CommandRequested;
+    public event Action<MediaCommand>? CommandRequested;
 
-    public void RequestCommand(Plith.Views.MediaCommand command) => CommandRequested?.Invoke(command);
+    public void RequestCommand(MediaCommand command) => CommandRequested?.Invoke(command);
 
     /// <summary>
     /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher
