@@ -26,6 +26,7 @@ public partial class App : Application
     private ForegroundWatcher? _foregroundWatcher;
     private NativeFlyoutSuppressor? _flyoutSuppressor;
     private VolumeKeyHook? _volumeKeyHook;
+    private FullscreenVideoWatcher? _fullscreenWatcher;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -55,7 +56,9 @@ public partial class App : Application
         _audioCard = new AudioCard(_settings);
         _mediaCard = new MediaCard(_settings);
 
-        _cardHost = new CardHost(_settings);
+        _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
+
+        _cardHost = new CardHost(_settings, _fullscreenWatcher);
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
 
@@ -67,6 +70,7 @@ public partial class App : Application
         _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
         _orchestrator.Start();
         _diagnosticLog.Info("App", "OsdOrchestrator started");
+        _fullscreenWatcher.Start();   // after the orchestrator, so the first Evaluate sees a live session client
 
         // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
         // video player popping a topmost window mid-OSD doesn't steal the z-order ahead of us.
@@ -137,7 +141,9 @@ public partial class App : Application
         DisposeStep("ThemeService",      () => _theme?.Dispose());
         DisposeStep("Orchestrator",      () => _orchestrator?.Dispose());
         // Order matters: the orchestrator must stop feeding cards before CardHost deactivates
-        // them, and the shared SMTC client outlives both.
+        // them, and the shared SMTC client outlives both. The watcher must stop raising
+        // SuppressionChanged before CardHost — which it feeds — is disposed.
+        DisposeStep("FullscreenVideoWatcher", () => _fullscreenWatcher?.Dispose());
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());

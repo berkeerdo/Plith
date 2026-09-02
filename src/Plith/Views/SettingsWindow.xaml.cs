@@ -489,6 +489,8 @@ public partial class SettingsWindow : Window
             OpacitySlider.Value = m.OsdOpacityPercent;
             ColorThresholdsToggle.IsChecked = m.UseColorThresholds;
             CompactToggle.IsChecked = m.CompactMode;
+            FullscreenVideoToggle.IsChecked = m.HideDuringFullscreenVideo;
+            FullscreenHideListBox.Text = m.FullscreenVideoHideList;
             _capturedMods = m.SummonHotkeyMods;
             _capturedKey = m.SummonHotkeyKey;
             RefreshHotkeyButton(m.SummonHotkeyMods, m.SummonHotkeyKey);
@@ -538,6 +540,9 @@ public partial class SettingsWindow : Window
         ColorThresholdsToggle.Unchecked += (_, _) => AutoSave();
         CompactToggle.Checked += (_, _) => AutoSave();
         CompactToggle.Unchecked += (_, _) => AutoSave();
+        FullscreenVideoToggle.Checked += (_, _) => AutoSave();
+        FullscreenVideoToggle.Unchecked += (_, _) => AutoSave();
+        FullscreenHideListBox.LostFocus += (_, _) => AutoSave();
         // Hotkey button is wired through StartHotkeyCapture/ClearHotkey, not a SelectionChanged.
         SourceCombo.SelectionChanged += (_, _) => AutoSave();
         BusCombo.SelectionChanged += (_, _) => AutoSave();
@@ -583,6 +588,8 @@ public partial class SettingsWindow : Window
         m.OsdOpacityPercent = (int)Math.Round(OpacitySlider.Value);
         m.UseColorThresholds = ColorThresholdsToggle.IsChecked == true;
         m.CompactMode = CompactToggle.IsChecked == true;
+        m.HideDuringFullscreenVideo = FullscreenVideoToggle.IsChecked == true;
+        m.FullscreenVideoHideList = FullscreenHideListBox.Text ?? string.Empty;
         m.SummonHotkeyMods = _capturedMods;
         m.SummonHotkeyKey = _capturedKey;
         if (SourceCombo.SelectedItem is AudioSourceMode src) m.AudioSource = src;

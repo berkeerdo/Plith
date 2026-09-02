@@ -59,6 +59,10 @@ public sealed class SettingsService
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
+                HideDuringFullscreenVideo = ParseBool(data[SectionOsd]["HideDuringFullscreenVideo"], true),
+                FullscreenVideoHideList = string.IsNullOrWhiteSpace(data[SectionOsd]["FullscreenVideoHideList"])
+                    ? "mpv,PotPlayerMini64"
+                    : data[SectionOsd]["FullscreenVideoHideList"],
                 AudioSource = ParseEnum(data[SectionAudio]["AudioSource"], AudioSourceMode.Auto),
                 MonitoredBusIndex = ParseInt(data[SectionAudio]["MonitoredBusIndex"], 0, 0, 31),
                 MonitoredWindowsEndpointId = data[SectionAudio]["MonitoredWindowsEndpointId"] ?? string.Empty,
@@ -108,6 +112,8 @@ public sealed class SettingsService
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
         data[SectionOsd]["CompactMode"] = m.CompactMode.ToString(inv);
+        data[SectionOsd]["HideDuringFullscreenVideo"] = m.HideDuringFullscreenVideo.ToString(inv);
+        data[SectionOsd]["FullscreenVideoHideList"] = m.FullscreenVideoHideList ?? string.Empty;
         data[SectionOsd]["SummonHotkeyMods"] = m.SummonHotkeyMods.ToString(inv);
         data[SectionOsd]["SummonHotkeyKey"] = m.SummonHotkeyKey.ToString(inv);
         // Strip the legacy enum key on save so we don't keep a stale value around.

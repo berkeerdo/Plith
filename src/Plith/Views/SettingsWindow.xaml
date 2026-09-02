@@ -392,6 +392,39 @@
                             </Grid>
                         </Border>
 
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Hide during fullscreen video" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Hides the OSD while a fullscreen window is playing video. Games are never affected." />
+                                </StackPanel>
+                                <CheckBox x:Name="FullscreenVideoToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <StackPanel>
+                                <TextBlock Style="{StaticResource RowLabelStyle}" Text="Also hide in these apps" />
+                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Comma-separated process names, for players that don't report media to Windows." />
+                                <TextBox x:Name="FullscreenHideListBox"
+                                         Margin="0,14,0,0"
+                                         Padding="10,7"
+                                         Background="{DynamicResource ButtonGhost}"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         CaretBrush="{DynamicResource TextPrimary}"
+                                         BorderBrush="{DynamicResource CardBorderStrong}"
+                                         BorderThickness="1"
+                                         FontFamily="Consolas, Cascadia Mono, Segoe UI"
+                                         FontSize="12" />
+                            </StackPanel>
+                        </Border>
+
                         <Border Style="{StaticResource RowLastStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
