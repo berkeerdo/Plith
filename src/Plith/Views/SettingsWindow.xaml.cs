@@ -660,7 +660,7 @@ public partial class SettingsWindow : Window
     {
         // Outer button reserves 2px for the halo-style selection ring, rendered by the
         // shared SwatchTemplate as a plain Border. The inner Fill is smaller so the ring
-        // reads as a highlight around a solid dot instead of a coloured border on the
+        // reads as a highlight around a solid dot instead of a colored border on the
         // swatch itself. This used to be a bare Border with a MouseLeftButtonUp handler,
         // which meant it was unreachable by keyboard and invisible to a screen reader —
         // a Border exposes no focus and no invoke pattern. Button gets both for free.
@@ -678,6 +678,12 @@ public partial class SettingsWindow : Window
             Template = SwatchTemplate,
         };
         AutomationProperties.SetName(root, tooltip);
+        // Buttons with no Style fall through to the Aero2 theme's default
+        // FocusVisualStyle — a 1px dashed rectangle stroked with a near-black
+        // SystemColors brush that doesn't follow the app palette and sits in the
+        // transparent gap outside the fill dot, effectively invisible against CardBg.
+        // Use the same themed ring every other Settings control gets.
+        root.FocusVisualStyle = (Style)FindResource("SettingsFocusVisualStyle");
         var grid = new Grid();
         var fill = new Border
         {
@@ -732,6 +738,7 @@ public partial class SettingsWindow : Window
             Template = SwatchTemplate,
         };
         AutomationProperties.SetName(root, "Custom color");
+        root.FocusVisualStyle = (Style)FindResource("SettingsFocusVisualStyle");
         var grid = new Grid();
         var fill = new Border
         {
@@ -955,6 +962,12 @@ public partial class SettingsWindow : Window
             if (sw.Root is Control control)
             {
                 control.BorderBrush = selected ? accentBrush : Brushes.Transparent;
+                // As a Button, each swatch exposes only the Invoke pattern to UIA, so
+                // BorderBrush/Tick alone convey "selected" visually but not to a screen
+                // reader. ItemStatus is the cheap way to say it out loud without
+                // promoting these to RadioButton (which would bring SelectionItem and
+                // group navigation, but is a bigger change than this task should make).
+                AutomationProperties.SetItemStatus(control, selected ? "Selected" : "Not selected");
             }
             sw.Tick.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         }

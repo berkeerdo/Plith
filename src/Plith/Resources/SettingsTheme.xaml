@@ -11,11 +11,13 @@
          Keyboard focus visual — shared by every control style below
          that used to suppress focus entirely. Renders as a rounded
          accent outline through WPF's own FocusVisualStyle adorner,
-         which the framework only draws for keyboard-driven focus
-         (Tab/Shift+Tab) and never for a mouse click, so this adds a
-         real indicator for keyboard users without a flash on every
-         click. Accent is DynamicResource so the ring stays visible
-         against both the Dark and Light palettes.
+         which the framework draws for keyboard-driven focus
+         (Tab/Shift+Tab) on default Windows settings; it can also
+         show on a mouse click if the user has the Windows "show
+         keyboard cues" setting (SystemParameters.KeyboardCues) on —
+         that's correct behaviour on that setting, not a defect here.
+         Accent is DynamicResource so the ring stays visible against
+         both the Dark and Light palettes.
          ============================================================ -->
     <Style x:Key="SettingsFocusVisualStyle">
         <Setter Property="Control.Template">
