@@ -128,19 +128,58 @@ they care about.
 
 ## 6. Phase breakdown
 
-### Phase 5 — Consolidation + tech debt (1–2 wk)
+### Phase 5 — Consolidation + tech debt — **code-complete, unmerged**
 
-Get the house in order before any pivot code lands.
+Branch `feature/phase-5-cardhost`. Design: `docs/superpowers/specs/2026-09-02-cardhost-design.md`.
 
-- Refactor OSD rendering into a **CardHost** that supports N cards
-  side-by-side. Today's OSD becomes a single card in that host with
-  no behaviour change.
-- Accessibility pass: screen reader labels on all Settings controls,
-  high-contrast mode audit.
-- Auto-hide during exclusive fullscreen video (not games — the OSD
-  already survives games; we want it to hide during Netflix / VLC).
-- Success metric: OSD behaviour is identical to 0.1.5 from the user's
-  side, but the internal `CardHost` is in place and unit-tested.
+Shipped:
+
+- **CardHost** — owns which cards are visible and is the single authority for when
+  the OSD appears. Holds no reference to any WPF window, so the show policy is
+  unit-tested with no `Application` and no HWND. Today's OSD is an Audio card
+  (`Order 20`) plus a Media card (`Order 10`); orders are spaced by 10 so Phase 6
+  cards slot in without renumbering. `OsdViewModel` deleted; `OsdOrchestrator`
+  reduced to a pure audio/media source driver holding no display authority.
+- **Fullscreen-video auto-hide** — on by default, with a Settings toggle and a
+  user-editable process list. Fails toward showing in every ambiguous case.
+- **Accessibility** — screen-reader names across the OSD and Settings, OSD live
+  regions, accent swatches converted from `Border` to `Button` so they are
+  keyboard-reachable, focus indicators restored to six styles that had stripped
+  them, a high-contrast palette, and `scripts/check-a11y.ps1` as the guard.
+
+**The success metric is not yet met.** "Identical to 0.1.5 from the user's side" has
+no automated evidence — see `docs/PHASE5-VERIFICATION.md`.
+
+Two findings worth carrying forward, both caught only because something was measured
+rather than reasoned about:
+
+- A `DataTrigger` binding `RelativeSource AncestorType=ContentPresenter` inside
+  `DataTemplate.Triggers` does **not** resolve to the item container; it walks past it
+  to an outer presenter where `AlternationIndex` defaults to 0, so the trigger matched
+  every item. The fix routes the index through the item root's `Tag`. The warning is
+  recorded in both the spec and the plan.
+- Windows 11's Fullscreen Optimizations (default on) converts most "exclusive
+  fullscreen" games into borderless flip-model windows reporting `QUNS_BUSY`, so the
+  D3D veto never fires for them and game safety rests entirely on the media-session
+  predicate. Any future change to that predicate is a game-safety change.
+
+Deferred to Phase 6 (recorded so they are not rediscovered):
+
+- `MediaCommand` lives in `MediaCardView.xaml.cs`, so `Plith.ViewModels` depends on a
+  type in `Plith.Views` — inverted MVVM direction. Move to `Plith.Cards` when the
+  second card lands.
+- Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
+  `SelectionItem` pattern and arrow-key group navigation, and would remove the nine
+  extra tab stops the current row costs. Selection state is currently conveyed by
+  `AutomationProperties.ItemStatus` as a stopgap.
+- `CardHost.Register` has no duplicate-registration guard — add it when registration
+  becomes data-driven.
+- `SettingsPreview.PreviewMedia` is seeded and installed as a DataContext but nothing
+  binds to it; the preview's media text is hardcoded in two places that can drift.
+- Switching *between* high-contrast themes (Black → White) leaves stale colours until
+  restart, because `{x:Static SystemColors.*}` resolves once at dictionary load.
+- The a11y lint script is not wired into CI or any build target, and its default scope
+  excludes `src/Plith.Installer`, which has ~15 unnamed controls of its own.
 
 ### Phase 6 — Notch mode + System Controls card (3–4 wk)
 
