@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
@@ -27,7 +28,10 @@ public partial class SettingsWindow : Window
     // Row entry for each preset + the single custom swatch in the accent picker.
     // Kept as a mutable record so RefreshAccentSelection can flip visuals in-place
     // without rebuilding the WrapPanel on every settings change.
-    private sealed record AccentSwatch(string Id, Border Root, Border Fill, TextBlock Tick, TextBlock? PlusIcon, bool IsCustom);
+    // Root is a FrameworkElement (in practice always the Button built by CreateSwatch /
+    // CreateCustomSwatch) rather than Button so callers that only need to add it to the
+    // WrapPanel don't have to know its concrete type.
+    private sealed record AccentSwatch(string Id, FrameworkElement Root, Border Fill, TextBlock Tick, TextBlock? PlusIcon, bool IsCustom);
 
     // Captured combo for the in-progress hotkey recording. Apply on first valid KeyDown.
     private uint _capturedMods;
@@ -76,7 +80,9 @@ public partial class SettingsWindow : Window
         StateChanged += (_, _) =>
         {
             MaximizeButton.Content = WindowState == WindowState.Maximized ? "" : "";
-            MaximizeButton.ToolTip = WindowState == WindowState.Maximized ? "Restore" : "Maximize";
+            string maximizeLabel = WindowState == WindowState.Maximized ? "Restore" : "Maximize";
+            MaximizeButton.ToolTip = maximizeLabel;
+            AutomationProperties.SetName(MaximizeButton, maximizeLabel);
         };
 
         PreviewKeyDown += OnPreviewKeyDown;
@@ -652,21 +658,26 @@ public partial class SettingsWindow : Window
 
     private AccentSwatch CreateSwatch(string id, string tooltip, Color baseColor, bool isCustom)
     {
-        // Outer border reserves 2px for the halo-style selection ring. The inner
-        // Fill is smaller so the ring reads as a highlight around a solid dot
-        // instead of a coloured border on the swatch itself.
-        var root = new Border
+        // Outer button reserves 2px for the halo-style selection ring, rendered by the
+        // shared SwatchTemplate as a plain Border. The inner Fill is smaller so the ring
+        // reads as a highlight around a solid dot instead of a coloured border on the
+        // swatch itself. This used to be a bare Border with a MouseLeftButtonUp handler,
+        // which meant it was unreachable by keyboard and invisible to a screen reader —
+        // a Border exposes no focus and no invoke pattern. Button gets both for free.
+        var root = new Button
         {
             Width = 40,
             Height = 40,
-            CornerRadius = new CornerRadius(20),
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(2),
+            Padding = new Thickness(0),
             Cursor = Cursors.Hand,
             Margin = new Thickness(0, 0, 8, 8),
             ToolTip = tooltip,
+            Template = SwatchTemplate,
         };
+        AutomationProperties.SetName(root, tooltip);
         var grid = new Grid();
         var fill = new Border
         {
@@ -690,12 +701,12 @@ public partial class SettingsWindow : Window
         };
         grid.Children.Add(fill);
         grid.Children.Add(tick);
-        root.Child = grid;
+        root.Content = grid;
 
-        // MouseLeftButtonUp instead of PreviewMouseLeftButtonDown so drag-selection
-        // in the parent doesn't accidentally commit a preset — the user has to fully
-        // click on the swatch.
-        root.MouseLeftButtonUp += (_, _) => OnSwatchClicked(id, isCustom);
+        // Click (not a mouse event) so Space/Enter activate the swatch exactly like a
+        // mouse click does, and there's no separate mouse handler left behind that could
+        // fire alongside Click and double-invoke the same swatch.
+        root.Click += (_, _) => OnSwatchClicked(id, isCustom);
 
         return new AccentSwatch(id, root, fill, tick, PlusIcon: null, IsCustom: isCustom);
     }
@@ -707,18 +718,20 @@ public partial class SettingsWindow : Window
             settings.CustomAccentColor,
             AccentTheme.ResolveBase(AccentTheme.DefaultId, null));
 
-        var root = new Border
+        var root = new Button
         {
             Width = 40,
             Height = 40,
-            CornerRadius = new CornerRadius(20),
             Background = Brushes.Transparent,
             BorderBrush = Brushes.Transparent,
             BorderThickness = new Thickness(2),
+            Padding = new Thickness(0),
             Cursor = Cursors.Hand,
             Margin = new Thickness(0, 0, 8, 8),
             ToolTip = "Custom color",
+            Template = SwatchTemplate,
         };
+        AutomationProperties.SetName(root, "Custom color");
         var grid = new Grid();
         var fill = new Border
         {
@@ -756,11 +769,38 @@ public partial class SettingsWindow : Window
         grid.Children.Add(fill);
         grid.Children.Add(plus);
         grid.Children.Add(tick);
-        root.Child = grid;
+        root.Content = grid;
 
-        root.MouseLeftButtonUp += (_, _) => OnSwatchClicked(AccentTheme.CustomId, isCustom: true);
+        root.Click += (_, _) => OnSwatchClicked(AccentTheme.CustomId, isCustom: true);
 
         return new AccentSwatch(AccentTheme.CustomId, root, fill, tick, plus, IsCustom: true);
+    }
+
+    // Shared ControlTemplate for every accent swatch Button: a single rounded Border
+    // whose Background/BorderBrush/BorderThickness are template-bound back to the
+    // Button's own properties, and whose content (the fill dot + tick/plus glyphs built
+    // by CreateSwatch/CreateCustomSwatch) is rendered through a plain ContentPresenter.
+    // This neutralises every piece of default Button chrome — no ButtonChrome, no
+    // padding contribution, no theme-driven background — so the swatch renders exactly
+    // like the old bare Border did, just with real focus/keyboard/UIA-invoke support.
+    private static ControlTemplate? _swatchTemplate;
+    private static ControlTemplate SwatchTemplate => _swatchTemplate ??= BuildSwatchTemplate();
+
+    private static ControlTemplate BuildSwatchTemplate()
+    {
+        var border = new FrameworkElementFactory(typeof(Border));
+        border.SetValue(Border.CornerRadiusProperty, new CornerRadius(20));
+        border.SetValue(Border.BackgroundProperty, new TemplateBindingExtension(Button.BackgroundProperty));
+        border.SetValue(Border.BorderBrushProperty, new TemplateBindingExtension(Button.BorderBrushProperty));
+        border.SetValue(Border.BorderThicknessProperty, new TemplateBindingExtension(Button.BorderThicknessProperty));
+        border.SetValue(Border.SnapsToDevicePixelsProperty, true);
+
+        var content = new FrameworkElementFactory(typeof(ContentPresenter));
+        content.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        content.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Stretch);
+        border.AppendChild(content);
+
+        return new ControlTemplate(typeof(Button)) { VisualTree = border };
     }
 
     private void OnSwatchClicked(string id, bool isCustom)
@@ -909,7 +949,13 @@ public partial class SettingsWindow : Window
         foreach (var sw in _accentSwatches)
         {
             bool selected = string.Equals(sw.Id, id, StringComparison.OrdinalIgnoreCase);
-            sw.Root.BorderBrush = selected ? accentBrush : Brushes.Transparent;
+            // Root is typed FrameworkElement on the record, but is always the Button
+            // built by CreateSwatch/CreateCustomSwatch, which templates its BorderBrush
+            // into the selection ring — so this cast is always safe.
+            if (sw.Root is Control control)
+            {
+                control.BorderBrush = selected ? accentBrush : Brushes.Transparent;
+            }
             sw.Tick.Visibility = selected ? Visibility.Visible : Visibility.Collapsed;
         }
 
