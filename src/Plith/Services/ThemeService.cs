@@ -122,7 +122,7 @@ public sealed class ThemeService : IDisposable
 
         // High contrast overrides the user's theme setting entirely, including Auto.
         PaletteKind wantsKind;
-        if (SystemParameters.HighContrast)
+        if (IsHighContrast)
         {
             wantsKind = PaletteKind.HighContrast;
         }
