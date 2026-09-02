@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Plith.Installer.ViewModels;
 
 namespace Plith.Installer.Pages;
@@ -23,9 +24,24 @@ public partial class FinishPage : UserControl
 
         // M2 + I5: also fire the launch automatically if the user opted in. The button
         // remains visible as a fallback affordance while the new process is spinning up.
+        //
+        // Delay 2.5 s: Loaded fires BEFORE WPF's first render pass. Without the delay,
+        // LaunchPlithAndExit called Application.Shutdown before FinishPage ever painted,
+        // so the installer window "just disappeared" after the Registering step — users
+        // read the disappearance as a crash. The delay guarantees the page is visible
+        // and gives the child Process.Start time to complete before the parent tears down.
         if (vm.OpenAfterInstall)
         {
-            Loaded += (_, _) => LaunchPlithAndExit(installedExePath);
+            Loaded += (_, _) =>
+            {
+                var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(2500) };
+                timer.Tick += (_, _) =>
+                {
+                    timer.Stop();
+                    LaunchPlithAndExit(installedExePath);
+                };
+                timer.Start();
+            };
         }
 
         GitHubButton.Click += (_, _) => Process.Start(new ProcessStartInfo("https://github.com/berkeerdo/Plith") { UseShellExecute = true });
