@@ -35,6 +35,7 @@
                 x:Name="CloseButton"
                 Content="Close"
                 Style="{StaticResource AccentButtonStyle}"
-                HorizontalAlignment="Center" />
+                HorizontalAlignment="Center"
+                AutomationProperties.Name="Close" />
     </Grid>
 </UserControl>

@@ -48,11 +48,17 @@
         <!-- Spacer eats vertical room so button + expander hug the bottom -->
 
         <!-- Primary button -->
+        <!-- Content is bound to PrimaryButtonLabel, which already tracks the button's
+             actual action ("Install Plith" / "Reinstall Plith vX" / "Update Plith vX -> vY")
+             rather than an unrelated status string, so the accessible name is bound to the
+             same source: it stays in sync with what the button will do, the same way
+             SettingsWindow's MaximizeButton keeps its name in sync with window state. -->
         <Button Grid.Row="4"
                 x:Name="PrimaryButton"
                 Content="{Binding PrimaryButtonLabel}"
                 Style="{StaticResource AccentButtonStyle}"
-                Margin="0,0,0,12" />
+                Margin="0,0,0,12"
+                AutomationProperties.Name="{Binding PrimaryButtonLabel}" />
 
         <!-- Advanced options expander -->
         <Expander Grid.Row="5"
@@ -72,15 +78,22 @@
                         <CheckBox x:Name="GameModeCheck"
                                   Content="Game mode (UIAccess)"
                                   IsChecked="{Binding GameModeEnabled}"
-                                  Foreground="{DynamicResource TextPrimary}" />
+                                  Foreground="{DynamicResource TextPrimary}"
+                                  AutomationProperties.Name="Game mode (UIAccess)"
+                                  AutomationProperties.HelpText="{Binding ElementName=GameModeHintText, Path=Text}" />
                         <TextBlock Text="?"
                                    FontWeight="Bold"
                                    Foreground="{DynamicResource TextTertiary}"
                                    Margin="6,0,0,0"
-                                   ToolTip="Plith uses a self-signed certificate to enable UIAccess. The cert is only trusted on this machine." />
+                                   ToolTip="Plith uses a self-signed certificate to enable UIAccess. The cert is only trusted on this machine."
+                                   AutomationProperties.Name="" />
+                        <!-- Decorative help glyph: its ToolTip duplicates the surrounding
+                             prose and it isn't itself an interactive control, so it carries
+                             an explicit empty name rather than announcing a lone "?". -->
                     </StackPanel>
                 </Grid>
-                <TextBlock Text="OSD over fullscreen games"
+                <TextBlock x:Name="GameModeHintText"
+                           Text="OSD over fullscreen games"
                            FontSize="11"
                            Foreground="{DynamicResource TextTertiary}"
                            Margin="22,-2,0,8" />
@@ -89,13 +102,15 @@
                           Content="Launch at Windows login"
                           IsChecked="{Binding AutoStartEnabled}"
                           Foreground="{DynamicResource TextPrimary}"
-                          Margin="0,4" />
+                          Margin="0,4"
+                          AutomationProperties.Name="Launch at Windows login" />
 
                 <CheckBox x:Name="OpenAfterCheck"
                           Content="Open Plith after install"
                           IsChecked="{Binding OpenAfterInstall}"
                           Foreground="{DynamicResource TextPrimary}"
-                          Margin="0,4" />
+                          Margin="0,4"
+                          AutomationProperties.Name="Open Plith after install" />
             </StackPanel>
         </Expander>
     </Grid>

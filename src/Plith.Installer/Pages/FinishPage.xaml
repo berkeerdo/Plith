@@ -55,16 +55,19 @@
                 x:Name="OpenPlithButton"
                 Content="Open Plith"
                 Style="{StaticResource AccentButtonStyle}"
-                Margin="0,0,0,10" />
+                Margin="0,0,0,10"
+                AutomationProperties.Name="Open Plith" />
 
         <StackPanel Grid.Row="5" Orientation="Horizontal" HorizontalAlignment="Center">
             <Button x:Name="GitHubButton"
                     Content="View on GitHub"
                     Style="{StaticResource GhostButtonStyle}"
-                    Margin="0,0,10,0" />
+                    Margin="0,0,10,0"
+                    AutomationProperties.Name="View on GitHub" />
             <Button x:Name="CloseButton"
                     Content="Close"
-                    Style="{StaticResource GhostButtonStyle}" />
+                    Style="{StaticResource GhostButtonStyle}"
+                    AutomationProperties.Name="Close" />
         </StackPanel>
     </Grid>
 </UserControl>
