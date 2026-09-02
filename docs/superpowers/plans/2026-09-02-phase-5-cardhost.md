@@ -21,6 +21,18 @@
 - Build command: `dotnet build Plith.slnx -c Debug`
 - Test command: `dotnet test tests/Plith.Tests/Plith.Tests.csproj`
 - **Every task must leave the solution building and all tests passing.** No task may land a half-migrated type.
+- **No synthetic input, ever.** An automated worker must never inject mouse or keyboard
+  events, activate or focus a window, or launch and drive the app interactively. This is
+  not a style preference: during Task 3 a synthetic click intended for the OSD's Play/Pause
+  button landed in a live Valorant match — the OSD had auto-hidden, and a click sent at
+  screen coordinates goes wherever those coordinates now point. Automated work stops at
+  code, tests, `dotnet build`, and reading logs.
+- **Manual GUI verification is a human step.** Where a task calls for running the app,
+  comparing screenshots, driving Narrator, or checking high contrast, the worker stops and
+  reports `NEEDS_CONTEXT` with exact instructions: what to launch, what to do, what to look
+  for, and what would count as a failure. A human runs it and reports back. A task is not
+  complete until its manual steps have actually been performed by a person — "covered by
+  unit tests instead" does not discharge a manual step.
 - Card `Order` values are spaced by 10 (`media = 10`, `audio = 20`) so Phase 6 cards slot in without renumbering.
 
 ---
