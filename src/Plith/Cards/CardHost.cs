@@ -57,6 +57,16 @@ public sealed class CardHost : IDisposable
 
     public void Register(ICard card)
     {
+        // Registration happens once, deterministically, at startup wiring time — closer to a DI
+        // container's AddSingleton than to a runtime event. A re-registration here is always a
+        // programming/config bug (Phase 6's data-driven registration listing a card twice), and
+        // the failure mode it silently causes otherwise — a duplicated list entry plus a
+        // double-subscribed ShowRequested, so the OSD pops or hides twice per event — surfaces
+        // far from this call and is hard to trace back. Throwing at the call site instead points
+        // straight at the bug while the stack still names the offending card.
+        if (_cards.Contains(card))
+            throw new InvalidOperationException($"Card '{card.Id}' is already registered.");
+
         // Keep _cards sorted on insert so Cards and VisibleCards share one ordering rule.
         int index = _cards.FindIndex(c => c.Order > card.Order);
         if (index < 0) _cards.Add(card); else _cards.Insert(index, card);

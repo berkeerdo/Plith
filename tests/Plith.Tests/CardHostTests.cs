@@ -75,6 +75,16 @@ public class CardHostTests
     }
 
     [Fact]
+    public void Register_SameCardTwice_Throws()
+    {
+        var host = new CardHost(NewSettings());
+        var media = new FakeCard("media", 10);
+        host.Register(media);
+
+        Assert.Throws<InvalidOperationException>(() => host.Register(media));
+    }
+
+    [Fact]
     public void VisibleCards_ExcludesInvisibleCard()
     {
         var host = new CardHost(NewSettings());
