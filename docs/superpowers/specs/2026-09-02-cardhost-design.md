@@ -179,17 +179,23 @@ are shell chrome, not card content. The inner `StackPanel` is replaced by:
     </ItemsControl.ItemsPanel>
     <ItemsControl.ItemTemplate>
         <DataTemplate>
-            <StackPanel>
+            <!-- The alternation index is read into Tag by an ELEMENT-level binding and the
+                 trigger then reads Tag. Binding RelativeSource=AncestorType=ContentPresenter
+                 directly inside DataTemplate.Triggers does NOT work: a template trigger's
+                 binding evaluates against the container and FindAncestor starts at the
+                 container's PARENT, so the search walks past the item's own ContentPresenter
+                 and lands on an outer one where AlternationIndex is unset and defaults to 0 —
+                 collapsing the divider on every card. Do not "simplify" this back. -->
+            <StackPanel x:Name="ItemRoot"
+                        Tag="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter},
+                                      Path=(ItemsControl.AlternationIndex)}">
                 <!-- Separator above every card except the first. -->
                 <Border x:Name="Divider" Height="1" Margin="0,14,0,14"
                         Background="{DynamicResource OsdDivider}" />
                 <ContentControl Content="{Binding ViewModel}" />
             </StackPanel>
             <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding RelativeSource={RelativeSource
-                                       AncestorType=ContentPresenter},
-                                       Path=(ItemsControl.AlternationIndex)}"
-                             Value="0">
+                <DataTrigger Value="0" Binding="{Binding ElementName=ItemRoot, Path=Tag}">
                     <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>
@@ -201,6 +207,13 @@ are shell chrome, not card content. The inner `StackPanel` is replaced by:
 `AlternationCount="64"` makes `ItemsControl.AlternationIndex` report the true index for
 the first 64 items, which is the standard WPF idiom for index-aware item templates. The
 notch will never hold 64 cards; the constant gets a comment saying so.
+
+The `Tag` indirection above is not stylistic. An earlier revision of this spec put the
+`AncestorType=ContentPresenter` binding straight inside the `DataTrigger`, and that form
+was measured — in an isolated WPF layout harness reproducing this exact tree — to collapse
+the divider on *every* item, costing `14 + 1 + 14 = 29 px` of separation between the media
+and volume rows and shortening the whole card. Element-level bindings resolve the ancestor
+correctly; template-trigger bindings do not.
 
 **Geometry note:** in 0.1.5 the divider carries `Margin="0,14,0,14"` and sits between the
 media row and the volume row. Placing the divider *above* each non-first card reproduces

@@ -1489,7 +1489,12 @@ Replace the `StackPanel` inside the `Border` in `src/Plith/Views/OsdContent.xaml
     </ItemsControl.ItemsPanel>
     <ItemsControl.ItemTemplate>
         <DataTemplate>
-            <StackPanel>
+            <!-- Tag carries the alternation index because an ELEMENT-level binding resolves
+                 AncestorType=ContentPresenter to the item container, and a template-trigger
+                 binding does not. See the warning below the block. -->
+            <StackPanel x:Name="ItemRoot"
+                        Tag="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter},
+                                      Path=(ItemsControl.AlternationIndex)}">
                 <!-- Separator above every card except the first. In 0.1.5 the divider sat
                      between the media row and the volume row with this exact margin; placing
                      it above each non-first card reproduces that spacing. A Collapsed element
@@ -1500,9 +1505,7 @@ Replace the `StackPanel` inside the `Border` in `src/Plith/Views/OsdContent.xaml
                 <ContentControl Content="{Binding ViewModel}" />
             </StackPanel>
             <DataTemplate.Triggers>
-                <DataTrigger Value="0"
-                             Binding="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                               Path=(ItemsControl.AlternationIndex)}">
+                <DataTrigger Value="0" Binding="{Binding ElementName=ItemRoot, Path=Tag}">
                     <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
                 </DataTrigger>
             </DataTemplate.Triggers>
@@ -1510,6 +1513,19 @@ Replace the `StackPanel` inside the `Border` in `src/Plith/Views/OsdContent.xaml
     </ItemsControl.ItemTemplate>
 </ItemsControl>
 ```
+
+⚠️ **Do not move the `AncestorType=ContentPresenter` binding into the `DataTrigger`.** An
+earlier revision of this plan did exactly that, and it shipped a visible regression. A
+template trigger's binding evaluates against the item container, and `FindAncestor` starts
+at the container's *parent* — so the search walks past the item's own `ContentPresenter`
+and lands on an outer one (`OsdContent`'s UserControl template, then `BandWindow`'s
+`ContentControl` template) where `ItemsControl.AlternationIndex` is unset and returns its
+default `0`. The trigger then matches **every** item and collapses **every** divider. Since
+a `Collapsed` element contributes nothing to `StackPanel` layout, that costs
+`14 + 1 + 14 = 29 px` of separation and shortens the whole card, which also shifts it
+against a centre anchor. This was measured directly in an isolated WPF layout harness, not
+inferred. Element-level bindings resolve the ancestor correctly; template-trigger bindings
+do not.
 
 Change the design-time DataContext on the `UserControl` element from `vm:OsdViewModel` to `vm:OsdShellViewModel`. Leave `Width="440"`, the outer `Grid Margin="14" Background="Transparent"`, and the `Border` (corner radius, padding, brushes, drop shadow) exactly as they are — that is shell chrome and changing it breaks the pixel baseline.
 
