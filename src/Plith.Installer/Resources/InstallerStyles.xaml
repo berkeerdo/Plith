@@ -10,7 +10,8 @@
     <!-- Page-specific installer styles. -->
 
     <!-- Large primary action button — accent green fill, white text. Used on Welcome,
-         Finish (Open Plith), UninstallConfirm. -->
+         Finish (Open Plith), UninstallConfirm. MinHeight + MinWidth baked in so every
+         hero CTA across the installer has one shape; per-page overrides removed. -->
     <Style x:Key="AccentButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="{DynamicResource Accent}" />
         <Setter Property="Foreground" Value="#FFFFFF" />
@@ -19,6 +20,8 @@
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Padding" Value="20,10" />
+        <Setter Property="MinHeight" Value="42" />
+        <Setter Property="MinWidth" Value="140" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>
@@ -43,7 +46,9 @@
     </Style>
 
     <!-- Ghost button — outlined, accent-on-hover. For Cancel, View on GitHub, Close on
-         Finish/Error pages. -->
+         Finish/Error pages. MinHeight + MinWidth baked in so a row of ghost buttons
+         (Copy log + Open log, View on GitHub + Close, Uninstall + Cancel) is always
+         one consistent size regardless of label length. -->
     <Style x:Key="GhostButtonStyle" TargetType="Button">
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
@@ -53,6 +58,8 @@
         <Setter Property="BorderThickness" Value="1" />
         <Setter Property="BorderBrush" Value="{DynamicResource CardBorderStrong}" />
         <Setter Property="Padding" Value="14,8" />
+        <Setter Property="MinHeight" Value="36" />
+        <Setter Property="MinWidth" Value="110" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="Template">
             <Setter.Value>

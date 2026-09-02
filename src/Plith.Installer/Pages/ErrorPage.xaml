@@ -62,7 +62,6 @@
                 x:Name="CloseButton"
                 Content="Close"
                 Style="{StaticResource GhostButtonStyle}"
-                MinHeight="36"
                 HorizontalAlignment="Center" />
     </Grid>
 </UserControl>

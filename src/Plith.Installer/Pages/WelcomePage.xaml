@@ -52,7 +52,6 @@
                 x:Name="PrimaryButton"
                 Content="{Binding PrimaryButtonLabel}"
                 Style="{StaticResource AccentButtonStyle}"
-                MinHeight="42"
                 Margin="0,0,0,12" />
 
         <!-- Advanced options expander -->
