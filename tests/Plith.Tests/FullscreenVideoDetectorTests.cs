@@ -36,6 +36,16 @@ public class FullscreenVideoDetectorTests
     }
 
     [Fact]
+    public void ExclusiveFullscreenGame_DoesNotSuppress_EvenWhenProcessIsOnHideList()
+    {
+        // The veto must hold against both arms of the disjunction: D3D is an unconditional hard veto
+        // that overrides the decision even if the foreground process is on the hide list.
+        Assert.False(FullscreenVideoDetector.ShouldSuppress(
+            enabled: true, foregroundCoversMonitor: true, notificationState: D3D,
+            foregroundOwnsPlayingSmtc: false, foregroundProcessName: "mpv", hideList: DefaultList));
+    }
+
+    [Fact]
     public void FullscreenBrowserPlayingMedia_Suppresses()
     {
         Assert.True(FullscreenVideoDetector.ShouldSuppress(
