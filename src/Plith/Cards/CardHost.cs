@@ -64,6 +64,10 @@ public sealed class CardHost : IDisposable
         // double-subscribed ShowRequested, so the OSD pops or hides twice per event — surfaces
         // far from this call and is hard to trace back. Throwing at the call site instead points
         // straight at the bug while the stack still names the offending card.
+        // TODO(Phase 6): this is reference-equality only (List<T>.Contains, default
+        // comparer) — it catches the same instance registered twice but not two distinct
+        // instances sharing an Id. Data-driven registration will also want duplicate-Id
+        // detection; see the carry-forward report for why that's deferred.
         if (_cards.Contains(card))
             throw new InvalidOperationException($"Card '{card.Id}' is already registered.");
 
