@@ -10,7 +10,16 @@ namespace Plith.Cards;
 /// Deliberately holds no reference to any WPF window: it raises <see cref="ShowRequested"/>
 /// and <see cref="HideRequested"/> and lets OsdHost subscribe. That constraint is what makes
 /// the show policy unit-testable with no Application and no HWND, and it is the reason this
-/// type must never grow a Window, Dispatcher, or Visual dependency.
+/// type must never grow a Window, Dispatcher, or Visual dependency of its own.
+///
+/// That rule is about this type's own implementation, not about which thread calls it:
+/// <see cref="VisibleCards"/> is an <see cref="ObservableCollection{T}"/> bound directly to
+/// a live <c>ItemsControl</c>, so every member of this class — <see cref="Register"/>,
+/// <see cref="Start"/>, <see cref="RequestShow"/>, and both <see cref="ICard"/> events it
+/// subscribes to — must be called on the UI dispatcher. A future card that raises
+/// <see cref="ICard.VisibilityChanged"/> or <see cref="ICard.ShowRequested"/> from a worker
+/// thread (a WMI or COM callback, for example) will throw a <see cref="NotSupportedException"/>
+/// deep inside the WPF binding engine, far from this file.
 /// </summary>
 public sealed class CardHost : IDisposable
 {
@@ -29,6 +38,12 @@ public sealed class CardHost : IDisposable
 
     /// <summary>Every registered card, sorted by <see cref="ICard.Order"/>.</summary>
     public IReadOnlyList<ICard> Cards => _cards;
+
+    /// <summary>The suppressor this host was constructed with, if any. Exposed so a second
+    /// show authority outside CardHost (currently OsdHost.OnMouseEnter's hover keep-alive)
+    /// can consult the same suppression state RequestShow gates on, instead of resurrecting
+    /// the OSD independently of the one authority this class is meant to be.</summary>
+    public IShowSuppressor? Suppressor => _suppressor;
 
     /// <summary>Policy output: the cards that should render right now, in Order.
     /// Bound directly by OsdShellViewModel.</summary>

@@ -36,7 +36,7 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         _media = media;
         _log = log;
         _pollTimer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = PollInterval };
-        _pollTimer.Tick += (_, _) => Evaluate();
+        _pollTimer.Tick += (_, _) => SafeEvaluate();
     }
 
     public bool IsSuppressed => _suppressed;
@@ -67,13 +67,26 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         // This is a reverse-P/Invoke target: an exception escaping it (e.g. from a
         // SuppressionChanged subscriber like CardHost -> OsdHost's WPF animation code)
         // would unwind through a native frame, which is a process-level crash, not a
-        // logged warning. Catch here rather than folding this into Evaluate's own try —
-        // that try guards the detection inputs only, and catching a subscriber's
-        // exception there would incorrectly reset _suppressed's edge state.
+        // logged warning. SafeEvaluate is what guards that.
+        SafeEvaluate();
+    }
+
+    // Both the WinEvent path above and the poll timer's Tick call into this instead of
+    // Evaluate directly. An exception escaping Evaluate would either unwind through the
+    // native WinEvent frame (process-level crash) or, on the poll path, propagate out of
+    // the WPF dispatcher's Tick handler — which is just as fatal, only silent for up to
+    // 1 s at a time for the app's entire lifetime. One guarded entry point means the two
+    // call sites cannot drift apart and one of them ends up unguarded again.
+    //
+    // Catch here rather than folding this into Evaluate's own try: that inner try guards
+    // the detection inputs only, and catching a SuppressionChanged subscriber's exception
+    // there would incorrectly reset _suppressed's edge-trigger state.
+    private void SafeEvaluate()
+    {
         try { Evaluate(); }
         catch (Exception ex)
         {
-            _log?.Warn("FullscreenVideo", $"OnForegroundChanged threw: {ex.GetType().Name}: {ex.Message}");
+            _log?.Warn("FullscreenVideo", $"Evaluate threw: {ex.GetType().Name}: {ex.Message}");
         }
     }
 

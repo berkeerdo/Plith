@@ -139,6 +139,12 @@ public sealed class OsdHost : BandWindow
     {
         if (_isEditMode) return;
         if (!_settings.Current.HoverKeepAlive) return;
+        // CardHost is the single authority for when the OSD appears. Whether a
+        // faded-out (Opacity 0) layered window still hit-tests mouse messages has never
+        // been verified — if it does, hovering over the OSD's screen region while
+        // fullscreen-video suppression is active would resurrect it here, bypassing the
+        // suppressor entirely. Guard defensively rather than find out live.
+        if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
         BeginAnimation(OpacityProperty, null);
         Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;

@@ -21,10 +21,14 @@ public interface ICard
     /// <summary>DataContext for the card's view.</summary>
     object ViewModel { get; }
 
-    /// <summary>Raised when <see cref="IsVisible"/> flips.</summary>
+    /// <summary>Raised when <see cref="IsVisible"/> flips. Must be raised on the UI
+    /// dispatcher: <see cref="CardHost"/> reconciles it directly into an
+    /// <see cref="System.Collections.ObjectModel.ObservableCollection{T}"/> bound to a
+    /// live ItemsControl, which throws off-thread.</summary>
     event Action? VisibilityChanged;
 
-    /// <summary>Raised when the card wants the OSD on screen.</summary>
+    /// <summary>Raised when the card wants the OSD on screen. Must be raised on the UI
+    /// dispatcher — see the note on <see cref="VisibilityChanged"/>.</summary>
     event Action<ShowRequest>? ShowRequested;
 
     /// <summary>Subscribe to whatever sources this card reads.</summary>
