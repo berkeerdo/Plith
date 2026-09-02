@@ -165,21 +165,29 @@ rather than reasoned about:
 
 Deferred to Phase 6 (recorded so they are not rediscovered):
 
-- `MediaCommand` lives in `MediaCardView.xaml.cs`, so `Plith.ViewModels` depends on a
-  type in `Plith.Views` — inverted MVVM direction. Move to `Plith.Cards` when the
-  second card lands.
 - Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
   `SelectionItem` pattern and arrow-key group navigation, and would remove the nine
   extra tab stops the current row costs. Selection state is currently conveyed by
   `AutomationProperties.ItemStatus` as a stopgap.
-- `CardHost.Register` has no duplicate-registration guard — add it when registration
-  becomes data-driven.
-- `SettingsPreview.PreviewMedia` is seeded and installed as a DataContext but nothing
-  binds to it; the preview's media text is hardcoded in two places that can drift.
+- `CardHost.Register` now throws on a duplicate, but the check is **reference equality**
+  (`List<T>.Contains`). It catches the same instance registered twice; it does not catch
+  two distinct instances sharing an `Id`, which is the shape data-driven registration is
+  more likely to produce. Deferred rather than guessed at, because the registration model
+  Phase 6 wants has not been designed — decide the `Id` contract first, then guard it.
 - Switching *between* high-contrast themes (Black → White) leaves stale colours until
   restart, because `{x:Static SystemColors.*}` resolves once at dictionary load.
-- The a11y lint script is not wired into CI or any build target, and its default scope
-  excludes `src/Plith.Installer`, which has ~15 unnamed controls of its own.
+  Toggling high contrast on and off works correctly.
+
+Cleared after Phase 5 closed, recorded so the reasoning is not re-derived:
+
+- `MediaCommand` moved from `Plith.Views` to `Plith.Cards`, ending an inverted MVVM
+  dependency that was documented as transitional when introduced.
+- `SettingsPreview`'s media row now binds to its seeded view model instead of carrying
+  the same two strings hardcoded alongside it.
+- `src/Plith.Installer` gained accessible names on all 15 of its interactive controls,
+  so the lint's `-Root src` scope now passes across both projects.
+- `scripts/check-a11y.ps1` runs in CI on changes under `src/**`, with a local
+  invocation documented in `CONTRIBUTING.md`. Before this it was invoked by nothing.
 
 ### Phase 6 — Notch mode + System Controls card (3–4 wk)
 

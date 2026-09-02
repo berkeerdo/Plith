@@ -67,7 +67,7 @@ public sealed class CardHost : IDisposable
         // TODO(Phase 6): this is reference-equality only (List<T>.Contains, default
         // comparer) — it catches the same instance registered twice but not two distinct
         // instances sharing an Id. Data-driven registration will also want duplicate-Id
-        // detection; see the carry-forward report for why that's deferred.
+        // detection. See docs/ROADMAP.md's Phase 5 section for why that's deferred.
         if (_cards.Contains(card))
             throw new InvalidOperationException($"Card '{card.Id}' is already registered.");
 
