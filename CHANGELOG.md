@@ -3,7 +3,65 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [0.1.5] - 2026-09-01
+## [0.1.5] - 2026-09-02
+
+### Fixed
+- **Installer no longer appears to crash after the "Registering Plith"
+  step.** The FinishPage subscribed its auto-launch to the WPF `Loaded`
+  event, and `Loaded` fires BEFORE the first render pass. The immediate
+  `Application.Shutdown()` inside `LaunchPlithAndExit` then tore the
+  window down before FinishPage ever painted — from the user's side
+  the installer just "disappeared" after Registering with no completion
+  screen. The auto-launch is now deferred behind a 2.5 s
+  `DispatcherTimer` so the Installed screen is visibly on-screen first,
+  and the extra window also gives the child `Process.Start` time to
+  complete before the parent tears down (which likely explains the
+  reports of the auto-open-after-install occasionally not launching
+  Plith at all).
+
+### Changed
+- **Installer buttons are now one consistent size across every page.**
+  Each page (Welcome, Finish, Error, UninstallConfirm, UninstallFinish)
+  had drifted its own MinHeight / MinWidth per button — 42 here, 36
+  there, 120 on one CTA, 100 next to it, some ghost buttons unsized
+  entirely so "View on GitHub" and "Close" rendered at different
+  widths just because their labels differed. `AccentButtonStyle` and
+  `GhostButtonStyle` now bake in MinHeight (42 / 36) and MinWidth
+  (140 / 110); every per-page override was removed. A row of ghost
+  buttons — Copy log + Open log, View on GitHub + Close, Uninstall +
+  Cancel — is now one uniform shape regardless of label length.
+- **Release artifact is a single-file .exe again** (`Plith-Setup-0.1.5.exe`,
+  ~40 MB). 0.1.4 shipped as a folder+zip after Norton's SONAR / Download
+  Insight engines killed the self-extract mid-init on the dev machine.
+  The dev machine is now on Windows Defender, which does not sandbox this
+  path; the in-app updater and the landing site's release fetcher have
+  always looked for `Plith-Setup-*.exe`, so this restoration also unbreaks
+  the auto-update flow that the zip pivot had silently broken. If
+  Norton-heavy users report install crashes down the line, we will add a
+  zip fallback as a second asset alongside the .exe.
+- **Settings buttons now share one visual language.** `Set position`,
+  `Check for updates`, `Release notes`, and `Download and install`
+  were rendering as raw WPF default buttons because they never had a
+  `Style` applied — they broke visual continuity with the rest of the
+  Settings surface (accent-aware cards, ghost inputs, rounded 7px
+  corners). All four now use the existing `GhostButtonStyle` /
+  `PrimaryButtonStyle` from `SettingsTheme.xaml`, so hover, press,
+  focus, and accent-recolor states behave the same as every other
+  action in the window. `Download and install` is the only Primary
+  (accent-filled) button of the group — it is the actual CTA when an
+  update exists — everything else is Ghost.
+- **Updates card is now responsive at narrow widths.** The old layout
+  put the progress bar and both action buttons in one horizontal Grid
+  row; at the Settings window's minimum column width the buttons
+  crowded and the progress bar shrank to a stub. The card now stacks
+  the progress bar full-width on top with the action buttons wrapping
+  right-aligned underneath (`WrapPanel`), so `Download and install`
+  stays fully readable even when the Settings window is resized
+  toward its minimum.
+- **New `ModernProgressBarStyle`.** Thin (4 px) accent-filled bar on
+  a muted ghost track with 2 px rounded corners. Replaces the raw 6 px
+  system ProgressBar in the Updates card. Track and fill both recolor
+  live with the current accent, matching the sliders above.
 
 ### Fixed
 - **Theme Studio picks now actually reach the OSD overlay.** The 0.1.4

@@ -1,12 +1,12 @@
-# scripts/build-release.ps1 — builds the installer as a folder + zip archive.
+# scripts/build-release.ps1 — builds the installer as a single-file
+# self-extracting .exe (~40 MB compressed).
 #
-# History: earlier revisions shipped a single-file self-extracting .exe (~79 MB).
-# That form crashes on machines running Norton and similar AV with "Failed to
-# resolve full path of the current executable" — the AV kills the .exe mid
-# self-extract before .NET's AppHost can init. Folder-mode publish sidesteps
-# the entire self-extract path: the runtime just runs from the folder as-is.
-# Users get Plith-Setup-<version>.zip; extract anywhere, run Plith-Installer.exe
-# as administrator.
+# History: 0.1.4 and 0.1.5 initial build shipped folder+zip during the Norton
+# era on the dev machine — Norton's SONAR / Download Insight engines killed
+# the self-extract mid-init. Reverted to single-file for 0.1.5 publish now
+# that the dev machine is on Windows Defender, which does not sandbox this
+# path. If Norton-heavy users report install crashes down the line, add the
+# folder+zip back as a second output alongside the .exe.
 #
 # Run from an admin PowerShell (signtool needs the cert in CurrentUser\My and
 # lookup can be admin-gated depending on system policy).
@@ -39,36 +39,39 @@ Write-Host "Running Plith.Installer.Tests..."
 & dotnet test $installerTests
 if ($LASTEXITCODE -ne 0) { throw "Plith.Installer.Tests failed." }
 
-# 2. Publish installer as a folder (NOT single-file). Norton's SONAR / Download
-# Insight / Data Protector engines all target .NET's temp-directory self-extract
-# dance and yank the bundle out mid-init; folder mode has no self-extract, so
-# those engines get nothing to bite on. Larger on disk (~100 MB unzipped, ~80 MB
-# zipped) but this is the shape that actually installs on locked-down machines.
-Write-Host "Publishing installer as folder..."
+# 2. Publish installer as a single-file self-extracting .exe.
+# IncludeNativeLibrariesForSelfExtract=true is required for WPF apps so
+# PresentationNative and friends land inside the bundle instead of loose
+# alongside it. EnableCompressionInSingleFile=true shrinks the artifact
+# from ~100 MB to ~40 MB at the cost of ~1 s extra first-launch decompress.
+Write-Host "Publishing installer as single-file self-extract .exe..."
 if (Test-Path $releaseDir) { Remove-Item -Path $releaseDir -Recurse -Force }
 New-Item -ItemType Directory -Path $publishDir | Out-Null
 & dotnet publish $installerProj -c $Configuration -r win-x64 `
-    -p:PublishSingleFile=false `
+    -p:PublishSingleFile=true `
     -p:SelfContained=true `
+    -p:IncludeNativeLibrariesForSelfExtract=true `
+    -p:EnableCompressionInSingleFile=true `
     -o $publishDir
 if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed." }
 
-# 3. Rename Plith.Installer.exe -> Plith-Installer.exe (dash, not dot, so users
-# see it clearly in Explorer next to the other DLLs without thinking it's a
-# nested Plith.exe). The published main exe carries the ProductVersion.
+# 3. Move the published .exe to the release root as Plith-Setup-<version>.exe.
+# The published name from dotnet is Plith.Installer.exe; users see and
+# download Plith-Setup-<version>.exe on GitHub Releases.
 $mainExe = Join-Path $publishDir 'Plith.Installer.exe'
+if (-not (Test-Path $mainExe)) { throw "Published exe not found at $mainExe" }
 $version = (Get-Item $mainExe).VersionInfo.ProductVersion
 if (-not $version) { $version = '0.1.0' }
 $plusIdx = $version.IndexOf('+')
 if ($plusIdx -ge 0) { $version = $version.Substring(0, $plusIdx) }
 
-$launcherName = 'Plith-Installer.exe'
-$launcherExe = Join-Path $publishDir $launcherName
-Move-Item -Path $mainExe -Destination $launcherExe -Force
+$finalExe = Join-Path $releaseDir "Plith-Setup-$version.exe"
+Move-Item -Path $mainExe -Destination $finalExe -Force
 
-# 4. Sign the launcher with the self-signed cert (best-effort — folder mode
-# is meant to survive AV interference either way, but a valid signature still
-# helps SmartScreen and any AV that respects it).
+# 4. Sign the .exe with the self-signed cert. Best-effort — the artifact
+# still runs unsigned but SmartScreen and cooperating AVs treat a valid
+# signature more kindly, and our installer's cert-installation step lets
+# subsequent launches skip the "publisher unknown" nag.
 $cert = Get-ChildItem Cert:\CurrentUser\My |
     Where-Object { $_.Subject -eq 'CN=Plith Self-Signed' -and $_.NotAfter -gt (Get-Date) } |
     Select-Object -First 1
@@ -85,9 +88,9 @@ if ($cert) {
         if ($candidates) { $signtoolPath = $candidates[0].FullName }
     }
     if ($signtoolPath) {
-        Write-Host "Signing $launcherName..."
+        Write-Host "Signing Plith-Setup-$version.exe..."
         & $signtoolPath sign /sha1 $cert.Thumbprint /fd SHA256 `
-            /tr 'http://timestamp.digicert.com' /td SHA256 $launcherExe | Out-Host
+            /tr 'http://timestamp.digicert.com' /td SHA256 $finalExe | Out-Host
         if ($LASTEXITCODE -ne 0) { Write-Warning "signtool failed; artifact will be UNSIGNED." }
     } else {
         Write-Warning "signtool.exe not found; artifact will be UNSIGNED."
@@ -96,37 +99,8 @@ if ($cert) {
     Write-Warning "No Plith Self-Signed cert found in CurrentUser\My. Artifact will be UNSIGNED."
 }
 
-# 5. Drop a plain README so users know what to do without opening a browser.
-$readmePath = Join-Path $publishDir 'README.txt'
-@"
-Plith $version - Installer
-
-To install:
-  1. Right-click Plith-Installer.exe -> Run as administrator.
-  2. Follow the on-screen prompts.
-
-If Windows or your antivirus complains about a "publisher unknown" warning
-click More info -> Run anyway. Plith is signed with a self-signed developer
-certificate; the installer registers that certificate in your local trust
-store so subsequent launches don't warn.
-
-If your antivirus (particularly Norton) prevents the installer from writing
-into C:\Program Files\Plith, add C:\Program Files\Plith to its scan
-exclusion list before re-running.
-
-Uninstall via Windows Settings -> Apps -> Plith -> Uninstall.
-"@ | Set-Content -Path $readmePath -Encoding UTF8
-
-# 6. Zip the whole publish folder as Plith-Setup-<version>.zip. This is the
-# artifact that ships to GitHub Releases and to the in-app updater. Named to
-# match the earlier single-file convention so existing docs and the release
-# URL pattern still make sense.
-$zipPath = Join-Path $releaseDir "Plith-Setup-$version.zip"
-if (Test-Path $zipPath) { Remove-Item $zipPath -Force }
-Compress-Archive -Path (Join-Path $publishDir '*') -DestinationPath $zipPath -CompressionLevel Optimal
-
-# 7. Clean up the intermediate publish/ folder now that the zip is done.
+# 5. Clean up the intermediate publish/ folder — only the .exe ships.
 Remove-Item -Path $publishDir -Recurse -Force
 
 Write-Host ""
-Write-Host "Release artifact ready: $zipPath"
+Write-Host "Release artifact ready: $finalExe"
