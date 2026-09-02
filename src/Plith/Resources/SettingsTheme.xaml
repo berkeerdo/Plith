@@ -464,6 +464,33 @@
         </Setter>
     </Style>
 
+    <!-- Thin, rounded progress bar — accent fill on muted track. Used by the
+         Updates card during a download. Height 4px keeps it a status hint,
+         not a UI element competing with the buttons above it. -->
+    <Style x:Key="ModernProgressBarStyle" TargetType="ProgressBar">
+        <Setter Property="OverridesDefaultStyle" Value="True" />
+        <Setter Property="Height" Value="4" />
+        <Setter Property="Foreground" Value="{DynamicResource Accent}" />
+        <Setter Property="Background" Value="{DynamicResource ButtonGhost}" />
+        <Setter Property="BorderThickness" Value="0" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="ProgressBar">
+                    <Grid ClipToBounds="True">
+                        <Border CornerRadius="2"
+                                Background="{TemplateBinding Background}" />
+                        <Border x:Name="PART_Track" />
+                        <Border x:Name="PART_Indicator"
+                                HorizontalAlignment="Left"
+                                CornerRadius="2"
+                                Background="{TemplateBinding Foreground}" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- ============================================================
          Custom scrollbar — Raycast/Linear-tier thin overlay style.
          No track background, no arrows, thumb fades in on hover.

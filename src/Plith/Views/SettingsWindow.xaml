@@ -313,8 +313,8 @@
                                 </StackPanel>
                                 <Button x:Name="OpenPositionOverlayButton"
                                         Grid.Column="1"
+                                        Style="{StaticResource GhostButtonStyle}"
                                         Content="Set position"
-                                        Padding="18,8"
                                         VerticalAlignment="Center" />
                             </Grid>
                         </Border>
@@ -585,7 +585,7 @@
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
-                                <StackPanel Grid.Column="0">
+                                <StackPanel Grid.Column="0" Margin="0,0,16,0">
                                     <TextBlock x:Name="UpdateStatusLabel"
                                                Style="{StaticResource RowLabelStyle}"
                                                Text="Version — press Check for updates" />
@@ -595,34 +595,32 @@
                                 </StackPanel>
                                 <Button x:Name="UpdateCheckButton"
                                         Grid.Column="1"
+                                        Style="{StaticResource GhostButtonStyle}"
                                         Content="Check for updates"
-                                        Padding="14,6"
                                         VerticalAlignment="Center" />
                             </Grid>
-                            <Grid x:Name="UpdateActionRow" Margin="0,10,0,0" Visibility="Collapsed">
-                                <Grid.ColumnDefinitions>
-                                    <ColumnDefinition Width="*" />
-                                    <ColumnDefinition Width="Auto" />
-                                </Grid.ColumnDefinitions>
+                            <!-- Progress + actions surface only after "Check for updates" resolves.
+                                 Layout: progress bar spans full width up top (readable at any card
+                                 width) with the action buttons wrapping right-aligned underneath so
+                                 the narrow-column case doesn't clip the "Download and install" CTA. -->
+                            <StackPanel x:Name="UpdateActionRow" Margin="0,14,0,0" Visibility="Collapsed">
                                 <ProgressBar x:Name="UpdateProgressBar"
-                                             Grid.Column="0"
-                                             Height="6"
-                                             VerticalAlignment="Center"
+                                             Style="{StaticResource ModernProgressBarStyle}"
                                              Minimum="0" Maximum="1"
                                              Visibility="Collapsed" />
-                                <StackPanel Grid.Column="1"
-                                            Orientation="Horizontal"
-                                            HorizontalAlignment="Right"
-                                            VerticalAlignment="Center">
+                                <WrapPanel Orientation="Horizontal"
+                                           HorizontalAlignment="Right"
+                                           Margin="0,12,0,0">
                                     <Button x:Name="UpdateOpenPageButton"
+                                            Style="{StaticResource GhostButtonStyle}"
                                             Content="Release notes"
-                                            Padding="12,5"
-                                            Margin="0,0,8,0" />
+                                            Margin="0,0,8,4" />
                                     <Button x:Name="UpdateDownloadButton"
+                                            Style="{StaticResource PrimaryButtonStyle}"
                                             Content="Download and install"
-                                            Padding="14,5" />
-                                </StackPanel>
-                            </Grid>
+                                            Margin="0,0,0,4" />
+                                </WrapPanel>
+                            </StackPanel>
                         </StackPanel>
                     </Border>
                 </Border>
