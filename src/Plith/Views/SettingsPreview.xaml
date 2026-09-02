@@ -78,13 +78,13 @@
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource OsdTextPrimary}"
                                                TextTrimming="CharacterEllipsis"
-                                               Text="Sample track" />
+                                               Text="{Binding Title}" />
                                     <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                                FontSize="10"
                                                Margin="0,2,0,0"
                                                Foreground="{DynamicResource OsdTextSecondary}"
                                                TextTrimming="CharacterEllipsis"
-                                               Text="Sample artist" />
+                                               Text="{Binding Artist}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
