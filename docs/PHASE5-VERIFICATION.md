@@ -95,16 +95,55 @@ window hit-testing, which nobody verified.
 
 ## 3. Screen reader (Narrator: `Ctrl+Win+Enter`)
 
-| # | Check | Pass | Fail |
-|---|---|---|---|
-| 3.1 | Hover the OSD's transport buttons with a media session active | "Previous track", "Play"/"Pause", "Next track" | A meaningless glyph, or just "button" |
-| 3.2 | Change the volume with the OSD visible | The new value is announced | Nothing |
-| 3.3 | Tab through the whole Settings window | Every control announces a meaningful name | Any control announces only its type |
+**3.1 and 3.2 are done.** They were settled by reading the live UI Automation tree —
+the same data a screen reader consumes — rather than by starting Narrator, which has the
+advantage that the result is a transcript instead of something someone has to remember
+hearing. 3.3 still needs a person, because the Settings window can only be opened from the
+tray menu.
 
-**If 3.2 announces nothing, that is an expected possibility, not a bug to chase.** The
-OSD lives in a `CreateWindowInBand` HWND and whether such a window participates in the
-UI Automation tree was never assumable. The properties are correct and cost nothing
-either way. Record the observation in `docs/ROADMAP.md` under Phase 6 and move on.
+**The open question behind this whole section is answered: the band window DOES
+participate in the UI Automation tree.** The doubt recorded here earlier — that a
+`CreateWindowInBand` HWND might be invisible to UIA, which would have excused an
+announcement failure — is disproven. It appears as a desktop child with its full contents
+below it. So an a11y property that does not show up is a defect, not a platform limit.
+
+Two real defects were found that way and are fixed on this branch:
+
+- **The live region never existed.** Both card views put
+  `AutomationProperties.Name`/`LiveSetting` on a bare `<Grid>`. WPF creates no automation
+  peer for a panel, and `UIElementAutomationPeer.GetNameCore` reads the property off its
+  owner — so the name reached nothing. The tree showed `Custom <AudioCardView> name=''`
+  with no element for the Grid at all, not even in the raw view. The properties now sit on
+  each `UserControl` root, which does own a peer, and `LiveRegionAnnouncer` raises
+  `LiveRegionChanged` on change (WPF does not raise it by itself).
+- **Cards announced their .NET type name.** The OSD's `ItemsControl` container takes its
+  name from the bound item, falling back to `ToString()`. The tree really did read
+  `DataItem name='Plith.Cards.AudioCard'`. `ICard.AccessibleName` now requires every card
+  to name itself, and each card's `ToString()` returns it.
+
+Measured after the fix, with a media session active:
+
+```
+DataItem name='Now playing'
+  Custom <MediaCardView> name='OK (feat. Don Toliver) by Kanye West, paused'
+    Button name='Previous track'   Button name='Play'   Button name='Next track'
+DataItem name='Volume'
+  Custom <AudioCardView> name='Remote Audio, 60%'
+```
+
+| # | Check | Status |
+|---|---|---|
+| 3.1 | Transport buttons named | **PASS** — "Previous track" / "Play" / "Next track", each with HelpText |
+| 3.2 | Volume value reaches the live region | **PASS after fix** — the card's name tracks the current value |
+| 3.3 | Tab through the whole Settings window | **Still open** — needs the window opened from the tray |
+
+Note that 3.2 is verified only as far as *the property is correct and the event is
+raised*. Whether Narrator actually speaks it is a Narrator behaviour question that only
+listening can settle; if you ever do run Narrator, that is the thing worth checking.
+
+`scripts/check-a11y.ps1` passed throughout, including while the live region was inert —
+it reads XAML statically and cannot know which elements WPF gives a peer to. Treat a
+green lint as "nothing is unnamed", not as "everything named is reachable".
 
 Two known cosmetic quirks to listen for and report — both are deferred, and whether
 they are worth fixing depends on whether you can actually hear them:
@@ -140,7 +179,19 @@ deferred as a Phase 6 item.
 
 ## 5. High contrast (`Left Alt + Left Shift + Print Screen`)
 
-The static audit is done; nobody has looked at the result.
+The static audit is done; nobody has looked at the result. **This section resisted
+automation twice over, so it stays a human step:**
+
+- Setting the `HCF_HIGHCONTRASTON` flag through `SystemParametersInfo` flips
+  `SystemParameters.HighContrast`, so Plith swaps to its HighContrast palette — but
+  Windows 11 applies the actual contrast theme through the theme engine, so `SystemColors`
+  still hands back ordinary theme colours. The palette would be exercised against the wrong
+  input. Use the real hotkey or Settings > Accessibility > Contrast themes.
+- Over an RDP session the OSD cannot be screenshotted at all. The band window is layered
+  and drawn with `UpdateLayeredWindow`; it is absent from a plain `BitBlt`, absent from one
+  with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns solid black. The
+  window is provably on screen and correctly positioned at the time — only its pixels are
+  unreachable. Run anything pixel-based from the physical console.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
