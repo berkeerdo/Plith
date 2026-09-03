@@ -11,6 +11,19 @@ public interface ICard
     /// <summary>Stable identifier, e.g. "audio" / "media". Used in ShowRequest.OriginCardId.</summary>
     string Id { get; }
 
+    /// <summary>
+    /// Short human-readable name for the card, e.g. "Volume". A screen reader announces this as
+    /// the name of the card's row in the OSD stack.
+    ///
+    /// Required rather than defaulted on purpose. The OSD renders cards through an ItemsControl,
+    /// and WPF's ItemAutomationPeer names each container from the bound item — falling back to
+    /// ToString() when nothing better is available. A card that does not name itself therefore
+    /// announces its .NET type name; the live UIA tree really did read "Plith.Cards.AudioCard"
+    /// before this member existed. Each card overriding ToString() to return this value is what
+    /// feeds that fallback.
+    /// </summary>
+    string AccessibleName { get; }
+
     /// <summary>Render order inside the OSD stack; lower renders higher up. Spaced by 10
     /// so new cards can slot between existing ones without renumbering.</summary>
     int Order { get; }

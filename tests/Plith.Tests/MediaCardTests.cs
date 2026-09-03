@@ -127,4 +127,15 @@ public class MediaCardTests
 
         Assert.Equal(MediaCommand.SkipNext, seen);
     }
+
+    // See the matching test in AudioCardTests: ToString feeds WPF's ItemAutomationPeer, so it is
+    // load-bearing for screen readers rather than a debugging convenience.
+    [Fact]
+    public void AccessibleName_IsHumanReadable_AndDrivesToString()
+    {
+        var card = new MediaCard(NewSettings());
+        Assert.Equal("Now playing", card.AccessibleName);
+        Assert.Equal(card.AccessibleName, card.ToString());
+        Assert.DoesNotContain("Plith.Cards", card.ToString());
+    }
 }

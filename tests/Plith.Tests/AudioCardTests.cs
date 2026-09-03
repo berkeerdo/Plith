@@ -95,4 +95,16 @@ public class AudioCardTests
         var (card, _) = NewCard();
         Assert.True(card.IsVisible);
     }
+
+    // ToString is what WPF's ItemAutomationPeer announces for this card's row in the OSD stack.
+    // It read "Plith.Cards.AudioCard" in the live UIA tree until AccessibleName existed, so this
+    // guards against a future "unused override" cleanup silently restoring that.
+    [Fact]
+    public void AccessibleName_IsHumanReadable_AndDrivesToString()
+    {
+        var (card, _) = NewCard();
+        Assert.Equal("Volume", card.AccessibleName);
+        Assert.Equal(card.AccessibleName, card.ToString());
+        Assert.DoesNotContain("Plith.Cards", card.ToString());
+    }
 }

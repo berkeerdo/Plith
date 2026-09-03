@@ -16,6 +16,7 @@ internal sealed class FakeCard : ICard
     }
 
     public string Id { get; }
+    public string AccessibleName => Id;
     public int Order { get; }
     public object ViewModel { get; } = new object();
 

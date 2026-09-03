@@ -27,6 +27,7 @@ public sealed class AudioCard : ICard
     }
 
     public string Id => "audio";
+    public string AccessibleName => "Volume";
     public int Order => 20;
     public bool IsVisible => true;
     public object ViewModel => Vm;
@@ -36,6 +37,10 @@ public sealed class AudioCard : ICard
     // because a field-like event that is never invoked trips CS0067.
     public event Action? VisibilityChanged { add { } remove { } }
     public event Action<ShowRequest>? ShowRequested;
+
+    // Load-bearing for accessibility, not a debugging aid: WPF's ItemAutomationPeer names the
+    // OSD's list container from this. See ICard.AccessibleName.
+    public override string ToString() => AccessibleName;
 
     public void Activate() => _settings.Changed += OnSettingsChanged;
     public void Deactivate() => _settings.Changed -= OnSettingsChanged;

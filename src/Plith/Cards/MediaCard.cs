@@ -23,11 +23,16 @@ public sealed class MediaCard : ICard
     }
 
     public string Id => "media";
+    public string AccessibleName => "Now playing";
     public int Order => 10;
     public object ViewModel => Vm;
     public MediaViewModel Vm { get; }
 
     public bool IsVisible => Vm.HasSession && !_settings.Current.CompactMode;
+
+    // Load-bearing for accessibility, not a debugging aid: WPF's ItemAutomationPeer names the
+    // OSD's list container from this. See ICard.AccessibleName.
+    public override string ToString() => AccessibleName;
 
     public event Action? VisibilityChanged;
     public event Action<ShowRequest>? ShowRequested;

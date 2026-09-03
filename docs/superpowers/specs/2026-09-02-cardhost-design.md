@@ -80,6 +80,12 @@ public sealed record ShowRequest(
 public interface ICard
 {
     string Id { get; }
+
+    // Added during Phase 5 verification, not in the original design. The OSD renders cards
+    // through an ItemsControl, whose container names itself from the bound item and falls back
+    // to ToString() - so without this every card announced its .NET type name to screen readers.
+    string AccessibleName { get; }
+
     int Order { get; }
     bool IsVisible { get; }
     object ViewModel { get; }
