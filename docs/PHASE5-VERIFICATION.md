@@ -195,6 +195,12 @@ than made unfocusable, which keeps the affordance a keyboard user has for scroll
 this long without tabbing through every control on it. The ComboBox popup's `ScrollViewer`
 is a template part and was marked `Focusable="False"` instead.
 
+Every control also exposes the right UI Automation pattern for its kind — buttons Invoke,
+check boxes Toggle, sliders RangeValue, the hide-list Value, the combo boxes ExpandCollapse
+— and all report enabled. That matters for 4.3: the accent swatches are invokable, so a
+screen reader can activate one whatever the keyboard does. Enter was still worth fixing,
+but as ergonomics for a sighted keyboard user rather than as an accessibility blocker.
+
 The remaining checks below need eyes and hands: whether the focus ring is *visible* is not
 something UI Automation can answer.
 
