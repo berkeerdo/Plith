@@ -56,6 +56,14 @@ internal static class LiveRegionAnnouncer
         // so a view can be constructed before its DataContext arrives and can outlive one.
         Rebind(view.DataContext);
         view.DataContextChanged += (_, e) => Rebind(e.NewValue);
+
+        // Loaded and Unloaded must be symmetric. Unloaded alone drops the subscription so a
+        // discarded view stops holding the long-lived view-model, but if the same instance is
+        // ever put back into the tree with the DataContext it already had, DataContextChanged
+        // does not fire — and without the Loaded handler the announcer would stay silently
+        // dead from then on. That is the same failure shape as the defect this class fixes:
+        // correct-looking markup that quietly announces nothing.
+        view.Loaded += (_, _) => Rebind(view.DataContext);
         view.Unloaded += (_, _) => Rebind(null);
     }
 }
