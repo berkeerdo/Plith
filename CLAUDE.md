@@ -23,13 +23,17 @@ accessibility surface. The lint now covers three of the four.
 
 Still open, in `docs/PHASE5-VERIFICATION.md`: §1.4, §2, §4.2-4.3, §5 and most of §6.
 
-⚠️ **§2 (games must keep the OSD) is a release blocker and has not been run.** A false
-positive there makes the OSD vanish over fullscreen games — silently, with nothing in the
-logs a user would look at, and nothing any test in this repo can catch. Phase 5 was merged
-with it outstanding as a deliberate call, so the gate now lives here rather than on a
-branch: **do not tag or publish a build until §2.1 and §2.2 have been run on real
-hardware.** Its core predicate is unit-tested (`FullscreenVideoDetector.AumidMatchesProcess`);
-what is untested is the live Win32 path that feeds it.
+**§2 (games must keep the OSD) passed on real hardware and is no longer a release gate.**
+Run with `HideDuringFullscreenVideo` enabled, a game covering the monitor, and Spotify
+actually playing — the combination that makes the check meaningful rather than vacuous:
+the OSD appeared on every volume key, and not one `Suppression -> True` was logged. The
+predicate behind it is unit-tested (`FullscreenVideoDetector.AumidMatchesProcess`), and the
+measured AUMID makes a false positive unreachable on this configuration anyway: Spotify's
+Store build reduces to the stem `SpotifyAB`, which no game process name can equal.
+
+Also measured with a game running: it reported `QUNS_BUSY`, not
+`QUNS_RUNNING_D3D_FULL_SCREEN`, confirming that Fullscreen Optimizations put it on the
+composited path and that the D3D veto is dead code for such titles.
 
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).

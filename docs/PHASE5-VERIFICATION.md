@@ -63,10 +63,18 @@ markup is now correct; 1.4 is what confirms the runtime re-indexing is too.
 
 ## 2. Games must keep the OSD — the safety property
 
-> **Status: NOT RUN. This is a release blocker, not a merge blocker.**
-> Phase 5 was merged with this outstanding as a deliberate call — the merge was verified
-> conflict-free and green, and a local merge ships nothing. Publishing does. Do not tag or
-> release a build until 2.1 and 2.2 below have been run on real hardware.
+> **Status: PASSED on real hardware.**
+> Run with `HideDuringFullscreenVideo` enabled, a game covering the monitor, and Spotify
+> actually **playing** — without that last part the check short-circuits and passes for the
+> wrong reason. The OSD appeared on every volume key press, `OsdHost` logged the show
+> transitions, and not one `Suppression -> True` was recorded. The game reported
+> `QUNS_BUSY` rather than `QUNS_RUNNING_D3D_FULL_SCREEN`, so this exercised the borderless
+> path where the D3D veto does not help and the media-session predicate is the only guard —
+> which is the case that actually needed testing.
+>
+> Separately open, and unrelated to suppression: the OSD does not appear over Valorant in
+> its Fullscreen mode, while it works over other games and over Valorant in borderless. No
+> suppression fires there either. See the ROADMAP note for the two candidate causes.
 
 The app draws above fullscreen games, and Phase 5 added a feature that hides it during
 fullscreen *video*. A false positive here silently destroys the headline feature.
