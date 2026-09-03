@@ -185,6 +185,14 @@ the tests or the lint as they stood:
 check was validated in both directions against the tree from before the fix. The third
 needs a key press and has no static equivalent.
 
+Also measured, no defect found: the OSD show path does not leak. It was driven through 160
+volume changes in two runs. The first run grew (+8 GDI objects, +21 handles, +3 threads);
+the second, on the already-warmed process, held GDI objects at exactly 22 and ended with
+*fewer* handles and threads than it started with, while private bytes oscillated with GC in
+both directions. So the first run's growth was one-time initialisation on first show, not
+per-cycle accumulation — which matters because this is the path every volume key press
+takes, and Phase 5 moved it behind an `ItemsControl`.
+
 Environment fact worth keeping: **the OSD cannot be screenshotted over RDP.** The band
 window is layered and drawn with `UpdateLayeredWindow` — absent from a plain `BitBlt`,
 absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns solid
