@@ -14,9 +14,16 @@ authority for when the OSD appears; today's OSD is an Audio card plus a Media ca
 Adds fullscreen-video auto-hide (on by default, never fires during games) and an
 accessibility pass. `OsdViewModel` is gone; `OsdOrchestrator` is a pure source driver.
 
-⚠️ **Phase 5's claims are not verified.** No test here can observe a rendered pixel, a
-UI Automation property, a focus adorner, or the Win32 fullscreen path. Work through
-`docs/PHASE5-VERIFICATION.md` before merging.
+**Phase 5 is partly verified.** Layout and accessibility were measured against a running
+build; the remaining checks need a physical console session, because over RDP the OSD's
+layered window cannot be captured by any means. Four real defects were found doing it —
+all inside the "completed" accessibility pass, all fixed on the branch. A green build,
+green tests and a green lint had missed every one, because nothing looked at the running
+accessibility surface. The lint now covers three of the four.
+
+Still open, in `docs/PHASE5-VERIFICATION.md`: §1.4, §2, §4.2-4.3, §5 and most of §6.
+**Treat §2 (games must keep the OSD) as the merge blocker** — a false positive there
+silently destroys the headline feature and no test in this repo can catch it.
 
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).

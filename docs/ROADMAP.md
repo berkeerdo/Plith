@@ -163,12 +163,42 @@ rather than reasoned about:
   D3D veto never fires for them and game safety rests entirely on the media-session
   predicate. Any future change to that predicate is a game-safety change.
 
+Found during post-code-complete verification, fixed on the branch. All four came out of
+reading the live UI Automation tree or the WPF source; none was catchable by the build,
+the tests or the lint as they stood:
+
+- Both card views set `AutomationProperties.Name`/`LiveSetting` on a bare `<Grid>`. WPF
+  creates no automation peer for a panel, so the OSD's live region reached nothing at all.
+  Properties moved to the `UserControl` roots; `LiveRegionAnnouncer` raises
+  `LiveRegionChanged`, which WPF does not raise on its own.
+- The OSD's `ItemsControl` container named itself from the bound item's `ToString()`, so
+  cards announced `Plith.Cards.AudioCard`. `ICard.AccessibleName` is now required and each
+  card's `ToString()` returns it.
+- A focused accent swatch ignored Enter. `ButtonBase.OnKeyDown` handles `Key.Enter` only
+  when `KeyboardNavigation.AcceptsReturn` is set, and it defaults to false — the swatch
+  code carried a comment claiming otherwise.
+- Settings' content `ScrollViewer` was a nameless tab stop announcing only "pane"; WPF
+  makes `ScrollViewer` focusable by default. Named rather than made unfocusable, to keep
+  keyboard scrolling of a long page.
+
+`scripts/check-a11y.ps1` now catches the first, second and fourth shapes, and each new
+check was validated in both directions against the tree from before the fix. The third
+needs a key press and has no static equivalent.
+
+Environment fact worth keeping: **the OSD cannot be screenshotted over RDP.** The band
+window is layered and drawn with `UpdateLayeredWindow` — absent from a plain `BitBlt`,
+absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns solid
+black — while the window is provably on screen and correctly positioned. Anything
+pixel-based has to run from the physical console. UI Automation works fine over RDP.
+
 Deferred to Phase 6 (recorded so they are not rediscovered):
 
 - Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
   `SelectionItem` pattern and arrow-key group navigation, and would remove the nine
   extra tab stops the current row costs. Selection state is currently conveyed by
-  `AutomationProperties.ItemStatus` as a stopgap.
+  `AutomationProperties.ItemStatus` as a stopgap. It would also retire the
+  `KeyboardNavigation.AcceptsReturn` line each swatch now carries, since a radio button
+  in a group is driven by arrow keys rather than by Enter.
 - `CardHost.Register` now throws on a duplicate, but the check is **reference equality**
   (`List<T>.Contains`). It catches the same instance registered twice; it does not catch
   two distinct instances sharing an `Id`, which is the shape data-driven registration is
