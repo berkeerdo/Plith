@@ -22,8 +22,14 @@ green tests and a green lint had missed every one, because nothing looked at the
 accessibility surface. The lint now covers three of the four.
 
 Still open, in `docs/PHASE5-VERIFICATION.md`: §1.4, §2, §4.2-4.3, §5 and most of §6.
-**Treat §2 (games must keep the OSD) as the merge blocker** — a false positive there
-silently destroys the headline feature and no test in this repo can catch it.
+
+⚠️ **§2 (games must keep the OSD) is a release blocker and has not been run.** A false
+positive there makes the OSD vanish over fullscreen games — silently, with nothing in the
+logs a user would look at, and nothing any test in this repo can catch. Phase 5 was merged
+with it outstanding as a deliberate call, so the gate now lives here rather than on a
+branch: **do not tag or publish a build until §2.1 and §2.2 have been run on real
+hardware.** Its core predicate is unit-tested (`FullscreenVideoDetector.AumidMatchesProcess`);
+what is untested is the live Win32 path that feeds it.
 
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).

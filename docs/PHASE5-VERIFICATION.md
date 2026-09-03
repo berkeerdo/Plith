@@ -63,6 +63,11 @@ markup is now correct; 1.4 is what confirms the runtime re-indexing is too.
 
 ## 2. Games must keep the OSD — the safety property
 
+> **Status: NOT RUN. This is a release blocker, not a merge blocker.**
+> Phase 5 was merged with this outstanding as a deliberate call — the merge was verified
+> conflict-free and green, and a local merge ships nothing. Publishing does. Do not tag or
+> release a build until 2.1 and 2.2 below have been run on real hardware.
+
 The app draws above fullscreen games, and Phase 5 added a feature that hides it during
 fullscreen *video*. A false positive here silently destroys the headline feature.
 
