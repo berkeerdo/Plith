@@ -8,24 +8,16 @@ using Plith.Services;
 namespace Plith.ViewModels;
 
 /// <summary>
-/// Source-agnostic view model the OSD binds to. The orchestrator computes the normalized bar
-/// fill and the display text from whichever source produced the change — Voicemeeter is dB,
-/// Windows endpoint is percent — and just hands the formatted result to <see cref="Apply"/>.
+/// Source-agnostic view model for the Audio card. The orchestrator computes the normalized
+/// bar fill and the display text from whichever source produced the change — Voicemeeter is
+/// dB, Windows endpoint is percent — and hands the formatted result to <see cref="Apply"/>.
 /// </summary>
-public sealed class OsdViewModel : INotifyPropertyChanged
+public sealed class AudioCardViewModel : INotifyPropertyChanged
 {
     public const float VoicemeeterMinDb = -60f;
     public const float VoicemeeterMaxDb = 12f;
 
-    public MediaViewModel Media { get; }
-
-    public OsdViewModel()
-    {
-        Media = new MediaViewModel();
-        // ShowMediaCard depends on Media.HasSession too — bubble that change up.
-        Media.HasSessionChanged += () => OnPropertyChanged(nameof(ShowMediaCard));
-        RefreshThresholdBrushes();
-    }
+    public AudioCardViewModel() => RefreshThresholdBrushes();
 
     private bool _useColorThresholds;
     public bool UseColorThresholds
@@ -38,23 +30,16 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         }
     }
 
-    private bool _compactMode;
-    public bool CompactMode
+    private string _label = "Bus A1";
+    public string Label
     {
-        get => _compactMode;
+        get => _label;
         set
         {
-            if (Set(ref _compactMode, value))
-                OnPropertyChanged(nameof(ShowMediaCard));
+            if (Set(ref _label, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
         }
     }
-
-    /// <summary>The media card is shown only when there's an active session AND the user hasn't
-    /// asked for compact mode.</summary>
-    public bool ShowMediaCard => Media.HasSession && !_compactMode;
-
-    private string _label = "Bus A1";
-    public string Label { get => _label; set => Set(ref _label, value); }
 
     private double _gainNormalized;
     public double GainNormalized
@@ -68,7 +53,15 @@ public sealed class OsdViewModel : INotifyPropertyChanged
     }
 
     private string _gainText = "0.0 dB";
-    public string GainText { get => _gainText; set => Set(ref _gainText, value); }
+    public string GainText
+    {
+        get => _gainText;
+        set
+        {
+            if (Set(ref _gainText, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private bool _muted;
     public bool Muted
@@ -77,9 +70,16 @@ public sealed class OsdViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _muted, value))
+            {
                 OnPropertyChanged(nameof(GainColor));
+                OnPropertyChanged(nameof(AccessibleSummary));
+            }
         }
     }
+
+    /// <summary>What a screen reader announces when the volume changes. The OSD never takes
+    /// focus, so this live-region text is the only audio feedback a non-sighted user gets.</summary>
+    public string AccessibleSummary => _muted ? $"{_label}, muted" : $"{_label}, {_gainText}";
 
     // Cached brush references resolved from the active OSD palette ResourceDictionary.
     // The XAML brushes themselves are shared instances; we cache the refs so GainColor stays
@@ -90,7 +90,7 @@ public sealed class OsdViewModel : INotifyPropertyChanged
     // Seeds match the dark-theme keys so unit tests (which run without an Application.Current
     // and therefore can't resolve from XAML resources) still observe the expected colour-
     // mapping logic. In production these are overwritten on the first
-    // RefreshThresholdBrushes() call from the OsdViewModel ctor.
+    // RefreshThresholdBrushes() call, which AudioCardViewModel's own ctor makes.
     private Brush _brushMuted = FreezeBrush(Color.FromRgb(0x80, 0x80, 0x80));
     private Brush _brushAccent = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));
     private Brush _brushGreen = FreezeBrush(Color.FromRgb(0x4A, 0xD6, 0x95));

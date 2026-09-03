@@ -1,0 +1,40 @@
+name: Accessibility check
+
+# Runs scripts/check-a11y.ps1 so a XAML accessibility regression fails CI instead of shipping
+# silently: an interactive control that loses its AutomationProperties.Name, or a name set on
+# an element WPF gives no automation peer to, which reaches nothing at all. Scoped to
+# -Root src so both Plith and Plith.Installer stay covered.
+#
+# pwsh, not powershell: the script declares #requires -Version 7, and Windows PowerShell 5.1
+# refuses to run it at all rather than failing a check.
+
+# The checker itself and this workflow are in the trigger paths deliberately. Scoping to
+# 'src/**' alone means a change to the script ships without the script ever running, so a
+# broken or weakened check stays invisible until some unrelated src change happens to
+# exercise it. That is not hypothetical: the script was substantially rewritten in one sitting
+# and none of it would have run in CI.
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'scripts/check-a11y.ps1'
+      - '.github/workflows/a11y-check.yml'
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'scripts/check-a11y.ps1'
+      - '.github/workflows/a11y-check.yml'
+
+permissions: {}
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run accessibility check
+        run: pwsh -NoProfile -File scripts/check-a11y.ps1 -Root src

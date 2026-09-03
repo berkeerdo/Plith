@@ -90,15 +90,18 @@
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
                             Content="&#xE921;"
-                            ToolTip="Minimize" />
+                            ToolTip="Minimize"
+                            AutomationProperties.Name="Minimize" />
                     <Button x:Name="MaximizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
                             Content="&#xE922;"
-                            ToolTip="Maximize" />
+                            ToolTip="Maximize"
+                            AutomationProperties.Name="Maximize" />
                     <Button x:Name="CloseButton"
                             Style="{StaticResource CloseCaptionButtonStyle}"
                             Content="&#xE8BB;"
-                            ToolTip="Close" />
+                            ToolTip="Close"
+                            AutomationProperties.Name="Close" />
                 </StackPanel>
             </Grid>
         </Border>
@@ -130,7 +133,13 @@
                     Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />
 
+            <!-- Named because WPF makes ScrollViewer keyboard-focusable by default, so it is a
+                 real tab stop: it was reached fourth, right after the caption buttons, and
+                 announced as nothing but "pane". Naming it rather than setting
+                 Focusable="False" keeps the affordance a keyboard user has for scrolling this
+                 long page without tabbing through every control in it. -->
             <ScrollViewer Grid.Column="0"
+                          AutomationProperties.Name="Settings"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="32,24,24,24">
@@ -147,14 +156,15 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Theme" />
+                                    <TextBlock x:Name="ThemeLabel" Style="{StaticResource RowLabelStyle}" Text="Theme" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Dark and Light affect this Settings window. Auto follows your Windows app theme live. The OSD overlay stays dark in every mode for readability over games." />
                                 </StackPanel>
                                 <ComboBox x:Name="ThemeCombo"
                                           Grid.Column="1"
                                           Style="{StaticResource ModernComboStyle}"
                                           ItemsSource="{Binding Source={StaticResource ThemeModes}}"
-                                          VerticalAlignment="Center" />
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=ThemeLabel}" />
                             </Grid>
                         </Border>
 
@@ -213,7 +223,9 @@
                                                         Style="{StaticResource ModernSliderStyle}"
                                                         Minimum="0" Maximum="360"
                                                         Margin="8,0,8,0"
-                                                        VerticalAlignment="Center" />
+                                                        VerticalAlignment="Center"
+                                                        AutomationProperties.Name="Hue"
+                                                        AutomationProperties.HelpText="Value from 0 to 360 degrees." />
                                                 <TextBlock x:Name="CustomHueValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
                                             </Grid>
                                             <!-- Saturation -->
@@ -229,7 +241,9 @@
                                                         Style="{StaticResource ModernSliderStyle}"
                                                         Minimum="0" Maximum="100"
                                                         Margin="8,0,8,0"
-                                                        VerticalAlignment="Center" />
+                                                        VerticalAlignment="Center"
+                                                        AutomationProperties.Name="Saturation"
+                                                        AutomationProperties.HelpText="Value from 0 to 100 percent." />
                                                 <TextBlock x:Name="CustomSatValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
                                             </Grid>
                                             <!-- Luminance -->
@@ -245,7 +259,9 @@
                                                         Style="{StaticResource ModernSliderStyle}"
                                                         Minimum="0" Maximum="100"
                                                         Margin="8,0,8,0"
-                                                        VerticalAlignment="Center" />
+                                                        VerticalAlignment="Center"
+                                                        AutomationProperties.Name="Lightness"
+                                                        AutomationProperties.HelpText="Value from 0 to 100 percent." />
                                                 <TextBlock x:Name="CustomLumValue" Grid.Column="2" Style="{StaticResource RowHintStyle}" Margin="0" TextAlignment="Right" VerticalAlignment="Center" />
                                             </Grid>
 
@@ -260,7 +276,8 @@
                                                      BorderThickness="1"
                                                      FontFamily="Consolas, Cascadia Mono, Segoe UI"
                                                      FontSize="12"
-                                                     MaxLength="9" />
+                                                     MaxLength="9"
+                                                     AutomationProperties.Name="Accent color hex value" />
                                         </StackPanel>
                                     </Border>
                                 </Popup>
@@ -281,13 +298,14 @@
                                     <ColumnDefinition Width="Auto" MinWidth="72" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show duration" />
+                                    <TextBlock x:Name="ShowDurationLabel" Style="{StaticResource RowLabelStyle}" Text="Show duration" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="How long the OSD stays visible after the last change." />
                                     <Slider x:Name="DurationSlider"
                                             Style="{StaticResource ModernSliderStyle}"
                                             Margin="0,14,0,0"
                                             Minimum="500" Maximum="10000"
-                                            Value="2000" />
+                                            Value="2000"
+                                            AutomationProperties.LabeledBy="{Binding ElementName=ShowDurationLabel}" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="1"
                                            Style="{StaticResource ValueTagStyle}"
@@ -315,7 +333,8 @@
                                         Grid.Column="1"
                                         Style="{StaticResource GhostButtonStyle}"
                                         Content="Set position"
-                                        VerticalAlignment="Center" />
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Set position" />
                             </Grid>
                         </Border>
 
@@ -326,12 +345,13 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Hover keep-alive" />
+                                    <TextBlock x:Name="HoverKeepAliveLabel" Style="{StaticResource RowLabelStyle}" Text="Hover keep-alive" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Pause the auto-hide timer while the mouse is over the OSD." />
                                 </StackPanel>
                                 <CheckBox x:Name="HoverToggle"
                                           Grid.Column="1"
-                                          Style="{StaticResource ToggleSwitchStyle}" />
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=HoverKeepAliveLabel}" />
                             </Grid>
                         </Border>
 
@@ -342,13 +362,14 @@
                                     <ColumnDefinition Width="Auto" MinWidth="68" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Opacity" />
+                                    <TextBlock x:Name="OpacityLabel" Style="{StaticResource RowLabelStyle}" Text="Opacity" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="OSD card opacity at rest. 50 % is the minimum readable level." />
                                     <Slider x:Name="OpacitySlider"
                                             Style="{StaticResource ModernSliderStyle}"
                                             Margin="0,14,0,0"
                                             Minimum="50" Maximum="100"
-                                            Value="100" />
+                                            Value="100"
+                                            AutomationProperties.LabeledBy="{Binding ElementName=OpacityLabel}" />
                                 </StackPanel>
                                 <TextBlock Grid.Column="1"
                                            Style="{StaticResource ValueTagStyle}"
@@ -367,12 +388,13 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Color thresholds" />
+                                    <TextBlock x:Name="ColorThresholdsLabel" Style="{StaticResource RowLabelStyle}" Text="Color thresholds" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Volume bar turns amber near the top, red into the loud zone. Off keeps a calm constant green." />
                                 </StackPanel>
                                 <CheckBox x:Name="ColorThresholdsToggle"
                                           Grid.Column="1"
-                                          Style="{StaticResource ToggleSwitchStyle}" />
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=ColorThresholdsLabel}" />
                             </Grid>
                         </Border>
 
@@ -383,13 +405,50 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Compact mode" />
+                                    <TextBlock x:Name="CompactModeLabel" Style="{StaticResource RowLabelStyle}" Text="Compact mode" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Hide the media card so the OSD only shows the volume bar." />
                                 </StackPanel>
                                 <CheckBox x:Name="CompactToggle"
                                           Grid.Column="1"
-                                          Style="{StaticResource ToggleSwitchStyle}" />
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=CompactModeLabel}" />
                             </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock x:Name="FullscreenVideoLabel" Style="{StaticResource RowLabelStyle}" Text="Hide during fullscreen video" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Hides the OSD while a fullscreen window is playing video. Games are never affected." />
+                                </StackPanel>
+                                <CheckBox x:Name="FullscreenVideoToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=FullscreenVideoLabel}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <StackPanel>
+                                <TextBlock x:Name="FullscreenHideListLabel" Style="{StaticResource RowLabelStyle}" Text="Also hide in these apps" />
+                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Comma-separated process names, for players that don't report media to Windows." />
+                                <TextBox x:Name="FullscreenHideListBox"
+                                         Margin="0,14,0,0"
+                                         Padding="10,7"
+                                         Background="{DynamicResource ButtonGhost}"
+                                         Foreground="{DynamicResource TextPrimary}"
+                                         CaretBrush="{DynamicResource TextPrimary}"
+                                         BorderBrush="{DynamicResource CardBorderStrong}"
+                                         BorderThickness="1"
+                                         FontFamily="Consolas, Cascadia Mono, Segoe UI"
+                                         FontSize="12"
+                                         AutomationProperties.LabeledBy="{Binding ElementName=FullscreenHideListLabel}"
+                                         AutomationProperties.HelpText="Comma-separated process executable names, e.g. mpv.exe, vlc.exe." />
+                            </StackPanel>
                         </Border>
 
                         <Border Style="{StaticResource RowLastStyle}">
@@ -403,7 +462,7 @@
                                     <RowDefinition Height="Auto" />
                                 </Grid.RowDefinitions>
                                 <StackPanel Grid.Row="0" Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Summon hotkey" />
+                                    <TextBlock x:Name="SummonHotkeyLabel" Style="{StaticResource RowLabelStyle}" Text="Summon hotkey" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="System-wide shortcut that pops the OSD with the current values. Choose a combo your other apps don't use." />
                                 </StackPanel>
                                 <StackPanel Grid.Row="0" Grid.Column="1"
@@ -411,7 +470,8 @@
                                             VerticalAlignment="Center">
                                     <Button x:Name="HotkeyCaptureButton"
                                             Style="{StaticResource HotkeyCaptureButtonStyle}"
-                                            Content="Not set" />
+                                            Content="Not set"
+                                            AutomationProperties.LabeledBy="{Binding ElementName=SummonHotkeyLabel}" />
                                     <Button x:Name="HotkeyClearButton"
                                             Style="{StaticResource GhostButtonStyle}"
                                             Content="Clear"
@@ -420,7 +480,8 @@
                                             MinWidth="60"
                                             Padding="10,0"
                                             Margin="6,0,0,0"
-                                            Visibility="Collapsed" />
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Clear hotkey" />
                                 </StackPanel>
                                 <TextBlock x:Name="HotkeyConflictWarning"
                                            Grid.Row="1" Grid.Column="1"
@@ -449,7 +510,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Audio source" />
+                                    <TextBlock x:Name="AudioSourceLabel" Style="{StaticResource RowLabelStyle}" Text="Audio source" />
                                     <TextBlock x:Name="AudioSourceHint"
                                                Style="{StaticResource RowHintStyle}"
                                                Text="Auto prefers Voicemeeter when it's running and falls back to the Windows default endpoint." />
@@ -458,7 +519,8 @@
                                           Grid.Column="1"
                                           VerticalAlignment="Center"
                                           Style="{StaticResource ModernComboStyle}"
-                                          ItemsSource="{Binding Source={StaticResource AudioSources}}" />
+                                          ItemsSource="{Binding Source={StaticResource AudioSources}}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=AudioSourceLabel}" />
                             </Grid>
                         </Border>
 
@@ -469,14 +531,15 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Windows endpoint" />
+                                    <TextBlock x:Name="WindowsEndpointLabel" Style="{StaticResource RowLabelStyle}" Text="Windows endpoint" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Which render device the OSD tracks. Default follows Windows; pick a Sonar channel to lock onto it." />
                                 </StackPanel>
                                 <ComboBox x:Name="EndpointCombo"
                                           Grid.Column="1"
                                           MaxWidth="260"
                                           VerticalAlignment="Center"
-                                          Style="{StaticResource ModernComboStyle}">
+                                          Style="{StaticResource ModernComboStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=WindowsEndpointLabel}">
                                     <ComboBox.ItemTemplate>
                                         <DataTemplate>
                                             <TextBlock Text="{Binding FriendlyName}"
@@ -494,13 +557,14 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Monitored Voicemeeter bus" />
+                                    <TextBlock x:Name="MonitoredBusLabel" Style="{StaticResource RowLabelStyle}" Text="Monitored Voicemeeter bus" />
                                     <TextBlock Style="{StaticResource RowHintStyle}" Text="Which bus drives the OSD when Voicemeeter is the active source. A1 is the default route the volume keys land on." />
                                 </StackPanel>
                                 <ComboBox x:Name="BusCombo"
                                           Grid.Column="1"
                                           VerticalAlignment="Center"
-                                          Style="{StaticResource ModernComboStyle}" />
+                                          Style="{StaticResource ModernComboStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=MonitoredBusLabel}" />
                             </Grid>
                         </Border>
 
@@ -517,12 +581,13 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show on track change" />
+                                <TextBlock x:Name="ShowOnTrackChangeLabel" Style="{StaticResource RowLabelStyle}" Text="Show on track change" />
                                 <TextBlock Style="{StaticResource RowHintStyle}" Text="Off by default. When on, the OSD pops every time the current player advances or toggles play/pause." />
                             </StackPanel>
                             <CheckBox x:Name="AutoShowMediaToggle"
                                       Grid.Column="1"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      AutomationProperties.LabeledBy="{Binding ElementName=ShowOnTrackChangeLabel}" />
                         </Grid>
                     </Border>
                 </Border>
@@ -537,12 +602,13 @@
                                 <ColumnDefinition Width="Auto" />
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                <TextBlock Style="{StaticResource RowLabelStyle}" Text="Launch at Windows login" />
+                                <TextBlock x:Name="LaunchAtLoginLabel" Style="{StaticResource RowLabelStyle}" Text="Launch at Windows login" />
                                 <TextBlock Style="{StaticResource RowHintStyle}" Text="Adds a per-user registry entry so Plith starts automatically." />
                             </StackPanel>
                             <CheckBox x:Name="AutoStartToggle"
                                       Grid.Column="1"
-                                      Style="{StaticResource ToggleSwitchStyle}" />
+                                      Style="{StaticResource ToggleSwitchStyle}"
+                                      AutomationProperties.LabeledBy="{Binding ElementName=LaunchAtLoginLabel}" />
                         </Grid>
                     </Border>
                 </Border>
@@ -597,7 +663,8 @@
                                         Grid.Column="1"
                                         Style="{StaticResource GhostButtonStyle}"
                                         Content="Check for updates"
-                                        VerticalAlignment="Center" />
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Check for updates" />
                             </Grid>
                             <!-- Progress + actions surface only after "Check for updates" resolves.
                                  Layout: progress bar spans full width up top (readable at any card
@@ -614,11 +681,13 @@
                                     <Button x:Name="UpdateOpenPageButton"
                                             Style="{StaticResource GhostButtonStyle}"
                                             Content="Release notes"
-                                            Margin="0,0,8,4" />
+                                            Margin="0,0,8,4"
+                                            AutomationProperties.Name="Release notes" />
                                     <Button x:Name="UpdateDownloadButton"
                                             Style="{StaticResource PrimaryButtonStyle}"
                                             Content="Download and install"
-                                            Margin="0,0,0,4" />
+                                            Margin="0,0,0,4"
+                                            AutomationProperties.Name="Download and install" />
                                 </WrapPanel>
                             </StackPanel>
                         </StackPanel>

@@ -52,16 +52,19 @@
             <Button x:Name="CopyLogButton"
                     Content="Copy log"
                     Style="{StaticResource GhostButtonStyle}"
-                    Margin="0,0,10,0" />
+                    Margin="0,0,10,0"
+                    AutomationProperties.Name="Copy log" />
             <Button x:Name="OpenLogButton"
                     Content="Open log"
-                    Style="{StaticResource GhostButtonStyle}" />
+                    Style="{StaticResource GhostButtonStyle}"
+                    AutomationProperties.Name="Open log" />
         </StackPanel>
 
         <Button Grid.Row="5"
                 x:Name="CloseButton"
                 Content="Close"
                 Style="{StaticResource GhostButtonStyle}"
-                HorizontalAlignment="Center" />
+                HorizontalAlignment="Center"
+                AutomationProperties.Name="Close" />
     </Grid>
 </UserControl>

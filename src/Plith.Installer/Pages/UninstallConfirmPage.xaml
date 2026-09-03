@@ -36,10 +36,12 @@
             <Button x:Name="UninstallButton"
                     Content="Uninstall"
                     Style="{StaticResource AccentButtonStyle}"
-                    Margin="0,0,10,0" />
+                    Margin="0,0,10,0"
+                    AutomationProperties.Name="Uninstall" />
             <Button x:Name="CancelButton"
                     Content="Cancel"
-                    Style="{StaticResource GhostButtonStyle}" />
+                    Style="{StaticResource GhostButtonStyle}"
+                    AutomationProperties.Name="Cancel" />
         </StackPanel>
     </Grid>
 </UserControl>

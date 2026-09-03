@@ -3,6 +3,34 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [Unreleased]
+
+### Changed
+- **The OSD now hides itself automatically during fullscreen video playback,
+  and this is on by default.** Plith detects a foreground window covering a
+  monitor while it (or the system's active media session) is playing video,
+  and hides the OSD for as long as that lasts — no more volume popup sitting
+  on top of a movie or stream. This is **on by default** on upgrade; turn it
+  off from Settings with the **"Hide during fullscreen video"** toggle
+  (alongside a configurable app hide-list for players that should never be
+  auto-hidden). **Games are never affected** — the detector explicitly vetoes
+  exclusive-fullscreen and borderless-fullscreen D3D applications, so this
+  never touches Plith's core over-fullscreen-games behaviour.
+
+### Accessibility
+- Screen readers now announce meaningful names across the OSD and Settings
+  window (media transport buttons, accent swatches, status indicators)
+  instead of generic control types.
+- The OSD's audio and media cards are exposed as live regions, so a value or
+  track change is announced without the user needing to focus the OSD.
+- Accent swatches are keyboard-reachable and show a visible focus ring and
+  selection status.
+- Focus indicators that had gone missing across Settings controls are
+  restored.
+- Added a Windows high-contrast palette for both the OSD and Settings, so
+  the app follows the user's chosen high-contrast theme instead of painting
+  its own colours over it.
+
 ## [0.1.5] - 2026-09-02
 
 ### Fixed

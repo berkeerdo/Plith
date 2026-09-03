@@ -103,9 +103,11 @@
                     Margin="0,0,24,20">
             <Button x:Name="CancelButton"
                     Content="Cancel (Esc)"
+                    AutomationProperties.Name="Cancel"
                     Style="{StaticResource SecondaryButtonStyle}" />
             <Button x:Name="SaveButton"
                     Content="Save (Enter)"
+                    AutomationProperties.Name="Save position"
                     Style="{StaticResource PrimaryButtonStyle}" />
         </StackPanel>
     </Grid>

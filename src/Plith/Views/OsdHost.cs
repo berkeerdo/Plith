@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Plith.Cards;
 using Plith.Interop;
 using Plith.Services;
 using Plith.ViewModels;
@@ -30,6 +31,7 @@ public sealed class OsdHost : BandWindow
     private readonly OsdContent _content;
     private readonly SettingsService _settings;
     private readonly ThemeService _theme;
+    private readonly CardHost _cardHost;
     private readonly DiagnosticLog? _log = new();
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
@@ -47,18 +49,20 @@ public sealed class OsdHost : BandWindow
     private SettingsModel? _preEditSnapshot;
     private readonly List<PositionOverlayWindow> _overlays = new();
 
-    public OsdViewModel ViewModel { get; } = new();
-
-    public event EventHandler<MediaCommand>? MediaCommandInvoked;
+    /// <summary>Binding root for the OSD content. Exposes CardHost's visible-card list;
+    /// the shell itself holds no per-card state.</summary>
+    public OsdShellViewModel Shell { get; }
 
     /// <summary>Raised when the OSD enters or exits position-edit mode so Settings
     /// can flip its Edit/Save/Cancel button state.</summary>
     public event Action<bool>? EditModeChanged;
 
-    public OsdHost(SettingsService settings, ThemeService theme)
+    public OsdHost(SettingsService settings, ThemeService theme, CardHost cardHost)
     {
         _settings = settings;
         _theme = theme;
+        _cardHost = cardHost;
+        Shell = new OsdShellViewModel(cardHost);
 
         ZBandID = NativeMethods.GetTopMostZBandID();
         TopMost = true;
@@ -67,8 +71,7 @@ public sealed class OsdHost : BandWindow
         Opacity = 0;
         Focusable = false;
 
-        _content = new OsdContent { DataContext = ViewModel };
-        _content.MediaCommandInvoked += (s, cmd) => MediaCommandInvoked?.Invoke(this, cmd);
+        _content = new OsdContent { DataContext = Shell };
         Content = _content;
 
         // Seed the local accent mirror BEFORE the HwndSource is created (in CreateWindow
@@ -80,17 +83,10 @@ public sealed class OsdHost : BandWindow
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
 
-        // Propagate live-preview changes from Settings into the view-model so the OSD
-        // updates without requiring a pop to materialise them. Same pattern as OsdWindow.
-        _settings.Changed += m => Dispatcher.BeginInvoke(() =>
-        {
-            ViewModel.UseColorThresholds = m.UseColorThresholds;
-            ViewModel.CompactMode = m.CompactMode;
-            Reposition();
-        });
-
-        ViewModel.UseColorThresholds = _settings.Current.UseColorThresholds;
-        ViewModel.CompactMode = _settings.Current.CompactMode;
+        // A settings save can change where the OSD sits (position / monitor), so re-anchor it
+        // without waiting for the next pop. Card-level settings (colour thresholds, compact
+        // mode) are owned by AudioCard and MediaCard and never travel through the shell.
+        _settings.Changed += _ => Dispatcher.BeginInvoke(() => Reposition());
 
         // Pre-create the native HWND so the first ShowOsd is instant.
         // BandWindow.CreateWindow is idempotent if HasSourceCreated is already true.
@@ -143,6 +139,12 @@ public sealed class OsdHost : BandWindow
     {
         if (_isEditMode) return;
         if (!_settings.Current.HoverKeepAlive) return;
+        // CardHost is the single authority for when the OSD appears. Whether a
+        // faded-out (Opacity 0) layered window still hit-tests mouse messages has never
+        // been verified — if it does, hovering over the OSD's screen region while
+        // fullscreen-video suppression is active would resurrect it here, bypassing the
+        // suppressor entirely. Guard defensively rather than find out live.
+        if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
         BeginAnimation(OpacityProperty, null);
         Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
@@ -199,6 +201,19 @@ public sealed class OsdHost : BandWindow
 
         if (_settings.Current.HoverKeepAlive && IsMouseOver) return;
         RestartHideTimer(visibleFor);
+    }
+
+    /// <summary>Take the OSD down now, ignoring its hide timer. Used when the suppression gate
+    /// closes while the card is already on screen.</summary>
+    public void HideOsd()
+    {
+        if (_isEditMode) return;   // edit mode owns its own always-on visibility
+        _hideTimer?.Stop();
+        if (Opacity < 0.01) return;
+        // Already on the way out — restarting the animation from the current opacity would
+        // stretch the fade instead of shortening it.
+        if (_isFadingOut) return;
+        FadeOutAndHide();
     }
 
     private void FadeOutAndHide()
@@ -372,7 +387,10 @@ public sealed class OsdHost : BandWindow
 
         EditModeChanged?.Invoke(false);
 
-        ShowOsd(TimeSpan.FromMilliseconds(Math.Max(_settings.Current.ShowDurationMs, 1500)));
+        _cardHost.RequestShow(new ShowRequest(
+            ShowReason.EditModeExit,
+            null,
+            TimeSpan.FromMilliseconds(Math.Max(_settings.Current.ShowDurationMs, 1500))));
     }
 
     private void OnOverlaySaveRequested() => ExitPositionEditMode(save: true);

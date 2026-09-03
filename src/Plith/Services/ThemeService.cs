@@ -1,9 +1,22 @@
+using System.ComponentModel;
 using System.Linq;
 using System.Windows;
 using System.Windows.Media;
 using Microsoft.Win32;
 
 namespace Plith.Services;
+
+/// <summary>
+/// Which palette family is currently applied. Distinct from the user's
+/// <see cref="ThemeMode"/> setting: <see cref="HighContrast"/> can be reached from any
+/// <see cref="ThemeMode"/> whenever Windows high contrast is active, and overrides it.
+/// </summary>
+internal enum PaletteKind
+{
+    Dark,
+    Light,
+    HighContrast,
+}
 
 /// <summary>
 /// Owns both the palette polarity (dark / light) and the accent overlay for the
@@ -26,6 +39,10 @@ public sealed class ThemeService : IDisposable
         "pack://application:,,,/Resources/OsdPalette.Dark.xaml", UriKind.Absolute);
     private static readonly Uri OsdLightUri = new(
         "pack://application:,,,/Resources/OsdPalette.Light.xaml", UriKind.Absolute);
+    private static readonly Uri SettingsHighContrastUri = new(
+        "pack://application:,,,/Resources/Palette.HighContrast.xaml", UriKind.Absolute);
+    private static readonly Uri OsdHighContrastUri = new(
+        "pack://application:,,,/Resources/OsdPalette.HighContrast.xaml", UriKind.Absolute);
 
     // Brush keys the accent override replaces. Kept as constants so the surface is
     // greppable and easy to expand if new accent-sensitive brushes get added later.
@@ -53,7 +70,7 @@ public sealed class ThemeService : IDisposable
     private ResourceDictionary? _activeSettingsPalette;
     private ResourceDictionary? _activeOsdPalette;
     private ResourceDictionary? _accentOverride;
-    private bool _isEffectiveDark = true;
+    private PaletteKind _paletteKind = PaletteKind.Dark;
     private bool _started;
     private bool _disposed;
 
@@ -61,9 +78,27 @@ public sealed class ThemeService : IDisposable
     /// per-window DWM attributes (immersive dark mode) that resources can't reach.</summary>
     public event Action? ThemeApplied;
 
-    /// <summary>True when the currently rendered Settings palette is the dark one.
-    /// Used by SettingsWindow to align the DWM dark-mode/Mica tint with the palette.</summary>
-    public bool IsEffectiveDark => _isEffectiveDark;
+    /// <summary>True when Windows high contrast is currently active. High contrast
+    /// overrides the user's <see cref="ThemeMode"/> setting entirely, including
+    /// <see cref="ThemeMode.Auto"/>.</summary>
+    // CA1822: kept as an instance member — callers (OsdHost, SettingsWindow) already hold
+    // a ThemeService instance and query it for every other theme fact; a static member
+    // would fragment that API for no benefit.
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "Instance member kept for API consistency with the rest of ThemeService's instance-scoped surface.")]
+    public bool IsHighContrast => SystemParameters.HighContrast;
+
+    /// <summary>True when the currently rendered Settings palette reads as dark.
+    /// Used by SettingsWindow to align the DWM dark-mode/Mica tint with the palette.
+    /// For <see cref="PaletteKind.HighContrast"/> this is derived from the luminance of
+    /// the system window colour, since a high-contrast theme can be either light or dark.</summary>
+    public bool IsEffectiveDark => _paletteKind switch
+    {
+        PaletteKind.Dark => true,
+        PaletteKind.Light => false,
+        PaletteKind.HighContrast => IsColorDark(SystemColors.WindowColor),
+        _ => true,
+    };
 
     public ThemeService(Application app, SettingsService settings)
     {
@@ -78,19 +113,30 @@ public sealed class ThemeService : IDisposable
         Apply(_settings.Current.Theme);
         _settings.Changed += OnSettingsChanged;
         SystemEvents.UserPreferenceChanged += OnUserPreferenceChanged;
+        SystemParameters.StaticPropertyChanged += OnSystemParametersChanged;
     }
 
     public void Apply(ThemeMode mode)
     {
         if (_disposed) return;
 
-        bool wantsDark = mode switch
+        // High contrast overrides the user's theme setting entirely, including Auto.
+        PaletteKind wantsKind;
+        if (IsHighContrast)
         {
-            ThemeMode.Dark => true,
-            ThemeMode.Light => false,
-            ThemeMode.Auto => IsSystemDark(),
-            _ => true,
-        };
+            wantsKind = PaletteKind.HighContrast;
+        }
+        else
+        {
+            bool wantsDark = mode switch
+            {
+                ThemeMode.Dark => true,
+                ThemeMode.Light => false,
+                ThemeMode.Auto => IsSystemDark(),
+                _ => true,
+            };
+            wantsKind = wantsDark ? PaletteKind.Dark : PaletteKind.Light;
+        }
 
         // On the first Apply, adopt whichever palettes were loaded by App.xaml so we don't
         // pointlessly replace them with identical instances.
@@ -98,37 +144,59 @@ public sealed class ThemeService : IDisposable
         {
             _activeSettingsPalette = FindLoadedSettingsPalette();
             if (_activeSettingsPalette?.Source is { } sUri)
-                _isEffectiveDark = IsSettingsPaletteDark(sUri);
+                _paletteKind = ClassifySettingsPaletteUri(sUri);
         }
         _activeOsdPalette ??= FindLoadedOsdPalette();
 
-        // Palette swap. When polarity is already correct, both slots are populated,
-        // and there is no accent override yet-to-be-applied, we can short-circuit. We
-        // still fall through to ApplyAccentOverride when the accent picker changes,
-        // because polarity is unchanged there but the accent brushes need refreshing.
-        if (wantsDark != _isEffectiveDark || _activeSettingsPalette is null || _activeOsdPalette is null)
+        // Palette swap. When the palette kind is already correct, both slots are
+        // populated, and there is no accent override yet-to-be-applied, we can
+        // short-circuit. We still fall through to ApplyAccentOverride when the accent
+        // picker changes, because the palette kind is unchanged there but the accent
+        // brushes need refreshing.
+        if (wantsKind != _paletteKind || _activeSettingsPalette is null || _activeOsdPalette is null)
         {
             var merged = _app.Resources.MergedDictionaries;
-            _activeSettingsPalette = SwapPalette(merged, _activeSettingsPalette,
-                wantsDark ? SettingsDarkUri : SettingsLightUri);
-            _activeOsdPalette = SwapPalette(merged, _activeOsdPalette,
-                wantsDark ? OsdDarkUri : OsdLightUri);
-            _isEffectiveDark = wantsDark;
+            _activeSettingsPalette = SwapPalette(merged, _activeSettingsPalette, SettingsUriFor(wantsKind));
+            _activeOsdPalette = SwapPalette(merged, _activeOsdPalette, OsdUriFor(wantsKind));
+            _paletteKind = wantsKind;
         }
 
         // Rebuild + re-append the accent override so it sits after any palette dictionary
-        // (last-added wins in MergedDictionaries lookup) even if the polarity swap moved
+        // (last-added wins in MergedDictionaries lookup) even if the palette swap moved
         // things around. Always safe to run: cheap, idempotent, and the only source of truth
-        // for the currently applied accent.
+        // for the currently applied accent. Under high contrast this yields an empty
+        // dictionary (see BuildAccentOverride), so the palette's own SystemColors-mapped
+        // brushes win instead of an accent tint layered over them.
         ApplyAccentOverride();
 
         ThemeApplied?.Invoke();
     }
 
+    private static Uri SettingsUriFor(PaletteKind kind) => kind switch
+    {
+        PaletteKind.Dark => SettingsDarkUri,
+        PaletteKind.Light => SettingsLightUri,
+        PaletteKind.HighContrast => SettingsHighContrastUri,
+        _ => SettingsDarkUri,
+    };
+
+    private static Uri OsdUriFor(PaletteKind kind) => kind switch
+    {
+        PaletteKind.Dark => OsdDarkUri,
+        PaletteKind.Light => OsdLightUri,
+        PaletteKind.HighContrast => OsdHighContrastUri,
+        _ => OsdDarkUri,
+    };
+
     private void ApplyAccentOverride()
     {
         var dict = BuildAccentOverride();
         var merged = _app.Resources.MergedDictionaries;
+        // Removing the previously applied override before adding the new one means a
+        // high-contrast transition (where the new dict is empty) leaves nothing behind:
+        // the app-level accent slot goes from "tinted" to "contributes nothing", and
+        // DynamicResource lookups fall through to the high-contrast palette's own
+        // SystemColors-mapped brushes instead.
         if (_accentOverride is not null) merged.Remove(_accentOverride);
         merged.Add(dict);
         _accentOverride = dict;
@@ -143,13 +211,20 @@ public sealed class ThemeService : IDisposable
     /// notifications when <see cref="Application.Resources"/> is mutated —
     /// DynamicResource references inside the OSD only see local-tree changes. Each
     /// caller adds a distinct copy so ResourceDictionary parent-ownership stays clean.
+    ///
+    /// Returns an empty dictionary while <see cref="IsHighContrast"/> is true: an accent
+    /// tint layered over the user's system colours would defeat the point of high
+    /// contrast, and an empty dictionary needs no special-casing at either call site —
+    /// OsdHost.RefreshAccentMirror just mirrors nothing.
     /// </summary>
     public ResourceDictionary BuildAccentOverride()
     {
+        if (IsHighContrast) return new ResourceDictionary();
+
         var s = _settings.Current;
         var baseColor = AccentTheme.ResolveBase(s.AccentThemeId, s.CustomAccentColor);
-        var derived = AccentTheme.Derive(baseColor, _isEffectiveDark);
-        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, _isEffectiveDark);
+        var derived = AccentTheme.Derive(baseColor, IsEffectiveDark);
+        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, IsEffectiveDark);
 
         return new ResourceDictionary
         {
@@ -222,9 +297,15 @@ public sealed class ThemeService : IDisposable
             (EndsWith(d.Source, "/OsdPalette.Dark.xaml") || EndsWith(d.Source, "/OsdPalette.Light.xaml")));
 
     // Only invoked for the Settings palette slot (see Apply). Kept narrow on purpose —
-    // calling it for an OSD URI would silently treat the slot as a Settings one.
-    private static bool IsSettingsPaletteDark(Uri uri) =>
-        EndsWith(uri, "/Palette.Dark.xaml");
+    // calling it for an OSD URI would silently treat the slot as a Settings one. App.xaml
+    // only ever loads Dark or Light at startup (never HighContrast), but the HighContrast
+    // branch is included so this stays correct if that ever changes.
+    private static PaletteKind ClassifySettingsPaletteUri(Uri uri)
+    {
+        if (EndsWith(uri, "/Palette.Dark.xaml")) return PaletteKind.Dark;
+        if (EndsWith(uri, "/Palette.HighContrast.xaml")) return PaletteKind.HighContrast;
+        return PaletteKind.Light;
+    }
 
     private static bool EndsWith(Uri uri, string suffix) =>
         uri.OriginalString.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
@@ -256,6 +337,27 @@ public sealed class ThemeService : IDisposable
         Apply(ThemeMode.Auto);
     }
 
+    private void OnSystemParametersChanged(object? sender, PropertyChangedEventArgs e)
+    {
+        if (e.PropertyName != nameof(SystemParameters.HighContrast)) return;
+
+        if (!_app.Dispatcher.CheckAccess())
+        {
+            _app.Dispatcher.BeginInvoke(new Action(() => Apply(_settings.Current.Theme)));
+            return;
+        }
+        Apply(_settings.Current.Theme);
+    }
+
+    private static bool IsColorDark(Color c)
+    {
+        // Perceived-luminance heuristic (Rec. 601 weights). Windows high-contrast themes
+        // can be either polarity (e.g. "High Contrast Black" vs "High Contrast White"), so
+        // this can't be assumed the way Dark/Light palette kind can.
+        double luminance = ((0.299 * c.R) + (0.587 * c.G) + (0.114 * c.B)) / 255.0;
+        return luminance < 0.5;
+    }
+
     private static bool IsSystemDark()
     {
         try
@@ -279,6 +381,7 @@ public sealed class ThemeService : IDisposable
         _disposed = true;
         if (_started)
         {
+            SystemParameters.StaticPropertyChanged -= OnSystemParametersChanged;
             SystemEvents.UserPreferenceChanged -= OnUserPreferenceChanged;
             _settings.Changed -= OnSettingsChanged;
         }

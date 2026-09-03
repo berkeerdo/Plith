@@ -1,6 +1,5 @@
+using System.ComponentModel;
 using System.Windows.Controls;
-using System.Windows.Media;
-using System.Windows.Shapes;
 using Plith.Services;
 using Plith.ViewModels;
 
@@ -8,26 +7,48 @@ namespace Plith.Views;
 
 /// <summary>
 /// Mini OSD card rendered next to the settings list. Updates live as the user drags sliders /
-/// flips toggles in the settings window. The preview holds its own <see cref="OsdViewModel"/>
-/// seeded with sample text so the user sees realistic placeholder content.
+/// flips toggles in the settings window.
+///
+/// Deliberately a hand-built mock: it holds its own card view models seeded with sample text
+/// and never acquires a <see cref="Plith.Cards.CardHost"/>, because a second show pipeline
+/// inside the Settings window would be a second OSD authority in the app.
 /// </summary>
-public partial class SettingsPreview : UserControl
+public partial class SettingsPreview : UserControl, INotifyPropertyChanged
 {
-    public OsdViewModel PreviewViewModel { get; }
+    public AudioCardViewModel PreviewAudio { get; } = new()
+    {
+        Label = "Bus A1",
+        GainText = "+3.0 dB",
+        GainNormalized = 0.85,
+    };
+
+    public MediaViewModel PreviewMedia { get; } = new()
+    {
+        Title = "Sample track",
+        Artist = "Sample artist",
+        HasSession = true,
+    };
+
+    private bool _showMediaCard = true;
+
+    /// <summary>Mirrors what CompactMode does to the real OSD's media card. Local state
+    /// rather than a MediaCard, because the preview has no settings-driven card pipeline.</summary>
+    public bool ShowMediaCard
+    {
+        get => _showMediaCard;
+        private set
+        {
+            if (_showMediaCard == value) return;
+            _showMediaCard = value;
+            PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(nameof(ShowMediaCard)));
+        }
+    }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
 
     public SettingsPreview()
     {
-        PreviewViewModel = new OsdViewModel
-        {
-            Label = "Bus A1",
-            GainText = "+3.0 dB",
-            GainNormalized = 0.85,
-        };
-        PreviewViewModel.Media.Title = "Sample track";
-        PreviewViewModel.Media.Artist = "Sample artist";
-        PreviewViewModel.Media.HasSession = true;
-
-        DataContext = PreviewViewModel;
+        DataContext = this;
         InitializeComponent();
 
         // Re-anchor the preview card whenever the surface resizes, otherwise the BottomCenter
@@ -54,8 +75,8 @@ public partial class SettingsPreview : UserControl
 
     public void UpdateOpacity(double percent01) => MiniCard.Opacity = percent01;
 
-    public void UpdateCompact(bool compact) => PreviewViewModel.CompactMode = compact;
+    public void UpdateCompact(bool compact) => ShowMediaCard = !compact;
 
-    public void UpdateColorThresholds(bool thresholds) => PreviewViewModel.UseColorThresholds = thresholds;
+    public void UpdateColorThresholds(bool thresholds) => PreviewAudio.UseColorThresholds = thresholds;
 
 }

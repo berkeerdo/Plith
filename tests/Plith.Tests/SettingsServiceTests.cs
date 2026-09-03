@@ -292,6 +292,35 @@ public class SettingsServiceTests
         svc.Load();
         Assert.Equal("future-preset-99", svc.Current.AccentThemeId);
     }
+
+    [Fact]
+    public void FullscreenVideoSettings_RoundTripThroughIni()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+
+        var m = svc.Current.Clone();
+        m.HideDuringFullscreenVideo = false;
+        m.FullscreenVideoHideList = "mpv,vlc";
+        svc.Save(m);
+
+        var reloaded = new SettingsService(dir.IniPath);
+        reloaded.Load();
+
+        Assert.False(reloaded.Current.HideDuringFullscreenVideo);
+        Assert.Equal("mpv,vlc", reloaded.Current.FullscreenVideoHideList);
+    }
+
+    [Fact]
+    public void FullscreenVideoSettings_DefaultToEnabledWithSeededHideList()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+        svc.Load();   // no file on disk -> defaults
+
+        Assert.True(svc.Current.HideDuringFullscreenVideo);
+        Assert.Equal("mpv,PotPlayerMini64", svc.Current.FullscreenVideoHideList);
+    }
 }
 
 internal sealed class TempIniDir : IDisposable

@@ -8,6 +8,32 @@
     <FontFamily x:Key="UiFont">Segoe UI Variable, Segoe UI</FontFamily>
 
     <!-- ============================================================
+         Keyboard focus visual — shared by every control style below
+         that used to suppress focus entirely. Renders as a rounded
+         accent outline through WPF's own FocusVisualStyle adorner,
+         which the framework draws for keyboard-driven focus
+         (Tab/Shift+Tab) on default Windows settings; it can also
+         show on a mouse click if the user has the Windows "show
+         keyboard cues" setting (SystemParameters.KeyboardCues) on —
+         that's correct behaviour on that setting, not a defect here.
+         Accent is DynamicResource so the ring stays visible against
+         both the Dark and Light palettes.
+         ============================================================ -->
+    <Style x:Key="SettingsFocusVisualStyle">
+        <Setter Property="Control.Template">
+            <Setter.Value>
+                <ControlTemplate>
+                    <Rectangle Margin="-2"
+                               RadiusX="6" RadiusY="6"
+                               Stroke="{DynamicResource Accent}"
+                               StrokeThickness="2"
+                               SnapsToDevicePixels="True" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ============================================================
          Typography
          ============================================================ -->
 
@@ -92,7 +118,7 @@
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="Focusable" Value="True" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="CheckBox">
@@ -186,7 +212,7 @@
     <Style x:Key="ModernSliderStyle" TargetType="Slider">
         <Setter Property="MinHeight" Value="22" />
         <Setter Property="Focusable" Value="True" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Slider">
@@ -276,7 +302,7 @@
         <Setter Property="Height" Value="34" />
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="ItemContainerStyle" Value="{StaticResource ComboBoxItemStyle}" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="HorizontalContentAlignment" Value="Left" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
@@ -338,7 +364,12 @@
                                 <Border.Effect>
                                     <DropShadowEffect ShadowDepth="6" BlurRadius="22" Opacity="0.45" Color="Black" />
                                 </Border.Effect>
-                                <ScrollViewer MaxHeight="280" Padding="2">
+                                <!-- Focusable="False" because this is a template part, not a
+                                     control: the combo's own key handling drives selection and
+                                     scrolling inside the popup. Left focusable it would be a
+                                     nameless tab stop announcing only "pane", which is the
+                                     defect that was found on the Settings page's ScrollViewer. -->
+                                <ScrollViewer MaxHeight="280" Padding="2" Focusable="False">
                                     <ItemsPresenter />
                                 </ScrollViewer>
                             </Border>
@@ -377,7 +408,7 @@
         <Setter Property="MinWidth" Value="96" />
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="BorderThickness" Value="0" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="Template">
             <Setter.Value>
                 <ControlTemplate TargetType="Button">
@@ -428,7 +459,7 @@
         <Setter Property="MinWidth" Value="160" />
         <Setter Property="Padding" Value="12,0" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="HorizontalContentAlignment" Value="Center" />
         <Setter Property="VerticalContentAlignment" Value="Center" />
         <Setter Property="Template">
@@ -583,7 +614,7 @@
         <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
         <Setter Property="FontSize" Value="10" />
         <Setter Property="Cursor" Value="Hand" />
-        <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+        <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
         <Setter Property="Template">
             <Setter.Value>

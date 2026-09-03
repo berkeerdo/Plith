@@ -128,19 +128,104 @@ they care about.
 
 ## 6. Phase breakdown
 
-### Phase 5 — Consolidation + tech debt (1–2 wk)
+### Phase 5 — Consolidation + tech debt — **code-complete, unmerged**
 
-Get the house in order before any pivot code lands.
+Branch `feature/phase-5-cardhost`. Design: `docs/superpowers/specs/2026-09-02-cardhost-design.md`.
 
-- Refactor OSD rendering into a **CardHost** that supports N cards
-  side-by-side. Today's OSD becomes a single card in that host with
-  no behaviour change.
-- Accessibility pass: screen reader labels on all Settings controls,
-  high-contrast mode audit.
-- Auto-hide during exclusive fullscreen video (not games — the OSD
-  already survives games; we want it to hide during Netflix / VLC).
-- Success metric: OSD behaviour is identical to 0.1.5 from the user's
-  side, but the internal `CardHost` is in place and unit-tested.
+Shipped:
+
+- **CardHost** — owns which cards are visible and is the single authority for when
+  the OSD appears. Holds no reference to any WPF window, so the show policy is
+  unit-tested with no `Application` and no HWND. Today's OSD is an Audio card
+  (`Order 20`) plus a Media card (`Order 10`); orders are spaced by 10 so Phase 6
+  cards slot in without renumbering. `OsdViewModel` deleted; `OsdOrchestrator`
+  reduced to a pure audio/media source driver holding no display authority.
+- **Fullscreen-video auto-hide** — on by default, with a Settings toggle and a
+  user-editable process list. Fails toward showing in every ambiguous case.
+- **Accessibility** — screen-reader names across the OSD and Settings, OSD live
+  regions, accent swatches converted from `Border` to `Button` so they are
+  keyboard-reachable, focus indicators restored to six styles that had stripped
+  them, a high-contrast palette, and `scripts/check-a11y.ps1` as the guard.
+
+**The success metric is not yet met.** "Identical to 0.1.5 from the user's side" has
+no automated evidence — see `docs/PHASE5-VERIFICATION.md`.
+
+Two findings worth carrying forward, both caught only because something was measured
+rather than reasoned about:
+
+- A `DataTrigger` binding `RelativeSource AncestorType=ContentPresenter` inside
+  `DataTemplate.Triggers` does **not** resolve to the item container; it walks past it
+  to an outer presenter where `AlternationIndex` defaults to 0, so the trigger matched
+  every item. The fix routes the index through the item root's `Tag`. The warning is
+  recorded in both the spec and the plan.
+- Windows 11's Fullscreen Optimizations (default on) converts most "exclusive
+  fullscreen" games into borderless flip-model windows reporting `QUNS_BUSY`, so the
+  D3D veto never fires for them and game safety rests entirely on the media-session
+  predicate. Any future change to that predicate is a game-safety change.
+
+Found during post-code-complete verification, fixed on the branch. All four came out of
+reading the live UI Automation tree or the WPF source; none was catchable by the build,
+the tests or the lint as they stood:
+
+- Both card views set `AutomationProperties.Name`/`LiveSetting` on a bare `<Grid>`. WPF
+  creates no automation peer for a panel, so the OSD's live region reached nothing at all.
+  Properties moved to the `UserControl` roots; `LiveRegionAnnouncer` raises
+  `LiveRegionChanged`, which WPF does not raise on its own.
+- The OSD's `ItemsControl` container named itself from the bound item's `ToString()`, so
+  cards announced `Plith.Cards.AudioCard`. `ICard.AccessibleName` is now required and each
+  card's `ToString()` returns it.
+- A focused accent swatch ignored Enter. `ButtonBase.OnKeyDown` handles `Key.Enter` only
+  when `KeyboardNavigation.AcceptsReturn` is set, and it defaults to false — the swatch
+  code carried a comment claiming otherwise.
+- Settings' content `ScrollViewer` was a nameless tab stop announcing only "pane"; WPF
+  makes `ScrollViewer` focusable by default. Named rather than made unfocusable, to keep
+  keyboard scrolling of a long page.
+
+`scripts/check-a11y.ps1` now catches the first, second and fourth shapes, and each new
+check was validated in both directions against the tree from before the fix. The third
+needs a key press and has no static equivalent.
+
+Also measured, no defect found: the OSD show path does not leak. It was driven through 160
+volume changes in two runs. The first run grew (+8 GDI objects, +21 handles, +3 threads);
+the second, on the already-warmed process, held GDI objects at exactly 22 and ended with
+*fewer* handles and threads than it started with, while private bytes oscillated with GC in
+both directions. So the first run's growth was one-time initialisation on first show, not
+per-cycle accumulation — which matters because this is the path every volume key press
+takes, and Phase 5 moved it behind an `ItemsControl`.
+
+Environment fact worth keeping: **the OSD cannot be screenshotted over RDP.** The band
+window is layered and drawn with `UpdateLayeredWindow` — absent from a plain `BitBlt`,
+absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns solid
+black — while the window is provably on screen and correctly positioned. Anything
+pixel-based has to run from the physical console. UI Automation works fine over RDP.
+
+Deferred to Phase 6 (recorded so they are not rediscovered):
+
+- Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
+  `SelectionItem` pattern and arrow-key group navigation, and would remove the nine
+  extra tab stops the current row costs. Selection state is currently conveyed by
+  `AutomationProperties.ItemStatus` as a stopgap. It would also retire the
+  `KeyboardNavigation.AcceptsReturn` line each swatch now carries, since a radio button
+  in a group is driven by arrow keys rather than by Enter.
+- `CardHost.Register` now throws on a duplicate, but the check is **reference equality**
+  (`List<T>.Contains`). It catches the same instance registered twice; it does not catch
+  two distinct instances sharing an `Id`, which is the shape data-driven registration is
+  more likely to produce. Deferred rather than guessed at, because the registration model
+  Phase 6 wants has not been designed — decide the `Id` contract first, then guard it.
+- Switching *between* high-contrast themes (Black → White) leaves stale colours until
+  restart, because `{x:Static SystemColors.*}` resolves once at dictionary load.
+  Toggling high contrast on and off works correctly.
+
+Cleared after Phase 5 closed, recorded so the reasoning is not re-derived:
+
+- `MediaCommand` moved from `Plith.Views` to `Plith.Cards`, ending an inverted MVVM
+  dependency that was documented as transitional when introduced.
+- `SettingsPreview`'s media row now binds to its seeded view model instead of carrying
+  the same two strings hardcoded alongside it.
+- `src/Plith.Installer` gained accessible names on all 15 of its interactive controls,
+  so the lint's `-Root src` scope now passes across both projects.
+- `scripts/check-a11y.ps1` runs in CI on changes under `src/**`, with a local
+  invocation documented in `CONTRIBUTING.md`. Before this it was invoked by nothing.
 
 ### Phase 6 — Notch mode + System Controls card (3–4 wk)
 

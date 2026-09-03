@@ -82,6 +82,14 @@ public sealed class SettingsModel
     /// part. Off by default.</summary>
     public bool CompactMode { get; set; }
 
+    /// <summary>Hide the OSD while a fullscreen window is playing media. Games are exempt —
+    /// see FullscreenVideoDetector for the rule.</summary>
+    public bool HideDuringFullscreenVideo { get; set; } = true;
+
+    /// <summary>Comma-separated process names treated as fullscreen video players even when they
+    /// publish no SMTC session. Escape hatch for players like mpv.</summary>
+    public string FullscreenVideoHideList { get; set; } = "mpv,PotPlayerMini64";
+
     /// <summary>How Plith picks between Voicemeeter and the Windows default endpoint.</summary>
     public AudioSourceMode AudioSource { get; set; } = AudioSourceMode.Auto;
 
@@ -134,6 +142,8 @@ public sealed class SettingsModel
         OsdOpacityPercent = OsdOpacityPercent,
         UseColorThresholds = UseColorThresholds,
         CompactMode = CompactMode,
+        HideDuringFullscreenVideo = HideDuringFullscreenVideo,
+        FullscreenVideoHideList = FullscreenVideoHideList,
         AudioSource = AudioSource,
         MonitoredBusIndex = MonitoredBusIndex,
         MonitoredWindowsEndpointId = MonitoredWindowsEndpointId,

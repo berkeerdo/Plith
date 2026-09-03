@@ -2,7 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
-             d:DataContext="{d:DesignInstance Type=vm:OsdViewModel}"
+             xmlns:views="clr-namespace:Plith.Views"
+             d:DataContext="{d:DesignInstance Type=views:SettingsPreview}"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
@@ -58,7 +59,10 @@
                         <!-- Mini media row -->
                         <Border x:Name="MiniMediaRow"
                                 Visibility="{Binding ShowMediaCard, Converter={StaticResource BoolToVisibility}}">
-                            <Grid>
+                            <!-- Only the wrapper Border resolves against the control (for
+                                 ShowMediaCard); the row's own content binds to the media
+                                 view model, matching how the real OSD scopes it. -->
+                            <Grid DataContext="{Binding PreviewMedia}">
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="Auto" />
                                     <ColumnDefinition Width="10" />
@@ -74,13 +78,13 @@
                                                FontWeight="SemiBold"
                                                Foreground="{DynamicResource OsdTextPrimary}"
                                                TextTrimming="CharacterEllipsis"
-                                               Text="Sample track" />
+                                               Text="{Binding Title}" />
                                     <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                                FontSize="10"
                                                Margin="0,2,0,0"
                                                Foreground="{DynamicResource OsdTextSecondary}"
                                                TextTrimming="CharacterEllipsis"
-                                               Text="Sample artist" />
+                                               Text="{Binding Artist}" />
                                 </StackPanel>
                             </Grid>
                         </Border>
@@ -104,24 +108,24 @@
                                            FontSize="14"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource OsdTextPrimary}"
-                                           Text="{Binding GainText}" />
+                                           Text="{Binding PreviewAudio.GainText}" />
                                 <TextBlock FontFamily="{StaticResource OsdUiFont}"
                                            FontSize="10"
                                            FontWeight="SemiBold"
                                            Foreground="{DynamicResource OsdTextTertiary}"
                                            VerticalAlignment="Center"
                                            Typography.Capitals="AllSmallCaps"
-                                           Text="{Binding Label}" />
+                                           Text="{Binding PreviewAudio.Label}" />
                             </DockPanel>
 
                             <Grid Grid.Row="2" Height="4">
                                 <Border CornerRadius="2" Background="{DynamicResource OsdTrackBg}" />
                                 <Border HorizontalAlignment="Left"
                                         CornerRadius="2"
-                                        Background="{Binding GainColor}">
+                                        Background="{Binding PreviewAudio.GainColor}">
                                     <Border.Width>
                                         <MultiBinding Converter="{StaticResource NormConv}">
-                                            <Binding Path="GainNormalized" />
+                                            <Binding Path="PreviewAudio.GainNormalized" />
                                             <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
                                         </MultiBinding>
                                     </Border.Width>

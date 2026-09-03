@@ -1,14 +1,16 @@
-using System.Windows;
 using System.Windows.Threading;
+using Plith.Cards;
 using Plith.ViewModels;
-using Plith.Views;
 
 namespace Plith.Services;
 
 /// <summary>
 /// Owns the polling loop (Voicemeeter), the push subscription (SMTC), and the push
-/// subscription (Windows Core Audio), and funnels whichever source the user picked
-/// into a single OSD show pipeline. Routes media-button clicks back to the SMTC session.
+/// subscription (Windows Core Audio), and feeds whichever source the user picked into
+/// AudioCard / MediaCard. Routes media-button clicks back to the SMTC session.
+///
+/// Deliberately holds no display authority: every decision about whether the OSD appears
+/// belongs to the cards and CardHost, so this type never touches OsdHost.
 /// </summary>
 public sealed class OsdOrchestrator : IDisposable
 {
@@ -22,41 +24,39 @@ public sealed class OsdOrchestrator : IDisposable
 
     private enum ActiveSource { None, Voicemeeter, Windows }
 
-    private readonly OsdHost _osd;
+    private readonly AudioCard _audioCard;
+    private readonly MediaCard _mediaCard;
     private readonly SettingsService _settings;
     private readonly DiagnosticLog? _log;
     private readonly Dispatcher _dispatcher;
     private readonly VoicemeeterClient _voicemeeter = new();
     private readonly WindowsAudioClient _windowsAudio;
-    private readonly MediaSessionClient _media = new();
+    private readonly MediaSessionClient _media;
     private readonly DispatcherTimer _pollTimer;
     private DateTime _nextReconnect = DateTime.MinValue;
     private DispatcherTimer? _audioWatchdogTimer;
     private bool _windowsHadEventSinceActivation;
 
-    // Last-known values for the *active* source. Reset on every source swap so the next
-    // snapshot establishes a baseline silently rather than popping with whatever the new
-    // source's current value happens to be.
-    private float? _lastNormalized;
-    private bool? _lastMuted;
     private ActiveSource _activeSource = ActiveSource.None;
 
     private volatile bool _disposed;
 
-    private TimeSpan VisibleFor => TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
     private int MonitoredBusIndex => _settings.Current.MonitoredBusIndex;
 
-    public OsdOrchestrator(OsdHost osd, SettingsService settings, DiagnosticLog? log = null)
+    public OsdOrchestrator(AudioCard audioCard, MediaCard mediaCard, SettingsService settings,
+                           Dispatcher dispatcher, MediaSessionClient media, DiagnosticLog? log = null)
     {
-        _osd = osd;
+        _audioCard = audioCard;
+        _mediaCard = mediaCard;
         _settings = settings;
         _log = log;
-        _dispatcher = osd.Dispatcher;
+        _dispatcher = dispatcher;
+        _media = media;
         _windowsAudio = new WindowsAudioClient(log);
         _windowsAudio.SetTargetEndpoint(_settings.Current.MonitoredWindowsEndpointId);
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
-        _osd.MediaCommandInvoked += OnMediaCommandInvoked;
+        _mediaCard.CommandInvoked += OnMediaCommandInvoked;
         _settings.Changed += OnSettingsChanged;
         _windowsAudio.Changed += OnWindowsAudioChanged;
     }
@@ -80,9 +80,9 @@ public sealed class OsdOrchestrator : IDisposable
         _windowsAudio.SetTargetEndpoint(m.MonitoredWindowsEndpointId);
         // Mode may have changed (e.g. Auto → ForceWindows) — re-pick the active source.
         ReconcileActiveSource();
-        // Bus index might have changed too — reset cache so the new bus's value is the baseline.
-        _lastNormalized = null;
-        _lastMuted = null;
+        // Bus index might have changed too — reset the baseline so the new bus's first value
+        // is adopted silently instead of popping the OSD.
+        _audioCard.ResetBaseline();
     }
 
     /// <summary>
@@ -110,8 +110,7 @@ public sealed class OsdOrchestrator : IDisposable
         // 30 ms poll tick, and logging on every call floods the file in seconds.
         _log?.Info("Orchestrator", $"Source transition: {_activeSource} -> {desired} (vmLoggedIn={_voicemeeter.IsLoggedIn})");
 
-        _lastNormalized = null;
-        _lastMuted = null;
+        _audioCard.ResetBaseline();
 
         if (desired == ActiveSource.Windows)
         {
@@ -203,8 +202,7 @@ public sealed class OsdOrchestrator : IDisposable
             _log?.Info("Voicemeeter", $"TryLogin attempt: result={ok} rc={_voicemeeter.LastLoginReturnCode}");
             if (ok)
             {
-                _lastNormalized = null;
-                _lastMuted = null;
+                _audioCard.ResetBaseline();
                 // VM just came online — in Auto mode, switch over to it.
                 ReconcileActiveSource();
             }
@@ -251,42 +249,24 @@ public sealed class OsdOrchestrator : IDisposable
         // keeps the digit-only output consistent across locales.
         var text = (snapshot.ScalarVolume * 100).ToString("0",
             System.Globalization.CultureInfo.InvariantCulture) + "%";
-        HandleValueChange(snapshot.DeviceLabel, snapshot.ScalarVolume, text, snapshot.Muted);
+        _audioCard.Apply(snapshot.DeviceLabel, snapshot.ScalarVolume, text, snapshot.Muted);
     }
 
     #endregion
 
-    #region Common change handling
+    #region Voicemeeter value formatting
 
     private void HandleVoicemeeterChange(VoicemeeterParameterSnapshot snap)
     {
-        double normalized = (Math.Clamp(snap.GainDb, OsdViewModel.VoicemeeterMinDb, OsdViewModel.VoicemeeterMaxDb)
-                            - OsdViewModel.VoicemeeterMinDb)
-                          / (OsdViewModel.VoicemeeterMaxDb - OsdViewModel.VoicemeeterMinDb);
+        double normalized = (Math.Clamp(snap.GainDb, AudioCardViewModel.VoicemeeterMinDb, AudioCardViewModel.VoicemeeterMaxDb)
+                            - AudioCardViewModel.VoicemeeterMinDb)
+                          / (AudioCardViewModel.VoicemeeterMaxDb - AudioCardViewModel.VoicemeeterMinDb);
         // Invariant-culture formatting so the dB readout stays "0.0 dB" everywhere — the
         // CurrentCulture variant surfaces "0,0 dB" on tr-TR/de-DE/fr-FR machines, which
         // violates audio-engineering convention.
         string text = snap.GainDb.ToString("+0.0;-0.0;0.0",
             System.Globalization.CultureInfo.InvariantCulture) + " dB";
-        HandleValueChange(snap.Label, normalized, text, snap.Muted);
-    }
-
-    /// <summary>
-    /// Applies a normalized 0..1 value + a pre-formatted display string. Suppresses the first
-    /// read after a source attach so the OSD doesn't pop on a baseline; pops on any real change.
-    /// </summary>
-    private void HandleValueChange(string label, double normalized, string text, bool muted)
-    {
-        bool isFirstRead = _lastNormalized is null;
-        bool changed = isFirstRead
-            || Math.Abs(_lastNormalized!.Value - normalized) > 0.0005
-            || _lastMuted != muted;
-
-        _lastNormalized = (float)normalized;
-        _lastMuted = muted;
-
-        _osd.ViewModel.Apply(label, normalized, text, muted);
-        if (changed && !isFirstRead) _osd.ShowOsd(VisibleFor);
+        _audioCard.Apply(snap.Label, normalized, text, snap.Muted);
     }
 
     #endregion
@@ -302,10 +282,7 @@ public sealed class OsdOrchestrator : IDisposable
         }
         if (_disposed) return;
 
-        _osd.ViewModel.Media.Apply(snapshot);
-
-        if (_settings.Current.AutoShowOnMedia && snapshot.HasSession)
-            _osd.ShowOsd(VisibleFor);
+        _mediaCard.Apply(snapshot);
     }
 
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
@@ -317,7 +294,6 @@ public sealed class OsdOrchestrator : IDisposable
             MediaCommand.SkipNext => _media.SkipNextAsync(),
             _ => Task.FromResult(false),
         };
-        _osd.ShowOsd(VisibleFor);
     }
 
     #endregion
@@ -328,10 +304,10 @@ public sealed class OsdOrchestrator : IDisposable
         _pollTimer.Stop();
         _audioWatchdogTimer?.Stop();
         _settings.Changed -= OnSettingsChanged;
-        _osd.MediaCommandInvoked -= OnMediaCommandInvoked;
+        _mediaCard.CommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
         _windowsAudio.Changed -= OnWindowsAudioChanged;
-        _media.Dispose();
+        // _media is owned by App (shared with the fullscreen watcher) — not disposed here.
         _windowsAudio.Dispose();
         _voicemeeter.Dispose();
     }

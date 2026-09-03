@@ -2,6 +2,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Runtime.CompilerServices;
 using System.Windows.Media.Imaging;
+using Plith.Cards;
 using Plith.Services;
 
 namespace Plith.ViewModels;
@@ -9,10 +10,26 @@ namespace Plith.ViewModels;
 public sealed class MediaViewModel : INotifyPropertyChanged
 {
     private string _title = "";
-    public string Title { get => _title; set => Set(ref _title, value); }
+    public string Title
+    {
+        get => _title;
+        set
+        {
+            if (Set(ref _title, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private string _artist = "";
-    public string Artist { get => _artist; set => Set(ref _artist, value); }
+    public string Artist
+    {
+        get => _artist;
+        set
+        {
+            if (Set(ref _artist, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
 
     private BitmapSource? _albumArt;
     public BitmapSource? AlbumArt
@@ -34,7 +51,11 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _isPlaying, value))
+            {
                 OnPropertyChanged(nameof(PlayPauseGlyph));
+                OnPropertyChanged(nameof(PlayPauseLabel));
+                OnPropertyChanged(nameof(AccessibleSummary));
+            }
         }
     }
 
@@ -45,17 +66,38 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _hasSession, value))
+            {
                 HasSessionChanged?.Invoke();
+                OnPropertyChanged(nameof(AccessibleSummary));
+            }
         }
     }
 
-    /// <summary>Raised whenever HasSession flips, so the parent OsdViewModel can recompute
-    /// <c>ShowMediaCard</c> (which depends on HasSession + CompactMode). Always fires from
+    /// <summary>Live-region text for the media card.</summary>
+    public string AccessibleSummary => _hasSession
+        ? $"{_title} by {_artist}, {(_isPlaying ? "playing" : "paused")}"
+        : string.Empty;
+
+    /// <summary>Raised whenever HasSession flips, so MediaCard can recompute its
+    /// <c>IsVisible</c> (which depends on HasSession + CompactMode). Always fires from
     /// the setter, so callers that go around <see cref="Apply"/> still get the notification.</summary>
     public event Action? HasSessionChanged;
 
     /// <summary>Segoe Fluent Icons glyph for the play/pause toggle button (U+E769 Pause / U+E768 Play).</summary>
     public string PlayPauseGlyph => _isPlaying ? "" : "";
+
+    /// <summary>Screen-reader label for the play/pause toggle. The glyph beside it is a Segoe
+    /// Fluent Icons private-use codepoint, which a screen reader would otherwise read aloud
+    /// verbatim — this is the only text a non-sighted user gets for that button.</summary>
+    public string PlayPauseLabel => _isPlaying ? "Pause" : "Play";
+
+    /// <summary>Raised when the user clicks a transport button. The view calls
+    /// <see cref="RequestCommand"/> on its DataContext rather than surfacing an event on the
+    /// UserControl, because under CardHost the view is created by a DataTemplate and no owner
+    /// holds a named reference to it.</summary>
+    public event Action<MediaCommand>? CommandRequested;
+
+    public void RequestCommand(MediaCommand command) => CommandRequested?.Invoke(command);
 
     /// <summary>
     /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher

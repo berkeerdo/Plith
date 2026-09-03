@@ -1,11 +1,13 @@
-<UserControl x:Class="Plith.Views.MediaCard"
+<UserControl x:Class="Plith.Views.MediaCardView"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:MediaViewModel}"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             AutomationProperties.Name="{Binding AccessibleSummary}"
+             AutomationProperties.LiveSetting="Polite">
     <UserControl.Resources>
         <!-- Transport buttons — tight, icon-only, hover/pressed states only via background -->
         <Style x:Key="MediaButtonStyle" TargetType="Button">
@@ -74,7 +76,10 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid Visibility="{Binding HasSession, Converter={StaticResource BoolToVisibilityConverter}}">
+    <!-- The AutomationProperties for this card sit on the UserControl root above, not here:
+         WPF gives a Grid no automation peer, so a name set here never reaches UI Automation.
+         See LiveRegionAnnouncer for the measurement behind that. -->
+    <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="14" />
@@ -94,12 +99,14 @@
                 <DropShadowEffect ShadowDepth="0" BlurRadius="10" Opacity="0.35" Color="Black" />
             </Border.Effect>
             <Grid>
+                <!-- Decorative album-art placeholder glyph: automation name explicitly empty -->
                 <TextBlock HorizontalAlignment="Center"
                            VerticalAlignment="Center"
                            FontFamily="Segoe Fluent Icons, Segoe MDL2 Assets"
                            FontSize="18"
                            Foreground="{DynamicResource OsdTextTertiary}"
                            Text="&#xE940;"
+                           AutomationProperties.Name=""
                            Visibility="{Binding HasAlbumArt, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
                 <Image Source="{Binding AlbumArt}"
                        Stretch="UniformToFill"
@@ -127,15 +134,18 @@
             <Button x:Name="PrevButton"
                     Style="{StaticResource MediaButtonStyle}"
                     Content="&#xE892;"
+                    AutomationProperties.Name="Previous track"
                     ToolTip="Previous" />
             <Button x:Name="PlayPauseButton"
                     Style="{StaticResource PlayPauseButtonStyle}"
                     Margin="2,0"
                     Content="{Binding PlayPauseGlyph}"
+                    AutomationProperties.Name="{Binding PlayPauseLabel}"
                     ToolTip="Play / Pause" />
             <Button x:Name="NextButton"
                     Style="{StaticResource MediaButtonStyle}"
                     Content="&#xE893;"
+                    AutomationProperties.Name="Next track"
                     ToolTip="Next" />
         </StackPanel>
     </Grid>

@@ -1,0 +1,17 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:vm="clr-namespace:Plith.ViewModels"
+                    xmlns:views="clr-namespace:Plith.Views">
+
+    <!-- Implicit DataType templates: ItemsControl resolves each card's view from its
+         view-model type, which is what keeps ICard free of any view reference. Adding a
+         Phase 6 card means adding one DataTemplate here and nothing else in this file. -->
+    <DataTemplate DataType="{x:Type vm:AudioCardViewModel}">
+        <views:AudioCardView />
+    </DataTemplate>
+
+    <DataTemplate DataType="{x:Type vm:MediaViewModel}">
+        <views:MediaCardView />
+    </DataTemplate>
+
+</ResourceDictionary>

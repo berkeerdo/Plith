@@ -37,6 +37,14 @@ Run the tests:
 dotnet test tests/Plith.Tests/Plith.Tests.csproj
 ```
 
+Run the accessibility check (fails if an interactive XAML control has no
+`AutomationProperties.Name` or `AutomationProperties.LabeledBy`; CI runs this
+on every pull request and push touching `src/**`):
+
+```powershell
+pwsh -NoProfile -File scripts/check-a11y.ps1 -Root src
+```
+
 Produce a signed release artifact (needs the local self-signed cert):
 
 ```powershell

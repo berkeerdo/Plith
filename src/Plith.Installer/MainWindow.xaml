@@ -70,11 +70,13 @@
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
                             Content="&#xE921;"
-                            ToolTip="Minimize" />
+                            ToolTip="Minimize"
+                            AutomationProperties.Name="Minimize" />
                     <Button x:Name="CloseButton"
                             Style="{StaticResource CloseCaptionButtonStyle}"
                             Content="&#xE8BB;"
-                            ToolTip="Close" />
+                            ToolTip="Close"
+                            AutomationProperties.Name="Close" />
                 </StackPanel>
             </Grid>
         </Border>

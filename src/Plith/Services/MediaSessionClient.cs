@@ -33,6 +33,13 @@ public sealed class MediaSessionClient : IDisposable
     /// session's initial state, not a user-driven event.</summary>
     public event Action? SessionReplaced;
 
+    /// <summary>AUMID of the app owning the current session, or empty when there is none.
+    /// Used by FullscreenVideoWatcher to decide whether the foreground window is playing media.</summary>
+    public string CurrentSourceAppUserModelId { get; private set; } = string.Empty;
+
+    /// <summary>True while the current session reports Playing.</summary>
+    public bool IsCurrentSessionPlaying { get; private set; }
+
     public async Task StartAsync()
     {
         try
@@ -97,6 +104,8 @@ public sealed class MediaSessionClient : IDisposable
         var session = _currentSession;
         if (session is null)
         {
+            CurrentSourceAppUserModelId = string.Empty;
+            IsCurrentSessionPlaying = false;
             if (!ct.IsCancellationRequested)
                 Changed?.Invoke(new MediaSnapshot("", "", null, false, HasSession: false));
             return;
@@ -128,6 +137,13 @@ public sealed class MediaSessionClient : IDisposable
         catch { }
 
         if (ct.IsCancellationRequested) return;
+
+        var aumid = string.Empty;
+        try { aumid = session.SourceAppUserModelId ?? string.Empty; } catch { /* session died mid-read */ }
+
+        CurrentSourceAppUserModelId = aumid;
+        IsCurrentSessionPlaying = playing;
+
         Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true));
     }
 
