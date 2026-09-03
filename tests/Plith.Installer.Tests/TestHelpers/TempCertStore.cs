@@ -21,6 +21,11 @@ public sealed class TempCertStore : IDisposable
 {
     public const string TestSubject = "CN=Plith Test " + nameof(TempCertStore);
 
+    // FindBySubjectName is a case-insensitive substring match, so this filter is also the
+    // safety boundary for what Dispose is allowed to delete. It matches "Plith Test" and
+    // nothing else that exists in practice — in particular it does not match the developer
+    // signing certificate "CN=Plith Self-Signed", which must never be removed. Widening this
+    // string, or switching to a looser find type, would put that certificate in range.
     private const string SubjectFilter = "Plith Test";
 
     public void Dispose() => RemoveAll();
