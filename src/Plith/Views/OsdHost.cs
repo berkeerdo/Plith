@@ -37,6 +37,11 @@ public sealed class OsdHost : BandWindow
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
     private bool _isFadingOut;
+    private bool _isFadingIn;
+    // Separate from _showGeneration on purpose: _showGeneration ticks on every ShowOsd call,
+    // including the ones that deliberately leave a running fade-in alone, so using it to
+    // decide whether a fade-in is still current would strand _isFadingIn at true forever.
+    private int _fadeInGeneration;
 
     // Local mirror of ThemeService.BuildAccentOverride(). Lives on this ContentControl's
     // own Resources.MergedDictionaries so DynamicResource lookups inside OsdContent hit
@@ -175,6 +180,7 @@ public sealed class OsdHost : BandWindow
     {
         if (_isEditMode) return;   // edit mode keeps its own always-on visibility
         _showGeneration++;
+        bool wasFadingOut = _isFadingOut;
         _isFadingOut = false;
         _currentVisibleFor = visibleFor;
         double targetOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
@@ -184,17 +190,36 @@ public sealed class OsdHost : BandWindow
         {
             Reposition();
             Show();   // BandWindow.Show — Visibility=Visible + SetWindowPos HWND_TOPMOST
-            BeginAnimation(OpacityProperty, null);
-            var fadeIn = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(FadeInMs))
+
+            // Only start a fade-in when one is not already running toward this same target.
+            // Volume keys repeat far faster than FadeInMs, so a held or spammed key lands
+            // several events inside a single fade — and restarting the animation on each of
+            // them made the OSD pulse instead of staying up. Note also the absence of a
+            // BeginAnimation(OpacityProperty, null) here: clearing an animation reverts the
+            // property to its base value, which is 0 while the window is hidden, so the old
+            // clear-then-restart snapped the OSD back to fully invisible every time. A
+            // From-less DoubleAnimation hands off from the current animated value instead,
+            // which is what makes interrupting a fade-out look continuous.
+            if (wasFadingOut || !_isFadingIn)
             {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            };
-            BeginAnimation(OpacityProperty, fadeIn);
+                _isFadingIn = true;
+                int gen = ++_fadeInGeneration;
+                var fadeIn = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(FadeInMs))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                };
+                fadeIn.Completed += (_, _) =>
+                {
+                    if (_fadeInGeneration == gen) _isFadingIn = false;
+                };
+                BeginAnimation(OpacityProperty, fadeIn);
+            }
         }
         else
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = targetOpacity;
+            _isFadingIn = false;
         }
 
         ReassertTopmost();
@@ -220,6 +245,7 @@ public sealed class OsdHost : BandWindow
     {
         var gen = _showGeneration;
         _isFadingOut = true;
+        _isFadingIn = false;
         var fadeOut = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(FadeOutMs))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
