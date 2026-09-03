@@ -1,11 +1,27 @@
 #requires -Version 7
 <#
 .SYNOPSIS
-  Fails when an interactive XAML control carries no accessible name.
+  Fails when an interactive XAML control carries no accessible name, or when an accessible
+  name is set on an element that cannot surface it.
 
 .DESCRIPTION
   AutomationProperties live in XAML, where unit tests are weak — asserting on them needs an
   STA thread and a loaded visual tree. This static check is the regression guard instead.
+
+  Two checks run:
+
+  1. Every interactive control declares an accessible name (details below).
+
+  2. No AutomationProperties are set on an element WPF gives no automation peer to. This
+     second check exists because check 1 alone was green while the OSD's live region was
+     completely inert: both card views set AutomationProperties.Name and LiveSetting on a
+     bare <Grid>. WPF only creates automation peers for types that override
+     OnCreateAutomationPeer — panels, borders and other layout/decoration elements do not —
+     and UIElementAutomationPeer.GetNameCore reads the property off its owner. A name set on
+     a peerless element therefore reaches nothing at all: it appears nowhere in the live UI
+     Automation tree, not even in the raw view, while every build, test and lint stays green.
+     Move such properties onto the nearest element that does own a peer, usually the
+     UserControl or Control root.
 
   A control passes when it declares AutomationProperties.Name (including an explicitly empty
   one, which marks a decorative element) or AutomationProperties.LabeledBy.
@@ -65,12 +81,56 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
     }
 }
 
-if ($failures.Count -gt 0) {
+# --- Check 2: AutomationProperties must sit on an element that owns an automation peer ---
+
+# Types WPF creates no automation peer for. Not exhaustive by design: it lists the
+# layout and decoration elements an accessible name plausibly gets attached to by
+# mistake, which is where this class of bug actually occurs.
+$peerless = @(
+    'Grid', 'StackPanel', 'DockPanel', 'WrapPanel', 'Canvas', 'UniformGrid',
+    'VirtualizingStackPanel', 'Border', 'Decorator', 'Viewbox', 'ContentPresenter',
+    'ItemsPresenter', 'AdornerDecorator', 'BulletDecorator', 'InkPresenter',
+    'Rectangle', 'Ellipse', 'Path', 'Line', 'Polygon', 'Polyline'
+)
+
+$deadProperties = [System.Collections.Generic.List[string]]::new()
+
+foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
+    try {
+        $xml = [xml](Get-Content -Raw -LiteralPath $file.FullName)
+    }
+    catch {
+        # A XAML file this script cannot parse is a gap in coverage, not a pass.
+        $rel = Resolve-Path -Relative -LiteralPath $file.FullName
+        $deadProperties.Add("${rel}: could not be parsed as XML, so it was not checked — $($_.Exception.Message)")
+        continue
+    }
+
+    foreach ($node in $xml.SelectNodes('//*')) {
+        if ($peerless -notcontains $node.LocalName) { continue }
+        if ($null -eq $node.Attributes) { continue }
+        foreach ($attr in $node.Attributes) {
+            if ($attr.Name -notlike 'AutomationProperties.*') { continue }
+            $rel = Resolve-Path -Relative -LiteralPath $file.FullName
+            $deadProperties.Add("${rel}: <$($node.LocalName)> sets $($attr.Name), but WPF gives $($node.LocalName) no automation peer")
+        }
+    }
+}
+
+if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0) {
     Write-Host "Accessibility check failed:`n" -ForegroundColor Red
-    $failures | ForEach-Object { Write-Host "  $_" -ForegroundColor Red }
-    Write-Host "`nAdd AutomationProperties.Name, or AutomationProperties.Name=`"`" for a purely decorative element." -ForegroundColor Yellow
+    if ($failures.Count -gt 0) {
+        Write-Host "  Interactive controls without an accessible name:" -ForegroundColor Red
+        $failures | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Write-Host "`n  Add AutomationProperties.Name, or AutomationProperties.Name=`"`" for a purely decorative element." -ForegroundColor Yellow
+    }
+    if ($deadProperties.Count -gt 0) {
+        Write-Host "`n  AutomationProperties that never reach UI Automation:" -ForegroundColor Red
+        $deadProperties | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Write-Host "`n  Move them onto the nearest element that owns a peer, usually the UserControl or Control root." -ForegroundColor Yellow
+    }
     exit 1
 }
 
-Write-Host "Accessibility check passed: every interactive control has an accessible name." -ForegroundColor Green
+Write-Host "Accessibility check passed: every interactive control has an accessible name, and every AutomationProperties value sits on an element that can surface it." -ForegroundColor Green
 exit 0

@@ -141,9 +141,11 @@ Note that 3.2 is verified only as far as *the property is correct and the event 
 raised*. Whether Narrator actually speaks it is a Narrator behaviour question that only
 listening can settle; if you ever do run Narrator, that is the thing worth checking.
 
-`scripts/check-a11y.ps1` passed throughout, including while the live region was inert —
-it reads XAML statically and cannot know which elements WPF gives a peer to. Treat a
-green lint as "nothing is unnamed", not as "everything named is reachable".
+`scripts/check-a11y.ps1` passed throughout, including while the live region was inert: it
+only asked whether interactive controls were named, never whether a name could reach UI
+Automation. It now also fails on AutomationProperties set on a peerless element, and that
+second check was validated in both directions — green on the fixed tree, and four findings
+when pointed at the tree from before the fix.
 
 Two known cosmetic quirks to listen for and report — both are deferred, and whether
 they are worth fixing depends on whether you can actually hear them:
