@@ -5,9 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:AudioCardViewModel}"
-             mc:Ignorable="d">
-    <Grid AutomationProperties.Name="{Binding AccessibleSummary}"
-          AutomationProperties.LiveSetting="Polite">
+             mc:Ignorable="d"
+             AutomationProperties.Name="{Binding AccessibleSummary}"
+             AutomationProperties.LiveSetting="Polite">
+    <!-- The two AutomationProperties above belong on this UserControl root and nowhere else:
+         WPF gives a Grid no automation peer, so a name set there never reaches UI Automation.
+         See LiveRegionAnnouncer for the measurement behind that. -->
+    <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="10" />

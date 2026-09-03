@@ -5,7 +5,9 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:MediaViewModel}"
-             mc:Ignorable="d">
+             mc:Ignorable="d"
+             AutomationProperties.Name="{Binding AccessibleSummary}"
+             AutomationProperties.LiveSetting="Polite">
     <UserControl.Resources>
         <!-- Transport buttons — tight, icon-only, hover/pressed states only via background -->
         <Style x:Key="MediaButtonStyle" TargetType="Button">
@@ -74,8 +76,10 @@
         </Style>
     </UserControl.Resources>
 
-    <Grid AutomationProperties.Name="{Binding AccessibleSummary}"
-          AutomationProperties.LiveSetting="Polite">
+    <!-- The AutomationProperties for this card sit on the UserControl root above, not here:
+         WPF gives a Grid no automation peer, so a name set here never reaches UI Automation.
+         See LiveRegionAnnouncer for the measurement behind that. -->
+    <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
             <ColumnDefinition Width="14" />

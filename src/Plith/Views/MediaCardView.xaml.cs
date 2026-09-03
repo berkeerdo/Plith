@@ -12,6 +12,7 @@ public partial class MediaCardView : UserControl
         PrevButton.Click += (_, _) => Request(MediaCommand.SkipPrevious);
         PlayPauseButton.Click += (_, _) => Request(MediaCommand.TogglePlayPause);
         NextButton.Click += (_, _) => Request(MediaCommand.SkipNext);
+        LiveRegionAnnouncer.Attach(this, nameof(MediaViewModel.AccessibleSummary));
     }
 
     // The DataContext is supplied implicitly by the DataTemplate that resolves this view from
