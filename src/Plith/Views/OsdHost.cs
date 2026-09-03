@@ -202,6 +202,16 @@ public sealed class OsdHost : BandWindow
             // which is what makes interrupting a fade-out look continuous.
             if (wasFadingOut || !_isFadingIn)
             {
+                // Logged on the transition only, not on every repeat, so a held volume key
+                // produces one line per appearance. This is the line that separates "the OSD
+                // was never asked to show" from "it was shown and something on top of it won":
+                // over a game in true exclusive fullscreen the display is scanned out from the
+                // game's own swapchain, so nothing composites over it however correctly the
+                // OSD behaves, and without this line the two cases look identical from a log.
+                _log?.Info("OsdHost",
+                    $"Show: fade-in at {Left:0},{Top:0} for {visibleFor.TotalMilliseconds:0}ms" +
+                    (wasFadingOut ? " (interrupting fade-out)" : string.Empty));
+
                 _isFadingIn = true;
                 int gen = ++_fadeInGeneration;
                 var fadeIn = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(FadeInMs))

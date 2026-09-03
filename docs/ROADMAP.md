@@ -193,6 +193,24 @@ both directions. So the first run's growth was one-time initialisation on first 
 per-cycle accumulation — which matters because this is the path every volume key press
 takes, and Phase 5 moved it behind an `ItemsControl`.
 
+Measured while a game was actually running, which the earlier notes could only predict:
+a current title reported `QUNS_BUSY` (2) rather than `QUNS_RUNNING_D3D_FULL_SCREEN` (3)
+while covering the whole monitor, and the OSD drew over it correctly. So Windows 11's
+Fullscreen Optimizations really do put most games on the composited path, and the D3D veto
+really is dead code for them — game safety rests on the media-session predicate exactly as
+recorded.
+
+One title is an exception and the cause is **not yet isolated**: the OSD does not appear
+over Valorant in its Fullscreen mode, while it works over the same machine's other games
+and over Valorant in borderless. Two candidates remain, and they call for different fixes:
+Valorant may take true exclusive fullscreen, where the display is scanned out from the
+game's own swapchain and nothing composites over it no matter how correct the OSD is — in
+which case `README.md`'s "draws above exclusive fullscreen" is the thing that is wrong — or
+Riot's Vanguard anticheat may be blocking the overlay. `SHQueryUserNotificationState`
+returning 2 or 3 during that mode separates them in one reading. `OsdHost` now logs each
+show transition, so the log also distinguishes "never asked to show" from "shown and
+something on top of it won", which it could not do while this was first investigated.
+
 Environment fact worth keeping: **the OSD cannot be screenshotted over RDP.** The band
 window is layered and drawn with `UpdateLayeredWindow` — absent from a plain `BitBlt`,
 absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns solid
