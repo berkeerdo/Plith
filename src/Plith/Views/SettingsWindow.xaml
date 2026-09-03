@@ -133,7 +133,13 @@
                     Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />
 
+            <!-- Named because WPF makes ScrollViewer keyboard-focusable by default, so it is a
+                 real tab stop: it was reached fourth, right after the caption buttons, and
+                 announced as nothing but "pane". Naming it rather than setting
+                 Focusable="False" keeps the affordance a keyboard user has for scrolling this
+                 long page without tabbing through every control in it. -->
             <ScrollViewer Grid.Column="0"
+                          AutomationProperties.Name="Settings"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="32,24,24,24">

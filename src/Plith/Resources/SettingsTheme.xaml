@@ -364,7 +364,12 @@
                                 <Border.Effect>
                                     <DropShadowEffect ShadowDepth="6" BlurRadius="22" Opacity="0.45" Color="Black" />
                                 </Border.Effect>
-                                <ScrollViewer MaxHeight="280" Padding="2">
+                                <!-- Focusable="False" because this is a template part, not a
+                                     control: the combo's own key handling drives selection and
+                                     scrolling inside the popup. Left focusable it would be a
+                                     nameless tab stop announcing only "pane", which is the
+                                     defect that was found on the Settings page's ScrollViewer. -->
+                                <ScrollViewer MaxHeight="280" Padding="2" Focusable="False">
                                     <ItemsPresenter />
                                 </ScrollViewer>
                             </Border>

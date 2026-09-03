@@ -135,7 +135,7 @@ DataItem name='Volume'
 |---|---|---|
 | 3.1 | Transport buttons named | **PASS** — "Previous track" / "Play" / "Next track", each with HelpText |
 | 3.2 | Volume value reaches the live region | **PASS after fix** — the card's name tracks the current value |
-| 3.3 | Tab through the whole Settings window | **Still open** — needs the window opened from the tray |
+| 3.3 | Tab through the whole Settings window | **PASS after fix** — see section 4 |
 
 Note that 3.2 is verified only as far as *the property is correct and the event is
 raised*. Whether Narrator actually speaks it is a Narrator behaviour question that only
@@ -163,9 +163,44 @@ Nine accent swatches became keyboard-reachable in Phase 5 — they were previous
 `Border` elements with mouse handlers, unreachable by keyboard and invisible to screen
 readers.
 
+**4.1 is done, measured from the live UIA tree with the window open.** All 29
+keyboard-focusable elements were enumerated with their names and bounding rectangles, and
+tree order was compared against visual order (top to bottom, then left to right):
+
+```
+ 1-3   Minimize / Maximize / Close      13   Rose
+ 4     Settings (scroll region)         14   Custom color
+ 5     Theme                            15   Show duration
+ 6     Emerald                          16   Set position
+ 7     Praxvon Lime                     17   Hover keep-alive
+ 8     Sky                              18   Opacity
+ 9     Frost                            19   Color thresholds
+10     Violet                           20   Compact mode
+11     Peach                            21   Hide during fullscreen video
+12     Amber                            22   Also hide in these apps
+                                        23   Summon hotkey
+                                        24   Clear hotkey
+                                        25   Audio source
+                                        26   Windows endpoint
+                                        27   Show on track change
+                                        28   Launch at Windows login
+                                        29   Check for updates
+```
+
+Tab order matched visual order at every position, and no two controls share a name. One
+defect was found and fixed: position 4 was reached with **no name at all**, announcing
+only "pane". It is the content `ScrollViewer`, which WPF makes keyboard-focusable by
+default — so it is a real tab stop, not passive chrome. It is now named "Settings" rather
+than made unfocusable, which keeps the affordance a keyboard user has for scrolling a page
+this long without tabbing through every control on it. The ComboBox popup's `ScrollViewer`
+is a template part and was marked `Focusable="False"` instead.
+
+The remaining checks below need eyes and hands: whether the focus ring is *visible* is not
+something UI Automation can answer.
+
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 4.1 | Tab from the title bar to the bottom | Every interactive control reachable, in visual order | Anything skipped or out of order |
+| 4.1 | Tab from the title bar to the bottom | **PASS** — 29 controls, all named, tab order matches visual order |
 | 4.2 | Watch the focus indicator throughout | A visible accent ring on every focused control, **including the accent swatches** | Any control focuses with no visible indicator |
 | 4.3 | Focus a swatch, press **Space**, then **Enter** | Both select that accent | Either does nothing |
 

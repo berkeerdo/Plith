@@ -53,7 +53,11 @@ param(
 
 $ErrorActionPreference = 'Stop'
 
-$interactive = @('Button', 'ComboBox', 'Slider', 'ToggleButton', 'CheckBox', 'TextBox', 'RadioButton')
+# ScrollViewer is in this list because WPF makes it keyboard-focusable by default, which
+# makes it a genuine tab stop rather than passive chrome. Settings' ScrollViewer was reached
+# fourth by Tab and announced as nothing but "pane". A ScrollViewer that is not meant to be a
+# tab stop declares Focusable="False" and is exempted below like any other template part.
+$interactive = @('Button', 'ComboBox', 'Slider', 'ToggleButton', 'CheckBox', 'TextBox', 'RadioButton', 'ScrollViewer')
 $failures = [System.Collections.Generic.List[string]]::new()
 
 foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
