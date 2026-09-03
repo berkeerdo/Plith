@@ -709,9 +709,16 @@ public partial class SettingsWindow : Window
         grid.Children.Add(tick);
         root.Content = grid;
 
-        // Click (not a mouse event) so Space/Enter activate the swatch exactly like a
-        // mouse click does, and there's no separate mouse handler left behind that could
-        // fire alongside Click and double-invoke the same swatch.
+        // Click (not a mouse event) so keyboard activation goes through the same path as a
+        // mouse click, with no separate mouse handler left behind that could fire alongside
+        // Click and double-invoke the same swatch.
+        //
+        // Space alone comes for free; Enter does not. ButtonBase.OnKeyDown handles Key.Enter
+        // only when KeyboardNavigation.AcceptsReturn is set, and it defaults to false — so
+        // without the line below a focused swatch ignores Enter, which is the obvious key to
+        // press on a colour you have just tabbed to. Settings declares no IsDefault or
+        // IsCancel button, so nothing else is waiting for Enter to bubble past.
+        KeyboardNavigation.SetAcceptsReturn(root, true);
         root.Click += (_, _) => OnSwatchClicked(id, isCustom);
 
         return new AccentSwatch(id, root, fill, tick, PlusIcon: null, IsCustom: isCustom);
@@ -778,6 +785,8 @@ public partial class SettingsWindow : Window
         grid.Children.Add(tick);
         root.Content = grid;
 
+        // See CreateSwatch: Enter needs AcceptsReturn, Space does not.
+        KeyboardNavigation.SetAcceptsReturn(root, true);
         root.Click += (_, _) => OnSwatchClicked(AccentTheme.CustomId, isCustom: true);
 
         return new AccentSwatch(AccentTheme.CustomId, root, fill, tick, plus, IsCustom: true);

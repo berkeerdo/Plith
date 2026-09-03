@@ -168,6 +168,14 @@ readers.
 | 4.1 | Tab from the title bar to the bottom | Every interactive control reachable, in visual order | Anything skipped or out of order |
 | 4.2 | Watch the focus indicator throughout | A visible accent ring on every focused control, **including the accent swatches** | Any control focuses with no visible indicator |
 | 4.3 | Focus a swatch, press **Space**, then **Enter** | Both select that accent | Either does nothing |
+
+4.3's Enter half would have failed as written. `ButtonBase.OnKeyDown` in the WPF source
+handles `Key.Enter` only when `KeyboardNavigation.AcceptsReturn` is set, and it defaults to
+false — so a focused, non-default `Button` ignores Enter, whatever a `Click` handler
+suggests. The swatch code carried a comment claiming Space and Enter both worked. The
+swatches now set `AcceptsReturn`, which is safe here because Settings declares no
+`IsDefault` or `IsCancel` button for Enter to reach instead. Space was always fine.
+
 | 4.4 | Repeat 4.2 in both Light and Dark themes | Ring legible in both | Invisible in either |
 
 **On mouse clicks:** if the ring appears on click as well as on Tab, check whether
