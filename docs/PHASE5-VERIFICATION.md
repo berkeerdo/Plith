@@ -78,7 +78,22 @@ game into true exclusive mode tests only the easy path.
 | 2.2 | With the game still focused, check `plith.log` | No `Suppression -> True` line while the game holds focus | That line appears — a failure **even if the OSD looked fine** |
 
 2.1's background-media requirement is not optional. With no media playing the check
-short-circuits before the risky comparison and passes vacuously.
+short-circuits before the risky comparison and passes vacuously — `ShouldSuppress` reaches
+the AUMID comparison only through `foregroundOwnsPlayingSmtc`, and that is false unless a
+session is actually **Playing**. A paused session is not enough.
+
+**Use VLC for 2.3, not the Store Netflix app.** The AUMID→process match was measured
+against a real packaged player: Spotify's Store build reports
+`SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify`, which trims from the last dot to the stem
+`SpotifyAB` — never equal to any real process name. So **fullscreen video in a packaged
+player is not auto-hidden**, by design: it fails toward showing the OSD, which is the safe
+direction, and the hide list is the override. Testing 2.3 with a packaged player would
+report a failure that is actually the documented behaviour. Win32 players like VLC report
+`vlc.exe` and match normally.
+
+This predicate is now covered by tests (`FullscreenVideoDetector.AumidMatchesProcess`),
+including the game-safety case and the substring regression. It had none before: it lived
+inside the Win32 gatherer, where nothing could reach it.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|

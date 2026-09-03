@@ -1,3 +1,4 @@
+using System.IO;
 using Plith.Services;
 
 namespace Plith.Tests;
@@ -102,5 +103,78 @@ public class FullscreenVideoDetectorTests
     {
         Assert.Empty(FullscreenVideoDetector.ParseHideList(null));
         Assert.Empty(FullscreenVideoDetector.ParseHideList("   "));
+    }
+
+    // ---- AUMID -> process matching -------------------------------------------------
+    //
+    // This predicate is what game safety rests on: Windows 11 turns most "exclusive
+    // fullscreen" games into borderless windows reporting QUNS_BUSY, so the D3D veto never
+    // fires for them and nothing else stops a focused game being suppressed. It had no test
+    // coverage at all until these, because it lived in the Win32 gatherer.
+    //
+    // The Spotify string below is not invented: it is what a real machine reported.
+
+    private const string PackagedSpotifyAumid = "SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify";
+
+    [Theory]
+    [InlineData("vlc.exe", "vlc")]
+    [InlineData("VLC.EXE", "vlc")]                              // case-insensitive
+    [InlineData("vlc.exe", "VLC")]
+    [InlineData(@"C:\Program Files\VideoLAN\VLC\vlc.exe", "vlc")]   // full-path AUMID
+    [InlineData("chrome.exe", "chrome")]
+    public void AumidMatchesProcess_MatchesWin32Players(string aumid, string processName)
+    {
+        Assert.True(FullscreenVideoDetector.AumidMatchesProcess(aumid, processName));
+    }
+
+    [Fact]
+    public void AumidMatchesProcess_PackagedAumidReducesToAStem_NotToNothing()
+    {
+        // Documents what actually happens rather than the tempting shorthand that packaged
+        // AUMIDs "cannot match". GetFileNameWithoutExtension trims from the last dot.
+        Assert.Equal("SpotifyAB", Path.GetFileNameWithoutExtension(PackagedSpotifyAumid));
+    }
+
+    [Fact]
+    public void AumidMatchesProcess_DoesNotCreditThePackagedPlayersOwnProcess()
+    {
+        // Consequence of the above: fullscreen video in a packaged player is NOT auto-hidden.
+        // Failing this direction is safe (the OSD stays visible) and the hide list is the
+        // override, but it is deliberate rather than accidental.
+        Assert.False(FullscreenVideoDetector.AumidMatchesProcess(PackagedSpotifyAumid, "Spotify"));
+    }
+
+    [Theory]
+    [InlineData("VALORANT-Win64-Shipping")]
+    [InlineData("csgo")]
+    [InlineData("Spotify")]
+    [InlineData("Music")]
+    public void AumidMatchesProcess_NeverCreditsAForegroundGame(string gameProcess)
+    {
+        // The false-positive that would silently destroy the headline feature: a focused game
+        // credited with a media session owned by something playing in the background.
+        Assert.False(FullscreenVideoDetector.AumidMatchesProcess(PackagedSpotifyAumid, gameProcess));
+    }
+
+    [Theory]
+    [InlineData("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", "Zune")]
+    [InlineData("Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic", "Microsoft")]
+    [InlineData("SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify", "Spotify")]
+    public void AumidMatchesProcess_RejectsSubstrings(string aumid, string processName)
+    {
+        // Guards the exact regression the implementation comment warns about: relaxing this
+        // to Contains would make every one of these true.
+        Assert.False(FullscreenVideoDetector.AumidMatchesProcess(aumid, processName));
+    }
+
+    [Theory]
+    [InlineData(null, "vlc")]
+    [InlineData("", "vlc")]
+    [InlineData("   ", "vlc")]
+    [InlineData("vlc.exe", null)]
+    [InlineData("vlc.exe", "")]
+    public void AumidMatchesProcess_FailsTowardShowingTheOsd(string? aumid, string? processName)
+    {
+        Assert.False(FullscreenVideoDetector.AumidMatchesProcess(aumid, processName));
     }
 }

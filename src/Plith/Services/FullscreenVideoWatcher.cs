@@ -173,20 +173,10 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         var aumid = _media.CurrentSourceAppUserModelId;
         if (string.IsNullOrWhiteSpace(aumid)) return false;
 
-        // Equality on the filename stem, not Contains: a substring test against a long
-        // packaged AUMID (e.g. "Microsoft.ZuneMusic_8wekyb3d8bbwe!Microsoft.ZuneMusic")
-        // would accept any short/generic foreground process name that happens to appear
-        // inside it, letting a focused borderless-windowed game get falsely credited with
-        // a media session actually owned by something else playing in the background —
-        // and with no D3D veto available for a borderless window, this predicate is the
-        // only thing standing between that game and suppression. Win32 AUMIDs like
-        // "chrome.exe" or full-path AUMIDs all still reduce to the process name via
-        // GetFileNameWithoutExtension; packaged AUMIDs simply won't match, which fails
-        // toward showing the OSD — the safe direction. Do not loosen this back to Contains.
-        return string.Equals(
-            Path.GetFileNameWithoutExtension(aumid),
-            processName,
-            StringComparison.OrdinalIgnoreCase);
+        // The comparison itself lives in FullscreenVideoDetector so it can be tested against
+        // real AUMIDs; this method only gathers. See AumidMatchesProcess for why it is
+        // equality on the filename stem and must never be loosened back to Contains.
+        return FullscreenVideoDetector.AumidMatchesProcess(aumid, processName);
     }
 
     // On a failed HRESULT, every other failure path in this file fails toward showing the
