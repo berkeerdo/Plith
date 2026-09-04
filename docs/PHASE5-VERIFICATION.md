@@ -53,7 +53,15 @@ it is wrong the failure is glaring.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 1.4 | **Live transition**: with the OSD on screen, start playback, then stop it | Media row and its divider appear together and vanish together; the card recentres without drifting sideways | The divider survives without a row above it, or the card jumps |
+| 1.4 | **Live transition**: with the OSD on screen, make the media card come and go — **quit and reopen the player**, or toggle Compact mode | Media row and its divider appear together and vanish together; the card recentres without drifting sideways | The divider survives without a row above it, or the card jumps |
+
+**Pausing does not work for 1.4, and the original wording here was wrong.**
+`MediaCard.IsVisible` is `Vm.HasSession && !CompactMode` — it tracks whether a session
+*exists*, not whether it is playing. Measured: driving the session through
+pause → play with the OSD held open left the window at 440x178 throughout, never resizing,
+so the card never left and the re-indexing path was never exercised. Anyone following the
+old step would have recorded a pass without testing anything. Use a step that actually
+removes the session.
 
 1.4 matters because a defect of exactly this class was found and fixed mid-branch: the
 divider trigger was collapsing on *every* card, costing 29 px of separation. The static
