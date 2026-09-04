@@ -70,6 +70,9 @@ public sealed class OsdHost : BandWindow
         Shell = new OsdShellViewModel(cardHost);
 
         ZBandID = NativeMethods.GetTopMostZBandID();
+        // Recorded once at startup because it silently decides whether the OSD can cover an
+        // exclusive-fullscreen game, and nothing else in the log reveals it. See UiAccess.
+        _log?.Info("OsdHost", Plith.Interop.UiAccess.Describe());
         TopMost = true;
         Activatable = false;      // never steal focus
         IsClickThrough = false;   // mouse hover keep-alive needs hit-testing
