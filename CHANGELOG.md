@@ -13,9 +13,17 @@ All notable changes to Plith are documented here. Format loosely follows
   on top of a movie or stream. This is **on by default** on upgrade; turn it
   off from Settings with the **"Hide during fullscreen video"** toggle
   (alongside a configurable app hide-list for players that should never be
-  auto-hidden). **Games are never affected** — the detector explicitly vetoes
-  exclusive-fullscreen and borderless-fullscreen D3D applications, so this
-  never touches Plith's core over-fullscreen-games behaviour.
+  auto-hidden). **Games keep the OSD.** A game is only ever hidden behind if
+  it is itself the app playing the media, which it never is; a true
+  exclusive-fullscreen application is vetoed outright on top of that. Verified
+  on real hardware with a game covering the screen and music playing in the
+  background: the OSD appeared on every volume key and the auto-hide never
+  engaged.
+- Fullscreen video in a **packaged (Microsoft Store) player is not
+  auto-hidden**. Windows reports those apps under an identifier that cannot be
+  matched to their process, so Plith fails toward showing the OSD rather than
+  guessing. Add the player to the hide-list if you want it covered. Desktop
+  players such as VLC are detected normally.
 
 ### Accessibility
 - Screen readers now announce meaningful names across the OSD and Settings
@@ -27,9 +35,19 @@ All notable changes to Plith are documented here. Format loosely follows
   selection status.
 - Focus indicators that had gone missing across Settings controls are
   restored.
-- Added a Windows high-contrast palette for both the OSD and Settings, so
-  the app follows the user's chosen high-contrast theme instead of painting
-  its own colours over it.
+- Added a Windows high-contrast palette for both the OSD and Settings, so the
+  app switches away from its own colours when a contrast theme is active.
+
+### Fixed
+- **Holding or repeatedly pressing a volume key no longer makes the OSD
+  flicker.** Volume keys repeat faster than the OSD's fade-in, and each repeat
+  was restarting that fade from fully transparent, so the OSD pulsed instead
+  of staying up. It now stays up for as long as the key does.
+- **Enter now activates a focused accent swatch**, not just Space. The
+  swatches are buttons, and a focused button in WPF ignores Enter unless it is
+  asked not to.
+- Screen readers no longer read out an internal type name for each OSD card,
+  and the Settings scroll area is no longer an unnamed stop in the Tab order.
 
 ## [0.1.5] - 2026-09-02
 
