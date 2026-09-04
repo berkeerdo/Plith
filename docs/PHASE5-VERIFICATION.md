@@ -266,6 +266,16 @@ deferred as a Phase 6 item.
 
 ## 5. High contrast (`Left Alt + Left Shift + Print Screen`)
 
+> **Status: NOT VERIFIED, and deliberately left that way.**
+> The palettes were written, the static audit passed, and nobody has ever looked at the
+> result. That is recorded as-is rather than dressed up: after three checks in this list
+> turned out to pass vacuously, marking an unexamined one "done" would be worse than
+> leaving it open. It is a quality gate, not a release gate.
+>
+> Whoever picks this up needs a machine whose user actually runs a contrast theme, or two
+> minutes of willingness to toggle one. Everything else is ready: the palettes exist, the
+> swap is wired to `SystemParameters.HighContrast`, and the checks below are specific.
+
 The static audit is done; nobody has looked at the result. **This section resisted
 automation twice over, so it stays a human step:**
 
@@ -285,6 +295,11 @@ automation twice over, so it stays a human step:**
 | 5.1 | Toggle high contrast on with the OSD visible | Palette swaps live, no restart | Stale colours |
 | 5.2 | OSD appearance | System colours; card border and divider clearly visible | Border or divider invisible |
 | 5.3 | Volume bar | A single system colour | Still green/amber/red |
+
+5.3 is the one with a known, observed input: with `UseColorThresholds` on, the bar really
+does colour by level — `<= 0.70` green, `<= 0.90` amber, red above — and it was seen red at
+100 % on a live OSD. So there is definitely something for high contrast to override here;
+5.3 is not hypothetical.
 | 5.4 | No accent tint anywhere | Card and bar use system colours only | The picked accent still tints them |
 | 5.5 | Settings window | All text legible | Anything unreadable |
 | 5.6 | **Hover and press controls** | Feedback still perceptible | States indistinguishable |
