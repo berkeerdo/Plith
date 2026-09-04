@@ -26,6 +26,32 @@ public class SettingsServiceTests
         Assert.Equal(ThemeMode.Dark, svc.Current.Theme);
     }
 
+    // Section 6.7 of the manual verification list asks a human to clear the fullscreen hide
+    // list in Settings, restart, and confirm it stays empty. That is a round-trip through the
+    // INI, which is testable, so it does not need a person. The failure it guards against is
+    // specific: FullscreenVideoHideList has a non-empty default, so anything that treats an
+    // empty stored value as "absent" silently restores "mpv,PotPlayerMini64" and the user's
+    // deliberate choice is undone on the next launch.
+    [Fact]
+    public void Save_Then_Load_KeepsAnEmptyHideListEmpty()
+    {
+        using var dir = new TempIniDir();
+
+        var write = new SettingsService(dir.IniPath);
+        write.Load();
+        Assert.Equal("mpv,PotPlayerMini64", write.Current.FullscreenVideoHideList);
+
+        var cleared = write.Current.Clone();
+        cleared.FullscreenVideoHideList = string.Empty;
+        write.Save(cleared);
+
+        var read = new SettingsService(dir.IniPath);
+        read.Load();
+
+        Assert.Equal(string.Empty, read.Current.FullscreenVideoHideList);
+        Assert.Empty(FullscreenVideoDetector.ParseHideList(read.Current.FullscreenVideoHideList));
+    }
+
     [Fact]
     public void Save_Then_Load_RoundTripsAllFields()
     {

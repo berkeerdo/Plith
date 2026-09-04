@@ -310,7 +310,13 @@ contrast on and off works correctly.
 | 6.4 | Compact mode on, then off | Media row hides and returns; the Settings preview agrees with the real OSD | They disagree, or toggling pops the OSD |
 | 6.5 | Summon hotkey and volume keys | Both pop the OSD; no Windows native flyout alongside | Either fails |
 | 6.6 | Position edit mode | Enter, drag, save, cancel all work | Any step broken |
-| 6.7 | Clear the fullscreen hide list in Settings, restart | It stays empty | The defaults come back |
+| 6.7 | ~~Clear the fullscreen hide list in Settings, restart~~ | **Now covered by a test** — `Save_Then_Load_KeepsAnEmptyHideListEmpty` |
+
+6.7 was a round-trip through the INI, which needed no person: the risk is that an empty
+stored value gets treated as absent, silently restoring the non-empty default
+`mpv,PotPlayerMini64` and undoing a deliberate choice on the next launch. That is now a
+unit test. Worth doing to the rest of this list wherever the same is true — a check a
+machine can run is a check that keeps running.
 
 6.1 and 6.3 are the two that validate specific refactor decisions — baseline
 suppression moving into `AudioCard`, and removing the `HasSession` visibility binding
