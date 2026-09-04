@@ -305,12 +305,24 @@ contrast on and off works correctly.
 | # | Check | Pass | Fail |
 |---|---|---|---|
 | 6.1 | Start or quit Voicemeeter without touching the volume | The OSD does **not** appear on its own | It pops by itself — the baseline reset is not reaching `AudioCard` |
-| 6.2 | Media transport buttons | Each controls playback, and the OSD stays alive across all three clicks | A button does nothing, or the OSD fades mid-sequence |
+| 6.2 | Media transport buttons | **First half done** — see below. Still open: the OSD stays alive across all three clicks | The OSD fades mid-sequence |
 | 6.3 | No media session | Volume row only, no blank gap where the media card would be | A gap or stray divider |
 | 6.4 | Compact mode on, then off | Media row hides and returns; the Settings preview agrees with the real OSD | They disagree, or toggling pops the OSD |
 | 6.5 | Summon hotkey and volume keys | Both pop the OSD; no Windows native flyout alongside | Either fails |
 | 6.6 | Position edit mode | Enter, drag, save, cancel all work | Any step broken |
 | 6.7 | ~~Clear the fullscreen hide list in Settings, restart~~ | **Now covered by a test** — `Save_Then_Load_KeepsAnEmptyHideListEmpty` |
+
+**6.2's first half is verified end to end.** Driving `PlayPauseButton` through UI
+Automation's `InvokePattern` — which targets one element by identity, so unlike a synthetic
+click it cannot land somewhere else if the OSD hides mid-run — took the real SMTC session
+from Paused to Playing and back, ending exactly where it started. That exercises the whole
+chain the tests only cover the first two links of: `Button.Click` → `MediaCardView.Request`
+→ `MediaViewModel.RequestCommand` → `MediaCard.CommandInvoked` → `OsdOrchestrator` → the
+session. The button's accessible name flipped from "Play" to "Pause" along the way, so the
+`PlayPauseLabel` binding is confirmed live too.
+
+What is still open in 6.2 is the other half: whether the OSD survives three clicks in a
+row, which is about hover keep-alive and needs a mouse.
 
 **What is already covered by tests, so a person is only needed for the other half.** The
 list never said this, which invites re-checking by hand what a machine already proves on
