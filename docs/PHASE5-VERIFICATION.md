@@ -312,6 +312,25 @@ contrast on and off works correctly.
 | 6.6 | Position edit mode | Enter, drag, save, cancel all work | Any step broken |
 | 6.7 | ~~Clear the fullscreen hide list in Settings, restart~~ | **Now covered by a test** — `Save_Then_Load_KeepsAnEmptyHideListEmpty` |
 
+**What is already covered by tests, so a person is only needed for the other half.** The
+list never said this, which invites re-checking by hand what a machine already proves on
+every run:
+
+| # | Logic already asserted by | What still needs eyes |
+|---|---|---|
+| 2.4 | `NotFullscreen_DoesNotSuppress` | that the watcher re-evaluates on leaving fullscreen |
+| 2.6 | `Disabled_NeverSuppresses`, plus the settings round-trip | nothing much — this is close to fully covered |
+| 6.1 | `FirstApply_IsSilentBaseline`, `ResetBaseline_MakesTheNextApplySilentAgain` | **the wiring — see below** |
+| 6.3 | `IsVisible_IsFalseWithoutASession`, `LastCardGoingInvisible_ShrinksVisibleCards` | that nothing renders in the gap |
+| 6.4 | `IsVisible_IsFalseInCompactModeDespiteASession`, `CompactModeToggle_RaisesVisibilityChanged`, `MiddleCardComingBackVisible_ReinsertsAtItsOrderPosition` | that the Settings preview agrees with the real OSD |
+
+**6.1 is the one with a real gap, and it is not the half you would guess.** `AudioCard`'s
+baseline behaviour is well covered. What is not covered at all is that a source switch ever
+*reaches* it: `OsdOrchestrator` calls `ResetBaseline()` from three places and has **no tests
+whatsoever**, because it constructs its own `VoicemeeterClient` and `WindowsAudioClient` and
+needs a `Dispatcher`, so it cannot be built in a headless test as written. So run 6.1 by
+hand, and treat its failure as pointing at the orchestrator rather than the card.
+
 6.7 was a round-trip through the INI, which needed no person: the risk is that an empty
 stored value gets treated as absent, silently restoring the non-empty default
 `mpv,PotPlayerMini64` and undoing a deliberate choice on the next launch. That is now a

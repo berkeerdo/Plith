@@ -225,6 +225,13 @@ Deferred to Phase 6 (recorded so they are not rediscovered):
   `AutomationProperties.ItemStatus` as a stopgap. It would also retire the
   `KeyboardNavigation.AcceptsReturn` line each swatch now carries, since a radio button
   in a group is driven by arrow keys rather than by Enter.
+- `OsdOrchestrator` has no tests at all, and it is not an oversight that can be fixed by
+  writing some: it constructs `VoicemeeterClient` and `WindowsAudioClient` itself and takes
+  a `Dispatcher`, so it cannot be built headlessly. That matters more than it looks, because
+  it owns all three `AudioCard.ResetBaseline()` calls — the mechanism behind "switching
+  sources must not pop the OSD". The card half of that rule is well tested; the half that
+  triggers it is verified only by a human running check 6.1. Injecting the two clients
+  behind interfaces would close it, and is worth doing before Phase 6 adds more sources.
 - `CardHost.Register` now throws on a duplicate, but the check is **reference equality**
   (`List<T>.Contains`). It catches the same instance registered twice; it does not catch
   two distinct instances sharing an `Id`, which is the shape data-driven registration is
