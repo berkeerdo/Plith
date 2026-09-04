@@ -200,16 +200,27 @@ Fullscreen Optimizations really do put most games on the composited path, and th
 really is dead code for them — game safety rests on the media-session predicate exactly as
 recorded.
 
-One title is an exception and the cause is **not yet isolated**: the OSD does not appear
-over Valorant in its Fullscreen mode, while it works over the same machine's other games
-and over Valorant in borderless. Two candidates remain, and they call for different fixes:
-Valorant may take true exclusive fullscreen, where the display is scanned out from the
-game's own swapchain and nothing composites over it no matter how correct the OSD is — in
-which case `README.md`'s "draws above exclusive fullscreen" is the thing that is wrong — or
-Riot's Vanguard anticheat may be blocking the overlay. `SHQueryUserNotificationState`
-returning 2 or 3 during that mode separates them in one reading. `OsdHost` now logs each
-show transition, so the log also distinguishes "never asked to show" from "shown and
-something on top of it won", which it could not do while this was first investigated.
+One title looked like an exception: the OSD did not appear over Valorant in its Fullscreen
+mode, while it worked over the same machine's other games and over Valorant in borderless.
+
+**The most likely cause is a testing artefact, and it is worth ruling out before anything
+else.** That session ran a Debug build out of `bin\Debug`, and `app.manifest` sets
+`uiAccess="false"` there on purpose — only `app.release.manifest` requests `uiAccess="true"`,
+and Windows honours it only for a signed binary in a trusted location. Without UIAccess
+`BandWindow` cannot use `CreateWindowInBand` and falls back to `CreateWindowEx`, i.e. an
+ordinary topmost window. That predicts exactly what was seen: an ordinary topmost window
+composites over borderless and Fullscreen-Optimizations games, and cannot cover a true
+exclusive-fullscreen swapchain. **Retest with the installed Program Files build before
+treating this as a product defect.**
+
+If it still fails there, two candidates remain and they call for different fixes: Valorant
+takes true exclusive fullscreen, where the display is scanned out from the game's own
+swapchain and nothing composites over it however correct the OSD is — in which case
+`README.md`'s "draws above exclusive fullscreen" is the claim that is wrong — or Riot's
+Vanguard anticheat blocks the overlay. `SHQueryUserNotificationState` returning 2 or 3
+during that mode separates them in one reading, and `OsdHost` now logs each show transition,
+so the log also distinguishes "never asked to show" from "shown and something on top of it
+won".
 
 Environment fact worth keeping: **the OSD cannot be screenshotted over RDP.** The band
 window is layered and drawn with `UpdateLayeredWindow` — absent from a plain `BitBlt`,
