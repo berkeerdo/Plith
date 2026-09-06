@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 
 namespace Plith.Views.Presentation;
 
@@ -18,25 +18,22 @@ public static class NotchGeometry
     public const double DescendedOffset = 0.0;
 
     /// <summary>
-    /// Y offset applied to the OSD content while the notch is parked: negative, pushing all
-    /// but the strip above the top of the window.
+    /// Y offset that takes the card fully off screen, leaving nothing but whatever the strip
+    /// element itself draws. This is the offset for BOTH rest states — parked and retracted —
+    /// which differ only in whether NotchStrip is shown.
+    ///
+    /// An earlier design parked at a shallower offset that left the card's own bottom edge
+    /// sitting at y = stripHeight, so the dedicated strip and a sliver of the card (with that
+    /// Border's corner radius and drop shadow) drew in the same band. On a running build that
+    /// reads as a card edge leaking out from under the top of the screen rather than as a
+    /// notch, so it was removed.
     ///
     /// <paramref name="contentInset"/> is the drop-shadow margin on OsdContent's outer Grid
-    /// (14 DIP today). The card's visible border starts that far below the content origin,
-    /// so it has to be subtracted or the strip renders that much too short.
+    /// (14 DIP today): the card's visible border starts that far below the content origin, so
+    /// subtracting it lands the card's bottom edge exactly at y = 0.
     ///
-    /// Clamped at zero: during the first layout pass DesiredSize is still zero, and a
-    /// positive offset there would drop the card into mid-screen for a frame.
-    /// </summary>
-    public static double RestingOffset(double contentHeight, double stripHeight, double contentInset)
-        => -Math.Max(0, contentHeight - stripHeight - contentInset);
-
-    /// <summary>
-    /// Y offset that takes the card fully off screen, leaving nothing but whatever the strip
-    /// element itself draws. Distinct from <see cref="RestingOffset"/>, which deliberately
-    /// leaves the card's bottom edge sitting at stripHeight: at rest that sliver is part of
-    /// the parked look, but when a window covers the monitor the card must contribute no
-    /// pixels at all, and collapsing the strip element alone leaves the sliver behind.
+    /// Clamped at zero: during the first layout pass DesiredSize is still zero, and a positive
+    /// offset there would drop the card into mid-screen for a frame.
     /// </summary>
     public static double HiddenOffset(double contentHeight, double contentInset)
         => -Math.Max(0, contentHeight - contentInset);

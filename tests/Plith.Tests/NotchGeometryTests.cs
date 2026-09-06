@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using Plith.Views.Presentation;
 
 namespace Plith.Tests;
@@ -12,28 +12,26 @@ public class NotchGeometryTests
     private const double Inset = 14;
 
     [Fact]
-    public void RestingOffset_LeavesExactlyTheStripVisible()
+    public void HiddenOffset_TakesTheWholeCardOffScreen()
     {
-        // 200 tall content, 5 px strip: push up until only inset + strip remains on screen.
-        Assert.Equal(-181, NotchGeometry.RestingOffset(contentHeight: 200, stripHeight: 5, contentInset: Inset));
+        // 200 tall content, 14 inset: push up until the card's bottom edge lands at y = 0, so
+        // the only thing left on screen is whatever the strip element itself draws.
+        Assert.Equal(-186, NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset));
     }
 
     [Fact]
-    public void RestingOffset_ScalesWithContentHeight()
+    public void HiddenOffset_ScalesWithContentHeight()
     {
-        var shorter = NotchGeometry.RestingOffset(150, 5, Inset);
-        var taller = NotchGeometry.RestingOffset(300, 5, Inset);
-        Assert.Equal(-131, shorter);
-        Assert.Equal(-281, taller);
+        Assert.Equal(-136, NotchGeometry.HiddenOffset(150, Inset));
+        Assert.Equal(-286, NotchGeometry.HiddenOffset(300, Inset));
     }
 
     [Fact]
-    public void RestingOffset_NeverPushesDown_WhenContentIsShorterThanTheStrip()
+    public void HiddenOffset_NeverPushesDown_ForDegenerateContent()
     {
-        // Degenerate but reachable during the first layout pass, when DesiredSize is still
-        // zero. A positive offset there would drop the card into the middle of the screen
-        // for one frame.
-        Assert.Equal(0, NotchGeometry.RestingOffset(contentHeight: 0, stripHeight: 5, contentInset: Inset));
+        // Reachable during the first layout pass, when DesiredSize is still zero. A positive
+        // offset there would drop the card into the middle of the screen for one frame.
+        Assert.Equal(0, NotchGeometry.HiddenOffset(contentHeight: 0, contentInset: Inset));
     }
 
     [Fact]
@@ -57,15 +55,17 @@ public class NotchGeometryTests
     }
 
     [Fact]
-    public void HiddenOffset_IsExactlyStripHeightMoreNegative_ThanRestingOffset()
+    public void HiddenOffset_DoesNotDependOnStripHeight()
     {
-        // The distinction the fix depends on: RestingOffset leaves the card's bottom edge at
-        // stripHeight (part of the parked look), HiddenOffset leaves it at 0 (nothing on
-        // screen). For the same content/inset, the two must differ by exactly stripHeight.
-        const double stripHeight = 5;
-        var resting = NotchGeometry.RestingOffset(contentHeight: 200, stripHeight: stripHeight, contentInset: Inset);
-        var hidden = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
-        Assert.Equal(hidden, resting - stripHeight);
+        // Both rest states park at this offset and differ only in whether NotchStrip is shown,
+        // so the strip's height must not enter the card's placement at all. An earlier design
+        // subtracted it here, which left the card's own bottom edge — corner radius and drop
+        // shadow included — drawing in the same band as the strip, and read on screen as a card
+        // edge leaking out from under the top rather than as a notch.
+        var a = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
+        var b = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
+        Assert.Equal(a, b);
+        Assert.Equal(-186, a);
     }
 
     [Fact]

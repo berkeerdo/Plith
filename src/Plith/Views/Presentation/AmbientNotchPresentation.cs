@@ -1,4 +1,4 @@
-using System.Windows;
+﻿using System.Windows;
 using System.Windows.Media.Animation;
 using Plith.Interop;
 using Plith.Services;
@@ -20,7 +20,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     private readonly Func<double> _stripHeight;
     private readonly DiagnosticLog? _log;
 
-    private double _restingOffset;
     private double _hiddenOffset;
     private bool _hasMeasured;
     private bool _isParked = true;
@@ -61,8 +60,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
     public void OnContentMeasured(Size contentSize)
     {
-        _restingOffset = NotchGeometry.RestingOffset(
-            contentSize.Height, _stripHeight(), OsdContent.ContentInsetDip);
         _hiddenOffset = NotchGeometry.HiddenOffset(contentSize.Height, OsdContent.ContentInsetDip);
         _hasMeasured = true;
 
@@ -121,7 +118,7 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     public void AnimateToRest(Action onCompleted)
     {
         _isRetracting = true;
-        var retract = new DoubleAnimation(_restingOffset, TimeSpan.FromMilliseconds(RetractMs))
+        var retract = new DoubleAnimation(_hiddenOffset, TimeSpan.FromMilliseconds(RetractMs))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
         };
@@ -154,7 +151,20 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
         _window.Show();
         _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        _content.ContentOffset = _restingOffset;
+        // Parks at the HIDDEN offset, not the resting one, so the card contributes no pixels
+        // and NotchStrip is the only thing on screen.
+        //
+        // RestingOffset leaves the card's own bottom edge sitting exactly at y = stripHeight,
+        // which put two surfaces in the same band: the dedicated strip, and a sliver of the
+        // card's bottom — carrying that Border's corner radius and drop shadow with it. On a
+        // running build that reads as the corner of a card poking out from under the top of
+        // the screen, not as a notch. A notch is a deliberate shape; a leaked card edge is an
+        // artefact. Reported directly by the user on the first real session, which is what
+        // settled the open question section 1 of docs/PHASE6-VERIFICATION.md had recorded.
+        //
+        // Park and Retract now differ only in whether the strip itself is shown, which is the
+        // distinction their names actually claim.
+        _content.ContentOffset = _hiddenOffset;
         _content.SetStrip(visible: true, heightDip: _stripHeight());
     }
 
