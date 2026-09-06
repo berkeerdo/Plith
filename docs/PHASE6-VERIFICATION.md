@@ -196,6 +196,19 @@ first-execution risks to watch for, not one:
   (a flicker, a flash to a different alpha, a redraw hitch), the symptom is a rendering change on
   the very first hover, not a swallowed click — watch for it specifically during check 3.1.
 
+  > **This happened. 2026-09-06, first launch that reached the call.** It was not a flicker: the
+  > `HwndSource` is created with `UsesPerPixelTransparency = true`, and
+  > `SetLayeredWindowAttributes` switches a layered window to *constant*-alpha layering, which
+  > discards the per-pixel channel outright. Every transparent pixel became opaque black, and
+  > because notch mode never hides the window, the result was a permanent black rectangle at the
+  > top of the screen rather than a transient artefact. Fixed by deleting the call: `WS_EX_LAYERED`
+  > is already applied at creation and click-through is entirely the `WS_EX_TRANSPARENT` bit.
+  >
+  > Worth recording *how* it was found. Both automated gates stayed green throughout, and so did
+  > every reviewer across ten tasks — because no test in this repository can construct this window.
+  > It was found within seconds of a person looking at the screen. That is the standing argument
+  > for why the checks in this file are the real gate and the green suite is not.
+
 | # | Check | Pass | Fail |
 |---|---|---|---|
 | 3.1 | Move the cursor onto the parked strip | The notch descends smoothly, as a slide rather than a jump, into the full card | Nothing happens, the descent needs an unreasonably long dwell, or it jumps/snaps instead of sliding |
@@ -419,3 +432,74 @@ note the gap rather than treating the untested class as passing by default.
 
 Note the check number and what you saw, the way `docs/PHASE5-VERIFICATION.md` does. A failure
 in section 1 is worth stopping for — it is the mode's entire reason to exist.
+
+---
+
+## 9. Findings from the first real session (2026-09-06)
+
+Recorded from a live run on the signed Program Files install, with UIAccess granted. These
+are observations, not inferences.
+
+### 9.1 Verified working
+
+| What | Evidence |
+|---|---|
+| UIAccess is granted to the installed build | `[OsdHost] UIAccess granted — ...` |
+| The presentation mode is applied from config | `Presentation applied: AmbientNotch, clickThrough=True, coversMonitor=False, parked=True, stripHeight=5` |
+| A pre-upgrade `config.ini` with no `Presentation` key loads as Classic | first launch logged `Presentation applied: ClassicOsd` before the key was added |
+| The notch is flush with the top edge, centred, on the saved monitor | `GetWindowLongPtr` + `GetWindowRect`: `rect=1060,0-1500,178` on a 2560-wide display, with `Position = Custom` in config and `CustomPositionMonitorDeviceName = \.\DISPLAY1` |
+| `WS_EX_TRANSPARENT` is genuinely set while parked | ex-style read: `TRANSPARENT=True LAYERED=True TOPMOST=True`. Note the log's `clickThrough=True` alone would NOT have shown this — it reports the dependency property, which reads back true whether or not the native style was applied |
+| Per-pixel transparency survives the click-through toggle (after the fix) | screen capture of the OSD's own rect shows the content behind it, where a black rectangle had been |
+| Retraction fires while a window covers the monitor | `ForegroundCoversMonitor -> True` with nothing drawn in the OSD's rect |
+| Retraction is not suppression | `Show: transition at 1060,0` logged *while* `coversMonitor` was true — the OSD still appeared on a volume key over a covering window |
+
+### 9.2 BLOCKING for the Ambient Notch: the covers-monitor signal flaps during gameplay
+
+**Status: confirmed on real hardware, unfixed. This makes the notch unusable in a game.**
+
+`ForegroundCoversMonitor` does not settle while a game is running. From one session:
+
+```
+21:06:45.152  ForegroundCoversMonitor -> False
+21:06:45.685  ForegroundCoversMonitor -> True
+21:06:46.887  ForegroundCoversMonitor -> False
+...
+21:10:06.273  ForegroundCoversMonitor -> False
+21:10:23.930  ForegroundCoversMonitor -> True
+```
+
+Every `False` re-parks the strip and every `True` retracts it, so the strip repeatedly appears
+and disappears across the top of the screen mid-game. The user's report was direct: it gets in
+the way badly.
+
+The code is behaving exactly as designed — the defect is in the design. The spec argued for
+"one rule, no game/video classifier: a rule with no classifier in it has no classifier to get
+wrong". That reasoning holds for correctness and fails for stability: a raw foreground/geometry
+predicate is simply noisy while a game is up, and the notch converts every sample into a visible
+state change.
+
+Candidate directions, none of them chosen yet:
+
+- **Hysteresis / debounce.** Require the signal to hold a value for N samples before acting.
+  Cheapest, and it directly targets the observed failure. Asymmetric thresholds would suit the
+  stated failure direction: retract immediately, return only after a sustained un-cover.
+- **Latch on the covering process.** Retract when a covering window appears and stay retracted
+  until that *process* is gone or is no longer foreground, rather than re-evaluating geometry.
+- **Treat games differently after all.** The spec explicitly rejected a classifier; this finding
+  is the counter-evidence and the decision deserves revisiting rather than defending.
+
+### 9.3 Design problem: top-centre pinning is intrusive during gameplay
+
+Also observed in the same session. In notch mode the OSD is pinned to top-centre, so it appeared
+at `1060,0` — the middle of the field of view. The same user's Classic anchor is `1067,1140`,
+near the bottom of the screen, chosen deliberately.
+
+So switching to the notch silently relocates the OSD from a spot the user picked to the single
+most intrusive spot on the screen, and there is no way to move it: §5's guard disables position
+editing in notch mode, which is correct for the notch's own geometry but leaves the user with no
+recourse.
+
+This is not a bug against the spec — the notch is *defined* as top-centre. It is evidence that
+"Ambient Notch" and "an OSD you positioned yourself" are different products, and that a user who
+has customised their position is being handed a downgrade. Worth deciding before the preset
+picker ships to anyone.
