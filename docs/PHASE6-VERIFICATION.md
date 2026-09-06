@@ -68,6 +68,17 @@ this during the section 1 manual pass: at rest (1.1), does the top edge read as 
 as two overlapping edges/shadows? Neither outcome should be assumed; record what is actually
 seen.
 
+**Second open question, also not resolved: the card's drop shadow may still bleed past
+`HiddenOffset`.** The card carries a `DropShadowEffect` (`BlurRadius` 28) as part of the same
+`Border` whose edge `HiddenOffset` pushes off screen. `ClipToBounds` on the outer container
+does not clip effects — only content — so it is unverified whether a faint halo from that
+blur still shows in the reserved margin band even when the card itself is fully retracted.
+This was not investigated further or worked around; it is recorded here, unresolved, for the
+same manual pass to look for: during 1.3's retraction (and while retracted generally, once
+Task 8 wires a caller to `Retract()`), check the strip's margin band for any faint glow or
+halo beyond the strip itself. Record what is actually seen, not what should theoretically
+happen.
+
 **Known environment limitation, carried over from Phase 5:** over an RDP session the band
 window's layered surface cannot be captured by any means (`BitBlt`, `BitBlt` with
 `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` were all tried and failed for the
