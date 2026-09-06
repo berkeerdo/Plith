@@ -1,0 +1,121 @@
+using System.Windows;
+using Plith.Views.Presentation;
+
+namespace Plith.Tests;
+
+public class NotchGeometryTests
+{
+    // OsdContent's outer Grid has Margin="14" to reserve drop-shadow space, so the card's
+    // visible border starts 14 DIP below the content origin. Every case here uses that
+    // real value rather than 0, because a geometry that only works at inset 0 would look
+    // correct in tests and sit 14 px too low on screen.
+    private const double Inset = 14;
+
+    [Fact]
+    public void RestingOffset_LeavesExactlyTheStripVisible()
+    {
+        // 200 tall content, 5 px strip: push up until only inset + strip remains on screen.
+        Assert.Equal(-181, NotchGeometry.RestingOffset(contentHeight: 200, stripHeight: 5, contentInset: Inset));
+    }
+
+    [Fact]
+    public void RestingOffset_ScalesWithContentHeight()
+    {
+        var shorter = NotchGeometry.RestingOffset(150, 5, Inset);
+        var taller = NotchGeometry.RestingOffset(300, 5, Inset);
+        Assert.Equal(-131, shorter);
+        Assert.Equal(-281, taller);
+    }
+
+    [Fact]
+    public void RestingOffset_NeverPushesDown_WhenContentIsShorterThanTheStrip()
+    {
+        // Degenerate but reachable during the first layout pass, when DesiredSize is still
+        // zero. A positive offset there would drop the card into the middle of the screen
+        // for one frame.
+        Assert.Equal(0, NotchGeometry.RestingOffset(contentHeight: 0, stripHeight: 5, contentInset: Inset));
+    }
+
+    [Fact]
+    public void DescendedOffset_IsZero()
+    {
+        Assert.Equal(0.0, NotchGeometry.DescendedOffset);
+    }
+
+    [Fact]
+    public void StripRect_SitsAtTheWindowTopAndInsideTheShadowInset()
+    {
+        var r = NotchGeometry.StripRect(
+            windowLeft: 740, windowTop: 0, contentWidth: 440, stripHeight: 5, contentInset: Inset);
+
+        Assert.Equal(754, r.Left);    // 740 + 14
+        Assert.Equal(0, r.Top);
+        Assert.Equal(412, r.Width);   // 440 - 14 * 2
+        Assert.Equal(5, r.Height);
+    }
+
+    [Fact]
+    public void StripRect_FollowsTheWindowOrigin()
+    {
+        // The window origin comes from Reposition(), which anchors on Screen.WorkingArea.
+        // A taskbar docked to the top therefore moves the strip down with it, and this is
+        // the only thing NotchGeometry needs to know about that.
+        var r = NotchGeometry.StripRect(740, 48, 440, 5, Inset);
+        Assert.Equal(48, r.Top);
+    }
+
+    [Fact]
+    public void StripRect_DoesNotGoNegative_ForContentNarrowerThanTheInset()
+    {
+        var r = NotchGeometry.StripRect(0, 0, contentWidth: 10, stripHeight: 5, contentInset: Inset);
+        Assert.Equal(0, r.Width);
+    }
+
+    [Fact]
+    public void PhysicalToDip_At100Percent_IsIdentity()
+    {
+        Assert.Equal(new Point(800, 12), NotchGeometry.PhysicalToDip(800, 12, 1.0));
+    }
+
+    [Fact]
+    public void PhysicalToDip_At125Percent_DividesOut()
+    {
+        // GetCursorPos reports physical pixels; Left/Top and WorkingArea are DIP. This is
+        // the conversion the spec requires to be explicit and covered at a non-100 % scale.
+        Assert.Equal(new Point(800, 12), NotchGeometry.PhysicalToDip(1000, 15, 1.25));
+    }
+
+    [Fact]
+    public void PhysicalToDip_At150Percent_DividesOut()
+    {
+        Assert.Equal(new Point(640, 8), NotchGeometry.PhysicalToDip(960, 12, 1.5));
+    }
+
+    [Fact]
+    public void PhysicalToDip_TreatsANonPositiveScaleAsOneToOne()
+    {
+        // A failed DPI query must not divide by zero and teleport the cursor to infinity.
+        Assert.Equal(new Point(800, 12), NotchGeometry.PhysicalToDip(800, 12, 0));
+    }
+
+    [Fact]
+    public void IsInsideStrip_JustInside()
+    {
+        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
+        Assert.True(NotchGeometry.IsInsideStrip(r, new Point(755, 2)));
+    }
+
+    [Fact]
+    public void IsInsideStrip_JustBelow()
+    {
+        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
+        Assert.False(NotchGeometry.IsInsideStrip(r, new Point(755, 6)));
+    }
+
+    [Fact]
+    public void IsInsideStrip_JustLeftOfIt()
+    {
+        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
+        Assert.False(NotchGeometry.IsInsideStrip(r, new Point(753, 2)));
+    }
+}
