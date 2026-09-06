@@ -26,6 +26,9 @@ internal sealed class ClassicPresentation : IOsdPresentation
 
     public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.ClassicOsd, isParked: false);
 
+    public bool IsFullyHidden =>
+        PresentationPolicy.IsFullyHidden(PresentationMode.ClassicOsd, _window.Opacity, isParked: false);
+
     // Recorded on each transition so the policy above and the animations below agree on what
     // "fully visible" means for the current settings. OsdOpacityPercent can be as low as 50,
     // so "at rest" has to mean "below the target", not "below 1.0".

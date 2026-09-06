@@ -69,6 +69,10 @@ internal interface IOsdPresentation
     /// Classic: Opacity below target. Notch: the strip is parked.
     bool IsAtRest { get; }
 
+    /// True when there is nothing left on screen to take down. A distinct question from
+    /// IsAtRest — see §6.4 for why conflating them stranded the OSD on screen.
+    bool IsFullyHidden { get; }
+
     /// True when the window should hit-test the mouse in its current state.
     bool WantsHitTesting { get; }
 
@@ -257,22 +261,57 @@ bool wasHidden = Opacity < targetOpacity - 0.01;
 
 Resting opacity in notch mode is not zero. This becomes `_presentation.IsAtRest`.
 
-### 6.4 `HideOsd`'s early return has the same assumption
+### 6.4 `HideOsd`'s early return asks a different question from 6.3, not the same one
 
 ```csharp
 if (Opacity < 0.01) return;
 ```
 
-This is 6.3 in mirror image: it means "already hidden, nothing to do", but in notch mode
-resting opacity is above the threshold, so the guard never fires and a hide is started on
-an already-parked strip. It becomes `_presentation.IsAtRest` too.
+An earlier draft of this section reused `_presentation.IsAtRest` here too, on the theory
+that it was "6.3 in mirror image". That was wrong, and the mistake is a real defect, not
+a nicety to clean up later.
 
-Worth noting the case that makes this mostly theoretical rather than urgent: `HideOsd` is
-called when the suppression gate closes, and `ShouldSuppress` requires
-`foregroundCoversMonitor`, which is the same condition that has already retracted the
-strip under §4. The two paths agree by construction. It is still fixed rather than relied
-upon, because that agreement is a property of today's `ShouldSuppress` inputs and nothing
-enforces it.
+`ShowOsd` and `HideOsd` ask two different questions, and Classic answers them differently:
+
+- `ShowOsd` asks *"must a show transition still run?"* → `opacity < targetOpacity - 0.01`
+  (`IsAtRest`)
+- `HideOsd` asks *"is there anything left on screen to take down?"* → `opacity < 0.01`
+  (`IsFullyHidden`)
+
+Those two predicates agree everywhere except mid-transition, where they diverge on
+purpose: partway through a 140 ms fade-in, opacity is below target (`IsAtRest` is true —
+a show transition would still have work to do) but the OSD is clearly still visible
+(`IsFullyHidden` is false — there is very much something on screen). Collapsing the two
+into one predicate makes `HideOsd` read that mid-fade-in moment as "already hidden,
+nothing to do."
+
+That reading is not academic. `HideOsd` stops the hide timer *before* running this guard.
+So: a volume key starts a fade-in; fullscreen-video suppression engages inside that same
+~140 ms window and calls `HideOsd`; the timer is stopped; the (wrong) `IsAtRest`-based
+guard sees "at rest" and returns early; the fade-in animation, already in flight, finishes
+on its own and lands the OSD at full opacity — with no timer left running to take it back
+down. The OSD sticks on screen indefinitely, over the exact fullscreen video that
+suppression exists to clear it from. This is the opposite of theoretical: it is the
+single failure mode this whole subsystem is built to prevent.
+
+The fix is a second, distinct predicate — `PresentationPolicy.IsFullyHidden` — rather than
+reusing `IsAtRest`:
+
+```csharp
+public static bool IsFullyHidden(PresentationMode mode, double opacity, bool isParked)
+    => mode == PresentationMode.AmbientNotch ? isParked : opacity < 0.01;
+```
+
+`HideOsd`'s guard becomes `_presentation.IsFullyHidden`. `ShowOsd` keeps `IsAtRest`
+unchanged; the two guards must not be merged again. In notch mode both predicates happen
+to reduce to "is it parked", since the notch has no partial-opacity resting state the way
+Classic's fade does — but that coincidence belongs to notch, not to the general contract,
+which is why `IsFullyHidden` exists as its own named predicate rather than as an alias.
+
+The `ShouldSuppress`/`foregroundCoversMonitor` agreement noted in the original draft of
+this section is real for the *steady-state* case (OSD fully up, suppression engages) but
+says nothing about the transient fade-in window above, which is exactly where the two
+predicates disagree and where a merged predicate fails.
 
 ## §7 — Tests (`tests/Plith.Tests/`, headless)
 
@@ -294,6 +333,7 @@ and the presentation classes are thin adapters over it, tested through §8 inste
 - Classic reports `EdgeMarginDip == 96` and always wants hit-testing
 - Notch reports `0`, and wants hit-testing only while descended
 - `IsAtRest` for both, at rest and while visible
+- `IsFullyHidden` for both, including the mid-fade-in case that pins the §6.4 fix
 
 Retraction gets **no unit test**, and that is a deliberate call rather than an omission.
 

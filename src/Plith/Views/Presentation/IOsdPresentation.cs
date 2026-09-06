@@ -20,6 +20,10 @@ internal interface IOsdPresentation
     /// <summary>True when nothing is on screen that the user would read as "the OSD is up".</summary>
     bool IsAtRest { get; }
 
+    /// <summary>True when nothing is on screen to take down. See PresentationPolicy.IsFullyHidden
+    /// for why this is a different question from <see cref="IsAtRest"/>.</summary>
+    bool IsFullyHidden { get; }
+
     /// <summary>Whether the window should accept mouse messages in its current state.</summary>
     bool WantsHitTesting { get; }
 

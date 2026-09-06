@@ -223,7 +223,7 @@ public sealed class OsdHost : BandWindow
     {
         if (_isEditMode) return;   // edit mode owns its own always-on visibility
         _hideTimer?.Stop();
-        if (_presentation.IsAtRest) return;
+        if (_presentation.IsFullyHidden) return;
         // Already on the way out — restarting the animation from the current opacity would
         // stretch the fade instead of shortening it.
         if (_isFadingOut) return;

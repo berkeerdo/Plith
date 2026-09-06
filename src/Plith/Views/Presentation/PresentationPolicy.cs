@@ -39,4 +39,16 @@ public static class PresentationPolicy
     /// </summary>
     public static bool WantsHitTesting(PresentationMode mode, bool isParked)
         => mode != PresentationMode.AmbientNotch || !isParked;
+
+    /// <summary>
+    /// True when there is nothing on screen to take down. Deliberately NOT the same question
+    /// as <see cref="IsAtRest"/>, which asks whether a show transition still has work to do.
+    ///
+    /// The two diverge mid-transition, and conflating them is a real defect rather than a
+    /// nicety: HideOsd stops the hide timer before consulting this, so answering "at rest"
+    /// during a fade-in would let the fade finish with no timer left to take the OSD down,
+    /// stranding it on screen over the fullscreen video that asked it to leave.
+    /// </summary>
+    public static bool IsFullyHidden(PresentationMode mode, double opacity, bool isParked)
+        => mode == PresentationMode.AmbientNotch ? isParked : opacity < 0.01;
 }

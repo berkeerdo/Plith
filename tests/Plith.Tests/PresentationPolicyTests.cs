@@ -63,4 +63,29 @@ public class PresentationPolicyTests
         Assert.False(PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, isParked: true));
         Assert.True(PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, isParked: false));
     }
+
+    [Fact]
+    public void Classic_IsFullyHidden_OnlyAtZeroOpacity()
+    {
+        Assert.True(PresentationPolicy.IsFullyHidden(PresentationMode.ClassicOsd, opacity: 0, isParked: false));
+        Assert.False(PresentationPolicy.IsFullyHidden(PresentationMode.ClassicOsd, opacity: 1, isParked: false));
+    }
+
+    [Fact]
+    public void Classic_MidFadeIn_IsAtRestButNotFullyHidden()
+    {
+        // The regression this predicate exists to prevent. HideOsd stops the hide timer before
+        // its guard, so if it read IsAtRest here it would return early, the fade-in would
+        // complete, and nothing would ever take the OSD back down.
+        const double midFade = 0.3;
+        Assert.True(PresentationPolicy.IsAtRest(PresentationMode.ClassicOsd, midFade, targetOpacity: 1.0, isParked: false));
+        Assert.False(PresentationPolicy.IsFullyHidden(PresentationMode.ClassicOsd, midFade, isParked: false));
+    }
+
+    [Fact]
+    public void Notch_IsFullyHidden_TracksParked()
+    {
+        Assert.True(PresentationPolicy.IsFullyHidden(PresentationMode.AmbientNotch, opacity: 1, isParked: true));
+        Assert.False(PresentationPolicy.IsFullyHidden(PresentationMode.AmbientNotch, opacity: 1, isParked: false));
+    }
 }
