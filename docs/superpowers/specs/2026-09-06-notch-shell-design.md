@@ -284,14 +284,28 @@ enforces it.
 - cursor just inside / just outside the strip
 - **a non-100 % scale factor case**, per §3
 
-`PresentationModeTests`
+`PresentationPolicyTests`
+
+The `IOsdPresentation` implementations hold a `BandWindow`, which is a WPF
+`ContentControl` behind an `HwndSource` — it cannot be constructed on this suite's
+headless, non-STA threads. So the *decisions* live in a pure static `PresentationPolicy`
+and the presentation classes are thin adapters over it, tested through §8 instead.
+
 - Classic reports `EdgeMarginDip == 96` and always wants hit-testing
 - Notch reports `0`, and wants hit-testing only while descended
 - `IsAtRest` for both, at rest and while visible
 
-`RetractionTests`
-- covering foreground retracts; non-covering does not
-- gather failure retracts (fail-toward-retract, §4)
+Retraction gets **no unit test**, and that is a deliberate call rather than an omission.
+
+Its decision is the covers-monitor boolean verbatim — the same value `ShouldSuppress` already
+receives — plus a `catch` block that defaults it to true. There is no branching logic between
+those two, so a test would either assert `true == true` or need to force an exception out of
+`GetForegroundWindow` / `GetMonitorInfo`, which the headless suite cannot do. Extracting a
+predicate to make it testable would be extracting the word `true`.
+
+What the existing suite does cover is that `ShouldSuppress` is untouched: `FullscreenVideoDetectorTests`
+must pass unchanged, which is what proves publishing a second output did not disturb the
+suppression gate. The retraction behaviour itself is covered by §8.4 instead, on hardware.
 
 `SettingsServiceTests`
 - a config file with no `PresentationMode` key loads as `ClassicOsd`
@@ -307,6 +321,13 @@ Recorded up front so they are not mistaken for covered:
    flat at 22 across 160 volume changes, but that scenario hid the window between events.
 3. The descent reads as motion, not as a jump, on a 60 Hz and a high-refresh display.
 4. Retraction over a real game, on the installed Program Files build (UIAccess granted).
+5. The runtime click-through toggle actually takes effect. `BandWindow.IsClickThrough`
+   supports being set after creation, but that path has never executed in Plith:
+   `OsdHost` assigns it once in its constructor, before `CreateWindow()`, when
+   `HasSourceCreated` is false — so `ToggleClickThrough` returns early every time. Notch
+   mode is its first caller. Its guard is `if (!IsLoaded || !HasSourceCreated) return;`,
+   and a silently-skipped toggle leaves the strip either swallowing clicks at the top of
+   the screen or refusing them once descended.
 
 ## §9 — Risks
 
