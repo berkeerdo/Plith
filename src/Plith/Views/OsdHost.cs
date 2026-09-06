@@ -225,6 +225,12 @@ public sealed class OsdHost : BandWindow
         // suppressor entirely. Guard defensively rather than find out live.
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
+        // A show transition in flight is already on its way to fully visible. Snapping here
+        // would clear its animation mid-descent (SnapToVisible's BeginAnimation(..., null))
+        // and turn the notch's 220 ms slide into a jump — this is how the strip becoming
+        // hit-testable partway through a hover-triggered descent used to cancel its own
+        // animation the instant WPF delivered the resulting MouseEnter.
+        if (_isFadingIn) return;
         _presentation.SnapToVisible(Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0);
     }
 
@@ -240,7 +246,8 @@ public sealed class OsdHost : BandWindow
     // below reflects that: on entry it goes false immediately, because ShowOsd's
     // AnimateToVisible/SnapToVisible flips the presentation's parked flag synchronously,
     // before any animation runs; on exit it stays false until AnimateToRest actually
-    // completes and re-parks, which FadeOutAndHide re-syncs below.
+    // completes and re-parks, which FadeOutAndHide and ShowOsd both re-sync (see the
+    // comments at those two call sites for why neither alone is enough).
     // Note this is the first code in Plith to change IsClickThrough after the HWND exists —
     // see the manual check in docs/PHASE6-VERIFICATION.md.
     private void OnStripHoverChanged(bool inside)
@@ -255,11 +262,24 @@ public sealed class OsdHost : BandWindow
             _hideTimer?.Stop();
             ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
         }
-        else if (_currentVisibleFor > TimeSpan.Zero && !_isFadingOut)
+        else
         {
-            RestartHideTimer(_currentVisibleFor);
+            // Leaving the strip is not leaving the OSD: the strip is only a few DIP tall, so
+            // the ordinary way to leave it is by moving DOWN onto the descended card, which
+            // is still squarely inside the window. Restarting the hide timer here would take
+            // the card away while the user is sitting on it, and the real OnMouseLeave could
+            // not undo it because the mouse never actually left the window. When the mouse
+            // really has left, the genuine WPF MouseLeave event already reached OnMouseLeave
+            // and restarted the timer itself — nothing further is needed from this handler.
+            if (IsMouseOver) return;
+            if (_currentVisibleFor > TimeSpan.Zero && !_isFadingOut)
+                RestartHideTimer(_currentVisibleFor);
         }
 
+        // Skipped only by the IsMouseOver early return above, which is a deliberate no-op:
+        // WantsHitTesting has not changed there (still descended, not re-parked), so
+        // IsClickThrough is already correct and re-computing it would just repeat the same
+        // value. Every other path through this method reaches here.
         IsClickThrough = !_presentation.WantsHitTesting;
     }
 
@@ -331,6 +351,15 @@ public sealed class OsdHost : BandWindow
             _isFadingIn = false;
         }
 
+        // Both branches above already flipped the presentation's parked state synchronously
+        // (AnimateToVisible and SnapToVisible both clear it before this line runs), so
+        // WantsHitTesting already reports the descended value here. This is the forward half
+        // of the click-through sync: FadeOutAndHide's resync only fires on the way BACK to
+        // rest, so without this line a volume-key show — one nobody hovered into — would
+        // leave IsClickThrough at whatever the last re-park left it (true), making the
+        // descended card click-through and its transport buttons dead.
+        IsClickThrough = !_presentation.WantsHitTesting;
+
         ReassertTopmost();
 
         if (_settings.Current.HoverKeepAlive && IsMouseOver) return;
@@ -360,10 +389,11 @@ public sealed class OsdHost : BandWindow
             if (_showGeneration != gen) return;
             _isFadingOut = false;
             // The presentation has just re-parked (AnimateToRest's own completion runs before
-            // this callback), so WantsHitTesting now reports the resting value. Re-syncing
-            // here — rather than only from OnStripHoverChanged — covers every path back to
-            // rest, hover-triggered or not (a volume-key show that nobody hovered away from
-            // still needs the strip to stop swallowing clicks once it re-parks).
+            // this callback), so WantsHitTesting now reports the resting value. This is the
+            // backward half of the click-through sync — it covers every path back to rest,
+            // hover-triggered or not — and pairs with the forward half in ShowOsd, which
+            // covers every path back down to descended. Neither one alone is enough: this
+            // one only ever turns click-through ON, ShowOsd's only ever turns it OFF.
             IsClickThrough = !_presentation.WantsHitTesting;
         });
     }

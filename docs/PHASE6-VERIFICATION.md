@@ -122,23 +122,32 @@ restart Plith, and make sure `HoverKeepAlive=true` (its default).
 
 **Why this section matters more than it looks:** `BandWindow.IsClickThrough` has always
 supported assignment after window creation (`ToggleClickThrough`, gated on
-`IsLoaded && HasSourceCreated`), but that path has never actually executed anywhere in Plith
-before this task. `OsdHost` sets `IsClickThrough = false` once in its own constructor, before
-`CreateWindow()` runs — i.e. while `HasSourceCreated` is still `false` — so every prior call to
-the `IsClickThrough` setter has hit the guard and returned without touching the window styles.
-Task 7's `OnStripHoverChanged` and `FadeOutAndHide` are the first real callers. If the guard
-turns out to skip the toggle in practice (for example because `IsLoaded` reads `false` on a
-`BandWindow` at the moment the toggle fires, which has never been observed one way or the
-other), the failure mode is asymmetric and easy to misread: the strip would either keep
-swallowing clicks at the top edge permanently, or refuse to become click-through once
-descended, and nothing in the build/test/lint output would show it. If checks 3.3, 3.4, or 3.5
-below fail, this guard is the first thing to check — the fix would be to route the toggle
-through the same `ApplyWindowStyles` path `Activatable` and `TopMost` already use, neither of
-which has an `IsLoaded` guard.
+`IsLoaded && HasSourceCreated`). It is not true that this has never run before — Task 6 already
+added a second call site, `ApplyPresentationMode`'s `IsClickThrough = !_presentation.WantsHitTesting`,
+which runs *after* `CreateWindow()`, and at a live settings-driven mode switch `IsLoaded` is
+already `true`, so `ToggleClickThrough` executes there. The accurate claim is narrower: nobody
+has yet run the branch this task adds — the toggle firing *while the window is actively being
+hovered*, from `OnStripHoverChanged`, `ShowOsd`, and `FadeOutAndHide`. There are two distinct
+first-execution risks to watch for, not one:
+
+- The guard could still skip the toggle in this specific calling context (for example if
+  `IsLoaded` reads `false` at the moment a poller-driven event fires, which has never been
+  observed one way or the other). The failure mode is asymmetric and easy to misread: the strip
+  would either keep swallowing clicks at the top edge permanently, or refuse to become
+  click-through once descended, and nothing in the build/test/lint output would show it. If
+  checks 3.3, 3.4, or 3.5 below fail, this guard is the first thing to check — the fix would be
+  to route the toggle through the same `ApplyWindowStyles` path `Activatable` and `TopMost`
+  already use, neither of which has an `IsLoaded` guard.
+- The toggle could instead *succeed*, and that is its own first-execution risk: `ToggleClickThrough`
+  calls `SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA)` on a `WS_EX_LAYERED` window that has
+  never had those attributes applied before — window creation sets the `WS_EX_LAYERED` style but
+  never calls `SetLayeredWindowAttributes` itself. If that call changes how the window composites
+  (a flicker, a flash to a different alpha, a redraw hitch), the symptom is a rendering change on
+  the very first hover, not a swallowed click — watch for it specifically during check 3.1.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 3.1 | Move the cursor onto the parked strip | The notch descends into the full card | Nothing happens, or the descent needs an unreasonably long dwell |
+| 3.1 | Move the cursor onto the parked strip | The notch descends smoothly, as a slide rather than a jump, into the full card | Nothing happens, the descent needs an unreasonably long dwell, or it jumps/snaps instead of sliding |
 | 3.2 | Move the cursor away from the descended card | The notch retracts back to the strip after the hide timer elapses | The notch stays down indefinitely, or retracts instantly with no hold time |
 | 3.3 | While descended, click a media transport button | It responds | The click is swallowed (see the `IsClickThrough`/`IsLoaded` note above) |
 | 3.4 | While parked (strip only, not descended), drag a window to the top edge of the screen | It maximises — the strip did not eat the drag | The drag is intercepted by the strip |
@@ -149,6 +158,14 @@ which has an `IsLoaded` guard.
 `NotchGeometry.PhysicalToDip`. On a non-100% display scale this is the one place a mismatch
 would show up as a strip that is hoverable in the wrong screen location — worth specifically
 trying on a scaled monitor if one is available, not just the primary display.
+
+**Known limitation, not something to chase during this pass:** `StripRect` and `DpiScale` are
+only published from `Reposition()`, which does not run on `WM_DPICHANGED`. If the display scale
+changes live (moving the OSD's monitor between screens with different scaling, or a live DPI
+change on the same monitor) while the notch is parked, the poller keeps comparing against the
+stale rectangle/scale until the next show-from-rest calls `Reposition()` again — so the strip
+can go unhoverable until that next show. Recorded here as a known limitation deferred out of
+this round, not as something observed on a run.
 
 ---
 

@@ -13,8 +13,10 @@ namespace Plith.Views.Presentation;
 /// larger risk. The strip is a few pixels tall and only needs to feel responsive to a
 /// deliberate move toward it, which 60 ms comfortably covers.
 ///
-/// The timer runs only while the notch is the active presentation and stops the moment the
-/// strip retracts, so Classic pays nothing for this.
+/// The timer runs for as long as notch mode is the active presentation — including while the
+/// card is descended, since the strip's own hover state still needs tracking to know when the
+/// user has left it — and stops only when the mode switches away from the notch, so Classic
+/// pays nothing for this.
 /// </summary>
 internal sealed class NotchHoverPoller : IDisposable
 {
