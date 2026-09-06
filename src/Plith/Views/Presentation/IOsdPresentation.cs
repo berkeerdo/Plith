@@ -17,8 +17,14 @@ internal interface IOsdPresentation
     /// <summary>Distance Reposition() keeps from the working-area edge.</summary>
     double EdgeMarginDip { get; }
 
-    /// <summary>True when nothing is on screen that the user would read as "the OSD is up".</summary>
-    bool IsAtRest { get; }
+    /// <summary>True when the host shows nothing the user would read as "the OSD is up".
+    ///
+    /// The target is passed in rather than remembered because OsdOpacityPercent can change
+    /// between shows: a remembered target is the one from the PREVIOUS transition, and
+    /// comparing against it can send ShowOsd down the snap branch, which also skips
+    /// Reposition(). See <see cref="IsFullyHidden"/> for the different question HideOsd asks.
+    /// </summary>
+    bool IsAtRest(double targetOpacity);
 
     /// <summary>True when nothing is on screen to take down. See PresentationPolicy.IsFullyHidden
     /// for why this is a different question from <see cref="IsAtRest"/>.</summary>

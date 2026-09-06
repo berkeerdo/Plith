@@ -21,25 +21,18 @@ internal sealed class ClassicPresentation : IOsdPresentation
 
     public double EdgeMarginDip => PresentationPolicy.EdgeMarginDip(PresentationMode.ClassicOsd);
 
-    public bool IsAtRest =>
-        PresentationPolicy.IsAtRest(PresentationMode.ClassicOsd, _window.Opacity, TargetOpacity, isParked: false);
+    public bool IsAtRest(double targetOpacity) =>
+        PresentationPolicy.IsAtRest(PresentationMode.ClassicOsd, _window.Opacity, targetOpacity, isParked: false);
 
     public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.ClassicOsd, isParked: false);
 
     public bool IsFullyHidden =>
         PresentationPolicy.IsFullyHidden(PresentationMode.ClassicOsd, _window.Opacity, isParked: false);
 
-    // Recorded on each transition so the policy above and the animations below agree on what
-    // "fully visible" means for the current settings. OsdOpacityPercent can be as low as 50,
-    // so "at rest" has to mean "below the target", not "below 1.0".
-    public double TargetOpacity { get; private set; } = 1.0;
-
     public void PrepareShow() => _window.Show();
 
     public void AnimateToVisible(double targetOpacity, Action onCompleted)
     {
-        TargetOpacity = targetOpacity;
-
         // Note the absence of BeginAnimation(OpacityProperty, null) here. Clearing an
         // animation reverts the property to its base value, which is 0 while the window is
         // hidden, so a clear-then-restart snapped the OSD back to fully invisible on every
@@ -55,7 +48,6 @@ internal sealed class ClassicPresentation : IOsdPresentation
 
     public void SnapToVisible(double targetOpacity)
     {
-        TargetOpacity = targetOpacity;
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
     }

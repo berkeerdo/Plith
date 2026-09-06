@@ -184,15 +184,27 @@ public sealed class OsdHost : BandWindow
         _isFadingOut = false;
         _currentVisibleFor = visibleFor;
         double targetOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
-        bool wasAtRest = _presentation.IsAtRest;
+        bool wasAtRest = _presentation.IsAtRest(targetOpacity);
 
         if (wasAtRest)
         {
             Reposition();
             _presentation.PrepareShow();
 
+            // Only start a fade-in when one is not already running toward this same target.
+            // Volume keys repeat far faster than a fade takes, so a held or spammed key lands
+            // several events inside a single fade — and restarting the animation on each of
+            // them made the OSD pulse instead of staying up. The other half of this fix — not
+            // clearing the animation before restarting it — lives in
+            // ClassicPresentation.AnimateToVisible, next to the animation it protects.
             if (wasFadingOut || !_isFadingIn)
             {
+                // Logged on the transition only, not on every repeat, so a held volume key
+                // produces one line per appearance. This is the line that separates "the OSD
+                // was never asked to show" from "it was shown and something on top of it won":
+                // over a game in true exclusive fullscreen the display is scanned out from the
+                // game's own swapchain, so nothing composites over it however correctly the
+                // OSD behaves, and without this line the two cases look identical from a log.
                 _log?.Info("OsdHost",
                     $"Show: transition at {Left:0},{Top:0} for {visibleFor.TotalMilliseconds:0}ms" +
                     (wasFadingOut ? " (interrupting hide)" : string.Empty));
