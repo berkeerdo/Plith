@@ -39,6 +39,7 @@ public sealed class OsdHost : BandWindow
     // including the ones that deliberately leave a running fade-in alone, so using it to
     // decide whether a fade-in is still current would strand _isFadingIn at true forever.
     private int _fadeInGeneration;
+    private PresentationMode _activeMode;
 
     // Local mirror of ThemeService.BuildAccentOverride(). Lives on this ContentControl's
     // own Resources.MergedDictionaries so DynamicResource lookups inside OsdContent hit
@@ -92,11 +93,61 @@ public sealed class OsdHost : BandWindow
         // A settings save can change where the OSD sits (position / monitor), so re-anchor it
         // without waiting for the next pop. Card-level settings (colour thresholds, compact
         // mode) are owned by AudioCard and MediaCard and never travel through the shell.
-        _settings.Changed += _ => Dispatcher.BeginInvoke(() => Reposition());
+        _settings.Changed += _ => Dispatcher.BeginInvoke(() =>
+        {
+            if (_settings.Current.Presentation != _activeMode)
+            {
+                _activeMode = _settings.Current.Presentation;
+                ApplyPresentationMode();
+                return;   // ApplyPresentationMode repositions as part of settling the mode
+            }
+            Reposition();
+        });
 
         // Pre-create the native HWND so the first ShowOsd is instant.
         // BandWindow.CreateWindow is idempotent if HasSourceCreated is already true.
         CreateWindow();
+
+        _activeMode = _settings.Current.Presentation;
+        ApplyPresentationMode();
+    }
+
+    private IOsdPresentation BuildPresentation() => _settings.Current.Presentation switch
+    {
+        PresentationMode.AmbientNotch =>
+            new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip),
+        _ => new ClassicPresentation(this),
+    };
+
+    // Switching modes rebuilds the presentation and returns the window to that mode's rest
+    // state. Both directions need cleaning up after the other: Classic leaves Opacity at 0
+    // and the strip hidden, the notch leaves a content offset and a visible strip.
+    private void ApplyPresentationMode()
+    {
+        _hideTimer?.Stop();
+        _isFadingIn = false;
+        _isFadingOut = false;
+
+        BeginAnimation(OpacityProperty, null);
+        _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
+        _content.ContentOffset = 0;
+        _content.SetStrip(visible: false, heightDip: _settings.Current.NotchStripHeightDip);
+
+        _presentation = BuildPresentation();
+        IsClickThrough = !_presentation.WantsHitTesting;
+
+        if (_presentation is AmbientNotchPresentation notch)
+        {
+            Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+            Reposition();               // measures content, which calls OnContentMeasured
+            notch.PrepareShow();
+            notch.Park();               // settle straight into rest; no descent flash
+        }
+        else
+        {
+            Opacity = 0;
+            Hide();
+        }
     }
 
     private void OnThemeApplied()
