@@ -65,6 +65,10 @@ public partial class App : Application
         _osd = new OsdHost(_settings, _theme, _cardHost);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += d => _osd.ShowOsd(d);
         _cardHost.HideRequested += () => _osd.HideOsd();
+        // Suppression reaches CardHost by injection above; this is the separate signal the
+        // notch needs. Deliberately not routed through IShowSuppressor: that means "do not
+        // show at all", while this means "retract the strip and behave like Classic".
+        _fullscreenWatcher.ForegroundCoversMonitorChanged += _osd.OnForegroundCoversMonitorChanged;
         _cardHost.Start();
 
         _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
@@ -143,7 +147,12 @@ public partial class App : Application
         // Order matters: the orchestrator must stop feeding cards before CardHost deactivates
         // them, and the shared SMTC client outlives both. The watcher must stop raising
         // SuppressionChanged before CardHost — which it feeds — is disposed.
-        DisposeStep("FullscreenVideoWatcher", () => _fullscreenWatcher?.Dispose());
+        DisposeStep("FullscreenVideoWatcher", () =>
+        {
+            if (_fullscreenWatcher is not null && _osd is not null)
+                _fullscreenWatcher.ForegroundCoversMonitorChanged -= _osd.OnForegroundCoversMonitorChanged;
+            _fullscreenWatcher?.Dispose();
+        });
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());

@@ -48,6 +48,11 @@ public sealed class OsdHost : BandWindow
     private int _fadeInGeneration;
     private PresentationMode _activeMode;
 
+    // Set by OnForegroundCoversMonitorChanged before anything else runs, so every path that
+    // reads it — including ApplyPresentationMode's own poller-start guard below — sees the
+    // current value rather than a stale one from before this event.
+    private bool _coversMonitor;
+
     // Local mirror of ThemeService.BuildAccentOverride(). Lives on this ContentControl's
     // own Resources.MergedDictionaries so DynamicResource lookups inside OsdContent hit
     // it before walking up. See the comment on ThemeService.BuildAccentOverride for why
@@ -168,8 +173,56 @@ public sealed class OsdHost : BandWindow
         // own "not AmbientNotchPresentation" guard discards it instead of restarting a hide
         // timer or toggling IsClickThrough for a mode switch that has already settled its own
         // state.
-        if (_presentation is AmbientNotchPresentation) _hoverPoller.Start();
+        // _coversMonitor guards against resurrecting the strip over a game: a mode switch
+        // (e.g. a settings save) landing while a fullscreen window is covering the monitor
+        // must not restart the poller, or hovering into the strip's screen region would
+        // descend the card right back on top of whatever is covered.
+        if (_presentation is AmbientNotchPresentation && !_coversMonitor) _hoverPoller.Start();
         else _hoverPoller.Stop();
+    }
+
+    /// <summary>Called when a window starts or stops covering its monitor. The Ambient Notch
+    /// retracts entirely while covered and returns afterwards; Classic ignores it.
+    ///
+    /// One rule, no game-versus-video classifier: a persistent strip over a fullscreen film is
+    /// as unwelcome as one over a game, and a rule with no classifier in it has no classifier
+    /// to get wrong.</summary>
+    public void OnForegroundCoversMonitorChanged(bool covers)
+    {
+        _coversMonitor = covers;
+
+        if (_presentation is not AmbientNotchPresentation notch) return;
+
+        if (covers)
+        {
+            // Stop the hover poller before the hide timer, not after: NotchHoverPoller.Stop()
+            // can synchronously raise a synthetic HoverChanged(false) if the cursor was inside
+            // the strip when the game took the foreground, and OnStripHoverChanged reacts to a
+            // hover-out by restarting the hide timer. Stopping the hide timer AFTER the poller
+            // guarantees that any timer resurrected by that synthetic event is killed here,
+            // in the same synchronous call, before the dispatcher ever gets a chance to tick
+            // it — instead of racing a timer that fades the card back in over the game a few
+            // seconds later.
+            _hoverPoller.Stop();
+            _hideTimer?.Stop();
+            IsClickThrough = true;
+            notch.Retract();
+        }
+        else
+        {
+            // Retract() left _isRetracted set. Park() is the only thing that clears it (see
+            // AmbientNotchPresentation.OnContentMeasured). Park() must run BEFORE Reposition():
+            // Reposition() ends by calling OnContentMeasured, which checks _isRetracted first
+            // and — if it were still true here — would call Retract() again instead of settling
+            // at the freshly measured resting offset, so the strip would never come back.
+            // Calling Park() first clears the flag, so the OnContentMeasured call inside
+            // Reposition() takes the _isParked branch instead and re-parks at the offset for
+            // whatever the content measures at right now (it may have changed size while
+            // covered — a media card appearing or going away).
+            notch.Park();
+            Reposition();
+            _hoverPoller.Start();
+        }
     }
 
     private void OnThemeApplied()

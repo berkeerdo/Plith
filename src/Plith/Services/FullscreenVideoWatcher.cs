@@ -28,6 +28,7 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     private nint _hook;
     private WinEventDelegate? _callback;
     private bool _suppressed;
+    private bool _coversMonitor;
     private bool _disposed;
 
     public FullscreenVideoWatcher(SettingsService settings, MediaSessionClient media, Dispatcher dispatcher, DiagnosticLog? log = null)
@@ -42,6 +43,13 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     public bool IsSuppressed => _suppressed;
 
     public event Action<bool>? SuppressionChanged;
+
+    /// <summary>True while the foreground window covers its monitor. Published separately
+    /// from suppression because the notch reacts to it differently: suppression means "do not
+    /// show at all", this means "retract the parked strip and behave like Classic".</summary>
+    public bool ForegroundCoversMonitor => _coversMonitor;
+
+    public event Action<bool>? ForegroundCoversMonitorChanged;
 
     public void Start()
     {
@@ -95,11 +103,13 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         if (_disposed) return;
 
         bool next;
+        bool covers;
         try
         {
+            covers = ForegroundCoversItsMonitor(out var processName);
             next = FullscreenVideoDetector.ShouldSuppress(
                 enabled: _settings.Current.HideDuringFullscreenVideo,
-                foregroundCoversMonitor: ForegroundCoversMonitor(out var processName),
+                foregroundCoversMonitor: covers,
                 notificationState: QueryNotificationState(),
                 foregroundOwnsPlayingSmtc: ForegroundOwnsPlayingSmtc(processName),
                 foregroundProcessName: processName,
@@ -110,7 +120,18 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
             // A window can die between GetForegroundWindow and Process lookup. Never let a
             // transient interop failure suppress the OSD — fail toward showing it.
             _log?.Warn("FullscreenVideo", $"Evaluate threw: {ex.GetType().Name}: {ex.Message}");
+            // Suppression fails toward SHOWING the OSD: a bug that hides it is worse than one
+            // that shows it. Retraction fails the other way, deliberately — a strip left
+            // sitting over a game is worse than one retracted when it need not have been.
             next = false;
+            covers = true;
+        }
+
+        if (covers != _coversMonitor)
+        {
+            _coversMonitor = covers;
+            _log?.Info("FullscreenVideo", $"ForegroundCoversMonitor -> {covers}");
+            ForegroundCoversMonitorChanged?.Invoke(covers);
         }
 
         if (next == _suppressed) return;
@@ -119,7 +140,7 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         SuppressionChanged?.Invoke(next);
     }
 
-    private static bool ForegroundCoversMonitor(out string processName)
+    private static bool ForegroundCoversItsMonitor(out string processName)
     {
         processName = string.Empty;
 

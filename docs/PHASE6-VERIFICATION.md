@@ -5,17 +5,18 @@ tracks the checks that need a person, the same way `docs/PHASE5-VERIFICATION.md`
 for the same reason: no test in this repository can observe a rendered pixel or a running
 animation, so an unrun check must never be recorded as a pass.
 
-This entry covers **Task 6 and Task 7** — `AmbientNotchPresentation`, the `OsdHost` mode
-switch, and hover-to-descend via `NotchHoverPoller`. Later tasks in this phase (the
-fullscreen retraction signal, the position editor's notch behaviour, etc.) will add their
-own sections here as they land.
+This entry covers **Task 6, Task 7 and Task 8** — `AmbientNotchPresentation`, the `OsdHost`
+mode switch, hover-to-descend via `NotchHoverPoller`, and the fullscreen-cover retraction
+signal from `FullscreenVideoWatcher`. Later tasks in this phase (the position editor's notch
+behaviour, etc.) will add their own sections here as they land.
 
 ---
 
-## 0. What is automated as of Task 7
+## 0. What is automated as of Task 8
 
 - `dotnet build src/Plith/Plith.csproj -c Debug` — 0 warnings, 0 errors.
-- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 162/162 passing.
+- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 162/162 passing, `FullscreenVideoDetectorTests`
+  unchanged (Task 8 does not touch `ShouldSuppress`'s signature or behaviour).
 - `pwsh -File scripts/check-a11y.ps1` — exit 0.
 
 None of the above exercises `AmbientNotchPresentation` itself: both it and `ClassicPresentation`
@@ -166,6 +167,48 @@ change on the same monitor) while the notch is parked, the poller keeps comparin
 stale rectangle/scale until the next show-from-rest calls `Reposition()` again — so the strip
 can go unhoverable until that next show. Recorded here as a known limitation deferred out of
 this round, not as something observed on a run.
+
+---
+
+## 4. Retraction while a window covers the monitor (Task 8)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing Task 8, and no synthetic mouse or keyboard input was sent
+> to any window or game — manual GUI verification in this project is a human step, and an
+> agent attempting it has previously caused real harm. The checks below are recorded exactly
+> as open, not as passed on the strength of the code reading correct.
+
+**This must be run on the installed Program Files build, not a Debug build out of `bin\`.**
+Debug builds have no UIAccess (see `Plith.Interop.UiAccess`), which silently changes what the
+OSD is even allowed to draw over — a Debug build can already fail to cover a fullscreen game
+for reasons that have nothing to do with retraction, and that failure would look identical to
+a retraction bug in `plith.log`. Install the signed build before running this section.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
+`[Osd]`, restart the installed build, then open a game (or a fullscreen video player) and
+alt-tab into it.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True`, and the parked strip is gone entirely — no strip, no sliver, no shadow bleed | The strip stays visible, or `ForegroundCoversMonitor -> True` never appears in the log |
+| 4.2 | While still in the game, press a volume key | The OSD still appears | The OSD stays hidden — this is the check that distinguishes retraction from suppression; if it fails, retraction has been conflated with `IShowSuppressor` somewhere and Phase 5 §2's gate has been broken |
+| 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False`, and the strip returns at the top edge, at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The strip does not return, returns at the wrong offset, or the log line is missing |
+
+**Why 4.2 is the one to watch most closely:** Task 8's entire design premise is that
+retraction and suppression are separate signals — `IShowSuppressor` means "do not show at
+all," `ForegroundCoversMonitorChanged` means "retract the parked strip and behave like
+Classic." Nothing in the automated suite can catch the two being accidentally merged, because
+merging them would still build clean, still pass all 162 tests (none of which exercise a live
+`OsdHost`/`AmbientNotchPresentation` pair), and still pass the a11y lint. A volume key still
+producing the OSD while the strip stays retracted is the only observation in this whole
+section that actually distinguishes the two.
+
+**Record, if this section is run:** the exact `plith.log` lines for 4.1 and 4.3 (the
+`ForegroundCoversMonitor -> …` transitions), and whether any faint strip/shadow was visible
+during 4.1 — the same drop-shadow-bleed question section 1 already flagged as unresolved for
+`HiddenOffset`, and Task 8 is the first task that actually reaches `Retract()` in a running
+build.
 
 ---
 
