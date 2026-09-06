@@ -198,14 +198,31 @@ public sealed class OsdHost : BandWindow
             // Stop the hover poller before the hide timer, not after: NotchHoverPoller.Stop()
             // can synchronously raise a synthetic HoverChanged(false) if the cursor was inside
             // the strip when the game took the foreground, and OnStripHoverChanged reacts to a
-            // hover-out by restarting the hide timer. Stopping the hide timer AFTER the poller
-            // guarantees that any timer resurrected by that synthetic event is killed here,
-            // in the same synchronous call, before the dispatcher ever gets a chance to tick
-            // it — instead of racing a timer that fades the card back in over the game a few
-            // seconds later.
+            // hover-out in two ways that both need to lose to the lines below. First, it can
+            // call RestartHideTimer — stopping the hide timer AFTER the poller guarantees any
+            // timer resurrected that way is killed here, in the same synchronous call, before
+            // the dispatcher ever gets a chance to tick it, instead of racing a timer that fades
+            // the card back in over the game a few seconds later. Second, its trailing
+            // "IsClickThrough = !_presentation.WantsHitTesting" runs too and would set
+            // IsClickThrough false while the card is still descended — harmless only because
+            // the explicit "IsClickThrough = true" two lines below runs after it and wins; swap
+            // the order and that assignment would stick instead.
             _hoverPoller.Stop();
             _hideTimer?.Stop();
             IsClickThrough = true;
+
+            // A cover can land mid-descend (ShowOsd's 220 ms AnimateToVisible still running,
+            // e.g. a volume key pressed right as alt-tab hands focus to the game).
+            // Retract()'s BeginAnimation(ContentOffsetProperty, null) removes that clock without
+            // firing its Completed handler — WPF does not raise Completed for a clock removed or
+            // replaced this way (established in Task 6's review) — so the callback that would
+            // have cleared _isFadingIn never runs. Left stranded true, the next ShowOsd's
+            // "wasFadingOut || !_isFadingIn" guard sees a fade it thinks is still in flight and
+            // starts no animation at all, so a volume key over the game would show nothing. Every
+            // other transition teardown (FadeOutAndHide, ApplyPresentationMode) clears both flags
+            // explicitly for the same reason; this one must too.
+            _isFadingIn = false;
+            _isFadingOut = false;
             notch.Retract();
         }
         else
@@ -448,6 +465,13 @@ public sealed class OsdHost : BandWindow
             // covers every path back down to descended. Neither one alone is enough: this
             // one only ever turns click-through ON, ShowOsd's only ever turns it OFF.
             IsClickThrough = !_presentation.WantsHitTesting;
+
+            // Re-parking while a window still covers the monitor means re-parking a strip on
+            // top of it. The OSD is deliberately allowed to appear over a game — retraction is
+            // not suppression — but it has to go back to retracted rather than parked when it
+            // leaves, or one volume key permanently restores the strip: the covers-monitor
+            // signal is edge-triggered, so nothing raises it again while the game stays up.
+            if (_coversMonitor && _presentation is AmbientNotchPresentation covered) covered.Retract();
         });
     }
 

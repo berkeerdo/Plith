@@ -192,7 +192,7 @@ alt-tab into it.
 | # | Check | Pass | Fail |
 |---|---|---|---|
 | 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True`, and the parked strip is gone entirely — no strip, no sliver, no shadow bleed | The strip stays visible, or `ForegroundCoversMonitor -> True` never appears in the log |
-| 4.2 | While still in the game, press a volume key | The OSD still appears | The OSD stays hidden — this is the check that distinguishes retraction from suppression; if it fails, retraction has been conflated with `IShowSuppressor` somewhere and Phase 5 §2's gate has been broken |
+| 4.2 | While still in the game, press a volume key, then let it auto-hide | The OSD still appears (this is the check that distinguishes retraction from suppression), **and** once it auto-hides the strip does not return — the notch is back to fully retracted, nothing drawn over the game | The OSD stays hidden on the key press (retraction conflated with `IShowSuppressor` somewhere, breaking Phase 5 §2's gate), **or** the strip reappears parked over the game after auto-hide (the volume key's own re-park undid the retraction — see the `_coversMonitor` check in `FadeOutAndHide`'s completion) |
 | 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False`, and the strip returns at the top edge, at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The strip does not return, returns at the wrong offset, or the log line is missing |
 
 **Why 4.2 is the one to watch most closely:** Task 8's entire design premise is that
@@ -201,8 +201,14 @@ all," `ForegroundCoversMonitorChanged` means "retract the parked strip and behav
 Classic." Nothing in the automated suite can catch the two being accidentally merged, because
 merging them would still build clean, still pass all 162 tests (none of which exercise a live
 `OsdHost`/`AmbientNotchPresentation` pair), and still pass the a11y lint. A volume key still
-producing the OSD while the strip stays retracted is the only observation in this whole
-section that actually distinguishes the two.
+producing the OSD while the strip stays retracted afterward is the only observation in this
+whole section that actually distinguishes the two — and it is a two-part observation, not
+one: the OSD appearing on the key press is necessary but not sufficient. `ShowOsd`'s at-rest
+path is allowed to run over a game by design (that is what makes the OSD appear at all), and
+its own hide timer then re-parks the card through `FadeOutAndHide` — a table that only checked
+the appearance half would report a pass even if that re-park brought the strip back over the
+game to stay, since 4.3's own alt-tab-out would mask exactly that failure by retracting it
+again through the normal path. Do not skip the "let it auto-hide" half of 4.2.
 
 **Record, if this section is run:** the exact `plith.log` lines for 4.1 and 4.3 (the
 `ForegroundCoversMonitor -> …` transitions), and whether any faint strip/shadow was visible
