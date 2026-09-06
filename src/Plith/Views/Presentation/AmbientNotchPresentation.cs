@@ -29,11 +29,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     // snapping. The snap branch also skips Reposition(), so this is not merely cosmetic.
     private bool _isRetracting;
 
-    // Parked and retracted are both "at rest" but they are not the same state: parked shows
-    // the strip, retracted shows nothing at all. OnContentMeasured has to re-apply whichever
-    // one is actually in force, or a re-measure while retracted would put the strip and the
-    // card's bottom sliver back on screen over the window that asked for them to go.
-    private bool _isRetracted;
 
     public AmbientNotchPresentation(BandWindow window, OsdContent content, Func<double> stripHeight, DiagnosticLog? log)
     {
@@ -74,8 +69,7 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         // animation holding ContentOffsetProperty with FillBehavior.HoldEnd, and animated-value
         // precedence outranks a local write — so assigning here would change nothing at all.
         // Park()/Retract() clear the animation first.
-        if (_isRetracted) Retract();
-        else if (_isParked) Park();
+        if (_isParked) Park();
     }
 
     public void PrepareShow()
@@ -90,7 +84,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     {
         _isParked = false;
         _isRetracting = false;
-        _isRetracted = false;
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
 
@@ -108,7 +101,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     {
         _isParked = false;
         _isRetracting = false;
-        _isRetracted = false;
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
         _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
@@ -132,7 +124,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     {
         _isRetracting = false;
         _isParked = true;
-        _isRetracted = false;
 
         if (!_hasMeasured)
         {
@@ -168,30 +159,4 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         _content.SetStrip(visible: true, heightDip: _stripHeight());
     }
 
-    /// <summary>Park immediately and hide the strip entirely. Used when a window covers the
-    /// monitor — see the retraction signal in FullscreenVideoWatcher.</summary>
-    public void Retract()
-    {
-        _isRetracting = false;
-        _isParked = true;
-        _isRetracted = true;
-        _content.SetStrip(visible: false, heightDip: _stripHeight());
-
-        if (!_hasMeasured)
-        {
-            // Same reasoning as Park()'s unmeasured branch: there is no known-good offset to
-            // hide behind yet, and the window may already be showing the full card at full
-            // opacity. Hide it outright rather than leaving that on screen.
-            _log?.Warn("AmbientNotchPresentation", "Retract() called before any measurement; hiding the window instead of an unmeasured offset.");
-            _window.Hide();
-            return;
-        }
-
-        // Distinct from RestingOffset: RestingOffset deliberately leaves the card's bottom
-        // edge sitting at stripHeight (part of the parked look), which is exactly the sliver
-        // that must NOT remain when a fullscreen window has covered the monitor. HiddenOffset
-        // takes the card fully off screen instead.
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        _content.ContentOffset = _hiddenOffset;
-    }
 }

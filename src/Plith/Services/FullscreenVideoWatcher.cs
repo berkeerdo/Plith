@@ -1,4 +1,4 @@
-using System.Diagnostics;
+﻿using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
 using System.Windows.Threading;
@@ -29,6 +29,14 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     private WinEventDelegate? _callback;
     private bool _suppressed;
     private bool _coversMonitor;
+
+    // Continuous evidence required before a falling covers-monitor edge is believed. Two
+    // seconds is four samples at the 1 Hz poll, comfortably longer than the sub-second blips
+    // measured during gameplay, and short enough that closing a game does not leave the strip
+    // missing for a noticeable beat.
+    private const long UncoverSettleMs = 2000;
+
+    private long? _uncoveredSinceTicks;
     private bool _disposed;
 
     public FullscreenVideoWatcher(SettingsService settings, MediaSessionClient media, Dispatcher dispatcher, DiagnosticLog? log = null)
@@ -127,17 +135,61 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
             covers = true;
         }
 
-        if (covers != _coversMonitor)
-        {
-            _coversMonitor = covers;
-            _log?.Info("FullscreenVideo", $"ForegroundCoversMonitor -> {covers}");
-            ForegroundCoversMonitorChanged?.Invoke(covers);
-        }
+        PublishCoversMonitor(covers);
 
         if (next == _suppressed) return;
         _suppressed = next;
         _log?.Info("FullscreenVideo", $"Suppression -> {next}");
         SuppressionChanged?.Invoke(next);
+    }
+
+    /// <summary>
+    /// Publish the covers-monitor edge, with asymmetric hysteresis on the falling edge.
+    ///
+    /// Measured on real hardware: while a game is running this predicate does not settle. It
+    /// flipped False/True repeatedly within the same second, over and over, for the whole
+    /// session. Each flip is a visible state change for the notch — the strip retracts and
+    /// comes back — so the raw signal makes the notch unusable in exactly the situation the
+    /// retraction exists for. The cause is upstream and not ours to fix: a game's foreground
+    /// window genuinely stops covering its monitor for brief moments (overlays, focus churn,
+    /// the game's own child windows).
+    ///
+    /// The asymmetry is the same one the rest of this feature already commits to. Retracting
+    /// is cheap and a strip left over a game is the expensive failure, so a rising edge is
+    /// published immediately. A falling edge is a claim that the game is *gone*, which is
+    /// exactly what a transient blip looks like, so it must hold for <see cref="UncoverSettleMs"/>
+    /// of continuous evidence before it is believed.
+    ///
+    /// Uses TickCount64 rather than DateTime: it is monotonic, so a clock adjustment cannot
+    /// make a pending un-cover appear to have settled hours ago.
+    /// </summary>
+    private void PublishCoversMonitor(bool covers)
+    {
+        if (covers)
+        {
+            _uncoveredSinceTicks = null;
+            if (_coversMonitor) return;
+            _coversMonitor = true;
+            _log?.Info("FullscreenVideo", "ForegroundCoversMonitor -> True");
+            ForegroundCoversMonitorChanged?.Invoke(true);
+            return;
+        }
+
+        if (!_coversMonitor) return;
+
+        var now = Environment.TickCount64;
+        if (_uncoveredSinceTicks is null)
+        {
+            _uncoveredSinceTicks = now;
+            return;
+        }
+
+        if (now - _uncoveredSinceTicks.Value < UncoverSettleMs) return;
+
+        _uncoveredSinceTicks = null;
+        _coversMonitor = false;
+        _log?.Info("FullscreenVideo", $"ForegroundCoversMonitor -> False (settled for {UncoverSettleMs}ms)");
+        ForegroundCoversMonitorChanged?.Invoke(false);
     }
 
     private static bool ForegroundCoversItsMonitor(out string processName)

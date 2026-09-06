@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -140,12 +140,27 @@ public sealed class OsdHost : BandWindow
         ApplyPresentationMode();
     }
 
-    private IOsdPresentation BuildPresentation() => _settings.Current.Presentation switch
-    {
-        PresentationMode.AmbientNotch =>
-            new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip, _log),
-        _ => new ClassicPresentation(this),
-    };
+    // While a window covers the monitor, the notch does not merely hide its strip — it stops
+    // being a notch. The spec's phrase for the covered state is "behave like Classic", and the
+    // first real session showed how much that phrase was carrying: retraction hid the strip but
+    // Reposition() still pinned the OSD to top-centre, so a volume key in a game put the card in
+    // the dead centre of the field of view. That is the single most intrusive spot on the screen,
+    // and the user's own Classic anchor sat near the bottom, chosen deliberately.
+    //
+    // Building Classic here makes the fallback literal rather than partial: the anchor, the edge
+    // margin, the card's shape and the transition all come from Classic, because the object
+    // driving them IS Classic. It also means there is exactly one place that decides what the
+    // OSD currently is, instead of a covered-state special case in each of them.
+    //
+    // Safe to rebuild on this edge only because FullscreenVideoWatcher now applies hysteresis to
+    // the falling edge: the raw signal flapped several times a second during gameplay, which
+    // would have thrashed presentations here.
+    private bool WantsNotch =>
+        _settings.Current.Presentation == PresentationMode.AmbientNotch && !_coversMonitor;
+
+    private IOsdPresentation BuildPresentation() => WantsNotch
+        ? new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip, _log)
+        : new ClassicPresentation(this);
 
     // Switching modes rebuilds the presentation and returns the window to that mode's rest
     // state. Both directions need cleaning up after the other: Classic leaves Opacity at 0
@@ -196,7 +211,9 @@ public sealed class OsdHost : BandWindow
         // (e.g. a settings save) landing while a fullscreen window is covering the monitor
         // must not restart the poller, or hovering into the strip's screen region would
         // descend the card right back on top of whatever is covered.
-        if (_presentation is AmbientNotchPresentation && !_coversMonitor) _hoverPoller.Start();
+        // No _coversMonitor check needed: BuildPresentation returns Classic while covered, so
+        // a notch presentation existing at all already means nothing is covering the monitor.
+        if (_presentation is AmbientNotchPresentation) _hoverPoller.Start();
         else _hoverPoller.Stop();
 
         // Recorded because the mode a run is actually in cannot be recovered any other way,
@@ -216,86 +233,35 @@ public sealed class OsdHost : BandWindow
                 : string.Empty));
     }
 
-    /// <summary>Called when a window starts or stops covering its monitor. The Ambient Notch
-    /// retracts entirely while covered and returns afterwards; Classic ignores it.
+    /// <summary>
+    /// Called when a window starts or stops covering the monitor. Classic ignores it entirely.
     ///
-    /// One rule, no game-versus-video classifier: a persistent strip over a fullscreen film is
-    /// as unwelcome as one over a game, and a rule with no classifier in it has no classifier
-    /// to get wrong.</summary>
+    /// For the notch this is a mode change, not a visibility tweak. The spec's phrase for the
+    /// covered state is "behave like Classic", and the first real session showed that hiding
+    /// the strip alone does not deliver it: Reposition() still pinned the OSD to top-centre, so
+    /// a volume key inside a game put the card in the dead centre of the field of view, while
+    /// the user's own Classic anchor sat near the bottom of the screen where they had put it.
+    ///
+    /// So the covered state builds ClassicPresentation outright (see BuildPresentation), and
+    /// this handler just re-runs the mode switch. That teardown already does everything the
+    /// covered state needs and used to be duplicated here: it stops the hide timer, clears both
+    /// the opacity and content-offset animations, clears _isFadingIn and _isFadingOut — which
+    /// matters because removing a clock does not raise its Completed handler, so the flags would
+    /// otherwise strand — reshapes the card, repositions, and starts or stops the hover poller.
+    ///
+    /// Rebuilding on this edge is only affordable because FullscreenVideoWatcher applies
+    /// hysteresis to the falling edge. The raw signal flapped several times a second during
+    /// gameplay; against that, this would have thrashed presentation objects continuously.
+    /// </summary>
     public void OnForegroundCoversMonitorChanged(bool covers)
     {
+        if (_coversMonitor == covers) return;
         _coversMonitor = covers;
 
-        if (_presentation is not AmbientNotchPresentation notch) return;
+        // Only the notch has a covered state to fall back from; Classic is already Classic.
+        if (_settings.Current.Presentation != PresentationMode.AmbientNotch) return;
 
-        // Both branches below clear _isFadingIn and _isFadingOut before settling the notch,
-        // for one shared reason. A cover or un-cover can land mid-transition (ShowOsd's 220 ms
-        // AnimateToVisible or FadeOutAndHide's 260 ms AnimateToRest still running — e.g. a
-        // volume key pressed right as alt-tab hands focus to the game, or an alt-tab back out
-        // moments after one). Retract() and Park() both begin with
-        // BeginAnimation(ContentOffsetProperty, null), which removes that clock WITHOUT firing
-        // its Completed handler — WPF does not raise Completed for a clock removed or replaced
-        // this way (established in Task 6's review) — so the callback that would have cleared
-        // the flag never runs. Left stranded true, _isFadingIn makes the next ShowOsd's
-        // "wasFadingOut || !_isFadingIn" guard see a fade it thinks is still in flight and
-        // start no animation at all, so a volume key would show nothing; and _isFadingOut makes
-        // FadeOutAndHide's IsClickThrough resync unreachable, leaving the parked strip
-        // hit-testable. Every other transition teardown (FadeOutAndHide, ApplyPresentationMode)
-        // clears both explicitly for the same reason; these two must too.
-        if (covers)
-        {
-            // Stop the hover poller before the hide timer, not after: NotchHoverPoller.Stop()
-            // can synchronously raise a synthetic HoverChanged(false) if the cursor was inside
-            // the strip when the game took the foreground, and OnStripHoverChanged reacts to a
-            // hover-out in two ways that both need to lose to the lines below. First, it can
-            // call RestartHideTimer — stopping the hide timer AFTER the poller guarantees any
-            // timer resurrected that way is killed here, in the same synchronous call, before
-            // the dispatcher ever gets a chance to tick it, instead of racing a timer that fades
-            // the card back in over the game a few seconds later. Second, its trailing
-            // "IsClickThrough = !_presentation.WantsHitTesting" runs too and would set
-            // IsClickThrough false while the card is still descended — harmless only because
-            // the explicit "IsClickThrough = true" two lines below runs after it and wins; swap
-            // the order and that assignment would stick instead.
-            _hoverPoller.Stop();
-            _hideTimer?.Stop();
-            IsClickThrough = true;
-
-            // See the shared note above the branch for why both flags are cleared here.
-            _isFadingIn = false;
-            _isFadingOut = false;
-            notch.Retract();
-        }
-        else
-        {
-            // Retract() left _isRetracted set. Park() is the only thing that clears it (see
-            // AmbientNotchPresentation.OnContentMeasured). Park() must run BEFORE Reposition():
-            // Reposition() ends by calling OnContentMeasured, which checks _isRetracted first
-            // and — if it were still true here — would call Retract() again instead of settling
-            // at the freshly measured resting offset, so the strip would never come back.
-            // Calling Park() first clears the flag, so the OnContentMeasured call inside
-            // Reposition() takes the _isParked branch instead and re-parks at the offset for
-            // whatever the content measures at right now (it may have changed size while
-            // covered — a media card appearing or going away).
-            //
-            // See the shared note above the branch for why both flags are cleared here.
-            _isFadingIn = false;
-            _isFadingOut = false;
-            notch.Park();
-            Reposition();
-
-            // Park() has just re-parked, so WantsHitTesting now reports the resting value.
-            // FadeOutAndHide's resync — the only other path that turns click-through back ON —
-            // is unreachable here: its completion callback was removed with the animation Park()
-            // cleared. Without this line the strip un-covers hit-testable and stays that way
-            // until some later full show/hide cycle, exactly the startup defect the Loaded
-            // handler in the constructor fixes. Deliberately before _hoverPoller.Start(): Start()
-            // can synchronously raise HoverChanged(true) if the cursor is already inside the
-            // strip's region, and the ShowOsd that follows sets IsClickThrough false for the
-            // descended card — assigning after Start() would clobber that back to true.
-            IsClickThrough = !_presentation.WantsHitTesting;
-
-            _hoverPoller.Start();
-        }
+        ApplyPresentationMode();
     }
 
     private void OnThemeApplied()
@@ -531,13 +497,6 @@ public sealed class OsdHost : BandWindow
             // covers every path back down to descended. Neither one alone is enough: this
             // one only ever turns click-through ON, ShowOsd's only ever turns it OFF.
             IsClickThrough = !_presentation.WantsHitTesting;
-
-            // Re-parking while a window still covers the monitor means re-parking a strip on
-            // top of it. The OSD is deliberately allowed to appear over a game — retraction is
-            // not suppression — but it has to go back to retracted rather than parked when it
-            // leaves, or one volume key permanently restores the strip: the covers-monitor
-            // signal is edge-triggered, so nothing raises it again while the game stays up.
-            if (_coversMonitor && _presentation is AmbientNotchPresentation covered) covered.Retract();
         });
     }
 
@@ -560,7 +519,10 @@ public sealed class OsdHost : BandWindow
         // Settings disables the position editor in notch mode, but the stored Position value
         // survives a mode switch untouched (deliberately, so switching back to Classic restores
         // the user's anchor exactly), which means it is still BottomCenter here for most users.
-        var anchor = m.Presentation == PresentationMode.AmbientNotch ? OsdPosition.TopCenter : m.Position;
+        // Reads the ACTIVE presentation rather than the setting: while a covering window is up
+        // the notch falls back to Classic wholesale, and that includes anchoring where the user
+        // put their OSD instead of the top of the screen.
+        var anchor = _presentation is AmbientNotchPresentation ? OsdPosition.TopCenter : m.Position;
 
         (Left, Top) = anchor switch
         {
