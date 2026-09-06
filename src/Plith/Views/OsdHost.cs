@@ -192,6 +192,22 @@ public sealed class OsdHost : BandWindow
         // descend the card right back on top of whatever is covered.
         if (_presentation is AmbientNotchPresentation && !_coversMonitor) _hoverPoller.Start();
         else _hoverPoller.Stop();
+
+        // Recorded because the mode a run is actually in cannot be recovered any other way,
+        // and almost every manual check in docs/PHASE6-VERIFICATION.md is conditional on it.
+        // Without this line "the strip never appeared" and "the mode was never applied" look
+        // identical from a log, which is the same ambiguity UiAccess.Describe() exists to
+        // remove — and the same one that cost real time to rediscover in Phase 5.
+        // IsClickThrough is included because the notch parks click-through, and whether that
+        // actually took effect is the single highest-risk unverified behaviour on this branch:
+        // BandWindow's setter silently no-ops until the window is loaded.
+        _log?.Info("OsdHost",
+            $"Presentation applied: {_settings.Current.Presentation}" +
+            $", clickThrough={IsClickThrough}" +
+            $", coversMonitor={_coversMonitor}" +
+            (_presentation is AmbientNotchPresentation n
+                ? $", parked={n.IsAtRest(1.0)}, stripHeight={_settings.Current.NotchStripHeightDip:0.#}"
+                : string.Empty));
     }
 
     /// <summary>Called when a window starts or stops covering its monitor. The Ambient Notch
