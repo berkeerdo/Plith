@@ -5,16 +5,17 @@ tracks the checks that need a person, the same way `docs/PHASE5-VERIFICATION.md`
 for the same reason: no test in this repository can observe a rendered pixel or a running
 animation, so an unrun check must never be recorded as a pass.
 
-This entry covers **Task 6 only** — `AmbientNotchPresentation` and the `OsdHost` mode switch.
-Later tasks in this phase (hover-to-expand, the fullscreen retraction signal, the position
-editor's notch behaviour, etc.) will add their own sections here as they land.
+This entry covers **Task 6 and Task 7** — `AmbientNotchPresentation`, the `OsdHost` mode
+switch, and hover-to-descend via `NotchHoverPoller`. Later tasks in this phase (the
+fullscreen retraction signal, the position editor's notch behaviour, etc.) will add their
+own sections here as they land.
 
 ---
 
-## 0. What is automated as of Task 6
+## 0. What is automated as of Task 7
 
 - `dotnet build src/Plith/Plith.csproj -c Debug` — 0 warnings, 0 errors.
-- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 158/158 passing.
+- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 162/162 passing.
 - `pwsh -File scripts/check-a11y.ps1` — exit 0.
 
 None of the above exercises `AmbientNotchPresentation` itself: both it and `ClassicPresentation`
@@ -22,6 +23,12 @@ hold a `BandWindow`, which is a `ContentControl` behind a native `HwndSource` th
 non-STA test suite cannot construct. `PresentationPolicy` — the pure predicates the two adapters
 delegate to — is unit-tested, but the adapters' WPF plumbing (the animations, `BeginAnimation`
 calls, `SetStrip`, and the `OsdHost.ApplyPresentationMode` wiring) is not.
+
+Task 7's `NotchHoverPoller` holds a `DispatcherTimer` and P/Invokes `GetCursorPos`, so it is in
+the same boat: the headless suite cannot exercise it end to end either. The pure geometry it
+calls — `NotchGeometry.StripRect`, `NotchGeometry.PhysicalToDip`, `NotchGeometry.IsInsideStrip`
+— is unit-tested; the timer, the P/Invoke, and the `OnStripHoverChanged` wiring in `OsdHost` are
+not.
 
 ---
 
@@ -99,6 +106,49 @@ swallow clicks meant for window-maximize, browser tabs, or Snap Layouts.
 |---|---|---|---|
 | 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the strip | Snap/maximize works as if the strip were not there | The strip intercepts the drag or click |
 | 2.2 | Click through the strip's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
+
+---
+
+## 3. Hover-to-descend and the click-through toggle (Task 7)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing Task 7 — manual GUI verification in this project is a human
+> step, and an agent attempting it has previously caused real harm. The checks below are
+> recorded exactly as open, not as passed on the strength of the code reading correct.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under `[Osd]`,
+restart Plith, and make sure `HoverKeepAlive=true` (its default).
+
+**Why this section matters more than it looks:** `BandWindow.IsClickThrough` has always
+supported assignment after window creation (`ToggleClickThrough`, gated on
+`IsLoaded && HasSourceCreated`), but that path has never actually executed anywhere in Plith
+before this task. `OsdHost` sets `IsClickThrough = false` once in its own constructor, before
+`CreateWindow()` runs — i.e. while `HasSourceCreated` is still `false` — so every prior call to
+the `IsClickThrough` setter has hit the guard and returned without touching the window styles.
+Task 7's `OnStripHoverChanged` and `FadeOutAndHide` are the first real callers. If the guard
+turns out to skip the toggle in practice (for example because `IsLoaded` reads `false` on a
+`BandWindow` at the moment the toggle fires, which has never been observed one way or the
+other), the failure mode is asymmetric and easy to misread: the strip would either keep
+swallowing clicks at the top edge permanently, or refuse to become click-through once
+descended, and nothing in the build/test/lint output would show it. If checks 3.3, 3.4, or 3.5
+below fail, this guard is the first thing to check — the fix would be to route the toggle
+through the same `ApplyWindowStyles` path `Activatable` and `TopMost` already use, neither of
+which has an `IsLoaded` guard.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 3.1 | Move the cursor onto the parked strip | The notch descends into the full card | Nothing happens, or the descent needs an unreasonably long dwell |
+| 3.2 | Move the cursor away from the descended card | The notch retracts back to the strip after the hide timer elapses | The notch stays down indefinitely, or retracts instantly with no hold time |
+| 3.3 | While descended, click a media transport button | It responds | The click is swallowed (see the `IsClickThrough`/`IsLoaded` note above) |
+| 3.4 | While parked (strip only, not descended), drag a window to the top edge of the screen | It maximises — the strip did not eat the drag | The drag is intercepted by the strip |
+| 3.5 | While parked, click a browser tab (or any UI) directly under the strip | It activates normally | The click is swallowed |
+
+**What to also note while running 3.1–3.2:** the poller compares cursor position against
+`NotchGeometry.StripRect` every 60 ms via `GetCursorPos` (physical pixels) converted through
+`NotchGeometry.PhysicalToDip`. On a non-100% display scale this is the one place a mismatch
+would show up as a strip that is hoverable in the wrong screen location — worth specifically
+trying on a scaled monitor if one is available, not just the primary display.
 
 ---
 

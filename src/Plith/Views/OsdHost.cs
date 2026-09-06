@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
+using System.Windows.Media;
 using System.Windows.Threading;
 using Plith.Cards;
 using Plith.Interop;
@@ -17,6 +18,11 @@ namespace Plith.Views;
 /// Desktop otherwise). Replaces the Phase 1 OsdWindow : Window approach, which
 /// could not draw above exclusive fullscreen games.
 /// </summary>
+// CA1001: OsdHost owns _hoverPoller (IDisposable). It's released in the Application.Exit
+// handler wired up below, the same pattern BandWindow itself uses for _hwndSource — see
+// the SuppressMessage on BandWindow for why this class doesn't implement IDisposable either.
+[System.Diagnostics.CodeAnalysis.SuppressMessage("Design", "CA1001:Types that own disposable fields should be disposable",
+    Justification = "_hoverPoller is released in the Application.Exit handler wired in the constructor; WPF visual tree owns the rest of the lifecycle.")]
 public sealed class OsdHost : BandWindow
 {
     // Magnet radius: while dragging or free-clicking, the OSD's center snaps to the
@@ -30,6 +36,7 @@ public sealed class OsdHost : BandWindow
     private readonly CardHost _cardHost;
     private readonly DiagnosticLog? _log = new();
     private IOsdPresentation _presentation;
+    private readonly NotchHoverPoller _hoverPoller;
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -67,6 +74,9 @@ public sealed class OsdHost : BandWindow
         _cardHost = cardHost;
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
+        _hoverPoller = new NotchHoverPoller(Dispatcher);
+        _hoverPoller.HoverChanged += OnStripHoverChanged;
+        Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
 
         ZBandID = NativeMethods.GetTopMostZBandID();
         // Recorded once at startup because it silently decides whether the OSD can cover an
@@ -148,6 +158,18 @@ public sealed class OsdHost : BandWindow
             Opacity = 0;
             Hide();
         }
+
+        // Started/stopped here rather than in the branches above so it happens after
+        // Reposition() has already published a fresh StripRect for the notch case, and after
+        // _presentation has already been reassigned in both cases. The latter matters: Stop()
+        // can raise a synthetic HoverChanged(false) if the poller thought the cursor was still
+        // inside the strip when the mode switched away from notch, and by the time that fires
+        // here, _presentation is already the new ClassicPresentation — so OnStripHoverChanged's
+        // own "not AmbientNotchPresentation" guard discards it instead of restarting a hide
+        // timer or toggling IsClickThrough for a mode switch that has already settled its own
+        // state.
+        if (_presentation is AmbientNotchPresentation) _hoverPoller.Start();
+        else _hoverPoller.Stop();
     }
 
     private void OnThemeApplied()
@@ -204,6 +226,41 @@ public sealed class OsdHost : BandWindow
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
         _presentation.SnapToVisible(Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0);
+    }
+
+    // Entering the parked strip descends the notch and makes the panel interactive; leaving
+    // hands back to the ordinary hide timer. IsClickThrough is toggled here rather than
+    // inside the presentation because it is a window-level concern and OsdHost owns the
+    // window — but it is deliberately re-DERIVED from _presentation.WantsHitTesting rather
+    // than asserted as an independent true/false, so this handler can never disagree with
+    // WantsHitTesting about what "hit-testable" means. Forcing click-through back on the
+    // instant the cursor leaves the strip (before the retract animation even starts) would
+    // be wrong: the card is still fully descended at that point, so WantsHitTesting is still
+    // true and a media transport button underneath it must still receive the click. The sync
+    // below reflects that: on entry it goes false immediately, because ShowOsd's
+    // AnimateToVisible/SnapToVisible flips the presentation's parked flag synchronously,
+    // before any animation runs; on exit it stays false until AnimateToRest actually
+    // completes and re-parks, which FadeOutAndHide re-syncs below.
+    // Note this is the first code in Plith to change IsClickThrough after the HWND exists —
+    // see the manual check in docs/PHASE6-VERIFICATION.md.
+    private void OnStripHoverChanged(bool inside)
+    {
+        if (_isEditMode) return;
+        if (!_settings.Current.HoverKeepAlive) return;
+        if (_cardHost.Suppressor?.IsSuppressed == true) return;
+        if (_presentation is not AmbientNotchPresentation) return;
+
+        if (inside)
+        {
+            _hideTimer?.Stop();
+            ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
+        }
+        else if (_currentVisibleFor > TimeSpan.Zero && !_isFadingOut)
+        {
+            RestartHideTimer(_currentVisibleFor);
+        }
+
+        IsClickThrough = !_presentation.WantsHitTesting;
     }
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
@@ -300,7 +357,14 @@ public sealed class OsdHost : BandWindow
         _isFadingIn = false;
         _presentation.AnimateToRest(() =>
         {
-            if (_showGeneration == gen) _isFadingOut = false;
+            if (_showGeneration != gen) return;
+            _isFadingOut = false;
+            // The presentation has just re-parked (AnimateToRest's own completion runs before
+            // this callback), so WantsHitTesting now reports the resting value. Re-syncing
+            // here — rather than only from OnStripHoverChanged — covers every path back to
+            // rest, hover-triggered or not (a volume-key show that nobody hovered away from
+            // still needs the strip to stop swallowing clicks once it re-parks).
+            IsClickThrough = !_presentation.WantsHitTesting;
         });
     }
 
@@ -334,6 +398,19 @@ public sealed class OsdHost : BandWindow
             OsdPosition.Custom       => CustomAnchor(area, w, h, m.CustomPositionXPercent, m.CustomPositionYPercent),
             _                        => (area.Left + (area.Width - w) / 2, area.Bottom - h - _presentation.EdgeMarginDip),
         };
+
+        // Publish the strip's screen rectangle and the display's DPI scale to the poller so
+        // it can compare against a fresh GetCursorPos reading. Both are computed here, right
+        // after Left/Top settle, rather than inside the poller itself, which has no route to
+        // either value on its own — NotchGeometry.PhysicalToDip is the only place physical
+        // pixels and DIP meet; StripRect and DpiScale below are DIP inputs to it, not
+        // converted values themselves.
+        if (_presentation is AmbientNotchPresentation)
+        {
+            _hoverPoller.StripRect = NotchGeometry.StripRect(
+                Left, Top, w, _settings.Current.NotchStripHeightDip, OsdContent.ContentInsetDip);
+            _hoverPoller.DpiScale = VisualTreeHelper.GetDpi(_content).DpiScaleX;
+        }
     }
 
     // Custom is stored as 0..1 fractions of the monitor working area, marking the
