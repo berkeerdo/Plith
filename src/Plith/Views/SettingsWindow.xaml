@@ -39,11 +39,6 @@
                 <x:Type TypeName="svc:ThemeMode" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
-        <ObjectDataProvider x:Key="PresentationModes" MethodName="GetValues" ObjectType="{x:Type svc:PresentationMode}">
-            <ObjectDataProvider.MethodParameters>
-                <x:Type TypeName="svc:PresentationMode" />
-            </ObjectDataProvider.MethodParameters>
-        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -333,12 +328,20 @@
                                     <TextBlock Style="{StaticResource RowHintStyle}"
                                                Text="Classic OSD fades in place wherever you put it. Ambient Notch parks a thin strip at the top of the screen that slides down when something changes." />
                                 </StackPanel>
+                                <!-- Spelled out as explicit items rather than bound to the enum
+                                     values so the user reads "Classic OSD", not "ClassicOsd".
+                                     SelectedValuePath="Tag" keeps the selected value a
+                                     PresentationMode, so nothing about what gets persisted
+                                     changes. -->
                                 <ComboBox x:Name="PresentationCombo"
                                           Grid.Column="1"
                                           Style="{StaticResource ModernComboStyle}"
-                                          ItemsSource="{Binding Source={StaticResource PresentationModes}}"
+                                          SelectedValuePath="Tag"
                                           VerticalAlignment="Center"
-                                          AutomationProperties.Name="Presentation mode" />
+                                          AutomationProperties.Name="Presentation mode">
+                                    <ComboBoxItem Content="Classic OSD" Tag="{x:Static svc:PresentationMode.ClassicOsd}" />
+                                    <ComboBoxItem Content="Ambient Notch" Tag="{x:Static svc:PresentationMode.AmbientNotch}" />
+                                </ComboBox>
                             </Grid>
                         </Border>
 

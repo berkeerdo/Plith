@@ -44,11 +44,11 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
 
     public event Action<bool>? SuppressionChanged;
 
-    /// <summary>True while the foreground window covers its monitor. Published separately
-    /// from suppression because the notch reacts to it differently: suppression means "do not
-    /// show at all", this means "retract the parked strip and behave like Classic".</summary>
-    public bool ForegroundCoversMonitor => _coversMonitor;
-
+    /// <summary>Raised when the foreground window starts or stops covering its monitor.
+    /// Published separately from suppression because the notch reacts to it differently:
+    /// suppression means "do not show at all", this means "retract the parked strip and behave
+    /// like Classic". Edge-triggered only — there is deliberately no level-triggered property
+    /// beside it, because nothing ever needed to poll the current value.</summary>
     public event Action<bool>? ForegroundCoversMonitorChanged;
 
     public void Start()

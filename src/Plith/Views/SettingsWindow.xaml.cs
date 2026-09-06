@@ -532,7 +532,7 @@ public partial class SettingsWindow : Window
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
             AutoStartToggle.IsChecked = m.AutoStart;
             ThemeCombo.SelectedItem = m.Theme;
-            PresentationCombo.SelectedItem = m.Presentation;
+            PresentationCombo.SelectedValue = m.Presentation;
             StripHeightSlider.Value = m.NotchStripHeightDip;
         }
         finally
@@ -657,7 +657,7 @@ public partial class SettingsWindow : Window
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
-        if (PresentationCombo.SelectedItem is PresentationMode p) m.Presentation = p;
+        if (PresentationCombo.SelectedValue is PresentationMode p) m.Presentation = p;
         m.NotchStripHeightDip = StripHeightSlider.Value;
 
         _settings.Save(m);

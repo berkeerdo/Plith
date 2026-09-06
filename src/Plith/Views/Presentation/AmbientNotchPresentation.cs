@@ -59,10 +59,6 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
     public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, _isParked);
 
-    /// <summary>True while only the strip is showing. Read by the hover poller and the
-    /// retraction signal.</summary>
-    public bool IsParked => _isParked;
-
     public void OnContentMeasured(Size contentSize)
     {
         _restingOffset = NotchGeometry.RestingOffset(

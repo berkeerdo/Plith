@@ -22,9 +22,16 @@ public static class PresentationPolicy
     /// True when the host is showing nothing the user would read as "the OSD is up".
     ///
     /// Classic answers with opacity. Notch cannot: it is fully opaque while parked, so it
-    /// answers with whether the content is still pushed above the top edge. This is what
-    /// OsdHost's ShowOsd and HideOsd both consult; reading opacity there would make ShowOsd
-    /// think the notch was already visible and skip the descent entirely.
+    /// answers with whether the content is still pushed above the top edge. Reading opacity
+    /// for the notch would make ShowOsd think it was already visible and skip the descent
+    /// entirely — which is why both modes answer this one question through here rather than
+    /// through the window's opacity directly.
+    ///
+    /// Only OsdHost's ShowOsd consults this predicate: it asks whether a show transition still
+    /// has work to do. HideOsd consults <see cref="IsFullyHidden"/> instead, which asks whether
+    /// there is anything on screen to take down. The two questions have different answers
+    /// mid-transition, which is why they are separate predicates — see IsFullyHidden for the
+    /// defect that conflating them produces.
     /// </summary>
     public static bool IsAtRest(PresentationMode mode, double opacity, double targetOpacity, bool isParked)
         => mode == PresentationMode.AmbientNotch ? isParked : opacity < targetOpacity - 0.01;

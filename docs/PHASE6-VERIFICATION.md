@@ -173,6 +173,16 @@ stale rectangle/scale until the next show-from-rest calls `Reposition()` again �
 can go unhoverable until that next show. Recorded here as a known limitation deferred out of
 this round, not as something observed on a run.
 
+**Second known limitation — mixed-DPI multi-monitor.** This is a different case from the one
+above, not the same one restated: it needs no DPI *change* at all to bite. `_hoverPoller.DpiScale`
+is a single scalar, so `NotchGeometry.PhysicalToDip` converts the whole virtual desktop at one
+scale factor. On a desktop where two displays run different scale factors, every physical cursor
+reading taken on the other display is converted with the OSD monitor's scale, so the strip is
+hoverable in the wrong screen region — and the further the cursor is from the virtual-desktop
+origin, the larger the error. Correct handling needs a per-monitor scale looked up from the point
+being converted rather than one cached scalar. Recorded as a known limitation, not as an
+observation: no mixed-DPI desktop has been run against this build.
+
 ---
 
 ## 4. Retraction while a window covers the monitor (Task 8)

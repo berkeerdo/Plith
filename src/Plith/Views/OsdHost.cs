@@ -105,6 +105,19 @@ public sealed class OsdHost : BandWindow
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
 
+        // The IsClickThrough setter no-ops until the window is loaded (see BandWindow.Ext),
+        // and Loaded is raised asynchronously — after App.OnStartup's synchronous constructor
+        // chain has already run ApplyPresentationMode below. So the value that call writes
+        // reaches the dependency property but never reaches the HWND's WS_EX_TRANSPARENT bit,
+        // which was fixed at CreateWindow() time from the IsClickThrough = false above.
+        // Without this re-assert the notch launches hit-testable and swallows clicks at the
+        // top of the screen — window drag-to-maximise, browser tabs, Snap Layouts — until the
+        // first full show/hide cycle happens to resync it. Derived from WantsHitTesting rather
+        // than asserted, like every other IsClickThrough write in this class, so it can never
+        // disagree with the presentation about what "hit-testable" means. _presentation is
+        // assigned at the top of this constructor, so it is non-null however early this fires.
+        Loaded += (_, _) => IsClickThrough = !_presentation.WantsHitTesting;
+
         // A settings save can change where the OSD sits (position / monitor), so re-anchor it
         // without waiting for the next pop. Card-level settings (colour thresholds, compact
         // mode) are owned by AudioCard and MediaCard and never travel through the shell.
@@ -193,6 +206,20 @@ public sealed class OsdHost : BandWindow
 
         if (_presentation is not AmbientNotchPresentation notch) return;
 
+        // Both branches below clear _isFadingIn and _isFadingOut before settling the notch,
+        // for one shared reason. A cover or un-cover can land mid-transition (ShowOsd's 220 ms
+        // AnimateToVisible or FadeOutAndHide's 260 ms AnimateToRest still running — e.g. a
+        // volume key pressed right as alt-tab hands focus to the game, or an alt-tab back out
+        // moments after one). Retract() and Park() both begin with
+        // BeginAnimation(ContentOffsetProperty, null), which removes that clock WITHOUT firing
+        // its Completed handler — WPF does not raise Completed for a clock removed or replaced
+        // this way (established in Task 6's review) — so the callback that would have cleared
+        // the flag never runs. Left stranded true, _isFadingIn makes the next ShowOsd's
+        // "wasFadingOut || !_isFadingIn" guard see a fade it thinks is still in flight and
+        // start no animation at all, so a volume key would show nothing; and _isFadingOut makes
+        // FadeOutAndHide's IsClickThrough resync unreachable, leaving the parked strip
+        // hit-testable. Every other transition teardown (FadeOutAndHide, ApplyPresentationMode)
+        // clears both explicitly for the same reason; these two must too.
         if (covers)
         {
             // Stop the hover poller before the hide timer, not after: NotchHoverPoller.Stop()
@@ -211,16 +238,7 @@ public sealed class OsdHost : BandWindow
             _hideTimer?.Stop();
             IsClickThrough = true;
 
-            // A cover can land mid-descend (ShowOsd's 220 ms AnimateToVisible still running,
-            // e.g. a volume key pressed right as alt-tab hands focus to the game).
-            // Retract()'s BeginAnimation(ContentOffsetProperty, null) removes that clock without
-            // firing its Completed handler — WPF does not raise Completed for a clock removed or
-            // replaced this way (established in Task 6's review) — so the callback that would
-            // have cleared _isFadingIn never runs. Left stranded true, the next ShowOsd's
-            // "wasFadingOut || !_isFadingIn" guard sees a fade it thinks is still in flight and
-            // starts no animation at all, so a volume key over the game would show nothing. Every
-            // other transition teardown (FadeOutAndHide, ApplyPresentationMode) clears both flags
-            // explicitly for the same reason; this one must too.
+            // See the shared note above the branch for why both flags are cleared here.
             _isFadingIn = false;
             _isFadingOut = false;
             notch.Retract();
@@ -236,8 +254,24 @@ public sealed class OsdHost : BandWindow
             // Reposition() takes the _isParked branch instead and re-parks at the offset for
             // whatever the content measures at right now (it may have changed size while
             // covered — a media card appearing or going away).
+            //
+            // See the shared note above the branch for why both flags are cleared here.
+            _isFadingIn = false;
+            _isFadingOut = false;
             notch.Park();
             Reposition();
+
+            // Park() has just re-parked, so WantsHitTesting now reports the resting value.
+            // FadeOutAndHide's resync — the only other path that turns click-through back ON —
+            // is unreachable here: its completion callback was removed with the animation Park()
+            // cleared. Without this line the strip un-covers hit-testable and stays that way
+            // until some later full show/hide cycle, exactly the startup defect the Loaded
+            // handler in the constructor fixes. Deliberately before _hoverPoller.Start(): Start()
+            // can synchronously raise HoverChanged(true) if the cursor is already inside the
+            // strip's region, and the ShowOsd that follows sets IsClickThrough false for the
+            // descended card — assigning after Start() would clobber that back to true.
+            IsClickThrough = !_presentation.WantsHitTesting;
+
             _hoverPoller.Start();
         }
     }
@@ -295,6 +329,16 @@ public sealed class OsdHost : BandWindow
         // suppressor entirely. Guard defensively rather than find out live.
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
+        // SnapToVisible below removes the in-flight fade-out (Classic) or retract (notch) clock,
+        // and WPF raises no Completed for a clock removed that way — so FadeOutAndHide's
+        // completion never runs and _isFadingOut would stick true forever. Both OnMouseLeave and
+        // OnStripHoverChanged's exit branch early-return on that flag, so no hide timer would
+        // ever be restarted: in Classic this stranded the OSD at full opacity until the next
+        // volume key (a defect that predates the notch), and in notch mode it additionally skips
+        // FadeOutAndHide's _coversMonitor re-retraction, leaving a descended card on screen over
+        // a game indefinitely. Cleared here rather than inside SnapToVisible because the flag is
+        // OsdHost's transition bookkeeping, not the presentation's.
+        _isFadingOut = false;
         // A show transition in flight is already on its way to fully visible. Snapping here
         // would clear its animation mid-descent (SnapToVisible's BeginAnimation(..., null))
         // and turn the notch's 220 ms slide into a jump — this is how the strip becoming
