@@ -36,8 +36,12 @@
       CA1838 — NativeFlyoutSuppressor uses StringBuilder for GetClassName; replacement
                by char[] is tracked but the suppressor itself is currently disabled
                (Explorer wedge issue). Re-evaluate when re-enabled in Phase 4 polish.
+      CA1859 — OsdHost._presentation is typed as the IOsdPresentation seam on purpose:
+               only ClassicPresentation exists today, but Task 4 adds a second
+               implementation (the Ambient Notch) selected at runtime. Narrowing the
+               field to the concrete type now would just have to be reverted next task.
     -->
-    <NoWarn>$(NoWarn);CA1707;CA1838</NoWarn>
+    <NoWarn>$(NoWarn);CA1707;CA1838;CA1859</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

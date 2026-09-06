@@ -1,12 +1,12 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
-using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Plith.Cards;
 using Plith.Interop;
 using Plith.Services;
 using Plith.ViewModels;
+using Plith.Views.Presentation;
 using WpfScreenHelper;
 
 namespace Plith.Views;
@@ -19,10 +19,6 @@ namespace Plith.Views;
 /// </summary>
 public sealed class OsdHost : BandWindow
 {
-    private const double EdgeMarginDip = 96;
-    private const int FadeInMs = 140;
-    private const int FadeOutMs = 220;
-
     // Magnet radius: while dragging or free-clicking, the OSD's center snaps to the
     // nearest 3x3 hotspot when it's within this many DIPs. Roomy enough for a strong
     // "pull" feel without preventing fine placement (Alt bypasses it completely).
@@ -33,6 +29,7 @@ public sealed class OsdHost : BandWindow
     private readonly ThemeService _theme;
     private readonly CardHost _cardHost;
     private readonly DiagnosticLog? _log = new();
+    private IOsdPresentation _presentation;
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -68,6 +65,7 @@ public sealed class OsdHost : BandWindow
         _theme = theme;
         _cardHost = cardHost;
         Shell = new OsdShellViewModel(cardHost);
+        _presentation = new ClassicPresentation(this);
 
         ZBandID = NativeMethods.GetTopMostZBandID();
         // Recorded once at startup because it silently decides whether the OSD can cover an
@@ -154,8 +152,7 @@ public sealed class OsdHost : BandWindow
         // suppressor entirely. Guard defensively rather than find out live.
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
-        BeginAnimation(OpacityProperty, null);
-        Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+        _presentation.SnapToVisible(Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0);
     }
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
@@ -187,51 +184,30 @@ public sealed class OsdHost : BandWindow
         _isFadingOut = false;
         _currentVisibleFor = visibleFor;
         double targetOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
-        bool wasHidden = Opacity < targetOpacity - 0.01;
+        bool wasAtRest = _presentation.IsAtRest;
 
-        if (wasHidden)
+        if (wasAtRest)
         {
             Reposition();
-            Show();   // BandWindow.Show — Visibility=Visible + SetWindowPos HWND_TOPMOST
+            _presentation.PrepareShow();
 
-            // Only start a fade-in when one is not already running toward this same target.
-            // Volume keys repeat far faster than FadeInMs, so a held or spammed key lands
-            // several events inside a single fade — and restarting the animation on each of
-            // them made the OSD pulse instead of staying up. Note also the absence of a
-            // BeginAnimation(OpacityProperty, null) here: clearing an animation reverts the
-            // property to its base value, which is 0 while the window is hidden, so the old
-            // clear-then-restart snapped the OSD back to fully invisible every time. A
-            // From-less DoubleAnimation hands off from the current animated value instead,
-            // which is what makes interrupting a fade-out look continuous.
             if (wasFadingOut || !_isFadingIn)
             {
-                // Logged on the transition only, not on every repeat, so a held volume key
-                // produces one line per appearance. This is the line that separates "the OSD
-                // was never asked to show" from "it was shown and something on top of it won":
-                // over a game in true exclusive fullscreen the display is scanned out from the
-                // game's own swapchain, so nothing composites over it however correctly the
-                // OSD behaves, and without this line the two cases look identical from a log.
                 _log?.Info("OsdHost",
-                    $"Show: fade-in at {Left:0},{Top:0} for {visibleFor.TotalMilliseconds:0}ms" +
-                    (wasFadingOut ? " (interrupting fade-out)" : string.Empty));
+                    $"Show: transition at {Left:0},{Top:0} for {visibleFor.TotalMilliseconds:0}ms" +
+                    (wasFadingOut ? " (interrupting hide)" : string.Empty));
 
                 _isFadingIn = true;
                 int gen = ++_fadeInGeneration;
-                var fadeIn = new DoubleAnimation(targetOpacity, TimeSpan.FromMilliseconds(FadeInMs))
-                {
-                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-                };
-                fadeIn.Completed += (_, _) =>
+                _presentation.AnimateToVisible(targetOpacity, () =>
                 {
                     if (_fadeInGeneration == gen) _isFadingIn = false;
-                };
-                BeginAnimation(OpacityProperty, fadeIn);
+                });
             }
         }
         else
         {
-            BeginAnimation(OpacityProperty, null);
-            Opacity = targetOpacity;
+            _presentation.SnapToVisible(targetOpacity);
             _isFadingIn = false;
         }
 
@@ -247,7 +223,7 @@ public sealed class OsdHost : BandWindow
     {
         if (_isEditMode) return;   // edit mode owns its own always-on visibility
         _hideTimer?.Stop();
-        if (Opacity < 0.01) return;
+        if (_presentation.IsAtRest) return;
         // Already on the way out — restarting the animation from the current opacity would
         // stretch the fade instead of shortening it.
         if (_isFadingOut) return;
@@ -259,19 +235,10 @@ public sealed class OsdHost : BandWindow
         var gen = _showGeneration;
         _isFadingOut = true;
         _isFadingIn = false;
-        var fadeOut = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(FadeOutMs))
+        _presentation.AnimateToRest(() =>
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
-        };
-        fadeOut.Completed += (_, _) =>
-        {
-            if (_showGeneration == gen)
-            {
-                Opacity = 0;
-                _isFadingOut = false;
-            }
-        };
-        BeginAnimation(OpacityProperty, fadeOut);
+            if (_showGeneration == gen) _isFadingOut = false;
+        });
     }
 
     private void Reposition()
@@ -287,14 +254,16 @@ public sealed class OsdHost : BandWindow
         var h = _content.DesiredSize.Height;
         if (w == 0 || h == 0) return;
 
+        _presentation.OnContentMeasured(new Size(w, h));
+
         (Left, Top) = m.Position switch
         {
-            OsdPosition.BottomCenter => (area.Left + (area.Width - w) / 2, area.Bottom - h - EdgeMarginDip),
-            OsdPosition.BottomRight  => (area.Right - w - EdgeMarginDip,   area.Bottom - h - EdgeMarginDip),
-            OsdPosition.TopCenter    => (area.Left + (area.Width - w) / 2, area.Top + EdgeMarginDip),
-            OsdPosition.TopRight     => (area.Right - w - EdgeMarginDip,   area.Top + EdgeMarginDip),
+            OsdPosition.BottomCenter => (area.Left + (area.Width - w) / 2, area.Bottom - h - _presentation.EdgeMarginDip),
+            OsdPosition.BottomRight  => (area.Right - w - _presentation.EdgeMarginDip,   area.Bottom - h - _presentation.EdgeMarginDip),
+            OsdPosition.TopCenter    => (area.Left + (area.Width - w) / 2, area.Top + _presentation.EdgeMarginDip),
+            OsdPosition.TopRight     => (area.Right - w - _presentation.EdgeMarginDip,   area.Top + _presentation.EdgeMarginDip),
             OsdPosition.Custom       => CustomAnchor(area, w, h, m.CustomPositionXPercent, m.CustomPositionYPercent),
-            _                        => (area.Left + (area.Width - w) / 2, area.Bottom - h - EdgeMarginDip),
+            _                        => (area.Left + (area.Width - w) / 2, area.Bottom - h - _presentation.EdgeMarginDip),
         };
     }
 
@@ -353,8 +322,7 @@ public sealed class OsdHost : BandWindow
         _isFadingOut = false;
 
         // Full opacity so the OSD is unmistakably visible above the dim layer.
-        BeginAnimation(OpacityProperty, null);
-        Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+        _presentation.SnapToVisible(Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0);
         Reposition();
         Show();
         ReassertTopmost();
@@ -445,9 +413,15 @@ public sealed class OsdHost : BandWindow
         SetOsdCenteredAt(screen.WorkingArea, w, h, absoluteCenter.X, absoluteCenter.Y);
     }
 
-    // Nine snap targets = {EdgeMarginDip, center, opposite-EdgeMarginDip} on each axis.
-    // Target values are OSD CENTRES (matching the persistence semantics), so a corner
-    // hotspot's centre sits EdgeMarginDip + w/2 from the working-area edge.
+    // The position editor's 3x3 hotspot grid is a Classic-only affordance (Task 8 disables
+    // the editor in notch mode). It keeps its own margin rather than following the active
+    // presentation's, whose notch value of 0 would collapse the outer hotspots onto the
+    // screen edges.
+    private const double EditorHotspotMarginDip = 96;
+
+    // Nine snap targets = {EditorHotspotMarginDip, center, opposite-EditorHotspotMarginDip} on
+    // each axis. Target values are OSD CENTRES (matching the persistence semantics), so a
+    // corner hotspot's centre sits EditorHotspotMarginDip + w/2 from the working-area edge.
     private static (double cx, double cy) MaybeSnapCenter(Rect area, double w, double h, double cx, double cy)
     {
         // Alt = free placement, no magnet.
@@ -455,15 +429,15 @@ public sealed class OsdHost : BandWindow
 
         double[] cxTargets =
         {
-            area.Left + EdgeMarginDip + w / 2,       // left column centre
+            area.Left + EditorHotspotMarginDip + w / 2,       // left column centre
             area.Left + area.Width / 2,               // centre column centre
-            area.Right - EdgeMarginDip - w / 2,       // right column centre
+            area.Right - EditorHotspotMarginDip - w / 2,       // right column centre
         };
         double[] cyTargets =
         {
-            area.Top + EdgeMarginDip + h / 2,        // top row centre
+            area.Top + EditorHotspotMarginDip + h / 2,        // top row centre
             area.Top + area.Height / 2,               // middle row centre
-            area.Bottom - EdgeMarginDip - h / 2,      // bottom row centre
+            area.Bottom - EditorHotspotMarginDip - h / 2,      // bottom row centre
         };
         foreach (var tx in cxTargets)
             if (Math.Abs(cx - tx) < SnapThresholdDip) { cx = tx; break; }
