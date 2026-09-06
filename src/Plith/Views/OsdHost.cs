@@ -115,7 +115,7 @@ public sealed class OsdHost : BandWindow
     private IOsdPresentation BuildPresentation() => _settings.Current.Presentation switch
     {
         PresentationMode.AmbientNotch =>
-            new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip),
+            new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip, _log),
         _ => new ClassicPresentation(this),
     };
 
@@ -319,7 +319,13 @@ public sealed class OsdHost : BandWindow
 
         _presentation.OnContentMeasured(new Size(w, h));
 
-        (Left, Top) = m.Position switch
+        // The notch is defined by sitting at the top edge; Position is a Classic-only choice.
+        // Settings disables the position editor in notch mode, but the stored Position value
+        // survives a mode switch untouched (deliberately, so switching back to Classic restores
+        // the user's anchor exactly), which means it is still BottomCenter here for most users.
+        var anchor = m.Presentation == PresentationMode.AmbientNotch ? OsdPosition.TopCenter : m.Position;
+
+        (Left, Top) = anchor switch
         {
             OsdPosition.BottomCenter => (area.Left + (area.Width - w) / 2, area.Bottom - h - _presentation.EdgeMarginDip),
             OsdPosition.BottomRight  => (area.Right - w - _presentation.EdgeMarginDip,   area.Bottom - h - _presentation.EdgeMarginDip),

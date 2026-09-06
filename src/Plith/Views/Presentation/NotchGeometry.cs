@@ -32,6 +32,16 @@ public static class NotchGeometry
         => -Math.Max(0, contentHeight - stripHeight - contentInset);
 
     /// <summary>
+    /// Y offset that takes the card fully off screen, leaving nothing but whatever the strip
+    /// element itself draws. Distinct from <see cref="RestingOffset"/>, which deliberately
+    /// leaves the card's bottom edge sitting at stripHeight: at rest that sliver is part of
+    /// the parked look, but when a window covers the monitor the card must contribute no
+    /// pixels at all, and collapsing the strip element alone leaves the sliver behind.
+    /// </summary>
+    public static double HiddenOffset(double contentHeight, double contentInset)
+        => -Math.Max(0, contentHeight - contentInset);
+
+    /// <summary>
     /// Screen rectangle of the visible strip, in DIP. <paramref name="windowLeft"/> and
     /// <paramref name="windowTop"/> are the values Reposition() computed, which are derived
     /// from Screen.WorkingArea — so a taskbar docked to the top moves this rectangle down

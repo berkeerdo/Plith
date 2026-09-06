@@ -43,6 +43,45 @@ public class NotchGeometryTests
     }
 
     [Fact]
+    public void HiddenOffset_TakesTheCardFullyOffScreen()
+    {
+        // 200 tall content: push up until only the inset (the drop-shadow margin) remains
+        // below the origin, i.e. nothing of the card's visible border is left on screen.
+        Assert.Equal(-186, NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset));
+    }
+
+    [Fact]
+    public void HiddenOffset_NeverPushesDown_WhenContentIsShorterThanTheInset()
+    {
+        Assert.Equal(0, NotchGeometry.HiddenOffset(contentHeight: 0, contentInset: Inset));
+    }
+
+    [Fact]
+    public void HiddenOffset_IsExactlyStripHeightMoreNegative_ThanRestingOffset()
+    {
+        // The distinction the fix depends on: RestingOffset leaves the card's bottom edge at
+        // stripHeight (part of the parked look), HiddenOffset leaves it at 0 (nothing on
+        // screen). For the same content/inset, the two must differ by exactly stripHeight.
+        const double stripHeight = 5;
+        var resting = NotchGeometry.RestingOffset(contentHeight: 200, stripHeight: stripHeight, contentInset: Inset);
+        var hidden = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
+        Assert.Equal(hidden, resting - stripHeight);
+    }
+
+    [Fact]
+    public void HiddenOffset_LeavesTheCardsBottomEdgeAtZero()
+    {
+        // The card's bottom edge, in the content's own coordinate space, sits at
+        // contentHeight - contentInset below the content origin (the inset is the drop-shadow
+        // margin the visible border starts inside of). Parking at HiddenOffset must bring that
+        // edge to exactly y = 0 — the top of the window — so nothing of the card draws above
+        // or below it.
+        const double contentHeight = 200;
+        var hidden = NotchGeometry.HiddenOffset(contentHeight, Inset);
+        Assert.Equal(0, hidden + (contentHeight - Inset));
+    }
+
+    [Fact]
     public void StripRect_SitsAtTheWindowTopAndInsideTheShadowInset()
     {
         var r = NotchGeometry.StripRect(

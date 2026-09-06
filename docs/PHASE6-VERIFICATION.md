@@ -52,6 +52,22 @@ That teardown/rebuild path only runs when a live settings change actually flips
 `SettingsModel.Presentation`, which is exactly the kind of runtime transition the automated
 suite cannot reach (`SettingsService.Changed` firing while a `BandWindow` is live).
 
+**Open question, not resolved in this fix round: the parked strip is drawn twice.**
+`Park()` leaves the card parked at `NotchGeometry.RestingOffset`, which by construction
+sits the card's own bottom edge exactly at `y = stripHeight` — the same band the dedicated
+`NotchStrip` border (`src/Plith/Views/OsdContent.xaml`) already covers. Both elements paint
+with `{DynamicResource OsdSurfaceBrush}`, so at rest the strip is, as far as the code goes,
+two overlapping surfaces in the same band: the `NotchStrip` Border, and a one-`stripHeight`-
+tall sliver of the parked card's own bottom edge (with its own corner radius and drop
+shadow, since it is the same `Border` the full card uses). Whether the intended parked look
+*is* that doubled edge, or whether the card should instead sit fully behind `NotchStrip` at
+`HiddenOffset` while parked (reserving `HiddenOffset` for the fullscreen-retraction case
+only), is a visual composition call this fix round deliberately did not make — it is a
+question about what looks right on a running build, not something a diff can settle. Check
+this during the section 1 manual pass: at rest (1.1), does the top edge read as one strip or
+as two overlapping edges/shadows? Neither outcome should be assumed; record what is actually
+seen.
+
 **Known environment limitation, carried over from Phase 5:** over an RDP session the band
 window's layered surface cannot be captured by any means (`BitBlt`, `BitBlt` with
 `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` were all tried and failed for the
