@@ -135,11 +135,37 @@ public partial class SettingsWindow : Window
     private void RefreshPositionSummary()
     {
         var m = _settings.Current;
+        // In notch mode the hint text is owned by UpdatePresentationDependentControls,
+        // which explains why the button is disabled rather than naming a position that
+        // was never applied. Leave it untouched here.
+        if (m.Presentation == PresentationMode.AmbientNotch) return;
         PositionSummary.Text = m.Position switch
         {
             OsdPosition.Custom => "Position: Custom (drag-placed). Click 'Set position' to move it again.",
             _                  => $"Position: {m.Position}. Click 'Set position' to open the overlay picker.",
         };
+    }
+
+    // Position edit mode drags the OSD and saves the result as OsdPosition.Custom. The notch
+    // is pinned to top-center, so letting the user through here would silently overwrite the
+    // pinned anchor with a Custom one and leave the notch somewhere it can never return from.
+    // The strip height row is Classic-irrelevant, so it appears under the inverse rule.
+    private void UpdatePresentationDependentControls()
+    {
+        bool isNotch = _settings.Current.Presentation == PresentationMode.AmbientNotch;
+
+        OpenPositionOverlayButton.IsEnabled = !isNotch;
+        OpenPositionOverlayButton.ToolTip = isNotch
+            ? "The Ambient Notch is pinned to the top of the screen. Switch to Classic OSD to place the OSD yourself."
+            : null;
+
+        // The hint text next to the button explains what the button does. When the button is
+        // disabled that sentence describes something the user cannot do, so say why instead.
+        PositionSummary.Text = isNotch
+            ? "The Ambient Notch is pinned to the top of the screen, so there is nothing to place. Switch to Classic OSD to choose a position."
+            : "Click 'Set position' to place the OSD anywhere on any monitor. A dim overlay with nine snap hotspots opens over your desktop.";
+
+        StripHeightRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void WireUpdateCheck()
@@ -506,11 +532,14 @@ public partial class SettingsWindow : Window
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
             AutoStartToggle.IsChecked = m.AutoStart;
             ThemeCombo.SelectedItem = m.Theme;
+            PresentationCombo.SelectedItem = m.Presentation;
+            StripHeightSlider.Value = m.NotchStripHeightDip;
         }
         finally
         {
             _loadingFromModel = false;
         }
+        UpdatePresentationDependentControls();
         SyncPreview();
     }
 
@@ -569,6 +598,19 @@ public partial class SettingsWindow : Window
         AutoStartToggle.Checked += (_, _) => AutoSave();
         AutoStartToggle.Unchecked += (_, _) => AutoSave();
         ThemeCombo.SelectionChanged += (_, _) => AutoSave();
+        PresentationCombo.SelectionChanged += (_, _) =>
+        {
+            AutoSave();
+            // Skip during LoadIntoUi for the same reason AutoSave does — LoadIntoUi calls
+            // UpdatePresentationDependentControls itself once every field is in place.
+            if (_loadingFromModel) return;
+            UpdatePresentationDependentControls();
+            // Restores the position-specific hint text ("Position: TopRight", etc.) once
+            // Classic is active again; RefreshPositionSummary is a no-op in notch mode, so
+            // this can never overwrite the "pinned to the top" message set just above.
+            RefreshPositionSummary();
+        };
+        StripHeightSlider.ValueChanged += (_, _) => AutoSave();
     }
 
     private void AutoSave()
@@ -615,6 +657,8 @@ public partial class SettingsWindow : Window
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
         m.AutoStart = AutoStartToggle.IsChecked == true;
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
+        if (PresentationCombo.SelectedItem is PresentationMode p) m.Presentation = p;
+        m.NotchStripHeightDip = StripHeightSlider.Value;
 
         _settings.Save(m);
         AutoStartService.Apply(m.AutoStart);

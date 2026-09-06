@@ -5,10 +5,11 @@ tracks the checks that need a person, the same way `docs/PHASE5-VERIFICATION.md`
 for the same reason: no test in this repository can observe a rendered pixel or a running
 animation, so an unrun check must never be recorded as a pass.
 
-This entry covers **Task 6, Task 7 and Task 8** — `AmbientNotchPresentation`, the `OsdHost`
-mode switch, hover-to-descend via `NotchHoverPoller`, and the fullscreen-cover retraction
-signal from `FullscreenVideoWatcher`. Later tasks in this phase (the position editor's notch
-behaviour, etc.) will add their own sections here as they land.
+This entry covers **Task 6, Task 7, Task 8 and Task 9** — `AmbientNotchPresentation`, the
+`OsdHost` mode switch, hover-to-descend via `NotchHoverPoller`, the fullscreen-cover retraction
+signal from `FullscreenVideoWatcher`, and the Settings UI's presentation picker, strip-height
+slider, and position-edit guard. Later tasks in this phase will add their own sections here as
+they land.
 
 ---
 
@@ -215,6 +216,41 @@ again through the normal path. Do not skip the "let it auto-hide" half of 4.2.
 during 4.1 — the same drop-shadow-bleed question section 1 already flagged as unresolved for
 `HiddenOffset`, and Task 8 is the first task that actually reaches `Retract()` in a running
 build.
+
+---
+
+## 5. Settings UI — mode picker, strip height, and the position guard (Task 9)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing Task 9 — manual GUI verification in this project is a human
+> step, and an agent attempting it has previously caused real harm. The checks below are
+> recorded exactly as open, not as passed on the strength of the code reading correct.
+
+**Setup:** launch Plith, open Settings, and find the new "Presentation" row at the top of the
+"On-screen display" card (immediately above "Position").
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 5.1 | Switch "Presentation" from Classic OSD to Ambient Notch | The notch appears live at the top of the screen with no restart — `OsdHost` rebuilds its presentation off `SettingsService.Changed` | Nothing changes on screen until Plith is restarted, or the OSD errors/crashes |
+| 5.2 | With Ambient Notch selected, look at the "Set position" row | The button is greyed out (disabled), and hovering it shows the tooltip "The Ambient Notch is pinned to the top of the screen. Switch to Classic OSD to place the OSD yourself.", and the hint text below "Position" reads "The Ambient Notch is pinned to the top of the screen, so there is nothing to place. Switch to Classic OSD to choose a position." | The button stays clickable, the tooltip is missing, or the hint text still describes clicking "Set position" |
+| 5.3 | With Ambient Notch selected, look for the "Notch strip height" row | It is visible, directly below "Presentation" (or below "Set position" once collapsed), with a slider running 2–24 | The row stays hidden, or shows the wrong range |
+| 5.4 | Drag the "Notch strip height" slider | The parked strip on screen visibly grows/shrinks in real time (or on next park) to match the slider value | The strip does not change, or only changes after a restart |
+| 5.5 | Switch back to Classic OSD | The notch disappears and the OSD behaves exactly as it did before switching (fade-in-place at the previous anchor), "Set position" re-enables with its tooltip cleared, and the hint text goes back to describing what the button does | The OSD keeps notch behaviour, the button stays disabled, or the position it restores to is not the anchor that was active before switching to notch mode |
+
+**Why 5.5 matters:** `Position` and `CustomPositionXPercent`/`CustomPositionYPercent`/
+`CustomPositionMonitorDeviceName` are deliberately left untouched on disk while notch mode is
+active — `ApplyFromUi` never writes to them, and the position-edit path is disabled so a save
+can't silently overwrite them with `OsdPosition.Custom` pinned at the notch's top-center anchor.
+5.5 is the check that actually exercises that: it is the only way to observe whether Classic
+truly comes back to the user's own anchor untouched, rather than something the notch left
+behind.
+
+**Nothing here is exercised by the automated suite.** `SettingsWindow` is a WPF `Window` the
+headless, non-STA test suite cannot construct (same limitation the rest of this file already
+notes for `BandWindow`), so `UpdatePresentationDependentControls`, the `PresentationCombo` /
+`StripHeightSlider` bindings, and their interaction with the live notch are all unverified by
+build, test, or lint passing.
 
 ---
 

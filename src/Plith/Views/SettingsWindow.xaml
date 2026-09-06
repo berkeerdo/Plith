@@ -39,6 +39,11 @@
                 <x:Type TypeName="svc:ThemeMode" />
             </ObjectDataProvider.MethodParameters>
         </ObjectDataProvider>
+        <ObjectDataProvider x:Key="PresentationModes" MethodName="GetValues" ObjectType="{x:Type svc:PresentationMode}">
+            <ObjectDataProvider.MethodParameters>
+                <x:Type TypeName="svc:PresentationMode" />
+            </ObjectDataProvider.MethodParameters>
+        </ObjectDataProvider>
     </Window.Resources>
 
     <Grid>
@@ -314,6 +319,47 @@
                                     <Run Text="{Binding ElementName=DurationSlider, Path=Value, StringFormat={}{0:0}}" />
                                     <Run Text=" ms" Foreground="{DynamicResource TextSecondary}" />
                                 </TextBlock>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Presentation" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               Text="Classic OSD fades in place wherever you put it. Ambient Notch parks a thin strip at the top of the screen that slides down when something changes." />
+                                </StackPanel>
+                                <ComboBox x:Name="PresentationCombo"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ModernComboStyle}"
+                                          ItemsSource="{Binding Source={StaticResource PresentationModes}}"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Presentation mode" />
+                            </Grid>
+                        </Border>
+
+                        <Border x:Name="StripHeightRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Notch strip height" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               Text="How tall the parked strip is, in pixels." />
+                                </StackPanel>
+                                <Slider x:Name="StripHeightSlider"
+                                        Grid.Column="1"
+                                        Style="{StaticResource ModernSliderStyle}"
+                                        Width="180"
+                                        VerticalAlignment="Center"
+                                        Minimum="2" Maximum="24" TickFrequency="1" IsSnapToTickEnabled="True"
+                                        AutomationProperties.Name="Notch strip height in pixels" />
                             </Grid>
                         </Border>
 
