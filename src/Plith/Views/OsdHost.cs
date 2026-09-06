@@ -164,6 +164,12 @@ public sealed class OsdHost : BandWindow
         _presentation = BuildPresentation();
         IsClickThrough = !_presentation.WantsHitTesting;
 
+        // Before Reposition(), deliberately: SetNotchLook changes the sliding root's top margin,
+        // which changes the measured content height, which is what OnContentMeasured turns into
+        // the parked offset. Reshaping after the measurement would park the card at an offset
+        // computed for the other mode's geometry.
+        _content.SetNotchLook(_presentation is AmbientNotchPresentation);
+
         if (_presentation is AmbientNotchPresentation notch)
         {
             Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;

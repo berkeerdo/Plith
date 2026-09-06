@@ -1,4 +1,4 @@
-<UserControl x:Class="Plith.Views.OsdContent"
+﻿<UserControl x:Class="Plith.Views.OsdContent"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
@@ -28,14 +28,31 @@
                 <TranslateTransform x:Name="ContentSlide" Y="0" />
             </Grid.RenderTransform>
 
-            <Border CornerRadius="14"
+            <!-- Corner radius, border thickness and shadow are all set from code-behind by
+                 SetNotchLook(), because the two presentation modes want genuinely different
+                 shapes and the difference is not cosmetic:
+
+                 Classic is a floating card - rounded on all four corners, inset from every
+                 window edge, with an even drop shadow. It is the 0.1.5 look and must not
+                 change.
+
+                 The notch is attached to the top edge of the screen. Its top corners are
+                 square and its top border is absent, so the panel reads as one object growing
+                 out of the screen edge rather than a card that happens to be near it; and its
+                 shadow only falls downward, because a blur above a surface flush with the
+                 monitor edge has nothing to fall on and just renders as a grey smear.
+
+                 The values below are Classic's, and are what the designer sees; SetNotchLook()
+                 overwrites them at runtime. -->
+            <Border x:Name="CardSurface"
+                    CornerRadius="14"
                     Padding="20,16"
                     Background="{DynamicResource OsdSurfaceBrush}"
                     BorderBrush="{DynamicResource OsdBorder}"
                     BorderThickness="1"
                     SnapsToDevicePixels="True">
                 <Border.Effect>
-                    <DropShadowEffect ShadowDepth="0" BlurRadius="28" Opacity="0.55" Color="Black" />
+                    <DropShadowEffect x:Name="CardShadow" ShadowDepth="0" BlurRadius="28" Opacity="0.55" Color="Black" />
                 </Border.Effect>
 
                 <!-- The card stack. CardHost decides membership and order; each item's view is
