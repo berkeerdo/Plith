@@ -302,7 +302,15 @@ public sealed class OsdHost : BandWindow
     // Fall back to primary when the saved monitor is unplugged (external display gone).
     private static Screen? ResolveTargetScreen(SettingsModel m)
     {
-        if (m.Position == OsdPosition.Custom && !string.IsNullOrEmpty(m.CustomPositionMonitorDeviceName))
+        // The saved device name is honoured for Custom placement and for the notch. Both
+        // are "the user chose a display"; only the built-in anchors are display-agnostic.
+        // ROADMAP §10 asked which monitor the notch pins to — this is the answer: the same
+        // saved device name, matched the same way, falling back to primary when that
+        // display is unplugged.
+        bool usesSavedMonitor =
+            m.Position == OsdPosition.Custom || m.Presentation == PresentationMode.AmbientNotch;
+
+        if (usesSavedMonitor && !string.IsNullOrEmpty(m.CustomPositionMonitorDeviceName))
         {
             foreach (var s in Screen.AllScreens)
             {
