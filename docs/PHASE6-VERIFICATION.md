@@ -102,7 +102,52 @@ the physical console instead.
 
 ## 2. Hit-testing while parked
 
-> **Status: NOT VERIFIED**, for the same reason as section 1.
+> **Status: PARTIALLY VERIFIED — 2026-09-06, on the signed Program Files install.**
+>
+> The window style was measured directly from Win32 and is correct. The user-facing halves
+> (2.1, 2.2) are still unobserved: a set style bit is strong evidence that clicks pass
+> through, but it is not the same as watching a click land.
+
+### What was measured
+
+With `Presentation = AmbientNotch`, a fresh launch logged:
+
+```
+[OsdHost] UIAccess granted — the OSD can be created in the topmost band and can cover exclusive-fullscreen games
+[OsdHost] Presentation applied: AmbientNotch, clickThrough=True, coversMonitor=False, parked=True, stripHeight=5
+```
+
+and the OSD's own HWND, enumerated by process and read with `GetWindowLongPtr(GWL_EXSTYLE)`:
+
+```
+class=PlithBandWindow_...  rect=1060,0-1500,178  TRANSPARENT=True LAYERED=True TOPMOST=True
+```
+
+Three separate things follow, none of them inferred from behaviour:
+
+1. **`WS_EX_TRANSPARENT` (0x20) is genuinely set on the window.** This is the specific
+   evidence the final review's Critical needed. `OsdHost` assigns `IsClickThrough` in its
+   constructor, before `CreateWindow()`, when `BandWindow`'s setter still no-ops on
+   `!IsLoaded` — so before the `Loaded` re-assertion was added, this bit was **not** set and
+   the parked strip swallowed clicks from every launch. Note the log line alone could not
+   have shown this: `clickThrough=True` reports the dependency property, which reads back
+   true whether or not the native style was ever applied. Only the ex-style settles it.
+2. **`Top = 0`** — the notch is flush with the top edge. The saved config had
+   `Position = Custom`, so this also confirms the notch-mode anchor override is in force and
+   that `EdgeMarginDip` is 0 for this mode.
+3. **`Left = 1060`, width 440 on a 2560-wide display** — exactly centred, on the monitor named
+   by `CustomPositionMonitorDeviceName = \\.\DISPLAY1`. That is the widened
+   `ResolveTargetScreen` condition working.
+
+### Still to observe
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the strip | Snap/maximize works as if the strip were not there | The strip intercepts the drag or click |
+| 2.2 | Click through the strip's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
+
+Original status note, still true of 2.1 and 2.2: **NOT VERIFIED**, for the same reason as
+section 1.
 
 `PresentationPolicy.WantsHitTesting` says the notch should not accept mouse messages while
 parked (`_isParked == true`), so that the strip sitting at the very top of the screen does not
