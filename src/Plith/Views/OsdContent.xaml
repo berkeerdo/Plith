@@ -10,61 +10,91 @@
              TextOptions.TextFormattingMode="Ideal"
              TextOptions.TextRenderingMode="ClearType"
              UseLayoutRounding="True">
-    <!-- Outer margin reserves space for the drop-shadow so it doesn't get clipped at window bounds.
-         Background=Transparent so the whole area (including margins) accepts hit-tests -
-         needed by the position editor's drag grab, which was only firing on the inner Border. -->
-    <Grid Margin="14" Background="Transparent">
-        <Border CornerRadius="14"
-                Padding="20,16"
+    <Grid ClipToBounds="True">
+        <!-- The card, offset upward while the notch is parked. Animating this transform
+             rather than the window's Top means no SetWindowPos per frame: WPF composites
+             the translation, so the descent stays smooth.
+
+             This Grid is the file's existing outer Grid, unchanged except for the x:Name
+             and the RenderTransform. Its Margin="14" and Background="Transparent" keep
+             their original reasons: the margin reserves drop-shadow space so it is not
+             clipped at the window bounds, and the transparent background makes the whole
+             area including the margin accept hit-tests, which the position editor's drag
+             grab needs (it was only firing on the inner Border before). Everything inside
+             it - the Border, its DropShadowEffect and the ItemsControl with its
+             AlternationCount and divider trigger - is untouched. -->
+        <Grid x:Name="SlidingRoot" Margin="14" Background="Transparent">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="ContentSlide" Y="0" />
+            </Grid.RenderTransform>
+
+            <Border CornerRadius="14"
+                    Padding="20,16"
+                    Background="{DynamicResource OsdSurfaceBrush}"
+                    BorderBrush="{DynamicResource OsdBorder}"
+                    BorderThickness="1"
+                    SnapsToDevicePixels="True">
+                <Border.Effect>
+                    <DropShadowEffect ShadowDepth="0" BlurRadius="28" Opacity="0.55" Color="Black" />
+                </Border.Effect>
+
+                <!-- The card stack. CardHost decides membership and order; each item's view is
+                     resolved from its view-model type by the implicit DataTemplates in
+                     Resources/CardTemplates.xaml. AlternationCount="64" is what makes
+                     ItemsControl.AlternationIndex report a true index rather than cycling;
+                     64 is far above any plausible card count, not a card limit. -->
+                <ItemsControl ItemsSource="{Binding VisibleCards}" AlternationCount="64">
+                    <ItemsControl.ItemsPanel>
+                        <ItemsPanelTemplate>
+                            <StackPanel Orientation="Vertical" />
+                        </ItemsPanelTemplate>
+                    </ItemsControl.ItemsPanel>
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate>
+                            <!-- Tag carries this item's AlternationIndex so the trigger below can read it.
+                                 DO NOT "simplify" by moving the RelativeSource binding into the DataTrigger:
+                                 a template trigger evaluates against the item container itself, so its
+                                 FindAncestor search starts at the container's PARENT and walks straight past
+                                 the item's own ContentPresenter to one further up the tree, where
+                                 ItemsControl.AlternationIndex is unset and returns its default 0 — which
+                                 collapses the divider on EVERY card. An element-level binding starts at this
+                                 StackPanel and finds the right container. -->
+                            <StackPanel x:Name="ItemRoot"
+                                        Tag="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter},
+                                                      Path=(ItemsControl.AlternationIndex)}">
+                                <!-- Separator above every card except the first. In 0.1.5 the divider sat
+                                     between the media row and the volume row with this exact margin; placing
+                                     it above each non-first card reproduces that spacing. A Collapsed element
+                                     contributes nothing to StackPanel layout, so the single-card case is
+                                     byte-identical to the old collapsed-divider case. -->
+                                <Border x:Name="Divider" Height="1" Margin="0,14,0,14"
+                                        Background="{DynamicResource OsdDivider}" />
+                                <ContentControl Content="{Binding ViewModel}" />
+                            </StackPanel>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Value="0" Binding="{Binding ElementName=ItemRoot, Path=Tag}">
+                                    <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </Border>
+        </Grid>
+
+        <!-- The parked strip. Purely decorative: it is never keyboard-reachable and carries
+             no information a screen reader could act on, so it deliberately carries no
+             AutomationProperties at all - Border has no automation peer for WPF to surface
+             them through. -->
+        <Border x:Name="NotchStrip"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Stretch"
+                Margin="14,0,14,0"
+                Height="5"
+                CornerRadius="0,0,6,6"
+                Visibility="Collapsed"
                 Background="{DynamicResource OsdSurfaceBrush}"
                 BorderBrush="{DynamicResource OsdBorder}"
-                BorderThickness="1"
-                SnapsToDevicePixels="True">
-            <Border.Effect>
-                <DropShadowEffect ShadowDepth="0" BlurRadius="28" Opacity="0.55" Color="Black" />
-            </Border.Effect>
-
-            <!-- The card stack. CardHost decides membership and order; each item's view is
-                 resolved from its view-model type by the implicit DataTemplates in
-                 Resources/CardTemplates.xaml. AlternationCount="64" is what makes
-                 ItemsControl.AlternationIndex report a true index rather than cycling;
-                 64 is far above any plausible card count, not a card limit. -->
-            <ItemsControl ItemsSource="{Binding VisibleCards}" AlternationCount="64">
-                <ItemsControl.ItemsPanel>
-                    <ItemsPanelTemplate>
-                        <StackPanel Orientation="Vertical" />
-                    </ItemsPanelTemplate>
-                </ItemsControl.ItemsPanel>
-                <ItemsControl.ItemTemplate>
-                    <DataTemplate>
-                        <!-- Tag carries this item's AlternationIndex so the trigger below can read it.
-                             DO NOT "simplify" by moving the RelativeSource binding into the DataTrigger:
-                             a template trigger evaluates against the item container itself, so its
-                             FindAncestor search starts at the container's PARENT and walks straight past
-                             the item's own ContentPresenter to one further up the tree, where
-                             ItemsControl.AlternationIndex is unset and returns its default 0 — which
-                             collapses the divider on EVERY card. An element-level binding starts at this
-                             StackPanel and finds the right container. -->
-                        <StackPanel x:Name="ItemRoot"
-                                    Tag="{Binding RelativeSource={RelativeSource AncestorType=ContentPresenter},
-                                                  Path=(ItemsControl.AlternationIndex)}">
-                            <!-- Separator above every card except the first. In 0.1.5 the divider sat
-                                 between the media row and the volume row with this exact margin; placing
-                                 it above each non-first card reproduces that spacing. A Collapsed element
-                                 contributes nothing to StackPanel layout, so the single-card case is
-                                 byte-identical to the old collapsed-divider case. -->
-                            <Border x:Name="Divider" Height="1" Margin="0,14,0,14"
-                                    Background="{DynamicResource OsdDivider}" />
-                            <ContentControl Content="{Binding ViewModel}" />
-                        </StackPanel>
-                        <DataTemplate.Triggers>
-                            <DataTrigger Value="0" Binding="{Binding ElementName=ItemRoot, Path=Tag}">
-                                <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
-                            </DataTrigger>
-                        </DataTemplate.Triggers>
-                    </DataTemplate>
-                </ItemsControl.ItemTemplate>
-            </ItemsControl>
-        </Border>
+                BorderThickness="1,0,1,1" />
     </Grid>
 </UserControl>
