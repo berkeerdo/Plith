@@ -55,6 +55,8 @@ public sealed class SettingsService
                 CustomPositionXPercent = ParseDouble(data[SectionOsd]["CustomPositionXPercent"], 0.0, 0.0, 1.0),
                 CustomPositionYPercent = ParseDouble(data[SectionOsd]["CustomPositionYPercent"], 0.9, 0.0, 1.0),
                 CustomPositionMonitorDeviceName = data[SectionOsd]["CustomPositionMonitorDeviceName"] ?? string.Empty,
+                Presentation = ParseEnum(data[SectionOsd]["Presentation"], PresentationMode.ClassicOsd),
+                NotchStripHeightDip = ParseDouble(data[SectionOsd]["NotchStripHeightDip"], 5, 2, 24),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
@@ -111,6 +113,8 @@ public sealed class SettingsService
         data[SectionOsd]["CustomPositionXPercent"] = m.CustomPositionXPercent.ToString("G", inv);
         data[SectionOsd]["CustomPositionYPercent"] = m.CustomPositionYPercent.ToString("G", inv);
         data[SectionOsd]["CustomPositionMonitorDeviceName"] = m.CustomPositionMonitorDeviceName ?? string.Empty;
+        data[SectionOsd]["Presentation"] = m.Presentation.ToString();
+        data[SectionOsd]["NotchStripHeightDip"] = m.NotchStripHeightDip.ToString("G", inv);
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);

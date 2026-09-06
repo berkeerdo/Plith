@@ -347,6 +347,53 @@ public class SettingsServiceTests
         Assert.True(svc.Current.HideDuringFullscreenVideo);
         Assert.Equal("mpv,PotPlayerMini64", svc.Current.FullscreenVideoHideList);
     }
+
+    [Fact]
+    public void Load_ConfigWithoutPresentationKeys_DefaultsToClassic()
+    {
+        // Every existing 0.1.5 install has a config.ini with no [Osd] Presentation key.
+        // They must keep the OSD they already have rather than being moved to a notch.
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "[Osd]\nShowDurationMs=2000\n");
+
+        var svc = new SettingsService(path);
+        svc.Load();
+
+        Assert.Equal(PresentationMode.ClassicOsd, svc.Current.Presentation);
+        Assert.Equal(5, svc.Current.NotchStripHeightDip);
+    }
+
+    [Fact]
+    public void Save_Then_Load_RoundTripsPresentationSettings()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        var write = new SettingsService(path);
+        var m = write.Current.Clone();
+        m.Presentation = PresentationMode.AmbientNotch;
+        m.NotchStripHeightDip = 6;
+        write.Save(m);
+
+        var read = new SettingsService(path);
+        read.Load();
+
+        Assert.Equal(PresentationMode.AmbientNotch, read.Current.Presentation);
+        Assert.Equal(6, read.Current.NotchStripHeightDip);
+    }
+
+    [Fact]
+    public void Load_ClampsAnAbsurdStripHeight()
+    {
+        // A hand-edited config must not be able to park a 900 px "strip" across the screen.
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        File.WriteAllText(path, "[Osd]\nNotchStripHeightDip=900\n");
+
+        var svc = new SettingsService(path);
+        svc.Load();
+
+        Assert.Equal(24, svc.Current.NotchStripHeightDip);
+    }
 }
 
 internal sealed class TempIniDir : IDisposable

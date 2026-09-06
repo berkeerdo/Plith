@@ -12,6 +12,18 @@ public enum OsdPosition
     Custom,
 }
 
+public enum PresentationMode
+{
+    /// <summary>Invisible at rest; fades in at the configured anchor. Behaviour through 0.1.5.</summary>
+    ClassicOsd,
+    /// <summary>A thin strip parked at the top edge that slides down on an event or hover.</summary>
+    AmbientNotch,
+    // FullNotch is deliberately absent until the cards that would fill its strip exist
+    // (mic status ships with the System Controls card; there is no Clock card yet).
+    // Adding an enum value nothing implements invites a silent fallthrough to Classic
+    // that reads as a bug rather than as a deferral.
+}
+
 public enum AudioSourceMode
 {
     /// <summary>Prefer Voicemeeter when it's running, fall back to the Windows default endpoint.</summary>
@@ -61,6 +73,14 @@ public sealed class SettingsModel
     /// (e.g. "\\.\DISPLAY2"). Empty means "primary". Restored across app launches by
     /// name; falls back to primary silently if the monitor is unplugged.</summary>
     public string CustomPositionMonitorDeviceName { get; set; } = string.Empty;
+
+    /// <summary>Which shell the OSD renders as. Defaults to Classic so existing installs
+    /// keep the OSD they already have.</summary>
+    public PresentationMode Presentation { get; set; } = PresentationMode.ClassicOsd;
+
+    /// <summary>Height in DIP of the strip left visible while the Ambient Notch is parked.
+    /// ROADMAP §3 specifies a 4–6 px band; 5 sits in the middle of it.</summary>
+    public double NotchStripHeightDip { get; set; } = 5;
 
     /// <summary>If true, a media event (track change, play/pause from the source app) pops the OSD.
     /// Default off — surfacing every Spotify advance is intrusive.</summary>
@@ -137,6 +157,8 @@ public sealed class SettingsModel
         CustomPositionXPercent = CustomPositionXPercent,
         CustomPositionYPercent = CustomPositionYPercent,
         CustomPositionMonitorDeviceName = CustomPositionMonitorDeviceName,
+        Presentation = Presentation,
+        NotchStripHeightDip = NotchStripHeightDip,
         AutoShowOnMedia = AutoShowOnMedia,
         HoverKeepAlive = HoverKeepAlive,
         OsdOpacityPercent = OsdOpacityPercent,
