@@ -5,6 +5,34 @@ All notable changes to Plith are documented here. Format loosely follows
 
 ## [Unreleased]
 
+### Added
+- **Presentation modes.** The OSD can now run as either **Classic OSD** (today's
+  behaviour) or an **Ambient Notch**: a thin strip (default 5 DIP, configurable
+  2–24 in Settings) parked at the top-center of the screen that descends into the
+  full OSD card on an event or on hover, then retracts. The strip is click-through
+  while parked, hit-testable while descended, and retracts fully while a window
+  covers the monitor, returning afterward. Settings gained a presentation picker
+  and a strip-height slider; choosing the notch disables the "set position" control,
+  since the notch is pinned rather than freely placed. On multi-monitor systems the
+  notch pins to the same saved monitor device name Custom placement already used,
+  falling back to the primary display if that monitor is unplugged. **Classic OSD
+  remains the default for every install, including existing `config.ini` files —
+  no one is moved to the notch automatically.**
+- **Full Notch is not part of this release.** It depends on always-on cards — mic
+  status from a future System Controls card, and a Clock card — that do not exist
+  yet. Shipping the notch shell without them would ship an empty strip, so Full
+  Notch is deferred to a later slice; only Ambient Notch ships now.
+
+**What is and is not verified.** Classic OSD's behaviour is unchanged by this
+change — it was moved behind a new internal seam (`IOsdPresentation`) without
+altering what it does, though this is an argument from the diff, not something
+observed on a running build. The notch's own behaviour — the strip appearing,
+descending on event or hover, retracting over a game and afterward, and the
+Settings controls driving it live — **has not been run on a build.** Every check
+for it is recorded as NOT VERIFIED in `docs/PHASE6-VERIFICATION.md`, including
+whether retraction over a real game actually works; nothing in this entry should
+be read as a claim that any of it has been confirmed working.
+
 ### Changed
 - **The OSD now hides itself automatically during fullscreen video playback,
   and this is on by default.** Plith detects a foreground window covering a

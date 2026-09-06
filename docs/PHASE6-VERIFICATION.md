@@ -8,8 +8,12 @@ animation, so an unrun check must never be recorded as a pass.
 This entry covers **Task 6, Task 7, Task 8 and Task 9** — `AmbientNotchPresentation`, the
 `OsdHost` mode switch, hover-to-descend via `NotchHoverPoller`, the fullscreen-cover retraction
 signal from `FullscreenVideoWatcher`, and the Settings UI's presentation picker, strip-height
-slider, and position-edit guard. Later tasks in this phase will add their own sections here as
-they land.
+slider, and position-edit guard. **Task 10** adds sections 6, 7 and 8 below, closing out the
+three checks listed in the design spec's §8 that no earlier task recorded: Snap
+Layouts/auto-hide-taskbar interference, an idle resource measurement with the window never
+hidden, and whether the descent reads as motion on both a 60 Hz and a high-refresh display.
+Task 10 is documentation only — it did not run any of these checks either, for the same reason
+every other section here is open: no agent may launch, focus, or drive the running app.
 
 ---
 
@@ -251,6 +255,108 @@ headless, non-STA test suite cannot construct (same limitation the rest of this 
 notes for `BandWindow`), so `UpdatePresentationDependentControls`, the `PresentationCombo` /
 `StripHeightSlider` bindings, and their interaction with the live notch are all unverified by
 build, test, or lint passing.
+
+---
+
+## 6. Snap Layouts hover, auto-hide taskbar reveal, and dragging to the top edge (Task 10)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing this task — manual GUI verification in this project is a
+> human step, and an agent attempting it has previously caused real harm. The checks below are
+> recorded exactly as open, not as passed on the strength of the code reading correct.
+
+Section 2 already covers the strip's own click-through/hit-test behaviour while parked. This
+section is narrower and specifically about Windows' own top-edge gestures, which the strip
+sits directly on top of and which nothing in this codebase implements or mediates — the design
+spec's §8.1 lists them as a distinct risk from ordinary click-through because they are handled
+by `explorer.exe` and `dwm.exe`, not by any window Plith owns.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under `[Osd]`,
+restart Plith, so the strip is parked at the top-center of the monitor.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 6.1 | Hover the mouse over a window's maximize button so Windows shows the Snap Layouts flyout | The flyout appears normally, positioned and clickable as if the strip were not there | The flyout is visually obscured by the strip, or hovering it is delayed/blocked |
+| 6.2 | If the taskbar is set to auto-hide, move the cursor to the taskbar's edge to reveal it | The taskbar reveals normally | The strip intercepts the pointer before the taskbar's edge-sensing does, and the taskbar does not reveal |
+| 6.3 | Drag a window's title bar to the very top edge of the monitor, under the strip, to trigger maximise-by-drag | The window maximises as if the strip were not there | The drag is intercepted or visually caught on the strip |
+
+**Why this is separate from section 2:** `PresentationPolicy.WantsHitTesting` and
+`BandWindow.IsClickThrough` only govern whether *Plith's own window* accepts mouse input. Snap
+Layouts and taskbar auto-hide reveal are driven by cursor position against screen edges at the
+OS level and do not go through Plith's message loop at all when the strip is click-through —
+but a layered, topmost, `WS_EX_LAYERED` window sitting exactly on the monitor's top edge is
+exactly the kind of thing that has, in other overlay apps, been observed to visually cover
+these OS surfaces even when it does not functionally block the underlying click. That visual
+question is what 6.1 is checking; it is not covered by 2.1's drag-to-maximise check, which only
+established that the *drag itself* is not swallowed.
+
+---
+
+## 7. Idle resource measurement with the window never hidden (Task 10)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing this task — manual GUI verification in this project is a
+> human step, and an agent attempting it has previously caused real harm.
+
+Phase 5 (`docs/PHASE5-VERIFICATION.md`) measured GDI handles flat at 22 across 160 volume
+changes and found no leak. **That result does not carry over to Ambient Notch.** The Phase 5
+run drove the OSD through show/hide cycles where the band window was hidden between events —
+it never measured a window that stays visible (as the parked strip does) for an extended idle
+period with no events at all. A leak that only manifests while a window remains mapped and
+composited — a redundant `DispatcherTimer` tick, a repeating `GetCursorPos` poll from
+`NotchHoverPoller`, a per-frame allocation in the parked-strip render path — would not have
+shown up in that test and has not been looked for in this one either.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
+`[Osd]`, restart Plith, and leave the machine idle (no volume/media events, no deliberate
+hover) with the parked strip on screen.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 7.1 | Record GDI object count, USER object count, handle count, thread count, and private bytes for the Plith process at startup (Task Manager "Details" tab, or Process Explorer) | — baseline only, not a pass/fail row — | — |
+| 7.2 | Leave the process idle and parked for at least 30 minutes, taking the same readings every 5 minutes | All five figures stay flat (private bytes may oscillate with GC, as Phase 5 noted, but should not trend upward) | Any of GDI objects, USER objects, handles, or threads climbs monotonically across the window; private bytes trend upward without returning after GC |
+| 7.3 | Repeat 7.1–7.2 once with the cursor resting motionless over the strip (so `NotchHoverPoller`'s comparison runs every tick but never fires a state change) | Same as 7.2 | Same as 7.2 |
+
+**Why 7.3 is a separate row:** `NotchHoverPoller` runs on a `DispatcherTimer` regardless of
+where the cursor is, but the branch it takes differs when the cursor sits inside `StripRect`
+without ever leaving (no `OnStripHoverChanged` transition fires). If there is a leak specific
+to that comparison path rather than to the general idle-parked state, 7.2 alone would miss it.
+
+---
+
+## 8. Descent motion across refresh rates (Task 10)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing this task — manual GUI verification in this project is a
+> human step, and an agent attempting it has previously caused real harm.
+
+Section 1's checks 1.2 and 1.3 already ask whether the descent/retraction animates rather than
+snaps, but on a single unspecified display. This section asks the same question deliberately
+twice, once per refresh class, because the animation is driven by WPF's `BeginAnimation` on a
+~220 ms (descend) / ~260 ms (retract) duration — short enough that frame pacing, not just the
+easing curve, determines whether it reads as motion. At 60 Hz that is roughly 13–16 frames; on
+a high-refresh panel it is proportionally more, and a composition or timer hiccup would be far
+more visible as a single dropped frame at 60 Hz than lost in a denser frame sequence at
+120 Hz+.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
+`[Osd]`, restart Plith. Repeat once with the Plith window on a 60 Hz display and once on a
+display running at a refresh rate above 60 Hz (120 Hz, 144 Hz, or similar), if both are
+available in the test environment.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 8.1 | On a 60 Hz display, press a volume key and watch the strip descend | The card visibly slides down over the ~220 ms window with a perceptible ease-out; it does not appear to jump directly from parked to expanded | The transition reads as an instantaneous jump, stutters, or visibly skips frames |
+| 8.2 | On the same display, let the hide timer elapse and watch the retraction | The card visibly slides up over the ~260 ms window with a perceptible ease-in | Same failure modes as 8.1 |
+| 8.3 | Repeat 8.1 on a high-refresh (>60 Hz) display | Same pass criteria as 8.1 | Same failure modes as 8.1 |
+| 8.4 | Repeat 8.2 on a high-refresh (>60 Hz) display | Same pass criteria as 8.2 | Same failure modes as 8.2 |
+
+**If only one refresh class is available:** run what is available and record which one was
+tested. A single-display result is still useful information; it is just not the full check —
+note the gap rather than treating the untested class as passing by default.
 
 ---
 

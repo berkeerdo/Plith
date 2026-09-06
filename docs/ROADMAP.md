@@ -267,17 +267,30 @@ Cleared after Phase 5 closed, recorded so the reasoning is not re-derived:
 
 The core pivot.
 
-- Notch positioning geometry: top-center pinned, height configurable,
-  respects Windows taskbar auto-hide.
-- Ship Ambient Notch and Full Notch preset modes. Classic OSD stays
-  default so existing installs don't feel bulldozed.
-- Preset picker + per-card config in Settings.
+**Slice 1 — code-complete on `feature/phase-6-notch-shell`, not yet merged, not yet
+verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
+
+- ~~Notch positioning geometry: top-center pinned, height configurable, respects
+  Windows taskbar auto-hide.~~ **Shipped.** `NotchGeometry` provides pure top-center
+  pinning with a configurable 2–24 DIP strip height; `OsdHost.ResolveTargetScreen`
+  respects the saved monitor.
+- ~~Ship Ambient Notch preset mode.~~ **Shipped**, behind the new `IOsdPresentation`
+  seam, as `AmbientNotchPresentation`. Classic OSD stays default for every install,
+  including existing `config.ini` files, so nobody is moved to the notch
+  automatically.
+- Preset picker + strip-height slider in Settings. **Shipped** — the picker disables
+  position editing while the notch is active, since the notch is pinned rather than
+  freely placed.
+- **Full Notch is deferred to a later slice.** It needs always-on cards — mic status
+  from the System Controls card below, and a Clock card, neither of which exists
+  yet — and shipping the notch shell without them would ship an empty strip. Ambient
+  Notch ships on its own in this slice instead.
 - **System Controls card** — brightness, backlight, mic mute, lock
   keys, airplane mode. This is what makes Plith stop being "an audio
-  OSD" from the user's perspective.
-- **Battery card** — laptop-first.
+  OSD" from the user's perspective. **Not started.**
+- **Battery card** — laptop-first. **Not started.**
 - Preset migration: existing installs default to Classic OSD; a
-  one-shot "meet the new Plith" nudge lets them try Ambient / Full.
+  one-shot "meet the new Plith" nudge lets them try Ambient / Full. **Not started.**
 - Success metric: install-to-second-launch retention crosses 60 %
   (currently 0.1.x sits at unknown baseline — instrument this).
 
@@ -349,8 +362,12 @@ counts only.
 - **Card-vs-notch pinning model**: does the notch always show all
   enabled cards side-by-side, or does it show one card at a time and
   cycle by event priority? Ambient/Full modes probably diverge here.
-- **Multi-monitor**: notch pins to which monitor? Primary only, or
-  per-monitor? Different from OSD which is per-event.
+- ~~**Multi-monitor**: notch pins to which monitor? Primary only, or
+  per-monitor? Different from OSD which is per-event.~~ **Closed by Phase 6
+  slice 1.** The notch pins to the same saved monitor device name Custom
+  placement already used (`OsdHost.ResolveTargetScreen`), falling back to the
+  primary display when that monitor is unplugged. Not per-monitor — one notch,
+  on one chosen display, same as Custom placement.
 - **Vendor OSD suppression**: to actually *replace* Logitech/Corsair
   native OSDs we may need to detect them running and suggest their
   OSD toggle be turned off. Do we ship that as onboarding help, or

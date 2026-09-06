@@ -38,6 +38,24 @@ composited path and that the D3D veto is dead code for such titles.
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).
 
+**Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
+Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged
+behaviour, moved behind the seam) and Ambient Notch (a configurable 2–24 DIP strip
+pinned top-center that descends into the full card on event/hover and retracts over
+a covering window). Settings gained a presentation picker and strip-height slider.
+Default stays Classic OSD for every install. Full Notch is deferred — its always-on
+cards (System Controls' mic status, a Clock card) don't exist yet. Multi-monitor:
+the notch pins to the saved monitor device name, falling back to primary — this
+closes ROADMAP §10's open question.
+
+**None of it is verified on a running build.** Build, the 162-test suite, and
+`scripts/check-a11y.ps1` are green, but no agent may launch or drive the app, so
+every manual check — the strip appearing and descending, hit-testing while parked,
+hover-to-descend, retraction over a real game, the Settings controls live, Snap
+Layouts/taskbar interference, idle resource use with the window never hidden, and
+motion smoothness across refresh rates — is open. Full ledger in
+`docs/PHASE6-VERIFICATION.md`.
+
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).
 - Voicemeeter Remote API via `VoicemeeterRemote64.dll` P/Invoke.
