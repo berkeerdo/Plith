@@ -27,4 +27,25 @@ public static class AmbientFormatter
         var date = now.ToString(culture.DateTimeFormat.MonthDayPattern, culture);
         return (time, date);
     }
+
+    /// <summary>
+    /// The battery column. Returns Show=false for every case that has no honest percentage:
+    /// a desktop (BatteryFlag bit 128), an unknown level (255), or a failed read (null).
+    /// All three collapse the column rather than rendering a placeholder, because a battery
+    /// readout that might be wrong is worse than none on a row this small.
+    /// </summary>
+    public static (bool Show, string Text, bool Charging) FormatBattery(BatteryStatusRaw? raw)
+    {
+        const byte NoSystemBattery = 128;
+        const byte UnknownPercent = 255;
+        const byte OnAcPower = 1;
+
+        if (raw is not { } s) return (false, string.Empty, false);
+        if ((s.BatteryFlag & NoSystemBattery) != 0) return (false, string.Empty, false);
+        if (s.BatteryLifePercent == UnknownPercent) return (false, string.Empty, false);
+
+        // ACLineStatus is 0 offline, 1 online, 255 unknown. Only an explicit 1 counts as
+        // charging: guessing on 255 puts a charging glyph on a laptop that is discharging.
+        return (true, $"{s.BatteryLifePercent}%", s.ACLineStatus == OnAcPower);
+    }
 }

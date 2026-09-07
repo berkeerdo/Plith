@@ -42,4 +42,62 @@ public class AmbientFormatterTests
         var (time, _) = AmbientFormatter.FormatClock(new DateTime(2026, 9, 7, 14, 5, 33), Tr);
         Assert.Equal("14:05", time);
     }
+
+    // GetSystemPowerStatus's own sentinel values, from the Win32 documentation. Named rather
+    // than inlined because 128 and 255 are unreadable at the call site and mean two very
+    // different things.
+    private const byte NoSystemBattery = 128;
+    private const byte UnknownPercent = 255;
+    private const byte OnAcPower = 1;
+    private const byte OnBattery = 0;
+
+    [Fact]
+    public void FormatBattery_HidesTheColumnOnADesktop()
+    {
+        // BatteryFlag bit 128 is "no system battery". A desktop must show no battery column
+        // at all rather than a zero or a dash — and this machine cannot be both a desktop and
+        // a laptop, so the decision has to be reachable without one.
+        var (show, _, _) = AmbientFormatter.FormatBattery(
+            new BatteryStatusRaw(NoSystemBattery, UnknownPercent, OnAcPower));
+        Assert.False(show);
+    }
+
+    [Fact]
+    public void FormatBattery_HidesTheColumnWhenThePercentIsUnknown()
+    {
+        var (show, _, _) = AmbientFormatter.FormatBattery(new BatteryStatusRaw(0, UnknownPercent, OnBattery));
+        Assert.False(show);
+    }
+
+    [Fact]
+    public void FormatBattery_HidesTheColumnWhenTheCallFailed()
+    {
+        var (show, _, _) = AmbientFormatter.FormatBattery(null);
+        Assert.False(show);
+    }
+
+    [Fact]
+    public void FormatBattery_ShowsAWholePercent()
+    {
+        var (show, text, charging) = AmbientFormatter.FormatBattery(new BatteryStatusRaw(0, 73, OnBattery));
+        Assert.True(show);
+        Assert.Equal("73%", text);
+        Assert.False(charging);
+    }
+
+    [Fact]
+    public void FormatBattery_ReportsChargingFromTheAcLineStatus()
+    {
+        var (_, _, charging) = AmbientFormatter.FormatBattery(new BatteryStatusRaw(0, 73, OnAcPower));
+        Assert.True(charging);
+    }
+
+    [Fact]
+    public void FormatBattery_TreatsAnUnknownAcLineStatusAsNotCharging()
+    {
+        // ACLineStatus 255 means "unknown". Guessing "charging" there would show a charging
+        // glyph on a laptop that is discharging, which is worse than showing none.
+        var (_, _, charging) = AmbientFormatter.FormatBattery(new BatteryStatusRaw(0, 73, 255));
+        Assert.False(charging);
+    }
 }

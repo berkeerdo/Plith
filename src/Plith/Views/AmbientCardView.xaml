@@ -38,7 +38,32 @@
                        AutomationProperties.Name="" />
         </StackPanel>
 
-        <!-- Columns 1 and 2 are filled by Tasks 3 and 7. Left empty here deliberately: this
-             task ships a working clock rather than three half-built columns. -->
+        <!-- Column 1 is filled by Task 7 (weather). Left empty here deliberately: this task
+             ships a working clock and battery rather than three half-built columns. -->
+
+        <!-- Battery. Collapsed rather than blanked when there is no battery: a collapsed
+             element contributes nothing to the Grid, so a desktop's row is genuinely two
+             columns wide instead of two columns and a gap. No AutomationProperties.Name here
+             on purpose — this StackPanel is peerless like every other panel in this file, so
+             a name set on it would never reach UI Automation. The reading lives entirely in
+             AmbientCardViewModel.AccessibleSummary, bound on the UserControl root above. -->
+        <StackPanel Grid.Column="2"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center"
+                    Visibility="{Binding HasBattery, Converter={StaticResource BoolToVisibilityConverter}}">
+            <TextBlock Text="&#xE83E;"
+                       FontFamily="Segoe MDL2 Assets"
+                       FontSize="12"
+                       Margin="0,0,4,0"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource OsdTextSecondary}"
+                       AutomationProperties.Name=""
+                       Visibility="{Binding IsCharging, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <TextBlock Text="{Binding BatteryText}"
+                       FontSize="13"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource OsdTextSecondary}"
+                       AutomationProperties.Name="" />
+        </StackPanel>
     </Grid>
 </UserControl>

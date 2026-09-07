@@ -53,7 +53,7 @@ public class AmbientCardTests
     {
         var card = Build(new NotchHomeState());
 
-        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"));
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null);
 
         Assert.Equal("14:05", card.Vm.ClockTime);
     }
@@ -65,9 +65,23 @@ public class AmbientCardTests
         // must hear the actual clock value, not a static "Time" label with nothing after it.
         var card = Build(new NotchHomeState());
 
-        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"));
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null);
 
         Assert.Equal("Time 14:05, 7 Eylül", card.Vm.AccessibleSummary);
+    }
+
+    [Fact]
+    public void AccessibleSummaryAppendsTheBatterySegmentWhenTheColumnIsShown()
+    {
+        // The battery StackPanel carries no AutomationProperties.Name of its own — WPF gives
+        // panels no automation peer — so the composed summary is the only place a screen
+        // reader can hear the battery reading at all.
+        var card = Build(new NotchHomeState());
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"),
+                  new BatteryStatusRaw(BatteryFlag: 0, BatteryLifePercent: 73, ACLineStatus: 1));
+
+        Assert.Equal("Time 14:05, 7 Eylül, Battery 73%, charging", card.Vm.AccessibleSummary);
     }
 
     [Fact]
@@ -85,5 +99,16 @@ public class AmbientCardTests
         // item's ToString(). Without this the row announces "Plith.Cards.AmbientCard".
         var card = Build(new NotchHomeState());
         Assert.Equal(card.AccessibleName, card.ToString());
+    }
+
+    [Fact]
+    public void TickCollapsesTheBatteryColumnOnADesktop()
+    {
+        var card = Build(new NotchHomeState());
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), CultureInfo.InvariantCulture,
+                  new BatteryStatusRaw(BatteryFlag: 128, BatteryLifePercent: 255, ACLineStatus: 1));
+
+        Assert.False(card.Vm.HasBattery);
     }
 }

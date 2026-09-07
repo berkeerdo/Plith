@@ -39,7 +39,7 @@ public sealed class AmbientCard : ICard
         {
             Interval = TimeSpan.FromSeconds(1),
         };
-        _timer.Tick += (_, _) => Tick(DateTime.Now, CultureInfo.CurrentCulture);
+        _timer.Tick += (_, _) => Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read());
 
         _lastVisible = IsVisible;
     }
@@ -72,7 +72,7 @@ public sealed class AmbientCard : ICard
         // precedent for this: Vm is MediaCard's own view model, not a shared external object.
         _home.Changed += OnStateChanged;
         _settings.Changed += OnSettingsChanged;
-        Tick(DateTime.Now, CultureInfo.CurrentCulture);   // seed, so the first open is not blank
+        Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read());   // seed, so the first open is not blank
         _timer.Start();
     }
 
@@ -83,9 +83,13 @@ public sealed class AmbientCard : ICard
         _settings.Changed -= OnSettingsChanged;
     }
 
-    /// <summary>Apply a point in time to the row. Public and parameterised so the headless
-    /// suite can drive it without a Dispatcher loop or a real clock.</summary>
-    public void Tick(DateTime now, CultureInfo culture) => Vm.ApplyClock(now, culture);
+    /// <summary>Apply a point in time and a power reading to the row. Both are parameters so
+    /// the headless suite can drive a desktop and a laptop from the same machine.</summary>
+    public void Tick(DateTime now, CultureInfo culture, BatteryStatusRaw? battery)
+    {
+        Vm.ApplyClock(now, culture);
+        Vm.ApplyBattery(battery);
+    }
 
     private void OnSettingsChanged(SettingsModel _) => OnStateChanged();
 
