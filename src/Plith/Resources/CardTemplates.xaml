@@ -14,4 +14,8 @@
         <views:MediaCardView />
     </DataTemplate>
 
+    <DataTemplate DataType="{x:Type vm:AmbientCardViewModel}">
+        <views:AmbientCardView />
+    </DataTemplate>
+
 </ResourceDictionary>

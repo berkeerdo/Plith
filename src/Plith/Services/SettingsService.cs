@@ -58,6 +58,7 @@ public sealed class SettingsService
                 Presentation = ParseEnum(data[SectionOsd]["Presentation"], PresentationMode.ClassicOsd),
                 NotchStripHeightDip = ParseDouble(data[SectionOsd]["NotchStripHeightDip"], 5, 2, 24),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
+                ShowAmbientOnHover = ParseBool(data[SectionOsd]["ShowAmbientOnHover"], true),
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
@@ -116,6 +117,7 @@ public sealed class SettingsService
         data[SectionOsd]["Presentation"] = m.Presentation.ToString();
         data[SectionOsd]["NotchStripHeightDip"] = m.NotchStripHeightDip.ToString("G", inv);
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
+        data[SectionOsd]["ShowAmbientOnHover"] = m.ShowAmbientOnHover.ToString(inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
         data[SectionOsd]["CompactMode"] = m.CompactMode.ToString(inv);

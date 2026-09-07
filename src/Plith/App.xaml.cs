@@ -21,6 +21,7 @@ public partial class App : Application
     private readonly NotchHomeState _home = new();
     private AudioCard? _audioCard;
     private MediaCard? _mediaCard;
+    private AmbientCard? _ambientCard;
     private MediaSessionClient? _mediaSession;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
@@ -56,10 +57,12 @@ public partial class App : Application
 
         _audioCard = new AudioCard(_settings);
         _mediaCard = new MediaCard(_settings);
+        _ambientCard = new AmbientCard(_home, _settings);
 
         _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
 
         _cardHost = new CardHost(_settings, _fullscreenWatcher);
+        _cardHost.Register(_ambientCard);  // Order 5 — the notch's ambient row, above media
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
 

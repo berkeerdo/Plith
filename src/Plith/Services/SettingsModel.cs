@@ -91,6 +91,10 @@ public sealed class SettingsModel
     /// <summary>If true, mouse over the OSD pauses the hide timer.</summary>
     public bool HoverKeepAlive { get; set; } = true;
 
+    /// <summary>Whether hovering the resting notch opens the ambient row (clock, weather,
+    /// battery). Notch-only; Classic never opens the home view at all.</summary>
+    public bool ShowAmbientOnHover { get; set; } = true;
+
     /// <summary>OSD card opacity at rest, 50–100 percent. Below 50 the OSD is hard to read.</summary>
     public int OsdOpacityPercent { get; set; } = 100;
 
@@ -163,6 +167,7 @@ public sealed class SettingsModel
         NotchStripHeightDip = NotchStripHeightDip,
         AutoShowOnMedia = AutoShowOnMedia,
         HoverKeepAlive = HoverKeepAlive,
+        ShowAmbientOnHover = ShowAmbientOnHover,
         OsdOpacityPercent = OsdOpacityPercent,
         UseColorThresholds = UseColorThresholds,
         CompactMode = CompactMode,
