@@ -56,7 +56,7 @@ public sealed class OpenMeteoClient : IDisposable
         // this class's own doc comment says must never happen.
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ObjectDisposedException or NotSupportedException or System.Text.Json.JsonException)
         {
-            LogFailure(ref _lastCurrentFailure, "OpenMeteo", $"Current-conditions fetch failed: {ex.GetType().Name}");
+            LogFailure(ref _lastCurrentFailure, "OpenMeteo", $"Current-conditions fetch failed: {ExceptionText.Describe(ex)}");
             return null;
         }
     }
@@ -77,7 +77,7 @@ public sealed class OpenMeteoClient : IDisposable
         // See the comment on the same filter in GetCurrentAsync above.
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ObjectDisposedException or NotSupportedException or System.Text.Json.JsonException)
         {
-            LogFailure(ref _lastGeocodeFailure, "OpenMeteo", $"Geocode failed for '{cityName}': {ex.GetType().Name}");
+            LogFailure(ref _lastGeocodeFailure, "OpenMeteo", $"Geocode failed for '{cityName}': {ExceptionText.Describe(ex)}");
             return null;
         }
     }

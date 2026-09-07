@@ -731,3 +731,140 @@ then re-announce "‹time›", "‹date›", the weather glyph character, "‹te
 and "‹percent›" individually as it walks the row — see 11.11 above. Accepted as a known
 limitation, not fixed. `MediaCardView.xaml` carries the same inert idiom in one place; it
 predates this branch and was left untouched.
+
+---
+
+## 12. The crash the first real hover produced (2026-09-07)
+
+The slice-2 build was installed and launched, and Plith **terminated** the first time the
+user hovered the notch:
+
+```
+System.ArgumentException: 'Segoe MDL2 Assets' is not a valid value for property 'FontFamily'
+  at Plith.Views.OsdHost.Reposition()                      <- UpdateLayout, realising the card
+  at Plith.Views.OsdHost.ShowOsd(TimeSpan, Boolean fromHover)
+  at Plith.Views.OsdHost.OnNotchHoverChanged(Boolean inside)
+  at Plith.Views.Presentation.NotchHoverPoller ... DispatcherTimer.FireTick()
+```
+
+**Cause.** `AmbientCardView.xaml` bound `FontFamily="{x:Static services:WeatherCodeMap.GlyphFontFamilyName}"`,
+and that constant is a `string`. A literal `FontFamily="Segoe MDL2 Assets"` attribute works
+because the XAML parser runs a type converter on it; `{x:Static}` hands the property a
+`System.String` **object**, and `DependencyObject.SetValue` performs no conversion.
+
+It was an unhandled exception on the dispatcher, so it took the process down rather than
+degrading — and the trigger was the notch's headline gesture, so the feature could not be
+used at all.
+
+**Why every automated gate missed it, one line each:**
+
+| Gate | Why it passed |
+|---|---|
+| `dotnet build` (Debug + Release, 0 warnings) | `{x:Static}` compiles fine; the mismatch is a run-time `SetValue`. |
+| The 219-test suite | Not STA — it cannot construct a `UserControl`, so no template was ever realised. |
+| `scripts/check-a11y.ps1` | Parses the XAML as text; it never loads it. |
+| Per-task review, whole-branch review, fix-wave re-review | All read the diff. The binding looks correct, and its intent (one source of truth for the font) was sound. |
+| Live verification | No agent may launch or drive the app, so the only path to this defect was a human hovering. |
+
+**The binding was introduced by a review fix, not by the original code.** An earlier round
+required the view to bind the font name from the constant so the view and the font-existence
+test could not drift onto different fonts. The requirement was right; the mechanism was wrong.
+
+**Fixed** by exposing `AmbientCardViewModel.GlyphFont`, a real `FontFamily` built from
+`WeatherCodeMap.GlyphFontFamilyName`, and binding **both** glyph `TextBlock`s to it — the
+battery one previously repeated the string literal, which was exactly the drift the constant
+was meant to prevent.
+
+### What is now covered, and what still is not
+
+`tests/Plith.Tests/AmbientGlyphFontTests.cs` asserts `GlyphFont` is a `FontFamily` and that it
+names the family the glyph-existence test checks against. Those guard the **member**.
+
+They do **not** guard the **binding**: re-pointing the XAML at the string constant brings the
+crash straight back and nothing fails. And no test anywhere covers the general class — any
+`{x:Static}` in any view handing a property the wrong type.
+
+An STA harness that loads each view and forces a layout pass was attempted and abandoned: it
+could not resolve the app's merged resource dictionaries from a PowerShell runspace, and a
+gate that reports resource-resolution noise instead of defects is worse than none. The
+remaining coverage for this class is a human launching the build and hovering.
+
+**Standing consequence for this project:** a green build, a green suite and a green lint say
+nothing about whether the OSD's markup loads. Until that changes, **install and hover before
+believing any change to the card views works** — that check is cheap and it is the only one
+that would have caught this.
+
+---
+
+## 13. Two more defects the first working hover exposed (2026-09-07)
+
+Once section 12's crash was fixed, the notch could actually be hovered for the first time.
+Two further defects surfaced immediately, and both are recorded here because both are
+invisible to the build, the suite and the lint.
+
+### 13.1 The panel closed with the cursor sitting on it — FIXED
+
+The hide timer ran to completion while the user was looking at the open panel. Instrumenting
+`OsdHost` from inside the process gave the answer in one line:
+
+```
+poller inside=True clickThrough=False wantsHit=True isMouseOver=False ... REAL_transparent=False hwndSize=440x233
+hide timer fired (isMouseOver=False, clickThrough=False)
+```
+
+`WS_EX_TRANSPARENT` was genuinely cleared on the HWND, the window was correctly sized, and
+**WPF still never raised `MouseEnter`** — not once, for the panel's whole life.
+
+**Cause.** The OSD is a `WS_EX_LAYERED` window with per-pixel alpha, and Windows hit-tests
+layered windows against that alpha: where a pixel is fully transparent the mouse passes
+straight through and no message reaches WPF. At rest the notch is `NotchStripHeightDip` of
+opaque pixels — 2 DIP on the reporting user's configuration — in an otherwise empty window,
+so the cursor that triggers a hover is over transparent space. The panel then opens *beneath
+a stationary cursor*, and a cursor that does not move generates no further `WM_MOUSEMOVE`, so
+Windows never re-evaluates. `IsMouseOver` was false the entire time.
+
+The keep-alive had been built on `IsMouseOver`, which on this window can never become true by
+the very gesture that opens it.
+
+**Fixed** by deciding keep-alive in the hide timer itself, against `NotchHoverPoller`'s polled
+`GetCursorPos` reading, which depends on neither alpha, message delivery, nor movement.
+
+A first attempt hung it off a poller *enter/leave event* and failed for a second reason worth
+recording: moving up toward the notch crosses the panel's rectangle **before** the resting
+shape's, so the enter transition fires while the notch is still parked, and a cursor that then
+stays put never produces a second transition. Whatever that early transition decides is final.
+
+### 13.2 Nothing in the open panel accepts a click — OPEN
+
+Reported on the same build, with a media session playing, so the media card's transport
+buttons were present and were the thing being clicked.
+
+This is almost certainly the same root cause as 13.1 — WPF receives no mouse messages at all
+on this window — with the difference that a click cannot be worked around by polling the way
+the hide timer was. Something has to actually deliver `WM_LBUTTONDOWN` to the WPF content.
+
+**Measured so far:**
+
+| Fact | Value |
+|---|---|
+| Outer band window ex-style, panel open | `0x08080088` — LAYERED, TOOLWINDOW, TOPMOST, NOACTIVATE. `WS_EX_TRANSPARENT` **clear**. |
+| `WS_EX_NOREDIRECTIONBITMAP` | Not set — dropped on Win11 by `BandWindow.CreateWindow` |
+| Child `HwndSource` window | `HwndWrapper[Plith;;…]`, `ex=0x00080000` (LAYERED only), `WS_EX_TRANSPARENT` clear, sized to content |
+| WPF `MouseEnter` | Never raised |
+
+**Leading hypothesis, not yet tested.** The outer band window carries `WS_EX_LAYERED` but
+nothing ever sets its layered attributes: `SetLayeredWindowAttributes` was deliberately removed
+from `ToggleClickThrough` in `3211d37` because it destroys the per-pixel alpha channel and left
+a permanent black rectangle on screen. A layered window with no layered attributes and no
+`UpdateLayeredWindow` may hit-test as fully transparent, passing all input through regardless
+of `WS_EX_TRANSPARENT`. If that is the mechanism, the fix cannot simply restore that call —
+that is what section 12's sibling defect was — and needs a different structure.
+
+**This blocks more than itself.** Any interactive notch content — media transport buttons, a
+widget carousel's arrows, a file shelf's drop target — depends on the panel receiving mouse
+input. It should be the first thing solved in the next slice, not assumed.
+
+**Note for whoever picks this up:** three external sampling harnesses were written during this
+investigation and all three produced misleading or empty results, while a four-line diagnostic
+inside `OsdHost` answered the question immediately. Instrument the process; do not sample it
+from outside.

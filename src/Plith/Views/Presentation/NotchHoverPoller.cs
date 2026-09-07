@@ -24,6 +24,7 @@ internal sealed class NotchHoverPoller : IDisposable
 
     private readonly DispatcherTimer _timer;
     private bool _wasInside;
+    private bool _wasInsidePanel;
 
     public NotchHoverPoller(Dispatcher dispatcher)
     {
@@ -42,9 +43,34 @@ internal sealed class NotchHoverPoller : IDisposable
     /// <summary>True on entering the rectangle, false on leaving. Raised on transitions only.</summary>
     public event Action<bool>? HoverChanged;
 
+    /// <summary>
+    /// The whole OSD window's screen rectangle in DIP — the open panel, not just the resting
+    /// notch. Set by OsdHost after every reposition.
+    /// </summary>
+    public Rect PanelRect { get; set; }
+
+
+    /// <summary>
+    /// Whether the last poll found the cursor inside <see cref="PanelRect"/>.
+    ///
+    /// A polled property rather than an event, deliberately. The OSD is a WS_EX_LAYERED window
+    /// with per-pixel alpha and Windows hit-tests layered windows against that alpha, so WPF's
+    /// IsMouseOver is useless here: at rest the notch is a couple of opaque DIP in an otherwise
+    /// transparent window, the cursor that triggers a hover is over transparent space, and the
+    /// panel then opens beneath a stationary cursor that generates no further WM_MOUSEMOVE. On a
+    /// live build IsMouseOver stayed false for the panel's entire life.
+    ///
+    /// An enter/leave event was tried and was also wrong: moving up toward the notch crosses the
+    /// panel's rectangle before the resting shape's, so the enter transition fires while the
+    /// notch is still parked, and a cursor that then stays put produces no second transition.
+    /// A property the hide timer can consult at the moment it matters has neither problem.
+    /// </summary>
+    public bool IsCursorInPanel => _wasInsidePanel;
+
     public void Start()
     {
         _wasInside = false;
+        _wasInsidePanel = false;
         _timer.Start();
     }
 
@@ -65,6 +91,9 @@ internal sealed class NotchHoverPoller : IDisposable
         if (!GetCursorPos(out var p)) return;
 
         var dip = NotchGeometry.PhysicalToDip(p.X, p.Y, DpiScale);
+
+        _wasInsidePanel = NotchGeometry.IsInsideNotch(PanelRect, dip);
+
         bool inside = NotchGeometry.IsInsideNotch(HoverRect, dip);
         if (inside == _wasInside) return;
 

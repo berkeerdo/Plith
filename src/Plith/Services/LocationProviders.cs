@@ -76,7 +76,7 @@ public sealed class WindowsLocationProvider
             // surface is not enumerable from here, and every failure has the same handling —
             // fall through to IP. Logged at Info because it is an expected configuration, not
             // a fault.
-            LogFailure($"Windows Location unavailable: {ex.GetType().Name}");
+            LogFailure($"Windows Location unavailable: {ExceptionText.Describe(ex)}");
             return (LocationOutcome.Unavailable, null);
         }
     }
@@ -134,7 +134,7 @@ public sealed class IpLocationProvider : IDisposable
         // at shutdown.
         catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ObjectDisposedException or NotSupportedException or System.Text.Json.JsonException)
         {
-            LogFailure($"IP location failed: {ex.GetType().Name}");
+            LogFailure($"IP location failed: {ExceptionText.Describe(ex)}");
             return null;
         }
     }

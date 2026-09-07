@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Windows.Media;
 using System.Globalization;
 using System.Runtime.CompilerServices;
 using Plith.Services;
@@ -66,6 +67,26 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
             return summary;
         }
     }
+
+
+    /// <summary>
+    /// The font the ambient row's glyphs are drawn in, as a FontFamily rather than its name.
+    ///
+    /// This exists because binding the NAME crashed the app. XAML's `FontFamily="Segoe MDL2 Assets"`
+    /// works as a literal attribute because the parser runs a type converter on the string, but
+    /// `{x:Static}` hands the property a System.String OBJECT and DependencyObject.SetValue does no
+    /// conversion — it threw ArgumentException ("'Segoe MDL2 Assets' is not a valid value for
+    /// property 'FontFamily'") the first time the template loaded, which is the first time the user
+    /// hovered the notch. Nothing caught it: the build compiles {x:Static} happily, the type
+    /// mismatch only surfaces at template-load time, and the headless suite cannot construct a
+    /// UserControl to load one.
+    ///
+    /// Constructed from WeatherCodeMap.GlyphFontFamilyName so the view and the font-existence test
+    /// still cannot drift onto different fonts, which was the point of binding it in the first
+    /// place. Both glyph TextBlocks in AmbientCardView bind here — the battery one previously
+    /// repeated the literal, which was the drift this was meant to prevent.
+    /// </summary>
+    public static FontFamily GlyphFont { get; } = new FontFamily(WeatherCodeMap.GlyphFontFamilyName);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 

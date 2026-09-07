@@ -66,7 +66,7 @@
                     VerticalAlignment="Center"
                     Visibility="{Binding HasWeather, Converter={StaticResource BoolToVisibilityConverter}}">
             <TextBlock Text="{Binding WeatherGlyph}"
-                       FontFamily="{x:Static services:WeatherCodeMap.GlyphFontFamilyName}"
+                       FontFamily="{x:Static vm:AmbientCardViewModel.GlyphFont}"
                        FontSize="14"
                        Margin="0,0,6,0"
                        VerticalAlignment="Center"
@@ -89,7 +89,7 @@
                     VerticalAlignment="Center"
                     Visibility="{Binding HasBattery, Converter={StaticResource BoolToVisibilityConverter}}">
             <TextBlock Text="&#xE83E;"
-                       FontFamily="Segoe MDL2 Assets"
+                       FontFamily="{x:Static vm:AmbientCardViewModel.GlyphFont}"
                        FontSize="12"
                        Margin="0,0,4,0"
                        VerticalAlignment="Center"

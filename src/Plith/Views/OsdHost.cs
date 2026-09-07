@@ -376,13 +376,20 @@ public sealed class OsdHost : BandWindow
         else
         {
             // Leaving the resting rectangle is not leaving the OSD: it is only a few DIP tall,
-            // so the ordinary way to leave it is by moving DOWN onto the open panel, which
-            // is still squarely inside the window. Restarting the hide timer here would take
-            // the card away while the user is sitting on it, and the real OnMouseLeave could
-            // not undo it because the mouse never actually left the window. When the mouse
-            // really has left, the genuine WPF MouseLeave event already reached OnMouseLeave
-            // and restarted the timer itself — nothing further is needed from this handler.
-            if (IsMouseOver) return;
+            // so the ordinary way to leave it is by moving DOWN onto the open panel, which is
+            // still squarely inside the window.
+            //
+            // This used to ask WPF (`if (IsMouseOver) return;`) and that was wrong, measured on a
+            // running build: the OSD is a layered window with per-pixel alpha, Windows hit-tests
+            // it against that alpha, and at rest the notch is a couple of opaque DIP in an
+            // otherwise transparent window. The cursor that triggered the hover is over
+            // transparent space, the panel opens beneath a now-stationary cursor, no further
+            // WM_MOUSEMOVE is generated, and MouseEnter never fires — so IsMouseOver stayed false
+            // for the panel's entire life and the hide timer took it away with the cursor on it.
+            //
+            // The poller has no such dependency: GetCursorPos answers regardless of alpha, of
+            // message delivery, and of whether the user moved.
+            if (_hoverPoller.IsCursorInPanel) return;
             if (_currentVisibleFor > TimeSpan.Zero && !_isFadingOut)
                 RestartHideTimer(_currentVisibleFor);
         }
@@ -392,7 +399,11 @@ public sealed class OsdHost : BandWindow
         // IsClickThrough is already correct and re-computing it would just repeat the same
         // value. Every other path through this method reaches here.
         IsClickThrough = !_presentation.WantsHitTesting;
+
     }
+
+
+
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {
@@ -410,6 +421,35 @@ public sealed class OsdHost : BandWindow
         _hideTimer.Tick += (_, _) =>
         {
             _hideTimer!.Stop();
+
+            // Keep-alive for the notch, decided here rather than on a hover transition.
+            //
+            // WPF's IsMouseOver cannot answer this for the OSD, and that was measured on a
+            // running build rather than assumed: the window is WS_EX_LAYERED with per-pixel
+            // alpha, Windows hit-tests layered windows against that alpha, and at rest the notch
+            // is a couple of opaque DIP in an otherwise transparent window. The cursor that
+            // triggered the hover sits over transparent space; the panel opens beneath a now
+            // stationary cursor; no further WM_MOUSEMOVE is generated, so Windows never
+            // re-evaluates and MouseEnter never fires. IsMouseOver stayed false for the panel's
+            // entire life while the user was looking straight at it.
+            //
+            // Asking the poller on a transition was tried first and was also wrong: moving up
+            // toward the notch crosses the panel's rectangle BEFORE the resting shape's, so the
+            // enter transition fires while the notch is still parked. Whatever that early
+            // transition decides is final, because a cursor that then stays inside produces no
+            // second transition.
+            //
+            // Checking at the moment of hiding has neither problem. It needs no transition, no
+            // mouse movement and no message delivery — just where the pointer is, right now,
+            // when it matters.
+            if (_presentation is AmbientNotchPresentation
+                && _settings.Current.HoverKeepAlive
+                && _hoverPoller.IsCursorInPanel)
+            {
+                RestartHideTimer(visibleFor);
+                return;
+            }
+
             FadeOutAndHide();
         };
         _hideTimer.Start();
@@ -576,6 +616,10 @@ public sealed class OsdHost : BandWindow
         {
             _hoverPoller.HoverRect = NotchGeometry.HoverRect(
                 Left, Top, w, _settings.Current.NotchStripHeightDip);
+            // The whole window, which is the open panel's extent. Keep-alive is decided against
+            // this rather than against WPF's IsMouseOver — see NotchHoverPoller.PanelHoverChanged
+            // for why the input system cannot answer this question for a layered window.
+            _hoverPoller.PanelRect = new Rect(Left, Top, w, h);
             _hoverPoller.DpiScale = VisualTreeHelper.GetDpi(_content).DpiScaleX;
         }
     }
