@@ -58,17 +58,19 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         _hiddenOffset = NotchGeometry.HiddenOffset(contentSize.Height, OsdContent.ContentInsetDip);
         _hasMeasured = true;
 
-        // Re-apply whichever rest state is actually in force if the content grew or shrank
-        // (the media card appearing or going away) while the notch was resting. Without this,
-        // a parked strip would show a slice of the middle of the card instead of its top edge
-        // — or, worse, a retracted notch would silently re-park: Retract() has no callers yet,
-        // but Task 8 wires it to "a window covers the monitor", and a later Reposition() must
-        // not put the strip and the card's bottom sliver back on screen over that window.
+        // Re-park if the content grew or shrank (the media card appearing or going away) while
+        // the notch was at rest. The parked offset is derived from the measured content height,
+        // so without this a stale offset would leave a slice of the middle of the card on
+        // screen instead of nothing but the strip.
         //
-        // Not a bare assignment: reaching either rest state through an animation leaves that
+        // Parked is the only rest state this class has. The covered-monitor case is not a
+        // second one: OsdHost rebuilds the presentation as ClassicPresentation while a window
+        // covers the monitor, so this object does not exist to be repositioned then.
+        //
+        // Not a bare assignment: reaching the parked state through an animation leaves that
         // animation holding ContentOffsetProperty with FillBehavior.HoldEnd, and animated-value
         // precedence outranks a local write — so assigning here would change nothing at all.
-        // Park()/Retract() clear the animation first.
+        // Park() clears the animation first.
         if (_isParked) Park();
     }
 
@@ -142,10 +144,10 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
         _window.Show();
         _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        // Parks at the HIDDEN offset, not the resting one, so the card contributes no pixels
-        // and NotchStrip is the only thing on screen.
+        // Parks at the HIDDEN offset — the only offset there is — so the card contributes no
+        // pixels and NotchStrip is the only thing on screen.
         //
-        // RestingOffset leaves the card's own bottom edge sitting exactly at y = stripHeight,
+        // The old RestingOffset (since deleted) left the card's own bottom edge at y = stripHeight,
         // which put two surfaces in the same band: the dedicated strip, and a sliver of the
         // card's bottom — carrying that Border's corner radius and drop shadow with it. On a
         // running build that reads as the corner of a card poking out from under the top of
@@ -153,8 +155,9 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         // artefact. Reported directly by the user on the first real session, which is what
         // settled the open question section 1 of docs/PHASE6-VERIFICATION.md had recorded.
         //
-        // Park and Retract now differ only in whether the strip itself is shown, which is the
-        // distinction their names actually claim.
+        // There is no deeper rest state below this one to distinguish it from: parking with the
+        // strip hidden was once its own state (Retract), and it was deleted when the covered
+        // case became a wholesale rebuild into ClassicPresentation.
         _content.ContentOffset = _hiddenOffset;
         _content.SetStrip(visible: true, heightDip: _stripHeight());
     }

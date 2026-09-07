@@ -65,9 +65,14 @@ public partial class OsdContent : UserControl
         CardSurface.BorderThickness = notch ? new Thickness(1, 0, 1, 1) : new Thickness(1);
 
         // ShadowDepth pushes the blur downward; Direction 270 is straight down in WPF's
-        // clockwise-from-east convention. Classic keeps ShadowDepth 0, which spreads the blur
-        // evenly in every direction.
+        // counter-clockwise-from-east convention. Classic keeps ShadowDepth 0, which spreads
+        // the blur evenly in every direction.
+        //
+        // The Classic branch restores DropShadowEffect.Direction's own default of 315, not 0.
+        // The XAML never declares Direction, so 315 is what a Classic-only run has always had,
+        // and 0 (due east) would silently become the Classic shadow's angle the moment anyone
+        // gives Classic a non-zero ShadowDepth. Inert today, wrong the instant it is not.
         CardShadow.ShadowDepth = notch ? 6 : 0;
-        CardShadow.Direction = notch ? 270 : 0;
+        CardShadow.Direction = notch ? 270 : 315;
     }
 }

@@ -31,9 +31,11 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     private bool _coversMonitor;
 
     // Continuous evidence required before a falling covers-monitor edge is believed. Two
-    // seconds is four samples at the 1 Hz poll, comfortably longer than the sub-second blips
+    // seconds is three samples at the 1 Hz poll (one to arm the timestamp, one rejected for
+    // being too early, one that publishes), comfortably longer than the sub-second blips
     // measured during gameplay, and short enough that closing a game does not leave the strip
-    // missing for a noticeable beat.
+    // missing for a noticeable beat. The WinEvent hook can deliver extra samples on top of
+    // the poll, which only ever makes the settle land closer to the threshold.
     private const long UncoverSettleMs = 2000;
 
     private long? _uncoveredSinceTicks;
@@ -54,9 +56,11 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
 
     /// <summary>Raised when the foreground window starts or stops covering its monitor.
     /// Published separately from suppression because the notch reacts to it differently:
-    /// suppression means "do not show at all", this means "retract the parked strip and behave
-    /// like Classic". Edge-triggered only — there is deliberately no level-triggered property
-    /// beside it, because nothing ever needed to poll the current value.</summary>
+    /// suppression means "do not show at all", this means "stop being a notch and behave like
+    /// Classic" — OsdHost answers it by rebuilding the presentation as ClassicPresentation, so
+    /// the anchor, the edge margin, the card's shape and the transition all change with it.
+    /// Edge-triggered only — there is deliberately no level-triggered property beside it,
+    /// because nothing ever needed to poll the current value.</summary>
     public event Action<bool>? ForegroundCoversMonitorChanged;
 
     public void Start()
@@ -110,11 +114,39 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     {
         if (_disposed) return;
 
-        bool next;
+        // Two try blocks, not one, and the split is load-bearing. The covers signal is no
+        // longer "hide the strip": OsdHost rebuilds the whole presentation on its rising edge,
+        // sets Opacity to 0 and hides the window, and the hysteresis below then holds that
+        // state for UncoverSettleMs. Only a genuine ForegroundCoversItsMonitor failure may
+        // force it. Everything in the second block — SHQueryUserNotificationState, and the
+        // WinRT/SMTC properties MediaSessionClient exposes, which throw transiently on session
+        // churn (RPC_E_DISCONNECTED) — says nothing about whether a window covers the monitor,
+        // so a hiccup there must not tear the notch down with no game anywhere in sight.
+        //
+        // The two failure directions are opposite ON PURPOSE, which reads as a bug without
+        // this note: suppression fails toward SHOWING the OSD, because a bug that hides it is
+        // worse than one that shows it; the covers signal fails toward COVERED, because a strip
+        // left sitting over a game is worse than one taken down when it need not have been.
+        string processName = string.Empty;
         bool covers;
         try
         {
-            covers = ForegroundCoversItsMonitor(out var processName);
+            covers = ForegroundCoversItsMonitor(out processName);
+        }
+        catch (Exception ex)
+        {
+            // A window can die between GetForegroundWindow and the Process lookup.
+            _log?.Warn("FullscreenVideo", $"ForegroundCoversItsMonitor threw: {ex.GetType().Name}: {ex.Message}");
+            covers = true;
+        }
+
+        // Published before the suppression gather, so nothing that gather can throw is able to
+        // reach the covers signal at all.
+        PublishCoversMonitor(covers);
+
+        bool next;
+        try
+        {
             next = FullscreenVideoDetector.ShouldSuppress(
                 enabled: _settings.Current.HideDuringFullscreenVideo,
                 foregroundCoversMonitor: covers,
@@ -125,17 +157,9 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
         }
         catch (Exception ex)
         {
-            // A window can die between GetForegroundWindow and Process lookup. Never let a
-            // transient interop failure suppress the OSD — fail toward showing it.
-            _log?.Warn("FullscreenVideo", $"Evaluate threw: {ex.GetType().Name}: {ex.Message}");
-            // Suppression fails toward SHOWING the OSD: a bug that hides it is worse than one
-            // that shows it. Retraction fails the other way, deliberately — a strip left
-            // sitting over a game is worse than one retracted when it need not have been.
+            _log?.Warn("FullscreenVideo", $"ShouldSuppress gather threw: {ex.GetType().Name}: {ex.Message}");
             next = false;
-            covers = true;
         }
-
-        PublishCoversMonitor(covers);
 
         if (next == _suppressed) return;
         _suppressed = next;
@@ -148,14 +172,15 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
     ///
     /// Measured on real hardware: while a game is running this predicate does not settle. It
     /// flipped False/True repeatedly within the same second, over and over, for the whole
-    /// session. Each flip is a visible state change for the notch — the strip retracts and
-    /// comes back — so the raw signal makes the notch unusable in exactly the situation the
-    /// retraction exists for. The cause is upstream and not ours to fix: a game's foreground
-    /// window genuinely stops covering its monitor for brief moments (overlays, focus churn,
-    /// the game's own child windows).
+    /// session. Each flip is a visible state change for the notch — under the design current
+    /// at the time, the strip vanished and came back; under the covered-state fallback it is a
+    /// whole presentation being torn down and rebuilt — so the raw signal makes the notch
+    /// unusable in exactly the situation the fallback exists for. The cause is upstream and
+    /// not ours to fix: a game's foreground window genuinely stops covering its monitor for
+    /// brief moments (overlays, focus churn, the game's own child windows).
     ///
-    /// The asymmetry is the same one the rest of this feature already commits to. Retracting
-    /// is cheap and a strip left over a game is the expensive failure, so a rising edge is
+    /// The asymmetry is the same one the rest of this feature already commits to. Falling back
+    /// to Classic is cheap and a strip left over a game is the expensive failure, so a rising edge is
     /// published immediately. A falling edge is a claim that the game is *gone*, which is
     /// exactly what a transient blip looks like, so it must hold for <see cref="UncoverSettleMs"/>
     /// of continuous evidence before it is believed.
@@ -184,11 +209,17 @@ public sealed class FullscreenVideoWatcher : IShowSuppressor, IDisposable
             return;
         }
 
-        if (now - _uncoveredSinceTicks.Value < UncoverSettleMs) return;
+        var settledMs = now - _uncoveredSinceTicks.Value;
+        if (settledMs < UncoverSettleMs) return;
 
         _uncoveredSinceTicks = null;
         _coversMonitor = false;
-        _log?.Info("FullscreenVideo", $"ForegroundCoversMonitor -> False (settled for {UncoverSettleMs}ms)");
+        // The elapsed time actually observed, not UncoverSettleMs: samples arrive on a 1 Hz
+        // poll plus an event hook, so the real settle is always longer than the threshold and
+        // can be much longer if the poll was starved. These log lines are the only evidence
+        // this hysteresis will ever be verified from; printing the constant would be printing
+        // an assumption.
+        _log?.Info("FullscreenVideo", $"ForegroundCoversMonitor -> False (settled for {settledMs}ms)");
         ForegroundCoversMonitorChanged?.Invoke(false);
     }
 

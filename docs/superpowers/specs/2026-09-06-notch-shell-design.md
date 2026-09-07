@@ -27,7 +27,9 @@ show, how long they hold, or when the OSD is suppressed changes.
 - `ClassicOsd` reproduces today's behaviour exactly — same fades, same anchors, same
   timing, same defect fixes.
 - `AmbientNotch` ships: a 4–6 px strip pinned top-center, expanding on event or hover.
-- The strip retracts entirely while a window covers the monitor, and returns after.
+- While a window covers the monitor the OSD stops being a notch and behaves like Classic
+  outright, returning to the notch after. (Amended after the first live session — the original
+  goal said "the strip retracts entirely and returns after"; see §4.)
 - Decision logic stays testable without a UI thread.
 
 ## Non-goals
@@ -176,10 +178,37 @@ the same class of bug that made Phase 5's capture scripts read the wrong screen 
 **Constraint:** the hover hit-test must convert into a single coordinate space explicitly,
 and a test must cover a non-100 % scale factor.
 
-## §4 — Retraction while a window covers the monitor
+## §4 — The covered-monitor fallback to Classic
 
-The strip fully retracts (and stops polling for hover) while the foreground window covers
-its monitor, and returns when it stops.
+While the foreground window covers its monitor, the OSD is built as `ClassicPresentation`
+instead of `AmbientNotchPresentation`, and is rebuilt as the notch when it stops.
+
+### Amended after the first live session: retracting the strip was not enough
+
+**As originally specified**, this section said the strip fully retracts (and stops polling
+for hover) while a window covers the monitor, and returns after. That shipped, and it was
+insufficient: hiding the strip does not make the OSD behave like Classic. `Reposition()`
+still pinned it to top-centre, because the anchor was chosen from the *configured* mode
+rather than from what was on screen. So a volume key inside a game still put the card in the
+dead centre of the field of view, while the user's own Classic anchor sat near the bottom
+where they had deliberately put it (recorded as §9.3 of `docs/PHASE6-VERIFICATION.md`).
+
+**As shipped**, `OsdHost.BuildPresentation` returns `ClassicPresentation` whenever the
+configured mode is the notch *and* a window covers the monitor. The anchor, the edge margin,
+the target monitor, the card's shape and the transition then all come from Classic, because
+the object driving them is Classic. `Retract()` and the retracted rest state are gone: the
+notch now has exactly one rest state (parked), and the covered case is not a state of the
+notch at all.
+
+This also removes the covered-state special case that each of those decisions would
+otherwise have needed separately — there is one place that decides what the OSD currently
+is.
+
+**Cost:** rebuilding a presentation object on every edge of a signal that was measured
+flapping several times a second during gameplay. That is only affordable because
+`FullscreenVideoWatcher` now applies hysteresis to the falling edge (rising edge immediate,
+falling edge requires 2 s of continuous evidence). The two changes are a pair; neither is
+safe without the other.
 
 ### This is not suppression
 
@@ -203,15 +232,23 @@ as one over a game, and a rule with no classifier in it has no classifier to get
 ### Failure direction is inverted here — deliberately
 
 Every failure path in `FullscreenVideoWatcher` fails toward *showing* the OSD, because a
-suppression bug that hides the OSD is worse than one that shows it. For retraction the
-opposite holds: a failure that leaves a strip sitting over a game is worse than one that
-retracts when it need not. **Fail toward retracting.**
+suppression bug that hides the OSD is worse than one that shows it. For the covers signal the
+opposite holds: a failure that leaves a strip sitting over a game is worse than one that falls
+back to Classic when it need not. **Fail toward covered.**
+
+Scoped narrowly, though: only a genuine `ForegroundCoversItsMonitor` failure may force the
+signal. The covered state is expensive now — a presentation rebuild held for the settle window
+— so a transient WinRT/SMTC throw from the *suppression* gather, which says nothing about
+whether a window covers the monitor, must not reach it.
 
 ### Latency, stated honestly
 
 Same characteristics as today's suppression: the WinEvent hook catches alt-tab instantly,
 the 1 Hz poll catches F11 within a second. Entering fullscreen with F11 can leave the
 strip visible for up to ~1 s.
+
+Leaving the covered state is slower by design, since the hysteresis was added: the notch
+returns roughly 2–3 s after the last covering sample, not immediately.
 
 ## §5 — Settings
 
@@ -246,6 +283,11 @@ The notch is not `Custom`, so as written it always lands on the primary screen o
 multi-monitor setup. The condition must widen to cover notch mode. This also answers the
 roadmap §10 open question "notch pins to which monitor" — the saved device name, matched
 the same way, falling back to primary when that display is unplugged.
+
+Amended with §4: the widened condition keys on whether the notch is the *active* presentation,
+not on `SettingsModel.Presentation`. While covered, the fallback is Classic and the monitor is
+part of that — otherwise a `BottomCenter` OSD would render bottom-centre of the notch's saved
+display rather than of the screen Classic would have used.
 
 ### 6.2 Position edit mode is meaningless in notch mode
 

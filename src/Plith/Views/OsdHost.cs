@@ -207,10 +207,7 @@ public sealed class OsdHost : BandWindow
         // own "not AmbientNotchPresentation" guard discards it instead of restarting a hide
         // timer or toggling IsClickThrough for a mode switch that has already settled its own
         // state.
-        // _coversMonitor guards against resurrecting the strip over a game: a mode switch
-        // (e.g. a settings save) landing while a fullscreen window is covering the monitor
-        // must not restart the poller, or hovering into the strip's screen region would
-        // descend the card right back on top of whatever is covered.
+        //
         // No _coversMonitor check needed: BuildPresentation returns Classic while covered, so
         // a notch presentation existing at all already means nothing is covering the monitor.
         if (_presentation is AmbientNotchPresentation) _hoverPoller.Start();
@@ -322,9 +319,9 @@ public sealed class OsdHost : BandWindow
         // completion never runs and _isFadingOut would stick true forever. Both OnMouseLeave and
         // OnStripHoverChanged's exit branch early-return on that flag, so no hide timer would
         // ever be restarted: in Classic this stranded the OSD at full opacity until the next
-        // volume key (a defect that predates the notch), and in notch mode it additionally skips
-        // FadeOutAndHide's _coversMonitor re-retraction, leaving a descended card on screen over
-        // a game indefinitely. Cleared here rather than inside SnapToVisible because the flag is
+        // volume key (a defect that predates the notch), and in notch mode it leaves a fully
+        // descended card sitting on screen indefinitely instead of sliding back to the strip.
+        // Cleared here rather than inside SnapToVisible because the flag is
         // OsdHost's transition bookkeeping, not the presentation's.
         _isFadingOut = false;
         // A show transition in flight is already on its way to fully visible. Snapping here
@@ -503,7 +500,7 @@ public sealed class OsdHost : BandWindow
     private void Reposition()
     {
         var m = _settings.Current;
-        var screen = ResolveTargetScreen(m);
+        var screen = ResolveTargetScreen(m, notchActive: _presentation is AmbientNotchPresentation);
         if (screen is null) return;
         var area = screen.WorkingArea;
 
@@ -569,15 +566,22 @@ public sealed class OsdHost : BandWindow
     // Choose the monitor a Custom-positioned OSD anchors on. Match by device name so a
     // resolution or scaling change on the same physical display keeps the OSD there.
     // Fall back to primary when the saved monitor is unplugged (external display gone).
-    private static Screen? ResolveTargetScreen(SettingsModel m)
+    //
+    // notchActive is whether the ACTIVE presentation is the notch, not whether the notch is
+    // the configured mode. While a window covers the monitor the notch
+    // falls back to ClassicPresentation wholesale, and the monitor is part of that fallback:
+    // keying on the setting would anchor a BottomCenter OSD on the notch's saved display
+    // rather than on the primary screen Classic would have used, contradicting the claim that
+    // anchor, margin, shape and transition all come from Classic. One input, taken from the
+    // object that is actually driving the window, rather than instance state read implicitly.
+    private static Screen? ResolveTargetScreen(SettingsModel m, bool notchActive)
     {
-        // The saved device name is honoured for Custom placement and for the notch. Both
+        // The saved device name is honoured for Custom placement and for a live notch. Both
         // are "the user chose a display"; only the built-in anchors are display-agnostic.
         // ROADMAP §10 asked which monitor the notch pins to — this is the answer: the same
         // saved device name, matched the same way, falling back to primary when that
         // display is unplugged.
-        bool usesSavedMonitor =
-            m.Position == OsdPosition.Custom || m.Presentation == PresentationMode.AmbientNotch;
+        bool usesSavedMonitor = m.Position == OsdPosition.Custom || notchActive;
 
         if (usesSavedMonitor && !string.IsNullOrEmpty(m.CustomPositionMonitorDeviceName))
         {

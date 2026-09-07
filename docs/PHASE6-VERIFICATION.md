@@ -6,9 +6,9 @@ for the same reason: no test in this repository can observe a rendered pixel or 
 animation, so an unrun check must never be recorded as a pass.
 
 This entry covers **Task 6, Task 7, Task 8 and Task 9** — `AmbientNotchPresentation`, the
-`OsdHost` mode switch, hover-to-descend via `NotchHoverPoller`, the fullscreen-cover retraction
-signal from `FullscreenVideoWatcher`, and the Settings UI's presentation picker, strip-height
-slider, and position-edit guard. **Task 10** adds sections 6, 7 and 8 below, closing out the
+`OsdHost` mode switch, hover-to-descend via `NotchHoverPoller`, the covers-monitor signal from
+`FullscreenVideoWatcher` and the Classic fallback it drives, and the Settings UI's presentation
+picker, strip-height slider, and position-edit guard. **Task 10** adds sections 6, 7 and 8 below, closing out the
 three checks listed in the design spec's §8 that no earlier task recorded: Snap
 Layouts/auto-hide-taskbar interference, an idle resource measurement with the window never
 hidden, and whether the descent reads as motion on both a 60 Hz and a high-refresh display.
@@ -20,8 +20,10 @@ every other section here is open: no agent may launch, focus, or drive the runni
 ## 0. What is automated as of Task 8
 
 - `dotnet build src/Plith/Plith.csproj -c Debug` — 0 warnings, 0 errors.
-- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 162/162 passing, `FullscreenVideoDetectorTests`
-  unchanged (Task 8 does not touch `ShouldSuppress`'s signature or behaviour).
+- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 161/161 passing, `FullscreenVideoDetectorTests`
+  unchanged (Task 8 does not touch `ShouldSuppress`'s signature or behaviour). The count fell
+  from 162 when a tautological `NotchGeometry` test — two identical calls asserted equal — was
+  deleted rather than left standing as coverage of a property it never exercised.
 - `pwsh -File scripts/check-a11y.ps1` — exit 0.
 
 None of the above exercises `AmbientNotchPresentation` itself: both it and `ClassicPresentation`
@@ -65,32 +67,39 @@ That teardown/rebuild path only runs when a live settings change actually flips
 `SettingsModel.Presentation`, which is exactly the kind of runtime transition the automated
 suite cannot reach (`SettingsService.Changed` firing while a `BandWindow` is live).
 
-**Open question, not resolved in this fix round: the parked strip is drawn twice.**
-`Park()` leaves the card parked at `NotchGeometry.RestingOffset`, which by construction
-sits the card's own bottom edge exactly at `y = stripHeight` — the same band the dedicated
-`NotchStrip` border (`src/Plith/Views/OsdContent.xaml`) already covers. Both elements paint
-with `{DynamicResource OsdSurfaceBrush}`, so at rest the strip is, as far as the code goes,
-two overlapping surfaces in the same band: the `NotchStrip` Border, and a one-`stripHeight`-
-tall sliver of the parked card's own bottom edge (with its own corner radius and drop
-shadow, since it is the same `Border` the full card uses). Whether the intended parked look
-*is* that doubled edge, or whether the card should instead sit fully behind `NotchStrip` at
-`HiddenOffset` while parked (reserving `HiddenOffset` for the fullscreen-retraction case
-only), is a visual composition call this fix round deliberately did not make — it is a
-question about what looks right on a running build, not something a diff can settle. Check
-this during the section 1 manual pass: at rest (1.1), does the top edge read as one strip or
-as two overlapping edges/shadows? Neither outcome should be assumed; record what is actually
-seen.
+**First open question — CLOSED by the first real session.** This document previously asked
+whether the parked strip should be the dedicated `NotchStrip` border alone, or that border
+plus a sliver of the parked card's own bottom edge (the old `RestingOffset` put the card's
+bottom edge at `y = stripHeight`, so both drew in the same band). The user reported the
+doubled edge directly on the first live run: it reads as the corner of a card poking out from
+under the top of the screen, not as a notch. `Park()` now parks at `HiddenOffset`, so the card
+contributes no pixels at all and `NotchStrip` is the only thing drawn. `RestingOffset` is
+gone. Nothing below re-opens this.
 
-**Second open question, also not resolved: the card's drop shadow may still bleed past
-`HiddenOffset`.** The card carries a `DropShadowEffect` (`BlurRadius` 28) as part of the same
-`Border` whose edge `HiddenOffset` pushes off screen. `ClipToBounds` on the outer container
-does not clip effects — only content — so it is unverified whether a faint halo from that
-blur still shows in the reserved margin band even when the card itself is fully retracted.
-This was not investigated further or worked around; it is recorded here, unresolved, for the
-same manual pass to look for: during 1.3's retraction (and while retracted generally, once
-Task 8 wires a caller to `Retract()`), check the strip's margin band for any faint glow or
-halo beyond the strip itself. Record what is actually seen, not what should theoretically
-happen.
+**Second open question, still open: the card's drop shadow may bleed past `HiddenOffset`, and
+may also be clipped at the bottom of the descended card.** Two halves, both unresolved, both
+for the same manual pass:
+
+- *Bleed while parked.* The card carries a `DropShadowEffect` (`BlurRadius` 28) on the same
+  `Border` whose edge `HiddenOffset` pushes off screen. `ClipToBounds` on the outer container
+  does not clip effects — only content — so it is unverified whether a faint halo from that
+  blur still shows in the strip's band even when the card itself is fully off screen. During
+  1.1 and after 1.3's retraction, check the band around the strip for any glow beyond the
+  strip itself.
+- *Clipping while descended.* In notch mode `SetNotchLook` sets `ShadowDepth = 6` and
+  `Direction = 270` (straight down) on a `BlurRadius` of 28, while `SlidingRoot`'s bottom
+  margin reserves only `ContentInsetDip` = 14 DIP below the card. The shadow's downward
+  extent can exceed that, so the bottom of the notch's shadow may be cut off in a straight
+  line rather than fading out. During 1.2, look at the bottom edge of the descended card
+  against a light background: does the shadow fade, or does it stop abruptly?
+
+  Deliberately not fixed by this round. The fix is not a one-liner: the bottom margin and
+  the `contentInset` argument `HiddenOffset` is called with are the same 14 DIP and must move
+  together, or the parked card stops landing with its bottom edge at exactly `y = 0`. Getting
+  the new number right is a visual judgement that needs eyes on a running build, and no build
+  from this branch has been run since the notch's shape was changed.
+
+Record what is actually seen in both cases, not what should theoretically happen.
 
 **Known environment limitation, carried over from Phase 5:** over an RDP session the band
 window's layered surface cannot be captured by any means (`BitBlt`, `BitBlt` with
@@ -243,7 +252,16 @@ observation: no mixed-DPI desktop has been run against this build.
 
 ---
 
-## 4. Retraction while a window covers the monitor (Task 8)
+## 4. The covered-monitor fallback to Classic (Task 8)
+
+> **Behaviour changed since this section was written.** Task 8 originally *retracted the
+> strip* while a window covered the monitor. That was not enough — the OSD stayed pinned to
+> top-centre, so a volume key in a game still put the card in the middle of the field of view
+> (see §9.3). The covered state now rebuilds the presentation as `ClassicPresentation`
+> outright: the anchor, the edge margin, the monitor, the card's shape and the transition all
+> come from Classic while a window covers the monitor, and the notch is rebuilt when it stops.
+> `Retract()` and the retracted rest state no longer exist. The checks below are worded for the
+> shipped behaviour.
 
 > **Status: NOT VERIFIED.**
 > This has not been run. No build from this branch has been launched, focused, or interacted
@@ -264,30 +282,31 @@ alt-tab into it.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True`, and the parked strip is gone entirely — no strip, no sliver, no shadow bleed | The strip stays visible, or `ForegroundCoversMonitor -> True` never appears in the log |
-| 4.2 | While still in the game, press a volume key, then let it auto-hide | The OSD still appears (this is the check that distinguishes retraction from suppression), **and** once it auto-hides the strip does not return — the notch is back to fully retracted, nothing drawn over the game | The OSD stays hidden on the key press (retraction conflated with `IShowSuppressor` somewhere, breaking Phase 5 §2's gate), **or** the strip reappears parked over the game after auto-hide (the volume key's own re-park undid the retraction — see the `_coversMonitor` check in `FadeOutAndHide`'s completion) |
-| 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False`, and the strip returns at the top edge, at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The strip does not return, returns at the wrong offset, or the log line is missing |
+| 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True` followed by `Presentation applied: AmbientNotch, …, coversMonitor=True` with no `parked=` suffix (that suffix only appears for a live notch, so its absence is how the log says "Classic was built"), and the strip is gone entirely — no strip, no sliver, no shadow bleed | The strip stays visible, `ForegroundCoversMonitor -> True` never appears, or the `Presentation applied` line still reports `parked=` |
+| 4.2 | While still in the game, press a volume key, then let it auto-hide | The OSD still appears (this is the check that distinguishes the covered state from suppression), it appears **at the user's own Classic anchor** — not top-centre — and on the monitor Classic would use, **and** once it auto-hides nothing is left drawn over the game | The OSD stays hidden on the key press (the covered state conflated with `IShowSuppressor` somewhere, breaking Phase 5 §2's gate), **or** it appears top-centre anyway (the fallback is not reaching `Reposition`/`ResolveTargetScreen`), **or** a strip appears over the game after auto-hide (a notch presentation was built while covered) |
+| 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False (settled for …ms)` roughly 2–3 s after the alt-tab, then `Presentation applied: AmbientNotch, …, coversMonitor=False, parked=True`, and the strip returns at the top edge at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The strip does not return, returns at the wrong offset, the settle takes far longer than the logged elapsed time suggests, or the log lines are missing |
 
-**Why 4.2 is the one to watch most closely:** Task 8's entire design premise is that
-retraction and suppression are separate signals — `IShowSuppressor` means "do not show at
-all," `ForegroundCoversMonitorChanged` means "retract the parked strip and behave like
+**Why 4.2 is the one to watch most closely:** Task 8's entire design premise is that the
+covered state and suppression are separate signals — `IShowSuppressor` means "do not show at
+all," `ForegroundCoversMonitorChanged` means "stop being a notch and behave like
 Classic." Nothing in the automated suite can catch the two being accidentally merged, because
-merging them would still build clean, still pass all 162 tests (none of which exercise a live
-`OsdHost`/`AmbientNotchPresentation` pair), and still pass the a11y lint. A volume key still
-producing the OSD while the strip stays retracted afterward is the only observation in this
-whole section that actually distinguishes the two — and it is a two-part observation, not
-one: the OSD appearing on the key press is necessary but not sufficient. `ShowOsd`'s at-rest
-path is allowed to run over a game by design (that is what makes the OSD appear at all), and
-its own hide timer then re-parks the card through `FadeOutAndHide` — a table that only checked
-the appearance half would report a pass even if that re-park brought the strip back over the
-game to stay, since 4.3's own alt-tab-out would mask exactly that failure by retracting it
-again through the normal path. Do not skip the "let it auto-hide" half of 4.2.
+merging them would still build clean, still pass all 161 tests (none of which exercise a live
+`OsdHost`/`AmbientNotchPresentation` pair — neither type can even be constructed by the
+headless, non-STA suite), and still pass the a11y lint. A volume key still producing the OSD
+while no strip appears over the game afterward is the only observation in this whole section
+that actually distinguishes the two — and it is a two-part observation, not one: the OSD
+appearing on the key press is necessary but not sufficient. `ShowOsd`'s at-rest path is allowed
+to run over a game by design (that is what makes the OSD appear at all), and its own hide timer
+then takes the card back down through `FadeOutAndHide` — a table that only checked the
+appearance half would report a pass even if that left a strip over the game to stay, since
+4.3's own alt-tab-out would mask exactly that failure by rebuilding the notch through the
+normal path. Do not skip the "let it auto-hide" half of 4.2.
 
 **Record, if this section is run:** the exact `plith.log` lines for 4.1 and 4.3 (the
-`ForegroundCoversMonitor -> …` transitions), and whether any faint strip/shadow was visible
-during 4.1 — the same drop-shadow-bleed question section 1 already flagged as unresolved for
-`HiddenOffset`, and Task 8 is the first task that actually reaches `Retract()` in a running
-build.
+`ForegroundCoversMonitor -> …` transitions, including 4.3's `settled for …ms` value), the
+`Presentation applied: …` line that follows each of them, and whether any faint strip or
+shadow was visible during 4.1 — the same drop-shadow-bleed question section 1 flags as
+unresolved for `HiddenOffset`.
 
 ---
 
@@ -450,12 +469,13 @@ are observations, not inferences.
 | The notch is flush with the top edge, centred, on the saved monitor | `GetWindowLongPtr` + `GetWindowRect`: `rect=1060,0-1500,178` on a 2560-wide display, with `Position = Custom` in config and `CustomPositionMonitorDeviceName = \.\DISPLAY1` |
 | `WS_EX_TRANSPARENT` is genuinely set while parked | ex-style read: `TRANSPARENT=True LAYERED=True TOPMOST=True`. Note the log's `clickThrough=True` alone would NOT have shown this — it reports the dependency property, which reads back true whether or not the native style was applied |
 | Per-pixel transparency survives the click-through toggle (after the fix) | screen capture of the OSD's own rect shows the content behind it, where a black rectangle had been |
-| Retraction fires while a window covers the monitor | `ForegroundCoversMonitor -> True` with nothing drawn in the OSD's rect |
-| Retraction is not suppression | `Show: transition at 1060,0` logged *while* `coversMonitor` was true — the OSD still appeared on a volume key over a covering window |
+| The covers-monitor signal fires, and the strip goes away with it | `ForegroundCoversMonitor -> True` with nothing drawn in the OSD's rect. Note the *label* this row used to carry ("retraction fires") no longer names anything in the code: the covered state is now a wholesale rebuild into `ClassicPresentation`, not a retraction of the strip. The observation is unchanged; only the mechanism behind it was replaced |
+| The covered state is not suppression | `Show: transition at 1060,0` logged *while* `coversMonitor` was true — the OSD still appeared on a volume key over a covering window |
 
-### 9.2 BLOCKING for the Ambient Notch: the covers-monitor signal flaps during gameplay
+### 9.2 The covers-monitor signal flaps during gameplay
 
-**Status: confirmed on real hardware, unfixed. This makes the notch unusable in a game.**
+**Status: confirmed on real hardware. A fix is implemented but has NOT been seen working on a
+running build — no build carrying it has been launched. Treat the fix as unverified.**
 
 `ForegroundCoversMonitor` does not settle while a game is running. From one session:
 
@@ -468,8 +488,9 @@ are observations, not inferences.
 21:10:23.930  ForegroundCoversMonitor -> True
 ```
 
-Every `False` re-parks the strip and every `True` retracts it, so the strip repeatedly appears
-and disappears across the top of the screen mid-game. The user's report was direct: it gets in
+Under the design current at the time, every `False` re-parked the strip and every `True` took
+it away, so the strip repeatedly appeared and disappeared across the top of the screen mid-game
+(under the covered-state fallback the same flapping would rebuild the whole presentation). The user's report was direct: it gets in
 the way badly.
 
 The code is behaving exactly as designed — the defect is in the design. The spec argued for
@@ -478,15 +499,29 @@ wrong". That reasoning holds for correctness and fails for stability: a raw fore
 predicate is simply noisy while a game is up, and the notch converts every sample into a visible
 state change.
 
-Candidate directions, none of them chosen yet:
+Three directions were considered — hysteresis, latching on the covering process, and
+classifying games after all. **The first was chosen and implemented** (`PublishCoversMonitor`
+in `FullscreenVideoWatcher`): the rising edge still publishes immediately, and a falling edge
+must hold for `UncoverSettleMs` (2000 ms, three samples at the 1 Hz poll) of continuous
+evidence before it is believed. `Environment.TickCount64` rather than `DateTime`, so a clock
+adjustment cannot make a pending un-cover look settled. Latching on the process and
+classifying games remain available if this proves insufficient; neither was implemented.
 
-- **Hysteresis / debounce.** Require the signal to hold a value for N samples before acting.
-  Cheapest, and it directly targets the observed failure. Asymmetric thresholds would suit the
-  stated failure direction: retract immediately, return only after a sustained un-cover.
-- **Latch on the covering process.** Retract when a covering window appears and stay retracted
-  until that *process* is gone or is no longer foreground, rather than re-evaluating geometry.
-- **Treat games differently after all.** The spec explicitly rejected a classifier; this finding
-  is the counter-evidence and the decision deserves revisiting rather than defending.
+**What is still open:** whether 2000 ms is actually enough against the measured blips. Read
+off the timestamps above, the flips are ~0.5 s and ~1.2 s apart, which this threshold covers;
+the last pair is ~17.7 s apart, far outside it. That arithmetic is all this claim rests on —
+no build carrying the hysteresis has been run, so its effect on the flapping has not been
+observed at all.
+
+**How to check it, when §4 is next run:** the `ForegroundCoversMonitor -> False` line now
+prints the elapsed time actually observed rather than the constant, e.g.
+`(settled for 2044ms)`. Two things to look for:
+
+1. No `-> False` / `-> True` pair closer together than a few seconds while a game is up. Pairs
+   that still flap mean the threshold is too short.
+2. The strip returning within roughly 2–3 s of alt-tabbing out of the game, not later.
+   A `settled for` value far above 2000 ms means the poll was being starved and the delay is
+   not the threshold's fault.
 
 ### 9.3 Design problem: top-centre pinning is intrusive during gameplay
 
@@ -495,11 +530,23 @@ at `1060,0` — the middle of the field of view. The same user's Classic anchor 
 near the bottom of the screen, chosen deliberately.
 
 So switching to the notch silently relocates the OSD from a spot the user picked to the single
-most intrusive spot on the screen, and there is no way to move it: §5's guard disables position
-editing in notch mode, which is correct for the notch's own geometry but leaves the user with no
-recourse.
+most intrusive spot on the screen.
+
+**Partly addressed since.** The covered state no longer merely hides the strip — it rebuilds
+the presentation as `ClassicPresentation` outright, so while a window covers the monitor the
+OSD uses the user's own anchor, edge margin, card shape and transition again (and, since this
+round, the monitor Classic would have chosen too). The `1060,0` placement described above is
+what a volume key during gameplay would no longer produce.
+
+What remains true is the *uncovered* case: in notch mode with nothing covering the monitor
+the OSD is pinned to top-centre and there is still no way to move it, because §5's guard
+disables position editing in notch mode. That guard is correct for the notch's own geometry
+but leaves the user with no recourse.
+
+**Neither statement above has been observed on a running build.** No build carrying the
+covered-state fallback has been launched.
 
 This is not a bug against the spec — the notch is *defined* as top-centre. It is evidence that
 "Ambient Notch" and "an OSD you positioned yourself" are different products, and that a user who
-has customised their position is being handed a downgrade. Worth deciding before the preset
-picker ships to anyone.
+has customised their position is being handed a downgrade in the uncovered case. Worth deciding
+before the preset picker ships to anyone.

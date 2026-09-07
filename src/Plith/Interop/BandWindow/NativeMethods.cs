@@ -173,10 +173,11 @@ public static partial class NativeMethods
     [DllImport("user32.dll")]
     internal static extern int SendMessage(nint hWnd, WindowMessage msg, nint wParam, nint lParam);
 
-    [DllImport("user32.dll")]
-    internal static extern bool SetLayeredWindowAttributes(nint hwnd, uint crKey, byte bAlpha, uint dwFlags);
-
-    public const uint LWA_ALPHA = 0x2;
+    // SetLayeredWindowAttributes and LWA_ALPHA are deliberately NOT declared here. The call
+    // is destructive on this window — it switches a per-pixel-alpha layered window to constant
+    // alpha and turns every transparent pixel opaque black — and it was removed from
+    // BandWindow.ToggleClickThrough for exactly that reason (see the comment there). Keeping
+    // an unused P/Invoke around only lets autocomplete offer the same bug back.
 
     public static void ApplyWindowStyles(
         nint hWnd,

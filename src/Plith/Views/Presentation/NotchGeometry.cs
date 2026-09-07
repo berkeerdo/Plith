@@ -19,8 +19,10 @@ public static class NotchGeometry
 
     /// <summary>
     /// Y offset that takes the card fully off screen, leaving nothing but whatever the strip
-    /// element itself draws. This is the offset for BOTH rest states — parked and retracted —
-    /// which differ only in whether NotchStrip is shown.
+    /// element itself draws. This is the notch's one and only rest offset: the parked state.
+    /// An earlier design had a second rest state (retracted — the same offset with the strip
+    /// hidden) for the covered-monitor case; that case now rebuilds the presentation as
+    /// ClassicPresentation instead, so the state and its offset are gone.
     ///
     /// An earlier design parked at a shallower offset that left the card's own bottom edge
     /// sitting at y = stripHeight, so the dedicated strip and a sliver of the card (with that

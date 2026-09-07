@@ -54,19 +54,12 @@ public class NotchGeometryTests
         Assert.Equal(0, NotchGeometry.HiddenOffset(contentHeight: 0, contentInset: Inset));
     }
 
-    [Fact]
-    public void HiddenOffset_DoesNotDependOnStripHeight()
-    {
-        // Both rest states park at this offset and differ only in whether NotchStrip is shown,
-        // so the strip's height must not enter the card's placement at all. An earlier design
-        // subtracted it here, which left the card's own bottom edge — corner radius and drop
-        // shadow included — drawing in the same band as the strip, and read on screen as a card
-        // edge leaking out from under the top rather than as a notch.
-        var a = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
-        var b = NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset);
-        Assert.Equal(a, b);
-        Assert.Equal(-186, a);
-    }
+    // Deleted: HiddenOffset_DoesNotDependOnStripHeight. It called HiddenOffset twice with
+    // identical arguments and asserted the two results equal, which is true of any pure
+    // function, then repeated the -186 assertion already made above. The property it claimed
+    // to cover — that strip height never enters the card's placement — is enforced by the
+    // signature: HiddenOffset takes content height and inset and nothing else, so no test can
+    // vary a strip height it cannot be given.
 
     [Fact]
     public void HiddenOffset_LeavesTheCardsBottomEdgeAtZero()
