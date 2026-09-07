@@ -371,7 +371,7 @@ public sealed class OsdHost : BandWindow
             // would expand to a height computed without the row and clip it for one show.
             _home.Open();
             _hideTimer?.Stop();
-            ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
+            ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs), fromHover: true);
         }
         else
         {
@@ -415,9 +415,22 @@ public sealed class OsdHost : BandWindow
         _hideTimer.Start();
     }
 
-    public void ShowOsd(TimeSpan visibleFor)
+    public void ShowOsd(TimeSpan visibleFor, bool fromHover = false)
     {
         if (_isEditMode) return;   // edit mode keeps its own always-on visibility
+
+        // Closed here, not only in FadeOutAndHide's AnimateToRest completion. IsAtRest treats
+        // an in-flight collapse as "at rest" (AmbientNotchPresentation's _isCollapsing), so an
+        // event arriving mid-collapse — a volume key, not a hover — lands in the
+        // AnimateToVisible branch below, which calls BeginAnimation(NotchExpandProperty, expand)
+        // and REPLACES the running collapse clock. WPF raises no Completed for a clock removed
+        // that way (the identical hazard is already documented on _isFadingOut in OnMouseEnter
+        // above), so the collapse's own completion — and the _home.Close() inside it — never
+        // runs. Closing here instead makes the row's closure not depend on that clock finishing.
+        // fromHover is the one exception: OnNotchHoverChanged's hover-in branch has just called
+        // _home.Open() and legitimately wants the row to stay for this show.
+        if (!fromHover) _home.Close();
+
         _showGeneration++;
         bool wasFadingOut = _isFadingOut;
         _isFadingOut = false;

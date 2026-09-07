@@ -86,8 +86,15 @@ The ordering matters: `CardHost.RecomputeVisibleCards` must have added the card 
 panel is measured, or the notch expands to a panel height computed without the ambient row
 and the row is clipped for one show.
 
-**Closed by** the notch reaching rest — i.e. in the callback `AnimateToRest` completes, and
-in `Park()`. Not on cursor exit: leaving the resting rectangle is the normal way to move
+**Closed by** `OsdHost`, in three places: whenever `ShowOsd` runs for a reason other than
+hover (an audio or media event, so the row never shows for those); whenever the notch finishes
+collapsing back to rest (the `AnimateToRest` completion callback, for the ordinary
+uninterrupted case); and whenever the presentation is rebuilt (both branches of
+`ApplyPresentationMode`, so a mode switch always settles fully closed). The first of these
+exists because `IsAtRest` treats an in-flight collapse as already at rest, so an event
+arriving mid-collapse can replace the collapse's animation clock before it ever completes —
+WPF raises no `Completed` for a clock replaced that way, so the `AnimateToRest` close alone is
+not reliable. Not on cursor exit: leaving the resting rectangle is the normal way to move
 *onto* the open panel (slice 1 §3 already relies on this), so closing there would take the
 row away the instant the user reached for it.
 
