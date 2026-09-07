@@ -123,7 +123,7 @@ public sealed class SettingsService
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["ShowAmbientOnHover"] = m.ShowAmbientOnHover.ToString(inv);
         data[SectionOsd]["ShowWeather"] = m.ShowWeather.ToString(inv);
-        data[SectionOsd]["WeatherLocation"] = m.WeatherLocation;
+        data[SectionOsd]["WeatherLocation"] = m.WeatherLocation ?? string.Empty;
         data[SectionOsd]["WeatherLatitude"] = m.WeatherLatitude.ToString("G", inv);
         data[SectionOsd]["WeatherLongitude"] = m.WeatherLongitude.ToString("G", inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);

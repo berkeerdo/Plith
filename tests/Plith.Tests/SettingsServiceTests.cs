@@ -394,6 +394,47 @@ public class SettingsServiceTests
 
         Assert.Equal(24, svc.Current.NotchStripHeightDip);
     }
+
+    [Fact]
+    public void Save_Then_Load_RoundTripsWeatherSettings()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+
+        var m = svc.Current.Clone();
+        m.ShowWeather = false;
+        m.WeatherLocation = "Istanbul";
+        m.WeatherLatitude = 41.0082;
+        m.WeatherLongitude = 28.9784;
+        svc.Save(m);
+
+        var reloaded = new SettingsService(dir.IniPath);
+        reloaded.Load();
+
+        Assert.False(reloaded.Current.ShowWeather);
+        Assert.Equal("Istanbul", reloaded.Current.WeatherLocation);
+        Assert.Equal(41.0082, reloaded.Current.WeatherLatitude, precision: 4);
+        Assert.Equal(28.9784, reloaded.Current.WeatherLongitude, precision: 4);
+    }
+
+    [Fact]
+    public void Save_NullWeatherLocation_DoesNotThrowAndRoundTripsAsEmpty()
+    {
+        // Regression: unlike FullscreenVideoHideList's save line, WeatherLocation's first
+        // draft was missing the "?? string.Empty" guard every other string save on this page
+        // has. A null here (e.g. from a future Settings binding) must not blow up Save.
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+
+        var m = svc.Current.Clone();
+        m.WeatherLocation = null!;
+        svc.Save(m);
+
+        var reloaded = new SettingsService(dir.IniPath);
+        reloaded.Load();
+
+        Assert.Equal(string.Empty, reloaded.Current.WeatherLocation);
+    }
 }
 
 internal sealed class TempIniDir : IDisposable

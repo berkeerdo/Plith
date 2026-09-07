@@ -24,8 +24,20 @@ public sealed class WeatherService : IDisposable
     private readonly CancellationTokenSource _cts = new();
 
     private LocationOutcome _lastWindowsOutcome = LocationOutcome.Unavailable;
-    private GeoPoint? _resolved;
+    // Session cache for the IP fallback only — re-asking ipapi.co every 15 minutes while
+    // Windows Location stays unavailable adds nothing and risks its free-tier rate limit.
+    // Windows Location itself is never cached this way: it must be asked fresh every refresh
+    // so a user flipping the system toggle back on mid-session recovers on the next tick, not
+    // just the first one. A later Windows success naturally takes precedence over this cached
+    // point, because LocationResolver.Choose only falls through to ipPoint when windowsPoint
+    // is null.
+    private GeoPoint? _cachedIpPoint;
     private bool _refreshing;
+
+    // Same once-per-transition logging discipline as OpenMeteoClient/WindowsLocationProvider/
+    // IpLocationProvider: one line when a refresh starts failing, one when it recovers, not
+    // one per tick.
+    private string? _lastRefreshFailure;
 
     public WeatherService(
         SettingsService settings,
@@ -65,18 +77,43 @@ public sealed class WeatherService : IDisposable
         // A slow fetch must not stack up behind the timer. Refreshes are idempotent and
         // dropping one costs nothing — the next tick is 15 minutes away.
         if (_refreshing) return;
-        if (!_settings.Current.ShowWeather) return;
+        if (!_settings.Current.ShowWeather)
+        {
+            // Drop any prior reading rather than leaving it on screen. Nothing can flip this
+            // setting at runtime yet, but Task 8 adds the toggle, and AmbientCard keeps feeding
+            // Current into Tick regardless — a stale snapshot would otherwise stay visible for
+            // up to WeatherMaxAgeMinutes after the user turned weather off.
+            Current = null;
+            return;
+        }
         _refreshing = true;
         try
         {
-            _resolved ??= await ResolveLocationAsync().ConfigureAwait(true);
-            if (_resolved is not { } at) return;
+            var at = await ResolveLocationAsync().ConfigureAwait(true);
+            if (at is not { } point) return;
 
-            var snap = await _weather.GetCurrentAsync(at, _cts.Token).ConfigureAwait(true);
+            var snap = await _weather.GetCurrentAsync(point, _cts.Token).ConfigureAwait(true);
             if (snap is null) return;
 
             Current = snap;
+            LogRecovery("Weather refresh recovered");
             Updated?.Invoke();
+        }
+        catch (Exception ex)
+        {
+            // Nothing else observes a fire-and-forget task's exception: this method is always
+            // invoked as `_ = RefreshAsync()`, from both Start() and the timer tick, and
+            // src/Plith has no TaskScheduler.UnobservedTaskException or
+            // DispatcherUnhandledException handler to catch it elsewhere. Left unguarded, a
+            // failure here — most plausibly SettingsService.Save throwing IOException out of
+            // GeocodeAndCacheAsync because config.ini is locked by an editor or a sync client,
+            // but also anything a WeatherService.Updated subscriber like AmbientCard throws —
+            // would be completely invisible: the `finally` below still resets _refreshing so
+            // the loop survives, but silently, with no record that anything went wrong. That
+            // contradicts spec §3.3's "logged once per transition, not once per attempt",
+            // which is why this reuses the same LogFailure/LogRecovery dedup the location
+            // providers use rather than swallowing the exception outright.
+            LogFailure($"Refresh failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
         {
@@ -99,13 +136,14 @@ public sealed class WeatherService : IDisposable
         }
 
         GeoPoint? windowsPoint = null;
-        // Always retry Windows Location, for every prior outcome including Denied: Plith is
-        // unpackaged, so Geolocator.RequestAccessAsync shows no per-app consent dialog and
-        // never "stops asking after the first answer" the way Microsoft's docs describe for
-        // packaged apps. Every call here just re-reads the live state of Windows' system-wide
-        // location toggle, so a user who flips that toggle back on mid-session must be able to
-        // recover on the next refresh without restarting Plith — see GeoPoint.cs and
-        // WindowsLocationProvider's doc comments for the full reasoning.
+        // Always retry Windows Location, on every refresh and for every prior outcome
+        // including Denied — never skipped by an in-memory cache the way the IP fallback is
+        // below. It is a local call, not a network one, and it is documented not to re-prompt
+        // after the first answer for an unpackaged app like Plith (see GeoPoint.cs and
+        // WindowsLocationProvider's doc comments), which is exactly why asking again is free.
+        // That is the whole point of the recovery case: a user who flips the system location
+        // toggle back on mid-session must see it picked up on the next 15-minute tick, not
+        // only on whichever refresh happened to run first.
         if (manual is null)
         {
             (_lastWindowsOutcome, windowsPoint) = await _windowsLocation.GetAsync(_cts.Token).ConfigureAwait(true);
@@ -113,7 +151,15 @@ public sealed class WeatherService : IDisposable
 
         GeoPoint? ipPoint = null;
         if (manual is null && windowsPoint is null)
-            ipPoint = await _ipLocation.GetAsync(_cts.Token).ConfigureAwait(true);
+        {
+            // Reused for the rest of the process once it succeeds, unlike Windows Location
+            // above: re-asking ipapi.co every 15 minutes while Windows stays unavailable buys
+            // nothing and risks its free-tier rate limit. If Windows Location later succeeds,
+            // windowsPoint above is non-null and LocationResolver.Choose never reaches this
+            // cached value at all — a Windows recovery always wins over a stale IP fix.
+            _cachedIpPoint ??= await _ipLocation.GetAsync(_cts.Token).ConfigureAwait(true);
+            ipPoint = _cachedIpPoint;
+        }
 
         var chosen = LocationResolver.Choose(manual, _lastWindowsOutcome, windowsPoint, ipPoint);
         _log?.Info("Weather", chosen is null
@@ -134,11 +180,12 @@ public sealed class WeatherService : IDisposable
         return point;
     }
 
-    /// <summary>Drop the cached location so the next refresh resolves again. Called when the
-    /// user edits the manual location in Settings.</summary>
+    /// <summary>Drop the cached IP fallback so the next refresh asks again. Called when the
+    /// user edits the manual location in Settings — Windows Location itself needs no
+    /// invalidation, since it is never cached across refreshes in the first place.</summary>
     public void InvalidateLocation()
     {
-        _resolved = null;
+        _cachedIpPoint = null;
         _lastWindowsOutcome = LocationOutcome.Unavailable;
     }
 
@@ -147,5 +194,24 @@ public sealed class WeatherService : IDisposable
         _timer.Stop();
         _cts.Cancel();
         _cts.Dispose();
+    }
+
+    // Logs only when the failure signature changes, so a fault held across many refresh ticks
+    // produces one line, not one per tick — spec §3.3's "logged once per transition, not once
+    // per attempt".
+    private void LogFailure(string message)
+    {
+        if (string.Equals(_lastRefreshFailure, message, StringComparison.Ordinal)) return;
+        _lastRefreshFailure = message;
+        _log?.Info("Weather", message);
+    }
+
+    // Logs recovery exactly once, the first successful refresh after a logged failure, then
+    // clears the remembered signature so a later failure logs again.
+    private void LogRecovery(string message)
+    {
+        if (_lastRefreshFailure is null) return;
+        _lastRefreshFailure = null;
+        _log?.Info("Weather", message);
     }
 }
