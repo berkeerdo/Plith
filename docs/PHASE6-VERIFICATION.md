@@ -665,7 +665,13 @@ returns immediately otherwise), so there is no path by which Classic can show th
 `ShowAmbientOnHover=true` under `[Osd]` (or pick "Ambient Notch" and enable "Show ambient info
 on hover" from Settings), restart Plith, and hover the resting notch. For 11.5–11.7, also clear
 any cached `WeatherLatitude`/`WeatherLongitude`/`WeatherLocation` so the location resolution
-actually runs cold.
+actually runs cold. **Also confirm `HoverKeepAlive=true` under `[Osd]` (or "Hover keep-alive"
+checked in Settings).** "Show ambient info on hover" opens the row through the same hover path
+`HoverKeepAlive` gates — `OsdHost.OnNotchHoverChanged` early-returns before ever opening the
+row when it is off — so with it off, hovering the notch does nothing at all no matter what
+"Show ambient info on hover" is set to. Settings now disables that toggle and says so in its
+hint whenever Hover keep-alive is off (see fix wave item 3); a verifier hitting a dead hover
+here should check that setting before treating it as a regression.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
@@ -678,7 +684,8 @@ actually runs cold.
 | 11.7 | Type a city into "Weather location" | The column switches to that city within one refresh; `config.ini` gains non-zero `WeatherLatitude`/`WeatherLongitude` | The old location persists, or the cache is not written |
 | 11.8 | Turn "Show weather" off | The column disappears and no further network requests are made | Requests continue |
 | 11.9 | Switch to Classic OSD | No ambient row ever appears, and the three Settings rows are hidden | The row leaks into Classic |
-| 11.10 | Narrator on the open panel | The row announces as "Ambient status"; its value reads as "Time ‹time›, ‹date›", then ", Battery ‹percent›" (plus ", charging" when charging) if the battery column is present, then ", ‹temperature›°  ‹condition›" if the weather column is present (`AmbientCardViewModel.AccessibleSummary`) — **by design, "Weather" is never spoken**: Time and Battery carry a spoken label, the weather segment does not | It announces a type name, reads bare numbers instead of the composed sentence above, or the Time/Battery segments are missing their labels or wrong order |
+| 11.10 | Narrator on the open panel | The row announces as "Ambient status"; its value reads as "Time ‹time›, ‹date›", then ", Battery ‹percent›" (plus ", charging" when charging) if the battery column is present, then ", Weather ‹temperature›°  ‹condition›" if the weather column is present (`AmbientCardViewModel.AccessibleSummary`) — Time, Battery and Weather all carry a spoken label now (fix wave item 7; the weather segment used to be bare, which read as a trailing fragment rather than a third labelled item) | It announces a type name, reads bare numbers instead of the composed sentence above, or any of the three segments is missing its label or in the wrong order |
+| 11.11 | Narrator on the open panel, listening past the card-level summary | After the composed "Ambient status" sentence above, Narrator also re-announces "‹time›", "‹date›", the weather glyph character and "‹temperature›°  ‹condition›" and "‹percent›" individually, once each, as it walks the clock/weather/battery TextBlocks | Nothing after the composed sentence, or a type name instead of the raw text — either would mean WPF started honouring an empty `AutomationProperties.Name` differently than it does today |
 
 **Why 11.5 and 11.6 are the highest-risk checks in this slice.** Every other row here is a
 WPF layout or a settings-wiring question, the same shape of thing the rest of this file has
@@ -704,3 +711,23 @@ both: a leak specific to the home view's timers — rather than to `NotchHoverPo
 general parked-notch render path §7 was originally written for — would show up in the same
 30-minute idle measurement, and 7.3's motionless-hover variant now also exercises the home
 view staying open (rather than just `NotchHoverPoller`'s comparison branch) for the duration.
+
+**Known limitation: the ambient row's Narrator announcement is doubled (fix wave item 4).**
+`AmbientCardView.xaml` binds `AutomationProperties.Name` to the composed
+`AmbientCardViewModel.AccessibleSummary` on the `UserControl` root, which is the correct and
+only place WPF gives it an automation peer (`Grid`/`StackPanel` own none). Every child
+`TextBlock` inside — the clock, the weather glyph and text, the battery glyph and text — also
+owns its own automation peer, though, and `TextBlockAutomationPeer.GetNameCore` falls through
+to the element's own `Text` whenever `AutomationProperties.Name` is unset, including set to the
+empty string. An `AutomationProperties.Name=""` on each of those TextBlocks was tried, on the
+theory it would suppress that fallback; it does not — WPF's `AutomationProperties` was checked
+(reflecting over `System.Windows.Automation.AutomationProperties` in `PresentationCore.dll`
+lists `Name`, `HelpText`, `LabeledBy`, `LiveSetting`, `ItemStatus`, `IsOffscreenBehavior` and so
+on, but nothing resembling WinUI/UWP's `AccessibilityView="Raw"`) and offers no supported way
+to pull a `TextBlock` out of the automation tree short of overriding
+`UIElement.OnCreateAutomationPeer` to return `null` on a custom control. So the inert
+`Name=""` attributes were removed, and Narrator is expected to speak the card-level summary and
+then re-announce "‹time›", "‹date›", the weather glyph character, "‹temperature›°  ‹condition›"
+and "‹percent›" individually as it walks the row — see 11.11 above. Accepted as a known
+limitation, not fixed. `MediaCardView.xaml` carries the same inert idiom in one place; it
+predates this branch and was left untouched.

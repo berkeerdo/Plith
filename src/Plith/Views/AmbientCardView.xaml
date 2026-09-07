@@ -13,7 +13,25 @@
          same as AudioCardView/MediaCardView: WPF gives Grid/StackPanel no automation peer, so
          a name set on either never reaches UI Automation. AccessibleSummary is composed from
          every column that currently has content — see AmbientCardViewModel — rather than named
-         per column, because the columns themselves are peerless panels. -->
+         per column, because the columns themselves are peerless panels.
+
+         Every TextBlock below DOES own an automation peer, though, and TextBlockAutomationPeer
+         falls through to the element's own Text whenever AutomationProperties.Name is unset —
+         including set to the empty string, which is not the same as "no name" to WPF. An
+         AutomationProperties.Name="" was tried on each of them, on the theory that it would
+         keep Narrator from re-announcing content the live-region summary above had just
+         spoken. It is inert, was removed, and is not replaced with anything: the review that
+         suggested AutomationProperties.AccessibilityView="Raw" (WinUI/UWP's answer to this
+         same problem) was checked against WPF's actual API surface — reflecting over
+         System.Windows.Automation.AutomationProperties in PresentationCore.dll lists Name,
+         HelpText, LabeledBy, LiveSetting, ItemStatus, IsOffscreenBehavior and so on, but no
+         AccessibilityView — and WPF has no equivalent. The only way to pull a TextBlock out of
+         the automation tree here is UIElement.OnCreateAutomationPeer returning null on a
+         custom control, which is a bigger change than this fix warrants. So Narrator speaks
+         the card's live-region summary and then re-announces "14:05", "7 September", the
+         weather glyph character, "21°  Clear" and the battery percentage individually — a
+         duplicate announcement accepted as a known limitation, not fixed. (MediaCardView.xaml
+         carries the same inert idiom in one place; it predates this branch and is left as-is.) -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -21,29 +39,27 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Clock. The TextBlocks carry no automation name of their own: TextBlock does own a
-             peer and names itself from its own Text by default, which would announce "14:05"
-             and "7 September" a second time, disconnected from the card-level summary above.
-             Explicitly empty neutralises that, matching the album-art glyph in
-             MediaCardView.xaml. -->
+        <!-- Clock. See the root comment above for why these TextBlocks carry no
+             AutomationProperties.Name override: WPF gives them no supported way to suppress
+             the automation peer's own text-derived name, so Narrator announces "14:05" and
+             "7 September" a second time after the card-level summary. Accepted, not fixed. -->
         <StackPanel Grid.Column="0"
                     VerticalAlignment="Center">
             <TextBlock Text="{Binding ClockTime}"
                        FontSize="20"
                        FontWeight="SemiBold"
-                       Foreground="{DynamicResource OsdTextPrimary}"
-                       AutomationProperties.Name="" />
+                       Foreground="{DynamicResource OsdTextPrimary}" />
             <TextBlock Text="{Binding ClockDate}"
                        FontSize="11"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       AutomationProperties.Name="" />
+                       Foreground="{DynamicResource OsdTextSecondary}" />
         </StackPanel>
 
         <!-- Weather. Collapsed rather than blanked when there is no fresh snapshot, same rule
-             as the battery column below. No AutomationProperties.Name here either: this
-             StackPanel is just as peerless as every other panel in this file, so a name set on
-             it would never reach UI Automation — the weather segment is appended to
-             AmbientCardViewModel.AccessibleSummary, bound on the UserControl root above. -->
+             as the battery column below. This StackPanel is peerless (Grid/StackPanel own no
+             automation peer in WPF), so it carries no AutomationProperties.Name of its own —
+             the weather segment is appended to AmbientCardViewModel.AccessibleSummary, bound
+             on the UserControl root above. Its child TextBlocks below duplicate that summary
+             when Narrator reads them individually; see the root comment for why. -->
         <StackPanel Grid.Column="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Center"
@@ -54,21 +70,20 @@
                        FontSize="14"
                        Margin="0,0,6,0"
                        VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       AutomationProperties.Name="" />
+                       Foreground="{DynamicResource OsdTextSecondary}" />
             <TextBlock Text="{Binding WeatherText}"
                        FontSize="13"
                        VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       AutomationProperties.Name="" />
+                       Foreground="{DynamicResource OsdTextSecondary}" />
         </StackPanel>
 
         <!-- Battery. Collapsed rather than blanked when there is no battery: a collapsed
              element contributes nothing to the Grid, so a desktop's row is genuinely two
-             columns wide instead of two columns and a gap. No AutomationProperties.Name here
-             on purpose — this StackPanel is peerless like every other panel in this file, so
-             a name set on it would never reach UI Automation. The reading lives entirely in
-             AmbientCardViewModel.AccessibleSummary, bound on the UserControl root above. -->
+             columns wide instead of two columns and a gap. Peerless StackPanel, same as
+             Weather above, so it carries no AutomationProperties.Name of its own — the
+             reading lives entirely in AmbientCardViewModel.AccessibleSummary, bound on the
+             UserControl root above. Its child TextBlocks below duplicate that summary when
+             Narrator reads them individually; see the root comment for why. -->
         <StackPanel Grid.Column="2"
                     Orientation="Horizontal"
                     VerticalAlignment="Center"
@@ -79,13 +94,11 @@
                        Margin="0,0,4,0"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource OsdTextSecondary}"
-                       AutomationProperties.Name=""
                        Visibility="{Binding IsCharging, Converter={StaticResource BoolToVisibilityConverter}}" />
             <TextBlock Text="{Binding BatteryText}"
                        FontSize="13"
                        VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       AutomationProperties.Name="" />
+                       Foreground="{DynamicResource OsdTextSecondary}" />
         </StackPanel>
     </Grid>
 </UserControl>

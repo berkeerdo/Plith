@@ -42,6 +42,11 @@ public sealed class WeatherService : IDisposable
     // against this field to tell an edited city apart from an unrelated settings save.
     private string? _cachedLocationCity;
 
+    // Mirrors ShowWeather the same way _cachedLocationCity mirrors WeatherLocation: seeded in
+    // Start(), compared against the incoming value in OnSettingsChanged to tell an actual
+    // toggle apart from an unrelated settings save.
+    private bool _cachedShowWeather;
+
     // Same once-per-transition logging discipline as OpenMeteoClient/WindowsLocationProvider/
     // IpLocationProvider: one line when a refresh starts failing, one when it recovers, not
     // one per tick.
@@ -77,29 +82,68 @@ public sealed class WeatherService : IDisposable
     public void Start()
     {
         _cachedLocationCity = _settings.Current.WeatherLocation;
+        _cachedShowWeather = _settings.Current.ShowWeather;
         _settings.Changed += OnSettingsChanged;
         _timer.Start();
         _ = RefreshAsync();   // do not make the user wait 15 minutes for the first reading
     }
 
+    // Reacts to two independent settings, each compared against its own cached copy so an
+    // unrelated save (a slider drag) is a no-op here — the same guard WeatherLocation always
+    // had, now paired with one for ShowWeather:
+    //
+    //   ShowWeather toggling off  -> drop Current immediately. RefreshAsync's own ShowWeather
+    //   check would eventually do this too, but only on the next 15-minute tick — AmbientCard
+    //   keeps feeding Current into Tick every second regardless of this setting, so leaving it
+    //   set would keep the weather column on screen for up to a full refresh cycle after the
+    //   user turned it off.
+    //
+    //   ShowWeather toggling on, or WeatherLocation changing while it's already on -> kick off
+    //   an immediate RefreshAsync rather than waiting for the timer, the same "don't make the
+    //   user wait 15 minutes" reasoning Start() already applies to the very first reading.
+    //
+    //   WeatherLocation changing -> also drop Current right away, before the refresh above
+    //   completes. Without this, a stale reading for the OLD city stays on screen — under the
+    //   NEW city's label — for however long the fresh geocode/fetch takes.
+    //
     // WeatherLocation changing at runtime, via the Task 8 Settings text box, invalidates the
     // geocode cache — both halves of it. Session caches (InvalidateLocation) go first; the
     // persisted WeatherLatitude/WeatherLongitude pair is zeroed and re-saved second, because
     // ResolveLocationAsync treats "both zero" as "not cached" and would otherwise read the
-    // stale pair straight back out of config.ini on the very next resolve. Fires on every
-    // Save, not just a location edit, so an unrelated settings change (a slider drag) must be
-    // a no-op here — the _cachedLocationCity comparison is what makes that so.
+    // stale pair straight back out of config.ini on the very next resolve. _settings.Save
+    // below raises Changed synchronously, re-entering this method: _cachedLocationCity and
+    // _cachedShowWeather are both updated before that Save runs, so the re-entrant call sees
+    // no change on either field and returns without recursing further.
     private void OnSettingsChanged(SettingsModel m)
     {
-        if (string.Equals(m.WeatherLocation, _cachedLocationCity, StringComparison.Ordinal)) return;
+        bool locationChanged = !string.Equals(m.WeatherLocation, _cachedLocationCity, StringComparison.Ordinal);
+        bool showWeatherTurnedOn = m.ShowWeather && !_cachedShowWeather;
+        bool showWeatherTurnedOff = !m.ShowWeather && _cachedShowWeather;
+        _cachedShowWeather = m.ShowWeather;
+
+        if (showWeatherTurnedOff) Current = null;
+
+        if (!locationChanged)
+        {
+            if (showWeatherTurnedOn) _ = RefreshAsync();
+            return;
+        }
+
+        // A new city invalidates whatever Current holds — it was fetched for the old one.
+        Current = null;
         _cachedLocationCity = m.WeatherLocation;
         InvalidateLocation();
 
-        if (m.WeatherLatitude == 0 && m.WeatherLongitude == 0) return;
+        if (m.WeatherLatitude == 0 && m.WeatherLongitude == 0)
+        {
+            if (m.ShowWeather) _ = RefreshAsync();
+            return;
+        }
         var cleared = m.Clone();
         cleared.WeatherLatitude = 0;
         cleared.WeatherLongitude = 0;
         _settings.Save(cleared);
+        if (m.ShowWeather) _ = RefreshAsync();
     }
 
     private async Task RefreshAsync()
@@ -109,10 +153,11 @@ public sealed class WeatherService : IDisposable
         if (_refreshing) return;
         if (!_settings.Current.ShowWeather)
         {
-            // Drop any prior reading rather than leaving it on screen. Nothing can flip this
-            // setting at runtime yet, but Task 8 adds the toggle, and AmbientCard keeps feeding
-            // Current into Tick regardless — a stale snapshot would otherwise stay visible for
-            // up to WeatherMaxAgeMinutes after the user turned weather off.
+            // OnSettingsChanged already clears Current the instant ShowWeather toggles off, so
+            // this is a defensive backstop, not the primary mechanism: it stops a refresh that
+            // was already in flight when the toggle flipped — or a timer tick that lands while
+            // the setting is off — from repopulating Current and putting the column back on
+            // screen behind the toggle's back.
             Current = null;
             return;
         }

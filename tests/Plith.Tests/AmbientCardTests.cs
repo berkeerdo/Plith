@@ -85,6 +85,20 @@ public class AmbientCardTests
     }
 
     [Fact]
+    public void AccessibleSummaryAppendsTheWeatherSegmentWithASpokenLabel()
+    {
+        // "Time" and "Battery" both carry a spoken label; the weather segment used to be bare
+        // (just the temperature and condition), which read as a trailing fragment rather than
+        // a third labelled item in the composed sentence. "Weather" makes the row symmetric.
+        var card = Build(new NotchHomeState());
+        var snap = new WeatherSnapshot(21.4, 0, DateTimeOffset.UtcNow);
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null, snap);
+
+        Assert.Equal("Time 14:05, 7 Eylül, Weather 21°  Clear", card.Vm.AccessibleSummary);
+    }
+
+    [Fact]
     public void RendersAboveTheMediaAndAudioCards()
     {
         // Order is the ambient row's whole claim to the top of the panel. MediaCard is 10 and

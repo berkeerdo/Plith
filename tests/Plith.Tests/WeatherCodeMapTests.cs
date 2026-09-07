@@ -6,7 +6,8 @@ namespace Plith.Tests;
 public class WeatherCodeMapTests
 {
     // Every WMO code the switch in WeatherCodeMap.Describe branches on, one representative per
-    // arm, plus a code the map has no arm for at all (covered by the fallback).
+    // arm, plus 4242 — a code well above the highest bounded arm (>= 95 and <= 99) — as a code
+    // the map genuinely has no arm for, covered only by the fallback.
     private static readonly int[] AllHandledCodesPlusFallback =
     [
         0, 1, 2, 3, 45, 48, 51, 55, 57, 61, 65, 67, 71, 75, 77, 80, 82, 85, 86, 95, 96, 99, 4242,
@@ -54,10 +55,14 @@ public class WeatherCodeMapTests
     public void Describe_FallsBackRatherThanThrowingOnAnUnknownCode()
     {
         // The provider can add codes. An exception here would take down the refresh timer on
-        // a background thread for a decoration.
+        // a background thread for a decoration. Asserts the actual Unknown mapping, not just a
+        // non-empty string: a non-empty glyph/label pair is also what every wrongly-open-ended
+        // arm above would have produced (the ">= 95" arm used to swallow this code before it
+        // was bounded to "<= 99"), so a non-empty check alone would keep passing on the wrong
+        // arm without ever exercising the fallback this test exists to cover.
         var (glyph, label) = WeatherCodeMap.Describe(4242);
-        Assert.False(string.IsNullOrWhiteSpace(glyph));
-        Assert.False(string.IsNullOrWhiteSpace(label));
+        Assert.Equal("\uE9CE", glyph);
+        Assert.Equal("Unknown", label);
     }
 
     [Fact]

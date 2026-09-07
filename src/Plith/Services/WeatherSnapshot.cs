@@ -50,11 +50,13 @@ public static class WeatherCodeMap
         >= 71 and <= 77 => ("\uE9CA", "Snow"),         // Frigid
         >= 80 and <= 82 => ("\uEB42", "Showers"),      // Drop
         >= 85 and <= 86 => ("\uE9CA", "Snow showers"), // Frigid
-        >= 95 => ("\uE945", "Thunderstorm"),           // LightningBolt
+        >= 95 and <= 99 => ("\uE945", "Thunderstorm"), // LightningBolt
 
         // Deliberately not an exception. Open-Meteo can add codes, and this runs on a
         // background refresh timer where a throw would silently stop every future refresh
-        // for the sake of a decoration.
+        // for the sake of a decoration. Bounded above at 99 (WMO 4677's own ceiling) rather
+        // than left open-ended: an unbounded ">= 95" swallowed every future or garbage code
+        // above it into "Thunderstorm" instead of reaching this fallback at all.
         _ => ("\uE9CE", "Unknown"), // Unknown
     };
 

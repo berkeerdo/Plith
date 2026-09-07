@@ -374,7 +374,8 @@
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show ambient info on hover" />
-                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                    <TextBlock x:Name="AmbientHoverHint"
+                                               Style="{StaticResource RowHintStyle}"
                                                Text="Hovering the notch opens a row with the time, weather and battery." />
                                 </StackPanel>
                                 <CheckBox x:Name="AmbientToggle"

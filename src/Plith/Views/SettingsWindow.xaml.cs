@@ -25,6 +25,15 @@ public partial class SettingsWindow : Window
     private bool _loadingCustomPickerFromModel;
     private DispatcherTimer? _savedPulseTimer;
 
+    // Mirrors OsdHost.IsInEditMode. Seeded from it at construction — not just updated from
+    // EditModeChanged — because TrayIconHost.ShowSettings can construct a brand-new
+    // SettingsWindow while a position edit is already in progress: it reopens on IsVisible,
+    // and OnOsdEditModeChanged(true) hides this window, so a fresh instance is exactly what a
+    // second tray double-click produces mid-edit. Without seeding here, that fresh instance
+    // would start with every presentation/weather control live, which is the scenario this
+    // field exists to prevent. See UpdatePresentationDependentControls.
+    private bool _isOsdEditMode;
+
     // Row entry for each preset + the single custom swatch in the accent picker.
     // Kept as a mutable record so RefreshAccentSelection can flip visuals in-place
     // without rebuilding the WrapPanel on every settings change.
@@ -48,6 +57,7 @@ public partial class SettingsWindow : Window
         _hotkey = hotkey;
         _theme = theme;
         _osd = osd;
+        _isOsdEditMode = osd.IsInEditMode;
         InitializeComponent();
 
         BusCombo.ItemsSource = new[]
@@ -114,6 +124,10 @@ public partial class SettingsWindow : Window
         OpenPositionOverlayButton.Click += (_, _) => _osd.EnterPositionEditMode();
         _osd.EditModeChanged += OnOsdEditModeChanged;
         Closed += (_, _) => _osd.EditModeChanged -= OnOsdEditModeChanged;
+        // Matches the label OnOsdEditModeChanged sets on a live transition — needed here too
+        // because a window constructed while an edit is already in progress (see the
+        // _isOsdEditMode field comment) never receives that transition itself.
+        OpenPositionOverlayButton.Content = _isOsdEditMode ? "Overlay open..." : "Set position";
         RefreshPositionSummary();
     }
 
@@ -124,12 +138,22 @@ public partial class SettingsWindow : Window
             Dispatcher.BeginInvoke(new Action<bool>(OnOsdEditModeChanged), isEditing);
             return;
         }
-        // Grey the button out while the overlay is open, and hide the Settings window
-        // itself so its own chrome doesn't sit on top of the overlay hotspots.
-        OpenPositionOverlayButton.IsEnabled = !isEditing;
+        _isOsdEditMode = isEditing;
+        // Hide the Settings window itself while the overlay is open so its own chrome
+        // doesn't sit on top of the overlay hotspots.
         OpenPositionOverlayButton.Content = isEditing ? "Overlay open..." : "Set position";
         if (isEditing) Hide();
         else { Show(); Activate(); RefreshPositionSummary(); }
+
+        // EnterPositionEditMode snapshots the whole settings model and a Cancel
+        // (ExitPositionEditMode(save: false)) writes it back wholesale — not just the
+        // position fields the snapshot predates. A presentation or weather change made while
+        // that snapshot is live would be silently reverted by a Cancel nobody associated with
+        // those controls, so freeze them for the duration of the edit. UpdatePresentationDependentControls
+        // is also what re-derives OpenPositionOverlayButton.IsEnabled now — doing that
+        // unconditionally right here used to stomp its own notch-mode disable the instant an
+        // edit session that started in notch mode ended.
+        UpdatePresentationDependentControls();
     }
 
     private void RefreshPositionSummary()
@@ -154,13 +178,15 @@ public partial class SettingsWindow : Window
     {
         bool isNotch = _settings.Current.Presentation == PresentationMode.AmbientNotch;
 
-        OpenPositionOverlayButton.IsEnabled = !isNotch;
+        OpenPositionOverlayButton.IsEnabled = !isNotch && !_isOsdEditMode;
         OpenPositionOverlayButton.ToolTip = isNotch
             ? "The Ambient Notch is pinned to the top of the screen. Switch to Classic OSD to place the OSD yourself."
             : null;
 
         // The hint text next to the button explains what the button does. When the button is
         // disabled that sentence describes something the user cannot do, so say why instead.
+        // RefreshPositionSummary overwrites this text once an edit session ends (see
+        // OnOsdEditModeChanged), so no edit-mode wording is needed here for the disabled case.
         PositionSummary.Text = isNotch
             ? "The Ambient Notch is pinned to the top of the screen, so there is nothing to place. Switch to Classic OSD to choose a position."
             : "Click 'Set position' to place the OSD anywhere on any monitor. A dim overlay with nine snap hotspots opens over your desktop.";
@@ -175,6 +201,32 @@ public partial class SettingsWindow : Window
         // off is dead UI, and hiding it is how the dependency is communicated.
         WeatherLocationRow.Visibility = isNotch && WeatherToggle.IsChecked == true
             ? Visibility.Visible : Visibility.Collapsed;
+
+        // OsdHost.EnterPositionEditMode/ExitPositionEditMode(save: false) snapshot and restore
+        // the WHOLE settings model, not just the position fields — see the comment on
+        // OnOsdEditModeChanged. Freezing these four while an edit is live means a Cancel can
+        // never revert a presentation or weather change the user made in the meantime, because
+        // the dialog never let them make one.
+        PresentationCombo.IsEnabled = !_isOsdEditMode;
+        StripHeightSlider.IsEnabled = !_isOsdEditMode;
+        WeatherToggle.IsEnabled = !_isOsdEditMode;
+        WeatherLocationBox.IsEnabled = !_isOsdEditMode;
+    }
+
+    // "Show ambient info on hover" opens the notch's ambient row via a hover — and that is a
+    // hover-keep-alive-class interaction by nature: OsdHost.OnNotchHoverChanged early-returns
+    // before it ever calls _home.Open() when HoverKeepAlive is off. That coupling is a
+    // deliberate ruling from the Phase 6 fix wave, not a bug — decoupling it would hand hover
+    // behaviour to a user who explicitly turned hover-keep-alive off. The bug was that nothing
+    // ever said so: a user in that state who then enabled this toggle got nothing, with no
+    // hint anywhere pointing at why. Surface the dependency here instead.
+    private void UpdateAmbientHoverDependency()
+    {
+        bool hoverAlive = HoverToggle.IsChecked == true;
+        AmbientToggle.IsEnabled = hoverAlive;
+        AmbientHoverHint.Text = hoverAlive
+            ? "Hovering the notch opens a row with the time, weather and battery."
+            : "Hovering the notch opens a row with the time, weather and battery. Requires \"Hover keep-alive\" below to be on.";
     }
 
     private void WireUpdateCheck()
@@ -552,6 +604,7 @@ public partial class SettingsWindow : Window
             _loadingFromModel = false;
         }
         UpdatePresentationDependentControls();
+        UpdateAmbientHoverDependency();
         SyncPreview();
     }
 
@@ -580,8 +633,8 @@ public partial class SettingsWindow : Window
     private void WireAutoSave()
     {
         DurationSlider.ValueChanged += (_, _) => AutoSave();
-        HoverToggle.Checked += (_, _) => AutoSave();
-        HoverToggle.Unchecked += (_, _) => AutoSave();
+        HoverToggle.Checked += (_, _) => { UpdateAmbientHoverDependency(); AutoSave(); };
+        HoverToggle.Unchecked += (_, _) => { UpdateAmbientHoverDependency(); AutoSave(); };
         OpacitySlider.ValueChanged += (_, _) => AutoSave();
         ColorThresholdsToggle.Checked += (_, _) => AutoSave();
         ColorThresholdsToggle.Unchecked += (_, _) => AutoSave();
@@ -628,8 +681,18 @@ public partial class SettingsWindow : Window
         WeatherToggle.Checked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
         WeatherToggle.Unchecked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
         // LostFocus rather than TextChanged, deliberately: TextChanged would save — and
-        // geocode — on every keystroke of a city name.
+        // geocode — on every keystroke of a city name. Enter also commits, matching
+        // FullscreenHideListBox's pattern above: without it, typing a city and closing the
+        // window with Alt+F4 (rather than tabbing/clicking away first) discards the edit.
         WeatherLocationBox.LostFocus += (_, _) => AutoSave();
+        WeatherLocationBox.KeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Enter)
+            {
+                AutoSave();
+                e.Handled = true;
+            }
+        };
     }
 
     private void AutoSave()

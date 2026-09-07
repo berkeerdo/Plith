@@ -48,9 +48,12 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
     /// of its own; WPF gives panels no automation peer, so a name set there would never reach
     /// UI Automation. This composed property is the only place the battery announces.
     ///
-    /// Weather appends here too (Task 7), following the same rule: a ", {WeatherText}" segment
-    /// when HasWeather is true, nothing when the column is collapsed. Its StackPanel column is
-    /// just as peerless as the battery one, so this remains the only place it can announce.</summary>
+    /// Weather appends here too (Task 7), following the same rule: a ", Weather {WeatherText}"
+    /// segment when HasWeather is true, nothing when the column is collapsed. Its StackPanel
+    /// column is just as peerless as the battery one, so this remains the only place it can
+    /// announce. "Weather" is a spoken label prefix, matching Time and Battery — the segment
+    /// used to be bare (just the temperature and condition), which read as a trailing fragment
+    /// instead of a third labelled item in the sentence.</summary>
     public string AccessibleSummary
     {
         get
@@ -59,7 +62,7 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
             if (HasBattery)
                 summary += $", Battery {BatteryText}{(IsCharging ? ", charging" : string.Empty)}";
             if (HasWeather)
-                summary += $", {WeatherText}";
+                summary += $", Weather {WeatherText}";
             return summary;
         }
     }
