@@ -83,6 +83,7 @@ public sealed class OsdHost : BandWindow
         _presentation = new ClassicPresentation(this);
         _hoverPoller = new NotchHoverPoller(Dispatcher);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
+        _hoverPoller.Polled += ResyncClickThrough;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
 
         ZBandID = NativeMethods.GetTopMostZBandID();
@@ -97,6 +98,25 @@ public sealed class OsdHost : BandWindow
 
         _content = new OsdContent { DataContext = Shell };
         Content = _content;
+
+        // Re-measure the notch's surface whenever the content's laid-out size actually changes.
+        //
+        // Reposition() measures once, synchronously, and that single reading is not enough. A
+        // hover adds the ambient card to CardHost's collection, and the ItemsControl bound to it
+        // materialises the new container on a LATER layout pass — so the Measure/UpdateLayout
+        // pair running immediately afterwards can still see the old tree. The window then grows
+        // to the real height once layout settles, while NotchSurface keeps the stale one.
+        //
+        // On a running build that drew the ambient row on the panel and left the media and volume
+        // cards hanging below it with no surface underneath at all, rendered straight over
+        // whatever was on screen. SizeChanged fires after arrange, so it reports the size the
+        // cards are actually drawn at rather than a prediction of it.
+        _content.SizeChanged += (_, e) =>
+        {
+            if (_presentation is not AmbientNotchPresentation) return;
+            if (e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
+            _presentation.OnContentMeasured(e.NewSize);
+        };
 
         // Seed the local accent mirror BEFORE the HwndSource is created (in CreateWindow
         // below) so the very first paint already uses the picked accent. Subsequent
@@ -404,6 +424,30 @@ public sealed class OsdHost : BandWindow
 
 
 
+
+
+    /// <summary>
+    /// Re-derive the window's click-through bit from the presentation, every poll.
+    ///
+    /// Every other write to IsClickThrough hangs off a discrete event, and several of those ride
+    /// an animation's Completed callback. WPF raises no Completed for a clock that a competing
+    /// animation replaced — the hazard that has produced four defects on this branch — so a
+    /// single dropped callback can leave a parked notch hit-testable. That is not a cosmetic
+    /// failure: the window is invisible while parked, 440 DIP wide, and sits across the top of
+    /// the screen where windows are dragged to maximise and browser tabs live, so it silently
+    /// eats clicks that were never meant for it. Reported on a running build exactly that way.
+    ///
+    /// This recomputes the same expression the event handlers use rather than caching a second
+    /// answer, so it can correct a missed write without ever disagreeing with them. The setter
+    /// itself is a no-op when the value is unchanged, and the native toggle underneath returns
+    /// early when the style bits already match, so the steady-state cost is a bool comparison.
+    /// </summary>
+    private void ResyncClickThrough()
+    {
+        if (_isEditMode) return;
+        bool want = !_presentation.WantsHitTesting;
+        if (IsClickThrough != want) IsClickThrough = want;
+    }
 
     private void OnMouseLeave(object sender, System.Windows.Input.MouseEventArgs e)
     {

@@ -67,6 +67,22 @@ internal sealed class NotchHoverPoller : IDisposable
     /// </summary>
     public bool IsCursorInPanel => _wasInsidePanel;
 
+    /// <summary>
+    /// Raised on every poll, not only on a transition.
+    ///
+    /// OsdHost uses it to re-derive the window's click-through bit from the presentation. That
+    /// bit is otherwise only written on discrete events, several of which ride animation
+    /// completion callbacks — and WPF raises no Completed for a clock that a competing animation
+    /// replaced, which has produced four separate defects on this branch already. A dropped
+    /// callback there leaves a parked, invisible notch still swallowing every click in a
+    /// 440-DIP-wide band across the top of the screen, which is where people drag windows to
+    /// maximise and reach browser tabs.
+    ///
+    /// Re-deriving costs a bool comparison per tick and cannot drift, because it recomputes the
+    /// same expression the event handlers do rather than tracking a second copy of the answer.
+    /// </summary>
+    public event Action? Polled;
+
     public void Start()
     {
         _wasInside = false;
@@ -93,6 +109,8 @@ internal sealed class NotchHoverPoller : IDisposable
         var dip = NotchGeometry.PhysicalToDip(p.X, p.Y, DpiScale);
 
         _wasInsidePanel = NotchGeometry.IsInsideNotch(PanelRect, dip);
+
+        Polled?.Invoke();
 
         bool inside = NotchGeometry.IsInsideNotch(HoverRect, dip);
         if (inside == _wasInside) return;
