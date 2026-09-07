@@ -181,9 +181,17 @@ Persisted keys: `ShowAmbientOnHover`, `ShowWeather`, `WeatherLocation`,
 `AmbientCard.AccessibleName` = "Ambient status", and `ToString()` returns it, per the
 `ICard` contract's note about `ItemAutomationPeer` naming containers from the bound item.
 
-Each column carries its own `AutomationProperties.Name` on an element that can surface it —
-`scripts/check-a11y.ps1` enforces both halves of that and is a release gate. The clock reads
-as a time, not as a bare number.
+The card carries one composed `AutomationProperties.Name`, bound to
+`AmbientCardViewModel.AccessibleSummary`, on the `AmbientCardView` root together with
+`AutomationProperties.LiveSetting="Polite"` — the same placement `AudioCardView` and
+`MediaCardView` already use. Not one name per column: the columns are `Grid`/`StackPanel`
+layout, and WPF gives panels no automation peer, so a name set there would never reach UI
+Automation at all. `AccessibleSummary` is composed instead, with each column that currently
+has content appending its own segment — only the clock exists today, so the summary is just
+the clock segment, and Tasks 3 (battery) and 7 (weather) each extend it when their column has
+content. `scripts/check-a11y.ps1` enforces both halves of the contract (a name is present, and
+it sits on an element that can surface it) and is a release gate. The clock reads as a time,
+not as a bare number.
 
 ## §6 — Risks
 

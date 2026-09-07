@@ -38,6 +38,7 @@ public class AmbientCardTests
         // working rather than like a missing event.
         var home = new NotchHomeState();
         var card = Build(home);
+        card.Activate();   // _home.Changed is only wired up between Activate() and Deactivate()
         int raised = 0;
         card.VisibilityChanged += () => raised++;
 
@@ -55,6 +56,18 @@ public class AmbientCardTests
         card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"));
 
         Assert.Equal("14:05", card.Vm.ClockTime);
+    }
+
+    [Fact]
+    public void AccessibleSummaryReadsTheClockAsATime()
+    {
+        // Bound as AmbientCardView's card-level AutomationProperties.Name — a screen reader
+        // must hear the actual clock value, not a static "Time" label with nothing after it.
+        var card = Build(new NotchHomeState());
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"));
+
+        Assert.Equal("Time 14:05, 7 Eylül", card.Vm.AccessibleSummary);
     }
 
     [Fact]

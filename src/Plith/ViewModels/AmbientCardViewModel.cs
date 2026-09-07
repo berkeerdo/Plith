@@ -14,8 +14,34 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
     private string _clockTime = string.Empty;
     private string _clockDate = string.Empty;
 
-    public string ClockTime { get => _clockTime; private set => Set(ref _clockTime, value); }
-    public string ClockDate { get => _clockDate; private set => Set(ref _clockDate, value); }
+    public string ClockTime
+    {
+        get => _clockTime;
+        private set
+        {
+            if (Set(ref _clockTime, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
+
+    public string ClockDate
+    {
+        get => _clockDate;
+        private set
+        {
+            if (Set(ref _clockDate, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
+
+    /// <summary>What a screen reader announces for the whole ambient row — bound on
+    /// AmbientCardView's UserControl root together with AutomationProperties.LiveSetting,
+    /// the same place AudioCardViewModel.AccessibleSummary is bound on AudioCardView. Only the
+    /// clock exists today, so this is just the clock segment; Tasks 3 (battery) and 7 (weather)
+    /// each extend this by appending their own ", "-joined segment when their column has
+    /// content, following AudioCardViewModel's precedent of one computed summary property
+    /// rather than a name per sub-element. That is the contract those tasks read.</summary>
+    public string AccessibleSummary => $"Time {ClockTime}, {ClockDate}";
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -28,10 +54,14 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
         ClockDate = date;
     }
 
-    private void Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name!));
+
+    private bool Set<T>(ref T field, T value, [CallerMemberName] string? name = null)
     {
-        if (EqualityComparer<T>.Default.Equals(field, value)) return;
+        if (EqualityComparer<T>.Default.Equals(field, value)) return false;
         field = value;
-        PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name!));
+        OnPropertyChanged(name);
+        return true;
     }
 }

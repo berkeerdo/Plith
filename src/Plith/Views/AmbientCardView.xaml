@@ -6,12 +6,13 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              mc:Ignorable="d"
              d:DataContext="{d:DesignInstance Type=vm:AmbientCardViewModel}"
-             AutomationProperties.Name="Time">
-    <!-- AutomationProperties.Name belongs on this UserControl root and nowhere else: WPF
-         gives a StackPanel no automation peer (check-a11y.ps1's peerless list), so a name
-         set there never reaches UI Automation, same as AudioCardView/MediaCardView. Fixed
-         at "Time" while the clock is the only column; Tasks 3 and 7 will need to revisit
-         this into a per-column scheme once weather and battery exist alongside it. -->
+             AutomationProperties.Name="{Binding AccessibleSummary}"
+             AutomationProperties.LiveSetting="Polite">
+    <!-- The two AutomationProperties above belong on this UserControl root and nowhere else,
+         same as AudioCardView/MediaCardView: WPF gives Grid/StackPanel no automation peer, so
+         a name set on either never reaches UI Automation. AccessibleSummary is composed from
+         every column that currently has content — see AmbientCardViewModel — rather than named
+         per column, because the columns themselves are peerless panels. -->
     <Grid>
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="Auto" />
@@ -19,17 +20,22 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <!-- Clock. Two lines (time, then a year-less date) read together as one thing by
-             virtue of the card-level AutomationProperties.Name above. -->
+        <!-- Clock. The TextBlocks carry no automation name of their own: TextBlock does own a
+             peer and names itself from its own Text by default, which would announce "14:05"
+             and "7 September" a second time, disconnected from the card-level summary above.
+             Explicitly empty neutralises that, matching the album-art glyph in
+             MediaCardView.xaml. -->
         <StackPanel Grid.Column="0"
                     VerticalAlignment="Center">
             <TextBlock Text="{Binding ClockTime}"
                        FontSize="20"
                        FontWeight="SemiBold"
-                       Foreground="{DynamicResource OsdTextPrimary}" />
+                       Foreground="{DynamicResource OsdTextPrimary}"
+                       AutomationProperties.Name="" />
             <TextBlock Text="{Binding ClockDate}"
                        FontSize="11"
-                       Foreground="{DynamicResource OsdTextSecondary}" />
+                       Foreground="{DynamicResource OsdTextSecondary}"
+                       AutomationProperties.Name="" />
         </StackPanel>
 
         <!-- Columns 1 and 2 are filled by Tasks 3 and 7. Left empty here deliberately: this

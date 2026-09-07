@@ -41,14 +41,6 @@ public sealed class AmbientCard : ICard
         };
         _timer.Tick += (_, _) => Tick(DateTime.Now, CultureInfo.CurrentCulture);
 
-        // Subscribed here rather than in Activate(), matching MediaCard's Vm.HasSessionChanged:
-        // NotchHomeState is a shared object this card doesn't own the lifetime of, but the card
-        // itself is registered once and lives for the app's lifetime, so there is no repeated
-        // Activate()/Deactivate() cycle to guard against. Activate()/Deactivate() below manage
-        // only what genuinely needs to start and stop with them — the settings subscription and
-        // the timer.
-        _home.Changed += OnStateChanged;
-
         _lastVisible = IsVisible;
     }
 
@@ -74,6 +66,11 @@ public sealed class AmbientCard : ICard
 
     public void Activate()
     {
+        // NotchHomeState is externally owned — App creates it and shares it with OsdHost — so
+        // it is subscribed here rather than in the constructor, the same convention _settings
+        // follows. MediaCard's constructor-time subscription to Vm.HasSessionChanged is not a
+        // precedent for this: Vm is MediaCard's own view model, not a shared external object.
+        _home.Changed += OnStateChanged;
         _settings.Changed += OnSettingsChanged;
         Tick(DateTime.Now, CultureInfo.CurrentCulture);   // seed, so the first open is not blank
         _timer.Start();
@@ -82,6 +79,7 @@ public sealed class AmbientCard : ICard
     public void Deactivate()
     {
         _timer.Stop();
+        _home.Changed -= OnStateChanged;
         _settings.Changed -= OnSettingsChanged;
     }
 
