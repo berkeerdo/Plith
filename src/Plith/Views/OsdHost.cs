@@ -80,7 +80,7 @@ public sealed class OsdHost : BandWindow
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
         _hoverPoller = new NotchHoverPoller(Dispatcher);
-        _hoverPoller.HoverChanged += OnStripHoverChanged;
+        _hoverPoller.HoverChanged += OnNotchHoverChanged;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
 
         ZBandID = NativeMethods.GetTopMostZBandID();
@@ -140,9 +140,9 @@ public sealed class OsdHost : BandWindow
         ApplyPresentationMode();
     }
 
-    // While a window covers the monitor, the notch does not merely hide its strip — it stops
+    // While a window covers the monitor, the notch does not merely shrink away — it stops
     // being a notch. The spec's phrase for the covered state is "behave like Classic", and the
-    // first real session showed how much that phrase was carrying: retraction hid the strip but
+    // first real session showed how much that phrase was carrying: retraction hid the shape but
     // Reposition() still pinned the OSD to top-centre, so a volume key in a game put the card in
     // the dead centre of the field of view. That is the single most intrusive spot on the screen,
     // and the user's own Classic anchor sat near the bottom, chosen deliberately.
@@ -163,8 +163,8 @@ public sealed class OsdHost : BandWindow
         : new ClassicPresentation(this);
 
     // Switching modes rebuilds the presentation and returns the window to that mode's rest
-    // state. Both directions need cleaning up after the other: Classic leaves Opacity at 0
-    // and the strip hidden, the notch leaves a content offset and a visible strip.
+    // state. Both directions need cleaning up after the other: Classic leaves Opacity at 0,
+    // the notch leaves an expansion value and a visible surface.
     private void ApplyPresentationMode()
     {
         _hideTimer?.Stop();
@@ -172,17 +172,16 @@ public sealed class OsdHost : BandWindow
         _isFadingOut = false;
 
         BeginAnimation(OpacityProperty, null);
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        _content.ContentOffset = 0;
-        _content.SetStrip(visible: false, heightDip: _settings.Current.NotchStripHeightDip);
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, null);
+        _content.NotchExpand = 0;
 
         _presentation = BuildPresentation();
         IsClickThrough = !_presentation.WantsHitTesting;
 
-        // Before Reposition(), deliberately: SetNotchLook changes the sliding root's top margin,
-        // which changes the measured content height, which is what OnContentMeasured turns into
-        // the parked offset. Reshaping after the measurement would park the card at an offset
-        // computed for the other mode's geometry.
+        // Before Reposition(), deliberately: SetNotchLook drops the content root's top margin,
+        // which changes the measured content height, and that measurement is what the notch
+        // opens into. Reshaping after measuring would size the open panel from the other mode's
+        // geometry and leave it a margin short.
         _content.SetNotchLook(_presentation is AmbientNotchPresentation);
 
         if (_presentation is AmbientNotchPresentation notch)
@@ -199,11 +198,11 @@ public sealed class OsdHost : BandWindow
         }
 
         // Started/stopped here rather than in the branches above so it happens after
-        // Reposition() has already published a fresh StripRect for the notch case, and after
+        // Reposition() has already published a fresh HoverRect for the notch case, and after
         // _presentation has already been reassigned in both cases. The latter matters: Stop()
         // can raise a synthetic HoverChanged(false) if the poller thought the cursor was still
         // inside the strip when the mode switched away from notch, and by the time that fires
-        // here, _presentation is already the new ClassicPresentation — so OnStripHoverChanged's
+        // here, _presentation is already the new ClassicPresentation — so OnNotchHoverChanged's
         // own "not AmbientNotchPresentation" guard discards it instead of restarting a hide
         // timer or toggling IsClickThrough for a mode switch that has already settled its own
         // state.
@@ -314,33 +313,33 @@ public sealed class OsdHost : BandWindow
         // suppressor entirely. Guard defensively rather than find out live.
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         _hideTimer?.Stop();
-        // SnapToVisible below removes the in-flight fade-out (Classic) or retract (notch) clock,
+        // SnapToVisible below removes the in-flight fade-out (Classic) or collapse (notch) clock,
         // and WPF raises no Completed for a clock removed that way — so FadeOutAndHide's
         // completion never runs and _isFadingOut would stick true forever. Both OnMouseLeave and
-        // OnStripHoverChanged's exit branch early-return on that flag, so no hide timer would
+        // OnNotchHoverChanged's exit branch early-return on that flag, so no hide timer would
         // ever be restarted: in Classic this stranded the OSD at full opacity until the next
         // volume key (a defect that predates the notch), and in notch mode it leaves a fully
-        // descended card sitting on screen indefinitely instead of sliding back to the strip.
+        // open panel sitting on screen indefinitely instead of shrinking back to the resting shape.
         // Cleared here rather than inside SnapToVisible because the flag is
         // OsdHost's transition bookkeeping, not the presentation's.
         _isFadingOut = false;
         // A show transition in flight is already on its way to fully visible. Snapping here
-        // would clear its animation mid-descent (SnapToVisible's BeginAnimation(..., null))
-        // and turn the notch's 220 ms slide into a jump — this is how the strip becoming
-        // hit-testable partway through a hover-triggered descent used to cancel its own
+        // would clear its animation mid-expansion (SnapToVisible's BeginAnimation(..., null))
+        // and turn the notch's expansion into a jump — this is how the notch becoming
+        // hit-testable partway through a hover-triggered expansion used to cancel its own
         // animation the instant WPF delivered the resulting MouseEnter.
         if (_isFadingIn) return;
         _presentation.SnapToVisible(Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0);
     }
 
-    // Entering the parked strip descends the notch and makes the panel interactive; leaving
+    // Entering the resting notch opens it and makes the panel interactive; leaving
     // hands back to the ordinary hide timer. IsClickThrough is toggled here rather than
     // inside the presentation because it is a window-level concern and OsdHost owns the
     // window — but it is deliberately re-DERIVED from _presentation.WantsHitTesting rather
     // than asserted as an independent true/false, so this handler can never disagree with
     // WantsHitTesting about what "hit-testable" means. Forcing click-through back on the
-    // instant the cursor leaves the strip (before the retract animation even starts) would
-    // be wrong: the card is still fully descended at that point, so WantsHitTesting is still
+    // instant the cursor leaves the resting rectangle (before the collapse even starts) would
+    // be wrong: the panel is still fully open at that point, so WantsHitTesting is still
     // true and a media transport button underneath it must still receive the click. The sync
     // below reflects that: on entry it goes false immediately, because ShowOsd's
     // AnimateToVisible/SnapToVisible flips the presentation's parked flag synchronously,
@@ -349,7 +348,7 @@ public sealed class OsdHost : BandWindow
     // comments at those two call sites for why neither alone is enough).
     // Note this is the first code in Plith to change IsClickThrough after the HWND exists —
     // see the manual check in docs/PHASE6-VERIFICATION.md.
-    private void OnStripHoverChanged(bool inside)
+    private void OnNotchHoverChanged(bool inside)
     {
         if (_isEditMode) return;
         if (!_settings.Current.HoverKeepAlive) return;
@@ -363,8 +362,8 @@ public sealed class OsdHost : BandWindow
         }
         else
         {
-            // Leaving the strip is not leaving the OSD: the strip is only a few DIP tall, so
-            // the ordinary way to leave it is by moving DOWN onto the descended card, which
+            // Leaving the resting rectangle is not leaving the OSD: it is only a few DIP tall,
+            // so the ordinary way to leave it is by moving DOWN onto the open panel, which
             // is still squarely inside the window. Restarting the hide timer here would take
             // the card away while the user is sitting on it, and the real OnMouseLeave could
             // not undo it because the mouse never actually left the window. When the mouse
@@ -531,16 +530,20 @@ public sealed class OsdHost : BandWindow
             _                        => (area.Left + (area.Width - w) / 2, area.Bottom - h - _presentation.EdgeMarginDip),
         };
 
-        // Publish the strip's screen rectangle and the display's DPI scale to the poller so
-        // it can compare against a fresh GetCursorPos reading. Both are computed here, right
-        // after Left/Top settle, rather than inside the poller itself, which has no route to
-        // either value on its own — NotchGeometry.PhysicalToDip is the only place physical
-        // pixels and DIP meet; StripRect and DpiScale below are DIP inputs to it, not
+        // Publish the collapsed pill's screen rectangle and the display's DPI scale to the
+        // poller so it can compare against a fresh GetCursorPos reading. Both are computed
+        // here, right after Left/Top settle, rather than inside the poller itself, which has no
+        // route to either value on its own — NotchGeometry.PhysicalToDip is the only place
+        // physical pixels and DIP meet; the rect and DpiScale below are DIP inputs to it, not
         // converted values themselves.
+        //
+        // w is passed as the window width so the pill can be centred in it. The pill's own
+        // width is a constant and deliberately does NOT follow w: the hover target must stay
+        // put when a media card widens the panel the pill opens into.
         if (_presentation is AmbientNotchPresentation)
         {
-            _hoverPoller.StripRect = NotchGeometry.StripRect(
-                Left, Top, w, _settings.Current.NotchStripHeightDip, OsdContent.ContentInsetDip);
+            _hoverPoller.HoverRect = NotchGeometry.HoverRect(
+                Left, Top, w, _settings.Current.NotchStripHeightDip);
             _hoverPoller.DpiScale = VisualTreeHelper.GetDpi(_content).DpiScaleX;
         }
     }

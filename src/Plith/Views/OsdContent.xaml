@@ -11,22 +11,50 @@
              TextOptions.TextRenderingMode="ClearType"
              UseLayoutRounding="True">
     <Grid ClipToBounds="True">
-        <!-- The card, offset upward while the notch is parked. Animating this transform
-             rather than the window's Top means no SetWindowPos per frame: WPF composites
-             the translation, so the descent stays smooth.
+        <!-- The notch surface. Collapsed it is a narrow pill flush with the top of the screen;
+             expanded it is the panel the card content sits in. It is ONE Border whose Width,
+             Height, corner radius and shadow are all written from code-behind by
+             ApplyNotchExpand() off a single progress value.
 
-             This Grid is the file's existing outer Grid, unchanged except for the x:Name
-             and the RenderTransform. Its Margin="14" and Background="Transparent" keep
-             their original reasons: the margin reserves drop-shadow space so it is not
-             clipped at the window bounds, and the transparent background makes the whole
-             area including the margin accept hit-tests, which the position editor's drag
-             grab needs (it was only firing on the inner Border before). Everything inside
-             it - the Border, its DropShadowEffect and the ItemsControl with its
-             AlternationCount and divider trigger - is untouched. -->
+             Why a separate element from CardSurface rather than morphing CardSurface itself:
+             this Border has no children, so animating its size re-measures nothing but itself.
+             The card content beside it keeps a fixed layout for the whole animation and is
+             merely faded in, which is both cheaper per frame and the reason the content does
+             not visibly reflow while the shape is still moving.
+
+             Collapsed in the designer and for Classic, which never shows it - Classic's card
+             is CardSurface below, exactly as it was in 0.1.5. -->
+        <Border x:Name="NotchSurface"
+                VerticalAlignment="Top"
+                HorizontalAlignment="Center"
+                Visibility="Collapsed"
+                CornerRadius="0,0,8,8"
+                Background="{DynamicResource OsdSurfaceBrush}"
+                BorderThickness="0"
+                SnapsToDevicePixels="True">
+            <!-- Direction 270 is straight down in WPF's counter-clockwise-from-east convention.
+                 A surface flush with the top of the monitor has nothing above it for a blur to
+                 fall on, so an even shadow would just render as a grey smear along the edge.
+                 Opacity is driven from code and is zero while collapsed: a bezel casts no
+                 shadow, and on a 2 DIP resting pill a blur is most of what you would see. -->
+            <Border.Effect>
+                <DropShadowEffect x:Name="NotchShadow" ShadowDepth="6" Direction="270"
+                                  BlurRadius="20" Opacity="0" Color="Black" />
+            </Border.Effect>
+        </Border>
+
+        <!-- The card content.
+
+             This Grid is the file's existing outer content Grid. Its Margin="14" and
+             Background="Transparent" keep their original reasons: the margin reserves
+             drop-shadow space so it is not clipped at the window bounds, and the transparent
+             background makes the whole area including the margin accept hit-tests, which the
+             position editor's drag grab needs (it was only firing on the inner Border before).
+
+             In notch mode its Opacity is driven by ApplyNotchExpand(): the content is absent
+             while the shape grows and fades in over the tail of the expansion. In Classic it
+             stays at 1 and the window's own Opacity does the fading, unchanged from 0.1.5. -->
         <Grid x:Name="SlidingRoot" Margin="14" Background="Transparent">
-            <Grid.RenderTransform>
-                <TranslateTransform x:Name="ContentSlide" Y="0" />
-            </Grid.RenderTransform>
 
             <!-- Corner radius, border thickness and shadow are all set from code-behind by
                  SetNotchLook(), because the two presentation modes want genuinely different
@@ -36,11 +64,10 @@
                  window edge, with an even drop shadow. It is the 0.1.5 look and must not
                  change.
 
-                 The notch is attached to the top edge of the screen. Its top corners are
-                 square and its top border is absent, so the panel reads as one object growing
-                 out of the screen edge rather than a card that happens to be near it; and its
-                 shadow only falls downward, because a blur above a surface flush with the
-                 monitor edge has nothing to fall on and just renders as a grey smear.
+                 In notch mode this Border draws NOTHING: no background, no border, no shadow.
+                 NotchSurface behind it is the visible surface, and the two are laid out to
+                 coincide exactly when the notch is fully open. Letting both paint would double
+                 every edge and stack two shadows.
 
                  The values below are Classic's, and are what the designer sees; SetNotchLook()
                  overwrites them at runtime. -->
@@ -98,20 +125,5 @@
                 </ItemsControl>
             </Border>
         </Grid>
-
-        <!-- The parked strip. Purely decorative: it is never keyboard-reachable and carries
-             no information a screen reader could act on, so it deliberately carries no
-             AutomationProperties at all - Border has no automation peer for WPF to surface
-             them through. -->
-        <Border x:Name="NotchStrip"
-                VerticalAlignment="Top"
-                HorizontalAlignment="Stretch"
-                Margin="14,0,14,0"
-                Height="5"
-                CornerRadius="0,0,6,6"
-                Visibility="Collapsed"
-                Background="{DynamicResource OsdSurfaceBrush}"
-                BorderBrush="{DynamicResource OsdBorder}"
-                BorderThickness="1,0,1,1" />
     </Grid>
 </UserControl>

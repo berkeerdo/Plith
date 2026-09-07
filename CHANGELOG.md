@@ -7,12 +7,19 @@ All notable changes to Plith are documented here. Format loosely follows
 
 ### Added
 - **Presentation modes.** The OSD can now run as either **Classic OSD** (today's
-  behaviour) or an **Ambient Notch**: a thin strip (default 5 DIP, configurable
-  2–24 in Settings) parked at the top-center of the screen that descends into the
-  full OSD card on an event or on hover, then retracts. The strip is click-through
-  while parked, hit-testable while descended, and retracts fully while a window
-  covers the monitor, returning afterward. Settings gained a presentation picker
-  and a strip-height slider; choosing the notch disables the "set position" control,
+  behaviour) or an **Ambient Notch**: a small shape resting at the top-center of
+  the screen — 190 DIP wide, with a configurable height (default 5 DIP, 2–24 in
+  Settings) — that **grows** into the full OSD panel on an event or on hover, then
+  shrinks back. It is one surface that changes size rather than a card sliding out
+  from behind a strip: the width, height, corner radius and shadow all follow a
+  single expansion value, and the content fades in only once the shape has mostly
+  settled. The resting shape's width is fixed on purpose, so a media session
+  appearing widens the panel it opens into without moving the anchor. It is
+  click-through at rest, hit-testable while open, and while a window covers the
+  monitor it stops being a notch altogether — the OSD falls back to Classic
+  wholesale, at the user's own anchor, returning to the notch about two seconds
+  after the covering window goes away. Settings gained a presentation picker and a
+  resting-height slider; choosing the notch disables the "set position" control,
   since the notch is pinned rather than freely placed. On multi-monitor systems the
   notch pins to the same saved monitor device name Custom placement already used,
   falling back to the primary display if that monitor is unplugged. **Classic OSD
@@ -20,18 +27,22 @@ All notable changes to Plith are documented here. Format loosely follows
   no one is moved to the notch automatically.**
 - **Full Notch is not part of this release.** It depends on always-on cards — mic
   status from a future System Controls card, and a Clock card — that do not exist
-  yet. Shipping the notch shell without them would ship an empty strip, so Full
+  yet. Shipping the notch shell without them would ship an empty shape, so Full
   Notch is deferred to a later slice; only Ambient Notch ships now.
 
 **What is and is not verified.** Classic OSD's behaviour is unchanged by this
 change — it was moved behind a new internal seam (`IOsdPresentation`) without
 altering what it does, though this is an argument from the diff, not something
-observed on a running build. The notch's own behaviour — the strip appearing,
-descending on event or hover, retracting over a game and afterward, and the
-Settings controls driving it live — **has not been run on a build.** Every check
-for it is recorded as NOT VERIFIED in `docs/PHASE6-VERIFICATION.md`, including
-whether retraction over a real game actually works; nothing in this entry should
-be read as a claim that any of it has been confirmed working.
+observed on a running build. The notch's own behaviour — the resting shape
+appearing, growing on event or hover, falling back to Classic over a game and
+returning afterward, and the Settings controls driving it live — **has not been
+run on a build carrying the current design.** An earlier design *was* run, and it
+is why this one exists: it slid a full-width strip and a card past each other,
+which on screen read as a drawer rather than a notch, and its resting shape
+changed width whenever a media card appeared. Both are fixed here and neither fix
+has been observed. Every check is recorded as NOT VERIFIED in
+`docs/PHASE6-VERIFICATION.md`; nothing in this entry should be read as a claim
+that any of it has been confirmed working.
 
 ### Changed
 - **The OSD now hides itself automatically during fullscreen video playback,

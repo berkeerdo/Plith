@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 
 namespace Plith.Views.Presentation;
 
@@ -11,54 +11,106 @@ namespace Plith.Views.Presentation;
 /// is <see cref="PhysicalToDip"/>, which exists so that conversion happens once, at a named
 /// boundary, instead of being spread across call sites — mixing the two spaces silently
 /// breaks every comparison on a non-100 % display.
+///
+/// The notch is ONE shape that changes size, not a card that travels. Everything below is
+/// parameterised by a single expansion progress t (0 = collapsed pill, 1 = open panel), so
+/// width, height, corner radius and content opacity cannot drift out of step with each
+/// other — they are all derived from the same number by the same animation clock.
+///
+/// The first design translated a full-width card down from behind a separate strip element.
+/// It was rejected on a running build: two objects sliding past each other reads as a drawer
+/// opening, not as a notch growing, and the strip spanned the whole panel width so its
+/// horizontal extent changed with the content. A notch is a fixed anchor whose shape morphs.
 /// </summary>
 public static class NotchGeometry
 {
-    /// <summary>Content offset when the notch is fully descended.</summary>
-    public const double DescendedOffset = 0.0;
+    /// <summary>Width of the collapsed pill, in DIP. Deliberately narrow and, unlike the
+    /// panel it opens into, CONSTANT: the resting shape must not change size when a media
+    /// card appears or goes away, or the anchor visibly jumps and the illusion breaks.</summary>
+    public const double CollapsedWidthDip = 190;
+
+    /// <summary>Bottom corner radius of the collapsed pill and of the open panel. Both are
+    /// clamped against the surface height by <see cref="SurfaceRadius"/>, so a user who sets
+    /// a 2 DIP resting height gets a 2 DIP radius rather than a squashed 8.</summary>
+    public const double CollapsedRadiusDip = 8;
+    public const double ExpandedRadiusDip = 16;
 
     /// <summary>
-    /// Y offset that takes the card fully off screen, leaving nothing but whatever the strip
-    /// element itself draws. This is the notch's one and only rest offset: the parked state.
-    /// An earlier design had a second rest state (retracted — the same offset with the strip
-    /// hidden) for the covered-monitor case; that case now rebuilds the presentation as
-    /// ClassicPresentation instead, so the state and its offset are gone.
+    /// Expansion progress at which the content starts to fade in. Below it the panel is a
+    /// blank surface still growing.
     ///
-    /// An earlier design parked at a shallower offset that left the card's own bottom edge
-    /// sitting at y = stripHeight, so the dedicated strip and a sliver of the card (with that
-    /// Border's corner radius and drop shadow) drew in the same band. On a running build that
-    /// reads as a card edge leaking out from under the top of the screen rather than as a
-    /// notch, so it was removed.
-    ///
-    /// <paramref name="contentInset"/> is the drop-shadow margin on OsdContent's outer Grid
-    /// (14 DIP today): the card's visible border starts that far below the content origin, so
-    /// subtracting it lands the card's bottom edge exactly at y = 0.
-    ///
-    /// Clamped at zero: during the first layout pass DesiredSize is still zero, and a positive
-    /// offset there would drop the card into mid-screen for a frame.
+    /// This ordering is the whole effect: the shape settles first and the content arrives
+    /// into it. Cross-fading content while the surface is still moving reads as a window
+    /// resizing, which is exactly what a notch must not look like.
     /// </summary>
-    public static double HiddenOffset(double contentHeight, double contentInset)
-        => -Math.Max(0, contentHeight - contentInset);
+    public const double ContentFadeStart = 0.55;
 
     /// <summary>
-    /// Screen rectangle of the visible strip, in DIP. <paramref name="windowLeft"/> and
-    /// <paramref name="windowTop"/> are the values Reposition() computed, which are derived
-    /// from Screen.WorkingArea — so a taskbar docked to the top moves this rectangle down
-    /// with it and needs no special case here.
+    /// Minimum height of the cursor target over the collapsed pill. The resting height is a
+    /// user setting that goes down to 2 DIP, and a 2 DIP tall target cannot be hit
+    /// deliberately — the pointer skips it between two mouse samples. The target is
+    /// invisible, so making it taller than what is drawn costs nothing on screen.
     /// </summary>
-    public static Rect StripRect(
-        double windowLeft, double windowTop, double contentWidth, double stripHeight, double contentInset)
+    public const double MinHoverHeightDip = 8;
+
+    public static double Clamp01(double t) => t < 0 ? 0 : t > 1 ? 1 : t;
+
+    public static double Lerp(double from, double to, double t) => from + (to - from) * Clamp01(t);
+
+    /// <summary>
+    /// Size of the notch surface at progress <paramref name="t"/>.
+    ///
+    /// <paramref name="expanded"/> is the measured size of the card content. Clamped at the
+    /// collapsed size on both axes: during the first layout pass the measurement is zero, and
+    /// interpolating toward zero would shrink the resting pill to nothing for a frame.
+    /// </summary>
+    public static Size SurfaceSize(double collapsedWidth, double collapsedHeight, Size expanded, double t)
     {
-        var left = windowLeft + contentInset;
-        var width = Math.Max(0, contentWidth - contentInset * 2);
-        return new Rect(left, windowTop, width, Math.Max(0, stripHeight));
+        var w = Lerp(collapsedWidth, Math.Max(expanded.Width, collapsedWidth), t);
+        var h = Lerp(collapsedHeight, Math.Max(expanded.Height, collapsedHeight), t);
+        return new Size(Math.Max(0, w), Math.Max(0, h));
+    }
+
+    /// <summary>Bottom corner radius at progress <paramref name="t"/>, never more than the
+    /// surface height — past that WPF clamps it anyway, and the un-clamped value would make
+    /// the collapsed pill's radius depend on a height it can no longer reach.</summary>
+    public static double SurfaceRadius(double t, double surfaceHeight)
+        => Math.Min(Lerp(CollapsedRadiusDip, ExpandedRadiusDip, t), Math.Max(0, surfaceHeight));
+
+    /// <summary>Content opacity at progress <paramref name="t"/>: nothing until the surface
+    /// is <see cref="ContentFadeStart"/> of the way open, then a linear ramp to full.</summary>
+    public static double ContentOpacity(double t)
+    {
+        t = Clamp01(t);
+        if (t <= ContentFadeStart) return 0;
+        return (t - ContentFadeStart) / (1 - ContentFadeStart);
+    }
+
+    /// <summary>
+    /// Screen rectangle of the cursor target over the collapsed pill, in DIP.
+    ///
+    /// <paramref name="windowLeft"/> and <paramref name="windowTop"/> are the values
+    /// Reposition() computed, which are derived from Screen.WorkingArea — so a taskbar docked
+    /// to the top moves this rectangle down with it and needs no special case here.
+    ///
+    /// The pill is centred in the window rather than inset from its edges, because the pill's
+    /// width is fixed while the window's follows the content. Deriving the target from the
+    /// window edges (which the previous full-width strip did) would have made the hover zone
+    /// grow every time a media card appeared.
+    /// </summary>
+    public static Rect HoverRect(double windowLeft, double windowTop, double windowWidth, double collapsedHeight)
+    {
+        var width = Math.Min(CollapsedWidthDip, Math.Max(0, windowWidth));
+        var left = windowLeft + (Math.Max(0, windowWidth) - width) / 2;
+        var height = Math.Max(collapsedHeight, MinHoverHeightDip);
+        return new Rect(left, windowTop, width, height);
     }
 
     /// <summary>
     /// Convert a GetCursorPos result (physical pixels) into DIP.
     ///
     /// A non-positive scale means the DPI query failed; treat it as 1:1 rather than
-    /// dividing by zero, which would send the cursor to infinity and make the strip
+    /// dividing by zero, which would send the cursor to infinity and make the pill
     /// permanently unhoverable.
     /// </summary>
     public static Point PhysicalToDip(int physicalX, int physicalY, double dpiScale)
@@ -69,5 +121,5 @@ public static class NotchGeometry
 
     /// <summary>Hit test, both operands in DIP. Rect.Contains is inclusive on left/top and
     /// exclusive on right/bottom, which is the behaviour we want at the screen edge.</summary>
-    public static bool IsInsideStrip(Rect stripRect, Point cursorDip) => stripRect.Contains(cursorDip);
+    public static bool IsInsideNotch(Rect hoverRect, Point cursorDip) => hoverRect.Contains(cursorDip);
 }

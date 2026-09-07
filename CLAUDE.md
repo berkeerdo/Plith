@@ -40,21 +40,30 @@ API deep integration).
 
 **Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
 Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged
-behaviour, moved behind the seam) and Ambient Notch (a configurable 2–24 DIP strip
-pinned top-center that descends into the full card on event/hover and retracts over
-a covering window). Settings gained a presentation picker and strip-height slider.
-Default stays Classic OSD for every install. Full Notch is deferred — its always-on
-cards (System Controls' mic status, a Clock card) don't exist yet. Multi-monitor:
-the notch pins to the saved monitor device name, falling back to primary — this
-closes ROADMAP §10's open question.
+behaviour, moved behind the seam) and Ambient Notch — a 190 DIP wide shape of
+configurable height (2–24 DIP) resting at top-center that **grows** into the full
+panel on event/hover and shrinks back, and that falls back to Classic wholesale
+while a window covers the monitor. Settings gained a presentation picker and a
+resting-height slider. Default stays Classic OSD for every install. Full Notch is
+deferred — its always-on cards (System Controls' mic status, a Clock card) don't
+exist yet. Multi-monitor: the notch pins to the saved monitor device name, falling
+back to primary — this closes ROADMAP §10's open question.
 
-**None of it is verified on a running build.** Build, the 162-test suite, and
-`scripts/check-a11y.ps1` are green, but no agent may launch or drive the app, so
-every manual check — the strip appearing and descending, hit-testing while parked,
-hover-to-descend, retraction over a real game, the Settings controls live, Snap
-Layouts/taskbar interference, idle resource use with the window never hidden, and
-motion smoothness across refresh rates — is open. Full ledger in
-`docs/PHASE6-VERIFICATION.md`.
+**The first design was run and rejected.** It parked a full-width strip over the
+card and translated the card down from behind it. On screen that reads as a drawer
+opening, not a notch, and the strip's width tracked the window so a media session
+appearing moved the anchor. It is now one surface whose width, height, corner radius,
+shadow and content opacity all derive from a single expansion value, with the content
+fading in only after the shape has mostly settled. Spec §2 records why.
+
+**The current design is not verified on a running build.** Release build, the
+169-test suite and `scripts/check-a11y.ps1` are green, but no agent may launch or
+drive the app, so every manual check — the resting shape appearing and growing,
+hit-testing at rest, hover-to-open, the Classic fallback over a real game, the
+Settings controls live, Snap Layouts/taskbar interference, idle resource use with
+the window never hidden, and motion smoothness across refresh rates — is open. Full
+ledger in `docs/PHASE6-VERIFICATION.md`; §10 records that the last live session ran
+against a binary three hours older than the branch.
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).

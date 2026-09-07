@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using System.Windows.Media.Animation;
 using Plith.Interop;
 using Plith.Services;
@@ -6,47 +6,50 @@ using Plith.Services;
 namespace Plith.Views.Presentation;
 
 /// <summary>
-/// A thin strip parked at the top edge that slides down into the full card on an event or
-/// hover, then retracts. The window itself never moves and is never hidden: it stays at the
-/// descended size and the content translates inside it.
+/// A notch: one surface pinned to the top edge of the screen that grows from a narrow resting
+/// pill into the full panel on an event or hover, then shrinks back. The window itself never
+/// moves and is never hidden — only the shape inside it changes size.
+///
+/// The distinction from the first design matters and is not stylistic. That one parked a
+/// full-width strip over a card and translated the card down from behind it: two objects
+/// passing each other, which reads as a drawer opening. This one has a single object that
+/// changes size, which is what a notch is. See NotchGeometry for the geometry itself.
 /// </summary>
 internal sealed class AmbientNotchPresentation : IOsdPresentation
 {
-    private const int DescendMs = 220;
-    private const int RetractMs = 260;
+    private const int ExpandMs = 340;
+    private const int CollapseMs = 260;
 
     private readonly BandWindow _window;
     private readonly OsdContent _content;
-    private readonly Func<double> _stripHeight;
+    private readonly Func<double> _collapsedHeight;
     private readonly DiagnosticLog? _log;
 
-    private double _hiddenOffset;
     private bool _hasMeasured;
     private bool _isParked = true;
 
-    // A retraction in flight counts as at rest, so an event arriving mid-retract routes
-    // ShowOsd down the animate branch and hands off from the current offset instead of
+    // A collapse in flight counts as at rest, so an event arriving mid-collapse routes
+    // ShowOsd down the animate branch and hands off from the current expansion instead of
     // snapping. The snap branch also skips Reposition(), so this is not merely cosmetic.
-    private bool _isRetracting;
+    private bool _isCollapsing;
 
-
-    public AmbientNotchPresentation(BandWindow window, OsdContent content, Func<double> stripHeight, DiagnosticLog? log)
+    public AmbientNotchPresentation(BandWindow window, OsdContent content, Func<double> collapsedHeight, DiagnosticLog? log)
     {
         _window = window;
         _content = content;
-        _stripHeight = stripHeight;
+        _collapsedHeight = collapsedHeight;
         _log = log;
     }
 
     public double EdgeMarginDip => PresentationPolicy.EdgeMarginDip(PresentationMode.AmbientNotch);
 
     // IsAtRest and IsFullyHidden deliberately consult different flags here. IsAtRest also
-    // treats a retraction-in-flight as "at rest" so ShowOsd hands off from the live offset
-    // instead of snapping past it (see _isRetracting). IsFullyHidden must NOT do that: a
-    // retraction in flight still has pixels on screen (the card is mid-slide), so there is
+    // treats a collapse-in-flight as "at rest" so ShowOsd hands off from the live expansion
+    // instead of snapping past it (see _isCollapsing). IsFullyHidden must NOT do that: a
+    // collapse in flight still has pixels on screen (the panel is mid-shrink), so there is
     // still something for HideOsd to consider taking down.
     public bool IsAtRest(double targetOpacity) =>
-        PresentationPolicy.IsAtRest(PresentationMode.AmbientNotch, _window.Opacity, targetOpacity, _isParked || _isRetracting);
+        PresentationPolicy.IsAtRest(PresentationMode.AmbientNotch, _window.Opacity, targetOpacity, _isParked || _isCollapsing);
 
     public bool IsFullyHidden =>
         PresentationPolicy.IsFullyHidden(PresentationMode.AmbientNotch, _window.Opacity, _isParked);
@@ -55,23 +58,15 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
     public void OnContentMeasured(Size contentSize)
     {
-        _hiddenOffset = NotchGeometry.HiddenOffset(contentSize.Height, OsdContent.ContentInsetDip);
+        _content.SetNotchMetrics(_collapsedHeight(), contentSize);
         _hasMeasured = true;
 
-        // Re-park if the content grew or shrank (the media card appearing or going away) while
-        // the notch was at rest. The parked offset is derived from the measured content height,
-        // so without this a stale offset would leave a slice of the middle of the card on
-        // screen instead of nothing but the strip.
-        //
-        // Parked is the only rest state this class has. The covered-monitor case is not a
-        // second one: OsdHost rebuilds the presentation as ClassicPresentation while a window
-        // covers the monitor, so this object does not exist to be repositioned then.
-        //
-        // Not a bare assignment: reaching the parked state through an animation leaves that
-        // animation holding ContentOffsetProperty with FillBehavior.HoldEnd, and animated-value
-        // precedence outranks a local write — so assigning here would change nothing at all.
-        // Park() clears the animation first.
-        if (_isParked) Park();
+        // No re-park needed after a content change, unlike the translate design this replaced.
+        // There the resting position was derived from the measured height, so a media card
+        // appearing while parked left a stale offset that exposed a slice of the card. Here the
+        // resting shape is the collapsed pill, whose size does not depend on the measurement at
+        // all — SetNotchMetrics has already re-applied the current expansion, and at rest that
+        // recomputes to the same pill it was already showing.
     }
 
     public void PrepareShow()
@@ -79,87 +74,78 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         // The window is permanently visible in this mode, so Show() is a first-activation
         // concern rather than a per-event one. BandWindow.Show is idempotent.
         _window.Show();
-        _content.SetStrip(visible: true, heightDip: _stripHeight());
     }
 
     public void AnimateToVisible(double targetOpacity, Action onCompleted)
     {
         _isParked = false;
-        _isRetracting = false;
+        _isCollapsing = false;
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
 
-        // From-less, exactly as in ClassicPresentation: hand off from wherever a retraction
-        // in flight had got to, rather than snapping back to the parked offset first.
-        var descend = new DoubleAnimation(NotchGeometry.DescendedOffset, TimeSpan.FromMilliseconds(DescendMs))
+        // From-less, exactly as in ClassicPresentation: hand off from wherever a collapse in
+        // flight had got to, rather than snapping shut and reopening.
+        //
+        // Quintic rather than cubic, and ease-out only: the shape should leave the resting pill
+        // fast and spend most of the duration settling. That decelerating tail is what reads as
+        // springy. A genuine overshoot is unavailable here — the window is sized to the open
+        // panel exactly, so a surface briefly larger than its final size would be clipped by the
+        // window rather than seen.
+        var expand = new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(ExpandMs))
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            EasingFunction = new QuinticEase { EasingMode = EasingMode.EaseOut },
         };
-        descend.Completed += (_, _) => onCompleted();
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, descend);
+        expand.Completed += (_, _) => onCompleted();
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, expand);
     }
 
     public void SnapToVisible(double targetOpacity)
     {
         _isParked = false;
-        _isRetracting = false;
+        _isCollapsing = false;
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        _content.ContentOffset = NotchGeometry.DescendedOffset;
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, null);
+        _content.NotchExpand = 1.0;
     }
 
     public void AnimateToRest(Action onCompleted)
     {
-        _isRetracting = true;
-        var retract = new DoubleAnimation(_hiddenOffset, TimeSpan.FromMilliseconds(RetractMs))
+        _isCollapsing = true;
+        var collapse = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(CollapseMs))
         {
             EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
         };
-        retract.Completed += (_, _) => { _isParked = true; _isRetracting = false; onCompleted(); };
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, retract);
+        collapse.Completed += (_, _) => { _isParked = true; _isCollapsing = false; onCompleted(); };
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, collapse);
     }
 
-    /// <summary>Park immediately with no animation, strip still showing. Used when settling
-    /// into notch mode, where an animated descent-then-retract would be a pointless flash.</summary>
+    /// <summary>Collapse immediately with no animation. Used when settling into notch mode,
+    /// where an animated open-then-close would be a pointless flash.</summary>
     public void Park()
     {
-        _isRetracting = false;
+        _isCollapsing = false;
         _isParked = true;
 
         if (!_hasMeasured)
         {
             // Reposition() early-returns before OnContentMeasured runs when the target screen
-            // can't be resolved or the first layout pass measures zero. There is no known-good
-            // offset to park at, and by this point ApplyPresentationMode/PrepareShow has
-            // already shown the window with ContentOffset at 0 — collapsing the strip alone
-            // would still leave the full card sitting on screen at full opacity, permanently.
-            // Hide the whole window instead; the measured path below calls Show() again once
-            // a real measurement lands, so the notch recovers rather than staying hidden.
-            _log?.Warn("AmbientNotchPresentation", "Park() called before any measurement; hiding the window instead of parking at an unmeasured offset.");
-            _content.SetStrip(visible: false, heightDip: _stripHeight());
-            _window.Hide();
-            return;
+            // can't be resolved or the first layout pass measures zero. Unlike the translate
+            // design this replaced, that is no longer a visual failure: the resting shape is
+            // the collapsed pill, whose size comes from the user's setting and a constant, not
+            // from the measurement — so parking unmeasured still puts exactly the right pill on
+            // screen and nothing else. Worth a line anyway, because it means Reposition() bailed
+            // and the panel this pill opens into has no size yet.
+            _log?.Warn("AmbientNotchPresentation", "Park() called before any measurement; the resting pill is correct but the open panel has no measured size yet.");
         }
 
         _window.Show();
-        _content.BeginAnimation(OsdContent.ContentOffsetProperty, null);
-        // Parks at the HIDDEN offset — the only offset there is — so the card contributes no
-        // pixels and NotchStrip is the only thing on screen.
-        //
-        // The old RestingOffset (since deleted) left the card's own bottom edge at y = stripHeight,
-        // which put two surfaces in the same band: the dedicated strip, and a sliver of the
-        // card's bottom — carrying that Border's corner radius and drop shadow with it. On a
-        // running build that reads as the corner of a card poking out from under the top of
-        // the screen, not as a notch. A notch is a deliberate shape; a leaked card edge is an
-        // artefact. Reported directly by the user on the first real session, which is what
-        // settled the open question section 1 of docs/PHASE6-VERIFICATION.md had recorded.
-        //
-        // There is no deeper rest state below this one to distinguish it from: parking with the
-        // strip hidden was once its own state (Retract), and it was deleted when the covered
-        // case became a wholesale rebuild into ClassicPresentation.
-        _content.ContentOffset = _hiddenOffset;
-        _content.SetStrip(visible: true, heightDip: _stripHeight());
-    }
 
+        // Not a bare assignment: reaching the collapsed state through an animation leaves that
+        // animation holding NotchExpandProperty with FillBehavior.HoldEnd, and animated-value
+        // precedence outranks a local write — so assigning without clearing the clock first
+        // would change nothing at all.
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, null);
+        _content.NotchExpand = 0.0;
+    }
 }

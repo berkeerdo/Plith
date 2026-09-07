@@ -5,103 +5,191 @@ namespace Plith.Tests;
 
 public class NotchGeometryTests
 {
-    // OsdContent's outer Grid has Margin="14" to reserve drop-shadow space, so the card's
-    // visible border starts 14 DIP below the content origin. Every case here uses that
-    // real value rather than 0, because a geometry that only works at inset 0 would look
-    // correct in tests and sit 14 px too low on screen.
-    private const double Inset = 14;
+    // The size the card content measures to with a single audio card, minus OsdContent's
+    // 14 DIP drop-shadow inset — i.e. the size of the surface at full expansion, which is
+    // what SetNotchMetrics hands the geometry.
+    private static readonly Size Panel = new(412, 150);
+
+    private const double RestingHeight = 5;
+
+    // ---- SurfaceSize -------------------------------------------------------------------
 
     [Fact]
-    public void HiddenOffset_TakesTheWholeCardOffScreen()
+    public void SurfaceSize_AtZero_IsTheCollapsedPill()
     {
-        // 200 tall content, 14 inset: push up until the card's bottom edge lands at y = 0, so
-        // the only thing left on screen is whatever the strip element itself draws.
-        Assert.Equal(-186, NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset));
+        var s = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, Panel, 0);
+        Assert.Equal(NotchGeometry.CollapsedWidthDip, s.Width);
+        Assert.Equal(RestingHeight, s.Height);
     }
 
     [Fact]
-    public void HiddenOffset_ScalesWithContentHeight()
+    public void SurfaceSize_AtOne_IsTheMeasuredPanel()
     {
-        Assert.Equal(-136, NotchGeometry.HiddenOffset(150, Inset));
-        Assert.Equal(-286, NotchGeometry.HiddenOffset(300, Inset));
+        var s = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, Panel, 1);
+        Assert.Equal(Panel.Width, s.Width);
+        Assert.Equal(Panel.Height, s.Height);
     }
 
     [Fact]
-    public void HiddenOffset_NeverPushesDown_ForDegenerateContent()
+    public void SurfaceSize_AtHalf_IsHalfwayOnBothAxes()
     {
-        // Reachable during the first layout pass, when DesiredSize is still zero. A positive
-        // offset there would drop the card into the middle of the screen for one frame.
-        Assert.Equal(0, NotchGeometry.HiddenOffset(contentHeight: 0, contentInset: Inset));
+        var s = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, Panel, 0.5);
+        Assert.Equal((NotchGeometry.CollapsedWidthDip + Panel.Width) / 2, s.Width);
+        Assert.Equal((RestingHeight + Panel.Height) / 2, s.Height);
     }
 
     [Fact]
-    public void DescendedOffset_IsZero()
+    public void SurfaceSize_NeverShrinksBelowThePill_WhenNothingHasBeenMeasuredYet()
     {
-        Assert.Equal(0.0, NotchGeometry.DescendedOffset);
+        // Reachable on the first layout pass, when DesiredSize is still zero. Interpolating
+        // toward a zero panel would collapse the resting pill to nothing for a frame — and at
+        // rest (t = 0) it must be exactly the pill no matter what the panel measures.
+        var atRest = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, new Size(0, 0), 0);
+        Assert.Equal(NotchGeometry.CollapsedWidthDip, atRest.Width);
+        Assert.Equal(RestingHeight, atRest.Height);
+
+        var open = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, new Size(0, 0), 1);
+        Assert.Equal(NotchGeometry.CollapsedWidthDip, open.Width);
+        Assert.Equal(RestingHeight, open.Height);
     }
 
     [Fact]
-    public void HiddenOffset_TakesTheCardFullyOffScreen()
+    public void SurfaceSize_TheRestingPillDoesNotFollowThePanelWidth()
     {
-        // 200 tall content: push up until only the inset (the drop-shadow margin) remains
-        // below the origin, i.e. nothing of the card's visible border is left on screen.
-        Assert.Equal(-186, NotchGeometry.HiddenOffset(contentHeight: 200, contentInset: Inset));
+        // The whole point of a fixed collapsed width: a media card appearing widens the panel,
+        // and the resting shape must not move or resize when it does, or the anchor visibly
+        // jumps and the notch reads as a window rather than part of the bezel.
+        var narrow = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, new Size(412, 150), 0);
+        var wide = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, new Size(1172, 260), 0);
+        Assert.Equal(narrow, wide);
     }
 
     [Fact]
-    public void HiddenOffset_NeverPushesDown_WhenContentIsShorterThanTheInset()
+    public void SurfaceSize_ClampsProgressOutsideZeroToOne()
     {
-        Assert.Equal(0, NotchGeometry.HiddenOffset(contentHeight: 0, contentInset: Inset));
+        // The window is sized to the open panel exactly, so a surface larger than the panel
+        // would be clipped rather than seen. An easing function that overshoots must not be
+        // able to produce one.
+        var over = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, Panel, 1.4);
+        Assert.Equal(Panel.Width, over.Width);
+
+        var under = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, RestingHeight, Panel, -0.3);
+        Assert.Equal(NotchGeometry.CollapsedWidthDip, under.Width);
     }
 
-    // Deleted: HiddenOffset_DoesNotDependOnStripHeight. It called HiddenOffset twice with
-    // identical arguments and asserted the two results equal, which is true of any pure
-    // function, then repeated the -186 assertion already made above. The property it claimed
-    // to cover — that strip height never enters the card's placement — is enforced by the
-    // signature: HiddenOffset takes content height and inset and nothing else, so no test can
-    // vary a strip height it cannot be given.
+    // ---- SurfaceRadius -----------------------------------------------------------------
 
     [Fact]
-    public void HiddenOffset_LeavesTheCardsBottomEdgeAtZero()
+    public void SurfaceRadius_GrowsWithExpansion()
     {
-        // The card's bottom edge, in the content's own coordinate space, sits at
-        // contentHeight - contentInset below the content origin (the inset is the drop-shadow
-        // margin the visible border starts inside of). Parking at HiddenOffset must bring that
-        // edge to exactly y = 0 — the top of the window — so nothing of the card draws above
-        // or below it.
-        const double contentHeight = 200;
-        var hidden = NotchGeometry.HiddenOffset(contentHeight, Inset);
-        Assert.Equal(0, hidden + (contentHeight - Inset));
+        Assert.Equal(NotchGeometry.CollapsedRadiusDip, NotchGeometry.SurfaceRadius(0, surfaceHeight: 40));
+        Assert.Equal(NotchGeometry.ExpandedRadiusDip, NotchGeometry.SurfaceRadius(1, surfaceHeight: 150));
     }
 
     [Fact]
-    public void StripRect_SitsAtTheWindowTopAndInsideTheShadowInset()
+    public void SurfaceRadius_NeverExceedsTheSurfaceHeight()
     {
-        var r = NotchGeometry.StripRect(
-            windowLeft: 740, windowTop: 0, contentWidth: 440, stripHeight: 5, contentInset: Inset);
+        // The resting height is a user setting that goes down to 2 DIP. An un-clamped 8 DIP
+        // radius on a 2 DIP tall shape is a radius the shape cannot express: WPF clamps it at
+        // draw time, so the drawn corner would stop tracking the value the animation holds.
+        Assert.Equal(2, NotchGeometry.SurfaceRadius(0, surfaceHeight: 2));
+    }
 
-        Assert.Equal(754, r.Left);    // 740 + 14
+    [Fact]
+    public void SurfaceRadius_NeverGoesNegative_ForADegenerateSurface()
+    {
+        Assert.Equal(0, NotchGeometry.SurfaceRadius(0, surfaceHeight: -5));
+    }
+
+    // ---- ContentOpacity ----------------------------------------------------------------
+
+    [Fact]
+    public void ContentOpacity_IsZeroWhileTheShapeIsStillGrowing()
+    {
+        // The ordering IS the effect: the shape settles first, the content arrives into it.
+        // Fading content in while the surface is still moving reads as a window resizing.
+        Assert.Equal(0, NotchGeometry.ContentOpacity(0));
+        Assert.Equal(0, NotchGeometry.ContentOpacity(0.3));
+        Assert.Equal(0, NotchGeometry.ContentOpacity(NotchGeometry.ContentFadeStart));
+    }
+
+    [Fact]
+    public void ContentOpacity_ReachesFullOnlyWhenFullyOpen()
+    {
+        Assert.Equal(1, NotchGeometry.ContentOpacity(1));
+        Assert.True(NotchGeometry.ContentOpacity(0.9) < 1);
+    }
+
+    [Fact]
+    public void ContentOpacity_RampsMonotonically_AfterTheFadeStart()
+    {
+        var a = NotchGeometry.ContentOpacity(0.7);
+        var b = NotchGeometry.ContentOpacity(0.85);
+        Assert.True(a > 0 && b > a, $"expected a rising ramp, got {a} then {b}");
+    }
+
+    [Fact]
+    public void ContentOpacity_StaysInRange_ForProgressOutsideZeroToOne()
+    {
+        Assert.Equal(0, NotchGeometry.ContentOpacity(-1));
+        Assert.Equal(1, NotchGeometry.ContentOpacity(2));
+    }
+
+    // ---- HoverRect ---------------------------------------------------------------------
+
+    [Fact]
+    public void HoverRect_IsCentredInTheWindowAtItsTop()
+    {
+        var r = NotchGeometry.HoverRect(windowLeft: 740, windowTop: 0, windowWidth: 440, collapsedHeight: 20);
+
+        Assert.Equal(740 + (440 - NotchGeometry.CollapsedWidthDip) / 2, r.Left);
         Assert.Equal(0, r.Top);
-        Assert.Equal(412, r.Width);   // 440 - 14 * 2
-        Assert.Equal(5, r.Height);
+        Assert.Equal(NotchGeometry.CollapsedWidthDip, r.Width);
+        Assert.Equal(20, r.Height);
     }
 
     [Fact]
-    public void StripRect_FollowsTheWindowOrigin()
+    public void HoverRect_FollowsTheWindowOrigin()
     {
         // The window origin comes from Reposition(), which anchors on Screen.WorkingArea.
-        // A taskbar docked to the top therefore moves the strip down with it, and this is
+        // A taskbar docked to the top therefore moves the target down with it, and this is
         // the only thing NotchGeometry needs to know about that.
-        var r = NotchGeometry.StripRect(740, 48, 440, 5, Inset);
+        var r = NotchGeometry.HoverRect(740, 48, 440, 20);
         Assert.Equal(48, r.Top);
     }
 
     [Fact]
-    public void StripRect_DoesNotGoNegative_ForContentNarrowerThanTheInset()
+    public void HoverRect_StaysPutWhenThePanelWidens()
     {
-        var r = NotchGeometry.StripRect(0, 0, contentWidth: 10, stripHeight: 5, contentInset: Inset);
-        Assert.Equal(0, r.Width);
+        // Centre of the pill, before and after a media card widens the window. Reposition()
+        // re-centres the window on the same screen, so a wider window starts further left by
+        // exactly half the extra width — and the pill's centre must not move at all.
+        var narrow = NotchGeometry.HoverRect(windowLeft: 1060, windowTop: 0, windowWidth: 440, collapsedHeight: 20);
+        var wide = NotchGeometry.HoverRect(windowLeft: 680, windowTop: 0, windowWidth: 1200, collapsedHeight: 20);
+
+        Assert.Equal(narrow.Left + narrow.Width / 2, wide.Left + wide.Width / 2);
+        Assert.Equal(narrow.Width, wide.Width);
     }
+
+    [Fact]
+    public void HoverRect_IsTallerThanADegenerateRestingHeight()
+    {
+        // The resting height goes down to 2 DIP, and a 2 DIP tall target cannot be hit
+        // deliberately — the pointer skips it between two mouse samples. The target is
+        // invisible, so making it taller than what is drawn costs nothing on screen.
+        var r = NotchGeometry.HoverRect(740, 0, 440, collapsedHeight: 2);
+        Assert.Equal(NotchGeometry.MinHoverHeightDip, r.Height);
+    }
+
+    [Fact]
+    public void HoverRect_DoesNotOverflowAWindowNarrowerThanThePill()
+    {
+        var r = NotchGeometry.HoverRect(0, 0, windowWidth: 100, collapsedHeight: 20);
+        Assert.Equal(0, r.Left);
+        Assert.Equal(100, r.Width);
+    }
+
+    // ---- PhysicalToDip -----------------------------------------------------------------
 
     [Fact]
     public void PhysicalToDip_At100Percent_IsIdentity()
@@ -130,24 +218,26 @@ public class NotchGeometryTests
         Assert.Equal(new Point(800, 12), NotchGeometry.PhysicalToDip(800, 12, 0));
     }
 
+    // ---- IsInsideNotch -----------------------------------------------------------------
+
     [Fact]
-    public void IsInsideStrip_JustInside()
+    public void IsInsideNotch_JustInside()
     {
-        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
-        Assert.True(NotchGeometry.IsInsideStrip(r, new Point(755, 2)));
+        var r = NotchGeometry.HoverRect(740, 0, 440, 20);
+        Assert.True(NotchGeometry.IsInsideNotch(r, new Point(960, 2)));
     }
 
     [Fact]
-    public void IsInsideStrip_JustBelow()
+    public void IsInsideNotch_JustBelow()
     {
-        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
-        Assert.False(NotchGeometry.IsInsideStrip(r, new Point(755, 6)));
+        var r = NotchGeometry.HoverRect(740, 0, 440, 20);
+        Assert.False(NotchGeometry.IsInsideNotch(r, new Point(960, 21)));
     }
 
     [Fact]
-    public void IsInsideStrip_JustLeftOfIt()
+    public void IsInsideNotch_JustLeftOfIt()
     {
-        var r = NotchGeometry.StripRect(740, 0, 440, 5, Inset);
-        Assert.False(NotchGeometry.IsInsideStrip(r, new Point(753, 2)));
+        var r = NotchGeometry.HoverRect(740, 0, 440, 20);
+        Assert.False(NotchGeometry.IsInsideNotch(r, new Point(r.Left - 1, 2)));
     }
 }

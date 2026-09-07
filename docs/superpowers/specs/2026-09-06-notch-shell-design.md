@@ -113,11 +113,53 @@ the mode activates rather than on each `ShowOsd` — today's `Show()` sits insid
 
 ## §2 — Geometry and motion
 
+### Amended after the second live session: one shape that grows, not a card that slides
+
+**The original design in this section was wrong, and it was wrong in a way no test could
+show.** It read: *animating the window's `Top` means a `SetWindowPos` per frame, which janks,
+so fix the window at its descended size and animate a `TranslateTransform` on the content
+instead.* The performance reasoning holds and is retained below. The **shape** reasoning did
+not exist, and that is what failed.
+
+What shipped was a full-width strip element parked over the card, with the card translating
+down from behind it. On a running build the user's verdict was immediate: *"this doesn't look
+much like a notch, because all it does is come down from above."* They were right, and there
+were two distinct reasons:
+
+1. **Two objects, not one.** A strip that stays put while a card slides out from under it
+   reads as a drawer opening. A notch is a single surface that changes size. Nothing about
+   the translation could be tuned into the other thing.
+2. **The resting shape tracked the content.** The strip was `HorizontalAlignment="Stretch"`
+   across the window, and the window's width follows the card — 440 DIP for audio alone,
+   far wider with a media card. So the resting shape's width, and with it the whole anchor,
+   changed depending on what was playing. A notch is a fixed point in the bezel.
+
+**The model now:** one `Border` (`NotchSurface`) whose width, height, bottom corner radius
+and shadow strength are all derived from a single expansion progress `t` (0 = collapsed,
+1 = open). The card content is a sibling with a fixed layout whose *opacity* is derived from
+the same `t`, and it stays at zero until the shape is `ContentFadeStart` of the way open.
+
+The single-progress part is not a stylistic preference. Four parallel animations on one
+visual transition can each be stopped, retargeted or completed independently, and any of
+those leaves the shape in a state no single progress value describes — which is precisely
+the class of defect this branch has already produced three times via
+`BeginAnimation(prop, null)` not raising `Completed`. One clock cannot desynchronise from
+itself.
+
+**Ordering is the effect.** The shape settles first and the content arrives into it. Fading
+content in while the surface is still moving reads as a window being resized, which is the
+one thing a notch must never look like.
+
+**The collapsed width is a constant, not a setting.** `NotchGeometry.CollapsedWidthDip`. The
+resting height stays a setting because it is a taste/intrusiveness trade-off the user owns;
+the width is not, because any value that follows the content reintroduces reason 2 above.
+
 ### Move the content, not the window
 
-Animating the window's `Top` means a `SetWindowPos` per frame, which janks. Instead the
-window is fixed at its descended size and a `TranslateTransform` on the content animates.
-WPF composites that; no per-frame Win32 call.
+Animating the window's `Top` means a `SetWindowPos` per frame, which janks. The window is
+fixed at its open size and everything animates inside it. `NotchSurface` is deliberately
+childless, so re-measuring it per frame re-measures nothing else; the card content beside it
+keeps a fixed layout for the whole animation and is only faded.
 
 At rest the window is at full size but almost entirely transparent and click-through, so
 it costs nothing visually or interactively.
@@ -139,9 +181,11 @@ New `src/Plith/Views/Presentation/NotchGeometry.cs`, static, no WPF window depen
 
 | Input | Output |
 |---|---|
-| working area, measured content size, strip height | resting offset, descended offset |
-| working area, content size, strip height | strip hit rectangle |
-| cursor point, strip rectangle | inside / outside |
+| collapsed width/height, measured panel size, progress `t` | surface size |
+| progress `t`, surface height | bottom corner radius, clamped to the height |
+| progress `t` | content opacity (zero until `ContentFadeStart`) |
+| window origin and width, collapsed height | hover rectangle, centred, with a minimum height |
+| cursor point, hover rectangle | inside / outside |
 
 This mirrors the `FullscreenVideoDetector` / `FullscreenVideoWatcher` split. That split is
 what made §2's predicate unit-testable, and is why the Spotify AUMID false-positive could

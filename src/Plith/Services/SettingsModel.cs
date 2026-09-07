@@ -16,7 +16,7 @@ public enum PresentationMode
 {
     /// <summary>Invisible at rest; fades in at the configured anchor. Behaviour through 0.1.5.</summary>
     ClassicOsd,
-    /// <summary>A thin strip parked at the top edge that slides down on an event or hover.</summary>
+    /// <summary>A small shape resting at the top edge that grows into the full panel on an event or hover.</summary>
     AmbientNotch,
     // FullNotch is deliberately absent until the cards that would fill its strip exist
     // (mic status ships with the System Controls card; there is no Clock card yet).
@@ -78,7 +78,9 @@ public sealed class SettingsModel
     /// keep the OSD they already have.</summary>
     public PresentationMode Presentation { get; set; } = PresentationMode.ClassicOsd;
 
-    /// <summary>Height in DIP of the strip left visible while the Ambient Notch is parked.
+    /// <summary>Height in DIP of the Ambient Notch's resting shape. Its WIDTH is a constant
+    /// (NotchGeometry.CollapsedWidthDip) and deliberately not a setting: the resting shape must
+    /// not resize when the panel it opens into does, or the anchor visibly jumps.
     /// ROADMAP §3 specifies a 4–6 px band; 5 sits in the middle of it.</summary>
     public double NotchStripHeightDip { get; set; } = 5;
 

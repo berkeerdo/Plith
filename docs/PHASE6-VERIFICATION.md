@@ -34,38 +34,52 @@ calls, `SetStrip`, and the `OsdHost.ApplyPresentationMode` wiring) is not.
 
 Task 7's `NotchHoverPoller` holds a `DispatcherTimer` and P/Invokes `GetCursorPos`, so it is in
 the same boat: the headless suite cannot exercise it end to end either. The pure geometry it
-calls — `NotchGeometry.StripRect`, `NotchGeometry.PhysicalToDip`, `NotchGeometry.IsInsideStrip`
-— is unit-tested; the timer, the P/Invoke, and the `OnStripHoverChanged` wiring in `OsdHost` are
+calls — `NotchGeometry.HoverRect`, `NotchGeometry.PhysicalToDip`, `NotchGeometry.IsInsideStrip`
+— is unit-tested; the timer, the P/Invoke, and the `OnNotchHoverChanged` wiring in `OsdHost` are
 not.
 
 ---
 
-## 1. The descent — Task 6's headline behaviour
+## 1. The expansion — the notch's headline behaviour
 
-> **Status: NOT VERIFIED.**
-> This has not been run. No build from this branch has been launched, focused, or interacted
-> with by an agent while producing Task 6 — manual GUI verification in this project is a human
-> step, and an agent attempting it has previously caused real harm. The check below is recorded
-> exactly as open, not as passed on the strength of the code reading correct.
+> **Status: NOT VERIFIED. Rewritten after the second live session.**
+> The checks below replace an earlier set written for a design that has since been removed.
+> That design parked a full-width strip over the card and translated the card down from
+> behind it; the user's verdict on a running build was that it did not read as a notch, and
+> the spec's §2 now records why. The current model is one surface that changes size. None of
+> it has been run: no build from this branch has been launched, focused, or interacted with
+> by an agent — manual GUI verification in this project is a human step, and an agent
+> attempting it has previously caused real harm.
 
-**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under `[Osd]`,
-restart Plith, then press a volume key.
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
+`[Osd]`, restart Plith, then press a volume key.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 1.1 | At rest, before any key press | A thin strip (`NotchStripHeightDip`, default 5 DIP) sits flush with the top edge of the target monitor, horizontally centered, with no margin above it | No strip, a strip with a visible top margin, or a strip that is the full card height |
-| 1.2 | Press a volume key | The full card slides down out of the strip over ~220 ms with an ease-out curve, then holds at `OsdOpacityPercent` opacity for the show duration | The card snaps into place with no animation, appears at the wrong opacity, or appears somewhere other than under the strip |
-| 1.3 | After the hide timer elapses | The card retracts back up into the strip over ~260 ms with an ease-in curve, ending exactly where 1.1 started | The card disappears instead of retracting, overshoots, or leaves a gap/seam at the strip boundary |
-| 1.4 | Repeat 1.2–1.3 while a media session is playing (larger card) | The strip still reads the top edge of the taller card; the resting (parked) offset adjusts so the strip shows the card's top edge, not a slice of its middle | The parked strip shows mid-card content, or the card is cut off asymmetrically |
-| 1.5 | Toggle `Presentation` back to `ClassicOsd` while the notch is parked, then back to `AmbientNotch` | Each switch settles cleanly into that mode's rest state with no leftover offset, no stray opacity, and no double strip | Classic shows a phantom offset; the notch reappears with the wrong opacity or a hidden/missing strip |
+| 1.1 | At rest, before any key press | A narrow shape (190 DIP wide, `NotchStripHeightDip` tall) sits flush with the top edge of the target monitor, horizontally centred, with no margin above it and no shadow below it | Nothing visible; a shape spanning the full panel width; a visible top margin; a grey blur under a 2 DIP shape |
+| 1.2 | Press a volume key | That same shape **grows** into the full panel over ~340 ms, decelerating into its final size; the card content is absent for roughly the first half and fades in as the shape settles | The panel appears at full size instantly; a card slides down from behind a strip; the content is legible while the shape is still moving; two outlines or two shadows are visible at once |
+| 1.3 | After the hide timer elapses | The panel shrinks back to exactly the 1.1 shape over ~260 ms, accelerating, with the content fading out first | The panel vanishes instead of shrinking; it overshoots; a seam or a leftover card edge is visible at the end |
+| 1.4 | Repeat 1.2–1.3 with a media session playing (wider, taller panel) | The resting shape in 1.1 is **pixel-identical** — same width, same height, same horizontal centre — and the panel simply grows to a different size | The resting shape widens, or its centre moves, when the media card appears |
+| 1.5 | Toggle `Presentation` to `ClassicOsd` while the notch is at rest, then back | Each switch settles cleanly into that mode's rest state: Classic is a rounded floating card at the user's own anchor with its shadow, the notch is the 1.1 shape again, and neither shows the other's outline | Classic appears at opacity 0 or with no shadow; the notch reappears at the wrong size, or with `CardSurface`'s border drawn on top of `NotchSurface` |
 
-**Why 1.5 matters:** `OsdHost.ApplyPresentationMode` is the piece of Task 6 with no equivalent in
-Phase 5 — it tears down the previous presentation's state (clears the content-offset animation,
-resets `ContentOffset` to 0, hides the strip) before building the new one, then, for the notch
-branch specifically, re-measures content and calls `Park()` to settle without an animated flash.
-That teardown/rebuild path only runs when a live settings change actually flips
-`SettingsModel.Presentation`, which is exactly the kind of runtime transition the automated
-suite cannot reach (`SettingsService.Changed` firing while a `BandWindow` is live).
+**Why 1.4 is the sharpest check here.** It is the one the previous design failed on a running
+build, and it failed silently: the resting strip was stretched across the window, the window's
+width follows the card, so a media session appearing changed the resting shape's width and the
+anchor with it. Nothing in a build, a test run or the lint could see that. The fix is that the
+collapsed width is now a constant rather than derived from the window
+(`NotchGeometry.CollapsedWidthDip`), and `SurfaceSize_TheRestingPillDoesNotFollowThePanelWidth`
+covers the geometry — but only 1.4 covers the thing on screen.
+
+**Why 1.5 matters:** `OsdHost.ApplyPresentationMode` is the piece with no equivalent in
+Phase 5 — it tears down the previous presentation's state (clears the expansion animation,
+resets `NotchExpand` to 0) before building the new one, then, for the notch branch
+specifically, re-measures content and calls `Park()` to settle without an animated flash.
+It also flips `CardSurface` between painting and not painting: in notch mode `NotchSurface`
+is the only visible surface, and if that switch leaked, Classic would show a borderless
+shadowless card or the notch would show two stacked outlines. That teardown/rebuild path only
+runs when a live settings change actually flips `SettingsModel.Presentation`, which is exactly
+the kind of runtime transition the automated suite cannot reach
+(`SettingsService.Changed` firing while a `BandWindow` is live).
 
 **First open question — CLOSED by the first real session.** This document previously asked
 whether the parked strip should be the dedicated `NotchStrip` border alone, or that border
@@ -138,7 +152,7 @@ Three separate things follow, none of them inferred from behaviour:
    evidence the final review's Critical needed. `OsdHost` assigns `IsClickThrough` in its
    constructor, before `CreateWindow()`, when `BandWindow`'s setter still no-ops on
    `!IsLoaded` — so before the `Loaded` re-assertion was added, this bit was **not** set and
-   the parked strip swallowed clicks from every launch. Note the log line alone could not
+   the resting notch swallowed clicks from every launch. Note the log line alone could not
    have shown this: `clickThrough=True` reports the dependency property, which reads back
    true whether or not the native style was ever applied. Only the ex-style settles it.
 2. **`Top = 0`** — the notch is flush with the top edge. The saved config had
@@ -152,24 +166,24 @@ Three separate things follow, none of them inferred from behaviour:
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the strip | Snap/maximize works as if the strip were not there | The strip intercepts the drag or click |
-| 2.2 | Click through the strip's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
+| 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the notch | Snap/maximize works as if the notch were not there | The notch intercepts the drag or click |
+| 2.2 | Click through the notch's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
 
 Original status note, still true of 2.1 and 2.2: **NOT VERIFIED**, for the same reason as
 section 1.
 
 `PresentationPolicy.WantsHitTesting` says the notch should not accept mouse messages while
-parked (`_isParked == true`), so that the strip sitting at the very top of the screen does not
+parked (`_isParked == true`), so that the notch sitting at the very top of the screen does not
 swallow clicks meant for window-maximize, browser tabs, or Snap Layouts.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the strip | Snap/maximize works as if the strip were not there | The strip intercepts the drag or click |
-| 2.2 | Click through the strip's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
+| 2.1 | With the notch parked, try to maximize a window by dragging its title bar to the top edge under the notch | Snap/maximize works as if the notch were not there | The notch intercepts the drag or click |
+| 2.2 | Click through the notch's screen region while nothing is expanded | Click reaches whatever is beneath it | The click is swallowed |
 
 ---
 
-## 3. Hover-to-descend and the click-through toggle (Task 7)
+## 3. Hover-to-open and the click-through toggle (Task 7)
 
 > **Status: NOT VERIFIED.**
 > This has not been run. No build from this branch has been launched, focused, or interacted
@@ -187,14 +201,14 @@ added a second call site, `ApplyPresentationMode`'s `IsClickThrough = !_presenta
 which runs *after* `CreateWindow()`, and at a live settings-driven mode switch `IsLoaded` is
 already `true`, so `ToggleClickThrough` executes there. The accurate claim is narrower: nobody
 has yet run the branch this task adds — the toggle firing *while the window is actively being
-hovered*, from `OnStripHoverChanged`, `ShowOsd`, and `FadeOutAndHide`. There are two distinct
+hovered*, from `OnNotchHoverChanged`, `ShowOsd`, and `FadeOutAndHide`. There are two distinct
 first-execution risks to watch for, not one:
 
 - The guard could still skip the toggle in this specific calling context (for example if
   `IsLoaded` reads `false` at the moment a poller-driven event fires, which has never been
-  observed one way or the other). The failure mode is asymmetric and easy to misread: the strip
+  observed one way or the other). The failure mode is asymmetric and easy to misread: the notch
   would either keep swallowing clicks at the top edge permanently, or refuse to become
-  click-through once descended, and nothing in the build/test/lint output would show it. If
+  click-through once open, and nothing in the build/test/lint output would show it. If
   checks 3.3, 3.4, or 3.5 below fail, this guard is the first thing to check — the fix would be
   to route the toggle through the same `ApplyWindowStyles` path `Activatable` and `TopMost`
   already use, neither of which has an `IsLoaded` guard.
@@ -220,23 +234,23 @@ first-execution risks to watch for, not one:
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 3.1 | Move the cursor onto the parked strip | The notch descends smoothly, as a slide rather than a jump, into the full card | Nothing happens, the descent needs an unreasonably long dwell, or it jumps/snaps instead of sliding |
-| 3.2 | Move the cursor away from the descended card | The notch retracts back to the strip after the hide timer elapses | The notch stays down indefinitely, or retracts instantly with no hold time |
-| 3.3 | While descended, click a media transport button | It responds | The click is swallowed (see the `IsClickThrough`/`IsLoaded` note above) |
-| 3.4 | While parked (strip only, not descended), drag a window to the top edge of the screen | It maximises — the strip did not eat the drag | The drag is intercepted by the strip |
-| 3.5 | While parked, click a browser tab (or any UI) directly under the strip | It activates normally | The click is swallowed |
+| 3.1 | Move the cursor onto the resting notch | The notch grows smoothly into the full panel | Nothing happens, the expansion needs an unreasonably long dwell, or it jumps/snaps instead of growing |
+| 3.2 | Move the cursor away from the open panel | The notch collapses back to the notch after the hide timer elapses | The notch stays down indefinitely, or collapses instantly with no hold time |
+| 3.3 | While open, click a media transport button | It responds | The click is swallowed (see the `IsClickThrough`/`IsLoaded` note above) |
+| 3.4 | While parked (notch only, not open), drag a window to the top edge of the screen | It maximises — the notch did not eat the drag | The drag is intercepted by the notch |
+| 3.5 | While parked, click a browser tab (or any UI) directly under the notch | It activates normally | The click is swallowed |
 
 **What to also note while running 3.1–3.2:** the poller compares cursor position against
-`NotchGeometry.StripRect` every 60 ms via `GetCursorPos` (physical pixels) converted through
+`NotchGeometry.HoverRect` every 60 ms via `GetCursorPos` (physical pixels) converted through
 `NotchGeometry.PhysicalToDip`. On a non-100% display scale this is the one place a mismatch
-would show up as a strip that is hoverable in the wrong screen location — worth specifically
+would show up as a notch that is hoverable in the wrong screen location — worth specifically
 trying on a scaled monitor if one is available, not just the primary display.
 
-**Known limitation, not something to chase during this pass:** `StripRect` and `DpiScale` are
+**Known limitation, not something to chase during this pass:** `HoverRect` and `DpiScale` are
 only published from `Reposition()`, which does not run on `WM_DPICHANGED`. If the display scale
 changes live (moving the OSD's monitor between screens with different scaling, or a live DPI
 change on the same monitor) while the notch is parked, the poller keeps comparing against the
-stale rectangle/scale until the next show-from-rest calls `Reposition()` again — so the strip
+stale rectangle/scale until the next show-from-rest calls `Reposition()` again — so the notch
 can go unhoverable until that next show. Recorded here as a known limitation deferred out of
 this round, not as something observed on a run.
 
@@ -244,7 +258,7 @@ this round, not as something observed on a run.
 above, not the same one restated: it needs no DPI *change* at all to bite. `_hoverPoller.DpiScale`
 is a single scalar, so `NotchGeometry.PhysicalToDip` converts the whole virtual desktop at one
 scale factor. On a desktop where two displays run different scale factors, every physical cursor
-reading taken on the other display is converted with the OSD monitor's scale, so the strip is
+reading taken on the other display is converted with the OSD monitor's scale, so the notch is
 hoverable in the wrong screen region — and the further the cursor is from the virtual-desktop
 origin, the larger the error. Correct handling needs a per-monitor scale looked up from the point
 being converted rather than one cached scalar. Recorded as a known limitation, not as an
@@ -273,8 +287,8 @@ observation: no mixed-DPI desktop has been run against this build.
 **This must be run on the installed Program Files build, not a Debug build out of `bin\`.**
 Debug builds have no UIAccess (see `Plith.Interop.UiAccess`), which silently changes what the
 OSD is even allowed to draw over — a Debug build can already fail to cover a fullscreen game
-for reasons that have nothing to do with retraction, and that failure would look identical to
-a retraction bug in `plith.log`. Install the signed build before running this section.
+for reasons that have nothing to do with collapse, and that failure would look identical to
+a collapse bug in `plith.log`. Install the signed build before running this section.
 
 **Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
 `[Osd]`, restart the installed build, then open a game (or a fullscreen video player) and
@@ -282,9 +296,9 @@ alt-tab into it.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True` followed by `Presentation applied: AmbientNotch, …, coversMonitor=True` with no `parked=` suffix (that suffix only appears for a live notch, so its absence is how the log says "Classic was built"), and the strip is gone entirely — no strip, no sliver, no shadow bleed | The strip stays visible, `ForegroundCoversMonitor -> True` never appears, or the `Presentation applied` line still reports `parked=` |
-| 4.2 | While still in the game, press a volume key, then let it auto-hide | The OSD still appears (this is the check that distinguishes the covered state from suppression), it appears **at the user's own Classic anchor** — not top-centre — and on the monitor Classic would use, **and** once it auto-hides nothing is left drawn over the game | The OSD stays hidden on the key press (the covered state conflated with `IShowSuppressor` somewhere, breaking Phase 5 §2's gate), **or** it appears top-centre anyway (the fallback is not reaching `Reposition`/`ResolveTargetScreen`), **or** a strip appears over the game after auto-hide (a notch presentation was built while covered) |
-| 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False (settled for …ms)` roughly 2–3 s after the alt-tab, then `Presentation applied: AmbientNotch, …, coversMonitor=False, parked=True`, and the strip returns at the top edge at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The strip does not return, returns at the wrong offset, the settle takes far longer than the logged elapsed time suggests, or the log lines are missing |
+| 4.1 | Alt-tab into the fullscreen game | `plith.log` shows `ForegroundCoversMonitor -> True` followed by `Presentation applied: AmbientNotch, …, coversMonitor=True` with no `parked=` suffix (that suffix only appears for a live notch, so its absence is how the log says "Classic was built"), and the notch is gone entirely — no shape, no sliver, no shadow bleed | The notch stays visible, `ForegroundCoversMonitor -> True` never appears, or the `Presentation applied` line still reports `parked=` |
+| 4.2 | While still in the game, press a volume key, then let it auto-hide | The OSD still appears (this is the check that distinguishes the covered state from suppression), it appears **at the user's own Classic anchor** — not top-centre — and on the monitor Classic would use, **and** once it auto-hides nothing is left drawn over the game | The OSD stays hidden on the key press (the covered state conflated with `IShowSuppressor` somewhere, breaking Phase 5 §2's gate), **or** it appears top-centre anyway (the fallback is not reaching `Reposition`/`ResolveTargetScreen`), **or** a notch appears over the game after auto-hide (a notch presentation was built while covered) |
+| 4.3 | Alt-tab back out of the game | `plith.log` shows `ForegroundCoversMonitor -> False (settled for …ms)` roughly 2–3 s after the alt-tab, then `Presentation applied: AmbientNotch, …, coversMonitor=False, parked=True`, and the notch returns at the top edge at the right offset for whatever is currently on the card (audio-only vs. audio+media size) | The notch does not return, returns at the wrong offset, the settle takes far longer than the logged elapsed time suggests, or the log lines are missing |
 
 **Why 4.2 is the one to watch most closely:** Task 8's entire design premise is that the
 covered state and suppression are separate signals — `IShowSuppressor` means "do not show at
@@ -293,24 +307,24 @@ Classic." Nothing in the automated suite can catch the two being accidentally me
 merging them would still build clean, still pass all 161 tests (none of which exercise a live
 `OsdHost`/`AmbientNotchPresentation` pair — neither type can even be constructed by the
 headless, non-STA suite), and still pass the a11y lint. A volume key still producing the OSD
-while no strip appears over the game afterward is the only observation in this whole section
+while no notch appears over the game afterward is the only observation in this whole section
 that actually distinguishes the two — and it is a two-part observation, not one: the OSD
 appearing on the key press is necessary but not sufficient. `ShowOsd`'s at-rest path is allowed
 to run over a game by design (that is what makes the OSD appear at all), and its own hide timer
 then takes the card back down through `FadeOutAndHide` — a table that only checked the
-appearance half would report a pass even if that left a strip over the game to stay, since
+appearance half would report a pass even if that left a notch over the game to stay, since
 4.3's own alt-tab-out would mask exactly that failure by rebuilding the notch through the
 normal path. Do not skip the "let it auto-hide" half of 4.2.
 
 **Record, if this section is run:** the exact `plith.log` lines for 4.1 and 4.3 (the
 `ForegroundCoversMonitor -> …` transitions, including 4.3's `settled for …ms` value), the
-`Presentation applied: …` line that follows each of them, and whether any faint strip or
+`Presentation applied: …` line that follows each of them, and whether any faint notch or
 shadow was visible during 4.1 — the same drop-shadow-bleed question section 1 flags as
 unresolved for `HiddenOffset`.
 
 ---
 
-## 5. Settings UI — mode picker, strip height, and the position guard (Task 9)
+## 5. Settings UI — mode picker, resting height, and the position guard (Task 9)
 
 > **Status: NOT VERIFIED.**
 > This has not been run. No build from this branch has been launched, focused, or interacted
@@ -325,8 +339,8 @@ unresolved for `HiddenOffset`.
 |---|---|---|---|
 | 5.1 | Switch "Presentation" from Classic OSD to Ambient Notch | The notch appears live at the top of the screen with no restart — `OsdHost` rebuilds its presentation off `SettingsService.Changed` | Nothing changes on screen until Plith is restarted, or the OSD errors/crashes |
 | 5.2 | With Ambient Notch selected, look at the "Set position" row | The button is greyed out (disabled), and hovering it shows the tooltip "The Ambient Notch is pinned to the top of the screen. Switch to Classic OSD to place the OSD yourself.", and the hint text below "Position" reads "The Ambient Notch is pinned to the top of the screen, so there is nothing to place. Switch to Classic OSD to choose a position." | The button stays clickable, the tooltip is missing, or the hint text still describes clicking "Set position" |
-| 5.3 | With Ambient Notch selected, look for the "Notch strip height" row | It is visible, directly below "Presentation" (or below "Set position" once collapsed), with a slider running 2–24 | The row stays hidden, or shows the wrong range |
-| 5.4 | Drag the "Notch strip height" slider | The parked strip on screen visibly grows/shrinks in real time (or on next park) to match the slider value | The strip does not change, or only changes after a restart |
+| 5.3 | With Ambient Notch selected, look for the "Notch resting height" row | It is visible, directly below "Presentation" (or below "Set position" once collapsed), with a slider running 2–24 | The row stays hidden, or shows the wrong range |
+| 5.4 | Drag the "Notch resting height" slider | The resting notch on screen visibly grows/shrinks in real time (or on next park) to match the slider value | The notch does not change, or only changes after a restart |
 | 5.5 | Switch back to Classic OSD | The notch disappears and the OSD behaves exactly as it did before switching (fade-in-place at the previous anchor), "Set position" re-enables with its tooltip cleared, and the hint text goes back to describing what the button does | The OSD keeps notch behaviour, the button stays disabled, or the position it restores to is not the anchor that was active before switching to notch mode |
 
 **Why 5.5 matters:** `Position` and `CustomPositionXPercent`/`CustomPositionYPercent`/
@@ -353,25 +367,25 @@ build, test, or lint passing.
 > human step, and an agent attempting it has previously caused real harm. The checks below are
 > recorded exactly as open, not as passed on the strength of the code reading correct.
 
-Section 2 already covers the strip's own click-through/hit-test behaviour while parked. This
-section is narrower and specifically about Windows' own top-edge gestures, which the strip
+Section 2 already covers the notch's own click-through/hit-test behaviour while parked. This
+section is narrower and specifically about Windows' own top-edge gestures, which the notch
 sits directly on top of and which nothing in this codebase implements or mediates — the design
 spec's §8.1 lists them as a distinct risk from ordinary click-through because they are handled
 by `explorer.exe` and `dwm.exe`, not by any window Plith owns.
 
 **Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under `[Osd]`,
-restart Plith, so the strip is parked at the top-center of the monitor.
+restart Plith, so the notch is parked at the top-center of the monitor.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 6.1 | Hover the mouse over a window's maximize button so Windows shows the Snap Layouts flyout | The flyout appears normally, positioned and clickable as if the strip were not there | The flyout is visually obscured by the strip, or hovering it is delayed/blocked |
-| 6.2 | If the taskbar is set to auto-hide, move the cursor to the taskbar's edge to reveal it | The taskbar reveals normally | The strip intercepts the pointer before the taskbar's edge-sensing does, and the taskbar does not reveal |
-| 6.3 | Drag a window's title bar to the very top edge of the monitor, under the strip, to trigger maximise-by-drag | The window maximises as if the strip were not there | The drag is intercepted or visually caught on the strip |
+| 6.1 | Hover the mouse over a window's maximize button so Windows shows the Snap Layouts flyout | The flyout appears normally, positioned and clickable as if the notch were not there | The flyout is visually obscured by the notch, or hovering it is delayed/blocked |
+| 6.2 | If the taskbar is set to auto-hide, move the cursor to the taskbar's edge to reveal it | The taskbar reveals normally | The notch intercepts the pointer before the taskbar's edge-sensing does, and the taskbar does not reveal |
+| 6.3 | Drag a window's title bar to the very top edge of the monitor, under the notch, to trigger maximise-by-drag | The window maximises as if the notch were not there | The drag is intercepted or visually caught on the notch |
 
 **Why this is separate from section 2:** `PresentationPolicy.WantsHitTesting` and
 `BandWindow.IsClickThrough` only govern whether *Plith's own window* accepts mouse input. Snap
 Layouts and taskbar auto-hide reveal are driven by cursor position against screen edges at the
-OS level and do not go through Plith's message loop at all when the strip is click-through —
+OS level and do not go through Plith's message loop at all when the notch is click-through —
 but a layered, topmost, `WS_EX_LAYERED` window sitting exactly on the monitor's top edge is
 exactly the kind of thing that has, in other overlay apps, been observed to visually cover
 these OS surfaces even when it does not functionally block the underlying click. That visual
@@ -390,40 +404,40 @@ established that the *drag itself* is not swallowed.
 Phase 5 (`docs/PHASE5-VERIFICATION.md`) measured GDI handles flat at 22 across 160 volume
 changes and found no leak. **That result does not carry over to Ambient Notch.** The Phase 5
 run drove the OSD through show/hide cycles where the band window was hidden between events —
-it never measured a window that stays visible (as the parked strip does) for an extended idle
+it never measured a window that stays visible (as the resting notch does) for an extended idle
 period with no events at all. A leak that only manifests while a window remains mapped and
 composited — a redundant `DispatcherTimer` tick, a repeating `GetCursorPos` poll from
-`NotchHoverPoller`, a per-frame allocation in the parked-strip render path — would not have
+`NotchHoverPoller`, a per-frame allocation in the parked-notch render path — would not have
 shown up in that test and has not been looked for in this one either.
 
 **Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` under
 `[Osd]`, restart Plith, and leave the machine idle (no volume/media events, no deliberate
-hover) with the parked strip on screen.
+hover) with the resting notch on screen.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
 | 7.1 | Record GDI object count, USER object count, handle count, thread count, and private bytes for the Plith process at startup (Task Manager "Details" tab, or Process Explorer) | — baseline only, not a pass/fail row — | — |
 | 7.2 | Leave the process idle and parked for at least 30 minutes, taking the same readings every 5 minutes | All five figures stay flat (private bytes may oscillate with GC, as Phase 5 noted, but should not trend upward) | Any of GDI objects, USER objects, handles, or threads climbs monotonically across the window; private bytes trend upward without returning after GC |
-| 7.3 | Repeat 7.1–7.2 once with the cursor resting motionless over the strip (so `NotchHoverPoller`'s comparison runs every tick but never fires a state change) | Same as 7.2 | Same as 7.2 |
+| 7.3 | Repeat 7.1–7.2 once with the cursor resting motionless over the notch (so `NotchHoverPoller`'s comparison runs every tick but never fires a state change) | Same as 7.2 | Same as 7.2 |
 
 **Why 7.3 is a separate row:** `NotchHoverPoller` runs on a `DispatcherTimer` regardless of
-where the cursor is, but the branch it takes differs when the cursor sits inside `StripRect`
-without ever leaving (no `OnStripHoverChanged` transition fires). If there is a leak specific
+where the cursor is, but the branch it takes differs when the cursor sits inside `HoverRect`
+without ever leaving (no `OnNotchHoverChanged` transition fires). If there is a leak specific
 to that comparison path rather than to the general idle-parked state, 7.2 alone would miss it.
 
 ---
 
-## 8. Descent motion across refresh rates (Task 10)
+## 8. Expansion motion across refresh rates (Task 10)
 
 > **Status: NOT VERIFIED.**
 > This has not been run. No build from this branch has been launched, focused, or interacted
 > with by an agent while producing this task — manual GUI verification in this project is a
 > human step, and an agent attempting it has previously caused real harm.
 
-Section 1's checks 1.2 and 1.3 already ask whether the descent/retraction animates rather than
+Section 1's checks 1.2 and 1.3 already ask whether the expansion/collapse animates rather than
 snaps, but on a single unspecified display. This section asks the same question deliberately
 twice, once per refresh class, because the animation is driven by WPF's `BeginAnimation` on a
-~220 ms (descend) / ~260 ms (retract) duration — short enough that frame pacing, not just the
+~340 ms (expand) / ~260 ms (collapse) duration — short enough that frame pacing, not just the
 easing curve, determines whether it reads as motion. At 60 Hz that is roughly 13–16 frames; on
 a high-refresh panel it is proportionally more, and a composition or timer hiccup would be far
 more visible as a single dropped frame at 60 Hz than lost in a denser frame sequence at
@@ -436,8 +450,8 @@ available in the test environment.
 
 | # | Check | Pass | Fail |
 |---|---|---|---|
-| 8.1 | On a 60 Hz display, press a volume key and watch the strip descend | The card visibly slides down over the ~220 ms window with a perceptible ease-out; it does not appear to jump directly from parked to expanded | The transition reads as an instantaneous jump, stutters, or visibly skips frames |
-| 8.2 | On the same display, let the hide timer elapse and watch the retraction | The card visibly slides up over the ~260 ms window with a perceptible ease-in | Same failure modes as 8.1 |
+| 8.1 | On a 60 Hz display, press a volume key and watch the notch expand | The shape visibly grows over the ~340 ms window with a perceptible deceleration, and the content fades in only as it settles; it does not appear to jump directly from resting to open | The transition reads as an instantaneous jump, stutters, or visibly skips frames |
+| 8.2 | On the same display, let the hide timer elapse and watch the collapse | The shape visibly shrinks back over the ~260 ms window with a perceptible acceleration | Same failure modes as 8.1 |
 | 8.3 | Repeat 8.1 on a high-refresh (>60 Hz) display | Same pass criteria as 8.1 | Same failure modes as 8.1 |
 | 8.4 | Repeat 8.2 on a high-refresh (>60 Hz) display | Same pass criteria as 8.2 | Same failure modes as 8.2 |
 
@@ -550,3 +564,53 @@ This is not a bug against the spec — the notch is *defined* as top-centre. It 
 "Ambient Notch" and "an OSD you positioned yourself" are different products, and that a user who
 has customised their position is being handed a downgrade in the uncovered case. Worth deciding
 before the preset picker ships to anyone.
+
+
+---
+
+## 10. Second real session (2026-09-07) — what it found
+
+### 10.1 The build under test was three hours stale
+
+`C:\Program Files\Plith\Plith.exe` was timestamped 23:59:39, which is commit `3211d37`.
+Five commits after it were on the branch and none of them were installed: the park-fully-off-
+screen fix, the notch panel shape, the covered-monitor rebuild into Classic, and the
+covers-signal hysteresis.
+
+Every symptom reported during that session was therefore reported against code that had
+already been changed. This is worth recording as a process finding, not just a fact: on this
+project the running binary and the working tree diverge silently, and `manual-install.ps1`
+needs elevation the agent cannot obtain unattended. **Check the exe timestamp against
+`git log` before interpreting any live report.**
+
+### 10.2 "It stutters" — diagnosed from the log, not yet re-measured
+
+The user reported hitching. `plith.log` for that session shows the covers signal flipping
+six times in 370 ms:
+
+```
+07:57:24.937 ForegroundCoversMonitor -> True
+07:57:25.010 ForegroundCoversMonitor -> False
+07:57:25.096 ForegroundCoversMonitor -> True
+07:57:25.171 ForegroundCoversMonitor -> False
+07:57:25.249 ForegroundCoversMonitor -> True
+07:57:25.303 ForegroundCoversMonitor -> False
+```
+
+In `3211d37` every one of those edges started a retract or a re-show, so six animations
+overlapped inside a third of a second. That is a sufficient explanation for the report and it
+matches §9.2 exactly. The hysteresis that removes it (`UncoverSettleMs = 2000`) is on the
+branch and was not in the binary.
+
+**Open:** confirm on a build that carries it. The check is to run with a game up and count
+`ForegroundCoversMonitor ->` lines in the log; the flapping pattern above must not recur.
+Until that is done the diagnosis is well-supported but unconfirmed, and it is possible some
+of the hitching had a second cause the log does not show.
+
+### 10.3 The notch did not read as a notch
+
+Reported directly: *"this doesn't look much like a notch, because all it does is come down
+from above."* This is the finding that drove the §2 rewrite. It is not a defect against the
+old spec — the old spec described a strip and a descent, and that is what was built. It is
+the spec that was wrong, and only a running build could show it. See §1 above for the
+replacement checks.
