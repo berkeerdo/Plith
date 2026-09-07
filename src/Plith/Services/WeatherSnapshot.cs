@@ -16,25 +16,46 @@ public readonly record struct WeatherSnapshot(double TemperatureC, int WeatherCo
 /// </summary>
 public static class WeatherCodeMap
 {
-    /// <summary>Glyphs are Segoe MDL2 Assets code points, which ship with Windows 10 and 11 —
-    /// no font is downloaded and none has to be embedded.</summary>
+    /// <summary>The icon font every glyph below is a code point in. A single constant so the
+    /// view (Task 7) and the test that verifies these code points actually exist cannot drift
+    /// apart into two hand-typed literals.</summary>
+    public const string GlyphFontFamilyName = "Segoe MDL2 Assets";
+
+    /// <summary>File backing <see cref="GlyphFontFamilyName"/>, for tools (like
+    /// <see cref="System.Windows.Media.GlyphTypeface"/>) that need the font file rather than
+    /// the family name. Ships with Windows 10 and 11 — no font is downloaded and none has to
+    /// be embedded.</summary>
+    public const string GlyphFontFilePath = @"C:\Windows\Fonts\segmdl2.ttf";
+
+    /// <summary>
+    /// Glyphs are Segoe MDL2 Assets code points, chosen only from glyphs confirmed present in
+    /// that font via <see cref="System.Windows.Media.GlyphTypeface.CharacterToGlyphMap"/> (see
+    /// <c>WeatherCodeMapTests.Describe_EveryGlyphExistsInTheDeclaredFont</c>) — MDL2 has no
+    /// dedicated icon for most weather conditions, and several plausible-looking code points in
+    /// this range (the E9C0-E9CD span) are simply undefined and render as a hollow "tofu" box.
+    /// Where no dedicated glyph exists, an adjacent documented glyph is reused deliberately:
+    /// Cloud for every degree of overcast including fog (fog is a cloud at ground level), Drop
+    /// for every liquid precipitation state, Frigid (a cold-temperature glyph) for the two snow
+    /// states, and LightningBolt for storms — the same kind of defensible reuse Clear already
+    /// made with Brightness.
+    /// </summary>
     public static (string Glyph, string Label) Describe(int code) => code switch
     {
-        0        => ("", "Clear"),
-        1 or 2   => ("", "Partly cloudy"),
-        3        => ("", "Overcast"),
-        45 or 48 => ("", "Fog"),
-        >= 51 and <= 57 => ("", "Drizzle"),
-        >= 61 and <= 67 => ("", "Rain"),
-        >= 71 and <= 77 => ("", "Snow"),
-        >= 80 and <= 82 => ("", "Showers"),
-        >= 85 and <= 86 => ("", "Snow showers"),
-        >= 95 => ("", "Thunderstorm"),
+        0        => ("\uE706", "Clear"),          // Brightness
+        1 or 2   => ("\uE753", "Partly cloudy"),  // Cloud
+        3        => ("\uE753", "Overcast"),       // Cloud
+        45 or 48 => ("\uE753", "Fog"),            // Cloud
+        >= 51 and <= 57 => ("\uEB42", "Drizzle"),      // Drop
+        >= 61 and <= 67 => ("\uEB42", "Rain"),         // Drop
+        >= 71 and <= 77 => ("\uE9CA", "Snow"),         // Frigid
+        >= 80 and <= 82 => ("\uEB42", "Showers"),      // Drop
+        >= 85 and <= 86 => ("\uE9CA", "Snow showers"), // Frigid
+        >= 95 => ("\uE945", "Thunderstorm"),           // LightningBolt
 
         // Deliberately not an exception. Open-Meteo can add codes, and this runs on a
         // background refresh timer where a throw would silently stop every future refresh
         // for the sake of a decoration.
-        _ => ("", "Unknown"),
+        _ => ("\uE9CE", "Unknown"), // Unknown
     };
 
     /// <summary>
