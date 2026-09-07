@@ -34,6 +34,7 @@ public sealed class OsdHost : BandWindow
     private readonly SettingsService _settings;
     private readonly ThemeService _theme;
     private readonly CardHost _cardHost;
+    private readonly NotchHomeState _home;
     private readonly DiagnosticLog? _log = new();
     private IOsdPresentation _presentation;
     private readonly NotchHoverPoller _hoverPoller;
@@ -72,11 +73,12 @@ public sealed class OsdHost : BandWindow
     /// can flip its Edit/Save/Cancel button state.</summary>
     public event Action<bool>? EditModeChanged;
 
-    public OsdHost(SettingsService settings, ThemeService theme, CardHost cardHost)
+    public OsdHost(SettingsService settings, ThemeService theme, CardHost cardHost, NotchHomeState home)
     {
         _settings = settings;
         _theme = theme;
         _cardHost = cardHost;
+        _home = home;
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
         _hoverPoller = new NotchHoverPoller(Dispatcher);
@@ -186,6 +188,10 @@ public sealed class OsdHost : BandWindow
 
         if (_presentation is AmbientNotchPresentation notch)
         {
+            // A mode switch while the panel is open must settle fully closed, the same as
+            // reaching rest normally does — otherwise the ambient row would survive a
+            // rebuild that just re-parked the strip underneath it.
+            _home.Close();
             Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
             Reposition();               // measures content, which calls OnContentMeasured
             notch.PrepareShow();
@@ -193,6 +199,9 @@ public sealed class OsdHost : BandWindow
         }
         else
         {
+            // Classic has no home view. This covers both the settings switch and the
+            // covered-monitor fallback, because both rebuild through here.
+            _home.Close();
             Opacity = 0;
             Hide();
         }
@@ -357,6 +366,10 @@ public sealed class OsdHost : BandWindow
 
         if (inside)
         {
+            // Before ShowOsd, not after. ShowOsd measures the content to size the panel it
+            // expands into, and the ambient row is part of that content — opening afterwards
+            // would expand to a height computed without the row and clip it for one show.
+            _home.Open();
             _hideTimer?.Stop();
             ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs));
         }
@@ -493,6 +506,12 @@ public sealed class OsdHost : BandWindow
             // covers every path back down to descended. Neither one alone is enough: this
             // one only ever turns click-through ON, ShowOsd's only ever turns it OFF.
             IsClickThrough = !_presentation.WantsHitTesting;
+
+            // Closed at rest, not on cursor exit. Leaving the resting rectangle is the
+            // normal way to move ONTO the open panel — OnNotchHoverChanged's exit branch
+            // already relies on that — so closing there would take the row away at the
+            // exact moment the user reached for it.
+            _home.Close();
         });
     }
 

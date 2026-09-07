@@ -18,6 +18,7 @@ public partial class App : Application
     private OsdOrchestrator? _orchestrator;
     private OsdHost? _osd;
     private CardHost? _cardHost;
+    private readonly NotchHomeState _home = new();
     private AudioCard? _audioCard;
     private MediaCard? _mediaCard;
     private MediaSessionClient? _mediaSession;
@@ -62,7 +63,7 @@ public partial class App : Application
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
 
-        _osd = new OsdHost(_settings, _theme, _cardHost);   // ctor calls CreateWindow() so first ShowOsd is instant
+        _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += d => _osd.ShowOsd(d);
         _cardHost.HideRequested += () => _osd.HideOsd();
         // Suppression reaches CardHost by injection above; this is the separate signal the
