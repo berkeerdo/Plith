@@ -1247,7 +1247,19 @@ git commit -m "feat(weather): add the snapshot type and the WMO code map"
   - `Plith.Services.GeoPoint` — `readonly record struct GeoPoint(double Latitude, double Longitude)`
   - `Plith.Services.LocationOutcome` — `enum { Resolved, Denied, Unavailable }`
   - `Plith.Services.LocationResolver.Choose(GeoPoint? cachedManual, LocationOutcome windowsOutcome, GeoPoint? windowsPoint, GeoPoint? ipPoint) -> GeoPoint?`
-  - `Plith.Services.LocationResolver.ShouldRetryWindowsLocation(LocationOutcome outcome) -> bool`
+  - ~~`Plith.Services.LocationResolver.ShouldRetryWindowsLocation(LocationOutcome outcome) -> bool`~~ —
+    **removed during execution.** This task originally planned to skip re-asking Windows
+    Location after a `Denied` outcome. While building Task 7 it became clear
+    `RequestAccessAsync` does not re-prompt after the first answer for an unpackaged app —
+    every call after that just reports the live system toggle state, at no cost beyond a
+    local call — so gating the retry on the outcome was pure downside: it is the thing that
+    stops a user who flips Windows' location toggle back on mid-session from being picked up
+    without a restart. The method decayed to `outcome => true`, ignoring its own parameter,
+    and was deleted rather than kept as dead weight. `WeatherService.ResolveLocationAsync`
+    now calls `_windowsLocation.GetAsync` unconditionally on every refresh instead of gating
+    it through this method; every reference to `ShouldRetryWindowsLocation` below in this
+    document describes that earlier, superseded design and was not built. `LocationResolver`
+    in the tree today has only `Choose`.
 
 - [ ] **Step 1: Write the failing tests**
 
@@ -1305,6 +1317,8 @@ public class LocationResolverTests
         Assert.Null(LocationResolver.Choose(null, LocationOutcome.Unavailable, null, null));
     }
 
+    // These two tests, and the method they exercise, were not built — see the note on
+    // `ShouldRetryWindowsLocation` in this task's Interfaces list above.
     [Fact]
     public void DoesNotRetryWindowsLocationAfterADenial()
     {
@@ -1385,6 +1399,10 @@ public static class LocationResolver
     /// <summary>Whether the Windows Location API is worth asking again on the next refresh.
     /// A denial is permanent until the user changes it in Windows settings; re-asking on a
     /// 15-minute timer would pester someone who already answered.</summary>
+    // Not built — deleted before this reached the tree. See the note on
+    // `ShouldRetryWindowsLocation` in this task's Interfaces list above for why: retrying is
+    // free for an unpackaged app, so gating it on the outcome only cost a stuck user their
+    // recovery path.
     public static bool ShouldRetryWindowsLocation(LocationOutcome outcome)
         => outcome != LocationOutcome.Denied;
 }
@@ -1551,8 +1569,10 @@ public sealed class WindowsLocationProvider
             var access = await Geolocator.RequestAccessAsync();
             if (access != GeolocationAccessStatus.Allowed)
             {
-                // Denied is permanent until the user changes it in Windows settings.
-                // LocationResolver.ShouldRetryWindowsLocation reads this to stop re-asking.
+                // Denied is permanent until the user changes it in Windows settings, but
+                // nothing reads that fact to skip re-asking (see the note on
+                // `ShouldRetryWindowsLocation` earlier in this task) — the outcome is
+                // returned and logged either way.
                 var outcome = access == GeolocationAccessStatus.Denied
                     ? LocationOutcome.Denied
                     : LocationOutcome.Unavailable;
@@ -1802,6 +1822,11 @@ public sealed class WeatherService : IDisposable
         }
 
         GeoPoint? windowsPoint = null;
+        // As built, this condition is just `manual is null` — the `ShouldRetryWindowsLocation`
+        // gate shown here was not built (see the note on Task 5's Interfaces list). Windows
+        // Location is asked on every refresh regardless of the last outcome, which is what
+        // lets a user who re-enables the system location toggle mid-session recover without
+        // restarting Plith.
         if (manual is null && LocationResolver.ShouldRetryWindowsLocation(_lastWindowsOutcome))
         {
             (_lastWindowsOutcome, windowsPoint) = await _windowsLocation.GetAsync(_cts.Token).ConfigureAwait(true);

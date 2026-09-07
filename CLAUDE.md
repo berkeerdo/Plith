@@ -56,14 +56,29 @@ appearing moved the anchor. It is now one surface whose width, height, corner ra
 shadow and content opacity all derive from a single expansion value, with the content
 fading in only after the shape has mostly settled. Spec §2 records why.
 
-**The current design is not verified on a running build.** Release build, the
-169-test suite and `scripts/check-a11y.ps1` are green, but no agent may launch or
-drive the app, so every manual check — the resting shape appearing and growing,
-hit-testing at rest, hover-to-open, the Classic fallback over a real game, the
-Settings controls live, Snap Layouts/taskbar interference, idle resource use with
-the window never hidden, and motion smoothness across refresh rates — is open. Full
-ledger in `docs/PHASE6-VERIFICATION.md`; §10 records that the last live session ran
-against a binary three hours older than the branch.
+**Phase 6 slice 2 (notch home view) code-complete on the same branch, not yet
+merged.** Hovering the resting notch now opens an ambient row above the OSD's other
+cards — a clock, current weather, and battery — with each column collapsing
+independently (no battery column on a desktop; weather disappears with no location,
+no network, or a stale reading). A volume or media event never opens the row; only a
+deliberate hover does, and Classic OSD never opens it at all. Weather is Open-Meteo
+(keyless), location priority is a typed city, then Windows Location, then IP
+geolocation, refreshed every 15 minutes; Windows Location is asked on every refresh
+rather than cached, since it does not re-prompt after the first answer. Settings
+gained "Show ambient info on hover", "Show weather", and "Weather location", hidden
+while Classic is selected.
+
+**Neither slice is verified on a running build.** Build, the 218-test suite and
+`scripts/check-a11y.ps1` are green, but no agent may launch or drive the app, so
+every manual check — the resting shape appearing and growing, hit-testing at rest,
+hover-to-open, the Classic fallback over a real game, the ambient row opening on
+hover and staying closed on an event, the Windows Location prompt and its `Denied`
+path, the Settings controls live, Snap Layouts/taskbar interference, idle resource
+use with the window never hidden, and motion smoothness across refresh rates — is
+open. Full ledger in `docs/PHASE6-VERIFICATION.md`; §10 records that the last live
+session ran against a binary three hours older than the branch, and §11 covers the
+home view, flagging the Windows Location checks (§11.5–11.6) as the highest risk in
+that slice.
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).

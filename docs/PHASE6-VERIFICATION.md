@@ -614,3 +614,67 @@ from above."* This is the finding that drove the §2 rewrite. It is not a defect
 old spec — the old spec described a strip and a descent, and that is what was built. It is
 the spec that was wrong, and only a running build could show it. See §1 above for the
 replacement checks.
+
+---
+
+## 11. Notch home view (slice 2)
+
+> **Status: NOT VERIFIED.**
+> This has not been run. No build from this branch has been launched, focused, or interacted
+> with by an agent while producing this slice — manual GUI verification in this project is a
+> human step, and an agent attempting it has previously caused real harm. Build, the 218-test
+> suite, and `scripts/check-a11y.ps1` are green, but none of that exercises a rendered pixel,
+> a live `Geolocator` prompt, or a real Open-Meteo response, so every row below is open.
+
+This section covers what was added on top of the notch shell: hovering the resting notch opens
+an `AmbientCard` row above the existing cards — a clock column, a weather column, and a battery
+column, each collapsing independently when its data is unavailable. None of it opens on a
+volume or media event; only a deliberate hover does. Weather resolves its location from a
+typed city, then Windows Location, then IP geolocation, and refreshes every 15 minutes from
+Open-Meteo. **Classic OSD is unaffected: `OsdHost` only starts `NotchHoverPoller` and only
+opens `NotchHomeState` while `AmbientNotchPresentation` is active** (`OnNotchHoverChanged`
+returns immediately otherwise), so there is no path by which Classic can show this row.
+
+**Setup:** in `%LOCALAPPDATA%\Plith\config.ini`, set `Presentation=AmbientNotch` and
+`ShowAmbientOnHover=true` under `[Osd]` (or pick "Ambient Notch" and enable "Show ambient info
+on hover" from Settings), restart Plith, and hover the resting notch. For 11.5–11.7, also clear
+any cached `WeatherLatitude`/`WeatherLongitude`/`WeatherLocation` so the location resolution
+actually runs cold.
+
+| # | Check | Pass | Fail |
+|---|---|---|---|
+| 11.1 | Hover the resting notch | The panel opens with a row at the top: time and date on the left, battery on the right (laptops), weather in the middle if available | The row is missing, appears below the volume bar, or the panel opens without it and it pops in a frame later |
+| 11.2 | Press a volume key without hovering | The panel opens with **no** ambient row — volume only, plus media if playing | The ambient row appears on an event |
+| 11.3 | Hover, then let the panel collapse, then press a volume key | The row is gone on the key press | The row persists after the first hover |
+| 11.4 | On a desktop with no battery | The battery column is absent entirely, not a dash or a zero | A placeholder renders |
+| 11.5 | First run with no `WeatherLocation` set | Windows shows its location permission prompt once; granting it fills the weather column within ~10 s | No prompt appears, or the column stays empty after granting |
+| 11.6 | Decline the location prompt, then restart | The column still fills (IP fallback), and `plith.log` shows `Windows Location access: Denied` **once**, not on every refresh | The prompt reappears, or the column stays empty |
+| 11.7 | Type a city into "Weather location" | The column switches to that city within one refresh; `config.ini` gains non-zero `WeatherLatitude`/`WeatherLongitude` | The old location persists, or the cache is not written |
+| 11.8 | Turn "Show weather" off | The column disappears and no further network requests are made | Requests continue |
+| 11.9 | Switch to Classic OSD | No ambient row ever appears, and the three Settings rows are hidden | The row leaks into Classic |
+| 11.10 | Narrator on the open panel | The row announces as "Ambient status", and the columns as "Time", "Weather", "Battery" | It announces a type name or reads bare numbers |
+
+**Why 11.5 and 11.6 are the highest-risk checks in this slice.** Every other row here is a
+WPF layout or a settings-wiring question, the same shape of thing the rest of this file has
+already flagged as unverifiable without a running build. 11.5 and 11.6 are different in kind:
+they exercise `Geolocator.RequestAccessAsync` from inside Plith's actual UIAccess process, and
+that combination — a UIAccess-elevated, unpackaged desktop app calling the Windows Location
+API — has never been observed running, only reasoned about from Microsoft's documentation (see
+`WindowsLocationProvider`'s doc comment in `src/Plith/Services/LocationProviders.cs`). If
+UIAccess changes how the consent toggle or the access-status result behaves, both checks fail
+in a way no amount of code reading would have caught. 11.6 specifically is the one that decides
+whether a user who said no gets left alone: `LocationResolver` and `WeatherService` were
+deliberately built to retry Windows Location on every refresh regardless of the last outcome
+(see `docs/superpowers/plans/2026-09-07-notch-home-view.md`, Task 5's note on
+`ShouldRetryWindowsLocation`), on the reasoning that `RequestAccessAsync` does not re-prompt
+after the first answer for an unpackaged app — but that reasoning is exactly the kind of thing
+that is cheap to get wrong on paper and expensive to get wrong in front of a user, and it has
+not been checked against a real `Denied` state on a real machine.
+
+**Amendment to §7 (idle resource measurement).** The ambient row adds a 1 Hz `DispatcherTimer`
+(the clock column's tick) and a 15-minute weather refresh timer to a window that §7 already
+notes is never hidden while the notch is at rest. §7's idle run should now be read as covering
+both: a leak specific to the home view's timers — rather than to `NotchHoverPoller` or the
+general parked-notch render path §7 was originally written for — would show up in the same
+30-minute idle measurement, and 7.3's motionless-hover variant now also exercises the home
+view staying open (rather than just `NotchHoverPoller`'s comparison branch) for the duration.

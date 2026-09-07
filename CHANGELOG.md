@@ -29,6 +29,22 @@ All notable changes to Plith are documented here. Format loosely follows
   status from a future System Controls card, and a Clock card — that do not exist
   yet. Shipping the notch shell without them would ship an empty shape, so Full
   Notch is deferred to a later slice; only Ambient Notch ships now.
+- **Ambient home view on hover.** Hovering the resting notch now opens an ambient
+  row above the OSD's other cards: a clock on the left, current weather in the
+  middle, and battery on the right. A volume or media event does **not** open
+  this row — only a deliberate hover does. Each column collapses independently
+  when it has nothing to show: a desktop shows no battery column at all, and
+  weather disappears entirely when there is no location, no network, or the
+  reading has gone stale. Weather comes from Open-Meteo (no API key) for a
+  location resolved in priority order — a city typed into the new "Weather
+  location" Settings field, then the Windows Location API, then IP geolocation —
+  and refreshes every 15 minutes; Windows Location is re-asked on every refresh
+  rather than cached, since it does not re-prompt after the first answer, so a
+  user who enables the system location toggle mid-session recovers without
+  restarting. Settings gained "Show ambient info on hover", "Show weather", and
+  "Weather location", all hidden while Classic OSD is selected. **Classic OSD is
+  unaffected — it never opens this row.** None of it has been observed on a
+  running build; see `docs/PHASE6-VERIFICATION.md` §11.
 
 **What is and is not verified.** Classic OSD's behaviour is unchanged by this
 change — it was moved behind a new internal seam (`IOsdPresentation`) without
@@ -40,7 +56,11 @@ run on a build carrying the current design.** An earlier design *was* run, and i
 is why this one exists: it slid a full-width strip and a card past each other,
 which on screen read as a drawer rather than a notch, and its resting shape
 changed width whenever a media card appeared. Both are fixed here and neither fix
-has been observed. Every check is recorded as NOT VERIFIED in
+has been observed. The ambient home view — the row opening on hover and staying
+closed on an event, each column's independent collapse, and the location/weather
+resolution chain — is likewise entirely unobserved: no agent may launch or drive
+the app, so nothing past a green build, a green test suite, and a green a11y
+check has looked at it. Every check is recorded as NOT VERIFIED in
 `docs/PHASE6-VERIFICATION.md`; nothing in this entry should be read as a claim
 that any of it has been confirmed working.
 
