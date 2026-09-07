@@ -19,15 +19,19 @@ namespace Plith.Cards;
 /// </summary>
 public sealed class AmbientCard : ICard
 {
+    private const int WeatherMaxAgeMinutes = 90;
+
     private readonly NotchHomeState _home;
     private readonly SettingsService _settings;
+    private readonly WeatherService? _weather;
     private readonly DispatcherTimer _timer;
     private bool _lastVisible;
 
-    public AmbientCard(NotchHomeState home, SettingsService settings)
+    public AmbientCard(NotchHomeState home, SettingsService settings, WeatherService? weather = null)
     {
         _home = home;
         _settings = settings;
+        _weather = weather;
         Vm = new AmbientCardViewModel();
 
         // 1 Hz so the minute rolls over promptly. The timer runs from Activate() to
@@ -39,7 +43,7 @@ public sealed class AmbientCard : ICard
         {
             Interval = TimeSpan.FromSeconds(1),
         };
-        _timer.Tick += (_, _) => Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read());
+        _timer.Tick += (_, _) => Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read(), _weather?.Current);
 
         _lastVisible = IsVisible;
     }
@@ -72,7 +76,8 @@ public sealed class AmbientCard : ICard
         // precedent for this: Vm is MediaCard's own view model, not a shared external object.
         _home.Changed += OnStateChanged;
         _settings.Changed += OnSettingsChanged;
-        Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read());   // seed, so the first open is not blank
+        if (_weather is not null) _weather.Updated += OnWeatherUpdated;
+        Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read(), _weather?.Current);   // seed, so the first open is not blank
         _timer.Start();
     }
 
@@ -81,15 +86,24 @@ public sealed class AmbientCard : ICard
         _timer.Stop();
         _home.Changed -= OnStateChanged;
         _settings.Changed -= OnSettingsChanged;
+        if (_weather is not null) _weather.Updated -= OnWeatherUpdated;
     }
 
-    /// <summary>Apply a point in time and a power reading to the row. Both are parameters so
-    /// the headless suite can drive a desktop and a laptop from the same machine.</summary>
-    public void Tick(DateTime now, CultureInfo culture, BatteryStatusRaw? battery)
+    /// <summary>Apply a point in time, a power reading and a weather reading to the row. All
+    /// are parameters so the headless suite can drive a desktop and a laptop, with or without
+    /// weather, from the same machine.</summary>
+    public void Tick(DateTime now, CultureInfo culture, BatteryStatusRaw? battery, WeatherSnapshot? weather)
     {
         Vm.ApplyClock(now, culture);
         Vm.ApplyBattery(battery);
+        Vm.ApplyWeather(weather, DateTimeOffset.UtcNow, WeatherMaxAgeMinutes);
     }
+
+    // Reaches the row without waiting for the next 1 Hz timer tick, so a successful refresh
+    // that lands while the notch is open is visible immediately rather than up to a second
+    // late. WeatherService.Updated already fires on the UI dispatcher (see its doc comment),
+    // so this handler is safe to call Tick from directly.
+    private void OnWeatherUpdated() => Tick(DateTime.Now, CultureInfo.CurrentCulture, BatteryReader.Read(), _weather?.Current);
 
     private void OnSettingsChanged(SettingsModel _) => OnStateChanged();
 

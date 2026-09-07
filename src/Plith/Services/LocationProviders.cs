@@ -47,8 +47,8 @@ public sealed class WindowsLocationProvider
             {
                 // Not a stored decision — see the class doc comment. Denied and Unavailable
                 // are still reported separately for diagnostics (a toggle switch vs. a failed
-                // or empty fix), but both are retried on schedule: LocationResolver
-                // .ShouldRetryWindowsLocation always returns true.
+                // or empty fix), but both are retried on schedule: WeatherService retries
+                // Windows Location unconditionally on every refresh.
                 var outcome = access == GeolocationAccessStatus.Denied
                     ? LocationOutcome.Denied
                     : LocationOutcome.Unavailable;

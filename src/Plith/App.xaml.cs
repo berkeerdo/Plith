@@ -22,6 +22,10 @@ public partial class App : Application
     private AudioCard? _audioCard;
     private MediaCard? _mediaCard;
     private AmbientCard? _ambientCard;
+    private OpenMeteoClient? _weatherClient;
+    private WindowsLocationProvider? _windowsLocation;
+    private IpLocationProvider? _ipLocation;
+    private WeatherService? _weatherService;
     private MediaSessionClient? _mediaSession;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
@@ -57,7 +61,11 @@ public partial class App : Application
 
         _audioCard = new AudioCard(_settings);
         _mediaCard = new MediaCard(_settings);
-        _ambientCard = new AmbientCard(_home, _settings);
+        _weatherClient = new OpenMeteoClient(_diagnosticLog);
+        _windowsLocation = new WindowsLocationProvider(_diagnosticLog);
+        _ipLocation = new IpLocationProvider(_diagnosticLog);
+        _weatherService = new WeatherService(_settings, _weatherClient, _windowsLocation, _ipLocation, _diagnosticLog);
+        _ambientCard = new AmbientCard(_home, _settings, _weatherService);
 
         _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
 
@@ -74,6 +82,11 @@ public partial class App : Application
         // show at all", while this means "retract the strip and behave like Classic".
         _fullscreenWatcher.ForegroundCoversMonitorChanged += _osd.OnForegroundCoversMonitorChanged;
         _cardHost.Start();
+        // Constructed and started here, on the UI thread, and never off it: WeatherService's
+        // refresh chain calls WindowsLocationProvider.GetAsync, whose Geolocator.RequestAccessAsync
+        // is UI-thread-only, and can reach SettingsService.Save (via GeocodeAndCacheAsync) and
+        // AmbientCard's Tick, both of which must run on the dispatcher too. See WeatherService.
+        _weatherService.Start();
 
         _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
         _orchestrator.Start();
@@ -158,6 +171,11 @@ public partial class App : Application
             _fullscreenWatcher?.Dispose();
         });
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
+        // After CardHost: AmbientCard.Deactivate() unsubscribes from _weatherService.Updated
+        // as part of that Dispose, so the service must still be alive when it runs.
+        DisposeStep("WeatherService",     () => _weatherService?.Dispose());
+        DisposeStep("OpenMeteoClient",    () => _weatherClient?.Dispose());
+        DisposeStep("IpLocationProvider", () => _ipLocation?.Dispose());
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.

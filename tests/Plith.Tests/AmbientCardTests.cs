@@ -10,7 +10,7 @@ public class AmbientCardTests
     private static AmbientCard Build(NotchHomeState home)
     {
         var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
-        return new(home, new SettingsService(path));
+        return new(home, new SettingsService(path), null);
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class AmbientCardTests
     {
         var card = Build(new NotchHomeState());
 
-        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null);
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null, null);
 
         Assert.Equal("14:05", card.Vm.ClockTime);
     }
@@ -65,7 +65,7 @@ public class AmbientCardTests
         // must hear the actual clock value, not a static "Time" label with nothing after it.
         var card = Build(new NotchHomeState());
 
-        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null);
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"), null, null);
 
         Assert.Equal("Time 14:05, 7 Eylül", card.Vm.AccessibleSummary);
     }
@@ -79,7 +79,7 @@ public class AmbientCardTests
         var card = Build(new NotchHomeState());
 
         card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), new CultureInfo("tr-TR"),
-                  new BatteryStatusRaw(BatteryFlag: 0, BatteryLifePercent: 73, ACLineStatus: 1));
+                  new BatteryStatusRaw(BatteryFlag: 0, BatteryLifePercent: 73, ACLineStatus: 1), null);
 
         Assert.Equal("Time 14:05, 7 Eylül, Battery 73%, charging", card.Vm.AccessibleSummary);
     }
@@ -107,8 +107,39 @@ public class AmbientCardTests
         var card = Build(new NotchHomeState());
 
         card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), CultureInfo.InvariantCulture,
-                  new BatteryStatusRaw(BatteryFlag: 128, BatteryLifePercent: 255, ACLineStatus: 1));
+                  new BatteryStatusRaw(BatteryFlag: 128, BatteryLifePercent: 255, ACLineStatus: 1), null);
 
         Assert.False(card.Vm.HasBattery);
+    }
+
+    [Fact]
+    public void TickCollapsesTheWeatherColumnWhenThereIsNoSnapshot()
+    {
+        var card = Build(new NotchHomeState());
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), CultureInfo.InvariantCulture, null, null);
+        Assert.False(card.Vm.HasWeather);
+    }
+
+    [Fact]
+    public void TickShowsAFreshSnapshot()
+    {
+        var card = Build(new NotchHomeState());
+        var snap = new WeatherSnapshot(21.4, 0, DateTimeOffset.UtcNow);
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), CultureInfo.InvariantCulture, null, snap);
+
+        Assert.True(card.Vm.HasWeather);
+        Assert.Contains("21", card.Vm.WeatherText);
+    }
+
+    [Fact]
+    public void TickCollapsesTheWeatherColumnForAStaleSnapshot()
+    {
+        var card = Build(new NotchHomeState());
+        var snap = new WeatherSnapshot(21.4, 0, DateTimeOffset.UtcNow.AddHours(-4));
+
+        card.Tick(new DateTime(2026, 9, 7, 14, 5, 0), CultureInfo.InvariantCulture, null, snap);
+
+        Assert.False(card.Vm.HasWeather);
     }
 }

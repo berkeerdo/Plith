@@ -95,6 +95,20 @@ public sealed class SettingsModel
     /// battery). Notch-only; Classic never opens the home view at all.</summary>
     public bool ShowAmbientOnHover { get; set; } = true;
 
+    /// <summary>Whether the ambient row fetches weather. Off disables the location lookup and
+    /// every network call outright — "clock and battery but nothing phoning home" is a
+    /// reasonable position, and the alternative is turning off the whole row.</summary>
+    public bool ShowWeather { get; set; } = true;
+
+    /// <summary>City name typed by the user. Empty means automatic (Windows Location, then
+    /// IP). A value here overrides both.</summary>
+    public string WeatherLocation { get; set; } = string.Empty;
+
+    /// <summary>Geocode cache for <see cref="WeatherLocation"/>, so no lookup runs at startup.
+    /// Both zero means "not cached"; the resolver treats that as no manual override.</summary>
+    public double WeatherLatitude { get; set; }
+    public double WeatherLongitude { get; set; }
+
     /// <summary>OSD card opacity at rest, 50–100 percent. Below 50 the OSD is hard to read.</summary>
     public int OsdOpacityPercent { get; set; } = 100;
 
@@ -168,6 +182,10 @@ public sealed class SettingsModel
         AutoShowOnMedia = AutoShowOnMedia,
         HoverKeepAlive = HoverKeepAlive,
         ShowAmbientOnHover = ShowAmbientOnHover,
+        ShowWeather = ShowWeather,
+        WeatherLocation = WeatherLocation,
+        WeatherLatitude = WeatherLatitude,
+        WeatherLongitude = WeatherLongitude,
         OsdOpacityPercent = OsdOpacityPercent,
         UseColorThresholds = UseColorThresholds,
         CompactMode = CompactMode,

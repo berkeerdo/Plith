@@ -59,6 +59,10 @@ public sealed class SettingsService
                 NotchStripHeightDip = ParseDouble(data[SectionOsd]["NotchStripHeightDip"], 5, 2, 24),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
                 ShowAmbientOnHover = ParseBool(data[SectionOsd]["ShowAmbientOnHover"], true),
+                ShowWeather = ParseBool(data[SectionOsd]["ShowWeather"], true),
+                WeatherLocation = data[SectionOsd]["WeatherLocation"] ?? string.Empty,
+                WeatherLatitude = ParseDouble(data[SectionOsd]["WeatherLatitude"], 0, -90, 90),
+                WeatherLongitude = ParseDouble(data[SectionOsd]["WeatherLongitude"], 0, -180, 180),
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
@@ -118,6 +122,10 @@ public sealed class SettingsService
         data[SectionOsd]["NotchStripHeightDip"] = m.NotchStripHeightDip.ToString("G", inv);
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["ShowAmbientOnHover"] = m.ShowAmbientOnHover.ToString(inv);
+        data[SectionOsd]["ShowWeather"] = m.ShowWeather.ToString(inv);
+        data[SectionOsd]["WeatherLocation"] = m.WeatherLocation;
+        data[SectionOsd]["WeatherLatitude"] = m.WeatherLatitude.ToString("G", inv);
+        data[SectionOsd]["WeatherLongitude"] = m.WeatherLongitude.ToString("G", inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
         data[SectionOsd]["CompactMode"] = m.CompactMode.ToString(inv);

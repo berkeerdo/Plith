@@ -46,7 +46,11 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
     /// is true, and nothing at all — no empty fragment, no dangling separator — when the
     /// column is collapsed. The StackPanel column itself carries no AutomationProperties.Name
     /// of its own; WPF gives panels no automation peer, so a name set there would never reach
-    /// UI Automation. This composed property is the only place the battery announces.</summary>
+    /// UI Automation. This composed property is the only place the battery announces.
+    ///
+    /// Weather appends here too (Task 7), following the same rule: a ", {WeatherText}" segment
+    /// when HasWeather is true, nothing when the column is collapsed. Its StackPanel column is
+    /// just as peerless as the battery one, so this remains the only place it can announce.</summary>
     public string AccessibleSummary
     {
         get
@@ -54,6 +58,8 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
             var summary = $"Time {ClockTime}, {ClockDate}";
             if (HasBattery)
                 summary += $", Battery {BatteryText}{(IsCharging ? ", charging" : string.Empty)}";
+            if (HasWeather)
+                summary += $", {WeatherText}";
             return summary;
         }
     }
@@ -112,6 +118,60 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
         HasBattery = show;
         BatteryText = text;
         IsCharging = charging;
+    }
+
+    private bool _hasWeather;
+    private string _weatherGlyph = string.Empty;
+    private string _weatherText = string.Empty;
+
+    public bool HasWeather
+    {
+        get => _hasWeather;
+        private set
+        {
+            if (Set(ref _hasWeather, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
+
+    public string WeatherGlyph
+    {
+        get => _weatherGlyph;
+        private set
+        {
+            if (Set(ref _weatherGlyph, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
+
+    public string WeatherText
+    {
+        get => _weatherText;
+        private set
+        {
+            if (Set(ref _weatherText, value))
+                OnPropertyChanged(nameof(AccessibleSummary));
+        }
+    }
+
+    /// <summary>Apply a weather reading to the weather column. A missing or stale snapshot
+    /// (see WeatherCodeMap.IsFresh) collapses the column and drops its AccessibleSummary
+    /// segment, the same "absent, not blank" rule ApplyBattery follows.</summary>
+    public void ApplyWeather(WeatherSnapshot? snapshot, DateTimeOffset now, int maxAgeMinutes)
+    {
+        if (snapshot is not { } s || !WeatherCodeMap.IsFresh(s, now, maxAgeMinutes))
+        {
+            HasWeather = false;
+            WeatherGlyph = string.Empty;
+            WeatherText = string.Empty;
+            return;
+        }
+
+        var (glyph, label) = WeatherCodeMap.Describe(s.WeatherCode);
+        HasWeather = true;
+        WeatherGlyph = glyph;
+        // Rounded to a whole degree: the row is one line and a decimal buys nothing.
+        WeatherText = $"{Math.Round(s.TemperatureC):0}°  {label}";
     }
 
     private void OnPropertyChanged([CallerMemberName] string? name = null)
