@@ -185,8 +185,22 @@ public partial class BandWindow : ContentControl, IWndProcObject
         ushort atom = RegisterClassEx(ref wndClass);
         if (atom == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
 
+        // WS_EX_LAYERED is deliberately NOT set on this outer container, and that is load-bearing.
+        //
+        // It used to be, and the result was that the OSD received no mouse input at all: a
+        // WS_EX_LAYERED window whose layered attributes are never set has no content the system
+        // can hit-test, so every message passes straight through — measured on a running build,
+        // where a WndProc counter recorded zero WM_MOUSEMOVE, zero WM_LBUTTONDOWN and zero
+        // WM_NCHITTEST while the user was hovering and clicking the open panel.
+        //
+        // Setting those attributes is not the fix: SetLayeredWindowAttributes(hWnd, 0, 255,
+        // LWA_ALPHA) is exactly what commit 3211d37 removed, because constant-alpha layering
+        // discards the per-pixel alpha channel and leaves a permanent black rectangle on screen.
+        //
+        // The window does not need it either. Per-pixel transparency lives on the HwndSource
+        // child created below, which carries WS_EX_LAYERED itself and composites through the
+        // DWM. This container only positions that child and owns the click-through bit.
         var extStyles = (int)(
-            ExtendedWindowStyles.WS_EX_LAYERED |
             ExtendedWindowStyles.WS_EX_NOREDIRECTIONBITMAP |
             // TOOLWINDOW is always wanted: this is an overlay, never a primary app window.
             // Without it, the OSD shows up in the taskbar and Alt+Tab as if it were a real app.

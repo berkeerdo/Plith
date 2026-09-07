@@ -48,7 +48,10 @@ public partial class BandWindow
         if (hWnd == 0 || !HasSourceCreated) return;
 
         int styles = GetWindowLongPtr(hWnd, (int)GetWindowLongFields.GWL_EXSTYLE).ToInt32();
-        int newStyles = styles | (int)ExtendedWindowStyles.WS_EX_LAYERED;
+        // Does NOT re-add WS_EX_LAYERED: see the comment where the window is created. Adding it
+        // back here would silently undo that fix on the first click-through toggle, which is the
+        // first thing that happens after the window loads.
+        int newStyles = styles;
         if (isEnabled) newStyles |= (int)ExtendedWindowStyles.WS_EX_TRANSPARENT;
         else newStyles &= ~(int)ExtendedWindowStyles.WS_EX_TRANSPARENT;
         if (styles == newStyles) return;
