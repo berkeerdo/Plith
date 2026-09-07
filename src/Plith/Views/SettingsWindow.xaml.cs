@@ -166,6 +166,15 @@ public partial class SettingsWindow : Window
             : "Click 'Set position' to place the OSD anywhere on any monitor. A dim overlay with nine snap hotspots opens over your desktop.";
 
         StripHeightRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
+
+        // Notch-only, following StripHeightRow's rule: Classic has no home view to configure.
+        AmbientRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
+        WeatherRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
+
+        // Nested one level deeper than the other two: a location for weather that is switched
+        // off is dead UI, and hiding it is how the dependency is communicated.
+        WeatherLocationRow.Visibility = isNotch && WeatherToggle.IsChecked == true
+            ? Visibility.Visible : Visibility.Collapsed;
     }
 
     private void WireUpdateCheck()
@@ -534,6 +543,9 @@ public partial class SettingsWindow : Window
             ThemeCombo.SelectedItem = m.Theme;
             PresentationCombo.SelectedValue = m.Presentation;
             StripHeightSlider.Value = m.NotchStripHeightDip;
+            AmbientToggle.IsChecked = m.ShowAmbientOnHover;
+            WeatherToggle.IsChecked = m.ShowWeather;
+            WeatherLocationBox.Text = m.WeatherLocation;
         }
         finally
         {
@@ -611,6 +623,13 @@ public partial class SettingsWindow : Window
             RefreshPositionSummary();
         };
         StripHeightSlider.ValueChanged += (_, _) => AutoSave();
+        AmbientToggle.Checked += (_, _) => AutoSave();
+        AmbientToggle.Unchecked += (_, _) => AutoSave();
+        WeatherToggle.Checked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
+        WeatherToggle.Unchecked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
+        // LostFocus rather than TextChanged, deliberately: TextChanged would save — and
+        // geocode — on every keystroke of a city name.
+        WeatherLocationBox.LostFocus += (_, _) => AutoSave();
     }
 
     private void AutoSave()
@@ -659,6 +678,9 @@ public partial class SettingsWindow : Window
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
         if (PresentationCombo.SelectedValue is PresentationMode p) m.Presentation = p;
         m.NotchStripHeightDip = StripHeightSlider.Value;
+        m.ShowAmbientOnHover = AmbientToggle.IsChecked == true;
+        m.ShowWeather = WeatherToggle.IsChecked == true;
+        m.WeatherLocation = WeatherLocationBox.Text.Trim();
 
         _settings.Save(m);
         AutoStartService.Apply(m.AutoStart);

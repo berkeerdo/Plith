@@ -34,6 +34,14 @@ public sealed class WeatherService : IDisposable
     private GeoPoint? _cachedIpPoint;
     private bool _refreshing;
 
+    // The city WeatherLatitude/WeatherLongitude were geocoded for. Seeded from the persisted
+    // WeatherLocation in Start() — the pair loaded from config.ini is self-consistent as long
+    // as nothing has edited WeatherLocation at runtime yet this session, which was always true
+    // before Task 8 added the Settings text box — and kept in sync by GeocodeAndCacheAsync
+    // after every fresh geocode. OnSettingsChanged compares the incoming WeatherLocation
+    // against this field to tell an edited city apart from an unrelated settings save.
+    private string? _cachedLocationCity;
+
     // Same once-per-transition logging discipline as OpenMeteoClient/WindowsLocationProvider/
     // IpLocationProvider: one line when a refresh starts failing, one when it recovers, not
     // one per tick.
@@ -68,8 +76,30 @@ public sealed class WeatherService : IDisposable
 
     public void Start()
     {
+        _cachedLocationCity = _settings.Current.WeatherLocation;
+        _settings.Changed += OnSettingsChanged;
         _timer.Start();
         _ = RefreshAsync();   // do not make the user wait 15 minutes for the first reading
+    }
+
+    // WeatherLocation changing at runtime, via the Task 8 Settings text box, invalidates the
+    // geocode cache — both halves of it. Session caches (InvalidateLocation) go first; the
+    // persisted WeatherLatitude/WeatherLongitude pair is zeroed and re-saved second, because
+    // ResolveLocationAsync treats "both zero" as "not cached" and would otherwise read the
+    // stale pair straight back out of config.ini on the very next resolve. Fires on every
+    // Save, not just a location edit, so an unrelated settings change (a slider drag) must be
+    // a no-op here — the _cachedLocationCity comparison is what makes that so.
+    private void OnSettingsChanged(SettingsModel m)
+    {
+        if (string.Equals(m.WeatherLocation, _cachedLocationCity, StringComparison.Ordinal)) return;
+        _cachedLocationCity = m.WeatherLocation;
+        InvalidateLocation();
+
+        if (m.WeatherLatitude == 0 && m.WeatherLongitude == 0) return;
+        var cleared = m.Clone();
+        cleared.WeatherLatitude = 0;
+        cleared.WeatherLongitude = 0;
+        _settings.Save(cleared);
     }
 
     private async Task RefreshAsync()
@@ -176,6 +206,9 @@ public sealed class WeatherService : IDisposable
         var m = _settings.Current.Clone();
         m.WeatherLatitude = point.Latitude;
         m.WeatherLongitude = point.Longitude;
+        // Save() below raises Changed synchronously; set this first so OnSettingsChanged sees
+        // a match and treats this save as the cache catching up, not another edit.
+        _cachedLocationCity = city;
         _settings.Save(m);
         return point;
     }
@@ -191,6 +224,7 @@ public sealed class WeatherService : IDisposable
 
     public void Dispose()
     {
+        _settings.Changed -= OnSettingsChanged;
         _timer.Stop();
         _cts.Cancel();
         _cts.Dispose();

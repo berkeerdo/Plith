@@ -366,6 +366,63 @@
                             </Grid>
                         </Border>
 
+                        <Border x:Name="AmbientRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show ambient info on hover" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               Text="Hovering the notch opens a row with the time, weather and battery." />
+                                </StackPanel>
+                                <CheckBox x:Name="AmbientToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Show ambient info on hover" />
+                            </Grid>
+                        </Border>
+
+                        <Border x:Name="WeatherRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show weather" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               Text="Off disables the location lookup and every network request the row would make." />
+                                </StackPanel>
+                                <CheckBox x:Name="WeatherToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Show weather" />
+                            </Grid>
+                        </Border>
+
+                        <Border x:Name="WeatherLocationRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Weather location" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               Text="Leave empty to use Windows Location, falling back to your IP address." />
+                                </StackPanel>
+                                <TextBox x:Name="WeatherLocationBox"
+                                         Grid.Column="1"
+                                         Width="180"
+                                         VerticalAlignment="Center"
+                                         AutomationProperties.Name="Weather location city name" />
+                            </Grid>
+                        </Border>
+
                         <Border Style="{StaticResource RowStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
