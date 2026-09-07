@@ -19,22 +19,29 @@ every other section here is open: no agent may launch, focus, or drive the runni
 
 ## 0. What is automated as of Task 8
 
+> **Note:** the figures below were accurate when Task 8 landed. Task 9 (Settings UI) and the
+> entire notch-home-view slice landed afterward and added far more coverage; the current count
+> is recorded here so this section stays true of the tree rather than of a moment in its
+> history.
+
 - `dotnet build src/Plith/Plith.csproj -c Debug` — 0 warnings, 0 errors.
-- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 161/161 passing, `FullscreenVideoDetectorTests`
-  unchanged (Task 8 does not touch `ShouldSuppress`'s signature or behaviour). The count fell
-  from 162 when a tautological `NotchGeometry` test — two identical calls asserted equal — was
-  deleted rather than left standing as coverage of a property it never exercised.
+- `dotnet test tests/Plith.Tests/Plith.Tests.csproj` — 218/218 passing as of the current tree
+  (161/161 as of Task 8 itself; `FullscreenVideoDetectorTests` was unchanged by Task 8, since it
+  does not touch `ShouldSuppress`'s signature or behaviour). The count fell from 162 to 161
+  when a tautological `NotchGeometry` test — two identical calls asserted equal — was deleted
+  rather than left standing as coverage of a property it never exercised; it climbed to 218
+  afterward as Task 9 and the home-view slice each added their own tests.
 - `pwsh -File scripts/check-a11y.ps1` — exit 0.
 
 None of the above exercises `AmbientNotchPresentation` itself: both it and `ClassicPresentation`
 hold a `BandWindow`, which is a `ContentControl` behind a native `HwndSource` that the headless,
 non-STA test suite cannot construct. `PresentationPolicy` — the pure predicates the two adapters
 delegate to — is unit-tested, but the adapters' WPF plumbing (the animations, `BeginAnimation`
-calls, `SetStrip`, and the `OsdHost.ApplyPresentationMode` wiring) is not.
+calls, `SetNotchLook`, `SetNotchMetrics`, and the `OsdHost.ApplyPresentationMode` wiring) is not.
 
 Task 7's `NotchHoverPoller` holds a `DispatcherTimer` and P/Invokes `GetCursorPos`, so it is in
 the same boat: the headless suite cannot exercise it end to end either. The pure geometry it
-calls — `NotchGeometry.HoverRect`, `NotchGeometry.PhysicalToDip`, `NotchGeometry.IsInsideStrip`
+calls — `NotchGeometry.HoverRect`, `NotchGeometry.PhysicalToDip`, `NotchGeometry.IsInsideNotch`
 — is unit-tested; the timer, the P/Invoke, and the `OnNotchHoverChanged` wiring in `OsdHost` are
 not.
 
@@ -81,39 +88,54 @@ runs when a live settings change actually flips `SettingsModel.Presentation`, wh
 the kind of runtime transition the automated suite cannot reach
 (`SettingsService.Changed` firing while a `BandWindow` is live).
 
-**First open question — CLOSED by the first real session.** This document previously asked
-whether the parked strip should be the dedicated `NotchStrip` border alone, or that border
-plus a sliver of the parked card's own bottom edge (the old `RestingOffset` put the card's
-bottom edge at `y = stripHeight`, so both drew in the same band). The user reported the
-doubled edge directly on the first live run: it reads as the corner of a card poking out from
-under the top of the screen, not as a notch. `Park()` now parks at `HiddenOffset`, so the card
-contributes no pixels at all and `NotchStrip` is the only thing drawn. `RestingOffset` is
-gone. Nothing below re-opens this.
+**First open question — CLOSED, and the mechanism that caused it no longer exists.** This
+document previously asked whether the parked strip should be the dedicated `NotchStrip` border
+alone, or that border plus a sliver of the parked card's own bottom edge (the old
+`RestingOffset` put the card's bottom edge at `y = stripHeight`, so both drew in the same
+band). The user reported the doubled edge directly on the first live run: it read as the
+corner of a card poking out from under the top of the screen, not as a notch. That whole
+translate-a-card-behind-a-strip design is gone. The current code
+(`src/Plith/Views/OsdContent.xaml.cs`, `src/Plith/Views/Presentation/AmbientNotchPresentation.cs`)
+has no `NotchStrip`, no `RestingOffset`, and no `HiddenOffset` — grep confirms none of the
+three exist anywhere in `src/Plith`. There is one surface, `NotchSurface`, whose `Width` and
+`Height` are written directly from a single `NotchExpand` progress value
+(`OsdContent.ApplyNotchExpand`), and the card content (`SlidingRoot`) is hidden by fading its
+`Opacity` to 0, not by moving it off screen. A translated element's edge poking out from behind
+an offset is not a failure mode this design can produce, because nothing is translated. Nothing
+below re-opens this.
 
-**Second open question, still open: the card's drop shadow may bleed past `HiddenOffset`, and
-may also be clipped at the bottom of the descended card.** Two halves, both unresolved, both
-for the same manual pass:
+**Second open question.** The original question was whether the card's drop shadow could bleed
+past its parked position, and whether it could be clipped at the bottom of the descended card.
+The card-parking half of that question no longer applies — there is no parked card to bleed
+from — but the underlying shadow-versus-reserved-space concern still has a live analogue in the
+current single-surface design, so it is restated in those terms rather than dropped:
 
-- *Bleed while parked.* The card carries a `DropShadowEffect` (`BlurRadius` 28) on the same
-  `Border` whose edge `HiddenOffset` pushes off screen. `ClipToBounds` on the outer container
-  does not clip effects — only content — so it is unverified whether a faint halo from that
-  blur still shows in the strip's band even when the card itself is fully off screen. During
-  1.1 and after 1.3's retraction, check the band around the strip for any glow beyond the
-  strip itself.
-- *Clipping while descended.* In notch mode `SetNotchLook` sets `ShadowDepth = 6` and
-  `Direction = 270` (straight down) on a `BlurRadius` of 28, while `SlidingRoot`'s bottom
-  margin reserves only `ContentInsetDip` = 14 DIP below the card. The shadow's downward
-  extent can exceed that, so the bottom of the notch's shadow may be cut off in a straight
-  line rather than fading out. During 1.2, look at the bottom edge of the descended card
-  against a light background: does the shadow fade, or does it stop abruptly?
+- *Bleed at rest — CLOSED by construction, not yet observed.* `NotchSurface`'s own shadow
+  (`NotchShadow` in `src/Plith/Views/OsdContent.xaml`) has its `Opacity` driven by
+  `NotchGeometry.Lerp(0, NotchShadowOpacity, t)` in `ApplyNotchExpand`, and at rest `t` is
+  exactly `0`, making that `Opacity` exactly `0` too — an effect at zero opacity renders
+  nothing, which is a stronger guarantee than "moved off screen and probably not visible." This
+  is an argument from the code, not something watched on a running build, so it is worth a fast
+  glance during 1.1 and after 1.3's retraction (does the band around the resting pill show any
+  glow at all?), but it is no longer treated as an open risk the way the original question was.
+- *Clipping while descended — still open, numbers corrected.* `NotchShadow` is `ShadowDepth="6"`,
+  `Direction="270"` (straight down), `BlurRadius="20"` — not 28; 28 belongs to `CardShadow`,
+  which is Classic's shadow and is inert (`Opacity = 0`) whenever `SetNotchLook(true)` has run.
+  `NotchSurface`'s expanded height is deliberately `ContentInsetDip` (14 DIP) shorter than the
+  card content's own measured height (`OsdContent.SetNotchMetrics`), which is what reserves the
+  vertical gap for this shadow inside the outer `Grid`'s `ClipToBounds="True"` clip. Whether a
+  6 DIP shadow depth plus a 20 DIP blur radius actually fits inside that 14 DIP gap, or gets cut
+  off in a straight line at the clip edge instead of fading out, is a real question a 20/6/14
+  arrangement does not answer on paper — it needs eyes on a running build. During 1.2, look at
+  the bottom edge of the open panel against a light background: does the shadow fade, or does
+  it stop abruptly?
 
-  Deliberately not fixed by this round. The fix is not a one-liner: the bottom margin and
-  the `contentInset` argument `HiddenOffset` is called with are the same 14 DIP and must move
-  together, or the parked card stops landing with its bottom edge at exactly `y = 0`. Getting
-  the new number right is a visual judgement that needs eyes on a running build, and no build
-  from this branch has been run since the notch's shape was changed.
+  Deliberately not fixed by this round even if it turns out to clip: the fix is not a one-liner
+  (the blur radius, shadow depth, and `ContentInsetDip` all have to move together, and getting
+  the new numbers right is a visual judgement), and no build from this branch has been run
+  since the shadow values above were last touched.
 
-Record what is actually seen in both cases, not what should theoretically happen.
+Record what is actually seen, not what should theoretically happen.
 
 **Known environment limitation, carried over from Phase 5:** over an RDP session the band
 window's layered surface cannot be captured by any means (`BitBlt`, `BitBlt` with
@@ -304,7 +326,7 @@ alt-tab into it.
 covered state and suppression are separate signals — `IShowSuppressor` means "do not show at
 all," `ForegroundCoversMonitorChanged` means "stop being a notch and behave like
 Classic." Nothing in the automated suite can catch the two being accidentally merged, because
-merging them would still build clean, still pass all 161 tests (none of which exercise a live
+merging them would still build clean, still pass all 218 tests (none of which exercise a live
 `OsdHost`/`AmbientNotchPresentation` pair — neither type can even be constructed by the
 headless, non-STA suite), and still pass the a11y lint. A volume key still producing the OSD
 while no notch appears over the game afterward is the only observation in this whole section
@@ -652,7 +674,7 @@ actually runs cold.
 | 11.7 | Type a city into "Weather location" | The column switches to that city within one refresh; `config.ini` gains non-zero `WeatherLatitude`/`WeatherLongitude` | The old location persists, or the cache is not written |
 | 11.8 | Turn "Show weather" off | The column disappears and no further network requests are made | Requests continue |
 | 11.9 | Switch to Classic OSD | No ambient row ever appears, and the three Settings rows are hidden | The row leaks into Classic |
-| 11.10 | Narrator on the open panel | The row announces as "Ambient status", and the columns as "Time", "Weather", "Battery" | It announces a type name or reads bare numbers |
+| 11.10 | Narrator on the open panel | The row announces as "Ambient status"; its value reads as "Time ‹time›, ‹date›", then ", Battery ‹percent›" (plus ", charging" when charging) if the battery column is present, then ", ‹temperature›°  ‹condition›" if the weather column is present (`AmbientCardViewModel.AccessibleSummary`) — **by design, "Weather" is never spoken**: Time and Battery carry a spoken label, the weather segment does not | It announces a type name, reads bare numbers instead of the composed sentence above, or the Time/Battery segments are missing their labels or wrong order |
 
 **Why 11.5 and 11.6 are the highest-risk checks in this slice.** Every other row here is a
 WPF layout or a settings-wiring question, the same shape of thing the rest of this file has
