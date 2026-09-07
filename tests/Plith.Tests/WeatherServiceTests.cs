@@ -89,15 +89,18 @@ public class WeatherServiceTests
         int changedCount = 0;
         settings.Changed += _ => changedCount++;
 
-        // A single edit must settle in a small, fixed number of Changed events: the user's
-        // own save, plus the one re-save OnSettingsChanged issues to zero the stale
-        // coordinates — which then matches _cachedLocationCity and stops. This is what pins
-        // the ordering inside OnSettingsChanged: it updates _cachedLocationCity BEFORE calling
-        // the nested Save, so that nested Save's own re-entrant Changed sees a match and
-        // returns immediately. Swap that order — update _cachedLocationCity after the nested
-        // Save instead of before — and the nested Save's Changed would see the mismatch again,
-        // re-save again, and recurse without bound; this count would no longer be 2 (or the
-        // process would crash from stack overflow before the assertion ever ran).
+        // A single edit settles in exactly 2 Changed events: the user's own save, plus the
+        // one corrective re-save OnSettingsChanged issues to zero the stale coordinates.
+        // Termination is guaranteed by two INDEPENDENT guards, either of which alone would
+        // stop the recursion: (1) the city-match check at the top of OnSettingsChanged, which
+        // no-ops once _cachedLocationCity has caught up with the incoming WeatherLocation, and
+        // (2) the "already zero" check guarding the nested Save, which no-ops once the
+        // coordinates have been cleared regardless of what _cachedLocationCity holds. The
+        // nested Save's own re-entrant Changed call is in fact caught by guard (2), not guard
+        // (1) — reordering when _cachedLocationCity gets updated does not change this count,
+        // because guard (2) catches the recursion either way. This test pins the event count
+        // both guards together produce; it does not, by itself, distinguish which guard did
+        // the catching.
         var edited = settings.Current.Clone();
         edited.WeatherLocation = "Paris";
         settings.Save(edited);
