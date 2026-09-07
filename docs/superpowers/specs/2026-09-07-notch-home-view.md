@@ -152,10 +152,15 @@ Location, in strict priority order — this order was the user's call:
 1. **Manual override** from Settings, if non-empty. Geocoded once via Open-Meteo's own
    geocoding endpoint and cached in `config.ini` as lat/lon so no lookup runs at startup.
 2. **Windows Location API** (`Windows.Devices.Geolocation.Geolocator`). Tried first among
-   the automatic options, deliberately: it is the accurate one, and asking for it first is
-   the only way the permission prompt ever appears. If access is `Denied`, `Unspecified`,
-   or the call throws, fall through — **do not retry it on a schedule**, or a user who said
-   no gets asked forever.
+   the automatic options, deliberately: it is the accurate one. Plith is unpackaged, so
+   `RequestAccessAsync` never shows a per-app consent prompt — that prompt, and the
+   "answer once and it stops asking" behaviour Microsoft documents for it, is a packaged-app
+   feature. Windows Location access here is governed entirely by the system-wide "Allow
+   desktop apps to access your location" toggle (and the master Location switch), checked live
+   on every call. If access is `Denied`, `Unspecified`, or the call throws, fall through to IP
+   for that refresh — and retry on the next scheduled refresh regardless of outcome: none of
+   these is a stored decision, so a user who flips a toggle on mid-session must recover without
+   restarting Plith.
 3. **IP geolocation** as the fallback for a denied or unavailable location service.
 
 Refresh every `WeatherRefreshMinutes` (default 15) on a background timer, not on hover — a

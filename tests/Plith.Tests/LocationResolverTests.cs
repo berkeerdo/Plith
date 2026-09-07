@@ -50,11 +50,14 @@ public class LocationResolverTests
     }
 
     [Fact]
-    public void DoesNotRetryWindowsLocationAfterADenial()
+    public void RetriesWindowsLocationAfterADenialToo()
     {
-        // A user who said no must not be asked again on every refresh. This is the whole
-        // reason Denied and Unavailable are separate outcomes rather than one failure case.
-        Assert.False(LocationResolver.ShouldRetryWindowsLocation(LocationOutcome.Denied));
+        // Denied is not a stored decision for Plith: it is unpackaged, so
+        // Geolocator.RequestAccessAsync shows no per-app consent dialog at all, and this
+        // outcome just reflects the live state of Windows' system-wide location toggle. A user
+        // who flips that toggle back on mid-session must be able to recover without restarting
+        // Plith, so retrying costs nothing and is required.
+        Assert.True(LocationResolver.ShouldRetryWindowsLocation(LocationOutcome.Denied));
     }
 
     [Fact]

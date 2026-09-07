@@ -29,8 +29,16 @@ public static class LocationResolver
     }
 
     /// <summary>Whether the Windows Location API is worth asking again on the next refresh.
-    /// A denial is permanent until the user changes it in Windows settings; re-asking on a
-    /// 15-minute timer would pester someone who already answered.</summary>
-    public static bool ShouldRetryWindowsLocation(LocationOutcome outcome)
-        => outcome != LocationOutcome.Denied;
+    ///
+    /// Always true, for every outcome including Denied. Plith is unpackaged, so
+    /// <c>Geolocator.RequestAccessAsync</c> shows no per-app consent dialog at all — that
+    /// dialog, and the "answer once and it stops asking" behaviour Microsoft documents for it
+    /// (https://learn.microsoft.com/en-us/uwp/api/windows.devices.geolocation.geolocator.requestaccessasync:
+    /// "After the first time they grant or deny permission, this method no longer prompts for
+    /// permission"), is a packaged-app feature that does not apply here. For Plith, every call
+    /// just re-reads the live state of Windows' system-wide location toggle, so re-asking never
+    /// pesters anyone — there is no prompt to repeat — and is required for a user who flips
+    /// that toggle back on mid-session to recover without restarting Plith. See
+    /// <c>LocationOutcome</c>'s doc comment for the full reasoning.</summary>
+    public static bool ShouldRetryWindowsLocation(LocationOutcome outcome) => true;
 }

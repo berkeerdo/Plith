@@ -17,8 +17,19 @@ namespace Plith.Services;
 /// </summary>
 public sealed class OpenMeteoClient : IDisposable
 {
-    private readonly HttpClient _http = new() { Timeout = TimeSpan.FromSeconds(10) };
+    // PooledConnectionLifetime forces periodic DNS re-resolution. Without it a pinned
+    // connection outlives a CDN/DNS change behind api.open-meteo.com and every fetch fails
+    // silently until the process restarts — this client is long-lived on a refresh timer, not
+    // a one-shot call, so it has to outlive that kind of change on its own.
+    private readonly HttpClient _http = new(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(5) })
+        { Timeout = TimeSpan.FromSeconds(10) };
     private readonly DiagnosticLog? _log;
+
+    // One remembered failure signature per endpoint, so a fetch that fails on every tick of a
+    // 15-minute timer logs once on the way down and once on the way back up, per spec §3.3,
+    // instead of once per attempt.
+    private string? _lastCurrentFailure;
+    private string? _lastGeocodeFailure;
 
     public OpenMeteoClient(DiagnosticLog? log = null) => _log = log;
 
@@ -34,11 +45,18 @@ public sealed class OpenMeteoClient : IDisposable
         {
             var r = await _http.GetFromJsonAsync<ForecastResponse>(url, ct).ConfigureAwait(false);
             if (r?.Current is not { } c) return null;
+            LogRecovery(ref _lastCurrentFailure, "OpenMeteo", "Current-conditions fetch recovered");
             return new WeatherSnapshot(c.Temperature, c.WeatherCode, DateTimeOffset.UtcNow);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException or System.Text.Json.JsonException)
+        // OperationCanceledException, not TaskCanceledException: GetFromJsonAsync can cancel
+        // after the response headers arrive, while it is reading/deserializing the body, and
+        // that path throws the plain base type, not the Task-flavoured subclass. Catching only
+        // the subclass let that case — and a Dispose() racing an in-flight request at shutdown,
+        // which throws ObjectDisposedException — escape into the caller's refresh timer, which
+        // this class's own doc comment says must never happen.
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ObjectDisposedException or NotSupportedException or System.Text.Json.JsonException)
         {
-            _log?.Info("OpenMeteo", $"Current-conditions fetch failed: {ex.GetType().Name}");
+            LogFailure(ref _lastCurrentFailure, "OpenMeteo", $"Current-conditions fetch failed: {ex.GetType().Name}");
             return null;
         }
     }
@@ -52,16 +70,38 @@ public sealed class OpenMeteoClient : IDisposable
         {
             var r = await _http.GetFromJsonAsync<GeocodeResponse>(url, ct).ConfigureAwait(false);
             var hit = r?.Results?.FirstOrDefault();
-            return hit is null ? null : new GeoPoint(hit.Latitude, hit.Longitude);
+            if (hit is null) return null;
+            LogRecovery(ref _lastGeocodeFailure, "OpenMeteo", "Geocode recovered");
+            return new GeoPoint(hit.Latitude, hit.Longitude);
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or NotSupportedException or System.Text.Json.JsonException)
+        // See the comment on the same filter in GetCurrentAsync above.
+        catch (Exception ex) when (ex is HttpRequestException or OperationCanceledException or ObjectDisposedException or NotSupportedException or System.Text.Json.JsonException)
         {
-            _log?.Info("OpenMeteo", $"Geocode failed for '{cityName}': {ex.GetType().Name}");
+            LogFailure(ref _lastGeocodeFailure, "OpenMeteo", $"Geocode failed for '{cityName}': {ex.GetType().Name}");
             return null;
         }
     }
 
     public void Dispose() => _http.Dispose();
+
+    // Logs only when the failure signature changes, so an outage held across many refresh
+    // ticks produces one line, not one per tick — spec §3.3's "logged once per transition, not
+    // once per attempt".
+    private void LogFailure(ref string? lastFailure, string source, string message)
+    {
+        if (string.Equals(lastFailure, message, StringComparison.Ordinal)) return;
+        lastFailure = message;
+        _log?.Info(source, message);
+    }
+
+    // Logs recovery exactly once, the first successful call after a logged failure, then
+    // clears the remembered signature so a later failure logs again.
+    private void LogRecovery(ref string? lastFailure, string source, string message)
+    {
+        if (lastFailure is null) return;
+        lastFailure = null;
+        _log?.Info(source, message);
+    }
 
     private sealed class ForecastResponse
     {
