@@ -390,6 +390,15 @@ public sealed class OsdHost : BandWindow
             // expands into, and the ambient row is part of that content — opening afterwards
             // would expand to a height computed without the row and clip it for one show.
             _home.Open();
+
+            // Force the layout pass BEFORE the expansion starts. Open() adds the ambient card to
+            // CardHost's collection, and the bound ItemsControl generates its container during a
+            // measure/arrange — not at the moment the collection changes. Without this the
+            // expansion begins against one target height and finishes against another as the new
+            // container appears mid-flight, which is what makes the opening animation jump while
+            // the closing one, whose content is already settled, stays smooth.
+            _content.UpdateLayout();
+
             _hideTimer?.Stop();
             ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs), fromHover: true);
         }

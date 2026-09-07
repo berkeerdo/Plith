@@ -51,10 +51,27 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     public bool IsAtRest(double targetOpacity) =>
         PresentationPolicy.IsAtRest(PresentationMode.AmbientNotch, _window.Opacity, targetOpacity, _isParked || _isCollapsing);
 
-    public bool IsFullyHidden =>
-        PresentationPolicy.IsFullyHidden(PresentationMode.AmbientNotch, _window.Opacity, _isParked);
+    /// <summary>
+    /// Whether the notch is closed, read from the shape itself rather than from a flag.
+    ///
+    /// _isParked is written in AnimateToRest's Completed callback, and WPF raises no Completed
+    /// for a clock a competing animation replaced - the hazard behind five defects on this
+    /// branch. A dropped callback leaves _isParked false forever, and everything derived from it
+    /// is then wrong forever: a closed notch that believes it is open keeps the window
+    /// hit-testable, so an invisible 440 DIP band across the top of the screen swallows every
+    /// click meant for whatever is underneath. Reported on a running build exactly that way.
+    ///
+    /// Re-deriving IsClickThrough on a timer did not fix it, because the re-derivation read the
+    /// same stale flag. NotchExpand is the animated value the shape is actually drawn from, so it
+    /// cannot be stale: if the panel is closed this is zero, whatever any callback did or did not
+    /// do. _isParked stays for transition bookkeeping, where a dropped callback is recoverable.
+    /// </summary>
+    private bool IsClosedNow => _content.NotchExpand <= 0.01;
 
-    public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, _isParked);
+    public bool IsFullyHidden =>
+        PresentationPolicy.IsFullyHidden(PresentationMode.AmbientNotch, _window.Opacity, IsClosedNow);
+
+    public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, IsClosedNow);
 
     public void OnContentMeasured(Size contentSize)
     {
