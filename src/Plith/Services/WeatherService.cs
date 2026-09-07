@@ -154,10 +154,12 @@ public sealed class WeatherService : IDisposable
         if (!_settings.Current.ShowWeather)
         {
             // OnSettingsChanged already clears Current the instant ShowWeather toggles off, so
-            // this is a defensive backstop, not the primary mechanism: it stops a refresh that
-            // was already in flight when the toggle flipped — or a timer tick that lands while
-            // the setting is off — from repopulating Current and putting the column back on
-            // screen behind the toggle's back.
+            // this guard's job is narrower than it looks: it only stops a fetch from starting
+            // in the first place while the setting is off (Start()'s initial call, or a timer
+            // tick landing here). It does NOT cover a fetch already in flight when the toggle
+            // flips — this check runs once, above `_refreshing = true`, so an in-flight call
+            // never re-enters it. See the ShowWeather re-check right before `Current = snap`
+            // below, which is what actually closes that hole.
             Current = null;
             return;
         }
@@ -169,6 +171,13 @@ public sealed class WeatherService : IDisposable
 
             var snap = await _weather.GetCurrentAsync(point, _cts.Token).ConfigureAwait(true);
             if (snap is null) return;
+
+            // Re-check rather than trust the guard at the top of this method: ShowWeather can
+            // flip off while the two awaits above were in flight, and AmbientCard.Tick feeds
+            // Current into the view with no ShowWeather check of its own — publishing a result
+            // fetched for a setting that is no longer on would put the weather column right
+            // back on screen behind the toggle's back until the next tick re-clears it.
+            if (!_settings.Current.ShowWeather) return;
 
             Current = snap;
             LogRecovery("Weather refresh recovered");

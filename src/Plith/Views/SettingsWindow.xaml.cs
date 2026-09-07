@@ -143,7 +143,7 @@ public partial class SettingsWindow : Window
         // doesn't sit on top of the overlay hotspots.
         OpenPositionOverlayButton.Content = isEditing ? "Overlay open..." : "Set position";
         if (isEditing) Hide();
-        else { Show(); Activate(); RefreshPositionSummary(); }
+        else { Show(); Activate(); }
 
         // EnterPositionEditMode snapshots the whole settings model and a Cancel
         // (ExitPositionEditMode(save: false)) writes it back wholesale — not just the
@@ -154,6 +154,15 @@ public partial class SettingsWindow : Window
         // unconditionally right here used to stomp its own notch-mode disable the instant an
         // edit session that started in notch mode ended.
         UpdatePresentationDependentControls();
+
+        // Must run AFTER UpdatePresentationDependentControls, not before: that method
+        // unconditionally writes PositionSummary.Text to the generic "Click 'Set position'..."
+        // placeholder as part of resetting the row's enabled state, and RefreshPositionSummary
+        // is what overwrites that placeholder with the real "Position: Custom (drag-placed)..."
+        // or "Position: TopRight..." text once an edit session actually ends. Calling it first
+        // (the original ordering here) meant the real position name was set and then
+        // immediately clobbered back to the placeholder on every save and every cancel.
+        if (!isEditing) RefreshPositionSummary();
     }
 
     private void RefreshPositionSummary()
@@ -185,8 +194,12 @@ public partial class SettingsWindow : Window
 
         // The hint text next to the button explains what the button does. When the button is
         // disabled that sentence describes something the user cannot do, so say why instead.
-        // RefreshPositionSummary overwrites this text once an edit session ends (see
-        // OnOsdEditModeChanged), so no edit-mode wording is needed here for the disabled case.
+        // This is a placeholder, not the last word on PositionSummary.Text: PresentationCombo's
+        // handler and OnOsdEditModeChanged's exit path both call RefreshPositionSummary right
+        // after this method, which overwrites it with the real "Position: Custom..."/"Position:
+        // TopRight..." text outside notch mode. That ordering matters — see the comment on the
+        // RefreshPositionSummary call in OnOsdEditModeChanged, which used to run this method
+        // second and clobber the real name back to this placeholder on every save and cancel.
         PositionSummary.Text = isNotch
             ? "The Ambient Notch is pinned to the top of the screen, so there is nothing to place. Switch to Classic OSD to choose a position."
             : "Click 'Set position' to place the OSD anywhere on any monitor. A dim overlay with nine snap hotspots opens over your desktop.";
