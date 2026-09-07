@@ -203,6 +203,20 @@ public sealed class WeatherService : IDisposable
         var p = await _weather.GeocodeAsync(city, _cts.Token).ConfigureAwait(true);
         if (p is not { } point) return null;
 
+        // Race: the user can edit WeatherLocation to a different city while this HTTP call is
+        // in flight. If they did, `city` is no longer what WeatherLocation says, and this
+        // answer belongs to a city the user has already moved off. Persisting it would stamp
+        // the new city's config.ini entry with the old city's coordinates — config.ini would
+        // self-correct on the next OnSettingsChanged re-entry, but only after this method had
+        // already returned the wrong GeoPoint to ResolveLocationAsync, showing the old city's
+        // weather under the new city's label for up to a full refresh cycle. Discard instead:
+        // losing this geocode is fine, the next tick re-resolves against the city the user
+        // actually wants.
+        if (!string.Equals(city, _settings.Current.WeatherLocation, StringComparison.Ordinal))
+        {
+            return null;
+        }
+
         var m = _settings.Current.Clone();
         m.WeatherLatitude = point.Latitude;
         m.WeatherLongitude = point.Longitude;
