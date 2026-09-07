@@ -341,8 +341,12 @@ normal path. Do not skip the "let it auto-hide" half of 4.2.
 **Record, if this section is run:** the exact `plith.log` lines for 4.1 and 4.3 (the
 `ForegroundCoversMonitor -> …` transitions, including 4.3's `settled for …ms` value), the
 `Presentation applied: …` line that follows each of them, and whether any faint notch or
-shadow was visible during 4.1 — the same drop-shadow-bleed question section 1 flags as
-unresolved for `HiddenOffset`.
+shadow was visible during 4.1 — not section 1's shadow question (that one is about the
+resting pill's own shadow, and does not apply here), but the switch-leaking concern section 1
+raises separately about `OsdHost.ApplyPresentationMode`: if `OsdContent.SetNotchLook(false)`
+failed to run when Classic was built, `NotchSurface` would stay `Visible` (or its shadow would
+stay non-zero) underneath the Classic card drawn on top of it, rather than being collapsed
+outright.
 
 ---
 
