@@ -390,17 +390,32 @@ public sealed class OsdHost : BandWindow
             // expands into, and the ambient row is part of that content — opening afterwards
             // would expand to a height computed without the row and clip it for one show.
             _home.Open();
-
-            // Force the layout pass BEFORE the expansion starts. Open() adds the ambient card to
-            // CardHost's collection, and the bound ItemsControl generates its container during a
-            // measure/arrange — not at the moment the collection changes. Without this the
-            // expansion begins against one target height and finishes against another as the new
-            // container appears mid-flight, which is what makes the opening animation jump while
-            // the closing one, whose content is already settled, stays smooth.
-            _content.UpdateLayout();
-
             _hideTimer?.Stop();
-            ShowOsd(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs), fromHover: true);
+
+            // Let the ambient row exist BEFORE the expansion animates, or the panel opens in two
+            // visible stages: media and volume first, then the clock and weather arriving late.
+            //
+            // Open() adds the card to CardHost's collection, but the ItemsControl bound to it
+            // does not gain the container synchronously — WPF processes binding work at
+            // DispatcherPriority.DataBind, and UpdateLayout() runs measure and arrange without
+            // flushing that queue, which is why calling it here was not enough. Deferring the
+            // show by one dispatcher turn at Loaded priority lets the binding, the container
+            // generation and the layout all complete first, so the expansion animates once,
+            // against content that is already final.
+            //
+            // The delay is a single frame and is not perceptible; the two-stage open was.
+            var visibleFor = TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
+            Dispatcher.BeginInvoke(new Action(() =>
+            {
+                // Re-check: a mode switch, edit mode or a covering window can all land between
+                // the hover and this callback, and each of them makes the show wrong rather than
+                // merely late.
+                if (_isEditMode) return;
+                if (_presentation is not AmbientNotchPresentation) return;
+                if (!_home.IsOpen) return;
+
+                ShowOsd(visibleFor, fromHover: true);
+            }), DispatcherPriority.Loaded);
         }
         else
         {
