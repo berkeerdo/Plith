@@ -1,6 +1,11 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- Stated once here and referenced below. It used to be typed out at each
+         brush, which is not a shared value but the same value by coincidence — the kind that
+         drifts the first time one of them is tuned. -->
+    <Color x:Key="OsdSignalColor">#4AD695</Color>
+
     <!-- Dark OSD overlay palette — default. -->
 
     <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
@@ -16,15 +21,19 @@
     <SolidColorBrush x:Key="OsdTextTertiary" Color="#71717A" />
 
     <SolidColorBrush x:Key="OsdTrackBg" Color="#22FFFFFF" />
-    <SolidColorBrush x:Key="OsdAccent" Color="#4AD695" />
+    <SolidColorBrush x:Key="OsdAccent" Color="{StaticResource OsdSignalColor}" />
     <SolidColorBrush x:Key="OsdDivider" Color="#1AFFFFFF" />
 
     <!-- Volume bar threshold colours when UseColorThresholds is on. The view model picks
          the right key based on the current normalised level. -->
     <SolidColorBrush x:Key="OsdGainMuted" Color="#808080" />
-    <SolidColorBrush x:Key="OsdGainGreen" Color="#4AD695" />
+    <SolidColorBrush x:Key="OsdGainGreen" Color="{StaticResource OsdSignalColor}" />
     <SolidColorBrush x:Key="OsdGainAmber" Color="#F5C242" />
-    <SolidColorBrush x:Key="OsdGainRed" Color="#E54B4B" />
+    <!-- #E0674F rather than #E54B4B: the earlier red sat at almost the same luminance as the
+         amber beside it, so on a 6 DIP bar the caution-to-alarm step read as a hue change with
+         no change in urgency. The light palette keeps its own #DC2626 — this value was chosen
+         against a near-black card and would lose contrast on a light one. -->
+    <SolidColorBrush x:Key="OsdGainRed" Color="#E0674F" />
 
 
     <!-- The notch's resting shape.

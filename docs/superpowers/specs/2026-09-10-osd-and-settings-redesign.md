@@ -93,7 +93,7 @@ States, all drawn in the mockup: normal, past 85 %, muted, with media, compact.
 |---|---|---|
 | Signal | `#4AD695` | level under 85 % — the resting state |
 | Caution | `#F5C242` | 85–99 % — loud, still fine |
-| Alarm | `#E0674F` | 100 %, or a Voicemeeter bus clipping |
+| Alarm | `#E0674F` (dark) / `#DC2626` (light) | 100 %, or a Voicemeeter bus clipping |
 | Bezel | `#06070A` | the notch's resting shape. Never a card ground. Constant across themes. |
 | Notch ink | `#F2F5F8` / `#9AA6B2` | text drawn **on** the bezel — the widget pages and the HUD |
 | Surface | `#151A21` | card ground, over Mica |
@@ -111,6 +111,18 @@ screen.
 level, because the level's colour is information. The single exception: when
 `UseColorThresholds` is off the fill takes the accent and the thresholds stop applying — which
 is the honest reading of what turning that setting off means.
+
+**Second correction, 2026-09-10.** The plan said the alarm colour moves to `#E0674F` "in all
+three OSD palettes". It moved in the dark one only. `#E0674F` was picked against a near-black
+card; on the light palette it loses contrast, and the light theme's existing `#DC2626` is the
+right value there. A colour chosen for one ground is not a token, it is that ground's value —
+and applying it to the other one would have been following the spec instead of the design.
+
+Two more things this section was wrong about. `AccentBrush` in `Theme.xaml` was a fourth
+definition of the same green and was **referenced by nothing**; it is deleted rather than
+reconciled. And `#E54B4B` in `SettingsTheme.xaml` is the close button's hover state, not the
+alarm colour — they share a literal by coincidence, and tying them together would make a theme
+tweak to one silently change the meaning of the other. Left alone, with a comment saying so.
 
 **Correction, 2026-09-10.** An earlier draft of this section claimed the threshold colours were
 literals in two files that had drifted apart. They are not: `OsdGainGreen`, `OsdGainAmber` and

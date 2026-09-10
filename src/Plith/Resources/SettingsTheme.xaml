@@ -664,6 +664,10 @@
     <Style x:Key="CloseCaptionButtonStyle" TargetType="Button" BasedOn="{StaticResource CaptionButtonStyle}">
         <Style.Triggers>
             <Trigger Property="IsMouseOver" Value="True">
+                <!-- Windows' own close-button red, not the OSD's alarm colour. They are
+                     deliberately unrelated: one is a control's hover state, the other means a
+                     level is clipping, and tying them together would make a theme tweak to one
+                     silently change the meaning of the other. -->
                 <Setter Property="Background" Value="#E54B4B" />
                 <Setter Property="Foreground" Value="#FFFFFF" />
             </Trigger>

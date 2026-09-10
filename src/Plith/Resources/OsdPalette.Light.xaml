@@ -1,6 +1,11 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- Stated once here and referenced below. It used to be typed out at each
+         brush, which is not a shared value but the same value by coincidence — the kind that
+         drifts the first time one of them is tuned. -->
+    <Color x:Key="OsdSignalColor">#059669</Color>
+
     <!-- Light OSD overlay palette — paired key-for-key with OsdPalette.Dark.
          The surface stays slightly translucent so the underlying app/desktop still bleeds
          through; on top of bright content the OSD reads like a frosted card. Accent green
@@ -24,13 +29,13 @@
     <SolidColorBrush x:Key="OsdTextTertiary" Color="#52525B" />
 
     <SolidColorBrush x:Key="OsdTrackBg" Color="#22000000" />
-    <SolidColorBrush x:Key="OsdAccent" Color="#059669" />
+    <SolidColorBrush x:Key="OsdAccent" Color="{StaticResource OsdSignalColor}" />
     <SolidColorBrush x:Key="OsdDivider" Color="#1A000000" />
 
     <!-- Volume bar threshold colours tuned for white surfaces — darker / saturated variants
          of the dark-theme equivalents so the bar still pops against the lighter card. -->
     <SolidColorBrush x:Key="OsdGainMuted" Color="#71717A" />
-    <SolidColorBrush x:Key="OsdGainGreen" Color="#059669" />
+    <SolidColorBrush x:Key="OsdGainGreen" Color="{StaticResource OsdSignalColor}" />
     <SolidColorBrush x:Key="OsdGainAmber" Color="#CA8A04" />
     <SolidColorBrush x:Key="OsdGainRed" Color="#DC2626" />
 

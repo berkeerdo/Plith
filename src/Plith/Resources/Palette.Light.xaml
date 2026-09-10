@@ -1,6 +1,11 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
+    <!-- Stated once here and referenced below. It used to be typed out at each
+         brush, which is not a shared value but the same value by coincidence — the kind that
+         drifts the first time one of them is tuned. -->
+    <Color x:Key="SignalColor">#059669</Color>
+
     <!-- Light palette — same key shape as Palette.Dark, tuned for white surfaces.
          Accent is darkened so the green still passes contrast on a light bg.  -->
 
@@ -17,7 +22,7 @@
     <SolidColorBrush x:Key="TextTertiary" Color="#71717A" />
     <SolidColorBrush x:Key="TextDisabled" Color="#A1A1AA" />
 
-    <SolidColorBrush x:Key="Accent" Color="#059669" />
+    <SolidColorBrush x:Key="Accent" Color="{StaticResource SignalColor}" />
     <SolidColorBrush x:Key="AccentHover" Color="#047857" />
     <SolidColorBrush x:Key="AccentPressed" Color="#065F46" />
     <SolidColorBrush x:Key="AccentGlow" Color="#1A059669" />

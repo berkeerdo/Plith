@@ -49,7 +49,6 @@
     <SolidColorBrush x:Key="TextPrimary" Color="#F5F5F5" />
     <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
     <SolidColorBrush x:Key="TrackBrush" Color="#22FFFFFF" />
-    <SolidColorBrush x:Key="AccentBrush" Color="#4AD695" />
 
     <Style x:Key="CardLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource OsdLabelStyle}" />
     <Style x:Key="CardValueStyle" TargetType="TextBlock" BasedOn="{StaticResource OsdValueStyle}" />
