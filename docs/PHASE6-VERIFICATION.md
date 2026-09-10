@@ -1065,3 +1065,65 @@ the three constants should be re-tuned from them rather than guessed at again.
   confirmed to cover what the row did.
 - **Three constants are provisional**: `NotchPager.CommitThreshold`, `NotchPager.RearmFloor`,
   `NotchPager.IdleRearmMs`. See §15.1.
+
+---
+
+## 16. Classic OSD and Settings redesign — open
+
+Green on build (Debug and Release, 0 warnings), 344 tests, and an accessibility lint that now
+also fails on system icon fonts in both XAML and code-behind. As in §15, none of that reaches
+anything below: the OSD renders in a layered window nothing can capture over RDP, and the
+settings window is STA-only so the suite cannot construct it.
+
+### 16.1 The card
+
+- [ ] **The card at its new width.** 300 DIP, 224 in compact. Check that the level row does not
+  look cramped at 224 and that the media row's title has room at 300.
+- [ ] The shortened device name against the **real** G733 string. `AudioLabel.Shorten` is unit
+  tested, but the string this machine actually reports has never been through it — the tests use
+  what the old doc comment claimed, which turned out to be wrong twice.
+- [ ] The bus line says the right rail on Voicemeeter and on a Windows endpoint, and says `Muted`
+  when muted.
+- [ ] The speaker icon's three states: crossed when muted, one wave below 33 %, two above.
+- [ ] **The 85 % tick appears as the level approaches and sits where the colour changes.** It is
+  positioned by a spacer sized from `CautionThresholdPosition`; if that binding is wrong the tick
+  draws at the far left, which is the failure to look for.
+- [ ] The fill's glow follows the threshold colour rather than staying green over an amber bar.
+- [ ] A long track title scrolls on the classic card, a short one does not, and the scroll stops
+  when the OSD dismisses.
+- [ ] Every icon at 100 % and at 150 % DPI. These are geometry now, so they scale — but the
+  stroke weights were chosen at one size.
+
+### 16.2 Colour
+
+- [ ] The new alarm colour reads as more urgent than the amber beside it, which the old one did
+  not. This is the only reason it changed, and it cannot be checked any other way.
+- [ ] The light theme still uses `#DC2626` and has not picked up the dark value.
+- [ ] `UseColorThresholds` off makes the fill take the accent, and on restores the thresholds.
+- [ ] High contrast: the card, the notch and the settings caption buttons all use the system's
+  colours.
+
+### 16.3 Settings
+
+- [ ] Each rail item shows its section and hides the rest, and **Appearance is showing when the
+  window opens** — the initial selection is applied from code because the XAML `IsChecked` fires
+  before the handler exists.
+- [ ] Arrow keys move between rail items; a screen reader announces them as one group.
+- [ ] The preview shows the notch when Notch is picked and the card when Classic is.
+- [ ] **Dragging the resting-height slider visibly changes the preview.** The height is
+  exaggerated on purpose; if it still looks static, the exaggeration is too small rather than the
+  wiring being wrong.
+- [ ] The fallback banner appears only in notch mode.
+- [ ] Nothing in the collapsed sections misbehaves when it is brought back — the update check,
+  the hotkey capture and the accent swatches all run code while their section is hidden.
+
+### 16.4 Known incomplete
+
+- **Task 8 of the plan was not run.** It removes `AmbientCard`, `NotchHomeState`,
+  `AmbientCardView` and the `ShowAmbientOnHover` setting, which slice 3 made unreachable. The
+  plan gates it on slice 3 having been driven on real hardware, and §15 is still open in its
+  entirety — so it stops here, deliberately, rather than deleting something whose replacement is
+  unverified.
+- The accent green is now stated once per palette file, but `Palette.Dark` and `OsdPalette.Dark`
+  still each declare their own. They are different dictionaries loaded into different scopes and
+  merging them is a larger change than the duplication costs; recorded rather than done.
