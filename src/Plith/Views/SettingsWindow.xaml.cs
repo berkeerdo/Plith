@@ -207,7 +207,8 @@ public partial class SettingsWindow : Window
         StripHeightRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
 
         // Notch-only, following StripHeightRow's rule: Classic has no home view to configure.
-        AmbientRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
+        WidgetsRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
+        NotchFallbackRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
         WeatherRow.Visibility = isNotch ? Visibility.Visible : Visibility.Collapsed;
 
         // Nested one level deeper than the other two: a location for weather that is switched
@@ -226,21 +227,6 @@ public partial class SettingsWindow : Window
         WeatherLocationBox.IsEnabled = !_isOsdEditMode;
     }
 
-    // "Show ambient info on hover" opens the notch's ambient row via a hover — and that is a
-    // hover-keep-alive-class interaction by nature: OsdHost.OnNotchHoverChanged early-returns
-    // before it ever calls _home.Open() when HoverKeepAlive is off. That coupling is a
-    // deliberate ruling from the Phase 6 fix wave, not a bug — decoupling it would hand hover
-    // behaviour to a user who explicitly turned hover-keep-alive off. The bug was that nothing
-    // ever said so: a user in that state who then enabled this toggle got nothing, with no
-    // hint anywhere pointing at why. Surface the dependency here instead.
-    private void UpdateAmbientHoverDependency()
-    {
-        bool hoverAlive = HoverToggle.IsChecked == true;
-        AmbientToggle.IsEnabled = hoverAlive;
-        AmbientHoverHint.Text = hoverAlive
-            ? "Hovering the notch opens a row with the time, weather and battery."
-            : "Hovering the notch opens a row with the time, weather and battery. Requires \"Hover keep-alive\" below to be on.";
-    }
 
     private void WireUpdateCheck()
     {
@@ -608,7 +594,7 @@ public partial class SettingsWindow : Window
             ThemeCombo.SelectedItem = m.Theme;
             PresentationCombo.SelectedValue = m.Presentation;
             StripHeightSlider.Value = m.NotchStripHeightDip;
-            AmbientToggle.IsChecked = m.ShowAmbientOnHover;
+            WidgetsToggle.IsChecked = m.ShowNotchWidgets;
             WeatherToggle.IsChecked = m.ShowWeather;
             WeatherLocationBox.Text = m.WeatherLocation;
         }
@@ -617,7 +603,6 @@ public partial class SettingsWindow : Window
             _loadingFromModel = false;
         }
         UpdatePresentationDependentControls();
-        UpdateAmbientHoverDependency();
         SyncPreview();
     }
 
@@ -646,8 +631,12 @@ public partial class SettingsWindow : Window
     private void WireAutoSave()
     {
         DurationSlider.ValueChanged += (_, _) => AutoSave();
-        HoverToggle.Checked += (_, _) => { UpdateAmbientHoverDependency(); AutoSave(); };
-        HoverToggle.Unchecked += (_, _) => { UpdateAmbientHoverDependency(); AutoSave(); };
+        // No longer coupled to the widget toggle. Hover-keep-alive gated the ambient row
+        // because that row opened on hover; the widget pages open on a CLICK, which
+        // OnNotchClicked reaches without consulting this setting at all. Leaving the dependency
+        // in place would have disabled a control for a reason that had stopped being true.
+        HoverToggle.Checked += (_, _) => AutoSave();
+        HoverToggle.Unchecked += (_, _) => AutoSave();
         OpacitySlider.ValueChanged += (_, _) => AutoSave();
         ColorThresholdsToggle.Checked += (_, _) => AutoSave();
         ColorThresholdsToggle.Unchecked += (_, _) => AutoSave();
@@ -689,8 +678,8 @@ public partial class SettingsWindow : Window
             RefreshPositionSummary();
         };
         StripHeightSlider.ValueChanged += (_, _) => AutoSave();
-        AmbientToggle.Checked += (_, _) => AutoSave();
-        AmbientToggle.Unchecked += (_, _) => AutoSave();
+        WidgetsToggle.Checked += (_, _) => AutoSave();
+        WidgetsToggle.Unchecked += (_, _) => AutoSave();
         WeatherToggle.Checked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
         WeatherToggle.Unchecked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };
         // LostFocus rather than TextChanged, deliberately: TextChanged would save — and
@@ -754,7 +743,7 @@ public partial class SettingsWindow : Window
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
         if (PresentationCombo.SelectedValue is PresentationMode p) m.Presentation = p;
         m.NotchStripHeightDip = StripHeightSlider.Value;
-        m.ShowAmbientOnHover = AmbientToggle.IsChecked == true;
+        m.ShowNotchWidgets = WidgetsToggle.IsChecked == true;
         m.ShowWeather = WeatherToggle.IsChecked == true;
         m.WeatherLocation = WeatherLocationBox.Text.Trim();
 

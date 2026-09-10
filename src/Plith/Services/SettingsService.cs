@@ -64,6 +64,7 @@ public sealed class SettingsService
                 WeatherLatitude = ParseDouble(data[SectionOsd]["WeatherLatitude"], 0, -90, 90),
                 WeatherLongitude = ParseDouble(data[SectionOsd]["WeatherLongitude"], 0, -180, 180),
                 WeatherRevealDate = data[SectionOsd]["WeatherRevealDate"] ?? string.Empty,
+                ShowNotchWidgets = ParseBool(data[SectionOsd]["ShowNotchWidgets"], true),
                 OsdOpacityPercent = ParseInt(data[SectionOsd]["OsdOpacityPercent"], 100, 50, 100),
                 UseColorThresholds = ParseBool(data[SectionOsd]["UseColorThresholds"], false),
                 CompactMode = ParseBool(data[SectionOsd]["CompactMode"], false),
@@ -128,6 +129,7 @@ public sealed class SettingsService
         data[SectionOsd]["WeatherLatitude"] = m.WeatherLatitude.ToString("G", inv);
         data[SectionOsd]["WeatherLongitude"] = m.WeatherLongitude.ToString("G", inv);
         data[SectionOsd]["WeatherRevealDate"] = m.WeatherRevealDate;
+        data[SectionOsd]["ShowNotchWidgets"] = m.ShowNotchWidgets.ToString(inv);
         data[SectionOsd]["OsdOpacityPercent"] = m.OsdOpacityPercent.ToString(inv);
         data[SectionOsd]["UseColorThresholds"] = m.UseColorThresholds.ToString(inv);
         data[SectionOsd]["CompactMode"] = m.CompactMode.ToString(inv);

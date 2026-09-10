@@ -119,6 +119,16 @@ public sealed class SettingsModel
     /// </summary>
     public string WeatherRevealDate { get; set; } = string.Empty;
 
+    /// <summary>
+    /// Whether clicking the notch opens the widget pages.
+    ///
+    /// Supersedes <see cref="ShowAmbientOnHover"/>, which described a behaviour that no longer
+    /// exists: hover opened an ambient row until slice 3 made hover a peek and a click the way
+    /// in. The old key is left in the model and the file so an existing settings file still
+    /// round-trips, but nothing reads it any more.
+    /// </summary>
+    public bool ShowNotchWidgets { get; set; } = true;
+
     /// <summary>OSD card opacity at rest, 50–100 percent. Below 50 the OSD is hard to read.</summary>
     public int OsdOpacityPercent { get; set; } = 100;
 
@@ -197,6 +207,7 @@ public sealed class SettingsModel
         WeatherLatitude = WeatherLatitude,
         WeatherLongitude = WeatherLongitude,
         WeatherRevealDate = WeatherRevealDate,
+        ShowNotchWidgets = ShowNotchWidgets,
         OsdOpacityPercent = OsdOpacityPercent,
         UseColorThresholds = UseColorThresholds,
         CompactMode = CompactMode,

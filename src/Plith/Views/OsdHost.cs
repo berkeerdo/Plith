@@ -551,6 +551,7 @@ public sealed class OsdHost : BandWindow
     private void OnNotchClicked()
     {
         if (_isEditMode) return;
+        if (!_settings.Current.ShowNotchWidgets) return;
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         if (_presentation is not AmbientNotchPresentation notch) return;
         if (notch.IsOpenEnoughToShowContent) return;   // already open — let the panel have the click

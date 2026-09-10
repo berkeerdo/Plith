@@ -326,7 +326,7 @@
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Presentation" />
                                     <TextBlock Style="{StaticResource RowHintStyle}"
-                                               Text="Classic OSD fades in place wherever you put it. Ambient Notch keeps a small shape at the top of the screen that grows into the full panel when something changes, then shrinks back." />
+                                               Text="Classic OSD fades in place wherever you put it. Ambient Notch keeps a small shape at the top of the screen: a volume key or a track change stretches it into a short bar for a moment, and clicking it opens the widget pages." />
                                 </StackPanel>
                                 <!-- Spelled out as explicit items rather than bound to the enum
                                      values so the user reads "Classic OSD", not "ClassicOsd".
@@ -343,6 +343,20 @@
                                     <ComboBoxItem Content="Ambient Notch" Tag="{x:Static svc:PresentationMode.AmbientNotch}" />
                                 </ComboBox>
                             </Grid>
+                        </Border>
+
+                        <!-- Stated on the page, because otherwise the first bug report writes
+                             itself: pick Notch, launch a game, see the Classic card, conclude the
+                             setting did not save. Deliberately NOT worded as a game switch - the
+                             signal is any window covering the monitor, and calling it a game
+                             setting is a lie a person catches the first time they maximise a
+                             video. Separate from "Hide during full-screen video" below, which
+                             decides whether the OSD appears at all rather than which shape it
+                             takes. -->
+                        <Border x:Name="NotchFallbackRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <TextBlock Style="{StaticResource RowHintStyle}"
+                                       TextWrapping="Wrap"
+                                       Text="The notch steps aside when a window covers the screen — a full-screen game, a borderless browser, a full-screen video — and Plith shows the Classic OSD until that ends. The notch sits flush against the top edge, which is the first place a covering window takes." />
                         </Border>
 
                         <Border x:Name="StripHeightRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
@@ -366,23 +380,23 @@
                             </Grid>
                         </Border>
 
-                        <Border x:Name="AmbientRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                        <Border x:Name="WidgetsRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
                             <Grid>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
-                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show ambient info on hover" />
-                                    <TextBlock x:Name="AmbientHoverHint"
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Widget pages" />
+                                    <TextBlock x:Name="WidgetsHint"
                                                Style="{StaticResource RowHintStyle}"
-                                               Text="Hovering the notch opens a row with the time, weather and battery." />
+                                               Text="Clicking the notch opens a clock, the weather, what is playing, and a volume you can drag. Swipe sideways, or click the dots, to page between them." />
                                 </StackPanel>
-                                <CheckBox x:Name="AmbientToggle"
+                                <CheckBox x:Name="WidgetsToggle"
                                           Grid.Column="1"
                                           Style="{StaticResource ToggleSwitchStyle}"
                                           VerticalAlignment="Center"
-                                          AutomationProperties.Name="Show ambient info on hover" />
+                                          AutomationProperties.Name="Widget pages" />
                             </Grid>
                         </Border>
 
@@ -395,7 +409,7 @@
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Show weather" />
                                     <TextBlock Style="{StaticResource RowHintStyle}"
-                                               Text="Off disables the location lookup and every network request the row would make." />
+                                               Text="Off removes the weather page and disables the location lookup and every network request behind it." />
                                 </StackPanel>
                                 <CheckBox x:Name="WeatherToggle"
                                           Grid.Column="1"
