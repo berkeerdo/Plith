@@ -474,7 +474,8 @@
                                 <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                     <TextBlock Style="{StaticResource RowLabelStyle}" Text="Weather location" />
                                     <TextBlock Style="{StaticResource RowHintStyle}"
-                                               Text="Leave empty to use Windows Location, falling back to your IP address." />
+                                               TextWrapping="Wrap"
+                                               Text="The reliable option. Leave it empty to use Windows Location instead, falling back to your IP address — both are less accurate, and Windows Location needs a system switch Plith cannot ask for." />
                                 </StackPanel>
                                 <TextBox x:Name="WeatherLocationBox"
                                          Grid.Column="1"

@@ -328,10 +328,16 @@ public partial class SettingsWindow : Window
             // never sees a per-app decision — both mean a system-wide switch is off, and the
             // fix is the same page either way. Splitting them would be a distinction the user
             // cannot act on differently.
+            // Names the exact toggle, and says up front that Plith will not be in the app list.
+            // That list only contains Store apps, so someone looking for "Plith" in it searches,
+            // fails, and concludes the app is broken rather than that they are on the wrong
+            // control — which is exactly what happened the first time this was tried.
             LocationOutcome.Denied or LocationOutcome.Unavailable =>
-                "Off. Plith is not a Store app, so Windows never asks — location is governed by "
-                + "the system switches. Turn on Location and \"Let desktop apps access your "
-                + "location\", or type a city above and Plith will not need it.",
+                "Off. Plith will not appear in the app list there — that list is Store apps only, "
+                + "and Plith is a desktop app, so Windows never asks it by name. Open Privacy & "
+                + "security > Location, turn on \"Location services\", then scroll to the bottom "
+                + "and turn on \"Let desktop apps access your location\". Or type a city above "
+                + "and none of this is needed.",
 
             _ => "On, but no reading has arrived yet. Plith falls back to your IP address, which "
                 + "is less accurate; typing a city above is the reliable option.",
