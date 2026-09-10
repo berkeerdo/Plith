@@ -124,6 +124,22 @@ public static partial class NativeMethods
         uint dwStyle, int x, int y, int nWidth, int nHeight,
         nint hWndParent, nint hMenu, nint hInstance, nint lpParam, int dwBand);
 
+    // Undocumented, exported from user32.dll alongside CreateWindowInBand. Moves an EXISTING
+    // window into a z-order band, which is what lets WPF create the window itself — with real
+    // per-pixel transparency, only available to top-level windows — and still reach the UIAccess
+    // band afterwards. Probed for at runtime like its sibling; absence is not fatal, it only
+    // costs the ability to draw over exclusive-fullscreen games.
+    [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowBand")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static extern bool SetWindowBand(nint hWnd, nint hwndInsertAfter, uint dwBand);
+
+    public static bool IsSetWindowBandSupported()
+    {
+        if (!NativeLibrary.TryLoad("user32.dll", out var libHandle)) return false;
+        try { return NativeLibrary.TryGetExport(libHandle, "SetWindowBand", out _); }
+        finally { NativeLibrary.Free(libHandle); }
+    }
+
     [DllImport("user32.dll", SetLastError = true, EntryPoint = "RegisterClassExW", CharSet = CharSet.Unicode)]
     internal static extern ushort RegisterClassEx([In] ref WNDCLASSEX lpWndClass);
 

@@ -46,6 +46,20 @@ public static class NotchGeometry
     public const double ContentFadeStart = 0.55;
 
     /// <summary>
+    /// How far the notch opens on hover alone: enough to acknowledge the pointer, nowhere near
+    /// enough to show content.
+    ///
+    /// Hover used to open the panel outright, and that was wrong twice over. It is not what the
+    /// reference apps do — there the notch grows a little under the pointer and opens on a
+    /// click — and it made the panel solid to the mouse whenever the pointer was anywhere near
+    /// the top of the screen, so clicks meant for browser tabs underneath went to the OSD.
+    ///
+    /// Below ContentFadeStart on purpose: a peek must never start fading content in, or it stops
+    /// being a hint and becomes a half-open panel.
+    /// </summary>
+    public const double PeekExpand = 0.14;
+
+    /// <summary>
     /// Minimum height of the cursor target over the collapsed pill. The resting height is a
     /// user setting that goes down to 2 DIP, and a 2 DIP tall target cannot be hit
     /// deliberately — the pointer skips it between two mouse samples. The target is
@@ -105,6 +119,8 @@ public static class NotchGeometry
         var height = Math.Max(collapsedHeight, MinHoverHeightDip);
         return new Rect(left, windowTop, width, height);
     }
+
+
 
     /// <summary>
     /// Convert a GetCursorPos result (physical pixels) into DIP.

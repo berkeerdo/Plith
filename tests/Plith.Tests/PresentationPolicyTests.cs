@@ -56,11 +56,27 @@ public class PresentationPolicyTests
     }
 
     [Fact]
-    public void Notch_WantsHitTesting_OnlyWhileDescended()
+    public void Notch_WantsHitTesting_AtEveryExpansion()
     {
-        // The top edge is where users drag windows and reach Snap Layouts. A parked strip
-        // that swallowed clicks there would be a defect, not a feature.
-        Assert.False(PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, isParked: true));
+        // This asserted the opposite until the click-through mechanism changed, and the reason is
+        // worth keeping rather than just flipping the expectation.
+        //
+        // The old contract switched the whole window between "solid to the mouse" and
+        // "click-through" via WS_EX_TRANSPARENT. That is all-or-nothing, and the moment the panel
+        // opened it captured its ENTIRE rectangle — including the wide transparent margins around
+        // the drawn shape — so the OSD sat over browser tabs and window controls and took the
+        // clicks meant for them.
+        //
+        // Worse, WS_EX_TRANSPARENT makes the system skip the window without sending WM_NCHITTEST
+        // at all, so no per-point rule could run while it was set. That was measured: with the
+        // notch parked, a direct WM_NCHITTEST probe never reached the window's WndProc.
+        //
+        // So the notch now keeps hit-testing on at every expansion and answers per point instead,
+        // through BandWindow.HitTestFilter — HTCLIENT on the pixels it actually occupies,
+        // HTTRANSPARENT everywhere else. The geometry behind that decision is covered by
+        // NotchGeometryTests.SurfaceSize_*; what this test pins is that the policy no longer
+        // tries to make the same decision at window granularity.
+        Assert.True(PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, isParked: true));
         Assert.True(PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, isParked: false));
     }
 

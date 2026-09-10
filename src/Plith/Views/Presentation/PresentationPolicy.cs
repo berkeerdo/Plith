@@ -39,13 +39,25 @@ public static class PresentationPolicy
     /// <summary>
     /// Whether the window should accept mouse messages right now.
     ///
-    /// Classic always does — hover keep-alive needs it. The notch does not while parked:
-    /// the top edge of the screen is where users drag windows to maximise, reach browser
-    /// tabs and trigger Snap Layouts, so a strip that swallowed clicks there would be a
-    /// defect rather than a feature.
+    /// Both modes now do, and for the notch that is a change worth explaining.
+    ///
+    /// It used to return false while parked, so the window carried WS_EX_TRANSPARENT and the
+    /// top of the screen stayed usable. That works, but it is all-or-nothing: the moment the
+    /// panel opens the whole window becomes solid to the mouse, including the large transparent
+    /// margins around the drawn shape. With hover-to-open that meant the notch was open most of
+    /// the time the pointer was anywhere near the top of the screen, and clicks meant for
+    /// browser tabs underneath went to Plith instead.
+    ///
+    /// WS_EX_TRANSPARENT also short-circuits WM_NCHITTEST entirely — the system skips the window
+    /// without ever asking it — so a per-point filter cannot run while it is set. Measured: with
+    /// the notch parked, a direct WM_NCHITTEST probe never reached the window's WndProc at all.
+    ///
+    /// So the notch keeps hit-testing on and answers per point instead, through
+    /// BandWindow.HitTestFilter: HTCLIENT on the pixels the notch actually occupies, and
+    /// HTTRANSPARENT everywhere else. The top of the screen stays usable at every expansion,
+    /// not just while parked.
     /// </summary>
-    public static bool WantsHitTesting(PresentationMode mode, bool isParked)
-        => mode != PresentationMode.AmbientNotch || !isParked;
+    public static bool WantsHitTesting(PresentationMode mode, bool isParked) => true;
 
     /// <summary>
     /// True when there is nothing on screen to take down. Deliberately NOT the same question

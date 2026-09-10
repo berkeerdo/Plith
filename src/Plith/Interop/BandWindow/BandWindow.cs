@@ -46,7 +46,6 @@ public delegate nint WndProc(nint hWnd, uint msg, nint wParam, nint lParam);
     Justification = "_hwndSource is released in the Application.Exit handler wired by BandWindowExt; WPF visual tree owns the rest of the lifecycle.")]
 public partial class BandWindow : ContentControl, IWndProcObject
 {
-    private readonly WndProc _wndProcDelegate;
     private HwndSource? _hwndSource;
     private double _dpiScale = 1.0;
     private readonly WndProcHookManager _hookManager;
@@ -54,6 +53,12 @@ public partial class BandWindow : ContentControl, IWndProcObject
     private bool _isVisibilityChanging;
 
     protected HwndSource? HwndSource => _hwndSource;
+
+
+
+    /// <summary>The display scale the window is currently sized against. Exposed so the
+    /// partial half can convert DIP rectangles into the physical pixels Win32 wants.</summary>
+    protected double CurrentDpiScale => _dpiScale;
 
     #region DependencyProperties
 
@@ -163,7 +168,6 @@ public partial class BandWindow : ContentControl, IWndProcObject
 
     public BandWindow()
     {
-        _wndProcDelegate = MyWndProc;
         SizeChanged += (_, _) => UpdateSize();
         _hookManager = WndProcHookManager.RegisterForIWndProcObject(this);
         BandWindowExt();
@@ -173,78 +177,75 @@ public partial class BandWindow : ContentControl, IWndProcObject
     {
         if (HasSourceCreated) return;
 
-        var wndClass = new WNDCLASSEX
-        {
-            cbSize = Marshal.SizeOf<WNDCLASSEX>(),
-            hbrBackground = 0,                               // NULL brush — let the layered window's per-pixel alpha paint everything
-            hInstance = Marshal.GetHINSTANCE(typeof(BandWindow).Module),
-            lpszMenuName = string.Empty,
-            lpszClassName = "PlithBandWindow_" + Guid.NewGuid(),
-            lpfnWndProc = Marshal.GetFunctionPointerForDelegate(_wndProcDelegate),
-        };
-        ushort atom = RegisterClassEx(ref wndClass);
-        if (atom == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
-
-        // WS_EX_LAYERED is deliberately NOT set on this outer container, and that is load-bearing.
+        // WPF creates the window ITSELF, as a top-level window, and it is then moved into the
+        // z-order band afterwards. That ordering is the whole point, and it was arrived at by
+        // measurement rather than preference.
         //
-        // It used to be, and the result was that the OSD received no mouse input at all: a
-        // WS_EX_LAYERED window whose layered attributes are never set has no content the system
-        // can hit-test, so every message passes straight through — measured on a running build,
-        // where a WndProc counter recorded zero WM_MOUSEMOVE, zero WM_LBUTTONDOWN and zero
-        // WM_NCHITTEST while the user was hovering and clicking the open panel.
+        // The previous shape created a container through CreateWindowInBand and hosted WPF in a
+        // WS_CHILD HwndSource inside it. That cannot be made to work, because per-pixel opacity
+        // is documented to apply only to TOP-LEVEL windows: the child got WS_EX_LAYERED without
+        // real per-pixel alpha, and a layered window is hit-tested against its alpha rather than
+        // through WM_NCHITTEST. So the system tested an alpha that read opaque across the whole
+        // rectangle, and a closed, invisible notch blocked every click in the area the open panel
+        // would occupy. Both directions were measured: turning per-pixel transparency off
+        // restored hit-testing and painted the notch as a solid black rectangle instead.
         //
-        // Setting those attributes is not the fix: SetLayeredWindowAttributes(hWnd, 0, 255,
-        // LWA_ALPHA) is exactly what commit 3211d37 removed, because constant-alpha layering
-        // discards the per-pixel alpha channel and leaves a permanent black rectangle on screen.
-        //
-        // The window does not need it either. Per-pixel transparency lives on the HwndSource
-        // child created below, which carries WS_EX_LAYERED itself and composites through the
-        // DWM. This container only positions that child and owns the click-through bit.
+        // As a genuine top-level layered window, the alpha WPF renders IS the hit-test mask.
+        // Transparent pixels pass the mouse through for free and drawn ones receive it — no
+        // WM_NCHITTEST filter, no click-through bit to keep in sync, no window region.
         var extStyles = (int)(
-            ExtendedWindowStyles.WS_EX_NOREDIRECTIONBITMAP |
             // TOOLWINDOW is always wanted: this is an overlay, never a primary app window.
-            // Without it, the OSD shows up in the taskbar and Alt+Tab as if it were a real app.
+            // Without it the OSD shows up in the taskbar and Alt+Tab as if it were a real app.
             ExtendedWindowStyles.WS_EX_TOOLWINDOW |
             (IsClickThrough ? ExtendedWindowStyles.WS_EX_TRANSPARENT : 0) |
             (Activatable ? 0 : ExtendedWindowStyles.WS_EX_NOACTIVATE) |
             (TopMost ? ExtendedWindowStyles.WS_EX_TOPMOST : 0));
 
-        // WS_EX_NOREDIRECTIONBITMAP breaks DWM Mica on Win11 — drop it there.
-        if (OperatingSystem.IsWindowsVersionAtLeast(10, 0, 22000))
-            extStyles &= ~(int)ExtendedWindowStyles.WS_EX_NOREDIRECTIONBITMAP;
-
-        var styles = (uint)WindowStyles.WS_POPUP & ~(uint)WindowStyles.WS_SYSMENU;
-
-        nint hWnd = IsBandWindowSupported()
-            ? CreateWindowInBand(extStyles, atom, string.Empty, styles,
-                (int)Math.Round(Left), (int)Math.Round(Top), 0, 0,
-                0, 0, wndClass.hInstance, 0, (int)ZBandID)
-            : CreateWindowEx(extStyles, atom, string.Empty, styles,
-                (int)Math.Round(Left), (int)Math.Round(Top), 0, 0,
-                0, 0, wndClass.hInstance, 0);
-
-        if (hWnd == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
-
-        Handle = hWnd;
-        OnSourceCreated();
-        _hookManager.OnHwndCreated(hWnd);
-
         var param = new HwndSourceParameters
         {
-            WindowStyle = (int)(WindowStyles.WS_VISIBLE | WindowStyles.WS_CHILD),
-            ParentWindow = hWnd,
+            WindowStyle = unchecked((int)((uint)WindowStyles.WS_POPUP | (uint)WindowStyles.WS_VISIBLE)),
+            ExtendedWindowStyle = extStyles,
+            PositionX = (int)Math.Round(Left),
+            PositionY = (int)Math.Round(Top),
             UsesPerPixelTransparency = true,
         };
+
         _hwndSource = new HwndSource(param)
         {
             SizeToContent = SizeToContent.WidthAndHeight,
             RootVisual = this,
         };
         _hwndSource.CompositionTarget!.BackgroundColor = Colors.Transparent;
-        _hwndSource.ContentRendered += (_, _) => UpdateDpiScale(GetDpiForWindow(Handle) / 96.0);
-        UpdateWindow(hWnd);
+
+        Handle = _hwndSource.Handle;
+        if (Handle == 0) throw new Win32Exception(Marshal.GetLastWin32Error());
+
+        // Into the band, now that the window exists. Failure is not fatal — it costs the ability
+        // to draw over exclusive-fullscreen games, which is a Phase 4 capability rather than a
+        // correctness requirement, and everything else keeps working.
+        if (ZBandID != 0 && IsSetWindowBandSupported() && !SetWindowBand(Handle, 0, (uint)ZBandID))
+            _bandFailed = true;
+
+        // WPF owns this window's WndProc now, so the messages the old class WndProc handled are
+        // taken through the supported hook instead.
+        _hwndSource.AddHook(SourceHook);
+
+        OnSourceCreated();
+        _hookManager.OnHwndCreated(Handle);
+        UpdateWindow(Handle);
         UpdateDpiScale(GetDpiForWindow(Handle) / 96.0);
         HasSourceCreated = true;
+    }
+
+    /// <summary>True when the window could not be moved into its z-order band. It still works;
+    /// it just cannot draw over an exclusive-fullscreen game.</summary>
+    public bool BandFailed => _bandFailed;
+    private bool _bandFailed;
+
+    private nint SourceHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        var result = MyWndProc(hwnd, (uint)msg, wParam, lParam, ref handled);
+        return result;
     }
 
     protected override void OnDpiChanged(DpiScale oldDpi, DpiScale newDpi)
@@ -253,8 +254,13 @@ public partial class BandWindow : ContentControl, IWndProcObject
         UpdateDpiScale(newDpi.DpiScaleX);
     }
 
-    private nint MyWndProc(nint hWnd, uint msg, nint wParam, nint lParam)
+
+
+    private nint MyWndProc(nint hWnd, uint msg, nint wParam, nint lParam, ref bool handled)
     {
+        // Answered before anything else: this is what decides whether the window exists for the
+        // mouse at this point. See HitTestFilter for why no combination of window styles can do
+        // it here.
         var message = (WindowMessage)msg;
         switch (message)
         {
@@ -277,19 +283,21 @@ public partial class BandWindow : ContentControl, IWndProcObject
                 break;
 
             case WindowMessage.WM_MOVE:
-                RepositionHwndSource();
+                // Nothing to do. This used to pin a WS_CHILD HwndSource back to (0,0) inside the
+                // container that moved. There is no child any more — WPF's window IS the window —
+                // so the same call now drags the OSD to the top-left corner of the screen every
+                // time it moves. Observed exactly that way: the notch stopped being centred.
                 break;
         }
 
-        var result = _hookManager.TryHandleWindowMessage(hWnd, msg, wParam, lParam, out bool handled);
-        return handled ? result : DefWindowProc(hWnd, msg, wParam, lParam);
+        // Unhandled messages fall through to WPF, which owns this window now — returning
+        // DefWindowProc here would bypass it.
+        var result = _hookManager.TryHandleWindowMessage(hWnd, msg, wParam, lParam, out bool hookHandled);
+        handled = hookHandled;
+        return hookHandled ? result : 0;
     }
 
-    private void RepositionHwndSource()
-    {
-        if (_hwndSource is null) return;
-        SetWindowPos(_hwndSource.Handle, 0, 0, 0, 0, 0, SWP.NOSIZE | SWP.NOZORDER | SWP.NOACTIVATE);
-    }
+
 
     private void UpdateDpiScale(double newDpiScale)
     {
@@ -367,7 +375,9 @@ public partial class BandWindow : ContentControl, IWndProcObject
         {
             ShowWindow(Handle, (int)ShowWindowCommands.ShowNoActivate);
         }
-        RepositionHwndSource();
+        // No child to re-pin: WPF's window IS the window now. The call that used to be here
+        // moved it to (0,0), which put the OSD in the top-left corner of the screen on every
+        // show instead of at its anchor.
         Shown?.Invoke(this, EventArgs.Empty);
     }
 

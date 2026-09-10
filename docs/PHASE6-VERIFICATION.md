@@ -868,3 +868,95 @@ input. It should be the first thing solved in the next slice, not assumed.
 investigation and all three produced misleading or empty results, while a four-line diagnostic
 inside `OsdHost` answered the question immediately. Instrument the process; do not sample it
 from outside.
+
+---
+
+## 14. The click-through problem — SOLVED, after eight attempts
+
+The notch's window swallows clicks in the region the panel would occupy, even while closed
+and invisible. Six approaches were tried in one session and none resolved it. Everything
+below was measured on running builds, so the next attempt does not have to re-derive it.
+
+### The architecture that causes it
+
+`BandWindow` creates the top-level window through `CreateWindowInBand` for the UIAccess
+z-band. WPF's content is then hosted in an `HwndSource` created with
+`WindowStyle = WS_VISIBLE | WS_CHILD` and `ParentWindow` set to it — so **the window WPF draws
+into is a child, and the top-level window is one WPF never paints**.
+
+That matters because of one documented rule: **`UsesPerPixelOpacity` applies only to top-level
+windows.** Alpha-based hit-testing — where a fully transparent pixel passes the mouse through
+for free, which is exactly what an overlay wants — is therefore unavailable here. The
+top-level window has no alpha for the raw input thread to test.
+
+### What was measured, per configuration
+
+| Configuration | Measured result |
+|---|---|
+| `WS_EX_LAYERED` set, layered attributes never supplied (the original state) | The raw input thread finds no content and skips the window. A `WndProc` counter recorded **0** `WM_MOUSEMOVE`, **0** `WM_LBUTTONDOWN`, **0** `WM_NCHITTEST` while the user hovered and clicked an open panel. |
+| `WS_EX_LAYERED` cleared | Input arrives — **1820** moves, **7** clicks, **1842** hit-tests in one session — but the window is now an ordinary opaque one for hit-testing and captures its whole rectangle, including while closed. |
+| `SetLayeredWindowAttributes(hWnd, 0, 255, LWA_ALPHA)` | Destroys the per-pixel alpha WPF draws with; leaves a permanent black rectangle. This is the defect `3211d37` removed. |
+| `WS_EX_TRANSPARENT` on the container | Set correctly (`ex=0x080000A8`, verified from inside the process). Does not make the window click-through on its own: that requires `WS_EX_LAYERED` as well, which is unavailable per the first row. |
+| `WS_EX_TRANSPARENT` on the child too | Applied and verified (`ex=0x00080020`). Did not resolve it. |
+| `SetWindowRgn` clipping the window to the drawn pill | Did not resolve it. Removed again rather than left alongside the next attempt. |
+| Answering `WM_NCHITTEST` with `HTTRANSPARENT` outside the drawn shape | The current state of the branch. **Did not resolve it.** |
+
+Also measured, and worth not re-deriving: `WindowFromPoint` **ignores** `WS_EX_TRANSPARENT`,
+so using it to test whether clicks pass through gives a misleading answer. It returned the
+band window for every probe while the window was correctly click-through.
+
+### The leading hypothesis for the next attempt
+
+The problem is structural, not a matter of style bits: **the window WPF paints must be the
+top-level window** for per-pixel alpha hit-testing to work at all. Two routes worth
+investigating, in order:
+
+1. Let `HwndSource` create its own top-level window with `UsesPerPixelTransparency`, then move
+   that window into the UIAccess z-band afterwards. `CreateWindowInBand` has a counterpart for
+   existing windows in the same undocumented family; if it can be reached, the band and the
+   per-pixel alpha stop being mutually exclusive.
+2. If they cannot be reconciled, the container has to supply its own alpha —
+   `UpdateLayeredWindow` with a bitmap WPF renders into — which is a substantial change to how
+   the OSD is composited and should not be attempted without measuring the cost.
+
+### Process note
+
+Three external sampling harnesses were written during this investigation and all three gave
+misleading or empty results; a four-line diagnostic inside `OsdHost` and a message counter in
+the `WndProc` answered each question immediately. Instrument the process, do not sample it.
+
+The session's other lesson: deleting a locked `obj/` artifact to get a build moving produced a
+binary that compiled with **0 errors** and crashed at startup with
+`Cannot locate resource 'views/osdcontent.xaml'` — the XAML resource had silently not been
+embedded. The real cause of the lock is that `Plith.Installer` references `Plith`, so a
+parallel solution build has the WPF temp project and the main project writing the same output.
+Build with `-m:1`; never delete intermediates to break a lock.
+
+### Resolution
+
+The window WPF paints is now the top-level window, and it is moved into the z-order band
+afterwards rather than created there.
+
+`HwndSource` creates it with `UsesPerPixelTransparency = true` and no parent, so it is a real
+top-level layered window — which is the one configuration where per-pixel opacity applies.
+`SetWindowBand`, exported from user32 alongside `CreateWindowInBand` and probed for at runtime,
+then moves it into the UIAccess band. Verified present on this machine before the change:
+`CreateWindowInBand`, `CreateWindowInBandEx`, `SetWindowBand`, `GetWindowBand` all exported.
+
+The alpha WPF renders is now the hit-test mask: transparent pixels pass the mouse through and
+drawn pixels receive it, with no help. Three mechanisms written during the investigation became
+dead on the spot and were deleted rather than left as alternatives — the `WM_NCHITTEST` filter,
+the polled click-through re-sync, and the `SetWindowRgn` clipping.
+
+One regression came with it and is worth recording, because it followed directly from the
+change: `RepositionHwndSource()` pinned the HwndSource to `(0,0)`, which was correct while it
+was a `WS_CHILD` inside a container and moved the whole OSD to the screen's top-left corner
+once it was the top-level window itself. Both call sites removed.
+
+**What made this take eight attempts.** Every earlier attempt tried to make the container and
+the child agree — style bits, a per-point hit-test filter on each, a window region, a polled
+re-sync. All of them were patching a gap that only existed because the window WPF paints was
+not the window the system hit-tests. The documented sentence that settles it —
+*"UsesPerPixelOpacity applies only to top-level windows"* — was found by research on the
+seventh attempt, and the two-directional measurement that proved no setting could satisfy both
+requirements came on the eighth.

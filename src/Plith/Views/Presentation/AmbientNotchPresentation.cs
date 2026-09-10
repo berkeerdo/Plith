@@ -73,6 +73,9 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
     public bool WantsHitTesting => PresentationPolicy.WantsHitTesting(PresentationMode.AmbientNotch, IsClosedNow);
 
+
+
+
     public void OnContentMeasured(Size contentSize)
     {
         _content.SetNotchMetrics(_collapsedHeight(), contentSize);
@@ -86,6 +89,48 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
         // recomputes to the same pill it was already showing.
     }
 
+
+    private const int PeekMs = 160;
+
+    /// <summary>
+    /// Grow the notch slightly to acknowledge the pointer, without opening it.
+    ///
+    /// This is what hover does now. Opening is a click, which is how the reference apps behave
+    /// and, just as importantly, what keeps the top of the screen usable: an open panel is solid
+    /// to the mouse across its whole width, so opening on hover meant the OSD intercepted clicks
+    /// meant for whatever was underneath every time the pointer passed by.
+    ///
+    /// Deliberately does NOT touch the parked/collapsing flags. A peek is not a show: no hide
+    /// timer runs, the home view stays closed, and the next collapse has nothing to unwind.
+    /// </summary>
+    public void Peek()
+    {
+        if (!IsClosedNow && _content.NotchExpand > NotchGeometry.PeekExpand) return;
+
+        var peek = new DoubleAnimation(NotchGeometry.PeekExpand, TimeSpan.FromMilliseconds(PeekMs))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        };
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, peek);
+    }
+
+    /// <summary>Withdraw a peek. Only acts on a notch that is still merely peeking — if the user
+    /// clicked and opened it in the meantime, the pointer leaving the pill must not shut it.</summary>
+    public void Unpeek()
+    {
+        if (_content.NotchExpand > NotchGeometry.PeekExpand + 0.01) return;
+
+        var settle = new DoubleAnimation(0.0, TimeSpan.FromMilliseconds(PeekMs))
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+        };
+        _content.BeginAnimation(OsdContent.NotchExpandProperty, settle);
+    }
+
+    /// <summary>Whether the notch is open enough to be showing content, as opposed to closed or
+    /// merely peeking. Read from the live value, never from a flag.</summary>
+    public bool IsOpenEnoughToShowContent => _content.NotchExpand > NotchGeometry.PeekExpand + 0.01;
+
     public void PrepareShow()
     {
         // The window is permanently visible in this mode, so Show() is a first-activation
@@ -97,6 +142,7 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     {
         _isParked = false;
         _isCollapsing = false;
+
         _window.BeginAnimation(UIElement.OpacityProperty, null);
         _window.Opacity = targetOpacity;
 

@@ -124,6 +124,11 @@ public sealed class OsdHost : BandWindow
         RefreshAccentMirror();
         _theme.ThemeApplied += OnThemeApplied;
 
+        // PreviewMouseLeftButtonDown rather than a button: the pill is drawn by the notch's
+        // surface, not by an interactive element, and preview means the click opens the panel
+        // before anything inside it can swallow the event.
+        PreviewMouseLeftButtonDown += (_, _) => OnNotchClicked();
+
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
 
@@ -334,6 +339,17 @@ public sealed class OsdHost : BandWindow
     private void OnMouseEnter(object sender, System.Windows.Input.MouseEventArgs e)
     {
         if (_isEditMode) return;
+
+        // Never let a hover OPEN the notch — it may only keep an already-open panel alive.
+        //
+        // This guard exists because making the notch hit-testable at every expansion (so a
+        // per-point WM_NCHITTEST filter could run) also turned WPF's own mouse events back on
+        // for it. This handler then did what it was written to do for Classic and called
+        // SnapToVisible, which sets NotchExpand straight to 1. The result on a running build:
+        // the notch opened fully the instant the pointer touched it, click-to-open never got a
+        // chance, and because that path starts no hide timer it never closed again.
+        if (_presentation is AmbientNotchPresentation notch && !notch.IsOpenEnoughToShowContent)
+            return;
         if (!_settings.Current.HoverKeepAlive) return;
         // CardHost is the single authority for when the OSD appears. Whether a
         // faded-out (Opacity 0) layered window still hit-tests mouse messages has never
@@ -377,73 +393,63 @@ public sealed class OsdHost : BandWindow
     // comments at those two call sites for why neither alone is enough).
     // Note this is the first code in Plith to change IsClickThrough after the HWND exists —
     // see the manual check in docs/PHASE6-VERIFICATION.md.
+    // Hover acknowledges the pointer; a CLICK opens the panel. See AmbientNotchPresentation.Peek
+    // for why: an open panel is solid to the mouse across its whole width, so opening on hover put
+    // the OSD over browser tabs and window controls and took the clicks meant for them whenever
+    // the pointer passed near the top of the screen. Reported on a running build exactly that way.
     private void OnNotchHoverChanged(bool inside)
     {
         if (_isEditMode) return;
-        if (!_settings.Current.HoverKeepAlive) return;
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
-        if (_presentation is not AmbientNotchPresentation) return;
+        if (_presentation is not AmbientNotchPresentation notch) return;
 
         if (inside)
         {
-            // Before ShowOsd, not after. ShowOsd measures the content to size the panel it
-            // expands into, and the ambient row is part of that content — opening afterwards
-            // would expand to a height computed without the row and clip it for one show.
-            _home.Open();
-            _hideTimer?.Stop();
-
-            // Let the ambient row exist BEFORE the expansion animates, or the panel opens in two
-            // visible stages: media and volume first, then the clock and weather arriving late.
-            //
-            // Open() adds the card to CardHost's collection, but the ItemsControl bound to it
-            // does not gain the container synchronously — WPF processes binding work at
-            // DispatcherPriority.DataBind, and UpdateLayout() runs measure and arrange without
-            // flushing that queue, which is why calling it here was not enough. Deferring the
-            // show by one dispatcher turn at Loaded priority lets the binding, the container
-            // generation and the layout all complete first, so the expansion animates once,
-            // against content that is already final.
-            //
-            // The delay is a single frame and is not perceptible; the two-stage open was.
-            var visibleFor = TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
-            Dispatcher.BeginInvoke(new Action(() =>
-            {
-                // Re-check: a mode switch, edit mode or a covering window can all land between
-                // the hover and this callback, and each of them makes the show wrong rather than
-                // merely late.
-                if (_isEditMode) return;
-                if (_presentation is not AmbientNotchPresentation) return;
-                if (!_home.IsOpen) return;
-
-                ShowOsd(visibleFor, fromHover: true);
-            }), DispatcherPriority.Loaded);
+            notch.Peek();
         }
         else
         {
-            // Leaving the resting rectangle is not leaving the OSD: it is only a few DIP tall,
-            // so the ordinary way to leave it is by moving DOWN onto the open panel, which is
-            // still squarely inside the window.
-            //
-            // This used to ask WPF (`if (IsMouseOver) return;`) and that was wrong, measured on a
-            // running build: the OSD is a layered window with per-pixel alpha, Windows hit-tests
-            // it against that alpha, and at rest the notch is a couple of opaque DIP in an
-            // otherwise transparent window. The cursor that triggered the hover is over
-            // transparent space, the panel opens beneath a now-stationary cursor, no further
-            // WM_MOUSEMOVE is generated, and MouseEnter never fires — so IsMouseOver stayed false
-            // for the panel's entire life and the hide timer took it away with the cursor on it.
-            //
-            // The poller has no such dependency: GetCursorPos answers regardless of alpha, of
-            // message delivery, and of whether the user moved.
-            if (_hoverPoller.IsCursorInPanel) return;
-            if (_currentVisibleFor > TimeSpan.Zero && !_isFadingOut)
-                RestartHideTimer(_currentVisibleFor);
+            // Only withdraw a peek. If the user clicked and opened it, the pointer leaving the
+            // pill must not shut it — the hide timer owns that, and its keep-alive check asks the
+            // poller whether the cursor is still inside the open panel.
+            if (!notch.IsOpenEnoughToShowContent) notch.Unpeek();
         }
 
-        // Skipped only by the IsMouseOver early return above, which is a deliberate no-op:
-        // WantsHitTesting has not changed there (still descended, not re-parked), so
-        // IsClickThrough is already correct and re-computing it would just repeat the same
-        // value. Every other path through this method reaches here.
         IsClickThrough = !_presentation.WantsHitTesting;
+    }
 
+    /// <summary>
+    /// A click on the drawn notch opens it. Clicks anywhere else never arrive here: the window
+    /// answers WM_NCHITTEST with HTTRANSPARENT outside the shape it is actually drawing, so they
+    /// go straight to whatever is underneath.
+    /// </summary>
+    private void OnNotchClicked()
+    {
+        if (_isEditMode) return;
+        if (_cardHost.Suppressor?.IsSuppressed == true) return;
+        if (_presentation is not AmbientNotchPresentation notch) return;
+        if (notch.IsOpenEnoughToShowContent) return;   // already open — let the panel have the click
+
+        _home.Open();
+        _hideTimer?.Stop();
+
+        // Deferred one dispatcher turn so the ambient row exists before the expansion animates.
+        // Open() adds the card to CardHost's collection, but the bound ItemsControl gains its
+        // container during WPF's DataBind pass rather than synchronously, so animating straight
+        // away opened the panel in two visible stages — media and volume first, the clock and
+        // weather arriving late. UpdateLayout() does not help: it runs measure and arrange
+        // without flushing that queue.
+        var visibleFor = TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            // A mode switch, edit mode or a covering window can all land between the click and
+            // this callback, and each makes the show wrong rather than merely late.
+            if (_isEditMode) return;
+            if (_presentation is not AmbientNotchPresentation) return;
+            if (!_home.IsOpen) return;
+
+            ShowOsd(visibleFor, fromHover: true);
+        }), DispatcherPriority.Loaded);
     }
 
 

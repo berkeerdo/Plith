@@ -42,10 +42,28 @@ public partial class BandWindow
         }
     }
 
+
+
     private void ToggleClickThrough(bool isEnabled)
     {
-        var hWnd = Handle;
-        if (hWnd == 0 || !HasSourceCreated) return;
+        if (Handle == 0 || !HasSourceCreated) return;
+
+        // BOTH windows, not just the container. The WPF content lives in an HwndSource child,
+        // and a child is hit-tested in its own right: clearing the bit only on the container
+        // left the child capturing every click across the whole rectangle the panel would
+        // occupy if it were open — a 440 DIP band across the top of the screen that swallowed
+        // clicks while the notch was closed and invisible. Reported on a running build.
+        //
+        // This was invisible until the container stopped being WS_EX_LAYERED: while it carried
+        // that flag with no layered attributes set, the system discarded input before it could
+        // reach either window, so the child's own hit-testing never came into play.
+        ApplyClickThrough(Handle, isEnabled);
+        if (HwndSource is { Handle: var childHandle } && childHandle != 0)
+            ApplyClickThrough(childHandle, isEnabled);
+    }
+
+    private static void ApplyClickThrough(nint hWnd, bool isEnabled)
+    {
 
         int styles = GetWindowLongPtr(hWnd, (int)GetWindowLongFields.GWL_EXSTYLE).ToInt32();
         // Does NOT re-add WS_EX_LAYERED: see the comment where the window is created. Adding it
