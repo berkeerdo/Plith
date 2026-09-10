@@ -1,0 +1,34 @@
+<UserControl x:Class="Plith.Views.Widgets.WidgetFrame"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False"
+             UseLayoutRounding="True">
+    <Grid>
+        <Grid.RowDefinitions>
+            <!-- The page takes what is left; the dots lane is FIXED, never Auto. With Auto, a
+                 page that measures one pixel taller than its share pushes the dots past the
+                 panel's padding and onto the frame's edge - which is exactly what the weather
+                 page did on the mockup. A star row over a fixed one, with ClipToBounds on the
+                 page host, means an over-tall page clips inside itself instead of displacing
+                 the chrome. -->
+            <RowDefinition Height="*" />
+            <RowDefinition Height="14" />
+        </Grid.RowDefinitions>
+
+        <!-- ClipToBounds is not cosmetic here: it is the half of the guarantee above that the
+             row definitions cannot provide on their own. -->
+        <Grid x:Name="PageHost" Grid.Row="0" ClipToBounds="True" />
+
+        <!-- Dots are built in code rather than templated from an ItemsControl, so each one can
+             carry its own AutomationProperties.Name. A templated Border or Ellipse has no
+             automation peer at all, and a name set on it reaches nothing - the defect the
+             accessibility lint exists to catch. -->
+        <StackPanel x:Name="Dots" Grid.Row="1"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center" />
+    </Grid>
+</UserControl>

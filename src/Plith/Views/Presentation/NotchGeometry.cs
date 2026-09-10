@@ -67,6 +67,39 @@ public static class NotchGeometry
     /// </summary>
     public const double MinHoverHeightDip = 8;
 
+    /// <summary>
+    /// The one size every widget page opens to. Content moves through the frame; the frame does
+    /// not move.
+    ///
+    /// Two earlier passes let the page drive the size and both were rejected on the mockup.
+    /// Varying both dimensions made the notch itself appear to jump around while swiping;
+    /// varying only the height still moved the bottom edge on every page turn. A single frame
+    /// that content moves through is the only version that reads as one object.
+    ///
+    /// The height is set by the FULLEST page rather than chosen: the weather page needs ~73 DIP
+    /// of content, plus 23 of padding and the 20 the dots lane occupies. The clock page carries
+    /// empty space as a result, and centred in a steady frame that reads as deliberate.
+    /// </summary>
+    public static readonly Size OpenFrameDip = new(356, 116);
+
+    /// <summary>
+    /// Height of the page-dot lane, and it is FIXED rather than sized to its content.
+    ///
+    /// Sized to content, a page measuring one pixel taller than its share pushes the dots past
+    /// the panel's padding and onto the frame's edge — which is what the weather page did on the
+    /// mockup. A fixed lane over a page row that cannot exceed its track means an over-tall page
+    /// clips inside itself instead of displacing the chrome.
+    /// </summary>
+    public const double DotsLaneDip = 14;
+
+    /// <summary>Gap between the page row and the dots lane.</summary>
+    public const double DotsGapDip = 6;
+
+    /// <summary>How far an incoming page starts from its resting position, in DIP. Signed by
+    /// the direction paged, so the page enters from the side the gesture came from and paging
+    /// reads as movement through a frame rather than a crossfade in place.</summary>
+    public const double PageSlideDip = 14;
+
     public static double Clamp01(double t) => t < 0 ? 0 : t > 1 ? 1 : t;
 
     public static double Lerp(double from, double to, double t) => from + (to - from) * Clamp01(t);
