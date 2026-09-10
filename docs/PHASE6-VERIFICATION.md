@@ -960,3 +960,108 @@ not the window the system hit-tests. The documented sentence that settles it —
 *"UsesPerPixelOpacity applies only to top-level windows"* — was found by research on the
 seventh attempt, and the two-directional measurement that proved no setting could satisfy both
 requirements came on the eighth.
+---
+
+## 15. Widget carousel (slice 3) — everything still open
+
+Slice 3 is code-complete on `feature/phase-6-notch-shell`: build green in Debug and Release with
+0 warnings, 326 tests passing, `scripts/check-a11y.ps1` exit 0. **None of that touches anything
+below.** The suite is not STA, so it cannot construct a `UserControl`, load a template, or
+receive a mouse message; the OSD renders in a layered window no capture path can photograph over
+RDP. Slice 2 shipped equally green and then crashed on the first hover, refused every click, and
+drew half its content over the desktop.
+
+### 15.1 Paging
+
+- [ ] **Two-finger swipe on the touchpad pages exactly one widget.** The single highest-risk item
+  in this slice. `NotchPager` accumulates deltas and commits one page per threshold, then waits
+  for the accumulator to fall back — but the threshold (`120`), the rearm floor (`40`) and the
+  idle gap (`150 ms`) are **provisional constants chosen without hardware**. Driver delta
+  magnitudes differ, and whether inertia arrives after the fingers lift, and how large those
+  tail deltas are, cannot be reasoned about from here.
+- [ ] **Inertia after a commit does not page again.** The specific failure this is guarding
+  against: a swipe that pages once, then pages again half a second later as the tail arrives.
+- [ ] **A mouse tilt wheel pages once per detent.** A tilt sends exactly one `WHEEL_DELTA` and
+  never anything smaller, so the rearm floor can never fire for it — only the idle gap can. This
+  path was found by reasoning, not by testing, and has never run.
+- [ ] **`Shift` + wheel pages, and in the direction a person expects.** The sign is negated
+  because forward scrolls left by the Windows convention. That convention was applied from
+  memory.
+- [ ] **A plain vertical wheel still does nothing.** It must reach WPF unhandled.
+- [ ] Clicking each page dot goes to that page; the hit target is reachable without care.
+- [ ] Paging quickly in both directions leaves exactly one page in the tree — no stacked ghosts
+  from an outgoing slide whose `Completed` never fired.
+
+**Read the log for this.** Every commit writes `Widget page committed: delta=…, index=…`. The
+delta values in that line are the only characterisation of this machine's touchpad that exists;
+the three constants should be re-tuned from them rather than guessed at again.
+
+### 15.2 The widgets
+
+- [ ] Clock: ticks while shown, **stops when the page is away**. Check by leaving another page
+  open and confirming the clock is correct — not stale — on returning.
+- [ ] Audio: dragging the track changes the actual volume, on Voicemeeter and on a Windows
+  endpoint. **First write path this app has ever had.**
+- [ ] Audio: the thumb does not stutter or jump backwards under the finger while dragging. The
+  guard is `_userIsDriving`, which suppresses incoming reports mid-gesture; if it is wrong, this
+  is where it shows.
+- [ ] Audio: keyboard arrows and Home/End move it, and a screen reader announces `62%` rather
+  than `0.62`.
+- [ ] Audio: unplug the headset mid-drag — the control stays where it was put rather than
+  snapping.
+- [ ] Media: transport buttons work; the play/pause icon matches the actual state.
+- [ ] Media: a long title scrolls, a short one does not, and the scroll stops when the page
+  leaves. **Both halves matter** — a marquee that always runs is the defect, not the feature.
+- [ ] Weather: the sky matches the actual condition, and turns to the night gradient after 20:00.
+- [ ] Weather: the reveal plays **once per day**, not once per open and not once per launch.
+  Verify across an app restart on the same day. The date lives in `WeatherRevealDate` in the ini.
+- [ ] Weather: with no location or no network the page says "Weather unavailable" rather than
+  showing a blank sky.
+
+### 15.3 The event HUD
+
+- [ ] A volume key stretches the notch into the short bar, **not** the widget frame.
+- [ ] A track change gives the wider HUD.
+- [ ] The HUD's level bar is painted the first time it appears — it is sized from a width that
+  only exists after arrange, which is exactly the class of defect this branch keeps producing.
+- [ ] The speaker icon shows the mute cross when muted and drops its outer wave below 33 %.
+- [ ] A HUD title ellipses rather than scrolling.
+
+### 15.4 Cost, which has never been measured
+
+- [ ] **Idle CPU with the notch closed, after a weather page has been open.** The ledger's oldest
+  unmeasured item, and this slice is the first thing that could plausibly make it matter: the
+  sky runs up to 30 storyboards. `WeatherWidget` logs `Sky started: … storyboards=N` and
+  `Sky stopped: storyboards=N`; **the two counts must balance**, and after a close the last line
+  must be a stop.
+- [ ] Memory after paging through every widget fifty times.
+- [ ] Motion smoothness at 60 Hz and at the monitor's real refresh rate.
+
+### 15.5 Theme
+
+- [ ] The bezel stays near-black on the **light** theme — the defect Task 8 fixed, and the only
+  way to confirm the fix is to look at it.
+- [ ] Widget text is readable on the bezel in both themes.
+- [ ] High contrast: the notch uses the system's colours rather than the hard-coded ones.
+
+### 15.6 Nothing underneath is captured
+
+- [ ] After all of the above, the desktop under a closed notch still takes clicks. This is the
+  regression that cost eight attempts in §14, and every change to the panel's contents changes
+  the alpha the system hit-tests against.
+
+### 15.7 Known incomplete
+
+- **The lint rule banning `Segoe MDL2 Assets` under `Views/` was not added.** `MediaCardView.xaml`
+  still uses it, and that replacement belongs to `2026-09-10-osd-and-settings-redesign.md`.
+  Adding the rule now would have meant either pulling that work into this slice or narrowing the
+  rule until it passed — and a rule narrowed to fit the code is a gate that has stopped meaning
+  anything. Owed, not skipped.
+- **`AmbientCard` is now unreachable in notch mode.** Events produce a HUD and a click produces
+  the widget frame, so the card stack — and the ambient row inside it — is only ever shown by
+  Classic, which does not open it on hover. The card, `NotchHomeState`, and the
+  `ShowAmbientOnHover` setting are all still wired. Nothing is broken by it; it is dead weight
+  that should be removed once slice 3 has been driven on real hardware and the widget pages are
+  confirmed to cover what the row did.
+- **Three constants are provisional**: `NotchPager.CommitThreshold`, `NotchPager.RearmFloor`,
+  `NotchPager.IdleRearmMs`. See §15.1.
