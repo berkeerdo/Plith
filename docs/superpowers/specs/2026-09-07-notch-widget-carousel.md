@@ -1,6 +1,10 @@
 # Phase 6 slice 3 — Notch widgets
 
 **Status:** design agreed 2026-09-10 against a live mockup the user drove directly.
+**Revised 2026-09-10** after a second pass over the same mockup: the frame height, the
+transport's position, the page-dot lane and the theme rules all changed. Each revision below
+records what it replaces, because in every case the first answer was mine and the correction
+came from looking at the running mockup.
 Supersedes the first draft of this file, which described a single home page with the clock
 and weather side by side.
 
@@ -63,6 +67,12 @@ a place you went.
 **Every widget page opens to exactly `356 × 116`.** Content moves through the frame; the frame
 does not move.
 
+**The height is set by the fullest page, not chosen.** With the transport on the right, that is
+the weather page at ~73 dip of content; plus 23 padding and the 20 dip dots lane, 116. The
+number briefly went to 128 while the transport sat on its own row underneath — which is the cost
+that layout had to justify and could not, since it spent 12 dip on all five pages to solve a
+problem only the media page had.
+
 Two earlier passes did it the other way and both were rejected on the mockup:
 
 - **Both dimensions per page** — swiping made the notch itself jump around. Read as instability.
@@ -74,13 +84,25 @@ steady frame reads as deliberate, a frame that shrinks to hug it reads as unstab
 Page transitions slide: the incoming page enters from the side you swiped from, so paging reads
 as movement through a frame rather than a crossfade in place.
 
+### The page dots get a lane of their own
+
+`14 dip`, **fixed** — not sized to content. Sized to content, a page that measures one pixel
+taller than its share pushes the dots past the panel's padding and onto the frame's edge, which
+is what the weather page did on the mockup. A fixed lane over a page row that cannot exceed its
+track means an over-tall page clips inside itself instead of displacing the chrome. In WPF:
+`RowDefinition Height="*"` over `Height="14"`, with `ClipToBounds` on the page row.
+
+Over the full-bleed sky the dots take white ink rather than slate — they stay **on** the sky
+rather than being clipped above it, because a dark band across the bottom would contradict the
+one thing that page is for.
+
 ## §3 — The widgets
 
 | Page | State | Notes |
 |---|---|---|
 | **Clock** | built | Time and date, centred. |
 | **Weather** | new | Full-bleed sky — see §4. |
-| **Media** | partly built | Art, title, working transport. |
+| **Media** | partly built | Art, title, working transport on the right — see below. |
 | **Audio** | new | Draggable level, endpoint and Voicemeeter bus. |
 | **Shelf** | behind a spike | Drag files onto the notch to hold them. |
 
@@ -90,6 +112,30 @@ underneath it. A draggable level in the notch is the thing only this app can off
 
 **Interactive, not decorative.** A widget you can only read is a notification with extra
 steps, and §1 already gives notifications their own shape.
+
+### The transport sits on the right, and long titles scroll
+
+It was briefly moved to a centred row underneath, on the argument that the right-hand rail left
+the title too little width. The rail is the better answer and the width objection has its own
+fix:
+
+- **Right is where this control already lives** — on the Classic card, in the media HUD, and in
+  every media surface a person already uses. One idiom across all three of Plith's surfaces is
+  worth more than a per-surface optimum.
+- **The title scrolls instead of ellipsing.** An ellipsis on a track name hides the half you
+  were reading. Rules that keep a marquee from being irritating, all of them non-optional:
+  - **Conditional.** Measured overflow starts it; anything that fits sits still.
+  - **Constant speed — `28 dip/s`, not a fixed duration.** A fixed duration makes a long title
+    fly and a short one crawl; that is the tell of a marquee nobody measured.
+  - **Ease-in-out with `alternate`**, which dwells at both ends for free: it pauses where you
+    start reading and pauses again at the end, rather than snapping back under your eye.
+  - **Re-measured, never cached.** The text width changes when the track changes, when the font
+    falls back, and when the DPI changes. See §7 — this is exactly the defect class this branch
+    keeps producing.
+  - **Stops on close, and under reduced motion.** Same rule as the sky in §4: the window is
+    never hidden in notch mode, so an animation left running is a permanent cost.
+- **The HUD does not marquee.** It is on screen for two seconds; a six-second scroll would show
+  the first third and vanish mid-word. Transient surfaces ellipse.
 
 ## §4 — Weather: the sky is the page
 
@@ -122,6 +168,39 @@ the notch fifty times before noon should produce exactly one reveal.
 mode, so an animation left running is a permanent CPU cost on an overlay that is invisible most
 of the time. Start on open, stop on collapse, and measure it — slice 1's ledger already carries
 an unmeasured idle-resource item, and this must not be what finally makes it matter.
+
+## §4b — Theme, accent, and the bezel
+
+**The notch takes the theme, but not all of it — and today it takes too much.** `OsdContent.xaml`
+paints `NotchSurface` with `OsdSurfaceBrush`, the same brush as a Classic card. On the light
+theme that makes the resting notch a pale bar on a pale desktop: it stops reading as a cutout and
+becomes a tab hanging off the top edge.
+
+| | Follows | Value |
+|---|---|---|
+| **Bezel** | neither theme nor accent | `#06070A` in both themes. Needs its own token, `NotchBezelBrush`. |
+| **Panel content** | theme | text, dividers, the card surfaces inside the open frame |
+| **Accent** | user setting | active page dot, focus rings, and the level fill *when* `UseColorThresholds` is off |
+| **Level fill (thresholds on)** | neither | Signal / Caution / Alarm. A colour that is also a preference cannot carry information. |
+| **The sky** | neither | condition and time of day. A night sky on the light theme is still a night sky. |
+
+A notch is a hole in the display. A hole is not lighter than the screen around it, on any theme.
+
+## §4c — When the notch is not there
+
+`OsdHost.WantsNotch` is *Notch selected **and** nothing covering the monitor*, and the
+presentation is rebuilt on that edge in both directions. Three consequences that belong in this
+spec rather than being rediscovered:
+
+1. **The signal is not "a game."** It is any window covering the monitor — a full-screen game, a
+   borderless maximised browser, a full-screen video. Calling it a game switch in the UI is a lie
+   a person catches the first time they maximise a video.
+2. **Settings has to say so.** Otherwise the first bug report writes itself: pick Notch, launch a
+   game, see the Classic card, conclude the setting did not save. This is separate from
+   `HideDuringFullscreenVideo`, which decides whether the OSD appears at all; this one decides
+   only which shape it takes.
+3. **Every Notch user is also a Classic user, several times a day.** That is the argument for the
+   Classic redesign being part of this work rather than a later tidy-up.
 
 ## §5 — Input
 

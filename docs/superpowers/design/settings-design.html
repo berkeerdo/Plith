@@ -1,0 +1,520 @@
+<title>Plith Settings Redesign</title>
+<style>
+  :root {
+    --bg:        #0C0F14;
+    --surface:   #151A21;
+    --surface-2: #1B2129;
+    --line:      #242C36;
+    --line-soft: #1C232B;
+    --ink:       #E9EEF4;
+    --ink-2:     #A6B2BF;
+    --ink-3:     #77828F;
+    --signal:    #4AD695;
+    --caution:   #F5C242;
+    --alarm:     #E0674F;
+    --focus:     #6FB3C4;
+  }
+  :root[data-theme="light"] {
+    --bg:        #F3F5F8;
+    --surface:   #FFFFFF;
+    --surface-2: #F7F9FB;
+    --line:      #DCE2E9;
+    --line-soft: #E9EDF2;
+    --ink:       #121820;
+    --ink-2:     #4E5A67;
+    --ink-3:     #77828F;
+    --signal:    #2E9E6B;
+    --caution:   #B98213;
+    --alarm:     #C24A32;
+    --focus:     #2E7D96;
+  }
+  @media (prefers-color-scheme: light) {
+    :root:not([data-theme="dark"]) {
+      --bg:        #F3F5F8;
+      --surface:   #FFFFFF;
+      --surface-2: #F7F9FB;
+      --line:      #DCE2E9;
+      --line-soft: #E9EDF2;
+      --ink:       #121820;
+      --ink-2:     #4E5A67;
+      --ink-3:     #77828F;
+      --signal:    #2E9E6B;
+      --caution:   #B98213;
+      --alarm:     #C24A32;
+      --focus:     #2E7D96;
+    }
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 28px 20px 80px;
+    background: var(--bg); color: var(--ink);
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    font-size: 15px; line-height: 1.55;
+  }
+  .wrap { max-width: 1120px; margin: 0 auto; }
+
+  .intro { margin-bottom: 26px; }
+  .intro h1 {
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    font-size: clamp(26px, 3.6vw, 36px); font-weight: 650; letter-spacing: -.02em;
+    margin: 0 0 8px; text-wrap: balance;
+  }
+  .intro p { color: var(--ink-2); margin: 0; max-width: 66ch; }
+
+  .ico { width: 17px; height: 17px; flex: none; }
+  .ico.s { width: 14px; height: 14px; }
+
+  /* ---------- the window ---------- */
+  .app {
+    background: var(--surface); border: 1px solid var(--line); border-radius: 10px;
+    overflow: hidden; box-shadow: 0 20px 50px rgba(0,0,0,.28);
+    display: grid; grid-template-columns: 216px 1fr 300px;
+    min-height: 620px;
+  }
+  @media (max-width: 900px) { .app { grid-template-columns: 1fr; } }
+
+  .chrome {
+    grid-column: 1 / -1; height: 40px; border-bottom: 1px solid var(--line);
+    display: flex; align-items: center; gap: 10px; padding: 0 14px;
+    background: var(--surface-2);
+  }
+  .dot3 { width: 7px; height: 7px; border-radius: 50%; background: var(--signal); }
+  .chrome b { font-size: 12.5px; font-weight: 600; }
+  .chrome span { font-size: 12.5px; color: var(--ink-3); }
+  .chrome .sp { flex: 1; }
+  .chrome .x { color: var(--ink-3); font-size: 13px; }
+
+  /* ---------- left rail ---------- */
+  .rail { border-right: 1px solid var(--line); padding: 14px 10px; background: var(--surface-2); }
+  .rail a {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 10px; border-radius: 6px; color: var(--ink-2);
+    font-size: 13.5px; text-decoration: none; cursor: pointer;
+  }
+  .rail a:hover { background: color-mix(in srgb, var(--ink) 6%, transparent); color: var(--ink); }
+  .rail a.on { background: color-mix(in srgb, var(--signal) 14%, transparent); color: var(--ink); }
+  .rail a.on .ico { color: var(--signal); }
+  .rail a:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .railgroup { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase;
+               color: var(--ink-3); padding: 14px 10px 6px; }
+
+  /* ---------- body ---------- */
+  .body { padding: 22px 26px 30px; overflow: auto; }
+  .body h2 {
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    font-size: 19px; font-weight: 650; margin: 0 0 2px; letter-spacing: -.01em;
+  }
+  .body .hint { color: var(--ink-3); font-size: 13px; margin: 0 0 20px; }
+
+  .set { border-top: 1px solid var(--line-soft); }
+  .item {
+    display: grid; grid-template-columns: 1fr auto; gap: 20px;
+    padding: 14px 0; border-bottom: 1px solid var(--line-soft); align-items: center;
+  }
+  .item .lbl { font-size: 14px; }
+  .item .sub { font-size: 12.5px; color: var(--ink-3); margin-top: 2px; }
+  .banner {
+    display: grid; grid-template-columns: auto 1fr; gap: 10px; align-items: start;
+    margin: 2px 0 12px; padding: 11px 13px; border-radius: 7px;
+    background: color-mix(in srgb, var(--focus) 10%, transparent);
+    border: 1px solid color-mix(in srgb, var(--focus) 26%, transparent);
+    font-size: 13px; color: var(--ink-2);
+  }
+  .banner .ico { color: var(--focus); margin-top: 2px; }
+  .banner b { color: var(--ink); font-weight: 600; }
+  .item.dep { padding-left: 22px; position: relative; }
+  .item.dep::before {
+    content: ""; position: absolute; left: 7px; top: 16px; bottom: 16px;
+    width: 2px; border-radius: 2px; background: var(--line);
+  }
+
+  /* controls */
+  .sw { width: 40px; height: 22px; border-radius: 99px; background: var(--line);
+        position: relative; cursor: pointer; border: none; padding: 0; transition: background 140ms; }
+  .sw::after { content: ""; position: absolute; top: 3px; left: 3px; width: 16px; height: 16px;
+               border-radius: 50%; background: var(--ink-2); transition: transform 140ms, background 140ms; }
+  .sw[aria-checked="true"] { background: color-mix(in srgb, var(--signal) 40%, var(--line)); }
+  .sw[aria-checked="true"]::after { transform: translateX(18px); background: var(--signal); }
+  .sw:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+
+  select, input[type="text"] {
+    font: inherit; font-size: 13.5px; color: var(--ink);
+    background: var(--surface-2); border: 1px solid var(--line);
+    border-radius: 6px; padding: 6px 10px; min-width: 168px;
+  }
+  select:focus-visible, input:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+
+  .rng { display: flex; align-items: center; gap: 12px; }
+  .rng .bar { width: 148px; height: 5px; border-radius: 99px; background: var(--line);
+              position: relative; cursor: ew-resize; }
+  .rng .bar > i { display: block; height: 100%; border-radius: 99px; background: var(--signal); }
+  .rng .bar:focus-visible { outline: 2px solid var(--focus); outline-offset: 4px; }
+  .rng .v { font-size: 13px; color: var(--ink-2); min-width: 58px; text-align: right;
+            font-variant-numeric: tabular-nums; }
+
+  .seg { display: inline-flex; background: var(--surface-2); border: 1px solid var(--line);
+         border-radius: 7px; padding: 2px; gap: 2px; }
+  .seg button {
+    font: inherit; font-size: 13px; border: none; background: none; color: var(--ink-2);
+    padding: 5px 13px; border-radius: 5px; cursor: pointer;
+  }
+  .seg button[aria-pressed="true"] { background: var(--surface); color: var(--ink);
+                                     box-shadow: 0 1px 2px rgba(0,0,0,.2); }
+  .seg button:focus-visible { outline: 2px solid var(--focus); outline-offset: -2px; }
+
+  .kbd {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace; font-size: 12px;
+    border: 1px solid var(--line); border-radius: 5px; padding: 4px 9px;
+    background: var(--surface-2); color: var(--ink-2);
+  }
+
+  /* ---------- preview ---------- */
+  .prev { border-left: 1px solid var(--line); padding: 18px; background: var(--surface-2);
+          display: grid; align-content: start; gap: 14px; }
+  .prev .cap { font-size: 10.5px; letter-spacing: .12em; text-transform: uppercase; color: var(--ink-3); }
+  .screen {
+    position: relative; height: 128px; border-radius: 7px; overflow: hidden;
+    background: linear-gradient(150deg, #223047, #16202E);
+    border: 1px solid var(--line);
+  }
+  .pnotch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    background: #06070A; border-radius: 0 0 6px 6px;
+    width: 92px; height: 4px;
+    transition: width 300ms cubic-bezier(.16,1,.3,1), height 300ms cubic-bezier(.16,1,.3,1),
+                border-radius 300ms cubic-bezier(.16,1,.3,1);
+  }
+  .pnotch.open { width: 178px; height: 58px; border-radius: 0 0 12px 12px; }
+  .pcard {
+    position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+    width: 168px; border-radius: 9px; padding: 9px 11px;
+    background: linear-gradient(180deg, #1B1F26, #14181E); border: 1px solid #2A313A;
+    display: none; gap: 7px;
+  }
+  .pcard.on { display: grid; }
+  .pcard .r { display: flex; justify-content: space-between; align-items: center; }
+  .pcard .n { font-size: 10px; color: #B7C2CE; display: flex; gap: 5px; align-items: center; }
+  .pcard .p { font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .pcard .t { height: 4px; border-radius: 99px; background: #262E38; overflow: hidden; }
+  .pcard .t > i { display: block; height: 100%; width: 62%; background: var(--signal); }
+
+  .note { color: var(--ink-3); font-size: 12.5px; margin: 0; }
+  .note strong { color: var(--ink-2); font-weight: 600; }
+  .ghost {
+    font: inherit; font-size: 12.5px; color: var(--ink-2); cursor: pointer;
+    background: var(--surface); border: 1px solid var(--line); border-radius: 6px;
+    padding: 7px 11px; text-align: left;
+  }
+  .ghost:hover { color: var(--ink); border-color: var(--ink-3); }
+  .ghost[aria-pressed="true"] { border-color: var(--focus); color: var(--ink); }
+  .ghost:focus-visible { outline: 2px solid var(--focus); outline-offset: 1px; }
+  .screen.covered { background: linear-gradient(150deg,#3A2130,#1E1420); }
+  .screen.covered::after {
+    content: "Game — full screen"; position: absolute; inset: 0;
+    display: grid; place-items: center; font-size: 11px; letter-spacing: .1em;
+    text-transform: uppercase; color: rgba(255,255,255,.3);
+  }
+
+  .after { margin-top: 30px; display: grid; grid-template-columns: repeat(auto-fit,minmax(260px,1fr)); gap: 18px; }
+  .card { border: 1px solid var(--line); border-radius: 8px; padding: 16px 18px; background: var(--surface); }
+  .card h3 { font-size: 14px; margin: 0 0 5px; font-weight: 650; }
+  .card p { margin: 0; color: var(--ink-2); font-size: 13.5px; }
+  .card .tag { font-size: 10.5px; letter-spacing: .1em; text-transform: uppercase;
+               color: var(--signal); display: block; margin-bottom: 7px;
+               font-family: "Cascadia Code", Consolas, ui-monospace, monospace; }
+
+  @media (prefers-reduced-motion: reduce) { * { transition-duration: 1ms !important; } }
+</style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z"/><path d="M15.6 9.4a3.6 3.6 0 0 1 0 5.2"/><path d="M18.2 6.8a7.2 7.2 0 0 1 0 10.4"/>
+  </symbol>
+  <symbol id="i-notch" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.8" y="4" width="18.4" height="16" rx="2.4"/><path d="M8.6 4v2.6a1.6 1.6 0 0 0 1.6 1.6h3.6a1.6 1.6 0 0 0 1.6-1.6V4"/>
+  </symbol>
+  <symbol id="i-media" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="8" cy="17" r="3"/><path d="M11 17V5l9-2v12"/><circle cx="17" cy="15" r="3"/>
+  </symbol>
+  <symbol id="i-paint" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.4a8.6 8.6 0 1 0 0 17.2c1.4 0 2-.9 2-1.8 0-1.5-1.3-1.7-1.3-2.9 0-.9.8-1.5 1.9-1.5h1.7A4.6 4.6 0 0 0 21 9.8C21 6.2 16.9 3.4 12 3.4z"/>
+    <circle cx="8" cy="10" r="1.1" fill="currentColor" stroke="none"/><circle cx="12" cy="7.6" r="1.1" fill="currentColor" stroke="none"/>
+  </symbol>
+  <symbol id="i-key" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <rect x="2.6" y="6" width="18.8" height="12" rx="2.4"/><path d="M6.6 10h.01M10 10h.01M13.4 10h.01M16.8 10h.01M8 14h8"/>
+  </symbol>
+  <symbol id="i-shield" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M12 3.2l7 2.6v5.6c0 4.3-2.9 7.6-7 9.4-4.1-1.8-7-5.1-7-9.4V5.8z"/>
+  </symbol>
+</defs></svg>
+
+<div class="wrap">
+
+<div class="intro">
+  <h1>Plith Settings Redesign</h1>
+  <p>Rebuilt around what a person actually comes here to change, with a live preview that
+  answers the one question every OSD setting raises: what will it look like on screen?</p>
+</div>
+
+<div class="app">
+  <div class="chrome">
+    <span class="dot3"></span><b>Plith</b><span>· Settings</span>
+    <span class="sp"></span><span class="x">— □ ✕</span>
+  </div>
+
+  <nav class="rail">
+    <div class="railgroup">Overlay</div>
+    <a class="on" tabindex="0"><svg class="ico"><use href="#i-notch"/></svg> Appearance</a>
+    <a tabindex="0"><svg class="ico"><use href="#i-vol"/></svg> Audio</a>
+    <a tabindex="0"><svg class="ico"><use href="#i-media"/></svg> Media</a>
+    <div class="railgroup">App</div>
+    <a tabindex="0"><svg class="ico"><use href="#i-paint"/></svg> Theme</a>
+    <a tabindex="0"><svg class="ico"><use href="#i-key"/></svg> Shortcuts</a>
+    <a tabindex="0"><svg class="ico"><use href="#i-shield"/></svg> Behaviour</a>
+  </nav>
+
+  <div class="body">
+    <h2>Appearance</h2>
+    <p class="hint">How the OSD looks and where it lives.</p>
+
+    <div class="set">
+      <div class="item">
+        <div>
+          <div class="lbl">Style</div>
+          <div class="sub">Classic floats where you put it. Notch rests at the top of the screen and opens when clicked.</div>
+        </div>
+        <div class="seg" role="group" aria-label="Style">
+          <button aria-pressed="false" id="s-classic">Classic</button>
+          <button aria-pressed="true"  id="s-notch">Notch</button>
+        </div>
+      </div>
+
+      <div class="banner">
+        <svg class="ico"><use href="#i-shield"/></svg>
+        <div><b>The notch steps aside when a window covers the screen.</b> A full-screen game, a
+        borderless browser, a full-screen video — Plith shows the Classic OSD for as long as that
+        lasts, then goes back. The notch sits flush against the top edge, which is the one place
+        a covering window takes first.</div>
+      </div>
+
+      <div class="item dep" id="row-height">
+        <div>
+          <div class="lbl">Resting height</div>
+          <div class="sub">How tall the notch is when closed. Its width never changes.</div>
+        </div>
+        <div class="rng">
+          <div class="bar" id="h-bar" tabindex="0" role="slider" aria-label="Resting height"
+               aria-valuemin="2" aria-valuemax="24" aria-valuenow="6"><i style="width:22%"></i></div>
+          <span class="v" id="h-val">6 px</span>
+        </div>
+      </div>
+
+      <div class="item dep">
+        <div>
+          <div class="lbl">Widgets on the notch</div>
+          <div class="sub">Clock, weather, audio and media, paged with a horizontal swipe.</div>
+        </div>
+        <button class="sw" role="switch" aria-checked="true" aria-label="Widgets on the notch"></button>
+      </div>
+
+      <div class="item">
+        <div>
+          <div class="lbl">Position</div>
+          <div class="sub">Classic only — the notch is always top-centre.</div>
+        </div>
+        <select disabled aria-label="Position"><option>Bottom centre</option></select>
+      </div>
+
+      <div class="item">
+        <div>
+          <div class="lbl">On screen for</div>
+          <div class="sub">After a volume key or a track change.</div>
+        </div>
+        <div class="rng">
+          <div class="bar" tabindex="0" role="slider" aria-label="On screen for"
+               aria-valuemin="500" aria-valuemax="10000" aria-valuenow="2000"><i style="width:20%"></i></div>
+          <span class="v">2.0 s</span>
+        </div>
+      </div>
+
+      <div class="item">
+        <div>
+          <div class="lbl">Opacity</div>
+          <div class="sub">Below 50 % the OSD stops being readable over bright wallpaper.</div>
+        </div>
+        <div class="rng">
+          <div class="bar" tabindex="0" role="slider" aria-label="Opacity"
+               aria-valuemin="50" aria-valuemax="100" aria-valuenow="100"><i style="width:100%"></i></div>
+          <span class="v">100 %</span>
+        </div>
+      </div>
+
+      <div class="item">
+        <div>
+          <div class="lbl">Accent</div>
+          <div class="sub">Applies to the selected page dot, focus rings and the OSD chrome.
+          Not to the notch itself — a notch is a cutout, so it stays black on both themes.</div>
+        </div>
+        <select aria-label="Accent"><option>Follow Windows</option><option>Signal green</option><option>Custom…</option></select>
+      </div>
+
+      <div class="item">
+        <div>
+          <div class="lbl">Colour the level</div>
+          <div class="sub">Green while it behaves, amber past 85 %, red at clipping. Turn it
+          off and the level takes your accent instead — a colour that is a preference cannot
+          also be a warning.</div>
+        </div>
+        <button class="sw" role="switch" aria-checked="true" aria-label="Colour the level"></button>
+      </div>
+    </div>
+  </div>
+
+  <aside class="prev">
+    <div class="cap" id="prev-cap">Preview · notch</div>
+    <div class="screen" id="screen">
+      <div class="pnotch" id="p-notch"></div>
+      <div class="pcard" id="p-card">
+        <div class="r">
+          <span class="n"><svg class="ico s"><use href="#i-vol"/></svg> Logitech G733</span>
+          <span class="p">62%</span>
+        </div>
+        <div class="t"><i></i></div>
+      </div>
+    </div>
+    <p class="note"><strong>The preview is the point.</strong> Every setting on this page changes
+    something you cannot see from the words alone, and the old dialog made you close it, press a
+    volume key, and open it again to find out.</p>
+    <p class="note">Press <em>Classic</em> or <em>Notch</em> above, or drag the resting height —
+    the preview follows.</p>
+    <button class="ghost" id="b-cover">Simulate a game covering the screen</button>
+    <p class="note" id="cover-note" hidden><strong>This is the fallback, not a bug.</strong>
+    It is what a person sees the first time they pick Notch and launch a game — which is why the
+    page says so above rather than leaving them to guess.</p>
+  </aside>
+</div>
+
+<div class="after">
+  <div class="card">
+    <span class="tag">Structure</span>
+    <h3>Grouped by what you came for</h3>
+    <p>The old page was one long scroll in config-file order. This splits into what the overlay
+    does and what the app does — and a person adjusting how the notch looks never has to scroll
+    past autostart and hotkeys to reach it.</p>
+  </div>
+  <div class="card">
+    <span class="tag">Dependency</span>
+    <h3>Nesting says what depends on what</h3>
+    <p>Notch-only settings sit indented under Style with a rail beside them, rather than
+    appearing and vanishing as you toggle. Controls that disappear teach people the page is
+    unpredictable; controls that are visibly subordinate teach them the rule.</p>
+  </div>
+  <div class="card">
+    <span class="tag">Copy</span>
+    <h3>Named by what happens</h3>
+    <p><em>On screen for</em>, not <em>ShowDurationMs</em>. <em>Colour the level</em>, not
+    <em>UseColorThresholds</em>. Each subtitle says what changes, and where a setting has a
+    threshold worth knowing — 85 %, 50 % — it says the number instead of hiding it.</p>
+  </div>
+  <div class="card">
+    <span class="tag">Restraint</span>
+    <h3>No save button</h3>
+    <p>Changes apply as you make them, which the app already does. A save button on a settings
+    page that autosaves is a lie, and one that does not autosave is a trap.</p>
+  </div>
+</div>
+
+</div>
+
+<script>
+  // Toggles
+  document.querySelectorAll('.sw').forEach(sw => {
+    sw.addEventListener('click', () => {
+      sw.setAttribute('aria-checked', sw.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+    });
+  });
+
+  // Style segment drives the preview, because that is the whole argument for having one.
+  const pnotch = document.getElementById('p-notch');
+  const pcard  = document.getElementById('p-card');
+  const bClassic = document.getElementById('s-classic');
+  const bNotch   = document.getElementById('s-notch');
+  const rowH     = document.getElementById('row-height');
+
+  function style(isNotch) {
+    bNotch.setAttribute('aria-pressed', String(isNotch));
+    bClassic.setAttribute('aria-pressed', String(!isNotch));
+    pnotch.style.display = isNotch ? 'block' : 'none';
+    pcard.classList.toggle('on', !isNotch);
+    rowH.style.opacity = isNotch ? '1' : '.45';
+    rowH.style.pointerEvents = isNotch ? '' : 'none';
+    if (isNotch) {
+      pnotch.classList.add('open');
+      setTimeout(() => pnotch.classList.remove('open'), 900);
+    }
+  }
+  bNotch.onclick   = () => style(true);
+  bClassic.onclick = () => style(false);
+
+  // Sliders: drag and keyboard, and the resting-height one is wired to the preview.
+  document.querySelectorAll('.rng .bar').forEach(bar => {
+    const fill = bar.firstElementChild;
+    const min = Number(bar.getAttribute('aria-valuemin'));
+    const max = Number(bar.getAttribute('aria-valuemax'));
+    const out = bar.parentElement.querySelector('.v');
+
+    function render(v) {
+      bar.setAttribute('aria-valuenow', String(v));
+      fill.style.width = ((v - min) / (max - min) * 100) + '%';
+      const label = bar.getAttribute('aria-label');
+      if (label === 'Resting height') {
+        out.textContent = v + ' px';
+        pnotch.style.height = Math.max(3, v * 0.7) + 'px';
+      } else if (label === 'On screen for') {
+        out.textContent = (v / 1000).toFixed(1) + ' s';
+      } else {
+        out.textContent = v + ' %';
+      }
+    }
+    function fromX(clientX) {
+      const r = bar.getBoundingClientRect();
+      const t = Math.min(1, Math.max(0, (clientX - r.left) / r.width));
+      render(Math.round(min + t * (max - min)));
+    }
+    let drag = false;
+    bar.addEventListener('pointerdown', e => { drag = true; bar.setPointerCapture(e.pointerId); fromX(e.clientX); });
+    bar.addEventListener('pointermove', e => { if (drag) fromX(e.clientX); });
+    bar.addEventListener('pointerup',   () => { drag = false; });
+    bar.addEventListener('keydown', e => {
+      if (e.key !== 'ArrowLeft' && e.key !== 'ArrowRight') return;
+      e.preventDefault();
+      const step = (max - min) / 40;
+      const cur = Number(bar.getAttribute('aria-valuenow'));
+      render(Math.round(Math.min(max, Math.max(min, cur + (e.key === 'ArrowRight' ? step : -step)))));
+    });
+  });
+
+  // The fallback, shown rather than described.
+  const bCover = document.getElementById('b-cover');
+  const screen = document.getElementById('screen');
+  const cap    = document.getElementById('prev-cap');
+  const cnote  = document.getElementById('cover-note');
+  let covered = false;
+  bCover.setAttribute('aria-pressed', 'false');
+  bCover.onclick = () => {
+    covered = !covered;
+    bCover.setAttribute('aria-pressed', String(covered));
+    bCover.textContent = covered ? 'Close the game' : 'Simulate a game covering the screen';
+    screen.classList.toggle('covered', covered);
+    cnote.hidden = !covered;
+    // Deliberately does NOT change the Style setting — the setting still says Notch. Only the
+    // shape on screen changes, which is exactly the distinction the banner is there to make.
+    const notchSelected = bNotch.getAttribute('aria-pressed') === 'true';
+    pnotch.style.display = (notchSelected && !covered) ? 'block' : 'none';
+    pcard.classList.toggle('on', covered || !notchSelected);
+    cap.textContent = 'Preview · ' + (covered ? 'classic (fallback)' : notchSelected ? 'notch' : 'classic');
+  };
+
+  style(true);
+</script>

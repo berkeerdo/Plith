@@ -47,6 +47,15 @@
   }
 
   * { box-sizing: border-box; }
+  code.tok { font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+             font-size: .86em; color: var(--ink); background: color-mix(in srgb, var(--ink) 7%, transparent);
+             padding: 1px 5px; border-radius: 3px; }
+
+  /* One icon size scale, so nothing is scaled at an arbitrary factor and every stroke lands
+     on the same optical weight. */
+  .ico   { width: 18px; height: 18px; flex: none; }
+  .ico.s { width: 15px; height: 15px; }
+  .ico.l { width: 22px; height: 22px; }
 
   body {
     margin: 0;
@@ -146,7 +155,13 @@
      notch itself jumping around while you swiped; letting only the height vary was better and
      still moved the bottom edge on every page turn. A single frame that content moves through
      is the only version that reads as one object. The clock page carries some empty space as a
-     result, and centred in a steady frame that looks deliberate rather than short. */
+     result, and centred in a steady frame that looks deliberate rather than short.
+
+     The height is set by the FULLEST page. With the transport on the right that is the weather
+     page at ~73, so the frame is 73 + 23 padding + 20 dots lane = 116. It briefly went to 128
+     while the transport sat on its own row underneath - which is the cost that argument had to
+     justify and could not: a marquee solves the title width without spending 12 dip on every
+     other page. */
   .notch.open {
     width: 356px; height: 116px;
     border-radius: 0 0 20px 20px;
@@ -162,13 +177,19 @@
   .panel {
     position: relative; z-index: 1;
     opacity: 0; transition: opacity 150ms ease 150ms;
-    padding: 14px 18px 10px; height: 100%;
-    display: grid; grid-template-rows: 1fr auto; gap: 8px;
+    padding: 14px 18px 9px; height: 100%;
+    /* A FIXED dots lane, not `auto`. With `auto` a page that measures one pixel taller than
+       its share pushes the dots past the panel's padding and they sit on the frame's edge -
+       which is exactly what a tall page did on the weather widget. A fixed lane plus a page
+       row that cannot exceed its track means overflow clips inside the page instead of
+       displacing the chrome. In WPF this is RowDefinition Height="*" over Height="14",
+       with ClipToBounds on the page row, and it has the same guarantee. */
+    display: grid; grid-template-rows: 1fr 14px; gap: 6px;
   }
   .notch.open .panel { opacity: 1; }
   .notch:not(.open) .panel { transition-delay: 0ms; }
 
-  .page { display: none; align-content: center; }
+  .page { display: none; align-content: center; min-height: 0; overflow: hidden; }
   .page.on { display: grid; animation: slidein 260ms cubic-bezier(.16,1,.3,1); }
   @keyframes slidein {
     from { opacity: 0; transform: translateX(var(--from, 14px)); }
@@ -237,14 +258,16 @@
   /* a scrim so the numbers stay legible whatever the sky is doing */
   .scrim {
     position: absolute; inset: 0;
-    background: linear-gradient(100deg, rgba(6,8,12,.62) 0%, rgba(6,8,12,.34) 46%, rgba(6,8,12,.05) 100%);
+    background:
+      linear-gradient(100deg, rgba(6,8,12,.62) 0%, rgba(6,8,12,.34) 46%, rgba(6,8,12,.05) 100%),
+      linear-gradient(to top, rgba(6,8,12,.42) 0%, rgba(6,8,12,0) 26%);
   }
 
   .wx { position: relative; color: #FFF; padding: 2px 2px; }
-  .wx .t { font-size: 38px; font-weight: 600; letter-spacing: -.03em; line-height: 1;
+  .wx .t { font-size: 34px; font-weight: 600; letter-spacing: -.03em; line-height: 1;
            font-variant-numeric: tabular-nums; text-shadow: 0 1px 12px rgba(0,0,0,.45); }
-  .wx .c { font-size: 12.5px; color: rgba(255,255,255,.9); margin-top: 3px; }
-  .wx .r { font-size: 11px; color: rgba(255,255,255,.68); margin-top: 6px;
+  .wx .c { font-size: 12.5px; line-height: 1.35; color: rgba(255,255,255,.9); margin-top: 3px; }
+  .wx .r { font-size: 11px; line-height: 1.3; color: rgba(255,255,255,.68); margin-top: 5px;
            font-variant-numeric: tabular-nums; }
 
   /* FIRST LOOK OF THE DAY: the sky arrives expansively, then settles into the ambient loop.
@@ -257,16 +280,47 @@
   @keyframes sunrise { from { transform: translateY(46px) scale(.5); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
   @keyframes rush    { from { transform: translateX(-60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
 
-  /* page 2 — media, interactive */
-  .media { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center; }
-  .art { width: 46px; height: 46px; border-radius: 7px;
+  /* page 2 — media, interactive.
+     The transport sits on its own centred row rather than in the right-hand column beside the
+     art. Three reasons, in the order they mattered:
+       - The frame's height is fixed at 116, so vertical space is already paid for; horizontal
+         space is the scarce one. In the column layout the three controls took ~96 of the 254
+         available and the title ellipsed on anything longer than about twenty characters.
+       - These are the only pointer targets on the page and they were 13px glyphs. On their own
+         row they are 32 - above the 20 dip floor the rest of this spec holds itself to.
+       - Centred transport under the track is what every media surface a person already uses
+         does, so it needs no learning. */
+  .media { display: grid; grid-template-columns: 40px 1fr auto; gap: 12px; align-items: center; }
+  .art { width: 40px; height: 40px; border-radius: 7px; flex: none;
          background: linear-gradient(135deg, #3B4A5C, #223040); }
-  .media .ttl { font-size: 13px; color: #F2F5F8; overflow: hidden;
-                text-overflow: ellipsis; white-space: nowrap; }
-  .media .art2 { font-size: 11px; color: #9AA6B2; margin-bottom: 6px; }
-  .keys { display: flex; gap: 14px; color: #C6D0DA; font-size: 13px; }
-  .keys span { cursor: pointer; }
-  .keys span:hover { color: #FFF; }
+  .mtext { min-width: 0; }
+
+  /* The title does not ellipse - it scrolls, and only if it has to.
+     A fixed rail of controls on the right leaves the title ~162 dip, which is not enough for a
+     real track name, and an ellipsis hides exactly the half you were trying to read. The rule
+     that keeps a marquee from being irritating is that it is CONDITIONAL: measured overflow
+     starts it, everything shorter sits still. */
+  .mline { overflow: hidden; position: relative; }
+  .mline > span { display: inline-block; white-space: nowrap; }
+  /* ease-in-out + alternate gives a dwell at both ends for free, so the text pauses where you
+     start reading and pauses again at the end instead of snapping back under your eye. */
+  .mline > span.scroll {
+    animation: marquee var(--dur, 6s) ease-in-out 1.2s infinite alternate;
+  }
+  @keyframes marquee { from { transform: translateX(0); }
+                       to   { transform: translateX(var(--shift, 0px)); } }
+  .media .ttl { font-size: 13px; color: #F2F5F8; }
+  .media .art2 { font-size: 11px; color: #9AA6B2; margin-top: 1px; }
+
+  .keys { display: flex; gap: 4px; color: #C6D0DA; }
+  .keys span {
+    width: 28px; height: 28px; border-radius: 8px; cursor: pointer;
+    display: grid; place-items: center;
+    background: rgba(255,255,255,.05); transition: background 130ms ease, color 130ms ease;
+  }
+  .keys span:hover { background: rgba(255,255,255,.12); color: #FFF; }
+  .keys span#pp { background: rgba(255,255,255,.11); }
+  .keys span#pp:hover { background: rgba(255,255,255,.19); }
 
   /* page 3 — audio: the level is DRAGGABLE, not a readout */
   .audio { color: #F2F5F8; }
@@ -291,7 +345,7 @@
              color: #F2F5F8; }
   .notch.hud .hudbody.on { display: flex; }
   .notch.hud .panel { display: none; }
-  .hudbody .glyph { font-size: 15px; color: #C6D0DA; }
+  .hudbody .glyph { color: #C6D0DA; }
   .hudbody .bar { flex: 1; height: 5px; border-radius: 99px; background: #2A323C; overflow: hidden; }
   .hudbody .bar > i { display: block; height: 100%; background: #4AD695; width: 62%; }
   .hudbody .num { font-size: 12px; font-variant-numeric: tabular-nums; color: #C6D0DA;
@@ -301,11 +355,20 @@
   .hudbody .meta { min-width: 0; }
   .hudbody .meta b { display: block; font-size: 12px; font-weight: 600;
                      overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* The HUD does NOT marquee. It is on screen for two seconds; a scroll that takes six would
+     only ever show the first third and then vanish mid-word. Transient surfaces ellipse. */
   .hudbody .meta span { font-size: 10.5px; color: #9AA6B2; }
 
-  .dots { display: flex; gap: 6px; justify-content: center; }
-  .dot { width: 5px; height: 5px; border-radius: 50%; background: #46525F; }
+  .dots { display: flex; gap: 6px; justify-content: center; align-items: center; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: #46525F;
+         transition: background 160ms ease; }
   .dot.on { background: #C6D0DA; }
+  /* Over the full-bleed sky the slate dots vanish into the gradient, so they take the sky's
+     own ink instead. The dots stay on top of the sky rather than being clipped above it -
+     clipping would put a dark band across the bottom of a page whose whole point is that it
+     reaches every edge. */
+  .notch.open[data-page="1"] .dot    { background: rgba(255,255,255,.34); }
+  .notch.open[data-page="1"] .dot.on { background: rgba(255,255,255,.95); }
 
   .controls { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
   button {
@@ -317,6 +380,85 @@
   button:hover { border-color: var(--mark); color: var(--mark); }
   button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
   button[aria-pressed="true"] { border-color: var(--mark); color: var(--mark); }
+
+  .sw { display: grid; grid-template-columns: repeat(auto-fit, minmax(184px,1fr)); gap: 12px; }
+  .chip {
+    border: 1px solid var(--rule); border-radius: 3px; padding: 12px 14px;
+    display: grid; grid-template-columns: auto 1fr; gap: 3px 12px; align-items: center;
+    background: var(--plate);
+  }
+  .chip i { width: 28px; height: 28px; border-radius: 4px; grid-row: span 3;
+            border: 1px solid rgba(128,128,128,.28); }
+  .chip b { font-size: 13px; font-weight: 650; }
+  .chip code { font-size: 11px; color: var(--dim); }
+  .chip span { font-size: 11.5px; color: var(--dim); }
+
+  .iconplate { display: grid; grid-template-columns: repeat(auto-fit, minmax(84px,1fr)); gap: 10px; }
+  .iconplate > div {
+    border: 1px solid var(--rule); border-radius: 3px; background: var(--plate);
+    display: grid; place-items: center; gap: 8px; padding: 16px 6px;
+    color: var(--ink);
+  }
+  .iconplate span { font-size: 10.5px; color: var(--dim);
+                    font-family: "Cascadia Code", Consolas, ui-monospace, monospace; }
+
+  /* ---- the OSD stage: HUDs get their own bench ---- */
+  .osd-stage { height: 190px; }
+  .hudnotch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    background: var(--bezel); overflow: hidden;
+    width: 190px; height: 6px; border-radius: 0 0 6px 6px;
+    transition: width 300ms cubic-bezier(.16,1,.3,1),
+                height 300ms cubic-bezier(.16,1,.3,1),
+                border-radius 300ms cubic-bezier(.16,1,.3,1),
+                box-shadow 300ms ease;
+  }
+  .hudnotch.on  { width: 300px; height: 46px; border-radius: 0 0 18px 18px;
+                  box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+  .hudnotch.on.wide { width: 372px; height: 54px; }
+  .hudnotch .hudbody { display: none; }
+  .hudnotch.on .hudbody.on { display: flex; }
+
+  /* mute is the one event with a colour: it is a state you can be stuck in */
+  .hudbody.muted .glyph { color: #E08A6E; }
+  .hudbody.muted .bar > i { background: #6A737D; }
+  .hudbody .dev2 { font-size: 11px; color: #C6D0DA; white-space: nowrap; }
+
+  .classicrow { display: grid; grid-template-columns: repeat(auto-fit, minmax(250px,1fr)); gap: 18px; }
+
+  /* the Classic card, kept honest beside the notch treatment */
+  .classic {
+    width: 300px; border-radius: 14px; padding: 14px 16px;
+    background: linear-gradient(180deg, #1B1F26, #14181E);
+    border: 1px solid #2A313A;
+    box-shadow: 0 12px 30px rgba(0,0,0,.45);
+    color: #F2F5F8;
+    display: grid; gap: 10px;
+    margin: 0 auto;
+  }
+  .classic { margin: 0; width: auto; }
+  .classic .row1 { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+  .classic .nm { font-size: 12px; color: #B7C2CE; display: flex; align-items: center; gap: 7px;
+                 min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .classic .nm.muted { color: #E0674F; }
+  .classic .pc { font-size: 21px; font-weight: 600; font-variant-numeric: tabular-nums;
+                 letter-spacing: -.02em; }
+  .classic .pc.hot { color: #F5C242; }
+  .classic .pc.muted { color: #E0674F; font-size: 15px; }
+  .classic .tr { height: 6px; border-radius: 99px; background: #262E38; overflow: hidden; }
+  .classic .tr > i { display: block; height: 100%; background: #4AD695; }
+  .classic .tr > i.hot { background: #F5C242; }
+  .classic .tr > i.off { background: #5A646F; }
+  .classic .bus { font-size: 11px; color: #77828F; }
+  .classic .cdiv { height: 1px; background: #262E38; }
+  .mediarow { display: grid; grid-template-columns: 38px 1fr auto; gap: 10px; align-items: center; }
+  .cart { width: 38px; height: 38px; border-radius: 6px;
+          background: linear-gradient(135deg, #3B4A5C, #223040); }
+  .cmeta { min-width: 0; }
+  .cmeta b { display: block; font-size: 12.5px; font-weight: 600;
+             overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cmeta > span { font-size: 11px; color: #8D9AA8; }
+  .ckeys { display: flex; gap: 10px; color: #C6D0DA; }
 
   /* ---- spec tables read as a drawing's dimension list ---- */
   .specs { border-top: 1px solid var(--rule); margin-top: 8px; }
@@ -364,6 +506,61 @@
     .notch, .panel { transition-duration: 1ms !important; }
   }
 </style>
+
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <!-- Plith's own icons. One language throughout: 1.6 stroke on a 24 grid, round caps and
+         joins, no fills except where a shape must read as solid at 14px. Drawn rather than
+         borrowed because Segoe MDL2 has no weather set worth using and its speaker glyphs sit
+         on a different optical weight from everything else here. -->
+    <symbol id="i-vol" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z"/>
+      <path d="M15.6 9.4a3.6 3.6 0 0 1 0 5.2"/>
+      <path d="M18.2 6.8a7.2 7.2 0 0 1 0 10.4"/>
+    </symbol>
+    <symbol id="i-mute" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 9.5h3.2L12 5.5v13L7.2 14.5H4z"/>
+      <path d="M16 9.5l5 5M21 9.5l-5 5"/>
+    </symbol>
+    <symbol id="i-dev" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 14v-2a8 8 0 0 1 16 0v2"/>
+      <rect x="2.6" y="13.4" width="4.2" height="6.2" rx="1.6"/>
+      <rect x="17.2" y="13.4" width="4.2" height="6.2" rx="1.6"/>
+    </symbol>
+    <symbol id="i-prev" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M7 5.4a1 1 0 0 1 2 0v13.2a1 1 0 0 1-2 0z"/>
+      <path d="M18.4 5.9v12.2a.8.8 0 0 1-1.24.66l-8.7-6.1a.8.8 0 0 1 0-1.32l8.7-6.1a.8.8 0 0 1 1.24.66z"/>
+    </symbol>
+    <symbol id="i-next" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M15 5.4a1 1 0 0 1 2 0v13.2a1 1 0 0 1-2 0z"/>
+      <path d="M5.6 5.9v12.2a.8.8 0 0 0 1.24.66l8.7-6.1a.8.8 0 0 0 0-1.32l-8.7-6.1a.8.8 0 0 0-1.24.66z"/>
+    </symbol>
+    <symbol id="i-play" viewBox="0 0 24 24" fill="currentColor">
+      <path d="M7 5.6v12.8a.8.8 0 0 0 1.22.68l10.2-6.4a.8.8 0 0 0 0-1.36L8.22 4.92A.8.8 0 0 0 7 5.6z"/>
+    </symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24" fill="currentColor">
+      <rect x="6.6" y="5" width="4" height="14" rx="1.3"/>
+      <rect x="13.4" y="5" width="4" height="14" rx="1.3"/>
+    </symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <circle cx="12" cy="12" r="8.2"/><path d="M12 7.4V12l3.2 2"/>
+    </symbol>
+    <symbol id="i-shelf" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M4 8.6a2 2 0 0 1 2-2h3.3l1.7 2H18a2 2 0 0 1 2 2v6.8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2z"/>
+    </symbol>
+    <symbol id="i-batt" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+            stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="2.8" y="8" width="15.4" height="8" rx="2.2"/>
+      <path d="M21 11v2"/>
+      <rect x="5" y="10.2" width="7" height="3.6" rx="1" fill="currentColor" stroke="none"/>
+    </symbol>
+  </defs>
+</svg>
 
 <div class="wrap">
 
@@ -424,14 +621,14 @@
         <div class="page" data-p="2">
           <div class="media">
             <div class="art"></div>
-            <div>
-              <div class="ttl">You Feel Be Love</div>
-              <div class="art2">Denis Phenomen</div>
-              <div class="keys">
-                <span title="Previous">⏮</span>
-                <span title="Play / pause" id="pp">⏯</span>
-                <span title="Next">⏭</span>
-              </div>
+            <div class="mtext">
+              <div class="mline"><span class="ttl" id="m-ttl">You Feel Be Love</span></div>
+              <div class="mline"><span class="art2" id="m-art">Denis Phenomen — Spotify</span></div>
+            </div>
+            <div class="keys">
+              <span title="Previous"><svg class="ico s"><use href="#i-prev"/></svg></span>
+              <span title="Play / pause" id="pp"><svg class="ico s"><use href="#i-pause"/></svg></span>
+              <span title="Next"><svg class="ico s"><use href="#i-next"/></svg></span>
             </div>
           </div>
         </div>
@@ -461,7 +658,7 @@
       </div>
 
       <div class="hudbody" id="hud-vol">
-        <span class="glyph">🔊</span>
+        <svg class="ico glyph"><use href="#i-vol"/></svg>
         <span class="bar"><i id="hudfill"></i></span>
         <span class="num" id="hudnum">62%</span>
       </div>
@@ -519,6 +716,235 @@
   <p class="note" style="margin-top:14px"><strong>Ordering is the effect.</strong> The shape
   settles first and the content arrives into it. Fading content in while the surface is still
   moving reads as a window being resized — the one thing a notch must never look like.</p>
+</section>
+
+<section>
+  <h2>Palette</h2>
+  <p class="lede">Built out from the accent the app already uses, rather than picked fresh.
+  The neutrals carry a slight green-blue bias so they sit with it instead of arguing — a pure
+  grey beside this green reads as two unrelated decisions.</p>
+  <div class="sw">
+    <div class="chip"><i style="background:#4AD695"></i><b>Signal</b><code>#4AD695</code><span>Level, playing, healthy</span></div>
+    <div class="chip"><i style="background:#F5C242"></i><b>Caution</b><code>#F5C242</code><span>Level running hot</span></div>
+    <div class="chip"><i style="background:#E0674F"></i><b>Alarm</b><code>#E0674F</code><span>Clipping, muted</span></div>
+    <div class="chip"><i style="background:#06070A"></i><b>Bezel</b><code>#06070A</code><span>The notch itself</span></div>
+    <div class="chip"><i style="background:#151A21"></i><b>Surface</b><code>#151A21</code><span>Classic card, settings</span></div>
+    <div class="chip"><i style="background:#8D9AA8"></i><b>Muted ink</b><code>#8D9AA8</code><span>Labels, secondary</span></div>
+  </div>
+  <p class="note" style="margin-top:16px"><strong>Three signal colours, and they mean three
+  different things.</strong> Green is a value behaving; amber is a value you might want to look
+  at; red is a state that needs you. Nothing else in the product is allowed to use them
+  decoratively, which is what keeps them meaning anything.</p>
+
+  <h2 style="margin-top:42px">Icons</h2>
+  <p class="lede">Drawn for this product rather than borrowed. Segoe MDL2 has no weather set
+  worth using and its speaker glyphs sit on a different optical weight from everything else
+  here, so mixing them was already showing.</p>
+  <div class="iconplate">
+    <div><svg class="ico l"><use href="#i-vol"/></svg><span>volume</span></div>
+    <div><svg class="ico l"><use href="#i-mute"/></svg><span>mute</span></div>
+    <div><svg class="ico l"><use href="#i-dev"/></svg><span>output</span></div>
+    <div><svg class="ico l"><use href="#i-prev"/></svg><span>previous</span></div>
+    <div><svg class="ico l"><use href="#i-play"/></svg><span>play</span></div>
+    <div><svg class="ico l"><use href="#i-pause"/></svg><span>pause</span></div>
+    <div><svg class="ico l"><use href="#i-next"/></svg><span>next</span></div>
+    <div><svg class="ico l"><use href="#i-clock"/></svg><span>clock</span></div>
+    <div><svg class="ico l"><use href="#i-batt"/></svg><span>battery</span></div>
+    <div><svg class="ico l"><use href="#i-shelf"/></svg><span>shelf</span></div>
+  </div>
+  <p class="note" style="margin-top:16px">One language throughout: a 1.6 stroke on a 24 grid,
+  round caps and joins, and fills only where a shape has to stay readable at 14&nbsp;px — the
+  transport marks, which become mud as outlines at that size.</p>
+</section>
+
+<section>
+  <h2>Theme, accent, and the bezel</h2>
+  <p class="lede">The notch takes the theme, but not all of it — and today it takes too much.
+  The resting shape is currently painted with <code class="tok">OsdSurfaceBrush</code>, the same
+  brush as a Classic card, which means on the light theme the notch becomes a pale bar sitting
+  on a pale desktop. That stops being a cutout and becomes a floating tab.</p>
+  <dl class="specs">
+    <div class="row"><dt>Bezel</dt>
+      <dd>Near-black in <b>both</b> themes. A notch is a hole in the display, not a panel on it,
+      and a hole is not lighter than the screen around it. Needs its own token —
+      <code class="tok">NotchBezelBrush</code> — rather than reusing the card surface.</dd>
+      <dd class="val">#06070A, constant</dd></div>
+    <div class="row"><dt>Panel content</dt>
+      <dd>Follows the theme like everything else: text, dividers, the card surfaces that appear
+      inside the open frame.</dd>
+      <dd class="val">theme tokens</dd></div>
+    <div class="row"><dt>Accent</dt>
+      <dd>The active page dot, focus rings, and the level fill <em>when</em> “Colour the level”
+      is off. Three places, all of them selection or emphasis.</dd>
+      <dd class="val">user accent</dd></div>
+    <div class="row"><dt>Never the accent</dt>
+      <dd>The bezel, and the level fill while thresholds are on. Both carry information; a
+      colour that is also a preference cannot carry information.</dd>
+      <dd class="val">—</dd></div>
+    <div class="row"><dt>The sky</dt>
+      <dd>Neither theme nor accent. Condition and time of day decide it — a night sky on the
+      light theme is still a night sky.</dd>
+      <dd class="val">condition-driven</dd></div>
+  </dl>
+
+  <h2 style="margin-top:42px">When the notch is not there</h2>
+  <p class="lede">Picking Notch does not mean the notch is always what you get. Plith drops to
+  Classic whenever a window covers the monitor, and comes back when it stops.</p>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag">Behaviour</span>
+      <h3>Covered means Classic</h3>
+      <p>The notch lives flush against the top edge, where a covering window either hides it or
+      it sits on top of something running full-screen. Classic keeps a 96 dip margin and was
+      built to appear over exactly that. So <code class="tok">WantsNotch</code> is
+      <em>Notch selected <b>and</b> nothing covering the monitor</em>, and the presentation is
+      rebuilt on the edge — including back to the notch when the game closes.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Precision</span>
+      <h3>It is not “games”</h3>
+      <p>The signal is any window covering the monitor: a full-screen game, a borderless
+      maximised browser, a full-screen video. Calling it a game switch in the UI would be a lie
+      a person catches the first time they maximise a video. Note this is separate from
+      <em>Hide during full-screen video</em>, which decides whether the OSD appears at all —
+      this one only decides which shape it takes.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Settings</span>
+      <h3>Say it on the page</h3>
+      <p>Otherwise the first bug report writes itself: pick Notch, launch a game, see the
+      Classic card, conclude the setting did not save. The Style row carries the sentence, and
+      the preview shows the fallback rather than describing it.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Consequence</span>
+      <h3>Classic is never optional</h3>
+      <p>Every Notch user is also a Classic user, several times a day. That is the argument for
+      the Classic redesign being part of this work and not a later tidy-up — half the sessions
+      of the “new” presentation are the old one.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>The OSD itself</h2>
+  <p class="lede">A volume key is not a request to open anything. Today it opens the same panel
+  a click does, which is why the OSD reads as a window rather than as feedback. In notch mode
+  it becomes a HUD: the resting shape stretches into a short bar, says one thing, and returns.</p>
+
+  <div class="stage osd-stage" id="osd-stage">
+    <div class="tabs">
+      <div class="tab on">Bir şey yapıyorsun</div>
+      <div class="tab">OSD araya girmiyor</div>
+    </div>
+
+    <div class="hudnotch" id="hudnotch">
+      <div class="hudbody" id="o-vol">
+        <svg class="ico glyph"><use href="#i-vol"/></svg>
+        <span class="bar"><i style="width:62%"></i></span>
+        <span class="num">62%</span>
+      </div>
+      <div class="hudbody" id="o-mute">
+        <svg class="ico glyph"><use href="#i-mute"/></svg>
+        <span class="bar"><i style="width:62%"></i></span>
+        <span class="num">Mute</span>
+      </div>
+      <div class="hudbody" id="o-media">
+        <span class="art3"></span>
+        <span class="meta">
+          <b>You Feel Be Love</b>
+          <span>Denis Phenomen</span>
+        </span>
+      </div>
+      <div class="hudbody" id="o-dev">
+        <svg class="ico glyph"><use href="#i-dev"/></svg>
+        <span class="dev2">Logitech G733 · Voicemeeter A1</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="o-b-vol">Volume</button>
+    <button id="o-b-mute">Mute</button>
+    <button id="o-b-media">Track change</button>
+    <button id="o-b-dev">Output changed</button>
+  </div>
+
+  <dl class="specs" style="margin-top:26px">
+    <div class="row"><dt>Volume / mute</dt><dd>Glyph, track, number. One line, nothing else.</dd><dd class="val">300 × 46</dd></div>
+    <div class="row"><dt>Track change</dt><dd>Art and two lines of text need the extra width.</dd><dd class="val">372 × 54</dd></div>
+    <div class="row"><dt>Output changed</dt><dd>Endpoint and the bus it is riding — the thing only Plith knows.</dd><dd class="val">300 × 46</dd></div>
+    <div class="row"><dt>Dwell</dt><dd>Then back to the resting shape. Interrupting it with another event hands off from wherever it is.</dd><dd class="val">2000 ms</dd></div>
+    <div class="row"><dt>Page dots</dt><dd>None. A HUD is not a place you can page through.</dd><dd class="val">—</dd></div>
+  </dl>
+
+  <p class="note" style="margin-top:16px"><strong>Mute is the one event that gets colour.</strong>
+  Everything else is a value that will change again on its own; mute is a state you can be stuck
+  in without noticing, and the track greys out to say so.</p>
+
+  <h2 style="margin-top:42px">Classic OSD</h2>
+  <p class="lede">Still the default for every install, and deliberately still a card: Classic
+  floats wherever the user put it, and a bar stretching out of nothing only makes sense when it
+  is anchored to an edge. What it gains here is the same icon set, the same three signal
+  colours, and a track that is actually legible.</p>
+
+  <div class="classicrow">
+    <div class="classic">
+      <div class="row1">
+        <span class="nm"><svg class="ico s"><use href="#i-vol"/></svg> Logitech G733</span>
+        <span class="pc">62%</span>
+      </div>
+      <div class="tr"><i style="width:62%"></i></div>
+      <div class="bus">Voicemeeter · A1</div>
+    </div>
+
+    <div class="classic">
+      <div class="row1">
+        <span class="nm"><svg class="ico s"><use href="#i-vol"/></svg> Logitech G733</span>
+        <span class="pc hot">88%</span>
+      </div>
+      <div class="tr"><i class="hot" style="width:88%"></i></div>
+      <div class="bus">Voicemeeter · A1</div>
+    </div>
+
+    <div class="classic">
+      <div class="row1">
+        <span class="nm muted"><svg class="ico s"><use href="#i-mute"/></svg> Logitech G733</span>
+        <span class="pc muted">Mute</span>
+      </div>
+      <div class="tr"><i class="off" style="width:62%"></i></div>
+      <div class="bus">Voicemeeter · A1</div>
+    </div>
+
+    <div class="classic wide">
+      <div class="mediarow">
+        <span class="cart"></span>
+        <span class="cmeta">
+          <b>You Feel Be Love</b>
+          <span>Denis Phenomen</span>
+        </span>
+        <span class="ckeys">
+          <svg class="ico s"><use href="#i-prev"/></svg>
+          <svg class="ico s"><use href="#i-pause"/></svg>
+          <svg class="ico s"><use href="#i-next"/></svg>
+        </span>
+      </div>
+      <div class="cdiv"></div>
+      <div class="row1">
+        <span class="nm"><svg class="ico s"><use href="#i-vol"/></svg> Logitech G733</span>
+        <span class="pc">62%</span>
+      </div>
+      <div class="tr"><i style="width:62%"></i></div>
+    </div>
+  </div>
+
+  <dl class="specs" style="margin-top:26px">
+    <div class="row"><dt>Level colour</dt><dd>Green while the value is behaving, amber past 85 %, red only for mute or clipping.</dd><dd class="val">signal · caution · alarm</dd></div>
+    <div class="row"><dt>Device name</dt><dd>The parenthesised adapter suffix is dropped. Nobody reads "(Logitech G733 Gaming Headset)" twice.</dd><dd class="val">subtraction</dd></div>
+    <div class="row"><dt>Bus line</dt><dd>New. Which Voicemeeter rail the level belongs to — the thing Plith knows and nothing else does.</dd><dd class="val">11.5 px</dd></div>
+    <div class="row"><dt>Track</dt><dd>6 dip, full width, its own row. It was fighting the percentage for space before.</dd><dd class="val">6 dip</dd></div>
+    <div class="row"><dt>Media</dt><dd>Sits above the level with a hairline between, not as a second card.</dd><dd class="val">one surface</dd></div>
+  </dl>
 </section>
 
 <section>
@@ -610,6 +1036,10 @@
     <div class="row"><dt>Tilt wheel</dt><dd>Mice that have one — same message.</dd><dd class="val">WM_MOUSEHWHEEL</dd></div>
     <div class="row"><dt>Shift + wheel</dt><dd>The established Windows convention for scrolling sideways.</dd><dd class="val">MK_SHIFT</dd></div>
     <div class="row"><dt>Page dots</dt><dd>Clickable. Not optional — it is how paging is discovered.</dd><dd class="val">hit target ≥ 20 dip</dd></div>
+    <div class="row"><dt>Dots lane</dt><dd>A fixed row the page content can never grow into, so a tall page clips itself instead of pushing the dots onto the frame's edge. Over the full-bleed sky the dots take white ink rather than slate.</dd><dd class="val">14 dip, fixed</dd></div>
+    <div class="row"><dt>Transport</dt><dd>A rail on the right of the art and title — the same place it sits on the Classic card and on every other media surface a person already uses. One idiom across all three of Plith's surfaces beats a per-surface optimum.</dd><dd class="val">28 × 28, 4 gap</dd></div>
+    <div class="row"><dt>Long titles</dt><dd>Scroll, and only when measured wider than the space. Ease-in-out with alternate, so it dwells where you start reading and dwells again at the end rather than snapping back.</dd><dd class="val">28 dip/s · 1.2 s delay</dd></div>
+    <div class="row"><dt>Marquee stops</dt><dd>On close, on reduced-motion, and when the text fits. The panel is never hidden in notch mode, so an animation left running is a permanent cost on an invisible overlay.</dd><dd class="val">same rule as the sky</dd></div>
   </dl>
   <p class="note" style="margin-top:14px">Wheel deltas are not page counts. One physical swipe
   emits a stream of them, so delta accumulates and commits a single page per threshold, then
@@ -661,7 +1091,41 @@
     dots.forEach((d, i) => d.classList.toggle('on', i === page));
     // The full-bleed sky keys off this: it is only painted while the weather page is showing.
     notch.dataset.page = String(page);
+    syncMarquee();
   }
+
+  /* Conditional marquee.
+     Measured every time, never cached: the branch this comes from has five defects whose whole
+     shape was a value derived once from a moment that turned out to be the wrong moment. The
+     text width changes when the track changes, when the font falls back, and when the DPI
+     changes, so overflow is re-asked at the point it is used rather than remembered.
+     Speed is constant (28 dip/s), NOT a fixed duration - a fixed duration makes a long title
+     fly and a short one crawl, which is the tell of a marquee nobody measured. */
+  const SPEED = 28;
+  const reduced = matchMedia('(prefers-reduced-motion: reduce)');
+
+  function syncMarquee() {
+    document.querySelectorAll('.mline').forEach(line => {
+      const text = line.firstElementChild;
+      text.classList.remove('scroll');
+      text.style.removeProperty('--shift');
+      text.style.removeProperty('--dur');
+
+      // Stopped whenever it would be pointless or unwelcome: the panel is shut, the page is
+      // not on screen, motion is reduced, or the text simply fits.
+      if (!notch.classList.contains('open')) return;
+      if (!line.closest('.page').classList.contains('on')) return;
+      if (reduced.matches) return;
+
+      const over = text.scrollWidth - line.clientWidth;
+      if (over <= 1) return;
+
+      text.style.setProperty('--shift', (-over) + 'px');
+      text.style.setProperty('--dur', Math.max(2.5, over / SPEED).toFixed(2) + 's');
+      text.classList.add('scroll');
+    });
+  }
+  reduced.addEventListener('change', syncMarquee);
 
   function clearHud() {
     if (hudTimer) { clearTimeout(hudTimer); hudTimer = null; }
@@ -675,6 +1139,9 @@
     notch.classList.remove('peek', 'open');
     if (state !== 'rest') notch.classList.add(state);
     for (const [k, b] of Object.entries(btns)) b.setAttribute('aria-pressed', String(k === state));
+    // After the class is settled, never before it - syncMarquee reads the live state rather
+    // than being told about it, so calling it mid-transition would answer for the old shape.
+    syncMarquee();
   }
 
   // An event HUD is not a page: it arrives on its own, says one thing, and leaves.
@@ -769,7 +1236,7 @@
   document.getElementById('pp').addEventListener('click', e => {
     e.stopPropagation();
     playing = !playing;
-    e.target.textContent = playing ? '⏯' : '▶';
+    document.querySelector('#pp use').setAttribute('href', playing ? '#i-pause' : '#i-play');
   });
 
   // ---- the sky ----------------------------------------------------------------------
@@ -817,4 +1284,27 @@
     sky.classList.add('first');
     setTimeout(() => sky.classList.remove('first'), 1700);
   };
+
+  // ---- the OSD bench --------------------------------------------------------------------
+  const hn = document.getElementById('hudnotch');
+  const obodies = ['o-vol','o-mute','o-media','o-dev'].map(id => document.getElementById(id));
+  let oTimer = null;
+
+  function osd(which, wide, muted) {
+    if (oTimer) clearTimeout(oTimer);
+    obodies.forEach(b => b.classList.remove('on', 'muted'));
+    const body = document.getElementById(which);
+    body.classList.add('on');
+    if (muted) body.classList.add('muted');
+    hn.classList.add('on');
+    hn.classList.toggle('wide', !!wide);
+    // An event arriving mid-dwell hands off rather than restarting: the shape is already out,
+    // so it only has to change what it says.
+    oTimer = setTimeout(() => { hn.classList.remove('on', 'wide'); }, 2000);
+  }
+
+  document.getElementById('o-b-vol').onclick   = () => osd('o-vol', false, false);
+  document.getElementById('o-b-mute').onclick  = () => osd('o-mute', false, true);
+  document.getElementById('o-b-media').onclick = () => osd('o-media', true, false);
+  document.getElementById('o-b-dev').onclick   = () => osd('o-dev', false, false);
 </script>
