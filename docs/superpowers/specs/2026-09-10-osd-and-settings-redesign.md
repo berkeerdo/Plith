@@ -19,17 +19,31 @@ default on every install — and, because `WantsNotch` drops to Classic whenever
 the monitor, **every Notch user is also a Classic user several times a day**. Leaving Classic
 alone would mean half the sessions of the "new" presentation are the old one.
 
-Three defects, all visible in a screenshot, none caught by a test:
+**Checked against the code, 2026-09-10, and one of the three claims below was mine rather than
+the code's.** They are corrected in place rather than quietly dropped.
 
-1. **The level track is invisible.** 2 DIP at low opacity on a dark card, so the number carries
-   the whole reading and the bar is decoration. The thing the OSD exists to show is the thing
-   with the least contrast on it.
-2. **The icons are borrowed.** Segoe MDL2 glyphs — the same speaker Windows' own flyout draws.
-   The set is also not ours to shape: seven of ten weather glyphs chosen from it during slice 2
-   turned out not to exist in the font, which is what the `GlyphTypeface.CharacterToGlyphMap`
-   test now exists to catch.
-3. **The device name runs on.** `Logitech G733 Gaming Headset (2- G733)` ellipses mid-word, so
-   the useful half is the half cut off.
+1. ~~**The level track is invisible.** 2 DIP at low opacity.~~ **Withdrawn — false.**
+   `AudioCardView.xaml` already draws a **6 DIP** track with a `#22FFFFFF` ground and a
+   full-strength fill. It was asserted from the mockup's narrative, not read from the file. The
+   user's sentence behind it — *"classic osde ne değişti track göremiyorum"* — reads at least as
+   naturally as *"I can't see what changed in Classic"*, which is a request for the pass rather
+   than a report of an invisible bar.
+
+   What is left of it is real but smaller: the track has **no threshold tick**, so the colour
+   change at 85 % has no visible cause, and the fill has no glow, so it sits flat against the
+   card. Those are additions, not a rescue.
+2. **The icons are borrowed.** Confirmed: `MediaCardView.xaml` binds
+   `Segoe Fluent Icons, Segoe MDL2 Assets`. The set is also not ours to shape — seven of ten
+   weather glyphs chosen from it during slice 2 turned out not to exist in the font, which is
+   what the `GlyphTypeface.CharacterToGlyphMap` test now exists to catch.
+3. **The device name runs on.** Confirmed, and easier to fix than assumed. The card's label comes
+   from `device.FriendlyName` raw (`WindowsAudioClient` line ~285), while the settings dropdown
+   already runs the same string through `ShortenFriendlyName`. There is nothing to write: the
+   card simply does not call the shortener that exists.
+
+**So the honest case for redoing Classic is not a defect list.** It is that Classic never got
+the pass the notch got, it is the default on every install, and `WantsNotch` drops every notch
+user into it several times a day.
 
 Settings has its own problem, and it is structural rather than cosmetic: it is one long scroll
 in config-file order, so a person adjusting how the notch looks scrolls past autostart and
@@ -65,10 +79,10 @@ States, all drawn in the mockup: normal, past 85 %, muted, with media, compact.
 | # | Decision | Why |
 |---|---|---|
 | 1 | Speaker icon has three shapes — full, low below 33 %, crossed when muted | The icon alone answers "is my sound off?" without reading a number |
-| 2 | Device name cut at the first bracket or dash | `Logitech G733 Gaming Headset (2- G733)` becomes `Logitech G733`. One line, no ellipsis. |
+| 2 | Card label runs through the existing `ShortenFriendlyName` | The settings dropdown already does; the card does not. No new logic. |
 | 3 | A bus line — `Voicemeeter · A1`, `Windows · Output`, `Muted` | On a machine with Voicemeeter plus Sonar plus a headset, a bare number is ambiguous |
 | 4 | Level as a number, tabular figures, `%` set smaller | The digits must not shuffle as the value changes |
-| 5 | Track at **6 DIP** with a soft glow on the fill | The thing the OSD exists to show becomes the highest-contrast thing on the card |
+| 5 | Track keeps its **6 DIP**, gains a glow on the fill | It is already 6 — see the correction above. The glow is what lifts it off the card |
 | 6 | Card width set by the fullest row | Same rule as the notch's fixed frame |
 | 7 | Long titles scroll, they do not ellipse | See §3 |
 | 8 | A hairline tick at 85 %, drawn only near it | Gives the colour change a cause instead of looking like a glitch |
