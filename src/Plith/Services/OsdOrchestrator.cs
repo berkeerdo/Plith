@@ -89,6 +89,40 @@ public sealed class OsdOrchestrator : IDisposable
     /// Picks the active source based on user preference + Voicemeeter availability,
     /// and attaches / detaches the Windows client accordingly.
     /// </summary>
+    /// <summary>
+    /// Write a normalised 0..1 level to whichever source is currently active.
+    ///
+    /// The orchestrator is the right place for this and the only one: it is already the thing
+    /// that knows which of Voicemeeter and the Windows endpoint is live, and a caller that had
+    /// to decide for itself would be a second copy of ReconcileActiveSource waiting to disagree
+    /// with this one.
+    ///
+    /// Returns false when there is nothing to write to — no Voicemeeter, no attached endpoint —
+    /// so the caller can leave the control where the user put it rather than snapping it to a
+    /// value nothing accepted.
+    ///
+    /// Nothing is pushed into the view model from here. The change comes back through the
+    /// endpoint's own notification or the parameter poll, on the same path every other change
+    /// takes. Echoing it here as well would give one change two routes into the UI, and a drag
+    /// would then fight the poll for the same pixel.
+    /// </summary>
+    public bool TrySetNormalizedVolume(double normalized)
+    {
+        switch (_activeSource)
+        {
+            case ActiveSource.Voicemeeter:
+                return _voicemeeter.IsLoggedIn
+                    && _voicemeeter.TrySetGain(VoicemeeterRail.Bus, MonitoredBusIndex,
+                                               VolumeMath.NormalizedToVoicemeeterDb(normalized));
+
+            case ActiveSource.Windows:
+                return _windowsAudio.TrySetScalarVolume(VolumeMath.NormalizedToWindowsScalar(normalized));
+
+            default:
+                return false;
+        }
+    }
+
     private void ReconcileActiveSource()
     {
         // When Voicemeeter isn't installed on this machine, every mode collapses to Windows —

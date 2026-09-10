@@ -152,6 +152,37 @@ public sealed class VoicemeeterClient : IDisposable
         return true;
     }
 
+    /// <summary>
+    /// Write a gain, in dB, to a bus or strip.
+    ///
+    /// The first write path in this application: until now Plith only ever read what the volume
+    /// keys did. Two things follow from that and are deliberate here.
+    ///
+    /// First, the value is clamped to Voicemeeter's own range rather than trusted. A caller
+    /// converting from a normalised slider can land marginally outside it through floating
+    /// point alone, and Voicemeeter accepts out-of-range writes silently — leaving a bus at a
+    /// gain the UI cannot represent and the user cannot get back from without opening
+    /// Voicemeeter itself.
+    ///
+    /// Second, nothing is echoed back into the view model here. The parameter poll notices the
+    /// change on its next pass and the snapshot flows through the same path every other change
+    /// takes. Writing the display here as well would give one source two routes into the UI,
+    /// which is how a drag ends up fighting the poll for the same pixel.
+    /// </summary>
+    public bool TrySetGain(VoicemeeterRail rail, int index, float gainDb)
+    {
+        if (!_loggedIn) return false;
+
+        var clamped = Math.Clamp(gainDb, MinGainDb, MaxGainDb);
+        string prefix = rail == VoicemeeterRail.Bus ? $"Bus[{index}]" : $"Strip[{index}]";
+        return VBVMR_SetParameterFloat($"{prefix}.Gain", clamped) == 0;
+    }
+
+    /// <summary>Voicemeeter's own gain range. Mirrored in AudioCardViewModel, which converts
+    /// between it and the normalised bar; the two must not drift apart.</summary>
+    public const float MinGainDb = -60f;
+    public const float MaxGainDb = 12f;
+
     private static string BusFriendlyName(int index) => index switch
     {
         0 => "A1", 1 => "A2", 2 => "A3", 3 => "A4",
@@ -172,6 +203,9 @@ public sealed class VoicemeeterClient : IDisposable
 
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     private static extern int VBVMR_GetParameterFloat([MarshalAs(UnmanagedType.LPStr)] string paramName, out float value);
+
+    [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
+    private static extern int VBVMR_SetParameterFloat([MarshalAs(UnmanagedType.LPStr)] string paramName, float value);
 
     [DllImport(DllName, CallingConvention = CallingConvention.StdCall, CharSet = CharSet.Ansi, BestFitMapping = false, ThrowOnUnmappableChar = true)]
     private static extern int VBVMR_GetParameterStringA(

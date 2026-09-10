@@ -46,6 +46,44 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 
     public event Action<WindowsAudioSnapshot>? Changed;
 
+    /// <summary>
+    /// Set the attached endpoint's master volume, 0..1.
+    ///
+    /// Returns false when nothing is attached rather than throwing: an endpoint can be pulled
+    /// out from under a drag that is already in flight, and a headset unplugged mid-gesture is
+    /// an ordinary event, not an error.
+    ///
+    /// The value is read back by the endpoint's own volume notification, on its own schedule.
+    /// Nothing is echoed into the view model here — see TrySetGain in VoicemeeterClient for why
+    /// giving one source two routes into the UI is what makes a drag fight the poll.
+    ///
+    /// Takes the attach lock for the same reason every other reader does: Stop() can null
+    /// _volume between the check and the write, and a COM call on a disposed endpoint is not a
+    /// recoverable failure.
+    /// </summary>
+    public bool TrySetScalarVolume(float scalar)
+    {
+        lock (_attachLock)
+        {
+            var volume = _volume;
+            if (volume is null) return false;
+
+            try
+            {
+                volume.MasterVolumeLevelScalar = Math.Clamp(scalar, 0f, 1f);
+                return true;
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                // The endpoint went away between the lock and the write. Logged rather than
+                // swallowed, because a write path that fails silently is indistinguishable from
+                // a slider that does not work.
+                _log?.Warn("WindowsAudioClient", $"Volume write failed: {ExceptionText.Describe(ex)}");
+                return false;
+            }
+        }
+    }
+
     public bool Start()
     {
         MMDeviceEnumerator? enToDrain = null;
