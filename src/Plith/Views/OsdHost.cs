@@ -8,6 +8,7 @@ using Plith.Interop;
 using Plith.Services;
 using Plith.ViewModels;
 using Plith.Views.Presentation;
+using Plith.Views.Widgets;
 using WpfScreenHelper;
 
 namespace Plith.Views;
@@ -48,6 +49,10 @@ public sealed class OsdHost : BandWindow
     // storyboards that are started and stopped by visibility, so rebuilding them on every open
     // would churn exactly the resources this slice is trying to keep bounded.
     private readonly Widgets.WidgetFrame _widgets = new();
+
+    // Built when the audio and media view models arrive, for the same reason the frame's pages
+    // are: it reads them live, and a HUD rebuilt per event would resubscribe every time.
+    private Widgets.NotchHud? _hud;
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -109,7 +114,6 @@ public sealed class OsdHost : BandWindow
         _content = new OsdContent { DataContext = Shell };
         Content = _content;
 
-        _content.SetWidgetContent(_widgets);
         _widgets.PageRequested += OnWidgetPageRequested;
         _widgets.SetPages(_pager, BuildWidgetPages());
 
@@ -472,7 +476,28 @@ public sealed class OsdHost : BandWindow
             new Widgets.MediaWidget(media),
             new Widgets.AudioWidget(audio, write),
         ]);
+
+        _hud = new Widgets.NotchHud(audio, media);
+        _content.SetWidgetContent(_widgets, _hud);
     }
+
+    /// <summary>
+    /// Which answer the HUD should give.
+    ///
+    /// The reason travels with the request rather than being remembered on the way past. It
+    /// used to be dropped at CardHost's event boundary, which would have left the shell guessing
+    /// the shape from whichever cards happened to be visible - inferring something CardHost
+    /// already knew, and getting it wrong whenever both a track and a level had changed.
+    ///
+    /// A null reason means the caller is not an event at all: a hover, a mode switch, edit mode.
+    /// Those never reach the HUD branch, and the volume default is only what an unexpected
+    /// caller would get.
+    /// </summary>
+    private static NotchHudKind PickHudKind(ShowReason? reason) => reason switch
+    {
+        ShowReason.MediaChange or ShowReason.MediaCommand => NotchHudKind.Media,
+        _ => NotchHudKind.Volume,
+    };
 
     private void OnWidgetPageRequested(object? sender, int index)
     {
@@ -517,7 +542,7 @@ public sealed class OsdHost : BandWindow
 
         // A click opens the widget frame. An event opens the card stack, and ShowOsd's other
         // callers switch it back - see SetWidgetMode's comment for why the two are exclusive.
-        _content.SetWidgetMode(true);
+        _content.SetPanelContent(NotchPanelContent.Widgets);
 
         _home.Open();
         _hideTimer?.Stop();
@@ -618,7 +643,9 @@ public sealed class OsdHost : BandWindow
         _hideTimer.Start();
     }
 
-    public void ShowOsd(TimeSpan visibleFor, bool fromHover = false)
+    /// <param name="reason">Why the OSD is appearing. Only the notch uses it, and only to pick
+    /// the HUD's shape; null means "not an event", which is what every internal caller is.</param>
+    public void ShowOsd(TimeSpan visibleFor, bool fromHover = false, ShowReason? reason = null)
     {
         if (_isEditMode) return;   // edit mode keeps its own always-on visibility
 
@@ -635,9 +662,20 @@ public sealed class OsdHost : BandWindow
         if (!fromHover) _home.Close();
 
         // Same reasoning, same place: an event is not a request to go anywhere, so it takes the
-        // card stack back from the widget frame. fromHover is the click path, which has already
-        // asked for the frame and must not have it taken away one turn later.
-        if (!fromHover) _content.SetWidgetMode(false);
+        // panel back from the widget frame. fromHover is the click path, which has already asked
+        // for the frame and must not have it taken away one turn later.
+        //
+        // Which shape it takes back depends on the mode. Classic shows its card, unchanged since
+        // 0.1.5. The notch shows a HUD - short, wide, nothing to press - because an answer to
+        // something you did must not look like a place you went. Falling back to the cards when
+        // the HUD has not been attached yet keeps a very early event (before App has wired the
+        // view models) showing something rather than an empty panel.
+        if (!fromHover)
+        {
+            var wantsHud = _presentation is AmbientNotchPresentation && _hud is not null;
+            if (wantsHud) _hud!.Show(PickHudKind(reason));
+            _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);
+        }
 
         _showGeneration++;
         bool wasFadingOut = _isFadingOut;

@@ -104,7 +104,7 @@ public class CardHostTests
         host.Register(new FakeCard("audio", 20));
 
         int shows = 0;
-        host.ShowRequested += _ => shows++;
+        host.ShowRequested += (_, _) => shows++;
 
         media.IsVisible = true;
 
@@ -120,7 +120,7 @@ public class CardHostTests
         host.Register(audio);
 
         TimeSpan? seen = null;
-        host.ShowRequested += d => seen = d;
+        host.ShowRequested += (_, d) => seen = d;
 
         audio.RaiseShow(new ShowRequest(ShowReason.AudioChange, "audio"));
 
@@ -133,7 +133,7 @@ public class CardHostTests
         var host = new CardHost(NewSettings(showDurationMs: 2000));
 
         TimeSpan? seen = null;
-        host.ShowRequested += d => seen = d;
+        host.ShowRequested += (_, d) => seen = d;
 
         host.RequestShow(new ShowRequest(ShowReason.EditModeExit, null, TimeSpan.FromMilliseconds(1500)));
 
@@ -147,7 +147,7 @@ public class CardHostTests
         var host = new CardHost(NewSettings(), suppressor);
 
         int shows = 0;
-        host.ShowRequested += _ => shows++;
+        host.ShowRequested += (_, _) => shows++;
 
         host.RequestShow(new ShowRequest(ShowReason.SummonHotkey));
 

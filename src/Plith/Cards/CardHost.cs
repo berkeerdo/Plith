@@ -50,7 +50,13 @@ public sealed class CardHost : IDisposable
     public ObservableCollection<ICard> VisibleCards { get; } = new();
 
     /// <summary>The OSD should appear for this long.</summary>
-    public event Action<TimeSpan>? ShowRequested;
+    /// <summary>
+    /// Asks the shell to show the OSD. Carries the reason as well as the duration, because in
+    /// notch mode the reason decides the SHAPE — a track change gets a wider HUD than a volume
+    /// key — and a shell that had to infer it from the visible cards would be inferring
+    /// something this class already knew.
+    /// </summary>
+    public event Action<ShowReason, TimeSpan>? ShowRequested;
 
     /// <summary>The OSD should disappear now, regardless of its hide timer.</summary>
     public event Action? HideRequested;
@@ -102,7 +108,7 @@ public sealed class CardHost : IDisposable
 
         var duration = request.DurationOverride
             ?? TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs);
-        ShowRequested?.Invoke(duration);
+        ShowRequested?.Invoke(request.Reason, duration);
     }
 
     private void OnCardShowRequested(ShowRequest request) => RequestShow(request);

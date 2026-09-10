@@ -139,6 +139,15 @@
                             Focusable="False"
                             HorizontalAlignment="Center"
                             VerticalAlignment="Top" />
+
+            <!-- The event HUD. Third of the three things this panel can be, and the only one an
+                 event ever produces in notch mode. Sized by the HUD view itself, which changes
+                 shape between its volume and media kinds. -->
+            <ContentControl x:Name="HudHost"
+                            Visibility="Collapsed"
+                            Focusable="False"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top" />
         </Grid>
     </Grid>
 </UserControl>

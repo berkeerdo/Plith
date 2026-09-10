@@ -75,7 +75,7 @@ public partial class App : Application
         _cardHost.Register(_audioCard);   // Order 20
 
         _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
-        _cardHost.ShowRequested += d => _osd.ShowOsd(d);
+        _cardHost.ShowRequested += (reason, d) => _osd.ShowOsd(d, reason: reason);
         _cardHost.HideRequested += () => _osd.HideOsd();
         // Suppression reaches CardHost by injection above; this is the separate signal the
         // notch needs. Deliberately not routed through IShowSuppressor: that means "do not

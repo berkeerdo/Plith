@@ -5,6 +5,21 @@ using Plith.Views.Presentation;
 
 namespace Plith.Views;
 
+/// <summary>What the notch panel is showing. Exactly one at a time, by construction: which shape
+/// the notch takes is what tells a person whether they went somewhere or were answered, and
+/// showing two at once would erase that.</summary>
+public enum NotchPanelContent
+{
+    /// <summary>The card stack. Classic's only mode, and never used by the notch.</summary>
+    Cards,
+
+    /// <summary>The paged widget frame. Opened by a click.</summary>
+    Widgets,
+
+    /// <summary>The short, transient answer to a volume key or a track change.</summary>
+    Hud,
+}
+
 public partial class OsdContent : UserControl
 {
     /// <summary>
@@ -105,15 +120,21 @@ public partial class OsdContent : UserControl
     /// read the tree before the ItemsControl had materialised its containers, which is the defect
     /// that once drew the ambient row on the panel and the other cards over the bare desktop.
     /// </summary>
-    public void SetWidgetMode(bool widgets)
+    public void SetPanelContent(NotchPanelContent content)
     {
-        WidgetHost.Visibility = widgets ? Visibility.Visible : Visibility.Collapsed;
-        CardSurface.Visibility = widgets ? Visibility.Collapsed : Visibility.Visible;
+        CardSurface.Visibility = content == NotchPanelContent.Cards ? Visibility.Visible : Visibility.Collapsed;
+        WidgetHost.Visibility = content == NotchPanelContent.Widgets ? Visibility.Visible : Visibility.Collapsed;
+        HudHost.Visibility = content == NotchPanelContent.Hud ? Visibility.Visible : Visibility.Collapsed;
     }
 
-    /// <summary>The control the widget frame lives in. Set once by the host; the frame outlives
-    /// every open and close, so its pages are built once rather than per show.</summary>
-    public void SetWidgetContent(UIElement content) => WidgetHost.Content = content;
+    /// <summary>The controls the widget frame and the HUD live in. Set once by the host; both
+    /// outlive every open and close, so their contents are built once rather than per show —
+    /// which matters because those contents own timers and storyboards.</summary>
+    public void SetWidgetContent(UIElement widgets, UIElement hud)
+    {
+        WidgetHost.Content = widgets;
+        HudHost.Content = hud;
+    }
 
     /// <summary>
     /// Switch the card between the Classic floating-card shape and the notch shape.
@@ -142,7 +163,7 @@ public partial class OsdContent : UserControl
 
         // Classic has no widget frame at all. Leaving it visible across a mode switch would put
         // a 356 DIP block inside a floating card that never asked for one.
-        if (!notch) SetWidgetMode(false);
+        if (!notch) SetPanelContent(NotchPanelContent.Cards);
 
         CardSurface.Background = notch ? Brushes.Transparent : FindResource("OsdSurfaceBrush") as Brush;
         CardSurface.BorderThickness = notch ? new Thickness(0) : new Thickness(1);

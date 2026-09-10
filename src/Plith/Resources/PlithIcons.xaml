@@ -15,4 +15,13 @@
     <Geometry x:Key="IconNext">M6,5.5 L6,18.5 L15.5,12 Z M17,5.5 L19,5.5 L19,18.5 L17,18.5 Z</Geometry>
     <Geometry x:Key="IconPlay">M7.5,5.2 L7.5,18.8 L18.6,12 Z</Geometry>
     <Geometry x:Key="IconPause">M9,5.5 L11.5,5.5 L11.5,18.5 L9,18.5 Z M14.5,5.5 L17,5.5 L17,18.5 L14.5,18.5 Z</Geometry>
+
+    <!-- The speaker is two geometries rather than one, because its body wants a fill and its
+         waves want a stroke, and a single Path cannot have a different treatment per subpath.
+         The call site stacks them; splitting here is also what lets the wave count change
+         between the loud, quiet and muted states without redrawing the cone. -->
+    <Geometry x:Key="IconSpeakerBody">M4,9.5 L7.2,9.5 L12,5.5 L12,18.5 L7.2,14.5 L4,14.5 Z</Geometry>
+    <Geometry x:Key="IconSpeakerWaveInner">M15.6,9.4 A3.6,3.6 0 0 1 15.6,14.6</Geometry>
+    <Geometry x:Key="IconSpeakerWaveOuter">M18.2,6.8 A7.2,7.2 0 0 1 18.2,17.2</Geometry>
+    <Geometry x:Key="IconMuteCross">M16,9.6 L20.4,14.4 M20.4,9.6 L16,14.4</Geometry>
 </ResourceDictionary>

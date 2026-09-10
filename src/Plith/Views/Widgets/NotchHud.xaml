@@ -1,0 +1,102 @@
+<UserControl x:Class="Plith.Views.Widgets.NotchHud"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- Two rows, never both. Which one is showing is set from code, and the control's own size
+         changes with it - a HUD carrying a media row needs the width for a title and the height
+         for two lines beside the art, and one size that fitted both would be the wrong size for
+         each. The notch's surface follows this control's measurement, so changing it here is all
+         that is needed to change the shape on screen. -->
+    <Grid>
+        <!-- Volume. No transport, no dots, nothing to press: this is an answer, not a place. -->
+        <Grid x:Name="VolumeRow" Margin="16,0" VerticalAlignment="Center">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Grid Grid.Column="0" Width="18" Height="18">
+                <Path x:Name="SpeakerBody"
+                      Data="{StaticResource IconSpeakerBody}"
+                      Fill="{DynamicResource OsdTextPrimary}"
+                      Stretch="Uniform" />
+                <!-- The waves are stroked, the cone is filled. StrokeThickness is set here rather
+                     than in the dictionary because the same geometry is drawn at two sizes on two
+                     surfaces, and a thickness baked into the resource would scale with neither. -->
+                <Path x:Name="WaveInner"
+                      Data="{StaticResource IconSpeakerWaveInner}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform" />
+                <Path x:Name="WaveOuter"
+                      Data="{StaticResource IconSpeakerWaveOuter}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform" />
+                <Path x:Name="MuteCross"
+                      Data="{StaticResource IconMuteCross}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform"
+                      Visibility="Collapsed" />
+            </Grid>
+
+            <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource OsdTrackBg}">
+                <Border x:Name="LevelFill"
+                        HorizontalAlignment="Left"
+                        CornerRadius="3"
+                        Background="{DynamicResource OsdGainGreen}" />
+            </Border>
+
+            <TextBlock x:Name="LevelText" Grid.Column="2"
+                       MinWidth="38" TextAlignment="Right"
+                       FontSize="12"
+                       Foreground="{DynamicResource OsdTextSecondary}"
+                       VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- Media. Ellipsed, not scrolled: this is on screen for about two seconds, and a scroll
+             that takes six would show the first third of a title and then vanish mid-word.
+             Transient surfaces ellipse; the widget page, which is held open, is where the
+             marquee belongs. -->
+        <Grid x:Name="MediaRow" Margin="14,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Width="34" Height="34" CornerRadius="6"
+                    Background="{DynamicResource OsdTrackBg}">
+                <Border.Clip>
+                    <RectangleGeometry Rect="0,0,34,34" RadiusX="6" RadiusY="6" />
+                </Border.Clip>
+                <Image x:Name="Art" Stretch="UniformToFill" />
+            </Border>
+
+            <StackPanel Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center">
+                <TextBlock x:Name="Title"
+                           FontSize="12" FontWeight="SemiBold"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource OsdTextPrimary}" />
+                <TextBlock x:Name="Artist"
+                           FontSize="10.5"
+                           TextTrimming="CharacterEllipsis"
+                           Foreground="{DynamicResource OsdTextSecondary}" />
+            </StackPanel>
+        </Grid>
+    </Grid>
+</UserControl>

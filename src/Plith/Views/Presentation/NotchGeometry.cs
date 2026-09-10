@@ -92,6 +92,18 @@ public static class NotchGeometry
     /// </summary>
     public const double DotsLaneDip = 14;
 
+    /// <summary>
+    /// The event HUD: short, wide and transient. A different shape family from the widget frame,
+    /// and the difference is the point — which shape the notch takes says who started the
+    /// interaction. A volume key is not a request to go anywhere, so the answer to it must not
+    /// look like a place you went.
+    /// </summary>
+    public static readonly Size HudDip = new(300, 46);
+
+    /// <summary>The HUD with a media row in it, which needs the extra width for a title and the
+    /// extra height for two lines of text beside the art.</summary>
+    public static readonly Size HudWideDip = new(372, 54);
+
     /// <summary>Gap between the page row and the dots lane.</summary>
     public const double DotsGapDip = 6;
 
