@@ -174,6 +174,11 @@ public sealed class OsdHost : BandWindow
         {
             _content.SetCompact(_settings.Current.CompactMode);
 
+            // Only when the answer changed. SetPages resets the pager and rebuilds the dots, and
+            // doing that on every save would snap an open notch back to its first page whenever
+            // anything at all was tweaked.
+            if (_settings.Current.ShowWeather != _weatherPageInstalled) ApplyWidgetPages();
+
             if (_settings.Current.Presentation != _activeMode)
             {
                 _activeMode = _settings.Current.Presentation;
@@ -476,16 +481,49 @@ public sealed class OsdHost : BandWindow
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
                                   Func<WeatherSnapshot?> weather)
     {
-        _widgets.SetPages(_pager,
-        [
-            new Widgets.ClockWidget(),
-            new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log),
-            new Widgets.MediaWidget(media),
-            new Widgets.AudioWidget(audio, write),
-        ]);
+        // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
+        // every settings change would churn exactly the resources this slice bounds — only the
+        // LIST is rebuilt, and only when the weather page's presence actually has to change.
+        _clockPage = new Widgets.ClockWidget();
+        _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
+        _mediaPage = new Widgets.MediaWidget(media);
+        _audioPage = new Widgets.AudioWidget(audio, write);
+
+        ApplyWidgetPages();
 
         _hud = new Widgets.NotchHud(audio, media);
         _content.SetWidgetContent(_widgets, _hud);
+    }
+
+    private Widgets.ClockWidget? _clockPage;
+    private Widgets.WeatherWidget? _weatherPage;
+    private Widgets.MediaWidget? _mediaPage;
+    private Widgets.AudioWidget? _audioPage;
+
+    /// <summary>Whether the weather page is currently in the pager, so a settings change that
+    /// does not affect it does not rebuild the list.</summary>
+    private bool _weatherPageInstalled;
+
+    /// <summary>
+    /// Put the right pages in the frame for the current settings.
+    ///
+    /// "Show weather" off removes the page, which is what Settings says it does. Leaving it in
+    /// and letting it render "Weather unavailable" would make the setting a lie in the one
+    /// direction a person can check — and this is the second time on this branch a settings
+    /// string described something the code did not do.
+    /// </summary>
+    private void ApplyWidgetPages()
+    {
+        if (_clockPage is null || _weatherPage is null || _mediaPage is null || _audioPage is null) return;
+
+        var wantsWeather = _settings.Current.ShowWeather;
+
+        List<FrameworkElement> pages = wantsWeather
+            ? [_clockPage, _weatherPage, _mediaPage, _audioPage]
+            : [_clockPage, _mediaPage, _audioPage];
+
+        _widgets.SetPages(_pager, pages);
+        _weatherPageInstalled = wantsWeather;
     }
 
     /// <summary>
