@@ -1,0 +1,820 @@
+<title>Plith Notch Blueprint</title>
+<style>
+  :root {
+    --paper:      #F2F4F7;
+    --plate:      #FFFFFF;
+    --bezel:      #06070A;
+    --rule:       #C9D0D9;
+    --rule-soft:  #E2E7ED;
+    --ink:        #10141A;
+    --dim:        #5C6875;
+    --mark:       #2E7D96;
+    --live:       #2E9E6B;
+    --warn:       #B4703A;
+    --shadow:     0 1px 2px rgba(16,20,26,.06), 0 8px 24px rgba(16,20,26,.06);
+  }
+  /* Dark tokens live in three places on purpose: the media query covers the default
+     "system" state where the host stamps nothing, the :not() guard lets an explicit light
+     choice beat a dark OS, and the [data-theme="dark"] block lets the toggle win the other
+     way. No component colour is ever declared inside these blocks - only tokens. */
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+    --paper:     #0E1116;
+    --plate:     #14181F;
+    --bezel:     #05060A;
+    --rule:      #2A323C;
+    --rule-soft: #1D242C;
+    --ink:       #E6EBF1;
+    --dim:       #8492A0;
+    --mark:      #6FB3C4;
+    --live:      #4AD695;
+    --warn:      #D9A05B;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+    }
+  }
+  :root[data-theme="dark"] {
+    --paper:     #0E1116;
+    --plate:     #14181F;
+    --bezel:     #05060A;
+    --rule:      #2A323C;
+    --rule-soft: #1D242C;
+    --ink:       #E6EBF1;
+    --dim:       #8492A0;
+    --mark:      #6FB3C4;
+    --live:      #4AD695;
+    --warn:      #D9A05B;
+    --shadow:    0 1px 2px rgba(0,0,0,.4), 0 10px 30px rgba(0,0,0,.35);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: "Segoe UI Variable Text", "Segoe UI", system-ui, sans-serif;
+    font-size: 15px;
+    line-height: 1.6;
+    padding: 0 24px 96px;
+  }
+
+  .wrap { max-width: 1060px; margin: 0 auto; }
+
+  /* ---- masthead: a drawing sheet title block ---- */
+  header {
+    border-bottom: 1px solid var(--rule);
+    padding: 56px 0 20px;
+    margin-bottom: 40px;
+    display: grid;
+    grid-template-columns: 1fr auto;
+    align-items: end;
+    gap: 24px;
+  }
+  h1 {
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    font-size: clamp(30px, 4.4vw, 46px);
+    font-weight: 650;
+    letter-spacing: -.02em;
+    line-height: 1.05;
+    margin: 0 0 10px;
+    text-wrap: balance;
+  }
+  .sub { color: var(--dim); max-width: 62ch; margin: 0; }
+  .stamp {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+    font-size: 11px;
+    color: var(--dim);
+    text-align: right;
+    line-height: 1.9;
+    white-space: nowrap;
+  }
+  .stamp b { color: var(--ink); font-weight: 600; }
+
+  h2 {
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+    font-size: 13px;
+    font-weight: 650;
+    letter-spacing: .13em;
+    text-transform: uppercase;
+    color: var(--mark);
+    margin: 0 0 6px;
+  }
+  .lede { color: var(--dim); margin: 0 0 22px; max-width: 68ch; }
+
+  section { margin-bottom: 64px; }
+
+  /* ---- the stage: a slice of desktop with the notch on it ---- */
+  .stage {
+    position: relative;
+    background:
+      linear-gradient(160deg, color-mix(in srgb, var(--mark) 8%, var(--plate)), var(--plate));
+    border: 1px solid var(--rule);
+    border-radius: 3px;
+    height: 300px;
+    overflow: hidden;
+    box-shadow: var(--shadow);
+  }
+  /* faint desktop furniture so the notch reads as an overlay, not a card */
+  .tabs {
+    display: flex; gap: 2px; padding: 6px 8px 0;
+    border-bottom: 1px solid var(--rule-soft);
+  }
+  .tab {
+    font-size: 11px; color: var(--dim); padding: 5px 14px;
+    border-radius: 4px 4px 0 0; background: color-mix(in srgb, var(--ink) 5%, transparent);
+    white-space: nowrap;
+  }
+  .tab.on { background: color-mix(in srgb, var(--ink) 10%, transparent); color: var(--ink); }
+
+  .notch {
+    position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+    background: var(--bezel);
+    overflow: hidden;
+    width: 190px; height: 6px;
+    border-radius: 0 0 6px 6px;
+    box-shadow: 0 0 0 rgba(0,0,0,0);
+    transition:
+      width  340ms cubic-bezier(.16,1,.3,1),
+      height 340ms cubic-bezier(.16,1,.3,1),
+      border-radius 340ms cubic-bezier(.16,1,.3,1),
+      box-shadow 340ms ease;
+  }
+  .notch.peek { width: 202px; height: 30px; border-radius: 0 0 14px 14px; }
+
+  /* ONE fixed open size for every widget page - width AND height.
+     Two earlier passes let the page drive the size. Letting both dimensions vary read as the
+     notch itself jumping around while you swiped; letting only the height vary was better and
+     still moved the bottom edge on every page turn. A single frame that content moves through
+     is the only version that reads as one object. The clock page carries some empty space as a
+     result, and centred in a steady frame that looks deliberate rather than short. */
+  .notch.open {
+    width: 356px; height: 116px;
+    border-radius: 0 0 20px 20px;
+    box-shadow: 0 10px 26px rgba(0,0,0,.45);
+  }
+
+  /* Event HUDs are a different family: short, wide, transient. Not a page you opened -
+     an answer to something you just did, gone in two seconds. */
+  .notch.hud { width: 300px; height: 46px; border-radius: 0 0 18px 18px;
+               box-shadow: 0 8px 20px rgba(0,0,0,.4); }
+  .notch.hud.wide { width: 372px; height: 54px; }
+
+  .panel {
+    position: relative; z-index: 1;
+    opacity: 0; transition: opacity 150ms ease 150ms;
+    padding: 14px 18px 10px; height: 100%;
+    display: grid; grid-template-rows: 1fr auto; gap: 8px;
+  }
+  .notch.open .panel { opacity: 1; }
+  .notch:not(.open) .panel { transition-delay: 0ms; }
+
+  .page { display: none; align-content: center; }
+  .page.on { display: grid; animation: slidein 260ms cubic-bezier(.16,1,.3,1); }
+  @keyframes slidein {
+    from { opacity: 0; transform: translateX(var(--from, 14px)); }
+    to   { opacity: 1; transform: translateX(0); }
+  }
+
+  /* page 0 — clock */
+  .clock { color: #F2F5F8; text-align: center; }
+  .clock .t { font-size: 40px; font-weight: 600; letter-spacing: -.03em; line-height: 1;
+              font-variant-numeric: tabular-nums; }
+  .clock .d { font-size: 12px; color: #9AA6B2; margin-top: 4px; }
+
+  /* page 1 — weather. The sky is not an icon on the page; the sky IS the page.
+     Samsung's weather app makes the whole surface the sky, and on a surface this small that
+     reads far better than a 60px glyph beside a number. The panel's own background is
+     replaced while this page is showing. */
+  .sky-bleed {
+    position: absolute; inset: 0; overflow: hidden;
+    opacity: 0; transition: opacity 320ms ease;
+    pointer-events: none;
+  }
+  .notch.open[data-page="1"] .sky-bleed { opacity: 1; }
+
+  .sky-grad { position: absolute; inset: 0; background: linear-gradient(165deg, #2E6F9E 0%, #57A0C9 46%, #86C2DE 100%); }
+  .sky-bleed[data-cond="rain"]  .sky-grad { background: linear-gradient(165deg, #2A3947 0%, #3D5568 52%, #56718A 100%); }
+  .sky-bleed[data-cond="night"] .sky-grad { background: linear-gradient(165deg, #10192B 0%, #1D2C45 55%, #2C3F5E 100%); }
+
+  /* the sun sits off to one side and blooms rather than spins - at this scale a rotating
+     ray wheel reads as a loading spinner */
+  .bloom {
+    position: absolute; right: 34px; top: -34px; width: 116px; height: 116px; border-radius: 50%;
+    background: radial-gradient(circle, rgba(255,225,150,.95) 0%, rgba(250,196,86,.55) 34%, rgba(250,196,86,0) 70%);
+    animation: bloom 7s ease-in-out infinite;
+  }
+  @keyframes bloom { 0%,100% { transform: scale(1); opacity: .92; } 50% { transform: scale(1.09); opacity: 1; } }
+  .sky-bleed[data-cond="rain"] .bloom,
+  .sky-bleed[data-cond="night"] .bloom { display: none; }
+
+  .moon {
+    position: absolute; right: 44px; top: 16px; width: 30px; height: 30px; border-radius: 50%;
+    background: radial-gradient(circle at 36% 34%, #F4F7FB, #C3CEDC 70%, #9AAABD);
+    box-shadow: 0 0 22px rgba(200,220,255,.35); display: none;
+  }
+  .sky-bleed[data-cond="night"] .moon { display: block; }
+
+  .puff {
+    position: absolute; height: 26px; border-radius: 99px;
+    background: rgba(255,255,255,.34);
+    filter: blur(.4px);
+    animation: sweep linear infinite;
+  }
+  .puff.p1 { width: 120px; top: 16px;  left: -140px; animation-duration: 26s; }
+  .puff.p2 { width: 86px;  top: 52px;  left: -110px; animation-duration: 34s; animation-delay: -12s; opacity: .8; }
+  .puff.p3 { width: 150px; top: 80px;  left: -170px; animation-duration: 42s; animation-delay: -26s; opacity: .55; }
+  @keyframes sweep { to { transform: translateX(520px); } }
+
+  .rain { position: absolute; inset: 0; display: none; }
+  .sky-bleed[data-cond="rain"] .rain { display: block; }
+  .rain i {
+    position: absolute; top: -14px; width: 1.5px; height: 13px; border-radius: 2px;
+    background: linear-gradient(to bottom, rgba(200,224,255,0), rgba(200,224,255,.75));
+    animation: fall linear infinite;
+  }
+  @keyframes fall { to { transform: translateY(150px); } }
+
+  /* a scrim so the numbers stay legible whatever the sky is doing */
+  .scrim {
+    position: absolute; inset: 0;
+    background: linear-gradient(100deg, rgba(6,8,12,.62) 0%, rgba(6,8,12,.34) 46%, rgba(6,8,12,.05) 100%);
+  }
+
+  .wx { position: relative; color: #FFF; padding: 2px 2px; }
+  .wx .t { font-size: 38px; font-weight: 600; letter-spacing: -.03em; line-height: 1;
+           font-variant-numeric: tabular-nums; text-shadow: 0 1px 12px rgba(0,0,0,.45); }
+  .wx .c { font-size: 12.5px; color: rgba(255,255,255,.9); margin-top: 3px; }
+  .wx .r { font-size: 11px; color: rgba(255,255,255,.68); margin-top: 6px;
+           font-variant-numeric: tabular-nums; }
+
+  /* FIRST LOOK OF THE DAY: the sky arrives expansively, then settles into the ambient loop.
+     An event the first time, wallpaper every time after - otherwise a daily flourish becomes
+     a thing that happens on every glance and stops meaning anything. */
+  .sky-bleed.first .sky-grad { animation: skyrise 1500ms cubic-bezier(.16,1,.3,1); }
+  .sky-bleed.first .bloom    { animation: sunrise 1600ms cubic-bezier(.16,1,.3,1), bloom 7s ease-in-out 1600ms infinite; }
+  .sky-bleed.first .puff     { animation: rush 1500ms cubic-bezier(.16,1,.3,1), sweep linear 1500ms infinite; }
+  @keyframes skyrise { from { transform: scale(1.25); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+  @keyframes sunrise { from { transform: translateY(46px) scale(.5); opacity: 0; } to { transform: translateY(0) scale(1); opacity: 1; } }
+  @keyframes rush    { from { transform: translateX(-60px); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+
+  /* page 2 — media, interactive */
+  .media { display: grid; grid-template-columns: 46px 1fr; gap: 12px; align-items: center; }
+  .art { width: 46px; height: 46px; border-radius: 7px;
+         background: linear-gradient(135deg, #3B4A5C, #223040); }
+  .media .ttl { font-size: 13px; color: #F2F5F8; overflow: hidden;
+                text-overflow: ellipsis; white-space: nowrap; }
+  .media .art2 { font-size: 11px; color: #9AA6B2; margin-bottom: 6px; }
+  .keys { display: flex; gap: 14px; color: #C6D0DA; font-size: 13px; }
+  .keys span { cursor: pointer; }
+  .keys span:hover { color: #FFF; }
+
+  /* page 3 — audio: the level is DRAGGABLE, not a readout */
+  .audio { color: #F2F5F8; }
+  .audio .dev { font-size: 11px; color: #9AA6B2; display: flex; justify-content: space-between; }
+  .audio .lvl { font-size: 26px; font-weight: 600; font-variant-numeric: tabular-nums;
+                margin: 2px 0 8px; }
+  .track { height: 6px; border-radius: 99px; background: #2A323C; cursor: ew-resize; position: relative; }
+  .fill  { height: 100%; border-radius: 99px; background: #4AD695; width: 62%; }
+  .track:focus-visible { outline: 2px solid #6FB3C4; outline-offset: 3px; }
+
+  /* page 4 — shelf */
+  .shelf { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+  .file {
+    background: #1B222B; border: 1px dashed #39434F; border-radius: 8px;
+    height: 54px; display: grid; place-content: center; gap: 3px;
+    color: #9AA6B2; font-size: 10px; text-align: center; padding: 4px;
+  }
+  .file.has { border-style: solid; border-color: #4A5765; color: #D6DEE7; background: #212A34; }
+
+  /* ---- event HUDs ---- */
+  .hudbody { display: none; align-items: center; gap: 12px; padding: 0 16px; height: 100%;
+             color: #F2F5F8; }
+  .notch.hud .hudbody.on { display: flex; }
+  .notch.hud .panel { display: none; }
+  .hudbody .glyph { font-size: 15px; color: #C6D0DA; }
+  .hudbody .bar { flex: 1; height: 5px; border-radius: 99px; background: #2A323C; overflow: hidden; }
+  .hudbody .bar > i { display: block; height: 100%; background: #4AD695; width: 62%; }
+  .hudbody .num { font-size: 12px; font-variant-numeric: tabular-nums; color: #C6D0DA;
+                  min-width: 34px; text-align: right; }
+  .hudbody .art3 { width: 34px; height: 34px; border-radius: 6px;
+                   background: linear-gradient(135deg, #3B4A5C, #223040); flex: none; }
+  .hudbody .meta { min-width: 0; }
+  .hudbody .meta b { display: block; font-size: 12px; font-weight: 600;
+                     overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .hudbody .meta span { font-size: 10.5px; color: #9AA6B2; }
+
+  .dots { display: flex; gap: 6px; justify-content: center; }
+  .dot { width: 5px; height: 5px; border-radius: 50%; background: #46525F; }
+  .dot.on { background: #C6D0DA; }
+
+  .controls { display: flex; gap: 8px; margin-top: 14px; flex-wrap: wrap; }
+  button {
+    font: inherit; font-size: 13px;
+    background: var(--plate); color: var(--ink);
+    border: 1px solid var(--rule); border-radius: 3px;
+    padding: 7px 14px; cursor: pointer;
+  }
+  button:hover { border-color: var(--mark); color: var(--mark); }
+  button:focus-visible { outline: 2px solid var(--mark); outline-offset: 2px; }
+  button[aria-pressed="true"] { border-color: var(--mark); color: var(--mark); }
+
+  /* ---- spec tables read as a drawing's dimension list ---- */
+  .specs { border-top: 1px solid var(--rule); margin-top: 8px; }
+  .row {
+    display: grid; grid-template-columns: 170px 1fr auto;
+    gap: 16px; padding: 9px 0;
+    border-bottom: 1px solid var(--rule-soft);
+    align-items: baseline;
+  }
+  .row dt { color: var(--dim); font-size: 13px; margin: 0; }
+  .row dd { margin: 0; }
+  .val {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+    font-size: 12px; color: var(--mark); white-space: nowrap;
+    font-variant-numeric: tabular-nums;
+  }
+  dl { margin: 0; }
+
+  .grid2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px,1fr)); gap: 20px; }
+  .card {
+    background: var(--plate); border: 1px solid var(--rule);
+    border-radius: 3px; padding: 18px 18px 20px;
+  }
+  .card h3 {
+    font-size: 14px; margin: 0 0 4px; font-weight: 650;
+    font-family: "Segoe UI Variable Display", "Segoe UI", system-ui, sans-serif;
+  }
+  .card p { margin: 0; color: var(--dim); font-size: 13.5px; }
+  .tag {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+    font-size: 10.5px; letter-spacing: .04em; text-transform: uppercase;
+    color: var(--mark); display: block; margin-bottom: 8px;
+  }
+  .tag.warn { color: var(--warn); }
+  .tag.live { color: var(--live); }
+
+  code {
+    font-family: "Cascadia Code", Consolas, ui-monospace, monospace;
+    font-size: .88em; color: var(--mark);
+  }
+  .note { color: var(--dim); font-size: 13.5px; max-width: 70ch; }
+  .note strong { color: var(--ink); font-weight: 600; }
+
+  @media (prefers-reduced-motion: reduce) {
+    .notch, .panel { transition-duration: 1ms !important; }
+  }
+</style>
+
+<div class="wrap">
+
+<header>
+  <div>
+    <h1>Plith Notch Blueprint</h1>
+    <p class="sub">The resting shape, what a hover does, what a click opens — and the
+    measurements behind each. Every state below is live: press a control and it runs at the
+    real duration and easing.</p>
+  </div>
+  <div class="stamp">
+    surface <b>190 × h</b> at rest<br>
+    opens to <b>356 × 116</b>, fixed<br>
+    anchor <b>top-centre, flush</b><br>
+    <span style="color:var(--live)">● click to open</span>
+  </div>
+</header>
+
+<section>
+  <h2>Live states</h2>
+  <p class="lede">Rest is a shape, not a strip. Hover acknowledges the pointer without opening
+  anything. A click opens the panel — that separation is what keeps the top of the screen
+  usable, because an open panel is solid to the mouse and a closed one is not there at all.</p>
+
+  <div class="stage" id="stage">
+    <div class="tabs">
+      <div class="tab">Parsel · task list</div>
+      <div class="tab on">Phase 5 CardHost refactor</div>
+      <div class="tab">Integrate Unity plugin</div>
+    </div>
+
+    <div class="notch" id="notch" data-page="0">
+      <div class="sky-bleed" id="sky" data-cond="day" aria-hidden="true">
+        <div class="sky-grad"></div>
+        <div class="bloom"></div>
+        <div class="moon"></div>
+        <i class="puff p1"></i><i class="puff p2"></i><i class="puff p3"></i>
+        <div class="rain" id="rain"></div>
+        <div class="scrim"></div>
+      </div>
+      <div class="panel">
+
+        <div class="page on" data-p="0">
+          <div class="clock">
+            <div class="t">21:32</div>
+            <div class="d">Pazartesi · 7 Eylül</div>
+          </div>
+        </div>
+
+        <div class="page" data-p="1">
+          <div class="wx">
+            <div class="t">22°</div>
+            <div class="c">Parçalı bulutlu</div>
+            <div class="r">↑ 24°   ↓ 14°   ·   Hissedilen 21°</div>
+          </div>
+        </div>
+
+        <div class="page" data-p="2">
+          <div class="media">
+            <div class="art"></div>
+            <div>
+              <div class="ttl">You Feel Be Love</div>
+              <div class="art2">Denis Phenomen</div>
+              <div class="keys">
+                <span title="Previous">⏮</span>
+                <span title="Play / pause" id="pp">⏯</span>
+                <span title="Next">⏭</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" data-p="3">
+          <div class="audio">
+            <div class="dev"><span>Logitech G733</span><span>Voicemeeter A1</span></div>
+            <div class="lvl" id="lvl">62%</div>
+            <div class="track" id="track" tabindex="0" role="slider"
+                 aria-label="Volume" aria-valuemin="0" aria-valuemax="100" aria-valuenow="62">
+              <div class="fill" id="fill"></div>
+            </div>
+          </div>
+        </div>
+
+        <div class="page" data-p="4">
+          <div class="shelf">
+            <div class="file has">rapor.pdf<br><span style="opacity:.6">2.4 MB</span></div>
+            <div class="file has">ekran.png<br><span style="opacity:.6">840 KB</span></div>
+            <div class="file">drop here</div>
+          </div>
+        </div>
+
+        <div class="dots" id="dots">
+          <span class="dot on"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="dot"></span>
+        </div>
+      </div>
+
+      <div class="hudbody" id="hud-vol">
+        <span class="glyph">🔊</span>
+        <span class="bar"><i id="hudfill"></i></span>
+        <span class="num" id="hudnum">62%</span>
+      </div>
+
+      <div class="hudbody" id="hud-media">
+        <span class="art3"></span>
+        <span class="meta">
+          <b>You Feel Be Love</b>
+          <span>Denis Phenomen</span>
+        </span>
+      </div>
+    </div>
+  </div>
+
+  <div class="controls">
+    <button id="b-rest" aria-pressed="true">Rest</button>
+    <button id="b-peek" aria-pressed="false">Peek — hover</button>
+    <button id="b-open" aria-pressed="false">Open — click</button>
+    <button id="b-cycle">Play sequence</button>
+    <button id="b-prev">◀ Previous page</button>
+    <button id="b-next">Next page ▶</button>
+    <button id="b-hud">Volume event</button>
+    <button id="b-hud2">Track change</button>
+    <button id="b-first">Weather · first look today</button>
+    <button id="b-cond">Cycle sky</button>
+  </div>
+</section>
+
+<section>
+  <h2>Geometry</h2>
+  <p class="lede">The resting width is fixed and the panel's is not. That asymmetry is the
+  point: a media session widens what the notch opens into, and the shape you see at rest must
+  not move when it does, or the anchor visibly jumps.</p>
+  <dl class="specs">
+    <div class="row"><dt>Resting width</dt><dd>Constant. Never follows the panel.</dd><dd class="val">190 dip</dd></div>
+    <div class="row"><dt>Resting height</dt><dd>User setting. Below ~8 dip it stops being a target.</dd><dd class="val">6 dip · 2–24</dd></div>
+    <div class="row"><dt>Peek</dt><dd>Hover only. Held under the content-fade threshold so it never reads as half-open.</dd><dd class="val">t = 0.14</dd></div>
+    <div class="row"><dt>Open panel</dt><dd>Width follows content; height follows the visible cards.</dd><dd class="val">412 × 196</dd></div>
+    <div class="row"><dt>Corner radius</dt><dd>Grows with the shape, clamped to its own height.</dd><dd class="val">6 → 22 dip</dd></div>
+    <div class="row"><dt>Top corners</dt><dd>Square, flush with the screen edge. A notch is part of the bezel.</dd><dd class="val">0</dd></div>
+  </dl>
+</section>
+
+<section>
+  <h2>Motion</h2>
+  <p class="lede">One progress value drives width, height, radius, shadow and content opacity
+  together. Four parallel clocks on one transition can be stopped or retargeted independently,
+  and any of those leaves the shape in a state no single value describes.</p>
+  <dl class="specs">
+    <div class="row"><dt>Open</dt><dd>Leaves fast, spends the rest settling. The decelerating tail is what reads as springy.</dd><dd class="val">340 ms · quintic out</dd></div>
+    <div class="row"><dt>Close</dt><dd>Accelerates away; content fades first.</dd><dd class="val">260 ms · cubic in</dd></div>
+    <div class="row"><dt>Peek / unpeek</dt><dd>Quick enough to feel like a response, not an animation.</dd><dd class="val">160 ms · cubic</dd></div>
+    <div class="row"><dt>Content fade</dt><dd>Starts only once the shape has mostly settled.</dd><dd class="val">from t = 0.55</dd></div>
+  </dl>
+  <p class="note" style="margin-top:14px"><strong>Ordering is the effect.</strong> The shape
+  settles first and the content arrives into it. Fading content in while the surface is still
+  moving reads as a window being resized — the one thing a notch must never look like.</p>
+</section>
+
+<section>
+  <h2>Two shape families</h2>
+  <p class="lede">The notch is never a card. It is one surface that takes one of two shapes,
+  and which shape it takes says who started the interaction.</p>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag live">You did something</span>
+      <h3>Event HUD</h3>
+      <p>A volume key, a track change. Short and wide, one line, gone in two seconds. It is an
+      answer, not a place — so it never grows tall and never shows a page dot.</p>
+    </div>
+    <div class="card">
+      <span class="tag">You went looking</span>
+      <h3>Widget page</h3>
+      <p>Opened by a click, held while you use it, paged sideways. One fixed frame, whichever
+      widget is in it.</p>
+    </div>
+  </div>
+</section>
+
+<section>
+  <h2>Widgets</h2>
+  <p class="lede">One widget per page, and every page is the same size. Two earlier passes let
+  the page drive the size — first both dimensions, then only the height. Both read as the notch
+  jumping around while you swiped. A steady frame with content moving through it is the only
+  version that reads as one object.</p>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag live">Built</span>
+      <h3>Clock</h3>
+      <p>Time and date, centred. Carries empty space on purpose — a clock centred in a steady
+      frame reads as deliberate, a frame that shrinks to hug it reads as unstable.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Planned</span>
+      <h3>Weather</h3>
+      <p>The sky is not an icon on the page — the sky <em>is</em> the page, edge to edge, the way
+      Samsung's weather app does it. Condition and time of day set the gradient; sun bloom,
+      drifting cloud and falling rain sit on top of it, and a scrim keeps the numbers legible
+      whatever the sky is doing.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Partly built</span>
+      <h3>Media</h3>
+      <p>Art, title, transport. The buttons work — press play here and it responds, because a
+      widget you can only look at is a notification.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Planned · interactive</span>
+      <h3>Audio</h3>
+      <p>Drag the level, see the device and the Voicemeeter bus it is riding. This is the one
+      Plith is uniquely placed to own — it already knows every rail.</p>
+    </div>
+    <div class="card">
+      <span class="tag warn">Behind a spike</span>
+      <h3>Shelf</h3>
+      <p>Drag files onto the notch to hold them, drag them out somewhere else. Gated on whether
+      an overlay in this z-band can accept an OLE drag at all.</p>
+    </div>
+    <div class="card">
+      <span class="tag">Candidates</span>
+      <h3>Next</h3>
+      <p>Calendar peek, a timer you start from the notch, mic mute state. Each earns a page only
+      if it is worth a swipe — the pager is not a place to put everything.</p>
+    </div>
+  </div>
+  <p class="note" style="margin-top:18px"><strong>First look of the day is an event; every look
+  after it is wallpaper.</strong> The first time you open the weather page on a given day the sky
+  arrives expansively — the gradient swells in, the sun rises into frame, cloud sweeps across —
+  and then settles into a slow ambient loop it keeps for the rest of the day. A flourish that
+  fires on every glance stops meaning anything, and on a surface that lives at the top of the
+  screen it would go from delightful to tiring inside a day. Press <em>Weather · first look
+  today</em> to see the difference against <em>Cycle sky</em>.</p>
+
+  <p class="note" style="margin-top:14px"><strong>Interactive, not decorative.</strong> Drag the
+  volume track above; press play on the media page. A widget you can only read is a notification
+  with extra steps, and the notch already has a shape for those.</p>
+</section>
+
+<section>
+  <h2>Input</h2>
+  <p class="lede">A touchpad's two-finger horizontal swipe and a mouse tilt wheel produce the
+  same message, so one handler covers both. Everything else is a fallback for hardware that has
+  neither.</p>
+  <dl class="specs">
+    <div class="row"><dt>Two-finger swipe</dt><dd>Touchpads.</dd><dd class="val">WM_MOUSEHWHEEL</dd></div>
+    <div class="row"><dt>Tilt wheel</dt><dd>Mice that have one — same message.</dd><dd class="val">WM_MOUSEHWHEEL</dd></div>
+    <div class="row"><dt>Shift + wheel</dt><dd>The established Windows convention for scrolling sideways.</dd><dd class="val">MK_SHIFT</dd></div>
+    <div class="row"><dt>Page dots</dt><dd>Clickable. Not optional — it is how paging is discovered.</dd><dd class="val">hit target ≥ 20 dip</dd></div>
+  </dl>
+  <p class="note" style="margin-top:14px">Wheel deltas are not page counts. One physical swipe
+  emits a stream of them, so delta accumulates and commits a single page per threshold, then
+  waits for the accumulator to fall back near zero.</p>
+</section>
+
+<section>
+  <h2>Two rules that are not style</h2>
+  <div class="grid2">
+    <div class="card">
+      <span class="tag">Structural</span>
+      <h3>The alpha is the hit mask</h3>
+      <p>The window WPF paints must be the top-level window — per-pixel opacity applies to
+      nothing else. Given that, transparent pixels pass the mouse through and drawn ones receive
+      it, with no filter, no click-through bit, no region. Every attempt to patch around it
+      failed, in both directions.</p>
+    </div>
+    <div class="card">
+      <span class="tag warn">Cost</span>
+      <h3>Motion stops when the panel closes</h3>
+      <p>The window is never hidden in notch mode, so an animation left running is a permanent
+      CPU cost on an overlay that is invisible most of the time. Weather motion starts on open
+      and stops on collapse — and gets measured, not assumed.</p>
+    </div>
+  </div>
+</section>
+
+</div>
+
+<script>
+  const notch = document.getElementById('notch');
+  const pages = [...document.querySelectorAll('.page')];
+  const dots  = [...document.querySelectorAll('#dots .dot')];
+  const huds  = { vol: document.getElementById('hud-vol'), media: document.getElementById('hud-media') };
+  const btns = {
+    rest: document.getElementById('b-rest'),
+    peek: document.getElementById('b-peek'),
+    open: document.getElementById('b-open'),
+  };
+  let page = 0, timer = null, hudTimer = null;
+
+  function showPage(n, dir) {
+    const next = (n + pages.length) % pages.length;
+    // Content enters from the side you swiped from, so paging reads as movement through a
+    // frame rather than a crossfade in place.
+    pages[next].style.setProperty('--from', (dir >= 0 ? 14 : -14) + 'px');
+    page = next;
+    pages.forEach((p, i) => p.classList.toggle('on', i === page));
+    dots.forEach((d, i) => d.classList.toggle('on', i === page));
+    // The full-bleed sky keys off this: it is only painted while the weather page is showing.
+    notch.dataset.page = String(page);
+  }
+
+  function clearHud() {
+    if (hudTimer) { clearTimeout(hudTimer); hudTimer = null; }
+    notch.classList.remove('hud', 'wide');
+    Object.values(huds).forEach(h => h.classList.remove('on'));
+  }
+
+  function set(state) {
+    if (timer) { clearTimeout(timer); timer = null; }
+    clearHud();
+    notch.classList.remove('peek', 'open');
+    if (state !== 'rest') notch.classList.add(state);
+    for (const [k, b] of Object.entries(btns)) b.setAttribute('aria-pressed', String(k === state));
+  }
+
+  // An event HUD is not a page: it arrives on its own, says one thing, and leaves.
+  function hud(which, wide) {
+    set('rest');
+    clearHud();
+    notch.classList.add('hud');
+    if (wide) notch.classList.add('wide');
+    huds[which].classList.add('on');
+    hudTimer = setTimeout(clearHud, 2000);
+  }
+
+  btns.rest.onclick = () => set('rest');
+  btns.peek.onclick = () => set('peek');
+  btns.open.onclick = () => set('open');
+  document.getElementById('b-prev').onclick = () => { set('open'); showPage(page - 1, -1); };
+  document.getElementById('b-next').onclick = () => { set('open'); showPage(page + 1, 1); };
+  document.getElementById('b-hud').onclick  = () => hud('vol', false);
+  document.getElementById('b-hud2').onclick = () => hud('media', true);
+
+  document.getElementById('b-cycle').onclick = () => {
+    showPage(0, 1); set('rest');
+    timer = setTimeout(() => {
+      set('peek');
+      timer = setTimeout(() => {
+        set('open');
+        let n = 1;
+        const step = () => {
+          if (n < pages.length) { showPage(n++, 1); timer = setTimeout(step, 1200); }
+          else timer = setTimeout(() => set('rest'), 1200);
+        };
+        timer = setTimeout(step, 1200);
+      }, 700);
+    }, 400);
+  };
+
+  // The stage behaves like the real thing: hover peeks, a click opens, a horizontal wheel
+  // pages - the same WM_MOUSEHWHEEL a touchpad's two-finger swipe produces.
+  const stage = document.getElementById('stage');
+  stage.addEventListener('mouseenter', () => {
+    if (!notch.classList.contains('open') && !notch.classList.contains('hud')) set('peek');
+  });
+  stage.addEventListener('mouseleave', () => {
+    if (!notch.classList.contains('open') && !notch.classList.contains('hud')) set('rest');
+  });
+  notch.addEventListener('click', (e) => {
+    if (e.target.closest('.track') || e.target.closest('.keys')) return;
+    e.stopPropagation();
+    set(notch.classList.contains('open') ? 'rest' : 'open');
+  });
+
+  let acc = 0;
+  stage.addEventListener('wheel', (e) => {
+    if (!notch.classList.contains('open')) return;
+    const dx = Math.abs(e.deltaX) > Math.abs(e.deltaY) ? e.deltaX : (e.shiftKey ? e.deltaY : 0);
+    if (!dx) return;
+    e.preventDefault();
+    // One physical swipe emits a stream of deltas, so they accumulate and commit a single page
+    // per threshold rather than flying through every widget.
+    acc += dx;
+    if (Math.abs(acc) > 90) { showPage(page + Math.sign(acc), Math.sign(acc)); acc = 0; }
+  }, { passive: false });
+
+  // ---- interactive bits: the widgets do things, they are not readouts ----
+  const track = document.getElementById('track');
+  const fill  = document.getElementById('fill');
+  const lvl   = document.getElementById('lvl');
+  function setVol(clientX) {
+    const r = track.getBoundingClientRect();
+    const v = Math.round(Math.min(1, Math.max(0, (clientX - r.left) / r.width)) * 100);
+    fill.style.width = v + '%';
+    lvl.textContent = v + '%';
+    track.setAttribute('aria-valuenow', String(v));
+    document.getElementById('hudfill').style.width = v + '%';
+    document.getElementById('hudnum').textContent = v + '%';
+  }
+  let dragging = false;
+  track.addEventListener('pointerdown', e => { dragging = true; track.setPointerCapture(e.pointerId); setVol(e.clientX); });
+  track.addEventListener('pointermove', e => { if (dragging) setVol(e.clientX); });
+  track.addEventListener('pointerup',   () => { dragging = false; });
+  track.addEventListener('keydown', e => {
+    const cur = Number(track.getAttribute('aria-valuenow'));
+    if (e.key === 'ArrowRight' || e.key === 'ArrowLeft') {
+      e.preventDefault();
+      const v = Math.min(100, Math.max(0, cur + (e.key === 'ArrowRight' ? 2 : -2)));
+      fill.style.width = v + '%'; lvl.textContent = v + '%';
+      track.setAttribute('aria-valuenow', String(v));
+    }
+  });
+
+  let playing = true;
+  document.getElementById('pp').addEventListener('click', e => {
+    e.stopPropagation();
+    playing = !playing;
+    e.target.textContent = playing ? '⏯' : '▶';
+  });
+
+  // ---- the sky ----------------------------------------------------------------------
+  const sky  = document.getElementById('sky');
+  const rain = document.getElementById('rain');
+
+  // Drops are generated rather than hand-authored so their timing is staggered without
+  // twenty near-identical lines of markup.
+  for (let i = 0; i < 26; i++) {
+    const d = document.createElement('i');
+    d.style.left = (Math.random() * 100) + '%';
+    d.style.animationDuration = (0.55 + Math.random() * 0.5) + 's';
+    d.style.animationDelay = (-Math.random() * 1.2) + 's';
+    d.style.opacity = String(0.35 + Math.random() * 0.5);
+    rain.appendChild(d);
+  }
+
+  const conds = ['day', 'rain', 'night'];
+  const condLabel = {
+    day:   ['22°', 'Parçalı bulutlu', '↑ 24°   ↓ 14°   ·   Hissedilen 21°'],
+    rain:  ['17°', 'Sağanak yağışlı',  '↑ 19°   ↓ 12°   ·   Hissedilen 15°'],
+    night: ['14°', 'Açık',             '↑ 21°   ↓ 11°   ·   Hissedilen 13°'],
+  };
+  let ci = 0;
+  document.getElementById('b-cond').onclick = () => {
+    ci = (ci + 1) % conds.length;
+    const c = conds[ci];
+    sky.dataset.cond = c;
+    const wx = document.querySelector('.wx');
+    wx.querySelector('.t').textContent = condLabel[c][0];
+    wx.querySelector('.c').textContent = condLabel[c][1];
+    wx.querySelector('.r').textContent = condLabel[c][2];
+    set('open'); showPage(1, 1);
+  };
+
+  // First look of the day: the sky arrives expansively, then settles into the ambient loop.
+  // An event the first time and wallpaper every time after - a flourish that fires on every
+  // glance stops meaning anything, and on a surface that lives at the top of the screen it
+  // would go from delightful to tiring within a day.
+  document.getElementById('b-first').onclick = () => {
+    set('open');
+    showPage(1, 1);
+    sky.classList.remove('first');
+    void sky.offsetWidth;          // restart the animation
+    sky.classList.add('first');
+    setTimeout(() => sky.classList.remove('first'), 1700);
+  };
+</script>

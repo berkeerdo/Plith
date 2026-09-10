@@ -1,191 +1,186 @@
-# Phase 6 slice 3 — Notch widget carousel
+# Phase 6 slice 3 — Notch widgets
 
-**Status:** design agreed 2026-09-07, from a live session driving the slice-2 build.
+**Status:** design agreed 2026-09-10 against a live mockup the user drove directly.
+Supersedes the first draft of this file, which described a single home page with the clock
+and weather side by side.
 
-**Depends on:** slice 2, and specifically the three fixes that made the panel usable at all —
-the `{x:Static}` crash (`6469ef1`), mouse input reaching the window (`1c60e5a`), and the
-click-through / surface-size pair (`6277c8a`).
+**Depends on:** slice 2, and the fixes that made the notch usable at all — the `{x:Static}`
+crash (`6469ef1`), click-to-open replacing hover-to-open, and the window architecture change
+that finally stopped a closed notch blocking the desktop (`0f1fda7`).
+
+**Mockup:** every state below is live at
+`docs/superpowers/design/notch-design.html` — hover peeks, click opens, a horizontal wheel
+pages, the volume track drags, and the weather page's first-look reveal has its own control.
 
 ---
 
 ## Problem statement
 
-Hovering the notch opens one fixed panel: a single ambient row above whatever cards the OSD
-was already going to render. There is one view and no way to reach anything else, so the
-notch can only ever show what fits on one line.
+The notch opens one fixed panel: an ambient row above whatever cards the OSD was going to
+render. There is one view and no way to reach anything else, so it can only ever show what
+fits on one line.
 
-The reference apps do not work that way. The notch is a small surface you **page through**:
-a home view, a calendar, media, a file shelf — one horizontal gesture apart. That is what
-makes an always-present strip worth having rather than a second volume popup.
-
-The user's words, driving this: *"yukarıda sağa doğru ya da sola doğru touchpad ile
-yaptığında değişiyor, diğer widget'a geçiyormuş gibi — mouse'ta da bunu iyi planlaman
-lazım"*, and for the home page *"saat tarih ve sağda weather"*.
+The first attempt at fixing that put the clock and the weather side by side on one "home"
+page. Driving it on a real surface killed the idea in one sentence from the user: *"saat ve
+weather olunca çok büyük oluyor"* — a notch that opens into a wide slab stops reading as a
+notch.
 
 ## Goals
 
-1. The open panel is a **pager**. Page 1 is home; further pages hold a calendar and whatever
-   later slices add. Paging is horizontal and animated.
-2. **Home page**: clock and date on the left, current weather on the right, each taking half
-   the width. No wasted middle.
-3. **Input works on a touchpad and on a mouse.** A two-finger horizontal swipe and a mouse
-   with no horizontal wheel must both be able to change page.
-4. **Weather looks alive** — motion that suits the condition, not a static glyph.
-5. Classic OSD is untouched, as in every slice so far.
+1. **One widget per page**, paged sideways.
+2. **One fixed frame.** Every page opens to the same size.
+3. **Widgets do things.** The volume level drags; the transport buttons work.
+4. **Weather is the sky**, edge to edge — not a glyph beside a number.
+5. Classic OSD untouched, as in every slice.
 
 ## Non-goals
 
-- The file shelf. Still deferred, still gated on the drag-and-drop spike from slice 2's spec.
-- Notifications. Declined by the user in slice 2 and still declined.
-- Making the notch a launcher, a clipboard manager, or a settings surface. It pages between
-  glanceable widgets; that is the whole scope.
+- Notifications. Declined twice.
+- Remembering the last page across opens. Easy to add, easy to regret before anyone has used
+  the paging.
+- Calendar events, and the provider integration behind them.
 
 ---
 
-## §1 — The pager
+## §1 — Two shape families
 
-A `NotchPager` control hosting an ordered list of widget views, showing exactly one at a time,
-with a horizontal slide between them.
+The notch is never a card. It takes one of two shapes, and **which shape it takes says who
+started the interaction**.
 
-**Pages are not cards.** `CardHost`/`ICard` decides what the *OSD* shows for an event and is
-the single authority for when the OSD appears — that contract stays exactly as it is. The
-pager lives **inside the ambient home content** that a hover opens, and an event-driven show
-never touches it. A volume key still opens the volume card, not page 3 of a carousel.
+| | **Event HUD** | **Widget page** |
+|---|---|---|
+| Trigger | A volume key, a track change | A click on the resting notch |
+| Shape | Short and wide — `300 × 46`, `372 × 54` for media | The fixed frame — `356 × 116` |
+| Lifetime | ~2 s, then gone | Held while in use |
+| Page dots | None. It is not a place. | Yes |
 
-Page state is per-open-session by default: opening the notch returns to page 1. A "remember
-the last page" setting is deliberately not in this slice; it is easy to add later and easy to
-regret shipping before anyone has used the paging.
+This replaces the current arrangement, where an event opens the same panel a hover does and
+the volume card is just another row in it. An answer to something you did should not look like
+a place you went.
 
-**Animation.** The outgoing page translates out and the incoming one translates in, both on a
-single progress value, exactly as `NotchExpand` drives the notch's own morph. That decision is
-not stylistic: parallel clocks on one visual transition can be stopped, retargeted or completed
-independently, and this branch has produced five defects from state that depended on a single
-animation callback firing. One clock cannot desynchronise from itself.
+## §2 — One frame, whatever is in it
 
-## §2 — Input, which is the hard part
+**Every widget page opens to exactly `356 × 116`.** Content moves through the frame; the frame
+does not move.
 
-Windows reports a touchpad's two-finger horizontal scroll as **`WM_MOUSEHWHEEL`**, and a mouse
-with a tilt wheel reports the same message. One handler therefore covers both, which is the
-whole reason to build on it rather than on gesture APIs.
+Two earlier passes did it the other way and both were rejected on the mockup:
 
-Three routes, one code path behind them:
+- **Both dimensions per page** — swiping made the notch itself jump around. Read as instability.
+- **Height only** — better, but the bottom edge still moved on every page turn.
+
+The clock page carries empty space as a result. That is the correct trade: a clock centred in a
+steady frame reads as deliberate, a frame that shrinks to hug it reads as unstable.
+
+Page transitions slide: the incoming page enters from the side you swiped from, so paging reads
+as movement through a frame rather than a crossfade in place.
+
+## §3 — The widgets
+
+| Page | State | Notes |
+|---|---|---|
+| **Clock** | built | Time and date, centred. |
+| **Weather** | new | Full-bleed sky — see §4. |
+| **Media** | partly built | Art, title, working transport. |
+| **Audio** | new | Draggable level, endpoint and Voicemeeter bus. |
+| **Shelf** | behind a spike | Drag files onto the notch to hold them. |
+
+**Audio is the one worth building first among the new ones.** Plith already knows every
+rail — the endpoint, the bus, the level — and no other notch app has an audio engine
+underneath it. A draggable level in the notch is the thing only this app can offer.
+
+**Interactive, not decorative.** A widget you can only read is a notification with extra
+steps, and §1 already gives notifications their own shape.
+
+## §4 — Weather: the sky is the page
+
+Not an icon beside a number. **The panel's entire background becomes the sky**, the way
+Samsung's weather app does it — which matters more here, not less, because the surface is
+small enough that a 60 DIP glyph beside a temperature wastes most of it.
+
+- **Gradient** from condition and time of day: day, overcast, rain, night.
+- **Sun blooms rather than spins.** At this scale a rotating ray wheel reads as a loading
+  spinner. It pulses slowly and sits off-centre, partly out of frame.
+- **Clouds sweep** across the full width on long, staggered loops.
+- **Rain and snow fall** as generated elements, staggered, recycled.
+- **A scrim under the text**, so the numbers stay legible whatever the sky is doing. Without it
+  the temperature disappears into the rain gradient.
+
+### First look of the day
+
+The first time the weather page is opened on a given day, the sky **arrives**: the gradient
+swells in, the sun rises into frame, cloud sweeps across — about 1.5 s — and then settles into
+the ambient loop it keeps for the rest of the day.
+
+**An event the first time, wallpaper every time after.** A flourish that fires on every glance
+stops meaning anything, and on a surface that lives at the top of the screen it would go from
+delightful to tiring inside a day. The trigger is a stored date, not a session flag: opening
+the notch fifty times before noon should produce exactly one reveal.
+
+### Motion has a cost and it is measured
+
+**Every storyboard stops when the panel closes.** The OSD's window is never hidden in notch
+mode, so an animation left running is a permanent CPU cost on an overlay that is invisible most
+of the time. Start on open, stop on collapse, and measure it — slice 1's ledger already carries
+an unmeasured idle-resource item, and this must not be what finally makes it matter.
+
+## §5 — Input
+
+A touchpad's two-finger horizontal swipe and a mouse tilt wheel produce **the same message**,
+so one handler covers both. That is the whole reason to build on it rather than on gesture APIs.
 
 | Route | Message | For |
 |---|---|---|
-| Two-finger horizontal swipe | `WM_MOUSEHWHEEL` | Touchpads |
+| Two-finger swipe | `WM_MOUSEHWHEEL` | Touchpads |
 | Tilt wheel | `WM_MOUSEHWHEEL` | Mice that have one |
-| `Shift` + vertical wheel | `WM_MOUSEWHEEL` with `MK_SHIFT` | Every other mouse — the established Windows convention for "scroll horizontally" |
+| `Shift` + wheel | `WM_MOUSEWHEEL` + `MK_SHIFT` | Every other mouse |
+| Page dots | click | The affordance that says paging exists |
 
-Plus **clickable page dots** under the content, which are also the affordance that tells a
-first-time user paging exists at all. They are the only route that needs no gesture knowledge,
-so they are not optional.
+**`WM_MOUSEHWHEEL` does not route through WPF's normal input events.** It has to be taken in
+the window's message hook and forwarded — which is now `HwndSource.AddHook`, since WPF owns
+the window after `0f1fda7`.
 
-**`WM_MOUSEHWHEEL` does not route through WPF's normal input events.** It must be handled in
-the band window's `WndProc` and forwarded. That is a real constraint and it is why input gets
-its own task rather than being folded into the pager's.
+**Wheel deltas are not page counts.** One physical swipe emits a stream of small deltas;
+committing a page per delta would fly through every widget. Accumulate, commit one page per
+threshold, then require the accumulator to fall back near zero. That decision belongs in a
+pure, unit-tested function — the same gather/decide split every other subsystem in this phase
+uses.
 
-**Wheel deltas are not page counts.** A touchpad emits a stream of small deltas for one
-physical swipe; treating each as a page turn would fly through every widget. Accumulate delta
-and commit one page per threshold, then require the accumulator to return near zero before the
-next commit. The threshold and the reset belong in a pure, unit-tested function — the same
-gather/decide split every other subsystem in this phase uses.
+**Verify on the user's own hardware.** Touchpad drivers differ in delta magnitude and in
+whether they emit inertia after the fingers lift. Inertia arriving after a commit is exactly
+what makes a carousel feel broken, and it cannot be reasoned about from here.
 
-**Verify on the user's actual hardware.** Touchpad drivers differ in delta magnitude and in
-whether they emit inertia after the fingers lift. Inertia that keeps arriving after a page
-commit is exactly what makes a carousel feel broken, and it cannot be reasoned about from here.
+## §6 — What the automated gates cannot see
 
-## §3 — Home page layout
+Slice 2 shipped green on build, 221 tests and the accessibility lint, and then crashed on the
+first hover, refused every click, and drew half its content over the desktop. None of it was
+reachable from the suite: it is not STA, so it cannot construct a `UserControl`, load a
+template, or receive a mouse message.
 
-```
-┌────────────────────────┬────────────────────────┐
-│  21:32                 │      ☁  22°            │
-│  Pazartesi             │      Partly cloudy     │
-│  7 Eylül               │      ↑24°  ↓14°        │
-└────────────────────────┴────────────────────────┘
-```
-
-Two equal columns. Clock, weekday and date left; condition glyph, temperature, label and the
-day's range right. Battery moves to a small badge beside the clock rather than a third column —
-it is one short value and does not deserve a half.
-
-The existing single-row `AmbientCardView` is replaced by this as page 1. `AmbientCardViewModel`
-keeps its role and its `AccessibleSummary` contract; only the view changes.
-
-## §4 — Calendar page
-
-Current month, the week's days as headers, today marked. Read-only in this slice: no event
-list, no navigation between months. A calendar you can only look at is worth shipping; one
-that half-navigates is not.
-
-Event data would mean a provider integration and a permission story, and neither belongs in
-the slice that introduces paging.
-
-## §5 — Weather motion
-
-Condition-driven, built from WPF `Storyboard`s with no new dependency:
-
-| Condition | Motion |
-|---|---|
-| Clear | A slow rotating glare behind the sun glyph |
-| Partly cloudy / overcast | Clouds drifting slowly across, wrapping |
-| Drizzle / rain / showers | Drops falling, staggered, recycled |
-| Snow | Flakes drifting with slight horizontal sway |
-| Thunderstorm | Rain plus an occasional brief flash |
-
-**Every storyboard stops when the panel closes.** The OSD's window is never hidden in notch
-mode, so an animation left running is a permanent CPU cost on an overlay that is supposed to be
-invisible most of the time. Slice 1's ledger already carries an unmeasured idle-resource item;
-this must not be what finally makes it matter. Start on open, stop on collapse, and measure it.
-
-## §6 — The resting shape
-
-Two changes, and the first is not cosmetic.
-
-**Raise the resting height.** The default is 5 DIP and the reporting user runs 2. At that size
-the notch is invisible *and* it is not a physical target: because the OSD is a layered window
-hit-tested against its alpha, a two-pixel strip is two pixels of clickable surface in an
-otherwise transparent window. That is the mechanism behind slice 2's keep-alive defect. A
-resting height around 30 DIP — what the reference apps use — makes the shape read as a notch
-and makes the target real. Keep the setting; change the default and widen the range.
-
-**Make the notch surface opaque.** It currently uses the theme's `OsdSurfaceBrush`, which reads
-as a floating card near the top of the screen rather than as part of the bezel. A notch is
-near-black. This forces the content colours dark in notch mode too, or a light-theme user gets
-dark text on a dark surface — that coupling is the reason it was deferred out of slice 1, and
-it needs handling here rather than deferring again.
-
-## §7 — What must be verified live, and why the automated gates cannot
-
-Slice 2 shipped green on build, 221 tests and the accessibility lint, and still crashed on the
-first hover, then failed to accept a single click, then drew half its content over the desktop.
-None of those were reachable from the suite: it is not STA, so it cannot construct a
-`UserControl`, load a template, or receive a mouse message.
-
-Everything in this slice is in that same blind spot. The gates prove it compiles and that the
-pure logic is right. They prove nothing about whether it works.
-
-**Install and drive it after every task.** Specifically: page with a touchpad, page with a
-mouse, click the dots, watch a full animation cycle, and check the panel still accepts clicks
-afterwards.
+Everything in this slice sits in that same blind spot. **Install and drive it after every
+task** — page with a touchpad, page with a mouse, click the dots, drag the volume track, watch
+a full sky cycle, and check the desktop underneath still takes clicks afterwards.
 
 **Instrument the process; do not sample it from outside.** Three external sampling harnesses
-were written during slice 2's investigation and all three produced misleading or empty results,
-while a four-line diagnostic inside `OsdHost` answered the question immediately.
+were written during slice 2's investigation and all three gave misleading or empty results,
+while four lines inside `OsdHost` and a message counter in the window hook answered each
+question immediately.
 
-## §8 — The defect class this slice must not repeat
+## §7 — The defect class this slice must not repeat
 
-Five defects on this branch share one shape: **state derived from a single moment, or a single
-callback, that turned out not to fire.**
+Every defect on this branch shares one shape: **state derived from a single moment, or a
+single callback, that turned out not to fire.**
 
-- `BeginAnimation(prop, null)` removes a clock without raising `Completed` — four times.
+- `BeginAnimation(prop, null)` removes a clock without raising `Completed` — five times.
 - One synchronous `Measure` read a tree the `ItemsControl` had not materialised yet.
+- A parked flag written in a completion handler left a closed notch believing it was open.
 
-Both were fixed the same way: stop trusting the event, and recompute the answer where it is
-used. The pager's page index, its animation state and any hit-testing it introduces must be
-written the same way — derived where they are consumed, not cached from a callback.
+All were fixed the same way: stop trusting the event, recompute the answer where it is used.
+The pager's page index, its slide state and the sky's first-look flag must be written that way.
 
 ## Deferred
 
-- The file shelf, still behind its drag-and-drop spike.
+- The file shelf, behind its drag-and-drop spike.
 - Remembering the last page across opens.
-- Calendar events, and any provider integration behind them.
+- Calendar events.
+- Refining the cloud shapes and the snow — the mockup's are placeholders good enough to agree
+  the direction, not to ship.
