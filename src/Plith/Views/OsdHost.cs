@@ -42,8 +42,12 @@ public sealed class OsdHost : BandWindow
     // The widget pager. Owns the page index and the wheel-delta accumulator, and owns them
     // outside any animation or callback - see NotchPager for why that is not incidental.
     // The page count is a placeholder until the widget frame exists and can report its own.
-    private readonly NotchPager _pager = new(WidgetPageCountPlaceholder);
-    private const int WidgetPageCountPlaceholder = 4;
+    private readonly NotchPager _pager = new(1);
+
+    // Built once and kept for the life of the host, not per open. Its pages own timers and
+    // storyboards that are started and stopped by visibility, so rebuilding them on every open
+    // would churn exactly the resources this slice is trying to keep bounded.
+    private readonly Widgets.WidgetFrame _widgets = new();
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -104,6 +108,10 @@ public sealed class OsdHost : BandWindow
 
         _content = new OsdContent { DataContext = Shell };
         Content = _content;
+
+        _content.SetWidgetContent(_widgets);
+        _widgets.PageRequested += OnWidgetPageRequested;
+        _widgets.SetPages(_pager, BuildWidgetPages());
 
         // Re-measure the notch's surface whenever the content's laid-out size actually changes.
         //
@@ -439,6 +447,22 @@ public sealed class OsdHost : BandWindow
     /// expansion value, never from a flag. Every stale-state defect on this branch came from
     /// the other choice.
     /// </summary>
+    /// <summary>
+    /// The widget pages, in paging order.
+    ///
+    /// One page today. The frame handles that honestly - it draws no dots, because a single dot
+    /// says nothing except that there is nowhere to go - and the pager refuses to page at all,
+    /// so a swipe over a one-page frame does nothing rather than appearing to break.
+    /// </summary>
+    private static List<FrameworkElement> BuildWidgetPages() => [new Widgets.ClockWidget()];
+
+    private void OnWidgetPageRequested(object? sender, int index)
+    {
+        var before = _pager.Index;
+        if (!_pager.GoTo(index)) return;
+        _widgets.SyncToPager(Math.Sign(_pager.Index - before));
+    }
+
     private void OnHorizontalWheel(object? sender, int delta)
     {
         if (_isEditMode) return;
@@ -449,6 +473,8 @@ public sealed class OsdHost : BandWindow
         // compares two of them. Time is passed in rather than read inside the pager so the
         // gap rule stays testable.
         if (!_pager.Accumulate(delta, Environment.TickCount64)) return;
+
+        _widgets.SyncToPager(Math.Sign(delta));
 
         // Logged because this is the only way the user's own touchpad can be characterised
         // later: the commit threshold and the rearm floor are provisional constants, and
@@ -469,6 +495,11 @@ public sealed class OsdHost : BandWindow
         // one either way - and a value written in a Completed handler is the exact hazard that
         // produced five defects on this branch. Recomputing it where it is used cannot go stale.
         _pager.Reset();
+        _widgets.SyncToPager(0);
+
+        // A click opens the widget frame. An event opens the card stack, and ShowOsd's other
+        // callers switch it back - see SetWidgetMode's comment for why the two are exclusive.
+        _content.SetWidgetMode(true);
 
         _home.Open();
         _hideTimer?.Stop();
@@ -584,6 +615,11 @@ public sealed class OsdHost : BandWindow
         // fromHover is the one exception: OnNotchHoverChanged's hover-in branch has just called
         // _home.Open() and legitimately wants the row to stay for this show.
         if (!fromHover) _home.Close();
+
+        // Same reasoning, same place: an event is not a request to go anywhere, so it takes the
+        // card stack back from the widget frame. fromHover is the click path, which has already
+        // asked for the frame and must not have it taken away one turn later.
+        if (!fromHover) _content.SetWidgetMode(false);
 
         _showGeneration++;
         bool wasFadingOut = _isFadingOut;

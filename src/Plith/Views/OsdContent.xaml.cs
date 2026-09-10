@@ -92,6 +92,30 @@ public partial class OsdContent : UserControl
     }
 
     /// <summary>
+    /// Show the widget frame instead of the card stack, or the other way round.
+    ///
+    /// The two are mutually exclusive by construction rather than by convention: a person who
+    /// clicked the notch went somewhere, and a person who pressed a volume key was answered, and
+    /// the shape is what tells those apart. Showing both would erase the distinction §1 of the
+    /// spec exists to make.
+    ///
+    /// Nothing is re-measured here. Collapsing one and showing the other changes this control's
+    /// desired size, and OsdHost's SizeChanged hook picks the new size up after arrange — which
+    /// is the only reading that reflects what is actually drawn. A synchronous Measure here would
+    /// read the tree before the ItemsControl had materialised its containers, which is the defect
+    /// that once drew the ambient row on the panel and the other cards over the bare desktop.
+    /// </summary>
+    public void SetWidgetMode(bool widgets)
+    {
+        WidgetHost.Visibility = widgets ? Visibility.Visible : Visibility.Collapsed;
+        CardSurface.Visibility = widgets ? Visibility.Collapsed : Visibility.Visible;
+    }
+
+    /// <summary>The control the widget frame lives in. Set once by the host; the frame outlives
+    /// every open and close, so its pages are built once rather than per show.</summary>
+    public void SetWidgetContent(UIElement content) => WidgetHost.Content = content;
+
+    /// <summary>
     /// Switch the card between the Classic floating-card shape and the notch shape.
     ///
     /// The notch is attached to the top edge of the screen, so the content root drops its top
@@ -115,6 +139,10 @@ public partial class OsdContent : UserControl
             : new Thickness(ContentInsetDip);
 
         NotchSurface.Visibility = notch ? Visibility.Visible : Visibility.Collapsed;
+
+        // Classic has no widget frame at all. Leaving it visible across a mode switch would put
+        // a 356 DIP block inside a floating card that never asked for one.
+        if (!notch) SetWidgetMode(false);
 
         CardSurface.Background = notch ? Brushes.Transparent : FindResource("OsdSurfaceBrush") as Brush;
         CardSurface.BorderThickness = notch ? new Thickness(0) : new Thickness(1);

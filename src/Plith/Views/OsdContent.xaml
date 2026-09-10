@@ -124,6 +124,21 @@
                     </ItemsControl.ItemTemplate>
                 </ItemsControl>
             </Border>
+
+            <!-- The widget surface. A click on the resting notch opens THIS; an event opens the
+                 card stack above. The two are never on screen together, and which one is showing
+                 is what tells a person whether they went somewhere or were answered.
+
+                 A sibling of CardSurface rather than a page inside it, because the frame brings
+                 its own fixed size: with the card stack collapsed, the content's measured size
+                 IS the frame plus the insets, so the existing measure-and-morph path sizes the
+                 notch to it without a second code path. Collapsed by default, including in the
+                 designer and in Classic, which never shows it. -->
+            <ContentControl x:Name="WidgetHost"
+                            Visibility="Collapsed"
+                            Focusable="False"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top" />
         </Grid>
     </Grid>
 </UserControl>

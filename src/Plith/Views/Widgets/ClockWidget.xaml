@@ -1,0 +1,29 @@
+<UserControl x:Class="Plith.Views.Widgets.ClockWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False">
+    <!-- Centred in a frame that does not resize to it. The empty space above and below is the
+         cost of the fixed frame, and it is the correct one: a clock centred in a steady frame
+         reads as deliberate, while a frame that shrank to hug it would read as unstable every
+         time the page turned. -->
+    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+        <!-- AutomationProperties.Name on the TextBlock, not on the StackPanel: a panel has no
+             automation peer, so a name set there reaches nothing at all. The time is announced
+             from Time itself, and Date is left to its own text. -->
+        <TextBlock x:Name="Time"
+                   HorizontalAlignment="Center"
+                   FontSize="40" FontWeight="SemiBold"
+                   TextOptions.TextFormattingMode="Ideal"
+                   LineHeight="42" LineStackingStrategy="BlockLineHeight"
+                   Foreground="{DynamicResource OsdTextPrimary}">
+        </TextBlock>
+        <TextBlock x:Name="Date"
+                   HorizontalAlignment="Center"
+                   Margin="0,4,0,0"
+                   FontSize="12"
+                   Foreground="{DynamicResource OsdTextSecondary}" />
+    </StackPanel>
+</UserControl>
