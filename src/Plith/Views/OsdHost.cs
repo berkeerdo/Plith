@@ -1,4 +1,5 @@
-﻿using System.Runtime.InteropServices;
+﻿using System.Globalization;
+using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -468,11 +469,13 @@ public sealed class OsdHost : BandWindow
     /// time there is nothing to hand over. Rebuilding the pages is the frame's normal path -
     /// pages come and go anyway - and the pager is told the new count as part of it.
     /// </summary>
-    public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media)
+    public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
+                                  Func<WeatherSnapshot?> weather)
     {
         _widgets.SetPages(_pager,
         [
             new Widgets.ClockWidget(),
+            new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log),
             new Widgets.MediaWidget(media),
             new Widgets.AudioWidget(audio, write),
         ]);
@@ -493,6 +496,25 @@ public sealed class OsdHost : BandWindow
     /// Those never reach the HUD branch, and the volume default is only what an unexpected
     /// caller would get.
     /// </summary>
+    /// <summary>
+    /// The last day the weather page played its arrival, read from settings.
+    ///
+    /// Parsed rather than trusted: this is a hand-editable ini file, and an unparseable value
+    /// means "never", which costs one extra reveal. Throwing here would take down a background
+    /// widget for the sake of a decoration.
+    /// </summary>
+    private DateOnly? ReadRevealDate() =>
+        DateOnly.TryParseExact(_settings.Current.WeatherRevealDate, "yyyy-MM-dd",
+            CultureInfo.InvariantCulture, DateTimeStyles.None, out var date)
+            ? date
+            : null;
+
+    private void WriteRevealDate(DateOnly date)
+    {
+        _settings.Current.WeatherRevealDate = date.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        _settings.Save(_settings.Current);
+    }
+
     private static NotchHudKind PickHudKind(ShowReason? reason) => reason switch
     {
         ShowReason.MediaChange or ShowReason.MediaCommand => NotchHudKind.Media,

@@ -109,6 +109,16 @@ public sealed class SettingsModel
     public double WeatherLatitude { get; set; }
     public double WeatherLongitude { get; set; }
 
+    /// <summary>
+    /// The last day the weather page played its arrival animation, as yyyy-MM-dd. Empty means
+    /// never.
+    ///
+    /// Persisted rather than kept in memory because the guarantee is one reveal per DAY, and a
+    /// session flag would give one per launch — indistinguishable from correct while testing,
+    /// and wrong on a machine that reboots daily.
+    /// </summary>
+    public string WeatherRevealDate { get; set; } = string.Empty;
+
     /// <summary>OSD card opacity at rest, 50–100 percent. Below 50 the OSD is hard to read.</summary>
     public int OsdOpacityPercent { get; set; } = 100;
 
@@ -186,6 +196,7 @@ public sealed class SettingsModel
         WeatherLocation = WeatherLocation,
         WeatherLatitude = WeatherLatitude,
         WeatherLongitude = WeatherLongitude,
+        WeatherRevealDate = WeatherRevealDate,
         OsdOpacityPercent = OsdOpacityPercent,
         UseColorThresholds = UseColorThresholds,
         CompactMode = CompactMode,
