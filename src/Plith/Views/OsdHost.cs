@@ -448,11 +448,6 @@ public sealed class OsdHost : BandWindow
     }
 
     /// <summary>
-    /// A click on the drawn notch opens it. Clicks anywhere else never arrive here: the window
-    /// answers WM_NCHITTEST with HTTRANSPARENT outside the shape it is actually drawing, so they
-    /// go straight to whatever is underneath.
-    /// </summary>
-    /// <summary>
     /// A sideways wheel gesture on the notch. Only pages a notch that is already open enough to
     /// be showing content: a swipe over the resting pill is not a request to page through
     /// something that is not on screen, and a swipe during the peek is part of reaching for it.
@@ -590,6 +585,15 @@ public sealed class OsdHost : BandWindow
         _log?.Info("OsdHost", $"Widget page committed: delta={delta}, index={_pager.Index}/{_pager.PageCount}");
     }
 
+    /// <summary>
+    /// A click on the drawn notch opens it.
+    ///
+    /// Clicks anywhere else never arrive here, and not because anything filters them: the window
+    /// is layered with per-pixel transparency, so the system hit-tests the ALPHA WPF rendered.
+    /// Transparent pixels pass the mouse through with no code involved, which also means the hit
+    /// region follows whatever shape is currently drawn — the resting pill, a HUD, the open
+    /// frame — without anything having to keep a rectangle in step with it.
+    /// </summary>
     private void OnNotchClicked()
     {
         if (_isEditMode) return;

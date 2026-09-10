@@ -52,10 +52,16 @@ public static class PresentationPolicy
     /// without ever asking it — so a per-point filter cannot run while it is set. Measured: with
     /// the notch parked, a direct WM_NCHITTEST probe never reached the window's WndProc at all.
     ///
-    /// So the notch keeps hit-testing on and answers per point instead, through
-    /// BandWindow.HitTestFilter: HTCLIENT on the pixels the notch actually occupies, and
-    /// HTTRANSPARENT everywhere else. The top of the screen stays usable at every expansion,
-    /// not just while parked.
+    /// So the notch keeps hit-testing on, and the per-point answer comes from the rendered alpha
+    /// rather than from any code of ours. The window is layered with per-pixel transparency, so
+    /// the system tests the pixels WPF drew: the notch's own shape receives the mouse and every
+    /// transparent pixel around it passes clicks straight through. The top of the screen stays
+    /// usable at every expansion, not just while parked.
+    ///
+    /// An earlier version of this comment named a BandWindow.HitTestFilter. There is no such
+    /// member: it was one of three mechanisms deleted when the window became top-level, and the
+    /// comment outlived the code. Recorded because a comment describing machinery that does not
+    /// exist is worse than no comment in a file people read to decide what is safe to change.
     /// </summary>
     public static bool WantsHitTesting(PresentationMode mode, bool isParked) => true;
 

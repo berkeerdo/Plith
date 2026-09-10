@@ -266,9 +266,11 @@ public partial class BandWindow : ContentControl, IWndProcObject
 
     private nint MyWndProc(nint hWnd, uint msg, nint wParam, nint lParam, ref bool handled)
     {
-        // Answered before anything else: this is what decides whether the window exists for the
-        // mouse at this point. See HitTestFilter for why no combination of window styles can do
-        // it here.
+        // Left over from when a WM_NCHITTEST case sat at the top of this switch and decided,
+        // per point, whether the window existed for the mouse. It does not any more: the window
+        // is layered with per-pixel transparency, so the system hit-tests the alpha WPF rendered
+        // and never asks. The filter and the two mechanisms beside it were deleted with it — see
+        // docs/PHASE6-VERIFICATION.md §14.
         var message = (WindowMessage)msg;
         switch (message)
         {
