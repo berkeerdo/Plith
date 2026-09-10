@@ -37,4 +37,15 @@
     <SolidColorBrush x:Key="OsdGainAmber" Color="{x:Static SystemColors.HighlightColor}" />
     <SolidColorBrush x:Key="OsdGainRed" Color="{x:Static SystemColors.HighlightColor}" />
 
+
+    <!-- High contrast does not get a fixed near-black bezel. The point of the mode is that the
+         user's chosen colours are the ones on screen, and a hard-coded shape would be the one
+         element on the overlay ignoring that - a black bar on a white-on-black scheme is
+         invisible, and on a light scheme it is the only thing that is not. -->
+    <SolidColorBrush x:Key="NotchBezelBrush" Color="{x:Static SystemColors.WindowColor}" />
+
+    <!-- On the bezel, high contrast keeps using the system's own pair. See NotchBezelBrush. -->
+    <SolidColorBrush x:Key="NotchInk" Color="{x:Static SystemColors.WindowTextColor}" />
+    <SolidColorBrush x:Key="NotchInkMuted" Color="{x:Static SystemColors.GrayTextColor}" />
+    <SolidColorBrush x:Key="NotchTrack" Color="{x:Static SystemColors.ControlColor}" />
 </ResourceDictionary>

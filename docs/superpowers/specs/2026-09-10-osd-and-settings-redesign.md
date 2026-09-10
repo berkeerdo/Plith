@@ -80,17 +80,30 @@ States, all drawn in the mockup: normal, past 85 %, muted, with media, compact.
 | Signal | `#4AD695` | level under 85 % — the resting state |
 | Caution | `#F5C242` | 85–99 % — loud, still fine |
 | Alarm | `#E0674F` | 100 %, or a Voicemeeter bus clipping |
-| Bezel | `#06070A` | the notch's resting shape. Never a card ground. |
+| Bezel | `#06070A` | the notch's resting shape. Never a card ground. Constant across themes. |
+| Notch ink | `#F2F5F8` / `#9AA6B2` | text drawn **on** the bezel — the widget pages and the HUD |
 | Surface | `#151A21` | card ground, over Mica |
 | Muted ink | `#8D9AA8` | device, artist, bus. Never the level. |
+
+**The bezel forces its own ink.** Anything drawn on the notch needs light text in both themes,
+because the surface under it is near-black in both. The theme's own `OsdTextPrimary` is near-black
+on the light theme, which on a near-black bezel is not a contrast problem so much as an invisible
+panel. That is the price of the bezel being a cutout rather than a surface, and it is why
+`NotchInk`, `NotchInkMuted` and `NotchTrack` exist alongside it. High contrast is the exception
+and keeps the system's own pair: the point of that mode is that the user's colours are the ones on
+screen.
 
 **The accent setting stays separate.** A purple accent gives purple card chrome, not a purple
 level, because the level's colour is information. The single exception: when
 `UseColorThresholds` is off the fill takes the accent and the thresholds stop applying — which
 is the honest reading of what turning that setting off means.
 
-Today the threshold colours are literals in two files that have already drifted apart. They
-become named brushes in `ThemePalette`.
+**Correction, 2026-09-10.** An earlier draft of this section claimed the threshold colours were
+literals in two files that had drifted apart. They are not: `OsdGainGreen`, `OsdGainAmber` and
+`OsdGainRed` are already named brushes in all three OSD palettes. What is actually duplicated is
+`#4AD695` itself, defined separately as `Accent`, `AccentBrush` and `OsdGainGreen` — three roles
+sharing one value by coincidence rather than by reference, which will drift the first time one of
+them is tuned. Worth fixing, but it is a different and smaller job than the one claimed.
 
 ## §3 — Long titles scroll
 

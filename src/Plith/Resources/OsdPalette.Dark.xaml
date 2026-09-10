@@ -26,4 +26,25 @@
     <SolidColorBrush x:Key="OsdGainAmber" Color="#F5C242" />
     <SolidColorBrush x:Key="OsdGainRed" Color="#E54B4B" />
 
+
+    <!-- The notch's resting shape.
+
+         Deliberately NOT OsdSurfaceBrush, which is what it used to be. A notch is a hole in the
+         display, not a panel on it, and a hole is not lighter than the screen around it - on the
+         light theme the card surface made the resting notch a pale bar sitting on a pale desktop,
+         at which point it stops reading as a cutout and becomes a tab hanging off the top edge.
+
+         Near-black in both themes, therefore, and that is the whole reason it is a separate
+         token. -->
+    <SolidColorBrush x:Key="NotchBezelBrush" Color="#06070A" />
+
+    <!-- Ink for anything drawn ON the bezel: the widget pages and the event HUD.
+
+         Constant across themes, exactly like the bezel under it. The theme's own text brushes
+         cannot be used here - on the light theme OsdTextPrimary is near-black, which on a
+         near-black bezel is not a contrast problem so much as an invisible panel. Splitting the
+         token is the price of the bezel being a cutout rather than a surface. -->
+    <SolidColorBrush x:Key="NotchInk" Color="#F2F5F8" />
+    <SolidColorBrush x:Key="NotchInkMuted" Color="#9AA6B2" />
+    <SolidColorBrush x:Key="NotchTrack" Color="#2A323C" />
 </ResourceDictionary>

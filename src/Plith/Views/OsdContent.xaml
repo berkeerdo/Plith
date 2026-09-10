@@ -29,7 +29,7 @@
                 HorizontalAlignment="Center"
                 Visibility="Collapsed"
                 CornerRadius="0,0,8,8"
-                Background="{DynamicResource OsdSurfaceBrush}"
+                Background="{DynamicResource NotchBezelBrush}"
                 BorderThickness="0"
                 SnapsToDevicePixels="True">
             <!-- Direction 270 is straight down in WPF's counter-clockwise-from-east convention.

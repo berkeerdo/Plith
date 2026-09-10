@@ -16,7 +16,7 @@
                 <Setter Property="Width" Value="28" />
                 <Setter Property="Height" Value="28" />
                 <Setter Property="Cursor" Value="Hand" />
-                <Setter Property="Foreground" Value="{DynamicResource OsdTextPrimary}" />
+                <Setter Property="Foreground" Value="{DynamicResource NotchInk}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
@@ -56,7 +56,7 @@
         </Grid.ColumnDefinitions>
 
         <Border Grid.Column="0" Width="40" Height="40" CornerRadius="7"
-                Background="{DynamicResource OsdTrackBg}">
+                Background="{DynamicResource NotchTrack}">
             <Border.Clip>
                 <RectangleGeometry Rect="0,0,40,40" RadiusX="7" RadiusY="7" />
             </Border.Clip>
@@ -72,12 +72,12 @@
             <w:MarqueeText x:Name="Title"
                            Height="18"
                            TextElement.FontSize="13"
-                           TextElement.Foreground="{DynamicResource OsdTextPrimary}" />
+                           TextElement.Foreground="{DynamicResource NotchInk}" />
             <w:MarqueeText x:Name="Artist"
                            Height="15"
                            Margin="0,1,0,0"
                            TextElement.FontSize="11"
-                           TextElement.Foreground="{DynamicResource OsdTextSecondary}" />
+                           TextElement.Foreground="{DynamicResource NotchInkMuted}" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal">

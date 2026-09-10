@@ -19,7 +19,7 @@
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Ellipse Fill="{DynamicResource OsdTextPrimary}" />
+                        <Ellipse Fill="{DynamicResource NotchInk}" />
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -36,7 +36,7 @@
                         <Grid Background="Transparent">
                             <Border Height="6" CornerRadius="3"
                                     VerticalAlignment="Center"
-                                    Background="{DynamicResource OsdTrackBg}" />
+                                    Background="{DynamicResource NotchTrack}" />
                             <Track x:Name="PART_Track">
                                 <Track.DecreaseRepeatButton>
                                     <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" Cursor="Hand">
@@ -76,13 +76,13 @@
              plus a headset, a level with no source attached to it is ambiguous. -->
         <TextBlock x:Name="Source"
                    FontSize="11"
-                   Foreground="{DynamicResource OsdTextSecondary}"
+                   Foreground="{DynamicResource NotchInkMuted}"
                    TextTrimming="CharacterEllipsis" />
 
         <TextBlock x:Name="Level"
                    Margin="0,2,0,10"
                    FontSize="26" FontWeight="SemiBold"
-                   Foreground="{DynamicResource OsdTextPrimary}" />
+                   Foreground="{DynamicResource NotchInk}" />
 
         <!-- A Slider, not a drawn rectangle with mouse handlers. That is what gives it keyboard
              arrows, Home/End, an automation peer that reports its value, and the drag behaviour
