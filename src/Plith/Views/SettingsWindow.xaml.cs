@@ -260,7 +260,7 @@ public partial class SettingsWindow : Window
         ShowSection("SecAppearance");
     }
 
-    private IEnumerable<RadioButton> SectionRailItems() =>
+    private RadioButton[] SectionRailItems() =>
         new[] { RailAppearance, RailOsd, RailAudio, RailMedia, RailGeneral, RailGameMode, RailUpdates };
 
     private void ShowSection(string sectionName)
@@ -671,6 +671,15 @@ public partial class SettingsWindow : Window
         Preview.UpdateColorThresholds(ColorThresholdsToggle.IsChecked == true);
         Preview.UpdateCompact(CompactToggle.IsChecked == true);
         Preview.UpdatePosition(_settings.Current.Position);
+
+        // Read from the CONTROLS, not from _settings. The save round-trip would get here too,
+        // but going through it would make the preview a consequence of persistence rather than
+        // of the control — and a drag that is refused or clamped on the way to disk would then
+        // show something the user did not do. This is the argument for the preview existing at
+        // all: every setting on this page changes something a person cannot see from the words,
+        // and the old dialog made them close it, press a volume key and reopen it to find out.
+        var mode = PresentationCombo.SelectedValue as PresentationMode? ?? _settings.Current.Presentation;
+        Preview.UpdatePresentation(mode, StripHeightSlider.Value);
     }
 
     private void WireAutoSave()
@@ -712,6 +721,7 @@ public partial class SettingsWindow : Window
         ThemeCombo.SelectionChanged += (_, _) => AutoSave();
         PresentationCombo.SelectionChanged += (_, _) =>
         {
+            SyncPreview();
             AutoSave();
             // Skip during LoadIntoUi for the same reason AutoSave does — LoadIntoUi calls
             // UpdatePresentationDependentControls itself once every field is in place.
@@ -722,7 +732,9 @@ public partial class SettingsWindow : Window
             // this can never overwrite the "pinned to the top" message set just above.
             RefreshPositionSummary();
         };
-        StripHeightSlider.ValueChanged += (_, _) => AutoSave();
+        // SyncPreview as well as AutoSave, and before it: the preview should track the thumb,
+        // not the file.
+        StripHeightSlider.ValueChanged += (_, _) => { SyncPreview(); AutoSave(); };
         WidgetsToggle.Checked += (_, _) => AutoSave();
         WidgetsToggle.Unchecked += (_, _) => AutoSave();
         WeatherToggle.Checked += (_, _) => { UpdatePresentationDependentControls(); AutoSave(); };

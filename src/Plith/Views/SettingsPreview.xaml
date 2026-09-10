@@ -42,7 +42,21 @@
 
                 <!-- The mini OSD card itself — same XAML structure as OsdContent but at preview
                      scale, no animations, no fade. -->
-                <Border x:Name="MiniCard"
+                <!-- The notch, at rest and pinned to the top edge, drawn rather than hosted.
+
+                 The real OSD lives in an HwndSource inside a z-band with its own resource
+                 scope; embedding one here would be a second, subtly different OSD rather than a
+                 preview of the first. A drawing that can be wrong is easier to keep honest than
+                 a host that can diverge — and every number below comes from NotchGeometry, so
+                 the two cannot drift on the shape's proportions. -->
+            <Border x:Name="MiniNotch"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Center"
+                    Background="{DynamicResource NotchBezelBrush}"
+                    Visibility="Collapsed"
+                    SnapsToDevicePixels="True" />
+
+            <Border x:Name="MiniCard"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Bottom"
                         CornerRadius="10"
