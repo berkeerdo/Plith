@@ -55,6 +55,15 @@ public partial class WeatherWidget : UserControl
         Bleed.ScaleX = (NotchGeometry.OpenFrameDip.Width + 40) / NotchGeometry.OpenFrameDip.Width;
         Bleed.ScaleY = (NotchGeometry.OpenFrameDip.Height + 40) / NotchGeometry.OpenFrameDip.Height;
 
+        // The scale's centre is the element's own centre, taken from the size it was actually
+        // arranged at. Anything else makes the sky grow off-axis: the reveal's swell would drift
+        // towards one corner instead of arriving evenly.
+        SizeChanged += (_, e) =>
+        {
+            Bleed.CenterX = e.NewSize.Width / 2;
+            Bleed.CenterY = e.NewSize.Height / 2;
+        };
+
         IsVisibleChanged += (_, e) =>
         {
             if ((bool)e.NewValue) Enter();

@@ -18,7 +18,12 @@
             <!-- Grown slightly and offset, so the sky covers the page row's padding on every
                  side. Without this the gradient would stop short of the panel edge and read as
                  a card with a picture on it. -->
-            <ScaleTransform x:Name="Bleed" ScaleX="1" ScaleY="1" CenterX="178" CenterY="41" />
+            <!-- Centre is written from code on every size change, not fixed here. The literals
+                 it replaced were half of numbers that are not this element's: the page row is
+                 the frame minus its padding and the dots lane, so a hard-coded centre was
+                 already slightly off and would have gone further off the moment the frame
+                 changed size. -->
+            <ScaleTransform x:Name="Bleed" ScaleX="1" ScaleY="1" />
         </Grid.RenderTransform>
 
         <Rectangle x:Name="Sky" />

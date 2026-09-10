@@ -24,14 +24,31 @@ public partial class AudioWidget : UserControl
     private readonly Func<double, bool> _write;
 
     /// <summary>
-    /// True from the moment the user takes hold of the track until they let go.
+    /// When the user last moved the track themselves.
     ///
-    /// Not derived from Slider.IsMouseCaptureWithin or from a Thumb event alone: a keyboard
-    /// arrow changes the value with no capture at all, and IsMoveToPointEnabled means a click
-    /// anywhere on the track is also a change the user made. Every one of those routes lands in
-    /// OnValueChanged, so the flag is set there and cleared when the value settles.
+    /// A timestamp rather than a flag, and that is a correction rather than a preference. The
+    /// flag version was set on every user-driven change and cleared on mouse-up, lost capture
+    /// and lost focus — which covers a drag and a click, and does NOT cover a keyboard arrow. A
+    /// person who tabbed to the track and pressed Left once left it set for as long as focus
+    /// stayed there, and every incoming report was ignored for that whole time: the display
+    /// silently stopped following the volume keys.
+    ///
+    /// A window that expires cannot get stuck. It also covers the routes the flag covered, for
+    /// the same reason — every one of them lands in OnValueChanged.
     /// </summary>
-    private bool _userIsDriving;
+    private long _lastUserChangeMs = long.MinValue;
+
+    /// <summary>
+    /// How long after a user-driven change incoming reports stay suppressed.
+    ///
+    /// Long enough to cover the gap between a drag's ticks and the report they cause coming back
+    /// through the poll — the parameter poll runs on its own cadence and the echo of our own
+    /// write is what would otherwise pull the thumb back under the finger. Short enough that a
+    /// track left focused starts following external changes again almost immediately.
+    /// </summary>
+    private const long UserDrivingWindowMs = 350;
+
+    private bool UserIsDriving => Environment.TickCount64 - _lastUserChangeMs < UserDrivingWindowMs;
 
     /// <summary>The last value written to the track from a report, so an echo of our own write
     /// coming back through the poll is recognised rather than treated as a fresh report that
@@ -54,9 +71,6 @@ public partial class AudioWidget : UserControl
         _vm.PropertyChanged += OnViewModelChanged;
 
         Track.ValueChanged += OnTrackValueChanged;
-        Track.PreviewMouseUp += (_, _) => _userIsDriving = false;
-        Track.LostMouseCapture += (_, _) => _userIsDriving = false;
-        Track.LostKeyboardFocus += (_, _) => _userIsDriving = false;
 
         IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Render(); };
         Render();
@@ -76,7 +90,7 @@ public partial class AudioWidget : UserControl
         Source.Text = _vm.Label;
         Level.Text = _vm.Muted ? "Muted" : _vm.GainText;
 
-        if (_userIsDriving) return;
+        if (UserIsDriving) return;
 
         var reported = VolumeMath.Clamp01(_vm.GainNormalized);
         if (reported.Equals(_lastReported)) return;
@@ -94,7 +108,7 @@ public partial class AudioWidget : UserControl
 
     private void OnTrackValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
-        _userIsDriving = true;
+        _lastUserChangeMs = Environment.TickCount64;
 
         // Snapped, so a drag lands on a round number rather than 47.318 %. The snap happens
         // before the write, not after: snapping the display alone would show a value the device
