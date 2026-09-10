@@ -104,7 +104,7 @@ public partial class WeatherWidget : UserControl
         }
 
         _sky = SkyCondition.From(w.WeatherCode, DateTime.Now.Hour);
-        var (_, label) = WeatherCodeMap.Describe(w.WeatherCode);
+        var label = WeatherCodeMap.Describe(w.WeatherCode);
 
         Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(w.TemperatureC):0}°");
         Condition.Text = label;

@@ -9,6 +9,14 @@
              d:DataContext="{d:DesignInstance Type=vm:AmbientCardViewModel}"
              AutomationProperties.Name="{Binding AccessibleSummary}"
              AutomationProperties.LiveSetting="Polite">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <!-- The two AutomationProperties above belong on this UserControl root and nowhere else,
          same as AudioCardView/MediaCardView: WPF gives Grid/StackPanel no automation peer, so
          a name set on either never reaches UI Automation. AccessibleSummary is composed from
@@ -65,12 +73,6 @@
                     HorizontalAlignment="Center"
                     VerticalAlignment="Center"
                     Visibility="{Binding HasWeather, Converter={StaticResource BoolToVisibilityConverter}}">
-            <TextBlock Text="{Binding WeatherGlyph}"
-                       FontFamily="{x:Static vm:AmbientCardViewModel.GlyphFont}"
-                       FontSize="14"
-                       Margin="0,0,6,0"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}" />
             <TextBlock Text="{Binding WeatherText}"
                        FontSize="13"
                        VerticalAlignment="Center"
@@ -88,13 +90,12 @@
                     Orientation="Horizontal"
                     VerticalAlignment="Center"
                     Visibility="{Binding HasBattery, Converter={StaticResource BoolToVisibilityConverter}}">
-            <TextBlock Text="&#xE83E;"
-                       FontFamily="{x:Static vm:AmbientCardViewModel.GlyphFont}"
-                       FontSize="12"
-                       Margin="0,0,4,0"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       Visibility="{Binding IsCharging, Converter={StaticResource BoolToVisibilityConverter}}" />
+            <Path Data="{StaticResource IconBolt}"
+                  Fill="{DynamicResource OsdTextSecondary}"
+                  Width="11" Height="11" Stretch="Uniform"
+                  Margin="0,0,4,0"
+                  VerticalAlignment="Center"
+                  Visibility="{Binding IsCharging, Converter={StaticResource BoolToVisibilityConverter}}" />
             <TextBlock Text="{Binding BatteryText}"
                        FontSize="13"
                        VerticalAlignment="Center"

@@ -8,6 +8,7 @@ using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Interop;
 using System.Windows.Media;
+using System.Windows.Shapes;
 using System.Windows.Threading;
 using Plith.Services;
 
@@ -40,7 +41,10 @@ public partial class SettingsWindow : Window
     // Root is a FrameworkElement (in practice always the Button built by CreateSwatch /
     // CreateCustomSwatch) rather than Button so callers that only need to add it to the
     // WrapPanel don't have to know its concrete type.
-    private sealed record AccentSwatch(string Id, FrameworkElement Root, Border Fill, TextBlock Tick, TextBlock? PlusIcon, bool IsCustom);
+    // Tick and PlusIcon are Shapes.Path rather than TextBlock: the marks are drawn geometry
+    // now, not Segoe MDL2 code points. Their colour is a Stroke rather than a Foreground, which
+    // is why the recolouring below changes property as well as type.
+    private sealed record AccentSwatch(string Id, FrameworkElement Root, Border Fill, Shape Tick, Shape? PlusIcon, bool IsCustom);
 
     // Captured combo for the in-progress hotkey recording. Apply on first valid KeyDown.
     private uint _capturedMods;
@@ -825,17 +829,8 @@ public partial class SettingsWindow : Window
             HorizontalAlignment = HorizontalAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
         };
-        var tick = new TextBlock
-        {
-            Text = "", // Segoe MDL2 Assets "CheckMark"
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 14,
-            Foreground = ContrastText(baseColor),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed,
-        };
+        var tick = SwatchMark("IconCheck", 13, ContrastText(baseColor), 1.8);
+        tick.Visibility = Visibility.Collapsed;
         grid.Children.Add(fill);
         grid.Children.Add(tick);
         root.Content = grid;
@@ -890,27 +885,9 @@ public partial class SettingsWindow : Window
         // "+" glyph shows when the user hasn't picked a custom colour yet, cueing the
         // affordance. It's hidden as soon as they commit one so the swatch just reads
         // as a colour.
-        var plus = new TextBlock
-        {
-            Text = "", // MDL2 "Add"
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 12,
-            Foreground = ContrastText(currentCustom),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-        };
-        var tick = new TextBlock
-        {
-            Text = "",
-            FontFamily = new FontFamily("Segoe MDL2 Assets"),
-            FontSize = 14,
-            Foreground = ContrastText(currentCustom),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-            IsHitTestVisible = false,
-            Visibility = Visibility.Collapsed,
-        };
+        var plus = SwatchMark("IconPlus", 12, ContrastText(currentCustom), 1.6);
+        var tick = SwatchMark("IconCheck", 13, ContrastText(currentCustom), 1.8);
+        tick.Visibility = Visibility.Collapsed;
         grid.Children.Add(fill);
         grid.Children.Add(plus);
         grid.Children.Add(tick);
@@ -1123,10 +1100,10 @@ public partial class SettingsWindow : Window
                 AccentTheme.ResolveBase(AccentTheme.DefaultId, null));
             custom.Fill.Background = new SolidColorBrush(customColor);
             var contrast = ContrastText(customColor);
-            custom.Tick.Foreground = contrast;
+            custom.Tick.Stroke = contrast;
             if (custom.PlusIcon is not null)
             {
-                custom.PlusIcon.Foreground = contrast;
+                custom.PlusIcon.Stroke = contrast;
                 // Hide the "+" hint whenever a custom colour is stored — the fill itself
                 // is the affordance at that point.
                 custom.PlusIcon.Visibility = string.IsNullOrWhiteSpace(_settings.Current.CustomAccentColor)
@@ -1144,6 +1121,30 @@ public partial class SettingsWindow : Window
     // Praxvon Lime (#CAFF33, luma 218) shows black text, Emerald (#4AD695, luma 175)
     // shows black text, and Violet (#BD93F9, luma 158) also picks black — while any
     // saturated dark tone gets white.
+    /// <summary>
+    /// A swatch mark, drawn rather than set from a font.
+    ///
+    /// These were Segoe MDL2 code points in TextBlocks. That font ships different contents on
+    /// different Windows builds — slice 2 found that seven of ten weather glyphs picked from it
+    /// did not exist at all — so every mark in this product is geometry now, and the
+    /// accessibility lint fails the build on any that are not.
+    /// </summary>
+    private Path SwatchMark(string iconKey, double size, Brush stroke, double thickness) => new()
+    {
+        Data = (Geometry)FindResource(iconKey),
+        Stroke = stroke,
+        StrokeThickness = thickness,
+        StrokeStartLineCap = PenLineCap.Round,
+        StrokeEndLineCap = PenLineCap.Round,
+        StrokeLineJoin = PenLineJoin.Round,
+        Width = size,
+        Height = size,
+        Stretch = Stretch.Uniform,
+        HorizontalAlignment = HorizontalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+        IsHitTestVisible = false,
+    };
+
     private static SolidColorBrush ContrastText(Color bg)
     {
         double luma = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B;

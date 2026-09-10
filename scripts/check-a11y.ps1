@@ -121,7 +121,40 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
     }
 }
 
-if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0) {
+# --- System icon fonts under Views ---
+#
+# A FontIcon bound to "Segoe MDL2 Assets" or "Segoe Fluent Icons" depends on a font whose
+# contents differ between Windows builds. Slice 2 found that out the expensive way: seven of ten
+# weather glyphs picked from Segoe MDL2 turned out not to exist in it and would have rendered as
+# tofu boxes on a user's machine. Every icon this product draws now lives in
+# Resources/PlithIcons.xaml as geometry, which cannot go missing.
+#
+# This rule was owed from the widget slice and could not pass until the classic card's icons were
+# drawn. It is deliberately not narrowed to the directories that happened to be clean at the time
+# — a rule narrowed to fit the code is a gate that has stopped meaning anything.
+# Both XAML and code-behind. Scanning only XAML was the rule's own blind spot on the day it was
+# written: SettingsWindow built three marks in C# with new FontFamily("Segoe MDL2 Assets"), and a
+# gate that misses the half of the codebase where a thing is easiest to do is not a gate.
+$iconFontUses = [System.Collections.Generic.List[string]]::new()
+$iconFontFiles = @(Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) +
+                 @(Get-ChildItem -Path $Root -Filter '*.cs' -Recurse |
+                   Where-Object { $_.FullName -notmatch '[\/](obj|bin)[\/]' })
+foreach ($file in $iconFontFiles) {
+    $text = Get-Content -LiteralPath $file.FullName -Raw
+    # Strip comments in both languages, so a comment explaining why the font is NOT used does
+    # not itself trip the rule.
+    $stripped = [regex]::Replace($text, '(?s)<!--.*?-->', '')
+    $stripped = [regex]::Replace($stripped, '(?s)/\*.*?\*/', '')
+    $stripped = [regex]::Replace($stripped, '(?m)^\s*//.*$', '')
+    foreach ($font in @('Segoe MDL2 Assets', 'Segoe Fluent Icons')) {
+        if ($stripped -like "*$font*") {
+            $rel = Resolve-Path -Relative -LiteralPath $file.FullName
+            $iconFontUses.Add("${rel}: uses '$font'. Draw the icon in Resources/PlithIcons.xaml instead.")
+        }
+    }
+}
+
+if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0 -or $iconFontUses.Count -gt 0) {
     Write-Host "Accessibility check failed:`n" -ForegroundColor Red
     if ($failures.Count -gt 0) {
         Write-Host "  Interactive controls without an accessible name:" -ForegroundColor Red
@@ -133,8 +166,12 @@ if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0) {
         $deadProperties | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
         Write-Host "`n  Move them onto the nearest element that owns a peer, usually the UserControl or Control root." -ForegroundColor Yellow
     }
+    if ($iconFontUses.Count -gt 0) {
+        Write-Host "`n  System icon fonts, whose glyphs differ between Windows builds:" -ForegroundColor Red
+        $iconFontUses | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+    }
     exit 1
 }
 
-Write-Host "Accessibility check passed: every interactive control has an accessible name, and every AutomationProperties value sits on an element that can surface it." -ForegroundColor Green
+Write-Host "Accessibility check passed: every interactive control has an accessible name, every AutomationProperties value sits on an element that can surface it, and no view depends on a system icon font." -ForegroundColor Green
 exit 0

@@ -2,6 +2,13 @@
                     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
                     xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework">
 
+    <ResourceDictionary.MergedDictionaries>
+        <!-- The drawn icon set, shared with the OSD. Merged here rather than referenced from
+             each window so a caption mark and a transport mark cannot end up being two
+             different drawings of the same idea. -->
+        <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+    </ResourceDictionary.MergedDictionaries>
+
     <!-- Palette brushes live in Palette.Dark.xaml / Palette.Light.xaml so the active
          theme can be swapped at runtime; every reference below uses DynamicResource. -->
 
@@ -605,14 +612,27 @@
          Hit-testable inside WindowChrome's caption area.
          ============================================================ -->
 
+    <Style x:Key="CaptionIconStyle" TargetType="Path">
+        <Setter Property="Width" Value="11" />
+        <Setter Property="Height" Value="11" />
+        <Setter Property="Stretch" Value="Uniform" />
+        <Setter Property="StrokeThickness" Value="1.2" />
+        <Setter Property="StrokeStartLineCap" Value="Round" />
+        <Setter Property="StrokeEndLineCap" Value="Round" />
+        <!-- Follows the button's Foreground, so hover and pressed keep working exactly as they
+             did when this was a glyph inheriting TextElement.Foreground. -->
+        <Setter Property="Stroke"
+                Value="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+    </Style>
+
     <Style x:Key="CaptionButtonStyle" TargetType="Button">
         <Setter Property="Width" Value="44" />
         <Setter Property="Height" Value="32" />
         <Setter Property="Background" Value="Transparent" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="Foreground" Value="{DynamicResource TextSecondary}" />
-        <Setter Property="FontFamily" Value="Segoe Fluent Icons, Segoe MDL2 Assets" />
-        <Setter Property="FontSize" Value="10" />
+        <!-- No icon font. The caption marks are geometry now, for the same reason the OSD's
+             are: a system icon font ships different contents on different Windows builds. -->
         <Setter Property="Cursor" Value="Hand" />
         <Setter Property="FocusVisualStyle" Value="{StaticResource SettingsFocusVisualStyle}" />
         <Setter Property="shell:WindowChrome.IsHitTestVisibleInChrome" Value="True" />
@@ -625,9 +645,7 @@
                             Margin="2">
                         <ContentPresenter HorizontalAlignment="Center"
                                           VerticalAlignment="Center"
-                                          TextElement.Foreground="{TemplateBinding Foreground}"
-                                          TextElement.FontFamily="{TemplateBinding FontFamily}"
-                                          TextElement.FontSize="{TemplateBinding FontSize}" />
+                                          TextElement.Foreground="{TemplateBinding Foreground}" />
                     </Border>
                     <ControlTemplate.Triggers>
                         <Trigger Property="IsMouseOver" Value="True">

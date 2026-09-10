@@ -69,24 +69,6 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
     }
 
 
-    /// <summary>
-    /// The font the ambient row's glyphs are drawn in, as a FontFamily rather than its name.
-    ///
-    /// This exists because binding the NAME crashed the app. XAML's `FontFamily="Segoe MDL2 Assets"`
-    /// works as a literal attribute because the parser runs a type converter on the string, but
-    /// `{x:Static}` hands the property a System.String OBJECT and DependencyObject.SetValue does no
-    /// conversion — it threw ArgumentException ("'Segoe MDL2 Assets' is not a valid value for
-    /// property 'FontFamily'") the first time the template loaded, which is the first time the user
-    /// hovered the notch. Nothing caught it: the build compiles {x:Static} happily, the type
-    /// mismatch only surfaces at template-load time, and the headless suite cannot construct a
-    /// UserControl to load one.
-    ///
-    /// Constructed from WeatherCodeMap.GlyphFontFamilyName so the view and the font-existence test
-    /// still cannot drift onto different fonts, which was the point of binding it in the first
-    /// place. Both glyph TextBlocks in AmbientCardView bind here — the battery one previously
-    /// repeated the literal, which was the drift this was meant to prevent.
-    /// </summary>
-    public static FontFamily GlyphFont { get; } = new FontFamily(WeatherCodeMap.GlyphFontFamilyName);
 
     public event PropertyChangedEventHandler? PropertyChanged;
 
@@ -145,7 +127,6 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
     }
 
     private bool _hasWeather;
-    private string _weatherGlyph = string.Empty;
     private string _weatherText = string.Empty;
 
     public bool HasWeather
@@ -154,16 +135,6 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
         private set
         {
             if (Set(ref _hasWeather, value))
-                OnPropertyChanged(nameof(AccessibleSummary));
-        }
-    }
-
-    public string WeatherGlyph
-    {
-        get => _weatherGlyph;
-        private set
-        {
-            if (Set(ref _weatherGlyph, value))
                 OnPropertyChanged(nameof(AccessibleSummary));
         }
     }
@@ -186,14 +157,12 @@ public sealed class AmbientCardViewModel : INotifyPropertyChanged
         if (snapshot is not { } s || !WeatherCodeMap.IsFresh(s, now, maxAgeMinutes))
         {
             HasWeather = false;
-            WeatherGlyph = string.Empty;
             WeatherText = string.Empty;
             return;
         }
 
-        var (glyph, label) = WeatherCodeMap.Describe(s.WeatherCode);
+        var label = WeatherCodeMap.Describe(s.WeatherCode);
         HasWeather = true;
-        WeatherGlyph = glyph;
         // Rounded to a whole degree: the row is one line and a decimal buys nothing.
         WeatherText = $"{Math.Round(s.TemperatureC):0}°  {label}";
     }

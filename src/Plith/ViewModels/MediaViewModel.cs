@@ -52,7 +52,6 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         {
             if (Set(ref _isPlaying, value))
             {
-                OnPropertyChanged(nameof(PlayPauseGlyph));
                 OnPropertyChanged(nameof(PlayPauseLabel));
                 OnPropertyChanged(nameof(AccessibleSummary));
             }
@@ -83,12 +82,14 @@ public sealed class MediaViewModel : INotifyPropertyChanged
     /// the setter, so callers that go around <see cref="Apply"/> still get the notification.</summary>
     public event Action? HasSessionChanged;
 
-    /// <summary>Segoe Fluent Icons glyph for the play/pause toggle button (U+E769 Pause / U+E768 Play).</summary>
-    public string PlayPauseGlyph => _isPlaying ? "" : "";
-
-    /// <summary>Screen-reader label for the play/pause toggle. The glyph beside it is a Segoe
-    /// Fluent Icons private-use codepoint, which a screen reader would otherwise read aloud
-    /// verbatim — this is the only text a non-sighted user gets for that button.</summary>
+    /// <summary>
+    /// Screen-reader label for the play/pause toggle, and the only text a non-sighted user gets
+    /// for that button.
+    ///
+    /// It used to sit beside a PlayPauseGlyph property carrying a Segoe Fluent Icons private-use
+    /// code point. Both the glyph and the font it needed are gone: the shape is now chosen from
+    /// <see cref="IsPlaying"/> in the view, from geometry this product draws itself.
+    /// </summary>
     public string PlayPauseLabel => _isPlaying ? "Pause" : "Play";
 
     /// <summary>Raised when the user clicks a transport button. The view calls

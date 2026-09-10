@@ -11,6 +11,14 @@
     <!-- The two AutomationProperties above belong on this UserControl root and nowhere else:
          WPF gives a Grid no automation peer, so a name set there never reaches UI Automation.
          See LiveRegionAnnouncer for the measurement behind that. -->
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
     <Grid>
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
@@ -19,13 +27,60 @@
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="True">
+            <!-- The speaker carries the state on its own, so "is my sound off?" is answered
+                 without reading a number: crossed when muted, one wave when quiet, two when not.
+                 Drawn rather than set from a font - see PlithIcons.xaml. -->
+            <Grid DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,10,0"
+                  VerticalAlignment="Center">
+                <Path Data="{StaticResource IconSpeakerBody}"
+                      Fill="{DynamicResource OsdTextPrimary}"
+                      Stretch="Uniform" />
+                <Path Data="{StaticResource IconSpeakerWaveInner}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform"
+                      Visibility="{Binding Muted, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                <Path Data="{StaticResource IconSpeakerWaveOuter}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform">
+                    <Path.Style>
+                        <Style TargetType="Path">
+                            <Setter Property="Visibility" Value="Visible" />
+                            <Style.Triggers>
+                                <DataTrigger Binding="{Binding Muted}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsQuiet}" Value="True">
+                                    <Setter Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                            </Style.Triggers>
+                        </Style>
+                    </Path.Style>
+                </Path>
+                <Path Data="{StaticResource IconMuteCross}"
+                      Stroke="{DynamicResource OsdTextPrimary}"
+                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                      Stretch="Uniform"
+                      Visibility="{Binding Muted, Converter={StaticResource BoolToVisibilityConverter}}" />
+            </Grid>
+
             <TextBlock DockPanel.Dock="Right"
                        Style="{StaticResource OsdValueStyle}"
-                       Text="{Binding GainText}" />
-            <TextBlock Style="{StaticResource OsdLabelStyle}"
                        VerticalAlignment="Center"
-                       TextTrimming="CharacterEllipsis"
-                       Text="{Binding Label}" />
+                       Text="{Binding GainText}" />
+
+            <!-- The device, then which rail it is. On a machine running Voicemeeter alongside
+                 Sonar alongside a headset, a number with no rail attached to it is ambiguous. -->
+            <StackPanel VerticalAlignment="Center">
+                <TextBlock Style="{StaticResource OsdLabelStyle}"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding Label}" />
+                <TextBlock Style="{StaticResource OsdTrackArtistStyle}"
+                           Margin="0,1,0,0"
+                           TextTrimming="CharacterEllipsis"
+                           Text="{Binding BusLine}" />
+            </StackPanel>
         </DockPanel>
 
         <Grid Grid.Row="2" Height="6">
@@ -33,6 +88,16 @@
             <Border HorizontalAlignment="Left"
                     CornerRadius="3"
                     Background="{Binding GainColor}">
+                <!-- The glow is what lifts the fill off the card. Its colour follows the fill,
+                     so it changes with the threshold rather than staying green over an amber
+                     bar. -->
+                <Border.Effect>
+                    <!-- FallbackValue because GainColor is typed as Brush: every value it
+                         actually returns is a SolidColorBrush, but a binding to .Color on
+                         anything else would resolve to nothing and paint a black halo. -->
+                    <DropShadowEffect ShadowDepth="0" BlurRadius="9" Opacity="0.55"
+                                      Color="{Binding GainColor.Color, FallbackValue=Transparent}" />
+                </Border.Effect>
                 <Border.Width>
                     <MultiBinding>
                         <MultiBinding.Converter>
@@ -43,6 +108,37 @@
                     </MultiBinding>
                 </Border.Width>
             </Border>
+
+            <!-- The caution tick, drawn only as the level approaches it.
+
+                 It gives the colour change a cause. Without it the bar simply turns amber at
+                 85 %, which reads as a glitch; with it, the mark is already there and the fill
+                 arrives at it. Its position comes from the same constant the colour logic uses,
+                 so the mark and the change cannot end up in different places.
+
+                 Visibility is bound to a property DERIVED from the level rather than set in a
+                 change handler - the defect class this branch keeps producing is a value
+                 latched at a moment that turned out to be the wrong one. -->
+            <!-- Positioned by an invisible spacer rather than a TranslateTransform. A binding
+                 on a Freezable does resolve through the inheritance context, but it is the kind
+                 of thing that fails silently and draws the mark at zero, and this is the one
+                 element whose position has to be right. A spacer uses ordinary DataContext
+                 inheritance and the converter the fill already uses. -->
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Left"
+                        Visibility="{Binding IsNearThreshold, Converter={StaticResource BoolToVisibilityConverter}}">
+                <Border Background="Transparent">
+                    <Border.Width>
+                        <MultiBinding>
+                            <MultiBinding.Converter>
+                                <vm:NormalizedToWidthConverter />
+                            </MultiBinding.Converter>
+                            <Binding Path="CautionThresholdPosition" />
+                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
+                        </MultiBinding>
+                    </Border.Width>
+                </Border>
+                <Border Width="1.5" CornerRadius="1" Margin="0,-2,0,-2" Background="#47FFFFFF" />
+            </StackPanel>
         </Grid>
     </Grid>
 </UserControl>

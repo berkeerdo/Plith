@@ -24,4 +24,23 @@
     <Geometry x:Key="IconSpeakerWaveInner">M15.6,9.4 A3.6,3.6 0 0 1 15.6,14.6</Geometry>
     <Geometry x:Key="IconSpeakerWaveOuter">M18.2,6.8 A7.2,7.2 0 0 1 18.2,17.2</Geometry>
     <Geometry x:Key="IconMuteCross">M16,9.6 L20.4,14.4 M20.4,9.6 L16,14.4</Geometry>
+
+    <!-- Album-art placeholder. A disc rather than a musical note: the note says "music", but
+         this stands in for artwork, and a disc is what is missing. Even-odd so the spindle hole
+         is a hole rather than a second filled circle. -->
+    <!-- Window caption marks. Strokes at the call site, so the 1.2 weight they want at 10 px
+         is not baked in at the size the OSD's icons use. -->
+    <Geometry x:Key="IconMinimize">M5,12 L19,12</Geometry>
+    <Geometry x:Key="IconMaximize">M5.5,5.5 L18.5,5.5 L18.5,18.5 L5.5,18.5 Z</Geometry>
+    <Geometry x:Key="IconClose">M6,6 L18,18 M18,6 L6,18</Geometry>
+
+    <!-- Accent-swatch marks, built in code by SettingsWindow. -->
+    <Geometry x:Key="IconCheck">M5,12.6 L9.6,17.2 L19,7.4</Geometry>
+    <Geometry x:Key="IconPlus">M12,5.5 L12,18.5 M5.5,12 L18.5,12</Geometry>
+
+    <!-- Charging. A bolt rather than a plug: the plug reads as "connected", which is what a
+         person already knows from the cable in their hand. -->
+    <Geometry x:Key="IconBolt">M13.4,3 L6.6,13.4 L11.2,13.4 L10.2,21 L17.4,10.4 L12.6,10.4 Z</Geometry>
+
+    <Geometry x:Key="IconDisc">F0 M12,3 A9,9 0 1 1 11.99,3 Z M12,9.6 A2.4,2.4 0 1 0 12.01,9.6 Z</Geometry>
 </ResourceDictionary>

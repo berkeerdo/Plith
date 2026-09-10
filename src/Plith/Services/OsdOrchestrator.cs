@@ -283,6 +283,10 @@ public sealed class OsdOrchestrator : IDisposable
         // keeps the digit-only output consistent across locales.
         var text = (snapshot.ScalarVolume * 100).ToString("0",
             System.Globalization.CultureInfo.InvariantCulture) + "%";
+        // The rail's name is set beside the level rather than threaded through Apply: Apply's
+        // signature is shared with the Voicemeeter path and covered by tests, and widening it
+        // for a display string would churn both for nothing.
+        _audioCard.Vm.BusLine = AudioLabel.BusLine(AudioRail.WindowsEndpoint, 0, snapshot.Muted);
         _audioCard.Apply(snapshot.DeviceLabel, snapshot.ScalarVolume, text, snapshot.Muted);
     }
 
@@ -300,6 +304,7 @@ public sealed class OsdOrchestrator : IDisposable
         // violates audio-engineering convention.
         string text = snap.GainDb.ToString("+0.0;-0.0;0.0",
             System.Globalization.CultureInfo.InvariantCulture) + " dB";
+        _audioCard.Vm.BusLine = AudioLabel.BusLine(AudioRail.VoicemeeterBus, MonitoredBusIndex, snap.Muted);
         _audioCard.Apply(snap.Label, normalized, text, snap.Muted);
     }
 

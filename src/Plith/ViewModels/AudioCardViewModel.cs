@@ -48,8 +48,54 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
         set
         {
             if (Set(ref _gainNormalized, Math.Clamp(value, 0, 1)))
+            {
                 OnPropertyChanged(nameof(GainColor));
+                OnPropertyChanged(nameof(IsQuiet));
+                OnPropertyChanged(nameof(IsNearThreshold));
+            }
         }
+    }
+
+    /// <summary>Below a third, where the speaker icon drops its outer wave. Derived rather than
+    /// stored, so it cannot disagree with the level it describes.</summary>
+    public bool IsQuiet => _gainNormalized < 0.33;
+
+    /// <summary>
+    /// Whether the level is close enough to the caution threshold for the tick to be worth
+    /// drawing.
+    ///
+    /// The tick exists to give the colour change a cause: appearing only near it means a person
+    /// sees the mark before the bar changes colour, rather than seeing a colour change with
+    /// nothing to explain it. Drawn from 70 % up, which is far enough ahead to be noticed.
+    /// </summary>
+    public bool IsNearThreshold => _gainNormalized >= 0.70;
+
+    /// <summary>Where the caution threshold sits, 0..1. The one place this number lives; the
+    /// colour logic below reads the same constant.</summary>
+    public const double CautionThreshold = 0.85;
+
+    /// <summary>
+    /// The same number as an instance property, because XAML cannot bind to a const.
+    ///
+    /// Not a nicety: <c>Path="(vm:AudioCardViewModel.CautionThreshold)"</c> compiles — it is
+    /// valid attached-property syntax — and then resolves to nothing at run time, handing the
+    /// converter UnsetValue and drawing the tick at zero. A binding that fails silently in the
+    /// one place a value has to be right is worse than no tick.
+    /// </summary>
+    /// <remarks>Instance rather than static despite touching no instance state, because XAML
+    /// binds through the DataContext and a static member is not reachable that way. The analyser
+    /// is right about the code and wrong about the requirement.</remarks>
+    [System.Diagnostics.CodeAnalysis.SuppressMessage("Performance", "CA1822:Mark members as static",
+        Justification = "Bound from XAML through the DataContext, which cannot reach a static member.")]
+    public double CautionThresholdPosition => CautionThreshold;
+
+    private string _busLine = string.Empty;
+    /// <summary>Which rail this level belongs to, in words — see AudioLabel.BusLine. Set by the
+    /// orchestrator, which is the only thing that knows.</summary>
+    public string BusLine
+    {
+        get => _busLine;
+        set => Set(ref _busLine, value);
     }
 
     private string _gainText = "0.0 dB";

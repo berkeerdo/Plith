@@ -13,30 +13,6 @@ public class WeatherCodeMapTests
         0, 1, 2, 3, 45, 48, 51, 55, 57, 61, 65, 67, 71, 75, 77, 80, 82, 85, 86, 95, 96, 99, 4242,
     ];
 
-    // Regression test for a Critical defect: seven of the ten original glyph choices were code
-    // points that do not exist in Segoe MDL2 Assets at all (an undefined gap between the real
-    // Frigid and Unknown glyphs), so they rendered as a hollow "tofu" box on a real Windows
-    // build. The unit tests above only assert the glyph string is non-empty, which every one of
-    // those broken code points also satisfies — a non-empty string is not a real glyph. This
-    // test asks the font itself, via GlyphTypeface.CharacterToGlyphMap, whether the code point
-    // Describe returns is an actual defined glyph, which is the only check that would have
-    // caught the original defect.
-    [Fact]
-    public void Describe_EveryGlyphExistsInTheDeclaredFont()
-    {
-        var glyphTypeface = new GlyphTypeface(new Uri(WeatherCodeMap.GlyphFontFilePath));
-
-        foreach (var code in AllHandledCodesPlusFallback)
-        {
-            var (glyph, label) = WeatherCodeMap.Describe(code);
-            Assert.True(glyph.Length == 1, $"Glyph for code {code} ({label}) is not a single UTF-16 code unit: \"{glyph}\".");
-            Assert.True(
-                glyphTypeface.CharacterToGlyphMap.ContainsKey(glyph[0]),
-                $"Glyph U+{(int)glyph[0]:X4} for code {code} ({label}) is not a defined glyph in " +
-                $"{WeatherCodeMap.GlyphFontFamilyName} ({WeatherCodeMap.GlyphFontFilePath}) — it will render as a hollow box.");
-        }
-    }
-
     // Open-Meteo reports WMO 4677 weather codes. These four are the boundaries of the ranges
     // the map collapses; the codes between them are covered by the range, not by a case each.
     [Theory]
@@ -46,8 +22,7 @@ public class WeatherCodeMapTests
     [InlineData(95)]   // thunderstorm
     public void Describe_ReturnsANonEmptyGlyphAndLabelForEveryKnownCode(int code)
     {
-        var (glyph, label) = WeatherCodeMap.Describe(code);
-        Assert.False(string.IsNullOrWhiteSpace(glyph));
+        var label = WeatherCodeMap.Describe(code);
         Assert.False(string.IsNullOrWhiteSpace(label));
     }
 
@@ -60,15 +35,14 @@ public class WeatherCodeMapTests
         // arm above would have produced (the ">= 95" arm used to swallow this code before it
         // was bounded to "<= 99"), so a non-empty check alone would keep passing on the wrong
         // arm without ever exercising the fallback this test exists to cover.
-        var (glyph, label) = WeatherCodeMap.Describe(4242);
-        Assert.Equal("\uE9CE", glyph);
+        var label = WeatherCodeMap.Describe(4242);
         Assert.Equal("Unknown", label);
     }
 
     [Fact]
     public void Describe_DistinguishesClearFromRain()
     {
-        Assert.NotEqual(WeatherCodeMap.Describe(0).Label, WeatherCodeMap.Describe(61).Label);
+        Assert.NotEqual(WeatherCodeMap.Describe(0), WeatherCodeMap.Describe(61));
     }
 
     [Fact]
