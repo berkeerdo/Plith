@@ -1127,3 +1127,29 @@ settings window is STA-only so the suite cannot construct it.
 - The accent green is now stated once per palette file, but `Palette.Dark` and `OsdPalette.Dark`
   still each declare their own. They are different dictionaries loaded into different scopes and
   merging them is a larger change than the duplication costs; recorded rather than done.
+
+---
+
+## 17. What a self-review found before merge
+
+Read back over the branch before proposing a merge, on the argument that with nothing verified
+on hardware this was the last cheap moment to find something. Five defects, none of which would
+have failed a build, a test or the lint, and none reachable from anything the suite can
+construct.
+
+| Found | Why no gate caught it |
+|---|---|
+| The audio widget's "user is driving" flag could stick forever after a keyboard arrow, silently freezing the display | Needs a focused Slider and a real key press |
+| The weather page's bleed transform had a hard-coded centre taken from a size that is not that element's | Renders correctly enough to look deliberate |
+| "Show weather" off did not remove the weather page, though Settings said it did | The setting works; only the sentence was wrong |
+| Three comments named `BandWindow.HitTestFilter`, deleted two commits earlier | Comments are not compiled |
+| A doc comment was orphaned in front of the wrong method, leaving two summary blocks on one | Same |
+
+**Two of the five are the same failure as the branch's own recurring one**, in a different dress:
+a value fixed at a moment (`_userIsDriving`, the transform's centre) rather than derived where it
+is used. The other three are documentation describing code that no longer exists — which on this
+branch is not cosmetic, because the comments are where the reasoning lives and a wrong one sends
+the next reader at the wrong mechanism.
+
+**None of this replaces the hardware session.** It found what could be found by reading. Every
+item in §15 and §16 is still open.
