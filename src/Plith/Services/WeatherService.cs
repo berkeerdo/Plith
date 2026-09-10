@@ -167,10 +167,19 @@ public sealed class WeatherService : IDisposable
         try
         {
             var at = await ResolveLocationAsync().ConfigureAwait(true);
-            if (at is not { } point) return;
+            if (at is not { } point) return;   // ResolveLocationAsync logs why
 
             var snap = await _weather.GetCurrentAsync(point, _cts.Token).ConfigureAwait(true);
-            if (snap is null) return;
+            if (snap is null)
+            {
+                // Logged because it used to return in silence, and the two silent exits above
+                // and here were between them the whole answer to "why is there no weather?" —
+                // with nothing in the log to tell them apart. A reading that never arrives looks
+                // identical from the outside to a location that never resolved, and identical
+                // again to a widget that is not asking.
+                _log?.Warn("Weather", "Location resolved but the forecast request returned nothing.");
+                return;
+            }
 
             // Re-check rather than trust the guard at the top of this method: ShowWeather can
             // flip off while the two awaits above were in flight, and AmbientCard.Tick feeds
@@ -180,6 +189,8 @@ public sealed class WeatherService : IDisposable
             if (!_settings.Current.ShowWeather) return;
 
             Current = snap;
+            _log?.Info("Weather",
+                $"Reading: {snap.Value.TemperatureC:0.#}C, code {snap.Value.WeatherCode}, at {snap.Value.FetchedAt:HH:mm:ss}.");
             LogRecovery("Weather refresh recovered");
             Updated?.Invoke();
         }

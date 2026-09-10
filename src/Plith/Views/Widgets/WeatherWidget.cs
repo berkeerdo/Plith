@@ -73,6 +73,33 @@ public partial class WeatherWidget : UserControl
     }
 
     /// <summary>
+    /// A new reading arrived. Take it, whether or not this page is on screen.
+    ///
+    /// This exists because the page could not see one otherwise, and that was a real defect
+    /// rather than a refinement: the widget read the snapshot once, when it became visible, and
+    /// nothing told it about later ones. The first fetch needs a location lookup and a network
+    /// round trip, so the common case was opening the notch, swiping to weather before that
+    /// finished, and getting "Weather unavailable" that never went away until the page was left
+    /// and re-entered. Only AmbientCard subscribed to WeatherService.Updated, and slice 3 made
+    /// AmbientCard unreachable — so in notch mode nothing was listening at all.
+    ///
+    /// Off screen it repaints and stops. On screen it repaints, and restarts the ambient loops
+    /// only if the SKY changed — the same drops falling for a new temperature is not worth a
+    /// restart, and restarting would also re-run the arrival for a page the user is already
+    /// looking at.
+    /// </summary>
+    public void OnWeatherUpdated()
+    {
+        var before = _sky;
+        Render(_read());
+
+        if (!IsVisible || _sky == before) return;
+
+        StopEverything();
+        StartAmbient(withReveal: false);
+    }
+
+    /// <summary>
     /// Come on screen: read the current weather, paint the sky, and start the loops — once, and
     /// only after deciding whether this is the day's first look.
     /// </summary>

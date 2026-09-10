@@ -490,6 +490,15 @@ public sealed class OsdHost : BandWindow
         _content.SetWidgetContent(_widgets, _hud);
     }
 
+    /// <summary>
+    /// Tell the weather page a new reading arrived.
+    ///
+    /// Called from App, which owns the WeatherService. The alternative — handing the widget the
+    /// service — would put a view in front of a background timer and an HttpClient for the sake
+    /// of one event.
+    /// </summary>
+    public void OnWeatherUpdated() => _weatherPage?.OnWeatherUpdated();
+
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;
     private Widgets.MediaWidget? _mediaPage;

@@ -98,6 +98,16 @@ public partial class App : Application
         // nothing to hand over until now.
         _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume, _mediaCard.Vm,
                                () => _weatherService.Current);
+
+        // The notch's weather page reads the snapshot when it comes on screen, which is not
+        // enough on its own: the first fetch needs a location lookup and a network round trip,
+        // so a page opened before that lands would show "Weather unavailable" and never correct
+        // itself. AmbientCard used to be the only subscriber, and slice 3 made it unreachable.
+        //
+        // Marshalled onto the OSD's dispatcher because Updated is raised from the refresh's
+        // continuation, which is not on the UI thread.
+        var osd = _osd;
+        _weatherService.Updated += () => osd.Dispatcher.BeginInvoke(new Action(osd.OnWeatherUpdated));
         _fullscreenWatcher.Start();   // after the orchestrator, so the first Evaluate sees a live session client
 
         // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
