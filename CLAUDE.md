@@ -65,20 +65,35 @@ deliberate hover does, and Classic OSD never opens it at all. Weather is Open-Me
 (keyless), location priority is a typed city, then Windows Location, then IP
 geolocation, refreshed every 15 minutes; Windows Location is asked on every refresh
 rather than cached, since it does not re-prompt after the first answer. Settings
-gained "Show ambient info on hover", "Show weather", and "Weather location", hidden
-while Classic is selected.
+gained "Show weather" and "Weather location", hidden while Classic is selected.
+(The "Show ambient info on hover" toggle this slice added is gone — slice 3 made hover a
+peek and a click the way in, so it described a behaviour that no longer happens.)
 
-**Neither slice is verified on a running build.** Build, the 218-test suite and
-`scripts/check-a11y.ps1` are green, but no agent may launch or drive the app, so
-every manual check — the resting shape appearing and growing, hit-testing at rest,
-hover-to-open, the Classic fallback over a real game, the ambient row opening on
-hover and staying closed on an event, the Windows Location prompt and its `Denied`
-path, the Settings controls live, Snap Layouts/taskbar interference, idle resource
-use with the window never hidden, and motion smoothness across refresh rates — is
-open. Full ledger in `docs/PHASE6-VERIFICATION.md`; §10 records that the last live
-session ran against a binary three hours older than the branch, and §11 covers the
-home view, flagging the Windows Location checks (§11.5–11.6) as the highest risk in
-that slice.
+**Phase 6 slice 3 (notch widgets) code-complete on the same branch, not yet merged.**
+The open notch is now a fixed 356×116 frame with paged widgets — clock, weather, media,
+audio — reached by a two-finger swipe, a tilt wheel, `Shift`+wheel or a click on the page
+dots. An event no longer opens that frame: a volume key or a track change gets its own
+short HUD shape instead, because an answer to something you did must not look like a place
+you went. Plith also gained its **first audio write path** — the audio widget's level is
+draggable, on Voicemeeter and on a Windows endpoint.
+
+**The Classic OSD and Settings redesign is code-complete too, through Task 7 of its plan.**
+Every icon in the product is now drawn geometry rather than Segoe MDL2, and the
+accessibility lint fails the build on any that are not — in code-behind as well as XAML,
+which was the rule's own blind spot on the day it was written. The classic card is sized by
+its fullest row (300 DIP, 224 compact), titles scroll rather than ellipse, and Settings has
+a grouped left rail and a preview that finally knows the notch exists.
+
+**None of it is verified on a running build.** Build, 344 tests and the lint are green, and
+none of that reaches any of it: the suite is not STA, and the OSD renders in a layered
+window nothing can capture over RDP. Slice 2 shipped equally green and then crashed on the
+first hover. Full ledgers in `docs/PHASE6-VERIFICATION.md` §15 and §16; the highest-risk
+items are the three provisional paging constants, which were chosen without hardware and can
+only be corrected from the log line each commit writes.
+
+Two things are deliberately left undone: the ambient row that slice 3 made unreachable is
+still wired (its removal is gated on slice 3 being driven on hardware first), and
+`Palette.Dark` and `OsdPalette.Dark` still each declare the accent green.
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).
