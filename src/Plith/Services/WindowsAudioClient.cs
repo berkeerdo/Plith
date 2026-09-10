@@ -191,7 +191,7 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
             var devs = en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
             foreach (var d in devs)
             {
-                try { list.Add(new WindowsAudioEndpointInfo(d.ID, ShortenFriendlyName(d.FriendlyName ?? "Unknown device"))); }
+                try { list.Add(new WindowsAudioEndpointInfo(d.ID, AudioLabel.Shorten(d.FriendlyName))); }
                 finally { d.Dispose(); }
             }
         }
@@ -202,32 +202,6 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         return list;
     }
 
-    /// <summary>Strips the parenthesized adapter suffix Windows appends to endpoint names,
-    /// e.g. "SteelSeries Sonar - Chat (SteelSeries Sonar Virtual Audio Device)" →
-    /// "SteelSeries Sonar - Chat". Keeps single-adapter endpoints intact
-    /// (e.g. "Hoparlör (Realtek(R) Audio)" → "Hoparlör (Realtek)") so identical-named
-    /// endpoints on different drivers stay distinguishable. Used only for display —
-    /// the raw endpoint id is what's persisted and matched.</summary>
-    private static string ShortenFriendlyName(string full)
-    {
-        int paren = full.LastIndexOf(" (", StringComparison.Ordinal);
-        if (paren <= 0) return full;
-        var head = full.Substring(0, paren);
-        var tail = full.Substring(paren + 2, full.Length - paren - 3); // strip " (" and trailing ")"
-        // If the head already contains the adapter descriptor (Sonar Chat / Sonar Gaming /
-        // Sonar Media all bundle the driver name in parens), drop the tail entirely.
-        if (head.Contains(tail, StringComparison.OrdinalIgnoreCase)) return head;
-        // Otherwise keep a shortened adapter hint so duplicates stay tellable.
-        // Pull the first two words out of the adapter descriptor.
-        var words = tail.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var shortAdapter = words.Length switch
-        {
-            0 => tail,
-            1 => words[0],
-            _ => words[0] + " " + words[1],
-        };
-        return $"{head} ({shortAdapter})";
-    }
 
     private void DetachFromCurrentDevice()
     {
@@ -282,7 +256,11 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         bool muted;
         try
         {
-            label = device.FriendlyName ?? "Speakers";
+            // Shortened here, not only in the endpoint list. The card took FriendlyName raw
+            // while the settings dropdown ran the same string through the shortener, so one
+            // endpoint appeared two different ways in two places - and the card's was the long
+            // one, ellipsed mid-word.
+            label = AudioLabel.Shorten(device.FriendlyName);
             scalar = volume.MasterVolumeLevelScalar;   // 0..1, matches Windows' own percentage UI
             muted = volume.Mute;
         }
