@@ -456,6 +456,19 @@ public sealed class OsdHost : BandWindow
     /// </summary>
     private static List<FrameworkElement> BuildWidgetPages() => [new Widgets.ClockWidget()];
 
+    /// <summary>
+    /// Give the widget frame an audio page.
+    ///
+    /// Called by App once the orchestrator exists, rather than injected through the constructor:
+    /// the orchestrator needs this window's Dispatcher to be built at all, so at construction
+    /// time there is nothing to hand over. Rebuilding the pages is the frame's normal path -
+    /// pages come and go anyway - and the pager is told the new count as part of it.
+    /// </summary>
+    public void AttachAudioSource(AudioCardViewModel vm, Func<double, bool> write)
+    {
+        _widgets.SetPages(_pager, [new Widgets.ClockWidget(), new Widgets.AudioWidget(vm, write)]);
+    }
+
     private void OnWidgetPageRequested(object? sender, int index)
     {
         var before = _pager.Index;

@@ -1,0 +1,98 @@
+<UserControl x:Class="Plith.Views.Widgets.AudioWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False">
+    <UserControl.Resources>
+        <!-- The track's look lives here rather than in SettingsTheme.xaml, whose slider style
+             reads brushes that only exist in the settings window's resource scope. The OSD
+             renders inside an HwndSource whose resource lookups do not reach Application
+             resources the same way, and a DynamicResource that resolves to nothing silently
+             draws an invisible control. -->
+        <Style x:Key="NotchThumbStyle" TargetType="Thumb">
+            <Setter Property="Focusable" Value="False" />
+            <Setter Property="Width" Value="12" />
+            <Setter Property="Height" Value="12" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Thumb">
+                        <Ellipse Fill="{DynamicResource OsdTextPrimary}" />
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <Style x:Key="NotchTrackStyle" TargetType="Slider">
+            <!-- Taller than the 6 DIP it draws: the whole control is the grab target, and a
+                 6 DIP one is missed between two mouse samples. -->
+            <Setter Property="MinHeight" Value="20" />
+            <Setter Property="Focusable" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Slider">
+                        <Grid Background="Transparent">
+                            <Border Height="6" CornerRadius="3"
+                                    VerticalAlignment="Center"
+                                    Background="{DynamicResource OsdTrackBg}" />
+                            <Track x:Name="PART_Track">
+                                <Track.DecreaseRepeatButton>
+                                    <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" Cursor="Hand">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Grid Background="Transparent">
+                                                    <Border Height="6" CornerRadius="3"
+                                                            VerticalAlignment="Center"
+                                                            Background="{DynamicResource OsdGainGreen}" />
+                                                </Grid>
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.DecreaseRepeatButton>
+                                <Track.IncreaseRepeatButton>
+                                    <RepeatButton Command="Slider.IncreaseLarge" Focusable="False" Cursor="Hand">
+                                        <RepeatButton.Template>
+                                            <ControlTemplate TargetType="RepeatButton">
+                                                <Border Background="Transparent" />
+                                            </ControlTemplate>
+                                        </RepeatButton.Template>
+                                    </RepeatButton>
+                                </Track.IncreaseRepeatButton>
+                                <Track.Thumb>
+                                    <Thumb Style="{StaticResource NotchThumbStyle}" />
+                                </Track.Thumb>
+                            </Track>
+                        </Grid>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel VerticalAlignment="Center">
+        <!-- Which rail this is, before the number. On a machine running Voicemeeter plus Sonar
+             plus a headset, a level with no source attached to it is ambiguous. -->
+        <TextBlock x:Name="Source"
+                   FontSize="11"
+                   Foreground="{DynamicResource OsdTextSecondary}"
+                   TextTrimming="CharacterEllipsis" />
+
+        <TextBlock x:Name="Level"
+                   Margin="0,2,0,10"
+                   FontSize="26" FontWeight="SemiBold"
+                   Foreground="{DynamicResource OsdTextPrimary}" />
+
+        <!-- A Slider, not a drawn rectangle with mouse handlers. That is what gives it keyboard
+             arrows, Home/End, an automation peer that reports its value, and the drag behaviour
+             people already expect - all of which a hand-rolled track would have had to
+             reimplement, and would have reimplemented worse. -->
+        <Slider x:Name="Track"
+                Minimum="0" Maximum="1"
+                SmallChange="0.02" LargeChange="0.1"
+                IsMoveToPointEnabled="True"
+                AutomationProperties.Name="Volume"
+                Style="{StaticResource NotchTrackStyle}" />
+    </StackPanel>
+</UserControl>

@@ -91,6 +91,12 @@ public partial class App : Application
         _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
         _orchestrator.Start();
         _diagnosticLog.Info("App", "OsdOrchestrator started");
+
+        // The notch's audio widget needs both halves at once: the view model the card already
+        // paints from, and a way to write back. Wired here rather than in OsdHost's constructor
+        // because the orchestrator needs that window's Dispatcher to exist first, so there is
+        // nothing to hand over until now.
+        _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume);
         _fullscreenWatcher.Start();   // after the orchestrator, so the first Evaluate sees a live session client
 
         // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
