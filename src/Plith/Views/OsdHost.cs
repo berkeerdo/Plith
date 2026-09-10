@@ -113,6 +113,7 @@ public sealed class OsdHost : BandWindow
         Focusable = false;
 
         _content = new OsdContent { DataContext = Shell };
+        _content.SetCompact(_settings.Current.CompactMode);
         Content = _content;
 
         _widgets.PageRequested += OnWidgetPageRequested;
@@ -166,10 +167,13 @@ public sealed class OsdHost : BandWindow
         Loaded += (_, _) => IsClickThrough = !_presentation.WantsHitTesting;
 
         // A settings save can change where the OSD sits (position / monitor), so re-anchor it
-        // without waiting for the next pop. Card-level settings (colour thresholds, compact
-        // mode) are owned by AudioCard and MediaCard and never travel through the shell.
+        // without waiting for the next pop. Card-level settings (colour thresholds) are owned by
+        // AudioCard and MediaCard and never travel through the shell — compact mode is the
+        // exception, because it changes the CARD'S WIDTH, which is shell geometry.
         _settings.Changed += _ => Dispatcher.BeginInvoke(() =>
         {
+            _content.SetCompact(_settings.Current.CompactMode);
+
             if (_settings.Current.Presentation != _activeMode)
             {
                 _activeMode = _settings.Current.Presentation;

@@ -2,6 +2,7 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
+             xmlns:w="clr-namespace:Plith.Views.Widgets"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:MediaViewModel}"
@@ -135,13 +136,30 @@
         <StackPanel Grid.Column="2"
                     VerticalAlignment="Center"
                     Orientation="Vertical">
-            <TextBlock Style="{StaticResource OsdTrackNameStyle}"
-                       TextTrimming="CharacterEllipsis"
-                       Text="{Binding Title}" />
-            <TextBlock Style="{StaticResource OsdTrackArtistStyle}"
-                       Margin="0,3,0,0"
-                       TextTrimming="CharacterEllipsis"
-                       Text="{Binding Artist}" />
+            <!-- Scrolls rather than ellipses, and only when it has to. The same MarqueeText the
+                 notch's media page uses, not a second implementation: a title must not be
+                 written one way on one surface and another way on the other, and the four rules
+                 that keep a marquee from being irritating are worth having in one place.
+
+                 TextElement.* rather than a Style, because MarqueeText is a FrameworkElement and
+                 owns neither FontSize nor Foreground; both are inheritable and reach the
+                 TextBlock inside exactly as they would anywhere else. -->
+            <!-- Sizes and weights copied from OsdTrackNameStyle / OsdTrackArtistStyle rather
+                 than re-chosen: this task changes HOW a long title behaves, not how any title
+                 looks, and a silent point-size change would be a second edit hiding inside the
+                 first. -->
+            <w:MarqueeText Height="18"
+                           TextElement.FontFamily="{StaticResource OsdUiFont}"
+                           TextElement.FontSize="13"
+                           TextElement.FontWeight="SemiBold"
+                           TextElement.Foreground="{DynamicResource OsdTextPrimary}"
+                           Text="{Binding Title}" />
+            <w:MarqueeText Height="15"
+                           Margin="0,3,0,0"
+                           TextElement.FontFamily="{StaticResource OsdUiFont}"
+                           TextElement.FontSize="11"
+                           TextElement.Foreground="{DynamicResource OsdTextSecondary}"
+                           Text="{Binding Artist}" />
         </StackPanel>
 
         <!-- Transport controls — prev / play-pause (primary) / next -->

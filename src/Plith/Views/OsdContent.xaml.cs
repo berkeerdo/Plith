@@ -30,6 +30,22 @@ public partial class OsdContent : UserControl
     /// </summary>
     public const double ContentInsetDip = 14;
 
+    /// <summary>
+    /// The card's visible width, and the control's is this plus the insets on both sides.
+    ///
+    /// Set by the FULLEST row rather than the bare volume one — the same rule the notch's fixed
+    /// frame follows. At the previous 412 the layout was generous everywhere and the media row
+    /// still ellipsed a real track name; at 300 the media row leaves the title ~130 DIP, which
+    /// is where short and medium titles sit still and only genuinely long ones scroll. Windows'
+    /// own flyout is wider than either number.
+    /// </summary>
+    public const double CardWidthDip = 300;
+
+    /// <summary>Compact mode drops the media card entirely, so the fullest row is the volume
+    /// one and the card can be narrower. Not proportional to the above: it is what the volume
+    /// row needs, measured the same way.</summary>
+    public const double CompactCardWidthDip = 224;
+
     /// <summary>Peak opacity of the notch panel's drop shadow, reached only when fully open.</summary>
     private const double NotchShadowOpacity = 0.5;
 
@@ -130,6 +146,17 @@ public partial class OsdContent : UserControl
     /// <summary>The controls the widget frame and the HUD live in. Set once by the host; both
     /// outlive every open and close, so their contents are built once rather than per show —
     /// which matters because those contents own timers and storyboards.</summary>
+    /// <summary>
+    /// Narrow the card for compact mode, or widen it back.
+    ///
+    /// Applied to this control rather than to CardSurface, because every geometry calculation in
+    /// the notch path maps between the WINDOW rectangle and the visible card through
+    /// ContentInsetDip — narrowing the inner Border alone would leave the notch's surface sized
+    /// to a card that is no longer that wide.
+    /// </summary>
+    public void SetCompact(bool compact) =>
+        Width = (compact ? CompactCardWidthDip : CardWidthDip) + ContentInsetDip * 2;
+
     public void SetWidgetContent(UIElement widgets, UIElement hud)
     {
         WidgetHost.Content = widgets;
