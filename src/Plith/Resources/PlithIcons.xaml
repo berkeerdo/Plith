@@ -1,0 +1,18 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+    <!-- Icons drawn for this product rather than taken from Segoe MDL2.
+
+         Not only a matter of taste. A FontIcon bound to "Segoe MDL2 Assets" depends on a font
+         whose contents differ between Windows builds, and slice 2 found that out the expensive
+         way: seven of ten weather glyphs picked from it did not exist at all and would have
+         rendered as tofu boxes on a user's machine. A PathGeometry cannot go missing.
+
+         One language throughout: a 24 grid, and fills rather than strokes wherever a shape has
+         to stay readable at 13 px - the transport marks, which turn to mud as outlines at that
+         size. Stroked icons in this set carry their own stroke width at the call site. -->
+
+    <Geometry x:Key="IconPrevious">M18,5.5 L18,18.5 L8.5,12 Z M5,5.5 L7,5.5 L7,18.5 L5,18.5 Z</Geometry>
+    <Geometry x:Key="IconNext">M6,5.5 L6,18.5 L15.5,12 Z M17,5.5 L19,5.5 L19,18.5 L17,18.5 Z</Geometry>
+    <Geometry x:Key="IconPlay">M7.5,5.2 L7.5,18.8 L18.6,12 Z</Geometry>
+    <Geometry x:Key="IconPause">M9,5.5 L11.5,5.5 L11.5,18.5 L9,18.5 Z M14.5,5.5 L17,5.5 L17,18.5 L14.5,18.5 Z</Geometry>
+</ResourceDictionary>

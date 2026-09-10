@@ -464,9 +464,14 @@ public sealed class OsdHost : BandWindow
     /// time there is nothing to hand over. Rebuilding the pages is the frame's normal path -
     /// pages come and go anyway - and the pager is told the new count as part of it.
     /// </summary>
-    public void AttachAudioSource(AudioCardViewModel vm, Func<double, bool> write)
+    public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media)
     {
-        _widgets.SetPages(_pager, [new Widgets.ClockWidget(), new Widgets.AudioWidget(vm, write)]);
+        _widgets.SetPages(_pager,
+        [
+            new Widgets.ClockWidget(),
+            new Widgets.MediaWidget(media),
+            new Widgets.AudioWidget(audio, write),
+        ]);
     }
 
     private void OnWidgetPageRequested(object? sender, int index)
