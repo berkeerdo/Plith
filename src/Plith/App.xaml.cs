@@ -151,7 +151,7 @@ public partial class App : Application
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
 
-        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd);
+        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
         _trayHost.Initialize();
     }
 

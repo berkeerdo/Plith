@@ -129,11 +129,14 @@ public partial class WeatherWidget : UserControl
         if (snapshot is not WeatherSnapshot w)
         {
             // No reading: no location, no network, or a stale one. Said plainly rather than
-            // shown as a blank sky with an empty number, which reads as a broken page.
+            // shown as a blank sky with an empty number, which reads as a broken page — and
+            // pointed at the one place it can be fixed, because the most common cause is a
+            // system location switch that Plith cannot ask about (it is unpackaged, so Windows
+            // never shows a consent prompt) and that nothing else would ever mention.
             _sky = SkyKind.Overcast;
             Temperature.Text = "—";
             Condition.Text = "Weather unavailable";
-            Detail.Text = string.Empty;
+            Detail.Text = "Check location in Settings, or type a city";
             PaintSky();
             AutomationProperties.SetName(Readout, "Weather unavailable");
             return;

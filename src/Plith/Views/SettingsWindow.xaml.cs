@@ -55,8 +55,12 @@ public partial class SettingsWindow : Window
     // don't have to hit GitHub twice per user flow.
     private UpdateInfo? _lastUpdateInfo;
 
-    public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd)
+    /// <param name="weather">Optional, and only so this window can explain why weather is not
+    /// appearing. Null leaves the location-permission row hidden rather than guessing.</param>
+    public SettingsWindow(SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd,
+                          WeatherService? weather = null)
     {
+        _weather = weather;
         _settings = settings;
         _hotkey = hotkey;
         _theme = theme;
@@ -119,6 +123,25 @@ public partial class SettingsWindow : Window
         ApplyGameModeStatus();
         WireUpdateCheck();
         WireSectionRail();
+
+        // ms-settings: is the documented way to deep-link a Settings page, and UseShellExecute
+        // is what makes the shell resolve the protocol rather than looking for an executable.
+        OpenLocationSettingsButton.Click += (_, _) =>
+        {
+            try
+            {
+                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(
+                    "ms-settings:privacy-location") { UseShellExecute = true });
+            }
+            catch (Exception ex)
+            {
+                // A button that silently does nothing is worse than one that says it failed,
+                // and this can fail: the protocol handler is absent on some Server SKUs.
+                LocationPermissionHint.Text =
+                    $"Could not open Windows settings ({ExceptionText.Describe(ex)}). "
+                    + "Open Settings > Privacy & security > Location by hand.";
+            }
+        };
         WirePositionEditor();
         BuildAccentSwatches();
         WireAccentPicker();
@@ -221,6 +244,8 @@ public partial class SettingsWindow : Window
         WeatherLocationRow.Visibility = isNotch && WeatherToggle.IsChecked == true
             ? Visibility.Visible : Visibility.Collapsed;
 
+        RefreshLocationPermission(isNotch && WeatherToggle.IsChecked == true);
+
         // OsdHost.EnterPositionEditMode/ExitPositionEditMode(save: false) snapshot and restore
         // the WHOLE settings model, not just the position fields — see the comment on
         // OnOsdEditModeChanged. Freezing these four while an edit is live means a Cancel can
@@ -272,6 +297,48 @@ public partial class SettingsWindow : Window
             section.Visibility = name == sectionName ? Visibility.Visible : Visibility.Collapsed;
         }
     }
+
+    /// <summary>
+    /// Say what Windows Location is doing, and offer the switch that changes it.
+    ///
+    /// The row appears only when there is something to say. Weather already working, or a typed
+    /// city making the lookup irrelevant, is not something to say — a permission warning on a
+    /// screen where nothing is wrong teaches people to ignore permission warnings.
+    /// </summary>
+    private void RefreshLocationPermission(bool weatherSectionVisible)
+    {
+        if (_weather is null || !weatherSectionVisible)
+        {
+            LocationPermissionRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        // A typed city bypasses Windows Location entirely, so its state is not worth raising.
+        var hasTypedCity = !string.IsNullOrWhiteSpace(WeatherLocationBox.Text);
+        if (hasTypedCity || _weather.HasEverResolved)
+        {
+            LocationPermissionRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        LocationPermissionRow.Visibility = Visibility.Visible;
+        LocationPermissionHint.Text = _weather.LastWindowsOutcome switch
+        {
+            // Denied and Unavailable are one sentence on purpose. Plith is unpackaged, so it
+            // never sees a per-app decision — both mean a system-wide switch is off, and the
+            // fix is the same page either way. Splitting them would be a distinction the user
+            // cannot act on differently.
+            LocationOutcome.Denied or LocationOutcome.Unavailable =>
+                "Off. Plith is not a Store app, so Windows never asks — location is governed by "
+                + "the system switches. Turn on Location and \"Let desktop apps access your "
+                + "location\", or type a city above and Plith will not need it.",
+
+            _ => "On, but no reading has arrived yet. Plith falls back to your IP address, which "
+                + "is less accurate; typing a city above is the reliable option.",
+        };
+    }
+
+    private readonly WeatherService? _weather;
 
     private void WireUpdateCheck()
     {

@@ -24,6 +24,21 @@ public sealed class WeatherService : IDisposable
     private readonly CancellationTokenSource _cts = new();
 
     private LocationOutcome _lastWindowsOutcome = LocationOutcome.Unavailable;
+
+    /// <summary>
+    /// What Windows Location said on the last attempt, so Settings can explain itself.
+    ///
+    /// Plith is unpackaged, so there is no consent prompt to show and no stored decision to
+    /// wait on: access is governed entirely by two system-wide switches, and a person whose
+    /// weather never appears has no way to discover that from inside the app. Exposing the
+    /// outcome is what lets Settings say which switch, and offer to open it.
+    /// </summary>
+    public LocationOutcome LastWindowsOutcome => _lastWindowsOutcome;
+
+    /// <summary>True once a reading has been fetched at least once this session. Distinguishes
+    /// "the lookup failed" from "it has not run yet", which look identical on a page that says
+    /// nothing.</summary>
+    public bool HasEverResolved { get; private set; }
     // Session cache for the IP fallback only — re-asking ipapi.co every 15 minutes while
     // Windows Location stays unavailable adds nothing and risks its free-tier rate limit.
     // Windows Location itself is never cached this way: it must be asked fresh every refresh
@@ -189,6 +204,7 @@ public sealed class WeatherService : IDisposable
             if (!_settings.Current.ShowWeather) return;
 
             Current = snap;
+            HasEverResolved = true;
             _log?.Info("Weather",
                 $"Reading: {snap.Value.TemperatureC:0.#}C, code {snap.Value.WeatherCode}, at {snap.Value.FetchedAt:HH:mm:ss}.");
             LogRecovery("Weather refresh recovered");

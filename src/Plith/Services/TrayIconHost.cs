@@ -14,16 +14,22 @@ public sealed class TrayIconHost : IDisposable
     private readonly HotkeyService _hotkey;
     private readonly ThemeService _theme;
     private readonly OsdHost _osd;
+    private readonly WeatherService? _weather;
     private TaskbarIcon? _tray;
     private SettingsWindow? _settingsWindow;
 
-    public TrayIconHost(Application app, SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd)
+    /// <param name="weather">Passed straight through to SettingsWindow, which uses it only to
+    /// explain why weather is not appearing. Optional so a caller that has no weather service
+    /// still compiles rather than being forced to invent one.</param>
+    public TrayIconHost(Application app, SettingsService settings, HotkeyService hotkey, ThemeService theme, OsdHost osd,
+                        WeatherService? weather = null)
     {
         _app = app;
         _settings = settings;
         _hotkey = hotkey;
         _theme = theme;
         _osd = osd;
+        _weather = weather;
     }
 
     public void Initialize()
@@ -67,7 +73,7 @@ public sealed class TrayIconHost : IDisposable
             _settingsWindow.Activate();
             return;
         }
-        _settingsWindow = new SettingsWindow(_settings, _hotkey, _theme, _osd);
+        _settingsWindow = new SettingsWindow(_settings, _hotkey, _theme, _osd, _weather);
         _settingsWindow.Closed += (_, _) => _settingsWindow = null;
         _settingsWindow.Show();
     }

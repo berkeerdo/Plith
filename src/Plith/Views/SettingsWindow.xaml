@@ -484,6 +484,33 @@
                             </Grid>
                         </Border>
 
+                        <!-- Plith is unpackaged, so Geolocator.RequestAccessAsync never shows a
+                             consent dialog — that is a packaged-app feature. Access is decided
+                             entirely by two system switches, and nothing in the app said so: a
+                             person whose weather never appeared had no way to find out why, and
+                             no way to fix it from here. This row is both. -->
+                        <Border x:Name="LocationPermissionRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Windows location" />
+                                    <TextBlock x:Name="LocationPermissionHint"
+                                               Style="{StaticResource RowHintStyle}"
+                                               TextWrapping="Wrap"
+                                               Text="Checking…" />
+                                </StackPanel>
+                                <Button x:Name="OpenLocationSettingsButton"
+                                        Grid.Column="1"
+                                        Style="{StaticResource GhostButtonStyle}"
+                                        Content="Open Windows settings"
+                                        VerticalAlignment="Center"
+                                        AutomationProperties.Name="Open Windows location settings" />
+                            </Grid>
+                        </Border>
+
                         <Border Style="{StaticResource RowStyle}">
                             <Grid>
                                 <Grid.ColumnDefinitions>
