@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using Plith.Services;
@@ -53,8 +54,22 @@ public partial class ClockWidget : UserControl
         Time.Text = time;
         Date.Text = date;
 
+        // Read every tick rather than cached. GetSystemPowerStatus is a struct read, and the
+        // states that matter — a cable going in, a machine dropping to low power — are exactly
+        // the ones a cached value would show wrong for as long as the page stayed open.
+        var (show, text, charging) = AmbientFormatter.FormatBattery(BatteryReader.Read());
+
+        // Collapsed on a desktop, which the formatter decides: a battery line reading "no
+        // battery" is worse than no line, and this is the same call the ambient row used.
+        Battery.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        BatteryText.Text = text;
+        ChargingBolt.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
+
         // The announced name is the whole reading, not just the digits: a screen reader user
-        // landing on "21:04" alone has no way to know what it is.
-        System.Windows.Automation.AutomationProperties.SetName(Time, $"{Time.Text}, {Date.Text}");
+        // landing on "21:04" alone has no way to know what it is. The battery joins it rather
+        // than announcing separately — a StackPanel has no automation peer, so a name set there
+        // would reach nothing at all.
+        var announced = show ? $"{Time.Text}, {Date.Text}, battery {text}" : $"{Time.Text}, {Date.Text}";
+        System.Windows.Automation.AutomationProperties.SetName(Time, announced);
     }
 }

@@ -5,6 +5,13 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
     <!-- Centred in a frame that does not resize to it. The empty space above and below is the
          cost of the fixed frame, and it is the correct one: a clock centred in a steady frame
          reads as deliberate, while a frame that shrank to hug it would read as unstable every
@@ -25,5 +32,32 @@
                    Margin="0,4,0,0"
                    FontSize="12"
                    Foreground="{DynamicResource NotchInkMuted}" />
+
+        <!-- The battery, on a machine that has one.
+
+             It lives here rather than on a page of its own because it is one short line that
+             nobody would swipe to, and because the clock page has room by design — the fixed
+             frame is sized by the fullest page, so this one carries empty space either way.
+
+             It went missing entirely when slice 3 replaced the ambient row with widget pages:
+             slice 2 built the reader, the formatter and their tests, and then nothing rendered
+             any of it. Restored rather than rebuilt. -->
+        <StackPanel x:Name="Battery"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center"
+                    Margin="0,9,0,0"
+                    Visibility="Collapsed">
+            <Path x:Name="ChargingBolt"
+                  Data="{StaticResource IconBolt}"
+                  Fill="{DynamicResource NotchInkMuted}"
+                  Width="10" Height="10" Stretch="Uniform"
+                  Margin="0,0,4,0"
+                  VerticalAlignment="Center"
+                  Visibility="Collapsed" />
+            <TextBlock x:Name="BatteryText"
+                       FontSize="11"
+                       VerticalAlignment="Center"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+        </StackPanel>
     </StackPanel>
 </UserControl>
