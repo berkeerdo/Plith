@@ -5,7 +5,7 @@
         xmlns:views="clr-namespace:Plith.Views"
         xmlns:shell="clr-namespace:System.Windows.Shell;assembly=PresentationFramework"
         Title="Plith Settings"
-        Width="900" Height="700" MinWidth="780" MinHeight="600"
+        Width="1020" Height="700" MinWidth="640" MinHeight="560"
         WindowStartupLocation="CenterScreen"
         WindowStyle="None"
         ShowInTaskbar="False"
@@ -130,15 +130,21 @@
              does, App is what the program does, and someone adjusting how the notch looks
              should not pass autostart and hotkeys on the way. -->
         <Grid Grid.Row="2">
+            <!-- Widths are named because the layout has to give things up as the window narrows.
+                 Fixed columns plus a MinWidth on the middle one added up to about 970, which is
+                 wider than the window's own default — so the settings column was squeezed under
+                 its minimum and its content clipped. The preview is what goes first: it is the
+                 supporting evidence for a control, and a control you cannot read is worse than
+                 one you cannot preview. See OnWindowSizeChanged. -->
             <Grid.ColumnDefinitions>
-                <ColumnDefinition Width="188" />
+                <ColumnDefinition x:Name="RailColumn" Width="172" />
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="*" MinWidth="460" />
-                <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="320" MinWidth="280" />
+                <ColumnDefinition Width="*" MinWidth="380" />
+                <ColumnDefinition x:Name="PreviewDividerColumn" Width="Auto" />
+                <ColumnDefinition x:Name="PreviewColumn" Width="300" MinWidth="260" />
             </Grid.ColumnDefinitions>
 
-            <StackPanel Grid.Column="0" Margin="10,14,0,0">
+            <StackPanel x:Name="SectionRail" Grid.Column="0" Margin="10,14,0,0">
                 <TextBlock Style="{StaticResource RailGroupStyle}" Text="OVERLAY" Margin="12,4,12,6" />
                 <RadioButton x:Name="RailAppearance" Style="{StaticResource RailItemStyle}"
                              Content="Appearance" Tag="SecAppearance" IsChecked="True"
@@ -170,7 +176,8 @@
                     Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />
 
-            <Border Grid.Column="3"
+            <Border x:Name="PreviewDivider"
+                    Grid.Column="3"
                     Width="1"
                     Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />

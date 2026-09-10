@@ -147,15 +147,29 @@ public partial class OsdContent : UserControl
     /// outlive every open and close, so their contents are built once rather than per show —
     /// which matters because those contents own timers and storyboards.</summary>
     /// <summary>
-    /// Narrow the card for compact mode, or widen it back.
+    /// Set the shell's width for the presentation and mode it is in.
     ///
     /// Applied to this control rather than to CardSurface, because every geometry calculation in
     /// the notch path maps between the WINDOW rectangle and the visible card through
     /// ContentInsetDip — narrowing the inner Border alone would leave the notch's surface sized
     /// to a card that is no longer that wide.
+    ///
+    /// <b>The notch does not use the card's width, and assuming it did was a real regression.</b>
+    /// Sizing the card by its fullest row took this control from 440 to 328, which is narrower
+    /// than the widget frame (356) and narrower still than the wide media HUD (372) — so the
+    /// notch's own panel was being clipped by the shell around it, and its content had nowhere
+    /// to lay out. In notch mode the width therefore comes from the widest shape the NOTCH can
+    /// show, not from the card, and the two no longer share a number they never shared a meaning
+    /// with.
     /// </summary>
-    public void SetCompact(bool compact) =>
-        Width = (compact ? CompactCardWidthDip : CardWidthDip) + ContentInsetDip * 2;
+    public void SetShellWidth(bool notch, bool compact)
+    {
+        var content = notch
+            ? Math.Max(NotchGeometry.OpenFrameDip.Width, NotchGeometry.HudWideDip.Width)
+            : compact ? CompactCardWidthDip : CardWidthDip;
+
+        Width = content + ContentInsetDip * 2;
+    }
 
     public void SetWidgetContent(UIElement widgets, UIElement hud)
     {

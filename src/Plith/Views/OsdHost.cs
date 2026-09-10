@@ -113,7 +113,7 @@ public sealed class OsdHost : BandWindow
         Focusable = false;
 
         _content = new OsdContent { DataContext = Shell };
-        _content.SetCompact(_settings.Current.CompactMode);
+        ApplyShellWidth();
         Content = _content;
 
         _widgets.PageRequested += OnWidgetPageRequested;
@@ -172,7 +172,7 @@ public sealed class OsdHost : BandWindow
         // exception, because it changes the CARD'S WIDTH, which is shell geometry.
         _settings.Changed += _ => Dispatcher.BeginInvoke(() =>
         {
-            _content.SetCompact(_settings.Current.CompactMode);
+            ApplyShellWidth();
 
             // Only when the answer changed. SetPages resets the pager and rebuilds the dots, and
             // doing that on every save would snap an open notch back to its first page whenever
@@ -239,6 +239,12 @@ public sealed class OsdHost : BandWindow
         // opens into. Reshaping after measuring would size the open panel from the other mode's
         // geometry and leave it a margin short.
         _content.SetNotchLook(_presentation is AmbientNotchPresentation);
+
+        // After SetNotchLook and before Reposition: the width is what Reposition measures
+        // against, and a mode switch changes it. Derived from the PRESENTATION rather than the
+        // setting, so the covering-window fallback gets the card's width while it is showing a
+        // card — reading the setting would keep the notch's width during a game.
+        ApplyShellWidth();
 
         if (_presentation is AmbientNotchPresentation notch)
         {
@@ -542,6 +548,16 @@ public sealed class OsdHost : BandWindow
     /// Those never reach the HUD branch, and the volume default is only what an unexpected
     /// caller would get.
     /// </summary>
+    /// <summary>
+    /// Size the shell for whatever is actually being shown.
+    ///
+    /// Asks the live presentation, not the setting. They disagree exactly when it matters: while
+    /// a window covers the monitor the notch falls back to Classic, and a width taken from the
+    /// setting would leave the card laid out inside a shell sized for a notch.
+    /// </summary>
+    private void ApplyShellWidth() =>
+        _content.SetShellWidth(_presentation is AmbientNotchPresentation, _settings.Current.CompactMode);
+
     /// <summary>
     /// The last day the weather page played its arrival, read from settings.
     ///

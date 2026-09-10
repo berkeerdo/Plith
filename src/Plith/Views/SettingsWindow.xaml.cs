@@ -124,6 +124,12 @@ public partial class SettingsWindow : Window
         WireUpdateCheck();
         WireSectionRail();
 
+        // Re-evaluated on every resize rather than decided once. The window is user-resizable
+        // and can be dragged narrow at any moment; a layout chosen at construction is right for
+        // exactly one size.
+        SizeChanged += (_, e) => ApplyResponsiveLayout(e.NewSize.Width);
+        Loaded += (_, _) => ApplyResponsiveLayout(ActualWidth);
+
         // ms-settings: is the documented way to deep-link a Settings page, and UseShellExecute
         // is what makes the shell resolve the protocol rather than looking for an executable.
         OpenLocationSettingsButton.Click += (_, _) =>
@@ -345,6 +351,38 @@ public partial class SettingsWindow : Window
     }
 
     private readonly WeatherService? _weather;
+
+    /// <summary>Below this the preview goes. 172 rail + 380 settings + 300 preview + the two
+    /// dividers and the padding is about 880, so this is where the settings column would start
+    /// being squeezed under its own minimum.</summary>
+    private const double PreviewDropsBelow = 880;
+
+    /// <summary>And below this the rail's labels would start wrapping, so it narrows instead.</summary>
+    private const double RailNarrowsBelow = 720;
+
+    /// <summary>
+    /// Give things up as the window narrows, in the order they can be spared.
+    ///
+    /// The preview goes first: it is supporting evidence for a control, and a control you cannot
+    /// read is worse than one you cannot preview. The rail narrows rather than disappearing —
+    /// losing it would strand a person in whichever section happened to be showing with no way
+    /// back.
+    /// </summary>
+    private void ApplyResponsiveLayout(double width)
+    {
+        var showPreview = width >= PreviewDropsBelow;
+
+        Preview.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+        PreviewDivider.Visibility = showPreview ? Visibility.Visible : Visibility.Collapsed;
+
+        // The COLUMN has to go too, not just what is in it. A collapsed child still leaves its
+        // fixed-width column occupying 300 DIP of nothing, which is the whole problem this is
+        // solving rather than a detail of it.
+        PreviewColumn.Width = showPreview ? new GridLength(300) : new GridLength(0);
+        PreviewColumn.MinWidth = showPreview ? 260 : 0;
+
+        RailColumn.Width = new GridLength(width >= RailNarrowsBelow ? 172 : 132);
+    }
 
     private void WireUpdateCheck()
     {
