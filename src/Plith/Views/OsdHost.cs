@@ -38,6 +38,12 @@ public sealed class OsdHost : BandWindow
     private readonly DiagnosticLog? _log = new();
     private IOsdPresentation _presentation;
     private readonly NotchHoverPoller _hoverPoller;
+
+    // The widget pager. Owns the page index and the wheel-delta accumulator, and owns them
+    // outside any animation or callback - see NotchPager for why that is not incidental.
+    // The page count is a placeholder until the widget frame exists and can report its own.
+    private readonly NotchPager _pager = new(WidgetPageCountPlaceholder);
+    private const int WidgetPageCountPlaceholder = 4;
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -128,6 +134,7 @@ public sealed class OsdHost : BandWindow
         // surface, not by an interactive element, and preview means the click opens the panel
         // before anything inside it can swallow the event.
         PreviewMouseLeftButtonDown += (_, _) => OnNotchClicked();
+        HorizontalWheel += OnHorizontalWheel;
 
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
@@ -423,12 +430,45 @@ public sealed class OsdHost : BandWindow
     /// answers WM_NCHITTEST with HTTRANSPARENT outside the shape it is actually drawing, so they
     /// go straight to whatever is underneath.
     /// </summary>
+    /// <summary>
+    /// A sideways wheel gesture on the notch. Only pages a notch that is already open enough to
+    /// be showing content: a swipe over the resting pill is not a request to page through
+    /// something that is not on screen, and a swipe during the peek is part of reaching for it.
+    ///
+    /// The open/closed question is asked of the presentation, which reads it from the live
+    /// expansion value, never from a flag. Every stale-state defect on this branch came from
+    /// the other choice.
+    /// </summary>
+    private void OnHorizontalWheel(object? sender, int delta)
+    {
+        if (_isEditMode) return;
+        if (_presentation is not AmbientNotchPresentation notch) return;
+        if (!notch.IsOpenEnoughToShowContent) return;
+
+        // Environment.TickCount64 rather than DateTime: monotonic, and the pager only ever
+        // compares two of them. Time is passed in rather than read inside the pager so the
+        // gap rule stays testable.
+        if (!_pager.Accumulate(delta, Environment.TickCount64)) return;
+
+        // Logged because this is the only way the user's own touchpad can be characterised
+        // later: the commit threshold and the rearm floor are provisional constants, and
+        // whether they are right can only be read back from a real gesture. Instrument from
+        // inside; three external sampling harnesses during slice 2 all gave misleading answers.
+        _log?.Info("OsdHost", $"Widget page committed: delta={delta}, index={_pager.Index}/{_pager.PageCount}");
+    }
+
     private void OnNotchClicked()
     {
         if (_isEditMode) return;
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         if (_presentation is not AmbientNotchPresentation notch) return;
         if (notch.IsOpenEnoughToShowContent) return;   // already open — let the panel have the click
+
+        // Reset here, on the way in, rather than in the collapse's completion callback. The
+        // spec defers remembering the last page across opens, so every open starts at the first
+        // one either way - and a value written in a Completed handler is the exact hazard that
+        // produced five defects on this branch. Recomputing it where it is used cannot go stale.
+        _pager.Reset();
 
         _home.Open();
         _hideTimer?.Stop();

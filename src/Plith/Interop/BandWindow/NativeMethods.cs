@@ -72,6 +72,8 @@ public enum WindowMessage : uint
     WM_MOVE = 0x0003,
     WM_ACTIVATE = 0x0006,
     WM_LBUTTONUP = 0x0202,
+    WM_MOUSEWHEEL = 0x020A,
+    WM_MOUSEHWHEEL = 0x020E,
     WM_EXITSIZEMOVE = 0x0232,
     WM_DPICHANGED = 0x02E0,
     WM_SYSCOMMAND = 0x0112,

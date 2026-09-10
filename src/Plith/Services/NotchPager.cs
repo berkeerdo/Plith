@@ -39,8 +39,24 @@ public sealed class NotchPager
     /// </summary>
     public const int RearmFloor = 40;
 
+    /// <summary>
+    /// How long the wheel has to go quiet before the next delta may page again.
+    ///
+    /// The rearm floor alone is not enough, and assuming it was is a real defect this constant
+    /// exists to close: a mouse's tilt wheel sends exactly one WHEEL_DELTA per detent and never
+    /// anything smaller, so a pager rearmed only by small deltas would page once and then stay
+    /// deaf forever. A touchpad rearms either way — its inertia decays through the floor — but
+    /// the tilt wheel only ever rearms on the gap between detents.
+    ///
+    /// 150 ms is short enough that deliberate repeated detents each page, and long enough that
+    /// the deltas inside one swipe do not.
+    /// </summary>
+    public const int IdleRearmMs = 150;
+
     private int _accumulated;
     private bool _armed = true;
+    private long _lastTimestampMs;
+    private bool _hasSeenDelta;
 
     public NotchPager(int pageCount)
     {
@@ -59,11 +75,19 @@ public sealed class NotchPager
     /// message — <c>WM_MOUSEHWHEEL</c> is positive-right while <c>WM_MOUSEWHEEL</c> is
     /// positive-up — because that is a Win32 detail, not a paging one.
     /// </summary>
-    public bool Accumulate(int delta)
+    public bool Accumulate(int delta, long timestampMs)
     {
         // One page is not a carousel. Swallowing here rather than at the call site keeps the
         // caller from having to know, and keeps a single-widget notch from feeling broken.
         if (PageCount < 2) return false;
+
+        // The gap is measured before anything else, so a quiet wheel rearms even when the delta
+        // that broke the silence is a full detent. Time comes in as a parameter rather than
+        // being read here: the whole point of this type is that it can be tested.
+        var gap = _hasSeenDelta ? timestampMs - _lastTimestampMs : long.MaxValue;
+        _lastTimestampMs = timestampMs;
+        _hasSeenDelta = true;
+        if (gap >= IdleRearmMs) Rest();
 
         if (!_armed)
         {
@@ -88,6 +112,14 @@ public sealed class NotchPager
     {
         _accumulated = 0;
         _armed = true;
+    }
+
+    /// <summary>Forget the last gesture's timing as well as its accumulator. Called when the
+    /// notch closes, so a swipe minutes later is never measured against it.</summary>
+    public void RestAndForgetTiming()
+    {
+        Rest();
+        _hasSeenDelta = false;
     }
 
     /// <summary>
@@ -125,7 +157,7 @@ public sealed class NotchPager
     public void Reset()
     {
         Index = 0;
-        Rest();
+        RestAndForgetTiming();
     }
 
     private void Step(int direction) => Index = Wrap(Index + direction);

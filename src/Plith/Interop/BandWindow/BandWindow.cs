@@ -5,6 +5,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Interop;
 using System.Windows.Media;
+using Plith.Services;
 using static Plith.Interop.NativeMethods;
 
 namespace Plith.Interop;
@@ -237,6 +238,13 @@ public partial class BandWindow : ContentControl, IWndProcObject
         HasSourceCreated = true;
     }
 
+    /// <summary>
+    /// A sideways wheel gesture, already decoded to a signed delta where positive means "towards
+    /// the next page". Raised for a horizontal wheel or a Shift+wheel; a plain vertical wheel
+    /// does not raise it. See WheelDecoder for the sign conventions.
+    /// </summary>
+    public event EventHandler<int>? HorizontalWheel;
+
     /// <summary>True when the window could not be moved into its z-order band. It still works;
     /// it just cannot draw over an exclusive-fullscreen game.</summary>
     public bool BandFailed => _bandFailed;
@@ -279,6 +287,22 @@ public partial class BandWindow : ContentControl, IWndProcObject
                 {
                     _ = SendMessage(_hwndSource.Handle, WindowMessage.WM_DPICHANGED, wParam, lParam);
                     ShowWindow(_hwndSource.Handle, (int)ShowWindowCommands.Show);
+                }
+                break;
+
+            case WindowMessage.WM_MOUSEWHEEL:
+            case WindowMessage.WM_MOUSEHWHEEL:
+                // WPF has no event for WM_MOUSEHWHEEL - it never surfaces as a routed input
+                // event - so a touchpad's two-finger swipe and a mouse's tilt wheel can only be
+                // seen from here. WM_MOUSEWHEEL is taken alongside it because Shift+wheel is the
+                // fallback for mice with neither, and both decode through the same place.
+                //
+                // Not marked handled: a delta that is not a paging gesture (a plain vertical
+                // wheel) must still reach WPF, and even one that is should not stop the window's
+                // own scrolling if anything inside it ever wants the message.
+                {
+                    var wheel = WheelDecoder.TryDecode(msg, wParam);
+                    if (wheel is int delta) HorizontalWheel?.Invoke(this, delta);
                 }
                 break;
 
