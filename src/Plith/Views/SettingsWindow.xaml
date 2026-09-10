@@ -123,15 +123,54 @@
             </StackPanel>
         </Border>
 
-        <!-- Split content: settings list on the left, live preview on the right -->
+        <!-- Split content: a rail, the settings for the chosen section, and the live preview.
+
+             The rail replaces a single scroll in config-file order. It is grouped rather than
+             flat because the two halves answer different questions: Overlay is what the OSD
+             does, App is what the program does, and someone adjusting how the notch looks
+             should not pass autostart and hotkeys on the way. -->
         <Grid Grid.Row="2">
             <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="188" />
+                <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="*" MinWidth="460" />
                 <ColumnDefinition Width="Auto" />
                 <ColumnDefinition Width="320" MinWidth="280" />
             </Grid.ColumnDefinitions>
 
+            <StackPanel Grid.Column="0" Margin="10,14,0,0">
+                <TextBlock Style="{StaticResource RailGroupStyle}" Text="OVERLAY" Margin="12,4,12,6" />
+                <RadioButton x:Name="RailAppearance" Style="{StaticResource RailItemStyle}"
+                             Content="Appearance" Tag="SecAppearance" IsChecked="True"
+                             GroupName="SettingsSection" AutomationProperties.Name="Appearance" />
+                <RadioButton x:Name="RailOsd" Style="{StaticResource RailItemStyle}"
+                             Content="On-screen display" Tag="SecOsd"
+                             GroupName="SettingsSection" AutomationProperties.Name="On-screen display" />
+                <RadioButton x:Name="RailAudio" Style="{StaticResource RailItemStyle}"
+                             Content="Audio source" Tag="SecAudio"
+                             GroupName="SettingsSection" AutomationProperties.Name="Audio source" />
+                <RadioButton x:Name="RailMedia" Style="{StaticResource RailItemStyle}"
+                             Content="Media" Tag="SecMedia"
+                             GroupName="SettingsSection" AutomationProperties.Name="Media" />
+
+                <TextBlock Style="{StaticResource RailGroupStyle}" Text="APP" />
+                <RadioButton x:Name="RailGeneral" Style="{StaticResource RailItemStyle}"
+                             Content="General" Tag="SecGeneral"
+                             GroupName="SettingsSection" AutomationProperties.Name="General" />
+                <RadioButton x:Name="RailGameMode" Style="{StaticResource RailItemStyle}"
+                             Content="Game mode" Tag="SecGameMode"
+                             GroupName="SettingsSection" AutomationProperties.Name="Game mode" />
+                <RadioButton x:Name="RailUpdates" Style="{StaticResource RailItemStyle}"
+                             Content="Updates" Tag="SecUpdates"
+                             GroupName="SettingsSection" AutomationProperties.Name="Updates" />
+            </StackPanel>
+
             <Border Grid.Column="1"
+                    Width="1"
+                    Background="{DynamicResource CardBorder}"
+                    Margin="0,16,0,16" />
+
+            <Border Grid.Column="3"
                     Width="1"
                     Background="{DynamicResource CardBorder}"
                     Margin="0,16,0,16" />
@@ -141,12 +180,13 @@
                  announced as nothing but "pane". Naming it rather than setting
                  Focusable="False" keeps the affordance a keyboard user has for scrolling this
                  long page without tabbing through every control in it. -->
-            <ScrollViewer Grid.Column="0"
+            <ScrollViewer Grid.Column="2"
                           AutomationProperties.Name="Settings"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled"
                           Padding="32,24,24,24">
                 <StackPanel HorizontalAlignment="Stretch">
+                <StackPanel x:Name="SecAppearance">
 
                 <!-- ============== Appearance ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Appearance" Margin="4,0,0,10" />
@@ -288,6 +328,9 @@
                         </Border>
                     </StackPanel>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecOsd">
 
                 <!-- ============== OSD ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="On-screen display" Margin="4,18,0,10" />
@@ -621,6 +664,9 @@
 
                     </StackPanel>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecAudio">
 
                 <!-- ============== Audio ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Audio source" Margin="4,18,0,10" />
@@ -694,6 +740,9 @@
 
                     </StackPanel>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecMedia">
 
                 <!-- ============== Media ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Media" Margin="4,18,0,10" />
@@ -715,6 +764,9 @@
                         </Grid>
                     </Border>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecGeneral">
 
                 <!-- ============== General ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="General" Margin="4,18,0,10" />
@@ -736,6 +788,9 @@
                         </Grid>
                     </Border>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecGameMode">
 
                 <!-- ============== Game mode ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Game mode" Margin="4,18,0,10" />
@@ -764,6 +819,9 @@
                         </Grid>
                     </Border>
                 </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecUpdates">
 
                 <!-- ============== Updates ============== -->
                 <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Updates" Margin="4,18,0,10" />
@@ -818,11 +876,14 @@
                     </Border>
                 </Border>
 
+                
                 </StackPanel>
+
+</StackPanel>
             </ScrollViewer>
 
             <views:SettingsPreview x:Name="Preview"
-                                    Grid.Column="2"
+                                    Grid.Column="4"
                                     Margin="24,24,32,24" />
         </Grid>
 

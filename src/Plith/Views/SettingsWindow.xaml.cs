@@ -118,6 +118,7 @@ public partial class SettingsWindow : Window
         UpdateHotkeyConflictWarning();
         ApplyGameModeStatus();
         WireUpdateCheck();
+        WireSectionRail();
         WirePositionEditor();
         BuildAccentSwatches();
         WireAccentPicker();
@@ -231,6 +232,46 @@ public partial class SettingsWindow : Window
         WeatherLocationBox.IsEnabled = !_isOsdEditMode;
     }
 
+
+    /// <summary>
+    /// Show one section and hide the rest.
+    ///
+    /// Filtering rather than scrolling to an anchor, because the page's problem was never that
+    /// the sections were hard to reach — it was that every one of them was always on screen, so
+    /// a person adjusting how the notch looks read past autostart, hotkeys and update settings
+    /// to get there.
+    ///
+    /// The rail is a RadioButton group, so exactly one is selected by construction and a screen
+    /// reader is told they are alternatives rather than seven independent toggles.
+    /// </summary>
+    private void WireSectionRail()
+    {
+        foreach (var item in SectionRailItems())
+        {
+            item.Checked += (sender, _) =>
+            {
+                if (sender is RadioButton { Tag: string sectionName }) ShowSection(sectionName);
+            };
+        }
+
+        // Applied once at startup rather than relying on the IsChecked="True" in XAML to have
+        // raised Checked: it is set during parsing, before this handler exists, so the very
+        // first selection would otherwise leave every section visible.
+        ShowSection("SecAppearance");
+    }
+
+    private IEnumerable<RadioButton> SectionRailItems() =>
+        new[] { RailAppearance, RailOsd, RailAudio, RailMedia, RailGeneral, RailGameMode, RailUpdates };
+
+    private void ShowSection(string sectionName)
+    {
+        foreach (var item in SectionRailItems())
+        {
+            if (item.Tag is not string name) continue;
+            if (FindName(name) is not UIElement section) continue;
+            section.Visibility = name == sectionName ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
 
     private void WireUpdateCheck()
     {
