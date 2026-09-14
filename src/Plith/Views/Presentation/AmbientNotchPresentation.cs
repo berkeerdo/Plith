@@ -76,6 +76,13 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
 
 
+    /// <summary>
+    /// Declines. The notch's whole premise is a shape that is always on screen, so there is no
+    /// resting state in which hiding it would still be a notch. This is why the covering-window
+    /// fallback exists: during a game the presentation becomes Classic, and Classic hides.
+    /// </summary>
+    public void HideWindowIfPossible() { }
+
     public void OnContentMeasured(Size contentSize)
     {
         _content.SetNotchMetrics(_collapsedHeight(), contentSize);

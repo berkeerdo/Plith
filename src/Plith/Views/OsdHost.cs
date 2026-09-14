@@ -323,10 +323,22 @@ public sealed class OsdHost : BandWindow
         if (_coversMonitor == covers) return;
         _coversMonitor = covers;
 
-        // Only the notch has a covered state to fall back from; Classic is already Classic.
-        if (_settings.Current.Presentation != PresentationMode.AmbientNotch) return;
+        // Classic is already Classic, but it still has somewhere to go: a window that covers
+        // the monitor is a game, and a resting Classic OSD is a window DWM is still compositing
+        // over it. Hiding outright is the only state that costs a game nothing.
+        if (_settings.Current.Presentation != PresentationMode.AmbientNotch)
+        {
+            if (covers) _presentation.HideWindowIfPossible();
+            return;
+        }
 
         ApplyPresentationMode();
+
+        // ApplyPresentationMode settles the new presentation's rest state but does not take the
+        // window down — Classic's own hide happens at the end of a fade, and a mode switch has
+        // no fade. Without this the fallback swapped a visible notch for an invisible card and
+        // left the window composited over the game regardless.
+        if (covers) _presentation.HideWindowIfPossible();
     }
 
     private void OnThemeApplied()
@@ -865,6 +877,12 @@ public sealed class OsdHost : BandWindow
             // already relies on that — so closing there would take the row away at the
             // exact moment the user reached for it.
             _home.Close();
+
+            // And then off the screen entirely, where the presentation allows it. Opacity 0 is
+            // invisible to a person and not to DWM: the window stays composited, and a topmost
+            // UIAccess-band window overlapping a full-screen game costs that game independent
+            // flip. Measured by the user as 700 fps becoming 80.
+            _presentation.HideWindowIfPossible();
         });
     }
 

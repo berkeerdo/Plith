@@ -63,4 +63,21 @@ internal sealed class ClassicPresentation : IOsdPresentation
     }
 
     public void OnContentMeasured(Size contentSize) { /* Classic's resting state is content-independent. */ }
+
+    /// <summary>
+    /// Actually hide the window once the fade has finished.
+    ///
+    /// Opacity 0 is invisible to a person and not to DWM. The window stays composited, and a
+    /// topmost UIAccess-band window overlapping a full-screen game costs that game independent
+    /// flip — which is a frame-rate collapse, not a rounding error.
+    ///
+    /// Guarded on the opacity rather than called blindly, because a show can start during the
+    /// fade-out and this runs from the fade's completion: hiding a window that has just been
+    /// asked to appear again would blank the OSD until the next event.
+    /// </summary>
+    public void HideWindowIfPossible()
+    {
+        if (_window.Opacity > 0.01) return;
+        _window.Hide();
+    }
 }

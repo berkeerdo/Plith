@@ -54,4 +54,18 @@ internal interface IOsdPresentation
     /// <summary>Called after OsdHost measures its content, so a mode whose resting state
     /// depends on content height can recompute it.</summary>
     void OnContentMeasured(Size contentSize);
+
+    /// <summary>
+    /// Take the window off the screen entirely, if this presentation can.
+    ///
+    /// Not the same as fading to zero, and the difference is measured in frames per second. A
+    /// layered, topmost, UIAccess-band window is still a window at opacity 0: it stays in DWM's
+    /// composition, and a game with anything in that band overlapping it loses independent flip
+    /// and falls back to the composited path. Reported from 700 fps to 80.
+    ///
+    /// Classic can do this whenever it is at rest, because at rest it shows nothing. The notch
+    /// cannot — its resting pill IS what it shows — so it declines, and the covering-window
+    /// fallback is what gets a game back to Classic in the first place.
+    /// </summary>
+    void HideWindowIfPossible();
 }
