@@ -23,8 +23,8 @@
         <TextBlock x:Name="Time"
                    HorizontalAlignment="Center"
                    FontSize="40" FontWeight="SemiBold"
-                   TextOptions.TextFormattingMode="Ideal"
-                   LineHeight="42" LineStackingStrategy="BlockLineHeight"
+                   Typography.NumeralAlignment="Tabular"
+                   LineHeight="40" LineStackingStrategy="BlockLineHeight"
                    Foreground="{DynamicResource NotchInk}">
         </TextBlock>
         <TextBlock x:Name="Date"

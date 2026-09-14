@@ -19,10 +19,11 @@
              MDL2 Assets" - ships different contents on different Windows builds, and slice 2
              found that out the expensive way when seven of ten weather glyphs picked from it
              turned out not to exist at all. A PathGeometry cannot go missing. -->
+        <!-- No Stretch. Each mark is drawn on the shared 24 grid inside a Viewbox, so they are
+             all scaled by the same factor - per-Path Stretch scaled each geometry's OWN bounds
+             to the box, which made play visibly larger than pause for no reason a person could
+             name. -->
         <Style x:Key="TransportIconStyle" TargetType="Path">
-            <Setter Property="Width" Value="15" />
-            <Setter Property="Height" Value="15" />
-            <Setter Property="Stretch" Value="Uniform" />
             <!-- Follows the button's Foreground, so the hover and disabled states keep working
                  exactly as they did when this was a glyph inheriting TextElement.Foreground. -->
             <Setter Property="Fill"
@@ -170,7 +171,9 @@
                     Style="{StaticResource MediaButtonStyle}"
                     AutomationProperties.Name="Previous track"
                     ToolTip="Previous">
-                <Path Style="{StaticResource TransportIconStyle}" Data="{StaticResource IconPrevious}" />
+                <Viewbox Width="15" Height="15"><Canvas Width="24" Height="24">
+                    <Path Style="{StaticResource TransportIconStyle}" Data="{StaticResource IconPrevious}" />
+                </Canvas></Viewbox>
             </Button>
             <Button x:Name="PlayPauseButton"
                     Style="{StaticResource PlayPauseButtonStyle}"
@@ -179,8 +182,8 @@
                     ToolTip="Play / Pause">
                 <!-- The shape is chosen from the state here rather than from a code point on the
                      view model. PlayPauseGlyph was a Segoe MDL2 character and goes with the font. -->
-                <Path Width="15" Height="15" Stretch="Uniform"
-                      Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
+                <Viewbox Width="15" Height="15"><Canvas Width="24" Height="24">
+                <Path Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}">
                     <Path.Style>
                         <Style TargetType="Path">
                             <Setter Property="Data" Value="{StaticResource IconPlay}" />
@@ -192,12 +195,15 @@
                         </Style>
                     </Path.Style>
                 </Path>
+                </Canvas></Viewbox>
             </Button>
             <Button x:Name="NextButton"
                     Style="{StaticResource MediaButtonStyle}"
                     AutomationProperties.Name="Next track"
                     ToolTip="Next">
-                <Path Style="{StaticResource TransportIconStyle}" Data="{StaticResource IconNext}" />
+                <Viewbox Width="15" Height="15"><Canvas Width="24" Height="24">
+                    <Path Style="{StaticResource TransportIconStyle}" Data="{StaticResource IconNext}" />
+                </Canvas></Viewbox>
             </Button>
         </StackPanel>
     </Grid>

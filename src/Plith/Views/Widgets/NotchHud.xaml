@@ -4,7 +4,10 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             Focusable="False">
+             Focusable="False"
+             TextOptions.TextFormattingMode="Ideal"
+             TextOptions.TextRenderingMode="ClearType"
+             FontFamily="{DynamicResource OsdUiFont}">
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
@@ -27,31 +30,40 @@
                 <ColumnDefinition Width="Auto" />
             </Grid.ColumnDefinitions>
 
-            <Grid Grid.Column="0" Width="18" Height="18">
-                <Path x:Name="SpeakerBody"
-                      Data="{StaticResource IconSpeakerBody}"
-                      Fill="{DynamicResource NotchInk}"
-                      Stretch="Uniform" />
-                <!-- The waves are stroked, the cone is filled. StrokeThickness is set here rather
-                     than in the dictionary because the same geometry is drawn at two sizes on two
-                     surfaces, and a thickness baked into the resource would scale with neither. -->
-                <Path x:Name="WaveInner"
-                      Data="{StaticResource IconSpeakerWaveInner}"
-                      Stroke="{DynamicResource NotchInk}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform" />
-                <Path x:Name="WaveOuter"
-                      Data="{StaticResource IconSpeakerWaveOuter}"
-                      Stroke="{DynamicResource NotchInk}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform" />
-                <Path x:Name="MuteCross"
-                      Data="{StaticResource IconMuteCross}"
-                      Stroke="{DynamicResource NotchInk}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform"
-                      Visibility="Collapsed" />
-            </Grid>
+            <!-- One Viewbox over one Canvas, and every part drawn at Stretch="None".
+
+                 Each Path used to carry Stretch="Uniform" of its own, which meant each one
+                 scaled ITS OWN bounds to fill the box independently: the cone filled 18x18, and
+                 so did a 4-unit wave arc. They came out on top of each other as a blob. A Canvas
+                 gives them the shared 24-grid the geometry was drawn on, and the Viewbox scales
+                 that whole grid once.
+
+                 Stroked, not filled. The artifact draws this speaker as an outline; filling the
+                 cone was my own departure from it and is most of why the icon did not look like
+                 the design. -->
+            <Viewbox Grid.Column="0" Width="19" Height="19">
+                <Canvas Width="24" Height="24">
+                    <Path x:Name="SpeakerBody"
+                          Data="{StaticResource IconSpeakerBody}"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6"
+                          StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Path x:Name="WaveInner"
+                          Data="{StaticResource IconSpeakerWaveInner}"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Path x:Name="WaveOuter"
+                          Data="{StaticResource IconSpeakerWaveOuter}"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Path x:Name="MuteCross"
+                          Data="{StaticResource IconMuteCross}"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Visibility="Collapsed" />
+                </Canvas>
+            </Viewbox>
 
             <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
                     VerticalAlignment="Center"

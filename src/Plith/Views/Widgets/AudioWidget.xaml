@@ -72,16 +72,27 @@
     </UserControl.Resources>
 
     <StackPanel VerticalAlignment="Center">
-        <!-- Which rail this is, before the number. On a machine running Voicemeeter plus Sonar
-             plus a headset, a level with no source attached to it is ambiguous. -->
-        <TextBlock x:Name="Source"
-                   FontSize="11"
-                   Foreground="{DynamicResource NotchInkMuted}"
-                   TextTrimming="CharacterEllipsis" />
+        <!-- Device on the left, rail on the right, as the design has it. Mine showed only the
+             device, which is the half that does not answer the question: on a machine running
+             Voicemeeter plus Sonar plus a headset, "Logitech G733" does not say WHICH level this
+             is. The two are a DockPanel rather than a two-column Grid so the device can take
+             whatever the rail leaves and ellipse into it. -->
+        <DockPanel LastChildFill="True">
+            <TextBlock x:Name="Rail"
+                       DockPanel.Dock="Right"
+                       Margin="10,0,0,0"
+                       FontSize="11"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+            <TextBlock x:Name="Source"
+                       FontSize="11"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       TextTrimming="CharacterEllipsis" />
+        </DockPanel>
 
         <TextBlock x:Name="Level"
-                   Margin="0,2,0,10"
+                   Margin="0,2,0,8"
                    FontSize="26" FontWeight="SemiBold"
+                   Typography.NumeralAlignment="Tabular"
                    Foreground="{DynamicResource NotchInk}" />
 
         <!-- A Slider, not a drawn rectangle with mouse handlers. That is what gives it keyboard

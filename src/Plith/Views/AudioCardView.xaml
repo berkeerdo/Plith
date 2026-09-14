@@ -30,40 +30,46 @@
             <!-- The speaker carries the state on its own, so "is my sound off?" is answered
                  without reading a number: crossed when muted, one wave when quiet, two when not.
                  Drawn rather than set from a font - see PlithIcons.xaml. -->
-            <Grid DockPanel.Dock="Left" Width="20" Height="20" Margin="0,0,10,0"
-                  VerticalAlignment="Center">
-                <Path Data="{StaticResource IconSpeakerBody}"
-                      Fill="{DynamicResource OsdTextPrimary}"
-                      Stretch="Uniform" />
-                <Path Data="{StaticResource IconSpeakerWaveInner}"
-                      Stroke="{DynamicResource OsdTextPrimary}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform"
-                      Visibility="{Binding Muted, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
-                <Path Data="{StaticResource IconSpeakerWaveOuter}"
-                      Stroke="{DynamicResource OsdTextPrimary}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform">
-                    <Path.Style>
-                        <Style TargetType="Path">
-                            <Setter Property="Visibility" Value="Visible" />
-                            <Style.Triggers>
-                                <DataTrigger Binding="{Binding Muted}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                                <DataTrigger Binding="{Binding IsQuiet}" Value="True">
-                                    <Setter Property="Visibility" Value="Collapsed" />
-                                </DataTrigger>
-                            </Style.Triggers>
-                        </Style>
-                    </Path.Style>
-                </Path>
-                <Path Data="{StaticResource IconMuteCross}"
-                      Stroke="{DynamicResource OsdTextPrimary}"
-                      StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
-                      Stretch="Uniform"
-                      Visibility="{Binding Muted, Converter={StaticResource BoolToVisibilityConverter}}" />
-            </Grid>
+            <!-- One Viewbox over one Canvas: every part shares the 24-grid the geometry was
+                 drawn on, and the Viewbox scales that grid once. Per-Path Stretch made each
+                 piece fill the box on its own, so a 4-unit wave came out the size of the cone
+                 and they stacked into a blob.
+
+                 Stroked, matching the design. -->
+            <Viewbox DockPanel.Dock="Left" Width="21" Height="21" Margin="0,0,10,0"
+                     VerticalAlignment="Center">
+                <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconSpeakerBody}"
+                          Stroke="{DynamicResource OsdTextPrimary}"
+                          StrokeThickness="1.6" StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Path Data="{StaticResource IconSpeakerWaveInner}"
+                          Stroke="{DynamicResource OsdTextPrimary}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Visibility="{Binding Muted, Converter={StaticResource InverseBoolToVisibilityConverter}}" />
+                    <Path Data="{StaticResource IconSpeakerWaveOuter}"
+                          Stroke="{DynamicResource OsdTextPrimary}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round">
+                        <Path.Style>
+                            <Style TargetType="Path">
+                                <Setter Property="Visibility" Value="Visible" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Muted}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                    <DataTrigger Binding="{Binding IsQuiet}" Value="True">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Path.Style>
+                    </Path>
+                    <Path Data="{StaticResource IconMuteCross}"
+                          Stroke="{DynamicResource OsdTextPrimary}"
+                          StrokeThickness="1.6" StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                          Visibility="{Binding Muted, Converter={StaticResource BoolToVisibilityConverter}}" />
+                </Canvas>
+            </Viewbox>
 
             <TextBlock DockPanel.Dock="Right"
                        Style="{StaticResource OsdValueStyle}"

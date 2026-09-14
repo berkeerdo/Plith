@@ -88,6 +88,7 @@ public partial class AudioWidget : UserControl
     private void Render()
     {
         Source.Text = _vm.Label;
+        Rail.Text = _vm.BusLine;
         Level.Text = _vm.Muted ? "Muted" : _vm.GainText;
 
         if (UserIsDriving) return;

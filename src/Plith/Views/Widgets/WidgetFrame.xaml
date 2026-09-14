@@ -5,7 +5,14 @@
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
              Focusable="False"
-             UseLayoutRounding="True">
+             UseLayoutRounding="True"
+             TextOptions.TextFormattingMode="Ideal"
+             TextOptions.TextRenderingMode="ClearType"
+             FontFamily="{DynamicResource OsdUiFont}">
+    <!-- The font is set here, once, and inherited by every page. None of the widgets set one,
+         so they all rendered in WPF's default face while the design and the classic card use
+         Segoe UI Variable - which on its own is enough to make every page look unlike the
+         mockup no matter how right the numbers are. -->
     <Grid>
         <Grid.RowDefinitions>
             <!-- The page takes what is left; the dots lane is FIXED, never Auto. With Auto, a

@@ -16,7 +16,9 @@
                 <Setter Property="Width" Value="28" />
                 <Setter Property="Height" Value="28" />
                 <Setter Property="Cursor" Value="Hand" />
-                <Setter Property="Foreground" Value="{DynamicResource NotchInk}" />
+                <!-- Dimmer than the title beside them, as the design has it: the controls are
+                     available, not the thing you came to read. -->
+                <Setter Property="Foreground" Value="{DynamicResource NotchInkMuted}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
@@ -83,9 +85,10 @@
         <StackPanel Grid.Column="2" Orientation="Horizontal">
             <Button x:Name="Previous" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Previous track">
-                <Path Data="{StaticResource IconPrevious}" Fill="{Binding Foreground,
-                          RelativeSource={RelativeSource AncestorType=Button}}"
-                      Width="14" Height="14" Stretch="Uniform" />
+                <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
+                        <Path Data="{StaticResource IconPrevious}"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Canvas></Viewbox>
             </Button>
             <!-- The name is rewritten by Render() on every state change, because "Play" on a
                  button that pauses is worse than no name at all. The value here is the one it
@@ -95,15 +98,23 @@
             <Button x:Name="PlayPause" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Play"
                     Margin="4,0">
-                <Path x:Name="PlayPauseGlyph" Fill="{Binding Foreground,
-                          RelativeSource={RelativeSource AncestorType=Button}}"
-                      Width="14" Height="14" Stretch="Uniform" />
+                <!-- Viewbox over a 24 Canvas, so every transport mark is scaled by the SAME
+                     factor. Per-Path Stretch="Uniform" scaled each geometry's own bounds to the
+                     box, which made play visibly larger than pause for no reason a person could
+                     name — the geometries differ in extent, not in intended size. -->
+                <Viewbox Width="14" Height="14">
+                    <Canvas Width="24" Height="24">
+                        <Path x:Name="PlayPauseGlyph"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Canvas>
+                </Viewbox>
             </Button>
             <Button x:Name="Next" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Next track">
-                <Path Data="{StaticResource IconNext}" Fill="{Binding Foreground,
-                          RelativeSource={RelativeSource AncestorType=Button}}"
-                      Width="14" Height="14" Stretch="Uniform" />
+                <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
+                        <Path Data="{StaticResource IconNext}"
+                              Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                    </Canvas></Viewbox>
             </Button>
         </StackPanel>
     </Grid>
