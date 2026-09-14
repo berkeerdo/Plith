@@ -25,7 +25,7 @@
 
     <Style x:Key="OsdValueStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
-        <Setter Property="FontSize" Value="20" />
+        <Setter Property="FontSize" Value="23" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource OsdTextPrimary}" />
         <Setter Property="Typography.NumeralAlignment" Value="Tabular" />
@@ -33,14 +33,14 @@
 
     <Style x:Key="OsdTrackNameStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
-        <Setter Property="FontSize" Value="13" />
+        <Setter Property="FontSize" Value="14" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="Foreground" Value="{DynamicResource OsdTextPrimary}" />
     </Style>
 
     <Style x:Key="OsdTrackArtistStyle" TargetType="TextBlock">
         <Setter Property="FontFamily" Value="{StaticResource OsdUiFont}" />
-        <Setter Property="FontSize" Value="11" />
+        <Setter Property="FontSize" Value="12" />
         <Setter Property="Foreground" Value="{DynamicResource OsdTextSecondary}" />
     </Style>
 

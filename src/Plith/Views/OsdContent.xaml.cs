@@ -39,12 +39,18 @@ public partial class OsdContent : UserControl
     /// is where short and medium titles sit still and only genuinely long ones scroll. Windows'
     /// own flyout is wider than either number.
     /// </summary>
-    public const double CardWidthDip = 300;
+    /// <remarks>
+    /// Back to what shipped in 0.1.5. It was briefly 300, taken from the mockup — but that
+    /// mockup is a card drawn inside a web page, where 300 sits in context next to body text,
+    /// and the real OSD sits alone on a large screen with nothing to be judged against. Reported
+    /// as too small twice. The old width was never a complaint; narrowing it created one.
+    /// </remarks>
+    public const double CardWidthDip = 412;
 
     /// <summary>Compact mode drops the media card entirely, so the fullest row is the volume
     /// one and the card can be narrower. Not proportional to the above: it is what the volume
     /// row needs, measured the same way.</summary>
-    public const double CompactCardWidthDip = 224;
+    public const double CompactCardWidthDip = 300;
 
     /// <summary>Peak opacity of the notch panel's drop shadow, reached only when fully open.</summary>
     private const double NotchShadowOpacity = 0.5;

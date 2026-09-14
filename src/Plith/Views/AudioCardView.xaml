@@ -84,13 +84,13 @@
                  treatment reserved for the thing they read second. -->
             <StackPanel VerticalAlignment="Center">
                 <TextBlock FontFamily="{StaticResource OsdUiFont}"
-                           FontSize="12"
+                           FontSize="13"
                            Foreground="{DynamicResource OsdTextSecondary}"
                            TextTrimming="CharacterEllipsis"
                            Text="{Binding Label}" />
                 <TextBlock FontFamily="{StaticResource OsdUiFont}"
-                           FontSize="10"
-                           Margin="0,1,0,0"
+                           FontSize="11"
+                           Margin="0,2,0,0"
                            Typography.Capitals="AllSmallCaps"
                            Foreground="{DynamicResource OsdTextTertiary}"
                            TextTrimming="CharacterEllipsis"

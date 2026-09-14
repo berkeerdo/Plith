@@ -149,16 +149,16 @@
                  than re-chosen: this task changes HOW a long title behaves, not how any title
                  looks, and a silent point-size change would be a second edit hiding inside the
                  first. -->
-            <w:MarqueeText Height="18"
+            <w:MarqueeText Height="20"
                            TextElement.FontFamily="{StaticResource OsdUiFont}"
-                           TextElement.FontSize="13"
+                           TextElement.FontSize="14"
                            TextElement.FontWeight="SemiBold"
                            TextElement.Foreground="{DynamicResource OsdTextPrimary}"
                            Text="{Binding Title}" />
-            <w:MarqueeText Height="15"
+            <w:MarqueeText Height="17"
                            Margin="0,3,0,0"
                            TextElement.FontFamily="{StaticResource OsdUiFont}"
-                           TextElement.FontSize="11"
+                           TextElement.FontSize="12"
                            TextElement.Foreground="{DynamicResource OsdTextSecondary}"
                            Text="{Binding Artist}" />
         </StackPanel>
