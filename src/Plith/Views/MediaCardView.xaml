@@ -107,8 +107,8 @@
 
         <!-- Album art with subtle drop shadow + rounded clip -->
         <Border Grid.Column="0"
-                Width="44" Height="44"
-                CornerRadius="8"
+                Width="36" Height="36"
+                CornerRadius="6"
                 Background="#22FFFFFF"
                 ClipToBounds="True"
                 SnapsToDevicePixels="True">

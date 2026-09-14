@@ -73,7 +73,7 @@
                  overwrites them at runtime. -->
             <Border x:Name="CardSurface"
                     CornerRadius="14"
-                    Padding="20,16"
+                    Padding="15,13,15,14"
                     Background="{DynamicResource OsdSurfaceBrush}"
                     BorderBrush="{DynamicResource OsdBorder}"
                     BorderThickness="1"
@@ -111,7 +111,7 @@
                                      it above each non-first card reproduces that spacing. A Collapsed element
                                      contributes nothing to StackPanel layout, so the single-card case is
                                      byte-identical to the old collapsed-divider case. -->
-                                <Border x:Name="Divider" Height="1" Margin="0,14,0,14"
+                                <Border x:Name="Divider" Height="1" Margin="0,11,0,11"
                                         Background="{DynamicResource OsdDivider}" />
                                 <ContentControl Content="{Binding ViewModel}" />
                             </StackPanel>

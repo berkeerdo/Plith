@@ -164,11 +164,19 @@ public partial class OsdContent : UserControl
     /// </summary>
     public void SetShellWidth(bool notch, bool compact)
     {
-        var content = notch
-            ? Math.Max(NotchGeometry.OpenFrameDip.Width, NotchGeometry.HudWideDip.Width)
-            : compact ? CompactCardWidthDip : CardWidthDip;
+        if (notch)
+        {
+            // Auto, not a fixed number. The notch shows three shapes of three widths - the
+            // widget frame at 356, the volume HUD at 300, the media HUD at 372 - and the
+            // surface behind them is derived from THIS control's measured size. Pinning it to
+            // the widest left the black shape 372 across whatever was actually showing, with
+            // the panel floating inside it. Sizing to content makes the shape hug the panel,
+            // which is the whole idea of a notch that grows into what it is showing.
+            Width = double.NaN;
+            return;
+        }
 
-        Width = content + ContentInsetDip * 2;
+        Width = (compact ? CompactCardWidthDip : CardWidthDip) + ContentInsetDip * 2;
     }
 
     public void SetWidgetContent(UIElement widgets, UIElement hud)

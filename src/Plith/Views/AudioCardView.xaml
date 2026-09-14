@@ -78,12 +78,21 @@
 
             <!-- The device, then which rail it is. On a machine running Voicemeeter alongside
                  Sonar alongside a headset, a number with no rail attached to it is ambiguous. -->
+            <!-- The device reads as a name and the rail reads as a label, which is the way
+                 round the design has it. They were swapped: the device carried the small-caps
+                 style meant for the rail, so the thing a person reads first was set in the
+                 treatment reserved for the thing they read second. -->
             <StackPanel VerticalAlignment="Center">
-                <TextBlock Style="{StaticResource OsdLabelStyle}"
+                <TextBlock FontFamily="{StaticResource OsdUiFont}"
+                           FontSize="12"
+                           Foreground="{DynamicResource OsdTextSecondary}"
                            TextTrimming="CharacterEllipsis"
                            Text="{Binding Label}" />
-                <TextBlock Style="{StaticResource OsdTrackArtistStyle}"
+                <TextBlock FontFamily="{StaticResource OsdUiFont}"
+                           FontSize="10"
                            Margin="0,1,0,0"
+                           Typography.Capitals="AllSmallCaps"
+                           Foreground="{DynamicResource OsdTextTertiary}"
                            TextTrimming="CharacterEllipsis"
                            Text="{Binding BusLine}" />
             </StackPanel>

@@ -13,7 +13,10 @@
          so they all rendered in WPF's default face while the design and the classic card use
          Segoe UI Variable - which on its own is enough to make every page look unlike the
          mockup no matter how right the numbers are. -->
-    <Grid>
+    <!-- The design's own padding: 14 top, 18 sides, 9 bottom. It was missing entirely, so every
+         page's content sat flush against the black edge - which is most of why all four looked
+         wrong no matter how right their type was. -->
+    <Grid Margin="18,14,18,9">
         <Grid.RowDefinitions>
             <!-- The page takes what is left; the dots lane is FIXED, never Auto. With Auto, a
                  page that measures one pixel taller than its share pushes the dots past the
