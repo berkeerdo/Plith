@@ -9,26 +9,33 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
             <Style x:Key="TransportButtonStyle" TargetType="Button">
                 <Setter Property="Width" Value="28" />
                 <Setter Property="Height" Value="28" />
                 <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Background" Value="#0DFFFFFF" />
                 <!-- Dimmer than the title beside them, as the design has it: the controls are
                      available, not the thing you came to read. -->
                 <Setter Property="Foreground" Value="{DynamicResource NotchInkMuted}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <Border x:Name="Chrome" CornerRadius="8" Background="Transparent">
+                            <!-- A resting ground, not just a hover one. The design gives each
+                                 control a faint pill so the row reads as three controls rather
+                                 than three floating marks; hover only brightens it. -->
+                            <!-- TemplateBinding, not a literal: play/pause overrides this to sit
+                                 a touch brighter than the two beside it, and a hard-coded value
+                                 here would make that override do nothing at all. -->
+                            <Border x:Name="Chrome" CornerRadius="8"
+                                    Background="{TemplateBinding Background}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
-                                    <Setter TargetName="Chrome" Property="Background"
-                                            Value="{DynamicResource OsdHighlight}" />
+                                    <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
                                 </Trigger>
                                 <Trigger Property="IsKeyboardFocused" Value="True">
                                     <Setter TargetName="Chrome" Property="Background"

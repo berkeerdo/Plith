@@ -6,7 +6,7 @@
         <!-- The drawn icon set, shared with the OSD. Merged here rather than referenced from
              each window so a caption mark and a transport mark cannot end up being two
              different drawings of the same idea. -->
-        <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+        <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <!-- Palette brushes live in Palette.Dark.xaml / Palette.Light.xaml so the active

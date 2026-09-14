@@ -30,6 +30,10 @@ public partial class MediaWidget : UserControl
         Next.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipNext);
         PlayPause.Click += (_, _) => _vm.RequestCommand(MediaCommand.TogglePlayPause);
 
+        // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
+        // the one a person reaches for without looking.
+        PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
+
         // Re-rendered on the way in as well as on change: a page that has been away misses every
         // notification while it is off the tree, so arriving without this would show whatever
         // was playing when it last left.

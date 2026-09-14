@@ -12,7 +12,7 @@
     <UserControl.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/Resources/PlithIcons.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
         <!-- Icons drawn for this product. The font this card used - "Segoe Fluent Icons, Segoe

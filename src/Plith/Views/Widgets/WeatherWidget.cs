@@ -49,11 +49,8 @@ public partial class WeatherWidget : UserControl
         _writeLastReveal = writeLastReveal;
         _log = log;
 
-        // Bleed the sky past the page's padding so it reaches the panel's edges. Derived from
-        // the frame's own numbers rather than a literal, so a change to the frame size cannot
-        // leave a hairline of panel showing along one edge.
-        Bleed.ScaleX = (NotchGeometry.OpenFrameDip.Width + 40) / NotchGeometry.OpenFrameDip.Width;
-        Bleed.ScaleY = (NotchGeometry.OpenFrameDip.Height + 40) / NotchGeometry.OpenFrameDip.Height;
+        // The bleed itself is the layer's negative margin; this transform rests at 1 and is
+        // only driven by the day's arrival, which swells uniformly.
 
         // The scale's centre is the element's own centre, taken from the size it was actually
         // arranged at. Anything else makes the sky grow off-axis: the reveal's swell would drift
@@ -73,6 +70,11 @@ public partial class WeatherWidget : UserControl
             else StopEverything();
         };
         Unloaded += (_, _) => StopEverything();
+
+        // Content once at construction, animations only on the way in. Same reasoning as the
+        // clock: a page whose first paint is bound to IsVisibleChanged is blank until something
+        // shows it, which is invisible in the app and total offscreen.
+        Render(_read());
     }
 
     /// <summary>
@@ -217,8 +219,8 @@ public partial class WeatherWidget : UserControl
     {
         var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
 
-        var swell = new DoubleAnimation(1.25, Bleed.ScaleX, RevealDuration) { EasingFunction = ease };
-        var swellY = new DoubleAnimation(1.25, Bleed.ScaleY, RevealDuration) { EasingFunction = ease };
+        var swell = new DoubleAnimation(1.25, 1.0, RevealDuration) { EasingFunction = ease };
+        var swellY = new DoubleAnimation(1.25, 1.0, RevealDuration) { EasingFunction = ease };
         var fade = new DoubleAnimation(0, 1, RevealDuration) { EasingFunction = ease };
 
         Run(Board((Bleed, ScaleTransform.ScaleXProperty, swell),

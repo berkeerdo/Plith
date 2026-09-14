@@ -36,7 +36,19 @@ public partial class AudioWidget : UserControl
     /// A window that expires cannot get stuck. It also covers the routes the flag covered, for
     /// the same reason — every one of them lands in OnValueChanged.
     /// </summary>
-    private long _lastUserChangeMs = long.MinValue;
+    private long _lastUserChangeMs;
+
+    /// <summary>
+    /// Whether the user has ever driven the track in this session.
+    ///
+    /// A flag rather than a sentinel timestamp, because the sentinel overflowed. Initialising
+    /// the timestamp to long.MinValue and asking whether TickCount64 minus it is small wraps:
+    /// the subtraction overflows to a negative number, which is smaller than the window, so the
+    /// widget believed the user was driving the track from the moment it was built and never
+    /// painted the level at all. Found by rendering the widget offscreen - the track sat at zero
+    /// beside a readout saying 62%.
+    /// </summary>
+    private bool _hasUserChanged;
 
     /// <summary>
     /// How long after a user-driven change incoming reports stay suppressed.
@@ -48,7 +60,7 @@ public partial class AudioWidget : UserControl
     /// </summary>
     private const long UserDrivingWindowMs = 350;
 
-    private bool UserIsDriving => Environment.TickCount64 - _lastUserChangeMs < UserDrivingWindowMs;
+    private bool UserIsDriving => _hasUserChanged && Environment.TickCount64 - _lastUserChangeMs < UserDrivingWindowMs;
 
     /// <summary>The last value written to the track from a report, so an echo of our own write
     /// coming back through the poll is recognised rather than treated as a fresh report that
@@ -110,6 +122,7 @@ public partial class AudioWidget : UserControl
     private void OnTrackValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
     {
         _lastUserChangeMs = Environment.TickCount64;
+        _hasUserChanged = true;
 
         // Snapped, so a drag lands on a round number rather than 47.318 %. The snap happens
         // before the write, not after: snapping the display alone would show a value the device

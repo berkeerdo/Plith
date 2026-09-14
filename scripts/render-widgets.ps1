@@ -1,0 +1,156 @@
+# scripts/render-widgets.ps1 — renders each notch widget and the classic card to PNG, offscreen.
+#
+# Why this exists: every design defect on this branch was found by a person looking at a
+# screenshot and reporting it, one per round. The OSD renders in a layered window that ordinary
+# capture misses, and the test suite is not STA so it cannot construct a UserControl at all — so
+# there was no way to SEE the result without running the app and asking someone.
+#
+# This closes that loop. It constructs each widget at the exact size the frame gives it, renders
+# it with RenderTargetBitmap, and writes a PNG. No app launch, no input, no screen capture.
+#
+# Run with: pwsh -STA -File scripts/render-widgets.ps1
+#   (STA is mandatory — WPF cannot create a visual on an MTA thread.)
+
+[CmdletBinding()]
+param(
+    [string]$OutDir = "$env:TEMP\plith-render",
+    [string]$Configuration = 'Debug'
+)
+
+$ErrorActionPreference = 'Stop'
+
+if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
+    throw "Must run under -STA. Use: pwsh -STA -File $PSCommandPath"
+}
+
+$root = Split-Path -Parent $PSScriptRoot
+$bin = Join-Path $root "src\Plith\bin\$Configuration\net10.0-windows10.0.22000.0"
+$dll = Join-Path $bin 'Plith.dll'
+if (-not (Test-Path $dll)) { throw "Build $Configuration first — $dll not found." }
+
+Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase
+# Resolve Plith's own dependencies out of its output folder rather than the script's directory.
+$null = [Reflection.Assembly]::LoadFrom($dll)
+[AppDomain]::CurrentDomain.add_AssemblyResolve({
+    param($s, $e)
+    $name = ($e.Name -split ',')[0]
+    $candidate = Join-Path $bin "$name.dll"
+    if (Test-Path $candidate) { [Reflection.Assembly]::LoadFrom($candidate) } else { $null }
+})
+
+New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
+
+# An Application is needed so pack:// URIs and Application.Resources resolve; the widgets reach
+# their palette through DynamicResource, which finds nothing without this.
+if ($null -eq [Windows.Application]::Current) { $app = [Windows.Application]::new() }
+else { $app = [Windows.Application]::Current }
+
+# The dictionaries go on the HOST ELEMENT rather than on Application.Resources.
+#
+# DynamicResource walks up the element tree before it reaches the application, so this is the
+# shorter and more certain path - and it sidesteps the fact that a ResourceDictionary reached
+# through Application.Current in PowerShell does not behave like the dictionary it wraps.
+$paletteSources = @(
+    'Resources/Theme.xaml', 'Resources/Palette.Dark.xaml',
+    'Resources/OsdPalette.Dark.xaml', 'Resources/PlithIcons.xaml'
+)
+
+function Add-Palette([Windows.FrameworkElement]$Element) {
+    # Added to the element's OWN collection rather than replacing its Resources wholesale:
+    # assigning the property from PowerShell hands over an object the tree does not then search.
+    foreach ($rel in $paletteSources) {
+        $d = [Windows.ResourceDictionary]::new()
+        # psbase, not $d.Source. ResourceDictionary implements IDictionary, and PowerShell
+        # resolves member access against the dictionary before the CLR property - so the plain
+        # assignment silently ADDS AN ENTRY KEYED "Source" instead of loading the file, and the
+        # dictionary comes back with exactly one useless key. Nothing throws; everything
+        # afterwards renders in WPF's defaults, which is black text on a black ground.
+        $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
+        $Element.Resources.MergedDictionaries.Add($d)
+    }
+}
+
+# Proven before anything is drawn: an unresolved resource renders as WPF's default, which is
+# black text on a black ground - indistinguishable from a design fault.
+$probe = [Windows.Controls.Border]::new()
+Add-Palette $probe
+foreach ($k in 'NotchInk','NotchTrack','OsdGainGreen','OsdTextPrimary','OsdUiFont') {
+    $v = $probe.TryFindResource($k)
+    if ($null -eq $v) { throw "Resource '$k' did not resolve - the render would be meaningless." }
+}
+"  palette resolved"
+
+function Save-Visual {
+    # [double] on a PowerShell param is not enough: a caller passing 356.0 through a variable
+    # can still arrive as something the arithmetic below turns into 0, and RenderTargetBitmap
+    # rejects a zero width with an exception rather than a blank image. Bound explicitly.
+    param([Windows.FrameworkElement]$Element,
+          [ValidateRange(1, 4096)][double]$W,
+          [ValidateRange(1, 4096)][double]$H,
+          [string]$Name,
+          [string]$Background = '#06070A')
+
+    # The notch's own ground behind it, so the PNG shows what a person sees rather than the
+    # element floating on transparency.
+    $host_ = [Windows.Controls.Border]::new()
+    Add-Palette $host_
+    $host_.Background = [Windows.Media.BrushConverter]::new().ConvertFromString($Background)
+    $host_.Width = $W; $host_.Height = $H
+    $host_.Child = $Element
+
+    $host_.Measure([Windows.Size]::new($W, $H))
+    $host_.Arrange([Windows.Rect]::new(0, 0, $W, $H))
+    $host_.UpdateLayout()
+
+    # 2x, so stroke weights and type can be judged rather than guessed at.
+    $scale = 2.0
+    $rtb = [Windows.Media.Imaging.RenderTargetBitmap]::new(
+        [int]($W * $scale), [int]($H * $scale), 96 * $scale, 96 * $scale,
+        [Windows.Media.PixelFormats]::Pbgra32)
+    $rtb.Render($host_)
+
+    $enc = [Windows.Media.Imaging.PngBitmapEncoder]::new()
+    $enc.Frames.Add([Windows.Media.Imaging.BitmapFrame]::Create($rtb))
+    $path = Join-Path $OutDir "$Name.png"
+    $fs = [IO.File]::Create($path)
+    try { $enc.Save($fs) } finally { $fs.Dispose() }
+    "  $Name.png  ($W x $H)"
+}
+
+# --- the frame's own size, and stand-in data for each page --------------------------------
+$frameW = 356.0
+$frameH = 116.0
+
+$audioVm = [Plith.ViewModels.AudioCardViewModel]::new()
+$audioVm.Label = 'Logitech G733'
+$audioVm.BusLine = 'Voicemeeter | A1'
+$audioVm.GainNormalized = 0.62
+$audioVm.GainText = '62%'
+
+$mediaVm = [Plith.ViewModels.MediaViewModel]::new()
+$mediaVm.Title = 'You Feel Be Love'
+$mediaVm.Artist = 'Denis Phenomen'
+$mediaVm.IsPlaying = $true
+$mediaVm.HasSession = $true
+
+"Rendering to $OutDir"
+
+$clock = [Plith.Views.Widgets.ClockWidget]::new()
+Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
+
+$media = [Plith.Views.Widgets.MediaWidget]::new($mediaVm)
+Save-Visual -Element $media -W $frameW -H $frameH -Name 'widget-media'
+
+$writer = [Func[double, bool]] { param($v) $true }
+$audio = [Plith.Views.Widgets.AudioWidget]::new($audioVm, $writer)
+Save-Visual -Element $audio -W $frameW -H $frameH -Name 'widget-audio'
+
+$reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
+    [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now)
+}
+$readDate = [Func[Nullable[DateOnly]]] { [DateOnly]::FromDateTime([DateTime]::Now) }  # not a first look
+$writeDate = [Action[DateOnly]] { param($d) }
+$weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
+Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
+
+"Done."

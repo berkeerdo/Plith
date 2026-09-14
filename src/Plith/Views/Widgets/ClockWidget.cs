@@ -36,6 +36,12 @@ public partial class ClockWidget : UserControl
             if ((bool)e.NewValue) Start();
             else _tick.Stop();
         };
+
+        // Painted once at construction as well. Binding the first paint to IsVisibleChanged
+        // alone means a widget that has never been shown holds nothing at all — true offscreen,
+        // and true for any host that lays the control out before it is on a rendered surface.
+        // The timer still starts and stops with visibility; only the content is unconditional.
+        Render();
     }
 
     private void Start()
