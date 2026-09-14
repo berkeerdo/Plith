@@ -142,8 +142,13 @@ public partial class OsdContent : UserControl
     /// read the tree before the ItemsControl had materialised its containers, which is the defect
     /// that once drew the ambient row on the panel and the other cards over the bare desktop.
     /// </summary>
+    /// <summary>What the panel is showing right now. Read where it is needed rather than
+    /// mirrored by callers, which is how the rest of this branch learned to keep state.</summary>
+    public NotchPanelContent PanelContent { get; private set; } = NotchPanelContent.Cards;
+
     public void SetPanelContent(NotchPanelContent content)
     {
+        PanelContent = content;
         CardSurface.Visibility = content == NotchPanelContent.Cards ? Visibility.Visible : Visibility.Collapsed;
         WidgetHost.Visibility = content == NotchPanelContent.Widgets ? Visibility.Visible : Visibility.Collapsed;
         HudHost.Visibility = content == NotchPanelContent.Hud ? Visibility.Visible : Visibility.Collapsed;

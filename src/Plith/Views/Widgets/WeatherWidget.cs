@@ -30,7 +30,17 @@ public partial class WeatherWidget : UserControl
     private readonly Action<DateOnly> _writeLastReveal;
     private readonly DiagnosticLog? _log;
 
-    private readonly List<Storyboard> _running = new();
+    /// <summary>
+    /// Every animation started for the current sky, as (target, property) pairs.
+    ///
+    /// Storyboards were the first attempt and nothing moved. A Storyboard needs its target
+    /// resolvable — through a name scope, or a SetTarget on an object the timing system will
+    /// accept — and a bare TranslateTransform created in code satisfies neither reliably. Every
+    /// other animation on this branch uses BeginAnimation directly and every one of them works,
+    /// so this does too; the list is what lets them all be stopped again, which is the only
+    /// thing the Storyboard was buying.
+    /// </summary>
+    private readonly List<(DependencyObject Target, DependencyProperty Property)> _running = new();
     private SkyKind _sky = SkyKind.Overcast;
 
     public WeatherWidget(
@@ -59,6 +69,7 @@ public partial class WeatherWidget : UserControl
         {
             Bleed.CenterX = e.NewSize.Width / 2;
             Bleed.CenterY = e.NewSize.Height / 2;
+            ApplyNotchClip(e.NewSize);
         };
 
         // The reveal fades the sky in, not the page. Fading Root took the readout with it, so
@@ -127,6 +138,37 @@ public partial class WeatherWidget : UserControl
         if (firstLook) _writeLastReveal(today);
 
         StartAmbient(firstLook);
+    }
+
+    /// <summary>
+    /// Clip the page to the notch's own shape.
+    ///
+    /// The sky is the only page that reaches the frame's edges, and the notch's surface is a
+    /// separate element behind it — so without this the gradient came out as a square inside a
+    /// rounded shape, with its bottom corners overhanging into nothing.
+    ///
+    /// Built as a path rather than a RectangleGeometry because only the BOTTOM corners are
+    /// round: the notch is flush with the top of the screen, and rounding the top would carve
+    /// two notches of desktop out of the edge it is supposed to be part of.
+    /// </summary>
+    private void ApplyNotchClip(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0) { Clip = null; return; }
+
+        var r = Math.Min(NotchGeometry.ExpandedRadiusDip, Math.Min(size.Width, size.Height) / 2);
+        var figure = new PathFigure { StartPoint = new Point(0, 0), IsClosed = true, IsFilled = true };
+        figure.Segments.Add(new LineSegment(new Point(size.Width, 0), false));
+        figure.Segments.Add(new LineSegment(new Point(size.Width, size.Height - r), false));
+        figure.Segments.Add(new ArcSegment(
+            new Point(size.Width - r, size.Height), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
+        figure.Segments.Add(new LineSegment(new Point(r, size.Height), false));
+        figure.Segments.Add(new ArcSegment(
+            new Point(0, size.Height - r), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        geometry.Freeze();
+        Clip = geometry;
     }
 
     private void Render(WeatherSnapshot? snapshot)
@@ -212,7 +254,7 @@ public partial class WeatherWidget : UserControl
         if (_sky is SkyKind.Rain or SkyKind.Snow) StartFall(delay);
 
         _log?.Info("WeatherWidget",
-            $"Sky started: kind={_sky}, storyboards={_running.Count}, reveal={withReveal}");
+            $"Sky started: kind={_sky}, animations={_running.Count}, reveal={withReveal}");
     }
 
     private static readonly TimeSpan RevealDuration = TimeSpan.FromMilliseconds(1500);
@@ -226,9 +268,9 @@ public partial class WeatherWidget : UserControl
         var swellY = new DoubleAnimation(1.25, 1.0, RevealDuration) { EasingFunction = ease };
         var fade = new DoubleAnimation(0, 1, RevealDuration) { EasingFunction = ease };
 
-        Run(Board((Bleed, ScaleTransform.ScaleXProperty, swell),
-                  (Bleed, ScaleTransform.ScaleYProperty, swellY)));
-        Run(Board((SkyLayer, OpacityProperty, fade)));
+        Run(Bleed, ScaleTransform.ScaleXProperty, swell);
+        Run(Bleed, ScaleTransform.ScaleYProperty, swellY);
+        Run(SkyLayer, OpacityProperty, fade);
     }
 
     private void StartBloom(TimeSpan delay)
@@ -242,8 +284,8 @@ public partial class WeatherWidget : UserControl
             RepeatBehavior = RepeatBehavior.Forever,
             EasingFunction = new SineEase { EasingMode = EasingMode.EaseInOut },
         };
-        Run(Board((BloomPulse, ScaleTransform.ScaleXProperty, pulse),
-                  (BloomPulse, ScaleTransform.ScaleYProperty, pulse.Clone())));
+        Run(BloomPulse, ScaleTransform.ScaleXProperty, pulse);
+        Run(BloomPulse, ScaleTransform.ScaleYProperty, pulse.Clone());
     }
 
     private void StartClouds(TimeSpan delay)
@@ -276,7 +318,7 @@ public partial class WeatherWidget : UserControl
                 BeginTime = delay + TimeSpan.FromSeconds(i * 4),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
-            Run(Board(((TranslateTransform)puff.RenderTransform, TranslateTransform.XProperty, travel)));
+            Run((TranslateTransform)puff.RenderTransform, TranslateTransform.XProperty, travel);
         }
     }
 
@@ -314,42 +356,42 @@ public partial class WeatherWidget : UserControl
                 BeginTime = delay + TimeSpan.FromMilliseconds(i * (snow ? 260 : 90)),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
-            Run(Board(((TranslateTransform)drop.RenderTransform, TranslateTransform.YProperty, fall)));
+            Run((TranslateTransform)drop.RenderTransform, TranslateTransform.YProperty, fall);
         }
     }
 
-    private static Storyboard Board(params (DependencyObject Target, DependencyProperty Property, AnimationTimeline Animation)[] parts)
+    /// <summary>Start one animation and remember it, so StopEverything can take it back off.</summary>
+    private void Run(DependencyObject target, DependencyProperty property, AnimationTimeline animation)
     {
-        var board = new Storyboard();
-        foreach (var (target, property, animation) in parts)
+        switch (target)
         {
-            Storyboard.SetTarget(animation, target);
-            Storyboard.SetTargetProperty(animation, new PropertyPath(property));
-            board.Children.Add(animation);
+            case Animatable a: a.BeginAnimation(property, animation); break;
+            case UIElement e: e.BeginAnimation(property, animation); break;
+            default: return;
         }
-        return board;
-    }
-
-    private void Run(Storyboard board)
-    {
-        _running.Add(board);
-        board.Begin();
+        _running.Add((target, property));
     }
 
     /// <summary>
     /// Stop and forget every loop.
     ///
-    /// Storyboards are tracked in a list rather than being stopped through their targets. A
-    /// target-based stop would need every element to still be in the tree, and the cloud and
-    /// drop elements are cleared on the next entry — so the ones from the previous visit would
-    /// keep their clocks alive with nothing left pointing at them.
+    /// Tracked in a list rather than found again through the tree: the cloud and drop elements
+    /// are cleared on the next entry, so anything reached that way would already be gone while
+    /// its clock ran on.
     /// </summary>
     private void StopEverything()
     {
         if (_running.Count == 0) return;
 
-        foreach (var board in _running) board.Stop();
-        _log?.Info("WeatherWidget", $"Sky stopped: storyboards={_running.Count}");
+        foreach (var (target, property) in _running)
+        {
+            switch (target)
+            {
+                case Animatable a: a.BeginAnimation(property, null); break;
+                case UIElement e: e.BeginAnimation(property, null); break;
+            }
+        }
+        _log?.Info("WeatherWidget", $"Sky stopped: animations={_running.Count}");
         _running.Clear();
 
         // Cleared as well as stopped: a stopped storyboard leaves the property at its animated

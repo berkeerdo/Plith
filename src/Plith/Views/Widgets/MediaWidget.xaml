@@ -64,7 +64,7 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <Border Grid.Column="0" Width="40" Height="40" CornerRadius="7"
+        <Border x:Name="ArtHost" Grid.Column="0" Width="40" Height="40" CornerRadius="7"
                 Background="{DynamicResource NotchTrack}">
             <Border.Clip>
                 <RectangleGeometry Rect="0,0,40,40" RadiusX="7" RadiusY="7" />
@@ -74,7 +74,7 @@
 
         <!-- MinWidth 0 is load-bearing: a star column sizes to its content's minimum by default,
              so a long title would push the transport off the frame instead of being clipped. -->
-        <StackPanel Grid.Column="1" MinWidth="0" Margin="12,0" VerticalAlignment="Center">
+        <StackPanel x:Name="TextColumn" Grid.Column="1" MinWidth="0" Margin="12,0" VerticalAlignment="Center">
             <!-- TextElement.* rather than FontSize/Foreground directly: MarqueeText is a
                  FrameworkElement, which owns neither property. Both are inheritable, so setting
                  them here reaches the TextBlock inside exactly as it would anywhere else. -->

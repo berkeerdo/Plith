@@ -644,7 +644,13 @@ public sealed class OsdHost : BandWindow
         if (!_settings.Current.ShowNotchWidgets) return;
         if (_cardHost.Suppressor?.IsSuppressed == true) return;
         if (_presentation is not AmbientNotchPresentation notch) return;
-        if (notch.IsOpenEnoughToShowContent) return;   // already open — let the panel have the click
+
+        // A HUD counts as closed for this purpose, and that is the point rather than a loophole.
+        // The HUD is an answer to a volume key; clicking it is a person saying "and now show me
+        // the rest", which is exactly what the widget frame is. Without this the notch was open
+        // enough to swallow the click and not open enough to be worth having clicked.
+        var showingHud = _content.PanelContent == NotchPanelContent.Hud;
+        if (!showingHud && notch.IsOpenEnoughToShowContent) return;   // already the frame — let it have the click
 
         // Reset here, on the way in, rather than in the collapse's completion callback. The
         // spec defers remembering the last page across opens, so every open starts at the first
@@ -785,9 +791,18 @@ public sealed class OsdHost : BandWindow
         // view models) showing something rather than an empty panel.
         if (!fromHover)
         {
-            var wantsHud = _presentation is AmbientNotchPresentation && _hud is not null;
+            // An event never takes the widget frame away. Pressing play ON the media page was
+            // answering itself with a media HUD - swapping the place you are standing for a
+            // two-second notice about the thing you just did there. The frame stays, its own
+            // page updates from the same view model, and only the hide timer is extended.
+            var frameIsOpen = _content.PanelContent == NotchPanelContent.Widgets
+                              && _presentation is AmbientNotchPresentation open
+                              && open.IsOpenEnoughToShowContent;
+
+            var wantsHud = !frameIsOpen && _presentation is AmbientNotchPresentation && _hud is not null;
             if (wantsHud) _hud!.Show(PickHudKind(reason));
-            _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);
+            if (!frameIsOpen)
+                _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);
         }
 
         _showGeneration++;

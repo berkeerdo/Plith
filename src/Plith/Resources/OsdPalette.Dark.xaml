@@ -36,7 +36,18 @@
     <SolidColorBrush x:Key="OsdGainRed" Color="#E0674F" />
 
 
-    <!-- The notch's resting shape.
+    <!-- Kept for reference and no longer used by the notch surface.
+
+         The argument for it still holds in the abstract - a notch is a hole in the display and a
+         hole is not lighter than the screen around it - but it cost the notch the one thing the
+         Appearance accent is for: the card tints with the picked colour and the notch did not,
+         so the two surfaces of the same app disagreed about what theme they were in. Asked for
+         directly, and the user's call: the notch now takes OsdSurfaceBrush exactly as the card
+         does. The light theme's consequence is real and accepted - on light the notch is a light
+         shape - and if that reads wrong on a screen it is a palette question, not a structural
+         one.
+
+         The notch's resting shape.
 
          Deliberately NOT OsdSurfaceBrush, which is what it used to be. A notch is a hole in the
          display, not a panel on it, and a hole is not lighter than the screen around it - on the

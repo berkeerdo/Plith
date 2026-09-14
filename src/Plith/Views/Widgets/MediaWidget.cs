@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Plith.Cards;
 using Plith.ViewModels;
 
@@ -41,11 +42,51 @@ public partial class MediaWidget : UserControl
         Render();
     }
 
+    /// <summary>What the page last showed, so a repaint that changes nothing does not animate.
+    /// Every property change on the view model lands here — play/pause alone must not make the
+    /// title jump.</summary>
+    private string? _shownTitle;
+
+    /// <summary>
+    /// A new track arrives rather than appearing.
+    ///
+    /// Short and small on purpose: 220 ms and eight DIP. The page is 356 wide and a person is
+    /// already looking at it, so anything longer reads as waiting and anything larger reads as a
+    /// page turn — which is what the pager does, and this is not that.
+    ///
+    /// The art cross-fades in place while the text slides, because the two carry different
+    /// things: the art is the album, which simply becomes another album, and the text is the
+    /// thing you are reading, which is replaced.
+    /// </summary>
+    private void AnimateTrackChange()
+    {
+        if (!SystemParameters.ClientAreaAnimation) return;
+
+        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
+        var duration = TimeSpan.FromMilliseconds(220);
+
+        var shift = new TranslateTransform();
+        TextColumn.RenderTransform = shift;
+        shift.BeginAnimation(TranslateTransform.XProperty,
+            new DoubleAnimation(8, 0, duration) { EasingFunction = ease });
+        TextColumn.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, 1, duration) { EasingFunction = ease });
+
+        ArtHost.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0.35, 1, duration) { EasingFunction = ease });
+    }
+
     private void Render()
     {
-        Title.Text = _vm.HasSession ? _vm.Title : "Nothing playing";
+        var title = _vm.HasSession ? _vm.Title : "Nothing playing";
+        var trackChanged = _shownTitle is not null && !string.Equals(_shownTitle, title, StringComparison.Ordinal);
+        _shownTitle = title;
+
+        Title.Text = title;
         Artist.Text = _vm.HasSession ? _vm.Artist : string.Empty;
         Art.Source = _vm.AlbumArt;
+
+        if (trackChanged) AnimateTrackChange();
 
         // The play/pause glyph is chosen here rather than bound to the view model's
         // PlayPauseGlyph, which is a Segoe MDL2 code point. This surface draws its own icons -
