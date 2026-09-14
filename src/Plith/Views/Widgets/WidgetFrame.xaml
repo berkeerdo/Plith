@@ -32,7 +32,10 @@
                  page host, means an over-tall page clips inside itself instead of displacing
                  the chrome. -->
             <RowDefinition Height="*" />
-            <RowDefinition Height="14" />
+            <!-- 23, not 14: the lane's own 9 of bottom inset has to live inside the row, or the
+                 dots are pushed past the frame's edge and clipped in half - which is what hid
+                 "which page am I on" entirely. -->
+            <RowDefinition Height="23" />
         </Grid.RowDefinitions>
 
         <!-- ClipToBounds is not cosmetic here: it is the half of the guarantee above that the
@@ -46,7 +49,6 @@
         <StackPanel x:Name="Dots" Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center"
-                    Margin="0,0,0,9" />
+                    VerticalAlignment="Center" />
     </Grid>
 </UserControl>

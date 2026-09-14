@@ -162,15 +162,39 @@ $writeDate = [Action[DateOnly]] { param($d) }
 $weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
 Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 
+# --- the whole frame, so the page dots are actually in shot --------------------------------
+# Rendering a page alone shows the page and nothing of the chrome around it, which is how a
+# clipped dots lane went unnoticed: the pages looked fine on their own.
+$frame = [Plith.Views.Widgets.WidgetFrame]::new()
+$pager = [Plith.Services.NotchPager]::new(3)
+$pages = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
+$pages.Add([Plith.Views.Widgets.ClockWidget]::new())
+$pages.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
+$pages.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm))
+$frame.SetPages($pager, $pages)
+$frame.SyncToPager(0)
+Save-Visual -Element $frame -W $frameW -H $frameH -Name 'frame-page1'
+
+$frame2 = [Plith.Views.Widgets.WidgetFrame]::new()
+$pager2 = [Plith.Services.NotchPager]::new(3)
+$pages2 = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
+$pages2.Add([Plith.Views.Widgets.ClockWidget]::new())
+$pages2.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
+$pages2.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm))
+$frame2.SetPages($pager2, $pages2)
+$pager2.GoTo(1)
+$frame2.SyncToPager(0)
+Save-Visual -Element $frame2 -W $frameW -H $frameH -Name 'frame-weather'
+
 # --- the event HUDs, which are a different shape family ------------------------------------
-$hud = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm)
+$hud = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm, $null)
 
 $hud.Show([Plith.Views.Widgets.NotchHudKind]::Volume)
 Save-Visual -Element $hud -W 300.0 -H 46.0 -Name 'hud-volume'
 
 # Re-hosted rather than reused in place: Save-Visual parents the element to a fresh Border, and
 # an element cannot have two parents.
-$hud2 = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm)
+$hud2 = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm, $null)
 $hud2.Show([Plith.Views.Widgets.NotchHudKind]::Media)
 Save-Visual -Element $hud2 -W 372.0 -H 54.0 -Name 'hud-media'
 

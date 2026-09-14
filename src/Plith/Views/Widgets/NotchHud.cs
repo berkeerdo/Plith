@@ -22,16 +22,24 @@ public enum NotchHudKind
 /// gone in two seconds. Before this, an event opened the same panel a click did, which is why
 /// the OSD read as a window rather than as feedback.
 ///
-/// Nothing here is interactive. Notice what that buys: no hit targets to miss, no transport to
-/// press by accident while reaching for a browser tab underneath, and no reason for the notch to
-/// stay solid to the mouse once the two seconds are up.
+/// One thing here is interactive, and exactly one: the speaker mutes. That is a deliberate
+/// narrowing rather than a relaxation of the old rule. The volume page used to carry the mute
+/// and the draggable level, and it was removed because a page you reach by swiping is the wrong
+/// place for the answer to a key you just pressed — which left mute with nowhere to live. One
+/// hit target on the surface where volume already is beats a page nobody swipes to.
+///
+/// Everything else stays inert: no transport to press by accident while reaching for a browser
+/// tab underneath, and the shape is still gone in two seconds.
 /// </summary>
 public partial class NotchHud : UserControl
 {
     private readonly AudioCardViewModel _audio;
     private readonly MediaViewModel _media;
 
-    public NotchHud(AudioCardViewModel audio, MediaViewModel media)
+    /// <param name="toggleMute">Optional. Null leaves the speaker inert rather than pretending
+    /// to be a control — a button that does nothing when pressed teaches people not to trust the
+    /// ones that do.</param>
+    public NotchHud(AudioCardViewModel audio, MediaViewModel media, Func<bool>? toggleMute = null)
     {
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(media);
@@ -39,6 +47,9 @@ public partial class NotchHud : UserControl
         InitializeComponent();
         _audio = audio;
         _media = media;
+
+        if (toggleMute is null) MuteButton.IsEnabled = false;
+        else MuteButton.Click += (_, _) => toggleMute();
 
         // Live while showing, because a volume key held down produces a stream of changes and a
         // HUD that painted once would sit there showing the first of them.

@@ -97,7 +97,8 @@ public partial class App : Application
         // because the orchestrator needs that window's Dispatcher to exist first, so there is
         // nothing to hand over until now.
         _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume, _mediaCard.Vm,
-                               () => _weatherService.Current);
+                               () => _weatherService.Current,
+                               _orchestrator.TryToggleMute);
 
         // The notch's weather page reads the snapshot when it comes on screen, which is not
         // enough on its own: the first fetch needs a location lookup and a network round trip,

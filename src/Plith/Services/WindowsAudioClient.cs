@@ -61,6 +61,33 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     /// _volume between the check and the write, and a COM call on a disposed endpoint is not a
     /// recoverable failure.
     /// </summary>
+    /// <summary>
+    /// Flip the attached endpoint's mute.
+    ///
+    /// Returns the new state, or null when there is nothing attached — a caller cannot tell
+    /// "muted" from "failed" if both come back as false.
+    /// </summary>
+    public bool? TryToggleMute()
+    {
+        lock (_attachLock)
+        {
+            var volume = _volume;
+            if (volume is null) return null;
+
+            try
+            {
+                var next = !volume.Mute;
+                volume.Mute = next;
+                return next;
+            }
+            catch (System.Runtime.InteropServices.COMException ex)
+            {
+                _log?.Warn("WindowsAudioClient", $"Mute toggle failed: {ExceptionText.Describe(ex)}");
+                return null;
+            }
+        }
+    }
+
     public bool TrySetScalarVolume(float scalar)
     {
         lock (_attachLock)

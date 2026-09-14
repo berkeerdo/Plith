@@ -178,6 +178,24 @@ public sealed class VoicemeeterClient : IDisposable
         return VBVMR_SetParameterFloat($"{prefix}.Gain", clamped) == 0;
     }
 
+    /// <summary>
+    /// Flip a bus or strip's mute. Returns the new state, or null when not logged in.
+    ///
+    /// Read-then-write rather than tracking it here: Voicemeeter's own UI can change the mute
+    /// at any moment, and a remembered value would flip to whatever WE last set rather than to
+    /// the opposite of what is actually true.
+    /// </summary>
+    public bool? TryToggleMute(VoicemeeterRail rail, int index)
+    {
+        if (!_loggedIn) return null;
+
+        string prefix = rail == VoicemeeterRail.Bus ? $"Bus[{index}]" : $"Strip[{index}]";
+        if (VBVMR_GetParameterFloat($"{prefix}.Mute", out float current) != 0) return null;
+
+        var next = current < 0.5f;
+        return VBVMR_SetParameterFloat($"{prefix}.Mute", next ? 1f : 0f) == 0 ? next : null;
+    }
+
     /// <summary>Voicemeeter's own gain range. Mirrored in AudioCardViewModel, which converts
     /// between it and the normalised bar; the two must not drift apart.</summary>
     public const float MinGainDb = -60f;

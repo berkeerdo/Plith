@@ -249,7 +249,13 @@ public partial class WidgetFrame : UserControl
         {
             var on = i == index;
             _dots[i].IsChecked = on;
-            _dots[i].Foreground = on ? ActiveDotBrush : IdleDotBrush;
+            // The accent, not a literal. The spec says the active dot is one of the three
+            // places the user's accent appears, and it was hard-coded to a grey - so picking a
+            // colour in Appearance changed nothing a person could see on this surface.
+            // Resolved per update rather than cached: the accent changes at runtime.
+            _dots[i].Foreground = on
+                ? TryFindResource("OsdAccent") as Brush ?? ActiveDotBrush
+                : IdleDotBrush;
         }
     }
 

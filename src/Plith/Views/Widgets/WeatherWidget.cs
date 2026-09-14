@@ -205,7 +205,10 @@ public partial class WeatherWidget : UserControl
         if (withReveal) PlayReveal();
 
         if (_sky == SkyKind.Clear) StartBloom(delay);
-        if (_sky is SkyKind.Overcast or SkyKind.Clear or SkyKind.Rain) StartClouds(delay);
+        // Every sky gets cloud, including night. The design hides only the sun after dark; this
+        // excluded night from the cloud loop as well, so a notch opened at two in the morning
+        // was completely still - reported as "no animation at all", and correctly.
+        StartClouds(delay);
         if (_sky is SkyKind.Rain or SkyKind.Snow) StartFall(delay);
 
         _log?.Info("WeatherWidget",
@@ -245,7 +248,9 @@ public partial class WeatherWidget : UserControl
 
     private void StartClouds(TimeSpan delay)
     {
-        var count = _sky == SkyKind.Clear ? 2 : 4;
+        // Fewer and fainter after dark: cloud you can see at night is cloud you can see, not a
+        // grey band across a deep blue sky.
+        var count = _sky switch { SkyKind.Clear => 2, SkyKind.Night => 2, _ => 4 };
         var width = NotchGeometry.OpenFrameDip.Width;
 
         for (int i = 0; i < count; i++)
@@ -254,7 +259,9 @@ public partial class WeatherWidget : UserControl
             {
                 Width = 90 + i * 26,
                 Height = 26 + i * 4,
-                Fill = new SolidColorBrush(Color.FromArgb((byte)(_sky == SkyKind.Clear ? 44 : 66), 255, 255, 255)),
+                Fill = new SolidColorBrush(Color.FromArgb(
+                    _sky switch { SkyKind.Clear => (byte)44, SkyKind.Night => (byte)26, _ => (byte)66 },
+                    255, 255, 255)),
                 RenderTransform = new TranslateTransform(),
             };
             Canvas.SetTop(puff, 6 + i * 17);

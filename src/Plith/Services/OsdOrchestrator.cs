@@ -123,6 +123,19 @@ public sealed class OsdOrchestrator : IDisposable
         }
     }
 
+    /// <summary>
+    /// Flip mute on whichever source is active. Same reasoning as TrySetNormalizedVolume: this
+    /// class already owns the choice, and a caller deciding for itself would be a second copy of
+    /// it waiting to disagree.
+    /// </summary>
+    public bool TryToggleMute() => _activeSource switch
+    {
+        ActiveSource.Voicemeeter =>
+            _voicemeeter.IsLoggedIn && _voicemeeter.TryToggleMute(VoicemeeterRail.Bus, MonitoredBusIndex) is not null,
+        ActiveSource.Windows => _windowsAudio.TryToggleMute() is not null,
+        _ => false,
+    };
+
     private void ReconcileActiveSource()
     {
         // When Voicemeeter isn't installed on this machine, every mode collapses to Windows —

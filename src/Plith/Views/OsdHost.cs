@@ -491,20 +491,28 @@ public sealed class OsdHost : BandWindow
     /// time there is nothing to hand over. Rebuilding the pages is the frame's normal path -
     /// pages come and go anyway - and the pager is told the new count as part of it.
     /// </summary>
+    /// <summary>Set alongside the audio source so the HUD's speaker can mute. Held rather than
+    /// passed straight through because the HUD is built here, after the pages.</summary>
+    private Func<bool>? _toggleMute;
+
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
-                                  Func<WeatherSnapshot?> weather)
+                                  Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null)
     {
+        _toggleMute = toggleMute;
         // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
         // every settings change would churn exactly the resources this slice bounds — only the
         // LIST is rebuilt, and only when the weather page's presence actually has to change.
+        // No audio page. A volume key already stretches the notch into a HUD that shows the
+        // level the instant it changes, so a widget page showing the same number is a second
+        // place for one fact - and the one you reach by swiping, long after the moment it
+        // mattered. The draggable track it carried moves to the HUD's speaker instead.
         _clockPage = new Widgets.ClockWidget();
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media);
-        _audioPage = new Widgets.AudioWidget(audio, write);
 
         ApplyWidgetPages();
 
-        _hud = new Widgets.NotchHud(audio, media);
+        _hud = new Widgets.NotchHud(audio, media, _toggleMute);
         _content.SetWidgetContent(_widgets, _hud);
     }
 
@@ -520,7 +528,6 @@ public sealed class OsdHost : BandWindow
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;
     private Widgets.MediaWidget? _mediaPage;
-    private Widgets.AudioWidget? _audioPage;
 
     /// <summary>Whether the weather page is currently in the pager, so a settings change that
     /// does not affect it does not rebuild the list.</summary>
@@ -536,13 +543,13 @@ public sealed class OsdHost : BandWindow
     /// </summary>
     private void ApplyWidgetPages()
     {
-        if (_clockPage is null || _weatherPage is null || _mediaPage is null || _audioPage is null) return;
+        if (_clockPage is null || _weatherPage is null || _mediaPage is null) return;
 
         var wantsWeather = _settings.Current.ShowWeather;
 
         List<FrameworkElement> pages = wantsWeather
-            ? [_clockPage, _weatherPage, _mediaPage, _audioPage]
-            : [_clockPage, _mediaPage, _audioPage];
+            ? [_clockPage, _weatherPage, _mediaPage]
+            : [_clockPage, _mediaPage];
 
         _widgets.SetPages(_pager, pages);
         _weatherPageInstalled = wantsWeather;

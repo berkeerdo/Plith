@@ -41,7 +41,27 @@
                  Stroked, not filled. The artifact draws this speaker as an outline; filling the
                  cone was my own departure from it and is most of why the icon did not look like
                  the design. -->
-            <Viewbox Grid.Column="0" Width="19" Height="19">
+            <!-- The one thing on the HUD you can press.
+                 Everything else here is an answer; this is the control the audio page used to
+                 carry, and with that page gone the speaker is where mute belongs. A button
+                 rather than a bare icon so it has a hit area, a focus visual and a name. -->
+            <Button x:Name="MuteButton" Grid.Column="0"
+                    Width="26" Height="26" Padding="0" BorderThickness="0"
+                    Background="Transparent" Cursor="Hand"
+                    AutomationProperties.Name="Toggle mute">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="b" CornerRadius="7" Background="{TemplateBinding Background}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="b" Property="Background" Value="#1FFFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            <Viewbox Width="19" Height="19">
                 <Canvas Width="24" Height="24">
                     <Path x:Name="SpeakerBody"
                           Data="{StaticResource IconSpeakerBody}"
@@ -64,6 +84,7 @@
                           Visibility="Collapsed" />
                 </Canvas>
             </Viewbox>
+            </Button>
 
             <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
                     VerticalAlignment="Center"
