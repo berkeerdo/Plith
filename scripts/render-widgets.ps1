@@ -55,6 +55,15 @@ $paletteSources = @(
     'Resources/OsdPalette.Dark.xaml', 'Resources/PlithIcons.xaml'
 )
 
+# The classic cards resolve StaticResource at CONSTRUCTION, which searches the application
+# rather than a tree the control is not in yet. The widget pages get away with DynamicResource
+# and the host element; these do not.
+foreach ($rel in $paletteSources) {
+    $d = [Windows.ResourceDictionary]::new()
+    $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
+    $app.Resources.MergedDictionaries.Add($d)
+}
+
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
     # assigning the property from PowerShell hands over an object the tree does not then search.
@@ -152,5 +161,28 @@ $readDate = [Func[Nullable[DateOnly]]] { [DateOnly]::FromDateTime([DateTime]::No
 $writeDate = [Action[DateOnly]] { param($d) }
 $weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
 Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
+
+# --- the event HUDs, which are a different shape family ------------------------------------
+$hud = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm)
+
+$hud.Show([Plith.Views.Widgets.NotchHudKind]::Volume)
+Save-Visual -Element $hud -W 300.0 -H 46.0 -Name 'hud-volume'
+
+# Re-hosted rather than reused in place: Save-Visual parents the element to a fresh Border, and
+# an element cannot have two parents.
+$hud2 = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm)
+$hud2.Show([Plith.Views.Widgets.NotchHudKind]::Media)
+Save-Visual -Element $hud2 -W 372.0 -H 54.0 -Name 'hud-media'
+
+# --- the classic card ----------------------------------------------------------------------
+# Rendered on its own ground rather than the notch's bezel: it is a floating card, and judging
+# it against black would flatter a border that has to work over a desktop.
+$audioCard = [Plith.Views.AudioCardView]::new()
+$audioCard.DataContext = $audioVm
+Save-Visual -Element $audioCard -W 382.0 -H 56.0 -Name 'card-audio' -Background '#151A21'
+
+$mediaCard = [Plith.Views.MediaCardView]::new()
+$mediaCard.DataContext = $mediaVm
+Save-Visual -Element $mediaCard -W 382.0 -H 56.0 -Name 'card-media' -Background '#151A21'
 
 "Done."
