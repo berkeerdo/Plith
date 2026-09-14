@@ -41,6 +41,8 @@ public sealed class MarqueeText : FrameworkElement
     public MarqueeText()
     {
         Focusable = false;
+        _text.Foreground = Foreground;
+        _text.FontSize = FontSize;
         _text.RenderTransform = _shift;
         _viewport.Children.Add(_text);
         AddVisualChild(_viewport);
@@ -61,6 +63,61 @@ public sealed class MarqueeText : FrameworkElement
         };
         Unloaded += (_, _) => Stop();
     }
+
+    /// <summary>
+    /// Real properties rather than inherited ones.
+    ///
+    /// The first version relied on TextElement.Foreground and friends reaching the inner
+    /// TextBlock by inheritance. They did not: the title rendered in the TextBlock's own default
+    /// black, which on a near-black card is text that is simply not there. Inheritance through a
+    /// FrameworkElement that builds its own visual children is exactly the kind of thing that
+    /// works in most trees and quietly does not in one — so nothing here depends on it. Each
+    /// property is declared, and each writes straight through to the TextBlock.
+    /// </summary>
+    public static readonly DependencyProperty ForegroundProperty =
+        DependencyProperty.Register(nameof(Foreground), typeof(Brush), typeof(MarqueeText),
+            new PropertyMetadata(Brushes.White, (d, e) => Inner(d).Foreground = (Brush)e.NewValue));
+
+    public Brush Foreground
+    {
+        get => (Brush)GetValue(ForegroundProperty);
+        set => SetValue(ForegroundProperty, value);
+    }
+
+    public static readonly DependencyProperty FontSizeProperty =
+        DependencyProperty.Register(nameof(FontSize), typeof(double), typeof(MarqueeText),
+            new FrameworkPropertyMetadata(13.0, FrameworkPropertyMetadataOptions.AffectsMeasure,
+                (d, e) => Inner(d).FontSize = (double)e.NewValue));
+
+    public double FontSize
+    {
+        get => (double)GetValue(FontSizeProperty);
+        set => SetValue(FontSizeProperty, value);
+    }
+
+    public static readonly DependencyProperty FontWeightProperty =
+        DependencyProperty.Register(nameof(FontWeight), typeof(FontWeight), typeof(MarqueeText),
+            new FrameworkPropertyMetadata(FontWeights.Normal, FrameworkPropertyMetadataOptions.AffectsMeasure,
+                (d, e) => Inner(d).FontWeight = (FontWeight)e.NewValue));
+
+    public FontWeight FontWeight
+    {
+        get => (FontWeight)GetValue(FontWeightProperty);
+        set => SetValue(FontWeightProperty, value);
+    }
+
+    public static readonly DependencyProperty FontFamilyProperty =
+        DependencyProperty.Register(nameof(FontFamily), typeof(FontFamily), typeof(MarqueeText),
+            new FrameworkPropertyMetadata(null, FrameworkPropertyMetadataOptions.AffectsMeasure,
+                (d, e) => { if (e.NewValue is FontFamily f) Inner(d).FontFamily = f; }));
+
+    public FontFamily FontFamily
+    {
+        get => (FontFamily)GetValue(FontFamilyProperty);
+        set => SetValue(FontFamilyProperty, value);
+    }
+
+    private static TextBlock Inner(DependencyObject d) => ((MarqueeText)d)._text;
 
     public static readonly DependencyProperty TextProperty =
         DependencyProperty.Register(nameof(Text), typeof(string), typeof(MarqueeText),

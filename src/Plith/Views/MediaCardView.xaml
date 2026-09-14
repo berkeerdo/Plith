@@ -74,9 +74,7 @@
                                 Background="{DynamicResource OsdHighlight}">
                             <ContentPresenter HorizontalAlignment="Center"
                                               VerticalAlignment="Center"
-                                              TextElement.Foreground="{DynamicResource OsdTextPrimary}"
-                                              TextElement.FontFamily="{TemplateBinding FontFamily}"
-                                              TextElement.FontSize="{TemplateBinding FontSize}" />
+                                              TextElement.Foreground="{DynamicResource OsdTextPrimary}" />
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
@@ -142,24 +140,25 @@
                  written one way on one surface and another way on the other, and the four rules
                  that keep a marquee from being irritating are worth having in one place.
 
-                 TextElement.* rather than a Style, because MarqueeText is a FrameworkElement and
-                 owns neither FontSize nor Foreground; both are inheritable and reach the
-                 TextBlock inside exactly as they would anywhere else. -->
+                 MarqueeText declares its own FontSize, FontWeight, FontFamily and Foreground.
+                 It relied on TextElement.* inheritance at first and the title came out in the
+                 TextBlock's default black - invisible on this card. A control that builds its
+                 own visual children is exactly where that inheritance quietly does not arrive. -->
             <!-- Sizes and weights copied from OsdTrackNameStyle / OsdTrackArtistStyle rather
                  than re-chosen: this task changes HOW a long title behaves, not how any title
                  looks, and a silent point-size change would be a second edit hiding inside the
                  first. -->
             <w:MarqueeText Height="20"
-                           TextElement.FontFamily="{StaticResource OsdUiFont}"
-                           TextElement.FontSize="14"
-                           TextElement.FontWeight="SemiBold"
-                           TextElement.Foreground="{DynamicResource OsdTextPrimary}"
+                           FontFamily="{StaticResource OsdUiFont}"
+                           FontSize="14"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource OsdTextPrimary}"
                            Text="{Binding Title}" />
             <w:MarqueeText Height="17"
                            Margin="0,3,0,0"
-                           TextElement.FontFamily="{StaticResource OsdUiFont}"
-                           TextElement.FontSize="12"
-                           TextElement.Foreground="{DynamicResource OsdTextSecondary}"
+                           FontFamily="{StaticResource OsdUiFont}"
+                           FontSize="12"
+                           Foreground="{DynamicResource OsdTextSecondary}"
                            Text="{Binding Artist}" />
         </StackPanel>
 

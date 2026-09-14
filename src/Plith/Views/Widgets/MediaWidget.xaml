@@ -73,13 +73,13 @@
                  them here reaches the TextBlock inside exactly as it would anywhere else. -->
             <w:MarqueeText x:Name="Title"
                            Height="18"
-                           TextElement.FontSize="13"
-                           TextElement.Foreground="{DynamicResource NotchInk}" />
+                           FontSize="13"
+                           Foreground="{DynamicResource NotchInk}" />
             <w:MarqueeText x:Name="Artist"
                            Height="15"
                            Margin="0,1,0,0"
-                           TextElement.FontSize="11"
-                           TextElement.Foreground="{DynamicResource NotchInkMuted}" />
+                           FontSize="11"
+                           Foreground="{DynamicResource NotchInkMuted}" />
         </StackPanel>
 
         <StackPanel Grid.Column="2" Orientation="Horizontal">
