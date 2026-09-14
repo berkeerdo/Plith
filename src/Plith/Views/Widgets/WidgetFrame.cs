@@ -42,7 +42,8 @@ public partial class WidgetFrame : UserControl
         InitializeComponent();
         Width = NotchGeometry.OpenFrameDip.Width;
         Height = NotchGeometry.OpenFrameDip.Height;
-        Dots.Margin = new Thickness(0, NotchGeometry.DotsGapDip, 0, 0);
+        // Set in XAML now: the lane sits over the page rather than under it, so its spacing is
+        // a bottom inset rather than a gap above.
     }
 
     /// <summary>The pager this frame reads its index from. Set once by the host.</summary>

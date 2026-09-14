@@ -71,7 +71,7 @@
         </Style>
     </UserControl.Resources>
 
-    <StackPanel VerticalAlignment="Center">
+    <StackPanel Margin="18,14,18,29" VerticalAlignment="Center">
         <!-- Device on the left, rail on the right, as the design has it. Mine showed only the
              device, which is the half that does not answer the question: on a machine running
              Voicemeeter plus Sonar plus a headset, "Logitech G733" does not say WHICH level this

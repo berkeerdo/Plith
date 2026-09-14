@@ -16,7 +16,7 @@
          cost of the fixed frame, and it is the correct one: a clock centred in a steady frame
          reads as deliberate, while a frame that shrank to hug it would read as unstable every
          time the page turned. -->
-    <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+    <StackPanel Margin="18,14,18,29" VerticalAlignment="Center" HorizontalAlignment="Center">
         <!-- AutomationProperties.Name on the TextBlock, not on the StackPanel: a panel has no
              automation peer, so a name set there reaches nothing at all. The time is announced
              from Time itself, and Date is left to its own text. -->

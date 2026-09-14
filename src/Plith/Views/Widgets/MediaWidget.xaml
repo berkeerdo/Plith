@@ -50,7 +50,7 @@
          the width objection has its own answer one column to the left - the title scrolls
          instead of ellipsing. Keeping the rail also let the frame stay 116 tall rather than 128,
          which would have spent 12 DIP on all five pages to solve one page's problem. -->
-    <Grid VerticalAlignment="Center">
+    <Grid Margin="18,14,18,29" VerticalAlignment="Center">
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="40" />
             <ColumnDefinition Width="*" />

@@ -14,6 +14,12 @@
          clips it, so the gradient reaches the panel's edges rather than sitting inside the
          padding the other pages use. -->
     <Grid x:Name="Root" ClipToBounds="True">
+        <!-- The sky is its own layer, and the bleed scales ONLY that layer.
+             It used to sit on this Grid, which scaled the readout and the moon along with the
+             gradient: the temperature grew until it clipped at the top, the update line clipped
+             at the bottom, and a 26 DIP moon came out half again as large. The mockup keeps them
+             apart for exactly this reason - the sky overflows the frame, the text never does. -->
+        <Grid x:Name="SkyLayer">
         <Grid.RenderTransform>
             <!-- Grown slightly and offset, so the sky covers the page row's padding on every
                  side. Without this the gradient would stop short of the panel edge and read as
@@ -60,8 +66,11 @@
         <Canvas x:Name="Clouds" IsHitTestVisible="False" />
         <Canvas x:Name="Fall" IsHitTestVisible="False" />
 
+        </Grid>
+
         <!-- A scrim under the text. Without it the temperature disappears into a rain gradient,
-             which is exactly where it is most worth reading. -->
+             which is exactly where it is most worth reading. Outside the sky layer, so it covers
+             the frame rather than the scaled-up sky. -->
         <Rectangle>
             <Rectangle.Fill>
                 <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.35">
@@ -72,11 +81,14 @@
             </Rectangle.Fill>
         </Rectangle>
 
-        <StackPanel x:Name="Readout" VerticalAlignment="Center" Margin="18,0">
+        <!-- Inset on the sides only. The page is vertically centred and the sky behind it wants
+             every pixel, so vertical padding here bought nothing and cost the readout the room
+             it needed - the temperature clipped at the top and the update line at the bottom. -->
+        <StackPanel x:Name="Readout" VerticalAlignment="Center" Margin="18,0,18,14">
             <TextBlock x:Name="Temperature"
-                       FontSize="34" FontWeight="SemiBold"
+                       FontSize="30" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="34" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="31" LineStackingStrategy="BlockLineHeight"
                        Foreground="White">
                 <!-- The design puts a soft shadow under the number for the same reason the scrim
                      is there: over a bright sky, white on pale blue is the one thing on the page

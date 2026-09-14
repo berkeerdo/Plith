@@ -64,6 +64,9 @@ public partial class WeatherWidget : UserControl
             Bleed.CenterY = e.NewSize.Height / 2;
         };
 
+        // The reveal fades the sky in, not the page. Fading Root took the readout with it, so
+        // the day's first look began with an unreadable temperature.
+
         IsVisibleChanged += (_, e) =>
         {
             if ((bool)e.NewValue) Enter();
@@ -220,7 +223,7 @@ public partial class WeatherWidget : UserControl
 
         Run(Board((Bleed, ScaleTransform.ScaleXProperty, swell),
                   (Bleed, ScaleTransform.ScaleYProperty, swellY)));
-        Run(Board((Root, OpacityProperty, fade)));
+        Run(Board((SkyLayer, OpacityProperty, fade)));
     }
 
     private void StartBloom(TimeSpan delay)
@@ -343,7 +346,7 @@ public partial class WeatherWidget : UserControl
         // Cleared as well as stopped: a stopped storyboard leaves the property at its animated
         // value under FillBehavior.HoldEnd, and the reveal's own fade would leave Root parked at
         // whatever opacity it had reached when the page turned away mid-reveal.
-        Root.BeginAnimation(OpacityProperty, null);
-        Root.Opacity = 1;
+        SkyLayer.BeginAnimation(OpacityProperty, null);
+        SkyLayer.Opacity = 1;
     }
 }

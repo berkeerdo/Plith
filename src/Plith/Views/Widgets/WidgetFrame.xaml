@@ -13,10 +13,17 @@
          so they all rendered in WPF's default face while the design and the classic card use
          Segoe UI Variable - which on its own is enough to make every page look unlike the
          mockup no matter how right the numbers are. -->
-    <!-- The design's own padding: 14 top, 18 sides, 9 bottom. It was missing entirely, so every
-         page's content sat flush against the black edge - which is most of why all four looked
-         wrong no matter how right their type was. -->
-    <Grid Margin="18,14,18,9">
+    <!-- The padding belongs to the PAGES, not to this frame.
+
+         Putting it here was the obvious move and the wrong one: the weather page's sky is meant
+         to bleed to the notch's edges, and a padded frame clips it to the inside of that
+         padding - a blue rectangle floating in a black border, which is what it looked like.
+         The page host now spans the whole frame and each page brings its own padding; weather
+         brings it only on the text and lets the sky fill.
+
+         The dots sit on top rather than below, for the same reason: a lane that took its own
+         row would have carved a black strip out of the bottom of the sky. -->
+    <Grid>
         <Grid.RowDefinitions>
             <!-- The page takes what is left; the dots lane is FIXED, never Auto. With Auto, a
                  page that measures one pixel taller than its share pushes the dots past the
@@ -30,7 +37,7 @@
 
         <!-- ClipToBounds is not cosmetic here: it is the half of the guarantee above that the
              row definitions cannot provide on their own. -->
-        <Grid x:Name="PageHost" Grid.Row="0" ClipToBounds="True" />
+        <Grid x:Name="PageHost" Grid.Row="0" Grid.RowSpan="2" ClipToBounds="True" />
 
         <!-- Dots are built in code rather than templated from an ItemsControl, so each one can
              carry its own AutomationProperties.Name. A templated Border or Ellipse has no
@@ -39,6 +46,7 @@
         <StackPanel x:Name="Dots" Grid.Row="1"
                     Orientation="Horizontal"
                     HorizontalAlignment="Center"
-                    VerticalAlignment="Center" />
+                    VerticalAlignment="Center"
+                    Margin="0,0,0,9" />
     </Grid>
 </UserControl>
