@@ -1,0 +1,80 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- The notch's draggable rail, shared by every page that has one.
+
+         It started as a private copy inside AudioWidget.xaml, and stayed private for exactly as
+         long as one page needed it. A second draggable rail is the moment a private copy becomes
+         two drifting ones.
+
+         It deliberately does NOT live in SettingsTheme.xaml, whose slider style reads brushes
+         that only exist in the settings window's resource scope. The OSD renders inside an
+         HwndSource, and a DynamicResource that resolves to nothing there silently draws an
+         invisible control rather than failing.
+
+         The fill is NotchTrackFill, which this dictionary does not define. Each page defines it
+         for itself: the audio rail is the gain green that matches the classic card, the
+         brightness rail is the accent from Appearance. Defining a default here would mean a page
+         that forgot to set one still drew something plausible, and a rail in the wrong colour is
+         much harder to notice than one that is missing. -->
+
+    <Style x:Key="NotchThumbStyle" TargetType="Thumb">
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Width" Value="12" />
+        <Setter Property="Height" Value="12" />
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Thumb">
+                    <Ellipse Fill="{DynamicResource NotchInk}" />
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <Style x:Key="NotchTrackStyle" TargetType="Slider">
+        <!-- Taller than the 6 DIP it draws: the whole control is the grab target, and a
+             6 DIP one is missed between two mouse samples. -->
+        <Setter Property="MinHeight" Value="20" />
+        <Setter Property="Focusable" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Slider">
+                    <Grid Background="Transparent">
+                        <Border Height="6" CornerRadius="3"
+                                VerticalAlignment="Center"
+                                Background="{DynamicResource NotchTrack}" />
+                        <Track x:Name="PART_Track">
+                            <Track.DecreaseRepeatButton>
+                                <RepeatButton Command="Slider.DecreaseLarge" Focusable="False" Cursor="Hand">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Grid Background="Transparent">
+                                                <Border Height="6" CornerRadius="3"
+                                                        VerticalAlignment="Center"
+                                                        Background="{DynamicResource NotchTrackFill}" />
+                                            </Grid>
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.DecreaseRepeatButton>
+                            <Track.IncreaseRepeatButton>
+                                <RepeatButton Command="Slider.IncreaseLarge" Focusable="False" Cursor="Hand">
+                                    <RepeatButton.Template>
+                                        <ControlTemplate TargetType="RepeatButton">
+                                            <Border Background="Transparent" />
+                                        </ControlTemplate>
+                                    </RepeatButton.Template>
+                                </RepeatButton>
+                            </Track.IncreaseRepeatButton>
+                            <Track.Thumb>
+                                <Thumb Style="{StaticResource NotchThumbStyle}" />
+                            </Track.Thumb>
+                        </Track>
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+</ResourceDictionary>

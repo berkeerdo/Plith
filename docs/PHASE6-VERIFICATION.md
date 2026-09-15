@@ -1153,3 +1153,45 @@ the next reader at the wrong mechanism.
 
 **None of this replaces the hardware session.** It found what could be found by reading. Every
 item in §15 and §16 is still open.
+
+---
+
+## 18. System Controls — what was measured, and what was not
+
+The first System Controls work to reach a running surface rather than a plan. Recorded here
+because the ratio is unusual for this branch: most of it was measured, and the part that was not
+is named rather than implied.
+
+### Measured on this machine
+
+| Check | How | Result |
+|---|---|---|
+| Does WMI brightness exist here? | `Get-CimInstance root/WMI WmiMonitorBrightness` | **No.** Chassis type 3, no battery — a desktop. The WMI implementation was written first and would never have run once. |
+| Does DDC/CI exist here? | `dxva2.dll` probe before writing any of it | **Yes.** `GetMonitorBrightness` answered, range 0..100, current 40. |
+| Does `BrightnessClient` work end to end? | Driven from PowerShell against the real display: `Start` → `Current` → `TrySet` → `Refresh` → `Dispose` | Attached, read 40, write accepted, round trip preserved 40, dispose cleared to null. |
+| Does the page fit the frame? | `Measure` against infinity, compared to 356×116 | **Initially no — 130.6 DIP tall, clipped by 15.** Found because the rendered rail was a half-drawn thumb. Trimmed to 122.6, which the `VerticalAlignment="Center"` and the 29 DIP bottom margin absorb, the same way the audio page's 122.2 always has. |
+| Does it draw what it should? | `scripts/render-widgets.ps1`, at the frame's exact size | Rail, accent fill at the display's real 40%, sun, muted mic. |
+| Does the rail survive a fourth page? | New `frame-system` render with the rail forced visible | Four segments, pip on the fourth. |
+| Range arithmetic on panels nobody here owns | `BrightnessMathTests` — coarse 0..10, non-zero floor, zero-width, out-of-range | 26 tests. The identity case this monitor exercises would have passed a completely wrong implementation. |
+
+### Not measured
+
+- **A live drag.** The coalescing — one pending value, one writer thread, intermediates dropped —
+  is what keeps a DDC/CI write off the mouse-move path. It is structurally sound (a single slot
+  cannot queue) but no finger has been on it. If the rail stutters under a drag, this is where to
+  look, and the 900 ms driving window is the first constant to question.
+- **A display that refuses a write.** The refusal path re-reads and corrects the optimistic
+  value. It exists because the doc comment claimed it before the code did; it has never run.
+- **A laptop.** Internal panels that refuse DDC/CI get nothing, and the WMI fallback that would
+  serve them is deliberately absent rather than written on faith.
+- **Anything on the running app.** Not deployed: a game was open at the point this was finished,
+  and the standing rule is that nothing touches the app while one is.
+
+### The render harness gained a blind spot, and lost it
+
+`frame-page1` had never shown the page rail, and that went unnoticed until a fourth page made the
+rail the thing worth looking at. The rail fades in on a page change and fades out after a linger,
+so a still frame catches it at zero every time — the harness was photographing a transient at the
+one moment it is invisible. `frame-system` forces it visible. This matters because a lane clipped
+in half is exactly the class of defect this harness was built to catch, and it had quietly stopped
+being able to.

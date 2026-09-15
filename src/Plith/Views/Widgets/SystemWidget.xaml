@@ -1,0 +1,145 @@
+<UserControl x:Class="Plith.Views.Widgets.SystemWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/NotchTrack.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+
+            <!-- The accent from Appearance, not the gain green. Green is the colour of a signal
+                 level in this product - it means "how loud" on the classic card and on the audio
+                 rail. Brightness is not a level of that kind, and borrowing the colour would
+                 quietly claim it was.
+
+                 Only a placeholder here. The accent lives in the palette merged at the OSD
+                 window, which this control's own resources cannot see: a StaticResource lookup
+                 for it would throw at load, and there is no markup form of "alias another key
+                 dynamically". The code-behind resolves it once the control is in the tree, and
+                 again every time the page is shown, so an accent changed in Appearance is picked
+                 up on the next open. The placeholder is the muted ink rather than something
+                 bright, so a failure to resolve reads as drab and wrong rather than as a
+                 plausible colour nobody would question. -->
+            <SolidColorBrush x:Key="NotchTrackFill" Color="#9AA6B2" />
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- The system page: the controls that belong to the machine rather than to what is playing
+         on it. Brightness, and whether the microphone is listening.
+
+         Both halves collapse on their own. A desktop with DDC/CI switched off in the monitor's
+         own menu has no brightness; a machine with no capture device has no microphone; the page
+         is only installed at all when at least one of them answered. That is the same rule the
+         weather page follows, and it is the difference between a control that is missing and one
+         that is present and dead. -->
+    <Grid Margin="18,14,18,29" VerticalAlignment="Center">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Label row: what this is on the left, the mic on the right. The mic sits up here
+             rather than below the rail because it is a state you glance at, not a value you
+             adjust - and the rail wants the full width. -->
+        <DockPanel Grid.Row="0" LastChildFill="True">
+            <Button x:Name="MicButton"
+                    DockPanel.Dock="Right"
+                    Margin="10,0,0,0"
+                    Focusable="True"
+                    Cursor="Hand"
+                    Click="OnMicClick"
+                    AutomationProperties.Name="Microphone">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chip"
+                                Background="Transparent"
+                                CornerRadius="11"
+                                Padding="4,2"
+                                SnapsToDevicePixels="True">
+                            <ContentPresenter />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="Background"
+                                        Value="{DynamicResource NotchTrack}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+
+                <!-- One Viewbox over one Canvas on the 24 grid. Drawn any other way each Path
+                     stretches to its own extent and the stand stops meeting the capsule - the
+                     mistake that turned the speaker into a blob. -->
+                <Viewbox Width="15" Height="15">
+                    <Canvas Width="24" Height="24">
+                        <!-- Brushes set here, not left to the code-behind alone. A Path with no
+                             Fill and no Stroke is not a drawing error that shows up as a wrong
+                             colour; it draws nothing at all, and the control looks empty rather
+                             than broken. The muted state is a brush swap on top of these. -->
+                        <Path x:Name="MicBody" Data="{StaticResource IconMic}"
+                              Fill="{DynamicResource NotchInk}" />
+                        <Path x:Name="MicStand" Data="{StaticResource IconMicStand}"
+                              Stroke="{DynamicResource NotchInk}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        <Path x:Name="MicCross" Data="{StaticResource IconMicCross}"
+                              Stroke="{DynamicResource NotchInk}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round"
+                              Visibility="Collapsed" />
+                    </Canvas>
+                </Viewbox>
+            </Button>
+
+            <!-- "System", fixed, and not named after whichever half happens to be present.
+                 The caption used to read "Display" whenever brightness answered, which put a
+                 microphone on a page calling itself the display - naming half the page and
+                 contradicting the other half. The sun beside the number says which reading it
+                 is; the caption says which page you are on, and this page grows (backlight,
+                 lock keys, airplane mode) rather than staying about one device. -->
+            <TextBlock x:Name="Caption"
+                       Text="System"
+                       FontSize="11"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       TextTrimming="CharacterEllipsis"
+                       VerticalAlignment="Center" />
+        </DockPanel>
+
+        <!-- The reading, with the sun beside it. Same grid, same Viewbox rule. -->
+        <StackPanel x:Name="BrightnessBlock" Grid.Row="1" Orientation="Horizontal"
+                    Margin="0,0,0,6">
+            <Viewbox Width="20" Height="20" VerticalAlignment="Center" Margin="0,0,8,0">
+                <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconWxRays}"
+                          Stroke="{DynamicResource NotchInkMuted}"
+                          StrokeThickness="1.5"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    <Path Data="{StaticResource IconWxSun}"
+                          Fill="{DynamicResource NotchInk}" />
+                </Canvas>
+            </Viewbox>
+
+            <TextBlock x:Name="Level"
+                       FontSize="26" FontWeight="SemiBold"
+                       Typography.NumeralAlignment="Tabular"
+                       Foreground="{DynamicResource NotchInk}"
+                       VerticalAlignment="Center" />
+        </StackPanel>
+
+        <!-- A Slider, not a drawn rectangle with mouse handlers - the same reasoning as the audio
+             rail: keyboard arrows, Home/End and an automation peer that reports its value all
+             come with it, and a hand-rolled track would have reimplemented them worse. -->
+        <Slider x:Name="Track" Grid.Row="2"
+                Minimum="0" Maximum="100"
+                SmallChange="5" LargeChange="10"
+                IsMoveToPointEnabled="True"
+                AutomationProperties.Name="Display brightness"
+                Style="{StaticResource NotchTrackStyle}" />
+    </Grid>
+</UserControl>

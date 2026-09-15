@@ -117,7 +117,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 |---|---|
 | Volume / mute keys | `WH_KEYBOARD_LL` (already wired). |
 | Media transport keys | `WH_KEYBOARD_LL` VK_MEDIA_*. |
-| Brightness up/down | `WH_KEYBOARD_LL` VK_BRIGHTNESS_*, apply via `WmiMonitorBrightnessMethods`. |
+| Brightness up/down | `WH_KEYBOARD_LL` VK_BRIGHTNESS_*, apply via DDC/CI (`dxva2.dll`) — see the Phase 6 note; WMI reaches laptop panels only. |
 | Keyboard backlight | Vendor SDKs (Razer Chroma, Corsair iCUE, Logitech G HUB) — start with Microsoft Precision + laptop-native, add vendor SDKs later. |
 | Mic mute | Vendor keys → intercept + broadcast via Windows.Devices.Enumeration. |
 | Caps / Num / Scroll Lock | `WH_KEYBOARD_LL`, read state via `GetKeyState`. |
@@ -286,13 +286,38 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
 - Preset picker + strip-height slider in Settings. **Shipped** — the picker disables
   position editing while the notch is active, since the notch is pinned rather than
   freely placed.
-- **Full Notch is deferred to a later slice.** It needs always-on cards — mic status
-  from the System Controls card below, and a Clock card, neither of which exists
-  yet — and shipping the notch shell without them would ship an empty strip. Ambient
-  Notch ships on its own in this slice instead.
-- **System Controls card** — brightness, backlight, mic mute, lock
-  keys, airplane mode. This is what makes Plith stop being "an audio
-  OSD" from the user's perspective. **Not started.**
+- **Full Notch is deferred to a later slice.** It needed always-on content — mic status
+  and a clock — and shipping the notch shell without them would have shipped an empty
+  strip. Both now exist: the clock is the "now" page and the mic is on it as well as on
+  the system page. What Full Notch still lacks is a decision rather than a part — which
+  of them earns permanent space on a strip that is 28 px tall.
+- **System Controls — a page, not a card. Brightness and mic mute shipped; backlight,
+  lock keys and airplane mode not started.**
+
+  The rename is a design correction rather than wording. Cards were the shape the OSD
+  had when everything it showed answered something you had just pressed; the notch
+  replaced that with two shapes — a HUD that answers a key, and a frame you deliberately
+  open. Nobody presses a key to be told their microphone's state, so a card would have
+  been a thing that appeared unasked.
+
+  Brightness goes over **DDC/CI**, not `WmiMonitorBrightnessMethods` as the table below
+  originally said. The WMI version was written first and thrown away: it reaches a
+  laptop's built-in panel and nothing else, so on the desktop this is developed on it was
+  code that could never once run. DDC/CI talks to the monitor over the video cable, which
+  is the case a desktop actually has — measured before a line was written, and the
+  attached panel answers with a 0..100 range. Laptop panels that refuse DDC/CI will need
+  the WMI path back as a fallback, added when there is a machine to prove it on.
+
+  The page installs itself only when it has something: a display that refuses DDC/CI and
+  a machine with no capture device leave it out of the pager entirely, rather than adding
+  a page you can swipe to and be told nothing on.
+
+  **Verified offscreen, not on a running build.** The client was driven end to end against
+  the real display (attach, read, write, re-read, dispose) and the page was rendered at
+  the frame's exact size; the range arithmetic is covered by `BrightnessMathTests` for the
+  coarse and non-zero-floor panels no machine here has. What has NOT been exercised is a
+  live drag — the coalescing that keeps a DDC/CI write off the mouse-move path is reasoned
+  and structurally sound, not measured.
 - ~~**Battery card** — laptop-first.~~ **Dropped.** The battery is on the notch's "now"
   page, beside the time it belongs with, and it collapses on a machine that has none. A
   card would be a second place for one fact — the same reason the audio widget page was

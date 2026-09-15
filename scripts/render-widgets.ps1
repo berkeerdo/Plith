@@ -185,6 +185,21 @@ Save-Visual -Element $audio -W $frameW -H $frameH -Name 'widget-audio'
 $weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
 Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 
+# A real BrightnessClient, against the real display. It only ever READS here - the harness never
+# calls TrySet - so this photographs the page holding the machine's actual brightness rather than
+# a number invented for the picture, which is the whole point of rendering it at all.
+$bright = [Plith.Services.BrightnessClient]::new($null)
+[void]$bright.Start()
+$micToggle = [Func[Nullable[bool]]] { $true }
+$system = [Plith.Views.Widgets.SystemWidget]::new($bright, $micReader, $micToggle)
+# Palette first, then repaint. The accent lives in the palette, and the constructor's paint runs
+# before any of it is merged - photographed straight after construction the rail would be wearing
+# its placeholder grey, and the picture would be of a bug the product does not have.
+Add-Palette $system
+$system.Refresh()
+Save-Visual -Element $system -W $frameW -H $frameH -Name 'widget-system'
+$bright.Dispose()
+
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a
 # clipped dots lane went unnoticed: the pages looked fine on their own.
@@ -208,6 +223,28 @@ $frame2.SetPages($pager2, $pages2)
 $pager2.GoTo(1)
 $frame2.SyncToPager(0)
 Save-Visual -Element $frame2 -W $frameW -H $frameH -Name 'frame-weather'
+
+# --- the frame with four pages, which is what the system page makes it ---------------------
+# Rendered because the rail is drawn from the page COUNT: every page added is a chance for the
+# lane to run out of room, and a clipped lane is invisible when the pages are rendered alone.
+$bright2 = [Plith.Services.BrightnessClient]::new($null)
+[void]$bright2.Start()
+$frame3 = [Plith.Views.Widgets.WidgetFrame]::new()
+$pager3 = [Plith.Services.NotchPager]::new(4)
+$pages3 = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
+$pages3.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader))
+$pages3.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
+$pages3.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null))
+$pages3.Add([Plith.Views.Widgets.SystemWidget]::new($bright2, $micReader, $micToggle))
+$frame3.SetPages($pager3, $pages3)
+[void]$pager3.GoTo(3)
+$frame3.SyncToPager(0)
+# Forced visible. The rail fades in on a page change and fades out after a linger, so a still
+# frame catches it at zero every time - which is exactly how a lane clipped in half stayed
+# invisible to this harness once before.
+$frame3.FindName('Rail').Opacity = 1
+Save-Visual -Element $frame3 -W $frameW -H $frameH -Name 'frame-system'
+$bright2.Dispose()
 
 # --- the event HUDs, which are a different shape family ------------------------------------
 $hud = [Plith.Views.Widgets.NotchHud]::new($audioVm, $mediaVm, $null)
