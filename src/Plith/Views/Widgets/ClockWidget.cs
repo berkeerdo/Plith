@@ -116,7 +116,15 @@ public partial class ClockWidget : UserControl
 
         var reading = snapshot!.Value;
         Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(reading.TemperatureC):0}°");
-        Condition.Text = WeatherCodeMap.Describe(reading.WeatherCode);
+
+        // The same SkyKind the weather page's gradient is drawn from, so the mark here and the
+        // sky there can never describe different weather.
+        Mark.Show(SkyCondition.From(reading.WeatherCode, DateTime.Now.Hour));
+
+        // The word still exists, as the announced name. A shape is faster to read and says
+        // nothing at all to a screen reader.
+        System.Windows.Automation.AutomationProperties.SetName(
+            Mark, WeatherCodeMap.Describe(reading.WeatherCode));
     }
 
     /// <summary>How old a reading may be and still be shown here. The same 45 minutes the

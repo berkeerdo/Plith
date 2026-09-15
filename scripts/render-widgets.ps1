@@ -210,4 +210,28 @@ $mediaCard = [Plith.Views.MediaCardView]::new()
 $mediaCard.DataContext = $mediaVm
 Save-Visual -Element $mediaCard -W 382.0 -H 56.0 -Name 'card-media' -Background '#151A21'
 
+# --- the cloud silhouette on its own ------------------------------------------------------
+# The sky builds its clouds only once the page is visible, which an offscreen render never is -
+# so the gradient shows and the weather does not. Drawing the shape directly is the only way to
+# judge the thing that was actually wrong with it.
+$cloudHost = [Windows.Controls.Canvas]::new()
+foreach ($spec in @(@{w=170; h=44; t=6; a=40}, @{w=104; h=30; t=30; a=70})) {
+    $path = [Windows.Shapes.Path]::new()
+    $path.Data = $probe.TryFindResource('ShapeCloud')
+    $path.Stretch = 'Fill'
+    $path.Width = $spec.w
+    $path.Height = $spec.h
+    $g = [Windows.Media.LinearGradientBrush]::new()
+    $g.StartPoint = [Windows.Point]::new(0.35, 0)
+    $g.EndPoint = [Windows.Point]::new(0.6, 1)
+    $g.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Color]::FromArgb($spec.a, 255,255,255), 0))
+    $g.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Color]::FromArgb([byte]($spec.a*0.72), 255,255,255), 0.55))
+    $g.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Color]::FromArgb([byte]($spec.a*0.18), 255,255,255), 1))
+    $path.Fill = $g
+    [Windows.Controls.Canvas]::SetLeft($path, 40)
+    [Windows.Controls.Canvas]::SetTop($path, $spec.t)
+    $cloudHost.Children.Add($path)
+}
+Save-Visual -Element $cloudHost -W $frameW -H $frameH -Name 'cloud-shape' -Background '#FF3E7BA8'
+
 "Done."

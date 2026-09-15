@@ -345,14 +345,19 @@ public partial class WeatherWidget : UserControl
 
         for (int i = 0; i < count; i++)
         {
-            var puff = new Ellipse
+            // A silhouette, not an ellipse. The flat oval was the single biggest reason the sky
+            // read as a gradient with shapes on it rather than as weather: a cloud is recognised
+            // by its profile, and an oval has none.
+            var puff = new Path
             {
-                Width = near ? 90 + i * 26 : 150 + i * 40,
-                Height = near ? 26 + i * 4 : 38 + i * 6,
-                Fill = new SolidColorBrush(Color.FromArgb((byte)baseAlpha, 255, 255, 255)),
+                Data = (Geometry)FindResource("ShapeCloud"),
+                Stretch = Stretch.Fill,
+                Width = near ? 104 + i * 30 : 170 + i * 46,
+                Height = near ? 30 + i * 5 : 44 + i * 7,
+                Fill = CloudBrush(baseAlpha),
                 RenderTransform = new TranslateTransform(),
             };
-            Canvas.SetTop(puff, near ? 4 + i * 19 : 10 + i * 24);
+            Canvas.SetTop(puff, near ? 2 + i * 20 : 8 + i * 26);
             canvas.Children.Add(puff);
 
             // Two corrections here, and together they are why the sky looked motionless.
@@ -373,6 +378,24 @@ public partial class WeatherWidget : UserControl
             };
             Run((TranslateTransform)puff.RenderTransform, TranslateTransform.XProperty, travel);
         }
+    }
+
+    /// <summary>
+    /// The fill that makes a silhouette read as vapour rather than as a cut-out.
+    ///
+    /// Brighter along the top where light lands and falling away towards the base, and fading to
+    /// nothing at the very bottom so the edge dissolves instead of ending. A blur would do the
+    /// same job and cost a filter pass per frame on every cloud - which on a surface that has
+    /// already been reported for taking a game from 700 fps to 80 is not a trade worth making.
+    /// </summary>
+    private static LinearGradientBrush CloudBrush(int alpha)
+    {
+        var brush = new LinearGradientBrush { StartPoint = new Point(0.35, 0), EndPoint = new Point(0.6, 1) };
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)alpha, 255, 255, 255), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(alpha * 0.72), 255, 255, 255), 0.55));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb((byte)(alpha * 0.18), 255, 255, 255), 1));
+        brush.Freeze();
+        return brush;
     }
 
     private void StartFall(TimeSpan delay)
