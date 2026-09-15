@@ -2,6 +2,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Media.Effects;
 using Plith.Views.Presentation;
 
 namespace Plith.Views;
@@ -99,7 +100,16 @@ public partial class OsdContent : UserControl
     /// SetNotchMetrics so it can tell a real content change from its own pin.</summary>
     private bool _panelPinned;
 
-    public OsdContent() => InitializeComponent();
+    /// <summary>The surface's shadow, held so it can be taken off during a morph and put back
+    /// afterwards. Detaching the Effect is what actually stops the blur being recomputed —
+    /// setting its Opacity to zero leaves the filter pass running on every frame.</summary>
+    private Effect? _notchShadow;
+
+    public OsdContent()
+    {
+        InitializeComponent();
+        _notchShadow = NotchSurface.Effect;
+    }
 
     /// <summary>
     /// How far the notch is open: 0 is the collapsed pill, 1 the fully open panel.
@@ -217,7 +227,36 @@ public partial class OsdContent : UserControl
 
         var radius = NotchGeometry.SurfaceRadius(t, size.Height);
         NotchSurface.CornerRadius = new CornerRadius(0, 0, radius, radius);
-        NotchShadow.Opacity = NotchGeometry.Lerp(0, NotchShadowOpacity, t);
+
+        // The shadow comes OFF while the shape is changing size, and back on when it settles.
+        //
+        // This window is layered with per-pixel alpha, so every frame is composited into a DIB
+        // and pushed with UpdateLayeredWindow - and a DropShadowEffect on the element being
+        // resized is a gaussian blur recomputed over the whole surface on each of those frames.
+        // At the notch's size that is the single most expensive thing happening per frame, and
+        // it is what made a 260 ms morph arrive in two or three visible steps rather than as a
+        // movement. A shadow under a shape that is mid-flight is not something anyone can see;
+        // one under a shape that has stopped is most of what makes it sit above the desktop.
+        var settled = Morph >= 0.999;
+        if (!settled)
+        {
+            NotchSurface.Effect = null;
+        }
+        else if (NotchSurface.Effect is null)
+        {
+            // Re-attached at zero and faded up, not switched back on. Restoring it at full
+            // strength puts a shadow under the shape in one frame, which is its own small pop
+            // right where the movement was supposed to end quietly.
+            NotchSurface.Effect = _notchShadow;
+            NotchShadow.Opacity = 0;
+            NotchShadow.BeginAnimation(UIElement.OpacityProperty,
+                new DoubleAnimation(NotchGeometry.Lerp(0, NotchShadowOpacity, t),
+                                    TimeSpan.FromMilliseconds(160)));
+        }
+        else
+        {
+            NotchShadow.Opacity = NotchGeometry.Lerp(0, NotchShadowOpacity, t);
+        }
 
         SlidingRoot.Opacity = NotchGeometry.ContentOpacity(t);
 
