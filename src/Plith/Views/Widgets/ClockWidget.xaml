@@ -39,29 +39,39 @@
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
 
-        <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Top">
-            <TextBlock x:Name="Time"
-                       FontSize="38" FontWeight="SemiBold"
-                       Typography.NumeralAlignment="Tabular"
-                       LineHeight="38" LineStackingStrategy="BlockLineHeight"
-                       Foreground="{DynamicResource NotchInk}" />
+        <!-- Time and date on ONE line, the date against the time's baseline.
 
-            <StackPanel Orientation="Horizontal" Margin="1,3,0,0">
-                <TextBlock x:Name="Date"
-                           FontSize="12"
-                           Foreground="{DynamicResource NotchInkMuted}" />
-                <Path x:Name="ChargingBolt"
-                      Data="{StaticResource IconBolt}"
-                      Fill="{DynamicResource NotchInkMuted}"
-                      Width="10" Height="10" Stretch="Uniform"
-                      Margin="9,0,3,1"
-                      VerticalAlignment="Center"
-                      Visibility="Collapsed" />
-                <TextBlock x:Name="BatteryText"
-                           FontSize="12"
-                           Foreground="{DynamicResource NotchInkMuted}"
-                           Visibility="Collapsed" />
-            </StackPanel>
+             Stacked, this block came to 56 DIP; with the gap and the track line under it the
+             page needed 86 and the frame has 76, so the track row ran off the bottom edge and
+             was clipped in half. Putting the date beside the time gives back the 18 that
+             overflowed - and it reads correctly here in a way it did not when everything was
+             centred, because there is a left edge for both of them to sit on. -->
+        <StackPanel Grid.Row="0" Grid.Column="0"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Top">
+            <TextBlock x:Name="Time"
+                       FontSize="36" FontWeight="SemiBold"
+                       Typography.NumeralAlignment="Tabular"
+                       LineHeight="36" LineStackingStrategy="BlockLineHeight"
+                       Foreground="{DynamicResource NotchInk}" />
+            <TextBlock x:Name="Date"
+                       Margin="10,0,0,3"
+                       VerticalAlignment="Bottom"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+            <Path x:Name="ChargingBolt"
+                  Data="{StaticResource IconBolt}"
+                  Fill="{DynamicResource NotchInkMuted}"
+                  Width="10" Height="10" Stretch="Uniform"
+                  Margin="9,0,3,4"
+                  VerticalAlignment="Bottom"
+                  Visibility="Collapsed" />
+            <TextBlock x:Name="BatteryText"
+                       Margin="0,0,0,3"
+                       VerticalAlignment="Bottom"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       Visibility="Collapsed" />
         </StackPanel>
 
         <!-- Right-aligned and baseline-matched to the time, so the two readings sit on one line
@@ -81,15 +91,15 @@
                                VerticalAlignment="Center"
                                Ink="{DynamicResource NotchInk}" />
                 <TextBlock x:Name="Temperature"
-                           FontSize="30" FontWeight="SemiBold"
+                           FontSize="28" FontWeight="SemiBold"
                            Typography.NumeralAlignment="Tabular"
-                           LineHeight="38" LineStackingStrategy="BlockLineHeight"
+                           LineHeight="36" LineStackingStrategy="BlockLineHeight"
                            Foreground="{DynamicResource NotchInk}" />
             </StackPanel>
         </StackPanel>
 
         <Grid x:Name="NowPlaying" Grid.Row="1" Grid.ColumnSpan="2"
-              Margin="0,12,0,0"
+              Margin="0,14,0,0"
               VerticalAlignment="Bottom"
               Visibility="Collapsed">
             <Grid.ColumnDefinitions>

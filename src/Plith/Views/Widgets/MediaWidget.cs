@@ -44,7 +44,11 @@ public partial class MediaWidget : UserControl
 
         // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
         // the one a person reaches for without looking.
-        PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x1C, 0xFF, 0xFF, 0xFF));
+        // Play/pause is the one a hand goes to without looking, so it is filled rather than
+        // merely a shade brighter - the difference between "three controls, one of them slightly
+        // different" and "a control, with two beside it".
+        PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
+        PlayPause.Margin = new Thickness(6, 0, 6, 0);
 
         // Re-rendered on the way in as well as on change: a page that has been away misses every
         // notification while it is off the tree, so arriving without this would show whatever

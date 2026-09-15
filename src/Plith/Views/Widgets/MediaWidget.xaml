@@ -13,8 +13,8 @@
             </ResourceDictionary.MergedDictionaries>
 
             <Style x:Key="TransportButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="28" />
-                <Setter Property="Height" Value="28" />
+                <Setter Property="Width" Value="30" />
+                <Setter Property="Height" Value="30" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Background" Value="#0DFFFFFF" />
                 <!-- Dimmer than the title beside them, as the design has it: the controls are
@@ -29,7 +29,7 @@
                             <!-- TemplateBinding, not a literal: play/pause overrides this to sit
                                  a touch brighter than the two beside it, and a hard-coded value
                                  here would make that override do nothing at all. -->
-                            <Border x:Name="Chrome" CornerRadius="8"
+                            <Border x:Name="Chrome" CornerRadius="15"
                                     Background="{TemplateBinding Background}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
                             </Border>
@@ -61,7 +61,7 @@
         <!-- The art and the text are one target; the transport is not part of it. A page-wide
              click would swallow every press meant for a transport button on the same row. -->
         <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="40" />
+            <ColumnDefinition Width="46" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
@@ -69,12 +69,18 @@
         <Border x:Name="OpenSourceArea" Grid.Column="0" Grid.ColumnSpan="2"
                 Background="Transparent" />
 
-        <Border x:Name="ArtHost" Grid.Column="0" Width="40" Height="40" CornerRadius="7"
+        <!-- Larger, and with a hairline over it. Album art is photographic and often dark at the
+             edges, so without an inner edge it dissolves into the panel and reads as a smudge
+             rather than as a picture with a boundary. -->
+        <Border x:Name="ArtHost" Grid.Column="0" Width="46" Height="46" CornerRadius="8"
                 Background="{DynamicResource NotchTrack}">
             <Border.Clip>
-                <RectangleGeometry Rect="0,0,40,40" RadiusX="7" RadiusY="7" />
+                <RectangleGeometry Rect="0,0,46,46" RadiusX="8" RadiusY="8" />
             </Border.Clip>
-            <Image x:Name="Art" Stretch="UniformToFill" />
+            <Grid>
+                <Image x:Name="Art" Stretch="UniformToFill" />
+                <Border CornerRadius="8" BorderThickness="1" BorderBrush="#1FFFFFFF" />
+            </Grid>
         </Border>
 
         <!-- MinWidth 0 is load-bearing: a star column sizes to its content's minimum by default,
@@ -84,17 +90,19 @@
                  FrameworkElement, which owns neither property. Both are inheritable, so setting
                  them here reaches the TextBlock inside exactly as it would anywhere else. -->
             <w:MarqueeText x:Name="Title"
-                           Height="18"
-                           FontSize="13"
+                           Height="20"
+                           FontSize="14.5" FontWeight="SemiBold"
                            Foreground="{DynamicResource NotchInk}" />
             <w:MarqueeText x:Name="Artist"
-                           Height="15"
-                           Margin="0,1,0,0"
-                           FontSize="11"
+                           Height="17"
+                           Margin="0,2,0,0"
+                           FontSize="11.5"
                            Foreground="{DynamicResource NotchInkMuted}" />
         </StackPanel>
 
-        <StackPanel Grid.Column="2" Orientation="Horizontal">
+        <!-- Round, not rounded-square. Three circles read as a transport; three squares read as
+             a toolbar, and this is the one row on the page a person reaches for without looking. -->
+        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
             <Button x:Name="Previous" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Previous track">
                 <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
