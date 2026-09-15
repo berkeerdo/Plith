@@ -47,6 +47,16 @@ public partial class WidgetFrame : UserControl
         // a bottom inset rather than a gap above.
     }
 
+    /// <summary>
+    /// The page on screen, or null before any is installed.
+    ///
+    /// Exposed so the host can ask what is being looked at. It matters for one decision: an
+    /// event that describes the page you are already on should not replace that page with a
+    /// two-second notice about it, and an event about anything else should.
+    /// </summary>
+    public FrameworkElement? CurrentPage =>
+        PageHost.Children.Count > 0 ? PageHost.Children[^1] as FrameworkElement : null;
+
     /// <summary>The pager this frame reads its index from. Set once by the host.</summary>
     public NotchPager? Pager { get; private set; }
 

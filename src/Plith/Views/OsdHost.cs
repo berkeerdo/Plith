@@ -806,17 +806,27 @@ public sealed class OsdHost : BandWindow
         // view models) showing something rather than an empty panel.
         if (!fromHover)
         {
-            // An event never takes the widget frame away. Pressing play ON the media page was
-            // answering itself with a media HUD - swapping the place you are standing for a
-            // two-second notice about the thing you just did there. The frame stays, its own
-            // page updates from the same view model, and only the hide timer is extended.
+            // An event keeps the widget frame ONLY when the frame is already showing the thing
+            // the event is about.
+            //
+            // The first version of this rule was "an event never takes the frame away", which
+            // fixed pressing play on the media page answering itself with a media HUD - but it
+            // was too wide: turning the volume up with the frame open then showed nothing at
+            // all, because no page carries the volume since the audio page was removed. The
+            // narrow rule covers both. An event about the page you are standing on updates that
+            // page; an event about anything else is news, and news gets the HUD.
             var frameIsOpen = _content.PanelContent == NotchPanelContent.Widgets
                               && _presentation is AmbientNotchPresentation open
                               && open.IsOpenEnoughToShowContent;
 
-            var wantsHud = !frameIsOpen && _presentation is AmbientNotchPresentation && _hud is not null;
+            var pageAlreadyShowsIt = frameIsOpen
+                                     && PickHudKind(reason) == NotchHudKind.Media
+                                     && ReferenceEquals(_widgets.CurrentPage, _mediaPage);
+
+            var keepFrame = frameIsOpen && pageAlreadyShowsIt;
+            var wantsHud = !keepFrame && _presentation is AmbientNotchPresentation && _hud is not null;
             if (wantsHud) _hud!.Show(PickHudKind(reason));
-            if (!frameIsOpen)
+            if (!keepFrame)
                 _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);
         }
 
