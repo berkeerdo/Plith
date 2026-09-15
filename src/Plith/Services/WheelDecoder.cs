@@ -30,13 +30,20 @@ public static class WheelDecoder
     /// - <c>WM_MOUSEWHEEL</c> with <c>MK_SHIFT</c> — the established Windows convention for
     ///   scrolling sideways on a mouse that has only a vertical wheel. Positive is forward,
     ///   away from the hand, which scrolls <em>left</em> by that convention, so it is negated.
-    ///   A plain <c>WM_MOUSEWHEEL</c> without the modifier is not a paging gesture and returns
-    ///   null rather than 0, so the caller can tell "not for me" from "no movement".
+    ///   A plain <c>WM_MOUSEWHEEL</c> pages as well. That was not true at first, on the
+    ///   principle that a vertical wheel is not a sideways gesture — but the notch has nothing
+    ///   of its own to scroll, so a wheel delivered to it can only have been meant for it, and
+    ///   requiring a modifier to use the obvious control is a rule with no beneficiary.
     /// </summary>
     public static int? TryDecode(uint message, nint wParam) => message switch
     {
         WM_MOUSEHWHEEL => WheelDelta(wParam),
-        WM_MOUSEWHEEL when HasShift(wParam) => -WheelDelta(wParam),
+
+        // A plain vertical wheel pages too, and over this surface that costs nothing: the notch
+        // has nothing of its own to scroll, so a wheel here can only have been meant for it.
+        // Negated for the same reason the Shift path is - forward, away from the hand, is
+        // "back", which is how every list a person has ever scrolled behaves.
+        WM_MOUSEWHEEL => -WheelDelta(wParam),
         _ => null,
     };
 

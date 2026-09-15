@@ -98,7 +98,8 @@ public partial class App : Application
         // nothing to hand over until now.
         _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume, _mediaCard.Vm,
                                () => _weatherService.Current,
-                               _orchestrator.TryToggleMute);
+                               _orchestrator.TryToggleMute,
+                               () => _mediaSession.TryOpenSourceApp());
 
         // The notch's weather page reads the snapshot when it comes on screen, which is not
         // enough on its own: the first fetch needs a location lookup and a network round trip,

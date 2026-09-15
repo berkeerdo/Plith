@@ -19,11 +19,22 @@ public partial class MediaWidget : UserControl
 {
     private readonly MediaViewModel _vm;
 
-    public MediaWidget(MediaViewModel vm)
+    /// <param name="openSource">Brings the app that owns the session to the front. Null leaves
+    /// the art and title inert rather than looking pressable and doing nothing.</param>
+    public MediaWidget(MediaViewModel vm, Action? openSource = null)
     {
         ArgumentNullException.ThrowIfNull(vm);
         InitializeComponent();
         _vm = vm;
+
+        if (openSource is not null)
+        {
+            // The art and the text, not the whole page: the transport sits on the same row, and
+            // a page-wide click target would swallow every press meant for a transport button.
+            OpenSourceArea.Cursor = System.Windows.Input.Cursors.Hand;
+            OpenSourceArea.MouseLeftButtonUp += (_, e) => { openSource(); e.Handled = true; };
+            System.Windows.Automation.AutomationProperties.SetName(OpenSourceArea, "Open the app that is playing");
+        }
 
         _vm.PropertyChanged += (_, _) => Render();
 

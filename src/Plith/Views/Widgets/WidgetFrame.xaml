@@ -46,9 +46,35 @@
              carry its own AutomationProperties.Name. A templated Border or Ellipse has no
              automation peer at all, and a name set on it reaches nothing - the defect the
              accessibility lint exists to catch. -->
-        <StackPanel x:Name="Dots" Grid.Row="1"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    VerticalAlignment="Center" />
+        <!-- A rail, not a row of dots.
+
+             Dots are a count: they say "four pages, you are on the second" and they say it
+             permanently, which is chrome sitting on a surface that is mostly looked at rather
+             than operated. A rail says the same thing as a POSITION, fits in a third of the
+             height, and can be absent when nothing is happening - it fades in as a page turns
+             and fades out once you have stopped.
+
+             Kept clickable all the same: paging has to be discoverable by something other than
+             guessing that the surface takes a wheel. -->
+        <Grid x:Name="Rail" Grid.Row="1"
+              Width="76" Height="16"
+              HorizontalAlignment="Center" VerticalAlignment="Center"
+              Background="Transparent"
+              Cursor="Hand"
+              Opacity="0">
+            <!-- 16 tall as a target, 3 tall as a mark. The rail is the only affordance left now
+                 that the dots are gone, and a 3 DIP strip is not something a pointer can find. -->
+            <Border Height="3" VerticalAlignment="Center" CornerRadius="1.5" Background="#26FFFFFF" />
+            <Border x:Name="RailPip"
+                    Height="3" VerticalAlignment="Center"
+                    CornerRadius="1.5"
+                    HorizontalAlignment="Left"
+                    IsHitTestVisible="False"
+                    Background="{DynamicResource OsdAccent}">
+                <Border.RenderTransform>
+                    <TranslateTransform x:Name="RailPipShift" />
+                </Border.RenderTransform>
+            </Border>
+        </Grid>
     </Grid>
 </UserControl>

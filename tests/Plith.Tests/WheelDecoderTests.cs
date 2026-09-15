@@ -34,11 +34,22 @@ public class WheelDecoderTests
     }
 
     [Fact]
-    public void PlainVerticalWheelIsNotAPagingGesture()
+    public void PlainVerticalWheelPagesToo()
     {
-        // Null, not 0: the caller has to be able to leave the message unhandled so it reaches
-        // whatever else wants it.
-        Assert.Null(WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120)));
+        // It did not at first, on the principle that a vertical wheel is not a sideways gesture.
+        // The notch has nothing of its own to scroll, so a wheel delivered to it can only have
+        // been meant for it - and a rule that makes someone hold a modifier to use the obvious
+        // control has no beneficiary.
+        Assert.Equal(-120, WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120)));
+    }
+
+    [Fact]
+    public void ForwardIsBackwards()
+    {
+        // Forward, away from the hand, moves toward the START of a list on every surface a
+        // person has ever scrolled. Both vertical paths agree on that.
+        Assert.True(WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120)) < 0);
+        Assert.True(WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120, Shift)) < 0);
     }
 
     [Fact]
@@ -48,10 +59,12 @@ public class WheelDecoderTests
     }
 
     [Fact]
-    public void OtherModifiersDoNotEnableTheShiftPath()
+    public void ModifiersDoNotChangeTheVerticalResult()
     {
+        // Shift used to be what made a vertical wheel count. Now it changes nothing, which is
+        // the honest consequence of the plain wheel already working.
         const int ctrl = 0x0008;
-        Assert.Null(WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120, ctrl)));
+        Assert.Equal(-120, WheelDecoder.TryDecode(WheelDecoder.WM_MOUSEWHEEL, W(120, ctrl)));
     }
 
     [Fact]

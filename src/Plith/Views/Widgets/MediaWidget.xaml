@@ -58,11 +58,16 @@
          instead of ellipsing. Keeping the rail also let the frame stay 116 tall rather than 128,
          which would have spent 12 DIP on all five pages to solve one page's problem. -->
     <Grid Margin="18,14,18,29" VerticalAlignment="Center">
+        <!-- The art and the text are one target; the transport is not part of it. A page-wide
+             click would swallow every press meant for a transport button on the same row. -->
         <Grid.ColumnDefinitions>
             <ColumnDefinition Width="40" />
             <ColumnDefinition Width="*" />
             <ColumnDefinition Width="Auto" />
         </Grid.ColumnDefinitions>
+
+        <Border x:Name="OpenSourceArea" Grid.Column="0" Grid.ColumnSpan="2"
+                Background="Transparent" />
 
         <Border x:Name="ArtHost" Grid.Column="0" Width="40" Height="40" CornerRadius="7"
                 Background="{DynamicResource NotchTrack}">

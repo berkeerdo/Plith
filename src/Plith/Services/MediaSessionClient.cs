@@ -37,6 +37,41 @@ public sealed class MediaSessionClient : IDisposable
     /// Used by FullscreenVideoWatcher to decide whether the foreground window is playing media.</summary>
     public string CurrentSourceAppUserModelId { get; private set; } = string.Empty;
 
+    /// <summary>
+    /// Bring the app that owns the current session to the front.
+    ///
+    /// shell:AppsFolder is the one launcher that takes an AUMID for both kinds of app: a Store
+    /// package like Spotify has no path to start, and a desktop app registers an AUMID that
+    /// resolves there too. Starting it through the shell rather than CreateProcess is what makes
+    /// an already-running instance come forward instead of a second one opening.
+    ///
+    /// Returns false rather than throwing when there is no session or the id will not resolve —
+    /// a click on the art is not worth taking the OSD down for.
+    /// </summary>
+    public bool TryOpenSourceApp()
+    {
+        var aumid = CurrentSourceAppUserModelId;
+        if (string.IsNullOrWhiteSpace(aumid)) return false;
+
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "explorer.exe",
+                Arguments = @"shell:AppsFolder\" + aumid,
+                UseShellExecute = true,
+            });
+            return true;
+        }
+        catch (Exception)
+        {
+            // Swallowed rather than logged: this class has no log of its own, and a click on the
+            // album art is not worth taking the OSD down for. The caller gets false and leaves
+            // the page as it was.
+            return false;
+        }
+    }
+
     /// <summary>True while the current session reports Playing.</summary>
     public bool IsCurrentSessionPlaying { get; private set; }
 

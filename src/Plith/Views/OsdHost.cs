@@ -496,7 +496,8 @@ public sealed class OsdHost : BandWindow
     private Func<bool>? _toggleMute;
 
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
-                                  Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null)
+                                  Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null,
+                                  Action? openSource = null)
     {
         _toggleMute = toggleMute;
         // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
@@ -508,7 +509,7 @@ public sealed class OsdHost : BandWindow
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
         _clockPage = new Widgets.ClockWidget();
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
-        _mediaPage = new Widgets.MediaWidget(media);
+        _mediaPage = new Widgets.MediaWidget(media, openSource);
 
         ApplyWidgetPages();
 

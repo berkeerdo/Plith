@@ -5,6 +5,7 @@ using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
+using System.Windows.Threading;
 using Plith.Services;
 using Plith.Views.Presentation;
 
@@ -24,7 +25,6 @@ public partial class WidgetFrame : UserControl
     private const int SlideMs = 260;
 
     private readonly List<FrameworkElement> _pages = new();
-    private readonly List<ToggleButton> _dots = new();
 
     /// <summary>
     /// The page currently on its way out, if any.
@@ -40,6 +40,7 @@ public partial class WidgetFrame : UserControl
     public WidgetFrame()
     {
         InitializeComponent();
+        WireRail();
         Width = NotchGeometry.OpenFrameDip.Width;
         Height = NotchGeometry.OpenFrameDip.Height;
         // Set in XAML now: the lane sits over the page rather than under it, so its spacing is
@@ -74,7 +75,7 @@ public partial class WidgetFrame : UserControl
 
         PageHost.Children.Clear();
         _outgoing = null;
-        BuildDots();
+        BuildRail();
         ShowCurrentPage(direction: 0, animate: false);
     }
 
@@ -109,7 +110,7 @@ public partial class WidgetFrame : UserControl
         var current = PageHost.Children.Count > 0 ? PageHost.Children[^1] as FrameworkElement : null;
         if (ReferenceEquals(current, incoming))
         {
-            UpdateDots(index);
+            UpdateRail(index, animate: false);
             return;
         }
 
@@ -128,7 +129,7 @@ public partial class WidgetFrame : UserControl
         incoming.RenderTransform = null;
         if (animate) SlideIn(incoming, direction);
 
-        UpdateDots(index);
+        UpdateRail(index, animate);
     }
 
     private static void SlideIn(FrameworkElement page, int direction)
@@ -188,89 +189,100 @@ public partial class WidgetFrame : UserControl
         _outgoing = null;
     }
 
-    private void BuildDots()
+    /// <summary>
+    /// Size the rail's travelling pip for the current page count.
+    ///
+    /// One page gets no rail at all: a position indicator for a place you cannot leave is
+    /// chrome that only ever says "still here".
+    /// </summary>
+    /// <summary>
+    /// A click anywhere along the rail goes to the page under the pointer.
+    ///
+    /// Paging has to be reachable by something other than knowing the surface takes a wheel,
+    /// and this is what the dots used to be for. Hovering shows the rail as well, so it can be
+    /// found by moving toward it rather than by already knowing it is there.
+    /// </summary>
+    private void WireRail()
     {
-        foreach (var dot in _dots) dot.Click -= OnDotClicked;
-        _dots.Clear();
-        Dots.Children.Clear();
-
-        // One dot alone says nothing except that there is nowhere to go, so it is not drawn.
-        if (_pages.Count < 2) return;
-
-        for (int i = 0; i < _pages.Count; i++)
+        Rail.MouseEnter += (_, _) => { if (_railVisible) ShowRailBriefly(); };
+        Rail.MouseLeftButtonDown += (_, e) =>
         {
-            var dot = new ToggleButton
+            if (Pager is null || _pages.Count < 2) return;
+
+            var x = e.GetPosition(Rail).X;
+            var index = (int)(x / (Rail.Width / _pages.Count));
+            PageRequested?.Invoke(this, Math.Clamp(index, 0, _pages.Count - 1));
+            e.Handled = true;
+        };
+    }
+
+    private void BuildRail()
+    {
+        _railVisible = _pages.Count > 1;
+        Rail.Visibility = _railVisible ? Visibility.Visible : Visibility.Collapsed;
+        if (!_railVisible) return;
+
+        RailPip.Width = Rail.Width / _pages.Count;
+    }
+
+    private bool _railVisible;
+
+    /// <summary>How long the rail lingers after the last page change before fading out.</summary>
+    private static readonly TimeSpan RailLinger = TimeSpan.FromMilliseconds(900);
+
+    private DispatcherTimer? _railTimer;
+
+    /// <summary>
+    /// Move the pip to the current page, and show the rail while that is happening.
+    ///
+    /// The pip slides rather than jumping, on the same curve and duration as the page behind it,
+    /// so the two read as one movement rather than a page turn with an indicator reacting to it.
+    /// </summary>
+    private void UpdateRail(int index, bool animate)
+    {
+        if (!_railVisible || Pager is null) return;
+
+        var target = RailPip.Width * index;
+
+        if (animate && IsAnimationAllowed)
+        {
+            RailPipShift.BeginAnimation(TranslateTransform.XProperty,
+                new DoubleAnimation(target, TimeSpan.FromMilliseconds(SlideMs))
+                {
+                    EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+                });
+        }
+        else
+        {
+            RailPipShift.BeginAnimation(TranslateTransform.XProperty, null);
+            RailPipShift.X = target;
+        }
+
+        ShowRailBriefly();
+    }
+
+    private void ShowRailBriefly()
+    {
+        Rail.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(1, TimeSpan.FromMilliseconds(140)));
+
+        // Restarted rather than left to run: paging again while it is up should extend the
+        // linger, not let the first change's timer take it away mid-swipe.
+        _railTimer ??= new DispatcherTimer(DispatcherPriority.Background, Dispatcher);
+        _railTimer.Stop();
+        _railTimer.Interval = RailLinger;
+        _railTimer.Tick -= OnRailLingerElapsed;
+        _railTimer.Tick += OnRailLingerElapsed;
+        _railTimer.Start();
+    }
+
+    private void OnRailLingerElapsed(object? sender, EventArgs e)
+    {
+        _railTimer?.Stop();
+        Rail.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(0, TimeSpan.FromMilliseconds(320))
             {
-                // 20 wide so a click between two dots still lands on one; 14 tall because that
-                // is the whole lane, and a taller target would reach up into the page and take
-                // clicks meant for a transport button or a volume track.
-                Width = 20,
-                Height = NotchGeometry.DotsLaneDip,
-                Padding = new Thickness(0),
-                BorderThickness = new Thickness(0),
-                Background = Brushes.Transparent,
-                Cursor = System.Windows.Input.Cursors.Hand,
-                Focusable = true,
-                Tag = i,
-                Template = BuildDotTemplate(),
-            };
-
-            // On the ToggleButton itself, which has a peer. A name on the Ellipse inside the
-            // template would reach nothing.
-            AutomationProperties.SetName(dot, $"Page {i + 1} of {_pages.Count}");
-            dot.Click += OnDotClicked;
-
-            _dots.Add(dot);
-            Dots.Children.Add(dot);
-        }
-    }
-
-    /// <summary>A dot is a 5 DIP circle centred in a 20 x 14 hit area. Built here rather than in
-    /// a resource dictionary so the two sizes stay next to the comment explaining them.</summary>
-    private static ControlTemplate BuildDotTemplate()
-    {
-        var ellipse = new FrameworkElementFactory(typeof(Ellipse));
-        ellipse.SetValue(WidthProperty, 5.0);
-        ellipse.SetValue(HeightProperty, 5.0);
-        ellipse.SetValue(HorizontalAlignmentProperty, HorizontalAlignment.Center);
-        ellipse.SetValue(VerticalAlignmentProperty, VerticalAlignment.Center);
-        ellipse.SetValue(Shape.FillProperty, new TemplateBindingExtension(ForegroundProperty));
-
-        var root = new FrameworkElementFactory(typeof(Border));
-        root.SetValue(BackgroundProperty, Brushes.Transparent);
-        root.AppendChild(ellipse);
-
-        return new ControlTemplate(typeof(ToggleButton)) { VisualTree = root };
-    }
-
-    private void UpdateDots(int index)
-    {
-        for (int i = 0; i < _dots.Count; i++)
-        {
-            var on = i == index;
-            _dots[i].IsChecked = on;
-            // The accent, not a literal. The spec says the active dot is one of the three
-            // places the user's accent appears, and it was hard-coded to a grey - so picking a
-            // colour in Appearance changed nothing a person could see on this surface.
-            // Resolved per update rather than cached: the accent changes at runtime.
-            _dots[i].Foreground = on
-                ? TryFindResource("OsdAccent") as Brush ?? ActiveDotBrush
-                : IdleDotBrush;
-        }
-    }
-
-    private static readonly Brush ActiveDotBrush = Freeze(Color.FromRgb(0xC6, 0xD0, 0xDA));
-    private static readonly Brush IdleDotBrush = Freeze(Color.FromRgb(0x46, 0x52, 0x5F));
-
-    private static SolidColorBrush Freeze(Color color)
-    {
-        var brush = new SolidColorBrush(color);
-        brush.Freeze();
-        return brush;
-    }
-
-    private void OnDotClicked(object sender, RoutedEventArgs e)
-    {
-        if (sender is ToggleButton { Tag: int index }) PageRequested?.Invoke(this, index);
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn },
+            });
     }
 }
