@@ -95,6 +95,10 @@ public partial class OsdContent : UserControl
     private Size _expandedFrom;
     private Size _expandedTo;
 
+    /// <summary>Whether the panel area is currently held at the larger of two sizes. Read by
+    /// SetNotchMetrics so it can tell a real content change from its own pin.</summary>
+    private bool _panelPinned;
+
     public OsdContent() => InitializeComponent();
 
     /// <summary>
@@ -132,6 +136,12 @@ public partial class OsdContent : UserControl
         // content root is inset by ContentInsetDip on the left, right and bottom in notch mode
         // (SetNotchLook drops the top inset so the panel is flush with the screen edge), so the
         // surface that must coincide with it at full expansion is that much smaller.
+        // A measurement taken while the panel area is pinned is the PIN talking, not new
+        // content — and acting on it is a feedback loop: the pin makes the control measure
+        // large, the large measurement starts a morph back to large, and the panel never
+        // shrinks at all. Which is exactly what the first version of this pin did.
+        if (_panelPinned) return;
+
         var target = new Size(
             Math.Max(0, measuredContentSize.Width - ContentInsetDip * 2),
             Math.Max(0, measuredContentSize.Height - ContentInsetDip));
@@ -164,6 +174,7 @@ public partial class OsdContent : UserControl
         // at the end shows nothing going away.
         SlidingRoot.MinWidth = Math.Max(_expandedFrom.Width, _expandedTo.Width);
         SlidingRoot.MinHeight = Math.Max(_expandedFrom.Height, _expandedTo.Height);
+        _panelPinned = true;
 
         Morph = 0;
         BeginAnimation(MorphProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(MorphMs))
@@ -214,8 +225,9 @@ public partial class OsdContent : UserControl
         // competing animation raises no Completed - the hazard behind more defects on this
         // branch than any other - and a pin left on would freeze the panel at the largest size
         // it ever had. Derived from the value itself, it cannot be missed.
-        if (Morph >= 0.999 && !double.IsNaN(SlidingRoot.MinWidth) && SlidingRoot.MinWidth > 0)
+        if (Morph >= 0.999 && _panelPinned)
         {
+            _panelPinned = false;
             SlidingRoot.MinWidth = 0;
             SlidingRoot.MinHeight = 0;
         }
