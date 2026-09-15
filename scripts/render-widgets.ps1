@@ -164,9 +164,15 @@ $reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
 $readDate = [Func[Nullable[DateOnly]]] { [DateOnly]::FromDateTime([DateTime]::Now) }  # not a first look
 $writeDate = [Action[DateOnly]] { param($d) }
 
+# A muted microphone, so the mark is in shot. The real client needs a capture endpoint; this
+# harness only needs the shape of the answer.
+$micReader = [Func[Plith.Services.MicrophoneSnapshot]] {
+    [Plith.Services.MicrophoneSnapshot]::new('Headset Microphone', $true, 0.8)
+}
+
 "Rendering to $OutDir"
 
-$clock = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader)
+$clock = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader)
 Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 
 $media = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null)
@@ -185,7 +191,7 @@ Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 $frame = [Plith.Views.Widgets.WidgetFrame]::new()
 $pager = [Plith.Services.NotchPager]::new(3)
 $pages = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
-$pages.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader))
+$pages.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader))
 $pages.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
 $pages.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null))
 $frame.SetPages($pager, $pages)
@@ -195,7 +201,7 @@ Save-Visual -Element $frame -W $frameW -H $frameH -Name 'frame-page1'
 $frame2 = [Plith.Views.Widgets.WidgetFrame]::new()
 $pager2 = [Plith.Services.NotchPager]::new(3)
 $pages2 = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
-$pages2.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader))
+$pages2.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader))
 $pages2.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
 $pages2.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null))
 $frame2.SetPages($pager2, $pages2)

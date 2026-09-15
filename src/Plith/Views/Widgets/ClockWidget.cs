@@ -21,16 +21,21 @@ public partial class ClockWidget : UserControl
 
     private readonly MediaViewModel? _media;
     private readonly Func<WeatherSnapshot?>? _weather;
+    private readonly Func<MicrophoneSnapshot?>? _microphone;
 
     /// <param name="media">Optional. Without it the page is the time and the battery, which is
     /// what it was — the track line never appears rather than appearing empty.</param>
     /// <param name="weather">Optional. The same reading the weather page draws its sky from —
     /// read here rather than mirrored, so the two can never disagree about the temperature.</param>
-    public ClockWidget(MediaViewModel? media = null, Func<WeatherSnapshot?>? weather = null)
+    /// <param name="microphone">Optional. Null, or a machine with no capture device, leaves the
+    /// mic mark absent entirely rather than showing an unmuted microphone nobody has.</param>
+    public ClockWidget(MediaViewModel? media = null, Func<WeatherSnapshot?>? weather = null,
+                       Func<MicrophoneSnapshot?>? microphone = null)
     {
         InitializeComponent();
         _media = media;
         _weather = weather;
+        _microphone = microphone;
 
         // Repainted on every media change, not only on the tick: a track can change while this
         // page is the one being looked at, and up to a second of saying nothing is long enough
@@ -67,6 +72,11 @@ public partial class ClockWidget : UserControl
         _tick.Start();
     }
 
+    /// <summary>Repaint from outside, when something the page reads has changed but the page
+    /// itself has no way of knowing. The tick would get there within a second; a mute is the one
+    /// state where a second is long enough to say the wrong thing.</summary>
+    public void Refresh() => Render();
+
     private void Render()
     {
         // Reuses the ambient row's formatter rather than a second one: the clock in the notch
@@ -86,6 +96,11 @@ public partial class ClockWidget : UserControl
         BatteryText.Text = text;
         ChargingBolt.Visibility = show && charging ? Visibility.Visible : Visibility.Collapsed;
 
+        // Shown only while muted — see the comment on the mark itself.
+        MicMark.Visibility = _microphone?.Invoke() is { Muted: true }
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
         RenderWeather();
         RenderNowPlaying();
 
@@ -95,6 +110,7 @@ public partial class ClockWidget : UserControl
         // would reach nothing at all.
         var announced = $"{Time.Text}, {Date.Text}";
         if (show) announced += $", battery {text}";
+        if (MicMark.Visibility == Visibility.Visible) announced += ", microphone muted";
         if (NowPlaying.Visibility == Visibility.Visible) announced += $", playing {NowTitle.Text}";
         System.Windows.Automation.AutomationProperties.SetName(Time, announced);
     }

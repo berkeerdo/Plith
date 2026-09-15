@@ -26,6 +26,7 @@ public partial class App : Application
     private WindowsLocationProvider? _windowsLocation;
     private IpLocationProvider? _ipLocation;
     private WeatherService? _weatherService;
+    private MicrophoneClient? _microphone;
     private MediaSessionClient? _mediaSession;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
@@ -88,6 +89,12 @@ public partial class App : Application
         // AmbientCard's Tick, both of which must run on the dispatcher too. See WeatherService.
         _weatherService.Start();
 
+        // The capture endpoint. Start() failing is an ordinary outcome rather than an error - a
+        // desktop with no microphone reports nothing, and Current staying null is how the notch
+        // knows to show no mic mark at all instead of an unmuted mic nobody has.
+        _microphone = new MicrophoneClient(_diagnosticLog);
+        _microphone.Start();
+
         _orchestrator = new OsdOrchestrator(_audioCard, _mediaCard, _settings, _osd.Dispatcher, _mediaSession, _diagnosticLog);
         _orchestrator.Start();
         _diagnosticLog.Info("App", "OsdOrchestrator started");
@@ -99,7 +106,12 @@ public partial class App : Application
         _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume, _mediaCard.Vm,
                                () => _weatherService.Current,
                                _orchestrator.TryToggleMute,
-                               () => _mediaSession.TryOpenSourceApp());
+                               () => _mediaSession.TryOpenSourceApp(),
+                               () => _microphone.Current);
+
+        // Marshalled, because the endpoint's notification arrives on a COM thread.
+        var osdForMic = _osd;
+        _microphone.Changed += _ => osdForMic.Dispatcher.BeginInvoke(new Action(osdForMic.OnMicrophoneChanged));
 
         // The notch's weather page reads the snapshot when it comes on screen, which is not
         // enough on its own: the first fetch needs a location lookup and a network round trip,
@@ -193,6 +205,7 @@ public partial class App : Application
         // After CardHost: AmbientCard.Deactivate() unsubscribes from _weatherService.Updated
         // as part of that Dispose, so the service must still be alive when it runs.
         DisposeStep("WeatherService",     () => _weatherService?.Dispose());
+        DisposeStep("MicrophoneClient",   () => _microphone?.Dispose());
         DisposeStep("OpenMeteoClient",    () => _weatherClient?.Dispose());
         DisposeStep("IpLocationProvider", () => _ipLocation?.Dispose());
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());

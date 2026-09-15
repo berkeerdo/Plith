@@ -507,7 +507,7 @@ public sealed class OsdHost : BandWindow
 
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
                                   Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null,
-                                  Action? openSource = null)
+                                  Action? openSource = null, Func<MicrophoneSnapshot?>? microphone = null)
     {
         _toggleMute = toggleMute;
         // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
@@ -517,7 +517,7 @@ public sealed class OsdHost : BandWindow
         // level the instant it changes, so a widget page showing the same number is a second
         // place for one fact - and the one you reach by swiping, long after the moment it
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
-        _clockPage = new Widgets.ClockWidget(media, weather);
+        _clockPage = new Widgets.ClockWidget(media, weather, microphone);
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
 
@@ -535,6 +535,10 @@ public sealed class OsdHost : BandWindow
     /// of one event.
     /// </summary>
     public void OnWeatherUpdated() => _weatherPage?.OnWeatherUpdated();
+
+    /// <summary>The microphone's mute changed. The now page reads the state where it draws it,
+    /// so it only needs telling that something moved.</summary>
+    public void OnMicrophoneChanged() => _clockPage?.Refresh();
 
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;

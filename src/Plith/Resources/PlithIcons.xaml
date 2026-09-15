@@ -50,6 +50,14 @@
          it can take a single gradient rather than showing the seams between overlapping circles. -->
     <Geometry x:Key="ShapeCloud">M7,36 C3,36 0,32.4 0,28 C0,23.4 3.4,19.6 7.8,19.1 C8.4,10.6 15.4,4 24,4 C31.2,4 37.4,8.6 39.6,15.1 C42.2,12.2 46,10.4 50.2,10.4 C58.1,10.4 64.5,16.8 64.5,24.7 C64.5,25.2 64.5,25.7 64.4,26.2 C72.9,26.6 79.7,30.9 79.7,36 Z</Geometry>
 
+    <!-- The microphone, and the stroke that crosses it out.
+
+         Separate parts for the same reason the speaker is: a muted mic is the mic AND the cross,
+         so there is no second drawing to keep in step when one of them changes. -->
+    <Geometry x:Key="IconMic">M12,3.4 A3.1,3.1 0 0 1 15.1,6.5 L15.1,11.6 A3.1,3.1 0 0 1 8.9,11.6 L8.9,6.5 A3.1,3.1 0 0 1 12,3.4 Z</Geometry>
+    <Geometry x:Key="IconMicStand">M6.4,11.2 A5.6,5.6 0 0 0 17.6,11.2 M12,16.8 L12,20.6 M8.6,20.6 L15.4,20.6</Geometry>
+    <Geometry x:Key="IconMicCross">M4.4,3.6 L19.6,20.4</Geometry>
+
     <!-- Weather marks. Drawn as separate parts so a condition can be composed from them - a sun
          behind a cloud is the sun and the cloud, not a third drawing to keep in step with both. -->
     <Geometry x:Key="IconWxSun">M12,7.2 A4.8,4.8 0 1 1 11.99,7.2 Z</Geometry>
