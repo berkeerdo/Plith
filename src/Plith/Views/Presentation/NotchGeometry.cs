@@ -1,4 +1,5 @@
 using System.Windows;
+using System.Windows.Media;
 
 namespace Plith.Views.Presentation;
 
@@ -111,6 +112,37 @@ public static class NotchGeometry
     /// the direction paged, so the page enters from the side the gesture came from and paging
     /// reads as movement through a frame rather than a crossfade in place.</summary>
     public const double PageSlideDip = 14;
+
+    /// <summary>
+    /// The notch's own outline, as a clip for a page that reaches its edges.
+    ///
+    /// Only the BOTTOM corners are round: the notch is flush with the top of the screen, and
+    /// rounding the top would carve two notches of desktop out of the edge it is part of.
+    /// Returns null for a size nothing can be clipped to, so a caller can assign the result
+    /// straight to Clip.
+    ///
+    /// Shared rather than written twice. Two pages bleed to the frame's edges now - the sky and
+    /// the album backdrop - and a second copy is a second place for the radius to drift.
+    /// </summary>
+    public static Geometry? BottomRoundedClip(Size size)
+    {
+        if (size.Width <= 0 || size.Height <= 0) return null;
+
+        var r = Math.Min(ExpandedRadiusDip, Math.Min(size.Width, size.Height) / 2);
+        var figure = new PathFigure { StartPoint = new Point(0, 0), IsClosed = true, IsFilled = true };
+        figure.Segments.Add(new LineSegment(new Point(size.Width, 0), false));
+        figure.Segments.Add(new LineSegment(new Point(size.Width, size.Height - r), false));
+        figure.Segments.Add(new ArcSegment(
+            new Point(size.Width - r, size.Height), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
+        figure.Segments.Add(new LineSegment(new Point(r, size.Height), false));
+        figure.Segments.Add(new ArcSegment(
+            new Point(0, size.Height - r), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
+
+        var geometry = new PathGeometry();
+        geometry.Figures.Add(figure);
+        geometry.Freeze();
+        return geometry;
+    }
 
     public static double Clamp01(double t) => t < 0 ? 0 : t > 1 ? 1 : t;
 

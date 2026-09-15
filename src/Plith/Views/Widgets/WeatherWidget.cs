@@ -69,7 +69,7 @@ public partial class WeatherWidget : UserControl
         {
             Bleed.CenterX = e.NewSize.Width / 2;
             Bleed.CenterY = e.NewSize.Height / 2;
-            ApplyNotchClip(e.NewSize);
+            Clip = NotchGeometry.BottomRoundedClip(e.NewSize);
         };
 
         // The reveal fades the sky in, not the page. Fading Root took the readout with it, so
@@ -138,37 +138,6 @@ public partial class WeatherWidget : UserControl
         if (firstLook) _writeLastReveal(today);
 
         StartAmbient(firstLook);
-    }
-
-    /// <summary>
-    /// Clip the page to the notch's own shape.
-    ///
-    /// The sky is the only page that reaches the frame's edges, and the notch's surface is a
-    /// separate element behind it — so without this the gradient came out as a square inside a
-    /// rounded shape, with its bottom corners overhanging into nothing.
-    ///
-    /// Built as a path rather than a RectangleGeometry because only the BOTTOM corners are
-    /// round: the notch is flush with the top of the screen, and rounding the top would carve
-    /// two notches of desktop out of the edge it is supposed to be part of.
-    /// </summary>
-    private void ApplyNotchClip(Size size)
-    {
-        if (size.Width <= 0 || size.Height <= 0) { Clip = null; return; }
-
-        var r = Math.Min(NotchGeometry.ExpandedRadiusDip, Math.Min(size.Width, size.Height) / 2);
-        var figure = new PathFigure { StartPoint = new Point(0, 0), IsClosed = true, IsFilled = true };
-        figure.Segments.Add(new LineSegment(new Point(size.Width, 0), false));
-        figure.Segments.Add(new LineSegment(new Point(size.Width, size.Height - r), false));
-        figure.Segments.Add(new ArcSegment(
-            new Point(size.Width - r, size.Height), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
-        figure.Segments.Add(new LineSegment(new Point(r, size.Height), false));
-        figure.Segments.Add(new ArcSegment(
-            new Point(0, size.Height - r), new Size(r, r), 0, false, SweepDirection.Clockwise, false));
-
-        var geometry = new PathGeometry();
-        geometry.Figures.Add(figure);
-        geometry.Freeze();
-        Clip = geometry;
     }
 
     private void Render(WeatherSnapshot? snapshot)

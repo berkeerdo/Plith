@@ -142,6 +142,22 @@ $mediaVm.Artist = 'Denis Phenomen'
 $mediaVm.IsPlaying = $true
 $mediaVm.HasSession = $true
 
+# A stand-in cover, so the backdrop has something to blur. Drawn rather than loaded: the harness
+# must not depend on a file that happens to be on this machine.
+$coverVisual = [Windows.Media.DrawingVisual]::new()
+$dc = $coverVisual.RenderOpen()
+$cg = [Windows.Media.LinearGradientBrush]::new()
+$cg.StartPoint = [Windows.Point]::new(0,0); $cg.EndPoint = [Windows.Point]::new(1,1)
+$cg.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Colors]::DarkOrange, 0))
+$cg.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Colors]::MediumVioletRed, 0.55))
+$cg.GradientStops.Add([Windows.Media.GradientStop]::new([Windows.Media.Colors]::MidnightBlue, 1))
+$dc.DrawRectangle($cg, $null, [Windows.Rect]::new(0,0,300,300))
+$dc.DrawEllipse([Windows.Media.Brushes]::White, $null, [Windows.Point]::new(150,150), 54, 54)
+$dc.Close()
+$cover = [Windows.Media.Imaging.RenderTargetBitmap]::new(300,300,96,96,[Windows.Media.PixelFormats]::Pbgra32)
+$cover.Render($coverVisual)
+$mediaVm.AlbumArt = $cover
+
 $reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
     [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now)
 }

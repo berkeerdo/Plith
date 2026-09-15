@@ -49,6 +49,36 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
+    <Grid x:Name="Root" ClipToBounds="True">
+        <!-- The artwork is the page, the way the sky is the weather page.
+
+             A 46 DIP thumbnail beside two lines of text is a list row, and this is not a list -
+             it is the one thing playing. Blown up, blurred and dropped behind a scrim, the album
+             becomes the surface's colour, which is the same idea the weather page uses and makes
+             the two read as one family rather than two unrelated screens.
+
+             Blur is affordable HERE and was not on the clouds: this image changes when the track
+             changes and is otherwise static, so the filter pass is paid once rather than every
+             frame. -->
+        <Image x:Name="Backdrop" Stretch="UniformToFill" Opacity="0" IsHitTestVisible="False">
+            <Image.Effect>
+                <BlurEffect Radius="34" KernelType="Gaussian" RenderingBias="Performance" />
+            </Image.Effect>
+        </Image>
+
+        <!-- Heavier on the left, where the text is, and thinning to the right so the artwork
+             still shows through behind the transport. A flat scrim would hide the thing it is
+             there to make readable. -->
+        <Rectangle IsHitTestVisible="False">
+            <Rectangle.Fill>
+                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.2">
+                    <GradientStop Offset="0" Color="#E60A0D12" />
+                    <GradientStop Offset="0.55" Color="#B00A0D12" />
+                    <GradientStop Offset="1" Color="#7A0A0D12" />
+                </LinearGradientBrush>
+            </Rectangle.Fill>
+        </Rectangle>
+
     <!-- Art, then the text, then the transport on the right.
 
          The transport was briefly moved to a centred row underneath, on the argument that the
@@ -137,5 +167,6 @@
                     </Canvas></Viewbox>
             </Button>
         </StackPanel>
+        </Grid>
     </Grid>
 </UserControl>
