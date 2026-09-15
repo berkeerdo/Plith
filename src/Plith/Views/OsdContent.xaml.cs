@@ -154,6 +154,17 @@ public partial class OsdContent : UserControl
             return;
         }
 
+        // Hold the panel area at the LARGER of the two sizes for the length of the morph.
+        //
+        // The window sizes itself to this control, so a panel that shrinks in one frame takes
+        // the window with it - and the surface's morph then plays out inside a window that has
+        // already finished. That is the shrink that looked comical: a shape animating inside a
+        // box that had snapped. Pinned to the maximum, the window stays big enough and the black
+        // shape carries the whole animation; the extra area is transparent, so releasing the pin
+        // at the end shows nothing going away.
+        SlidingRoot.MinWidth = Math.Max(_expandedFrom.Width, _expandedTo.Width);
+        SlidingRoot.MinHeight = Math.Max(_expandedFrom.Height, _expandedTo.Height);
+
         Morph = 0;
         BeginAnimation(MorphProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(MorphMs))
         {
@@ -198,6 +209,16 @@ public partial class OsdContent : UserControl
         NotchShadow.Opacity = NotchGeometry.Lerp(0, NotchShadowOpacity, t);
 
         SlidingRoot.Opacity = NotchGeometry.ContentOpacity(t);
+
+        // Released here rather than in the morph's completion handler. A clock replaced by a
+        // competing animation raises no Completed - the hazard behind more defects on this
+        // branch than any other - and a pin left on would freeze the panel at the largest size
+        // it ever had. Derived from the value itself, it cannot be missed.
+        if (Morph >= 0.999 && !double.IsNaN(SlidingRoot.MinWidth) && SlidingRoot.MinWidth > 0)
+        {
+            SlidingRoot.MinWidth = 0;
+            SlidingRoot.MinHeight = 0;
+        }
     }
 
     /// <summary>
