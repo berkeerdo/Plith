@@ -136,6 +136,16 @@ public sealed class OsdHost : BandWindow
             if (_presentation is not AmbientNotchPresentation) return;
             if (e.NewSize.Width <= 0 || e.NewSize.Height <= 0) return;
             _presentation.OnContentMeasured(e.NewSize);
+
+            // And re-anchor, because in notch mode the width is no longer fixed.
+            //
+            // Reposition centres the window by subtracting its width from the screen's. That was
+            // safe while the width was a constant; it stopped being safe the moment the panel
+            // was allowed to size to its content, because the window is placed and THEN grows -
+            // so the centring used whatever width it had a frame earlier, and the notch drifted
+            // off to the right. Re-anchoring on the measurement that caused the growth is what
+            // keeps the two in step.
+            Reposition();
         };
 
         // Seed the local accent mirror BEFORE the HwndSource is created (in CreateWindow
@@ -932,6 +942,14 @@ public sealed class OsdHost : BandWindow
         // the notch falls back to Classic wholesale, and that includes anchoring where the user
         // put their OSD instead of the top of the screen.
         var anchor = _presentation is AmbientNotchPresentation ? OsdPosition.TopCenter : m.Position;
+
+        // Recorded because where the notch lands cannot be recovered any other way, and the one
+        // report of it opening in the wrong place could equally be a stale width, the wrong
+        // monitor, or a working area that is not the one being looked at. This line separates
+        // those three without another round trip.
+        _log?.Info("OsdHost",
+            $"Reposition: anchor={anchor}, content={w:0}x{h:0}, " +
+            $"screen='{screen.DeviceName}' area={area.Left:0},{area.Top:0} {area.Width:0}x{area.Height:0}");
 
         (Left, Top) = anchor switch
         {
