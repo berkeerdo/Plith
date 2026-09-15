@@ -23,6 +23,16 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     private readonly BandWindow _window;
     private readonly OsdContent _content;
     private readonly Func<double> _collapsedHeight;
+
+    /// <summary>
+    /// Whether a window currently covers the monitor.
+    ///
+    /// A function rather than a captured bool, for the reason this branch has had to learn
+    /// repeatedly: a value read once at construction is a value that is wrong the moment the
+    /// thing it describes changes, and this one changes every time a window goes fullscreen.
+    /// </summary>
+    private readonly Func<bool> _isCovered;
+
     private readonly DiagnosticLog? _log;
 
     private bool _hasMeasured;
@@ -33,11 +43,13 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
     // snapping. The snap branch also skips Reposition(), so this is not merely cosmetic.
     private bool _isCollapsing;
 
-    public AmbientNotchPresentation(BandWindow window, OsdContent content, Func<double> collapsedHeight, DiagnosticLog? log)
+    public AmbientNotchPresentation(BandWindow window, OsdContent content, Func<double> collapsedHeight,
+                                    Func<bool> isCovered, DiagnosticLog? log)
     {
         _window = window;
         _content = content;
         _collapsedHeight = collapsedHeight;
+        _isCovered = isCovered;
         _log = log;
     }
 
@@ -77,11 +89,26 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
 
     /// <summary>
-    /// Declines. The notch's whole premise is a shape that is always on screen, so there is no
-    /// resting state in which hiding it would still be a notch. This is why the covering-window
-    /// fallback exists: during a game the presentation becomes Classic, and Classic hides.
+    /// Hides, but only while a window covers the monitor.
+    ///
+    /// This used to decline outright, on the argument that a notch is a shape which is always on
+    /// screen — so protecting a game meant ceasing to be a notch, and the whole presentation fell
+    /// back to Classic while anything covered the monitor. The premise under that was "a window
+    /// covering the monitor is a game", and it is not: fullscreen video covers the monitor, a
+    /// fullscreen browser covers the monitor, and neither is a game. On a real run the OSD spent
+    /// most of its life answering volume keys as a Classic card at the bottom of the screen,
+    /// which reads as the notch being broken.
+    ///
+    /// What the fallback actually bought was never the event. An event shows a window for two
+    /// seconds in either mode — Classic did exactly that — so the shapes cost a game the same.
+    /// What it bought was the absence of the RESTING strip, which is permanently composited and
+    /// is what cost 700 fps. So that is all this takes away now: while covered, rest means the
+    /// window is down, and an event still arrives as a notch.
     /// </summary>
-    public void HideWindowIfPossible() { }
+    public void HideWindowIfPossible()
+    {
+        if (_isCovered()) _window.Hide();
+    }
 
     public void OnContentMeasured(Size contentSize)
     {
@@ -209,7 +236,12 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
             _log?.Warn("AmbientNotchPresentation", "Park() called before any measurement; the resting pill is correct but the open panel has no measured size yet.");
         }
 
-        _window.Show();
+        // Rest is a hidden window while something covers the monitor, and the resting pill
+        // otherwise. This is the one place the two rests differ, and the shape is collapsed
+        // either way — so an event arriving while covered opens from the same closed state it
+        // would have opened from anywhere else, and PrepareShow's Show() brings the window back.
+        if (_isCovered()) _window.Hide();
+        else _window.Show();
 
         // Not a bare assignment: reaching the collapsed state through an animation leaves that
         // animation holding NotchExpandProperty with FillBehavior.HoldEnd, and animated-value

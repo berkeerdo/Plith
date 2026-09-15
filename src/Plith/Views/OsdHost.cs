@@ -221,11 +221,17 @@ public sealed class OsdHost : BandWindow
     // Safe to rebuild on this edge only because FullscreenVideoWatcher now applies hysteresis to
     // the falling edge: the raw signal flapped several times a second during gameplay, which
     // would have thrashed presentations here.
+    // The setting alone. A covering window used to force Classic here, which meant a fullscreen
+    // video or a maximised browser silently changed the OSD's shape AND its position — the card
+    // appeared at the user's saved Classic spot, typically nowhere near the top of the screen.
+    // What a game needs is the resting strip gone, not the notch gone; AmbientNotchPresentation
+    // hides its window at rest while covered, which is the same thing Classic did.
     private bool WantsNotch =>
-        _settings.Current.Presentation == PresentationMode.AmbientNotch && !_coversMonitor;
+        _settings.Current.Presentation == PresentationMode.AmbientNotch;
 
     private IOsdPresentation BuildPresentation() => WantsNotch
-        ? new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip, _log)
+        ? new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip,
+                                       () => _coversMonitor, _log)
         : new ClassicPresentation(this);
 
     // Switching modes rebuilds the presentation and returns the window to that mode's rest
@@ -251,9 +257,10 @@ public sealed class OsdHost : BandWindow
         _content.SetNotchLook(_presentation is AmbientNotchPresentation);
 
         // After SetNotchLook and before Reposition: the width is what Reposition measures
-        // against, and a mode switch changes it. Derived from the PRESENTATION rather than the
-        // setting, so the covering-window fallback gets the card's width while it is showing a
-        // card — reading the setting would keep the notch's width during a game.
+        // against, and a mode switch changes it. Still derived from the PRESENTATION rather than
+        // the setting — the two now agree in notch mode, but the presentation remains the thing
+        // actually being drawn, and deriving from what is drawn is the rule this branch keeps
+        // relearning.
         ApplyShellWidth();
 
         if (_presentation is AmbientNotchPresentation notch)
@@ -264,7 +271,12 @@ public sealed class OsdHost : BandWindow
             _home.Close();
             Opacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
             Reposition();               // measures content, which calls OnContentMeasured
-            notch.PrepareShow();
+
+            // PrepareShow only when the strip is going to be on screen. Park() decides between a
+            // visible pill and a hidden window by itself, so calling Show() first and letting
+            // Park() immediately hide it again would be a Show/Hide pair around a covering
+            // window - and Show on a layered window is not guaranteed to be free of a render.
+            if (!_coversMonitor) notch.PrepareShow();
             notch.Park();               // settle straight into rest; no descent flash
         }
         else
@@ -286,9 +298,12 @@ public sealed class OsdHost : BandWindow
         // timer or toggling IsClickThrough for a mode switch that has already settled its own
         // state.
         //
-        // No _coversMonitor check needed: BuildPresentation returns Classic while covered, so
-        // a notch presentation existing at all already means nothing is covering the monitor.
-        if (_presentation is AmbientNotchPresentation) _hoverPoller.Start();
+        // The _coversMonitor check IS needed now. It used not to be, because BuildPresentation
+        // returned Classic while covered, so a notch presentation existing at all proved nothing
+        // was covering the monitor. The notch now survives a covering window with its window
+        // hidden — and polling for a hover over a strip that is not on screen would wake the
+        // notch up over a game, which is the one thing none of this may do.
+        if (_presentation is AmbientNotchPresentation && !_coversMonitor) _hoverPoller.Start();
         else _hoverPoller.Stop();
 
         // Recorded because the mode a run is actually in cannot be recovered any other way,
@@ -333,21 +348,22 @@ public sealed class OsdHost : BandWindow
         if (_coversMonitor == covers) return;
         _coversMonitor = covers;
 
-        // Classic is already Classic, but it still has somewhere to go: a window that covers
-        // the monitor is a game, and a resting Classic OSD is a window DWM is still compositing
-        // over it. Hiding outright is the only state that costs a game nothing.
+        // Classic is already Classic, but it still has somewhere to go: a resting Classic OSD is
+        // a window DWM is still compositing over whatever is covering the monitor, and hiding
+        // outright is the only state that costs a game nothing.
         if (_settings.Current.Presentation != PresentationMode.AmbientNotch)
         {
             if (covers) _presentation.HideWindowIfPossible();
             return;
         }
 
+        // Still a full rebuild rather than a flag flip. The mode no longer changes, but the
+        // resting state does, and settling into a rest is what this does.
         ApplyPresentationMode();
 
-        // ApplyPresentationMode settles the new presentation's rest state but does not take the
-        // window down — Classic's own hide happens at the end of a fade, and a mode switch has
-        // no fade. Without this the fallback swapped a visible notch for an invisible card and
-        // left the window composited over the game regardless.
+        // ApplyPresentationMode settles the new rest state but does not always take the window
+        // down: Park() hides it when covered, and a path that ends anywhere else would leave a
+        // window composited over the game. Belt and braces, on the side that costs frames.
         if (covers) _presentation.HideWindowIfPossible();
     }
 
