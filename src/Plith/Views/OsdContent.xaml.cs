@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Media.Animation;
 using Plith.Views.Presentation;
 
 namespace Plith.Views;
@@ -55,6 +56,22 @@ public partial class OsdContent : UserControl
     /// <summary>Peak opacity of the notch panel's drop shadow, reached only when fully open.</summary>
     private const double NotchShadowOpacity = 0.5;
 
+    /// <summary>How far through a change of open size, 0..1. A dependency property so one
+    /// DoubleAnimation drives it, for the same reason NotchExpand is one.</summary>
+    public static readonly DependencyProperty MorphProperty =
+        DependencyProperty.Register(
+            nameof(Morph), typeof(double), typeof(OsdContent),
+            new PropertyMetadata(1.0, (d, e) =>
+            {
+                if (d is OsdContent c) c.ApplyNotchExpand(c.NotchExpand);
+            }));
+
+    public double Morph
+    {
+        get => (double)GetValue(MorphProperty);
+        set => SetValue(MorphProperty, value);
+    }
+
     public static readonly DependencyProperty NotchExpandProperty =
         DependencyProperty.Register(
             nameof(NotchExpand), typeof(double), typeof(OsdContent),
@@ -62,7 +79,21 @@ public partial class OsdContent : UserControl
 
     private bool _notchLook;
     private double _collapsedHeight;
-    private Size _expandedSize;
+
+    /// <summary>
+    /// The open size the shape is morphing FROM and TO, and how far along that is.
+    ///
+    /// The open size used to be one field, assigned outright. That is correct while the notch is
+    /// closed — it opens into whatever the content now measures — and wrong while it is already
+    /// open, because the panel can CHANGE size without closing: a volume HUD is 300 x 46, a
+    /// media HUD 372 x 54, the widget frame 356 x 116. Clicking a HUD to open the frame snapped
+    /// the shape between two of those in a single frame, which is the hard jump reported.
+    ///
+    /// Two sizes and a progress value make that a morph instead. Everything is still derived
+    /// from NotchExpand as before; only the far end of the interpolation now moves.
+    /// </summary>
+    private Size _expandedFrom;
+    private Size _expandedTo;
 
     public OsdContent() => InitializeComponent();
 
@@ -101,12 +132,53 @@ public partial class OsdContent : UserControl
         // content root is inset by ContentInsetDip on the left, right and bottom in notch mode
         // (SetNotchLook drops the top inset so the panel is flush with the screen edge), so the
         // surface that must coincide with it at full expansion is that much smaller.
-        _expandedSize = new Size(
+        var target = new Size(
             Math.Max(0, measuredContentSize.Width - ContentInsetDip * 2),
             Math.Max(0, measuredContentSize.Height - ContentInsetDip));
 
-        ApplyNotchExpand(NotchExpand);
+        if (SizesMatch(target, _expandedTo)) return;
+
+        // Closed, or barely open: take the new size outright. There is nothing on screen big
+        // enough for a morph to be visible on, and animating here would make the notch's own
+        // opening start from whatever the last panel happened to be.
+        var openEnough = _notchLook && NotchExpand > 0.5;
+
+        _expandedFrom = openEnough ? CurrentExpanded() : target;
+        _expandedTo = target;
+
+        BeginAnimation(MorphProperty, null);
+        if (!openEnough)
+        {
+            Morph = 1;
+            ApplyNotchExpand(NotchExpand);
+            return;
+        }
+
+        Morph = 0;
+        BeginAnimation(MorphProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(MorphMs))
+        {
+            // Out only, and on the same curve the panel's own expansion uses, so a shape that
+            // grows while opening and a shape that grows while already open move alike.
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        });
     }
+
+    /// <summary>How long one panel takes to become another. Shorter than the notch's own
+    /// opening: the shape is already on screen and only changing size, and a change that takes
+    /// as long as an arrival reads as the panel re-opening.</summary>
+    private const int MorphMs = 260;
+
+    /// <summary>The open size right now, part-way between the two ends of a morph.</summary>
+    private Size CurrentExpanded()
+    {
+        var t = NotchGeometry.Clamp01(Morph);
+        return new Size(
+            NotchGeometry.Lerp(_expandedFrom.Width, _expandedTo.Width, t),
+            NotchGeometry.Lerp(_expandedFrom.Height, _expandedTo.Height, t));
+    }
+
+    private static bool SizesMatch(Size a, Size b) =>
+        Math.Abs(a.Width - b.Width) < 0.5 && Math.Abs(a.Height - b.Height) < 0.5;
 
     private void ApplyNotchExpand(double t)
     {
@@ -116,7 +188,7 @@ public partial class OsdContent : UserControl
         if (!_notchLook) return;
 
         var size = NotchGeometry.SurfaceSize(
-            NotchGeometry.CollapsedWidthDip, _collapsedHeight, _expandedSize, t);
+            NotchGeometry.CollapsedWidthDip, _collapsedHeight, CurrentExpanded(), t);
 
         NotchSurface.Width = size.Width;
         NotchSurface.Height = size.Height;
@@ -148,11 +220,46 @@ public partial class OsdContent : UserControl
 
     public void SetPanelContent(NotchPanelContent content)
     {
+        if (PanelContent == content) return;
+
+        var wasOpen = _notchLook && NotchExpand > 0.5;
         PanelContent = content;
+
         CardSurface.Visibility = content == NotchPanelContent.Cards ? Visibility.Visible : Visibility.Collapsed;
         WidgetHost.Visibility = content == NotchPanelContent.Widgets ? Visibility.Visible : Visibility.Collapsed;
         HudHost.Visibility = content == NotchPanelContent.Hud ? Visibility.Visible : Visibility.Collapsed;
+
+        if (!wasOpen) return;
+
+        // The shape is already morphing to the new panel's size, so the panel arrives INTO it
+        // rather than being there the instant the swap happens. Only the incoming half fades:
+        // the outgoing one is collapsed outright, because holding two panels on screen to cross
+        // them would need a completion callback to take the old one away, and a callback that
+        // does not fire is the defect this branch has produced more than any other.
+        var incoming = Incoming(content);
+        if (incoming is null) return;
+
+        incoming.BeginAnimation(OpacityProperty, null);
+        incoming.Opacity = 0;
+        incoming.BeginAnimation(OpacityProperty,
+            new DoubleAnimation(1, TimeSpan.FromMilliseconds(PanelFadeMs))
+            {
+                // Begins a little into the morph, so the shape is closer to its new size before
+                // anything is legible in it - the same ordering the notch's own opening uses.
+                BeginTime = TimeSpan.FromMilliseconds(70),
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
     }
+
+    private const int PanelFadeMs = 180;
+
+    private UIElement? Incoming(NotchPanelContent content) => content switch
+    {
+        NotchPanelContent.Cards => CardSurface,
+        NotchPanelContent.Widgets => WidgetHost,
+        NotchPanelContent.Hud => HudHost,
+        _ => null,
+    };
 
     /// <summary>The controls the widget frame and the HUD live in. Set once by the host; both
     /// outlive every open and close, so their contents are built once rather than per show —
