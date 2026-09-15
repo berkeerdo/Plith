@@ -207,8 +207,41 @@ public partial class WeatherWidget : UserControl
     private void PaintSky()
     {
         Sky.Fill = SkyBrush(_sky);
+        Horizon.Fill = HorizonBrush(_sky);
         Bloom.Visibility = _sky == SkyKind.Clear ? Visibility.Visible : Visibility.Collapsed;
         Moon.Visibility = _sky == SkyKind.Night ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// The glow low in the sky, coloured by the condition.
+    ///
+    /// Placed off-centre and mostly below the frame: a light source you can see the whole of is
+    /// a shape in the picture, and one you can only see the edge of is a light behind it.
+    /// </summary>
+    private static RadialGradientBrush HorizonBrush(SkyKind kind)
+    {
+        var (color, strength) = kind switch
+        {
+            SkyKind.Clear => (Color.FromRgb(0xFF, 0xD9, 0x8C), (byte)0x59),
+            SkyKind.Overcast => (Color.FromRgb(0xD5, 0xDE, 0xE8), (byte)0x33),
+            SkyKind.Rain => (Color.FromRgb(0x9C, 0xC4, 0xE8), (byte)0x2E),
+            SkyKind.Snow => (Color.FromRgb(0xE8, 0xF1, 0xFF), (byte)0x3D),
+            _ => (Color.FromRgb(0x7A, 0x9B, 0xD6), (byte)0x2B),
+        };
+
+        var brush = new RadialGradientBrush
+        {
+            // On the same side as the sun. A warm glow low-left under a sun top-right is two
+            // light sources, which reads as a mistake even to someone not looking for one.
+            GradientOrigin = new Point(0.76, 1.06),
+            Center = new Point(0.76, 1.06),
+            RadiusX = 0.75,
+            RadiusY = 0.95,
+        };
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(strength, color.R, color.G, color.B), 0));
+        brush.GradientStops.Add(new GradientStop(Color.FromArgb(0, color.R, color.G, color.B), 1));
+        brush.Freeze();
+        return brush;
     }
 
     private static LinearGradientBrush SkyBrush(SkyKind kind)
@@ -241,6 +274,7 @@ public partial class WeatherWidget : UserControl
     private void StartAmbient(bool withReveal)
     {
         Clouds.Children.Clear();
+        CloudsFar.Children.Clear();
         Fall.Children.Clear();
 
         var delay = withReveal ? RevealDuration : TimeSpan.Zero;
@@ -290,24 +324,36 @@ public partial class WeatherWidget : UserControl
 
     private void StartClouds(TimeSpan delay)
     {
+        StartCloudLayer(CloudsFar, delay, near: false);
+        StartCloudLayer(Clouds, delay, near: true);
+    }
+
+    /// <summary>
+    /// One band of cloud. The far band is wider, fainter and slower than the near one, which is
+    /// the whole of the parallax: a single band at a single speed reads as a texture sliding
+    /// past rather than as weather at a distance.
+    /// </summary>
+    private void StartCloudLayer(Canvas canvas, TimeSpan delay, bool near)
+    {
         // Fewer and fainter after dark: cloud you can see at night is cloud you can see, not a
         // grey band across a deep blue sky.
-        var count = _sky switch { SkyKind.Clear => 2, SkyKind.Night => 2, _ => 4 };
+        var count = _sky switch { SkyKind.Clear => 2, SkyKind.Night => 2, _ => 3 };
         var width = NotchGeometry.OpenFrameDip.Width;
+
+        var baseAlpha = _sky switch { SkyKind.Clear => 44, SkyKind.Night => 26, _ => 66 };
+        if (!near) baseAlpha = (int)(baseAlpha * 0.55);
 
         for (int i = 0; i < count; i++)
         {
             var puff = new Ellipse
             {
-                Width = 90 + i * 26,
-                Height = 26 + i * 4,
-                Fill = new SolidColorBrush(Color.FromArgb(
-                    _sky switch { SkyKind.Clear => (byte)44, SkyKind.Night => (byte)26, _ => (byte)66 },
-                    255, 255, 255)),
+                Width = near ? 90 + i * 26 : 150 + i * 40,
+                Height = near ? 26 + i * 4 : 38 + i * 6,
+                Fill = new SolidColorBrush(Color.FromArgb((byte)baseAlpha, 255, 255, 255)),
                 RenderTransform = new TranslateTransform(),
             };
-            Canvas.SetTop(puff, 6 + i * 17);
-            Clouds.Children.Add(puff);
+            Canvas.SetTop(puff, near ? 4 + i * 19 : 10 + i * 24);
+            canvas.Children.Add(puff);
 
             // Two corrections here, and together they are why the sky looked motionless.
             //
@@ -320,9 +366,9 @@ public partial class WeatherWidget : UserControl
             // time starts each one part-way through instead, so the set is already spread and
             // already moving the moment the page appears.
             var travel = new DoubleAnimation(-puff.Width, width + puff.Width,
-                TimeSpan.FromSeconds(24 + i * 6))
+                TimeSpan.FromSeconds(near ? 24 + i * 6 : 46 + i * 9))
             {
-                BeginTime = delay - TimeSpan.FromSeconds(7.0 * i),
+                BeginTime = delay - TimeSpan.FromSeconds((near ? 7.0 : 13.0) * i),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
             Run((TranslateTransform)puff.RenderTransform, TranslateTransform.XProperty, travel);

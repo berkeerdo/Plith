@@ -39,6 +39,12 @@
 
         <Rectangle x:Name="Sky" />
 
+        <!-- A horizon. A two-stop gradient is a wall; a light source low and off-centre behind it
+             is depth, and it is what makes the difference between a coloured panel and a sky.
+             Its colour comes from the condition, so an overcast horizon is grey light and a
+             clear one is warm. -->
+        <Rectangle x:Name="Horizon" IsHitTestVisible="False" />
+
         <!-- The sun blooms rather than spins. At this size a rotating ray wheel reads as a
              loading spinner, which is the one thing a weather page must not look like. It sits
              off-centre and partly out of frame, which is what makes the sky feel larger than the
@@ -71,6 +77,11 @@
         <!-- Clouds and precipitation are generated in code: their count and stagger depend on
              the sky, and a fixed set in XAML would either be too many for a clear sky or too few
              for an overcast one. -->
+        <!-- Two cloud layers, not one. The far layer is wider, fainter and slower; the near one
+             is smaller, brighter and faster. That difference IS the parallax - a single layer at
+             a single speed reads as a texture sliding past, which is the tell of a background
+             rather than a sky. -->
+        <Canvas x:Name="CloudsFar" IsHitTestVisible="False" />
         <Canvas x:Name="Clouds" IsHitTestVisible="False" />
         <Canvas x:Name="Fall" IsHitTestVisible="False" />
 

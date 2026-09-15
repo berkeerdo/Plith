@@ -507,7 +507,7 @@ public sealed class OsdHost : BandWindow
         // level the instant it changes, so a widget page showing the same number is a second
         // place for one fact - and the one you reach by swiping, long after the moment it
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
-        _clockPage = new Widgets.ClockWidget(media);
+        _clockPage = new Widgets.ClockWidget(media, weather);
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
 

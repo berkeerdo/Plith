@@ -20,13 +20,17 @@ public partial class ClockWidget : UserControl
     private readonly DispatcherTimer _tick;
 
     private readonly MediaViewModel? _media;
+    private readonly Func<WeatherSnapshot?>? _weather;
 
     /// <param name="media">Optional. Without it the page is the time and the battery, which is
     /// what it was — the track line never appears rather than appearing empty.</param>
-    public ClockWidget(MediaViewModel? media = null)
+    /// <param name="weather">Optional. The same reading the weather page draws its sky from —
+    /// read here rather than mirrored, so the two can never disagree about the temperature.</param>
+    public ClockWidget(MediaViewModel? media = null, Func<WeatherSnapshot?>? weather = null)
     {
         InitializeComponent();
         _media = media;
+        _weather = weather;
 
         // Repainted on every media change, not only on the tick: a track can change while this
         // page is the one being looked at, and up to a second of saying nothing is long enough
@@ -82,6 +86,7 @@ public partial class ClockWidget : UserControl
         BatteryText.Text = text;
         ChargingBolt.Visibility = show && charging ? Visibility.Visible : Visibility.Collapsed;
 
+        RenderWeather();
         RenderNowPlaying();
 
         // The announced name is the whole reading, not just the digits: a screen reader user
@@ -95,6 +100,30 @@ public partial class ClockWidget : UserControl
     }
 
     /// <summary>
+    /// The weather, if there is a reading worth showing.
+    ///
+    /// Stale readings collapse the block rather than showing an old number, which is the same
+    /// rule the weather page follows — a temperature from three hours ago is a wrong answer
+    /// presented as a right one.
+    /// </summary>
+    private void RenderWeather()
+    {
+        var snapshot = _weather?.Invoke();
+        var fresh = snapshot is { } w && WeatherCodeMap.IsFresh(w, DateTimeOffset.Now, WeatherMaxAgeMinutes);
+
+        WeatherBlock.Visibility = fresh ? Visibility.Visible : Visibility.Collapsed;
+        if (!fresh) return;
+
+        var reading = snapshot!.Value;
+        Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(reading.TemperatureC):0}°");
+        Condition.Text = WeatherCodeMap.Describe(reading.WeatherCode);
+    }
+
+    /// <summary>How old a reading may be and still be shown here. The same 45 minutes the
+    /// ambient row used: three refresh cycles, so one failed fetch does not blank it.</summary>
+    private const int WeatherMaxAgeMinutes = 45;
+
+    /// <summary>
     /// The track line, present only while something is playing.
     ///
     /// Collapsed rather than blank, and the rule above it collapses with it: a divider over
@@ -104,8 +133,9 @@ public partial class ClockWidget : UserControl
     {
         var playing = _media is { HasSession: true } && !string.IsNullOrWhiteSpace(_media.Title);
 
+        // No divider any more: the track line sits on the page's bottom edge with the readings
+        // at the top, and space between two blocks says "separate" without a line drawn to say it.
         NowPlaying.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
-        Rule.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
         if (!playing) return;
 
         NowTitle.Text = string.IsNullOrWhiteSpace(_media!.Artist)

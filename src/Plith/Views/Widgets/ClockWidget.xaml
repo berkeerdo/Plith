@@ -14,66 +14,79 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <!-- The "now" page: the time, and the two other things that are true right now.
+    <!-- The "now" page.
 
-         It was the time alone, centred in a frame that does not resize to it, and it read as an
-         empty page with a clock on it - which is what "the clock widget is bad" meant. The frame
-         is fixed, so that space is paid for whether or not anything uses it; a page that leaves
-         it blank is not restrained, it is unfinished.
+         Centred-stack was the wrong composition and it looked it. With the date and the battery
+         hanging off the time's right, the block's optical centre sat left of the page's - so the
+         one thing that WAS centred read as misaligned. Nothing here is centred now; it is set on
+         a left edge with a second column against the right, which is a composition rather than
+         an absence of one.
 
-         What goes in it is chosen rather than found: the battery, which is a fact about now, and
-         what is playing, which is the other one. Both collapse when they do not apply - no
-         battery on a desktop, no track line with nothing playing - so on a machine where neither
-         is true the page is the clock again, deliberately this time. -->
-    <Grid Margin="18,12,18,27">
+         Left is the time, which is why the page exists. Right is the weather, which is the other
+         glanceable fact and was sitting on a page of its own that nobody opens to check whether
+         it is raining. Along the bottom, what is playing. Each side collapses on its own: no
+         weather without a reading, no track line with nothing playing, no battery on a desktop. -->
+    <Grid Margin="20,14,20,26">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
-            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
         </Grid.RowDefinitions>
+        <Grid.ColumnDefinitions>
+            <ColumnDefinition Width="*" />
+            <ColumnDefinition Width="Auto" />
+        </Grid.ColumnDefinitions>
 
-        <!-- Time and date on one line, the date against the time's baseline rather than under
-             it. Stacked, they took the height the track line now uses - and a date is a caption
-             for the time, not a second reading. -->
-        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+        <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Top">
             <TextBlock x:Name="Time"
-                       FontSize="36" FontWeight="SemiBold"
+                       FontSize="38" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="36" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="38" LineStackingStrategy="BlockLineHeight"
                        Foreground="{DynamicResource NotchInk}" />
-            <TextBlock x:Name="Date"
-                       Margin="10,0,0,3"
-                       VerticalAlignment="Bottom"
-                       FontSize="12"
-                       Foreground="{DynamicResource NotchInkMuted}" />
-            <Path x:Name="ChargingBolt"
-                  Data="{StaticResource IconBolt}"
-                  Fill="{DynamicResource NotchInkMuted}"
-                  Width="10" Height="10" Stretch="Uniform"
-                  Margin="10,0,3,4"
-                  VerticalAlignment="Bottom"
-                  Visibility="Collapsed" />
-            <TextBlock x:Name="BatteryText"
-                       Margin="0,0,0,3"
-                       VerticalAlignment="Bottom"
-                       FontSize="12"
-                       Foreground="{DynamicResource NotchInkMuted}"
-                       Visibility="Collapsed" />
+
+            <StackPanel Orientation="Horizontal" Margin="1,3,0,0">
+                <TextBlock x:Name="Date"
+                           FontSize="12"
+                           Foreground="{DynamicResource NotchInkMuted}" />
+                <Path x:Name="ChargingBolt"
+                      Data="{StaticResource IconBolt}"
+                      Fill="{DynamicResource NotchInkMuted}"
+                      Width="10" Height="10" Stretch="Uniform"
+                      Margin="9,0,3,1"
+                      VerticalAlignment="Center"
+                      Visibility="Collapsed" />
+                <TextBlock x:Name="BatteryText"
+                           FontSize="12"
+                           Foreground="{DynamicResource NotchInkMuted}"
+                           Visibility="Collapsed" />
+            </StackPanel>
         </StackPanel>
 
-        <!-- A hairline, and only when something is under it. A divider over nothing is a line
-             that says "more below" and then does not deliver it. -->
-        <Border x:Name="Rule" Grid.Row="1"
-                Height="1" Margin="52,11,52,0"
-                Background="#1AFFFFFF"
-                Visibility="Collapsed" />
+        <!-- Right-aligned and baseline-matched to the time, so the two readings sit on one line
+             rather than one floating beside the other. -->
+        <StackPanel x:Name="WeatherBlock"
+                    Grid.Row="0" Grid.Column="1"
+                    VerticalAlignment="Top"
+                    HorizontalAlignment="Right"
+                    Visibility="Collapsed">
+            <TextBlock x:Name="Temperature"
+                       HorizontalAlignment="Right"
+                       FontSize="26" FontWeight="SemiBold"
+                       Typography.NumeralAlignment="Tabular"
+                       LineHeight="38" LineStackingStrategy="BlockLineHeight"
+                       Foreground="{DynamicResource NotchInk}" />
+            <TextBlock x:Name="Condition"
+                       HorizontalAlignment="Right"
+                       Margin="0,3,1,0"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+        </StackPanel>
 
-        <Grid x:Name="NowPlaying" Grid.Row="2" Margin="0,9,0,0"
-              HorizontalAlignment="Center"
+        <Grid x:Name="NowPlaying" Grid.Row="1" Grid.ColumnSpan="2"
+              VerticalAlignment="Bottom"
               Visibility="Collapsed">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="Auto" />
-                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
             </Grid.ColumnDefinitions>
 
             <Border Grid.Column="0" Width="18" Height="18" CornerRadius="4"
@@ -84,13 +97,9 @@
                 <Image x:Name="NowArt" Stretch="UniformToFill" />
             </Border>
 
-            <!-- MaxWidth rather than a star column: the row is centred, and a star would stretch
-                 it to the page and strand a short title's art at the left edge. The marquee needs
-                 a bounded viewport either way - that is what it measures overflow against. -->
             <w:MarqueeText x:Name="NowTitle"
                            Grid.Column="1"
                            Margin="8,0,0,0"
-                           MaxWidth="250"
                            Height="16"
                            VerticalAlignment="Center"
                            FontSize="12"
