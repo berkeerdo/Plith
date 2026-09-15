@@ -111,6 +111,11 @@ public partial class OsdContent : UserControl
         _notchShadow = NotchSurface.Effect;
     }
 
+    /// <summary>Optional diagnostic sink, set by the host after construction. A property rather
+    /// than a constructor argument because this control is also created by XAML and by the
+    /// offscreen render harness, neither of which has a log to give it.</summary>
+    public Plith.Services.DiagnosticLog? Log { get; set; }
+
     /// <summary>
     /// How far the notch is open: 0 is the collapsed pill, 1 the fully open panel.
     ///
@@ -146,15 +151,28 @@ public partial class OsdContent : UserControl
         // content root is inset by ContentInsetDip on the left, right and bottom in notch mode
         // (SetNotchLook drops the top inset so the panel is flush with the screen edge), so the
         // surface that must coincide with it at full expansion is that much smaller.
-        // A measurement taken while the panel area is pinned is the PIN talking, not new
-        // content — and acting on it is a feedback loop: the pin makes the control measure
-        // large, the large measurement starts a morph back to large, and the panel never
-        // shrinks at all. Which is exactly what the first version of this pin did.
-        if (_panelPinned) return;
+        // The target comes from the CONTENT's own desired size, not from the measurement of this
+        // whole control - and that distinction is the whole fix.
+        //
+        // NotchSurface and SlidingRoot are siblings in the root Grid, so the Grid measures to
+        // whichever is bigger. ApplyNotchExpand sets NotchSurface's size on every frame of a
+        // morph, which means the control's measurement FOLLOWS THE ANIMATION. Deriving the
+        // target from it made the morph its own input: the surface was still large, so the
+        // target only shrank part of the way; the morph then shrank the surface, which produced
+        // a smaller measurement, which started another morph. Measured on a running build - one
+        // volume key turned into five chained 250 ms morphs, 356x116 -> 328x102 -> 300x88 ->
+        // 300x74 -> 300x60 -> 300x46, 978 ms end to end. That is the stepping.
+        //
+        // SlidingRoot holds the panel content and nothing else, so its desired size is what the
+        // panel actually needs, is unaffected by the surface beside it, and settles in one pass.
+        // The pin no longer touches it either (see below), so this is stable under a morph and
+        // the guard that used to drop pinned measurements is gone with the loop that needed it.
+        var measured = SlidingRoot.DesiredSize;
+        if (measured.Width <= 0 || measured.Height <= 0) measured = measuredContentSize;
 
         var target = new Size(
-            Math.Max(0, measuredContentSize.Width - ContentInsetDip * 2),
-            Math.Max(0, measuredContentSize.Height - ContentInsetDip));
+            Math.Max(0, measured.Width - ContentInsetDip * 2),
+            Math.Max(0, measured.Height - ContentInsetDip));
 
         if (SizesMatch(target, _expandedTo)) return;
 
@@ -182,11 +200,16 @@ public partial class OsdContent : UserControl
         // box that had snapped. Pinned to the maximum, the window stays big enough and the black
         // shape carries the whole animation; the extra area is transparent, so releasing the pin
         // at the end shows nothing going away.
-        SlidingRoot.MinWidth = Math.Max(_expandedFrom.Width, _expandedTo.Width);
-        SlidingRoot.MinHeight = Math.Max(_expandedFrom.Height, _expandedTo.Height);
+        // Pinned on THIS control, not on SlidingRoot. The window sizes itself to this control,
+        // so this is where a minimum has to sit to stop the window snapping; putting it on
+        // SlidingRoot also inflated SlidingRoot.DesiredSize, which is now the source of the
+        // target - the pin would have been feeding the morph its own destination.
+        MinWidth = Math.Max(_expandedFrom.Width, _expandedTo.Width) + ContentInsetDip * 2;
+        MinHeight = Math.Max(_expandedFrom.Height, _expandedTo.Height) + ContentInsetDip;
         _panelPinned = true;
 
         Morph = 0;
+        StartMorphProbe();
         BeginAnimation(MorphProperty, new DoubleAnimation(1.0, TimeSpan.FromMilliseconds(MorphMs))
         {
             // Out only, and on the same curve the panel's own expansion uses, so a shape that
@@ -199,6 +222,78 @@ public partial class OsdContent : UserControl
     /// opening: the shape is already on screen and only changing size, and a change that takes
     /// as long as an arrival reads as the panel re-opening.</summary>
     private const int MorphMs = 260;
+
+    // --- morph probe ---------------------------------------------------------------------
+    //
+    // "The animation is very heavy" has two completely different causes that feel identical to
+    // watch: frames being dropped (the morph costs too much per frame) and the morph simply
+    // taking too long (it renders perfectly at 60 fps and still reads as sluggish). The fixes
+    // point in opposite directions, so guessing between them is how this branch has previously
+    // spent several rounds fixing the wrong one.
+    //
+    // This counts real composition frames across one morph and writes the rate. It costs one
+    // increment per frame while a morph is in flight and nothing at all the rest of the time.
+    private int _morphFrames;
+    private long _morphStartedMs;
+    private bool _morphProbing;
+
+    private void StartMorphProbe()
+    {
+        if (_morphProbing) return;
+        _morphProbing = true;
+        _morphFrames = 0;
+        _morphStartedMs = Environment.TickCount64;
+        System.Windows.Media.CompositionTarget.Rendering += OnMorphFrame;
+    }
+
+    private void OnMorphFrame(object? sender, EventArgs e) => _morphFrames++;
+
+    private void StopMorphProbe()
+    {
+        if (!_morphProbing) return;
+        _morphProbing = false;
+        System.Windows.Media.CompositionTarget.Rendering -= OnMorphFrame;
+
+        var elapsed = Environment.TickCount64 - _morphStartedMs;
+        if (elapsed <= 0) return;
+
+        var fps = _morphFrames * 1000.0 / elapsed;
+        var now = Environment.TickCount64;
+        var sinceLast = _lastMorphEndedMs == 0 ? long.MaxValue : now - _lastMorphEndedMs;
+        _lastMorphEndedMs = now;
+
+        // Silent when the morph was fine, which is almost always. A line on every volume key
+        // would be noise, and noise is how a log stops being read.
+        //
+        // The two conditions are the two ways "the animation is heavy" can be true, and by eye
+        // they are indistinguishable - which is why this probe exists at all. Frames below the
+        // floor mean the morph costs too much per frame. A morph starting on the heels of the
+        // last one means a chain: ONE transition playing as several, which is what
+        // 356x116 -> 328x102 -> 300x88 -> 300x74 -> 300x60 -> 300x46 looked like from the
+        // outside, and would be a regression of the measurement feedback loop described in
+        // SetNotchMetrics.
+        var starved = fps < SlowMorphFps;
+        var chained = sinceLast < ChainedMorphMs;
+        if (!starved && !chained) return;
+
+        Log?.Warn("OsdContent",
+            $"Morph {(starved ? "starved" : "chained")}: {_morphFrames} frames in {elapsed}ms = {fps:0} fps" +
+            (chained ? $", {sinceLast}ms after the last one" : string.Empty) +
+            $", {_expandedFrom.Width:0}x{_expandedFrom.Height:0} -> {_expandedTo.Width:0}x{_expandedTo.Height:0}");
+    }
+
+    /// <summary>Below this, frames are being dropped rather than the morph merely being slow.
+    /// Measured healthy on this hardware at 94-238 fps, including across the five-step chain
+    /// that prompted the probe - so a floor here catches a real stall without firing on
+    /// ordinary variation.</summary>
+    private const double SlowMorphFps = 45;
+
+    /// <summary>A morph starting within this of the last one ending is a chain rather than two
+    /// separate transitions. The chain this caught ran five links at ~245 ms spacing; a person
+    /// paging deliberately cannot produce two inside a fifth of a second.</summary>
+    private const long ChainedMorphMs = 200;
+
+    private long _lastMorphEndedMs;
 
     /// <summary>The open size right now, part-way between the two ends of a morph.</summary>
     private Size CurrentExpanded()
@@ -238,6 +333,7 @@ public partial class OsdContent : UserControl
         // movement. A shadow under a shape that is mid-flight is not something anyone can see;
         // one under a shape that has stopped is most of what makes it sit above the desktop.
         var settled = Morph >= 0.999;
+        if (settled) StopMorphProbe();
         if (!settled)
         {
             NotchSurface.Effect = null;
@@ -267,8 +363,8 @@ public partial class OsdContent : UserControl
         if (Morph >= 0.999 && _panelPinned)
         {
             _panelPinned = false;
-            SlidingRoot.MinWidth = 0;
-            SlidingRoot.MinHeight = 0;
+            MinWidth = 0;
+            MinHeight = 0;
         }
     }
 

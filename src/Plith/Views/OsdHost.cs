@@ -112,7 +112,7 @@ public sealed class OsdHost : BandWindow
         Opacity = 0;
         Focusable = false;
 
-        _content = new OsdContent { DataContext = Shell };
+        _content = new OsdContent { DataContext = Shell, Log = _log };
         ApplyShellWidth();
         Content = _content;
 

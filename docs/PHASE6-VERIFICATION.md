@@ -1195,3 +1195,70 @@ so a still frame catches it at zero every time — the harness was photographing
 one moment it is invisible. `frame-system` forces it visible. This matters because a lane clipped
 in half is exactly the class of defect this harness was built to catch, and it had quietly stopped
 being able to.
+
+---
+
+## 19. The notch-to-HUD transition, measured
+
+Reported three times across the branch as juddering, stepping, "heavy". Fixed three times by
+reasoning, and it survived all three, because the reasoning was about the wrong failure.
+
+### The probe
+
+"The animation is heavy" has two causes that look identical: frames being dropped, and the
+transition simply taking too long. They need opposite fixes. Nothing can capture this window —
+it is layered with per-pixel alpha, and over RDP no capture works at all — so the shape was
+counted instead: `CompositionTarget.Rendering` ticks across one morph, with the elapsed time and
+the two sizes. One line per transition, temporarily.
+
+### What it said
+
+```
+Morph: 56 frames in 235ms = 238 fps   356x116 -> 328x102
+Morph: 38 frames in 235ms = 162 fps   328x102 -> 300x88
+Morph: 26 frames in 250ms = 104 fps   300x88  -> 300x74
+Morph: 27 frames in 250ms = 108 fps   300x74  -> 300x60
+Morph: 22 frames in 234ms =  94 fps   300x60  -> 300x46
+```
+
+Not one frame was dropped — 94 to 238 fps throughout. **One transition was playing as five
+chained morphs**, 978 ms end to end. Every earlier fix had been aimed at per-frame cost, and
+per-frame cost was never the problem. The shadow detach in `31c5430` was a real improvement
+aimed at a real cost, and it could not have fixed this.
+
+### Why five
+
+`NotchSurface` and `SlidingRoot` are siblings in the root `Grid`, so the Grid measures to
+whichever is larger. `ApplyNotchExpand` sets `NotchSurface`'s size on every frame of a morph —
+so the control's measurement follows the animation. The target was being derived from that
+measurement, which made the morph its own input: the surface was still large, so the target only
+shrank part of the way; the morph then shrank the surface; the smaller measurement started
+another morph. It converged geometrically, in five rounds.
+
+The XAML comment above `NotchSurface` asserted the opposite — "animating its size re-measures
+nothing but itself" — and had been true of an earlier tree. It was the load-bearing false belief.
+
+### The fix
+
+Two decouplings, both of the same kind: stop deriving a target from something downstream of it.
+
+- The target now comes from `SlidingRoot.DesiredSize` — the panel content alone, unaffected by
+  the surface beside it, settling in one pass — rather than from the whole control's measurement.
+- The pin that keeps the window from snapping moved off `SlidingRoot` onto the control itself. On
+  `SlidingRoot` it inflated the very desired size now used as the target; on the control it holds
+  the window and touches nothing the morph reads.
+
+Measured after: `Morph: 52 frames in 234ms = 222 fps, 356x116 -> 300x46`. One animation.
+Confirmed on the running build by the user.
+
+### What is left behind
+
+The probe stays, but silent. It warns only when frames fall below 45 fps (a genuine stall) or a
+morph begins within 200 ms of the last ending (a chain — this defect returning). Both thresholds
+come from the measurements above rather than from taste. A line per volume key would be noise,
+and noise is how a log stops being read.
+
+**This is the branch's own recurring defect in its fourth dress** — a value derived once, from
+the wrong place. The three previous ones were fixed by recomputing where used. This one could not
+be, because the value was not stale; it was circular. The difference was only visible from a
+measurement.
