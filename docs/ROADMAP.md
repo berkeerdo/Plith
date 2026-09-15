@@ -80,8 +80,13 @@ first-class, isolatable units:
    Caps/Num/Scroll Lock indicators, airplane / Wi-Fi / Bluetooth
    toggles. This is the card that replaces Windows' fragmented native
    OSDs and unifies OEM utilities.
-4. **Battery** — laptop only. Low / critical / full-charge alerts,
-   percent readout on hover.
+4. ~~**Battery** — laptop only. Low / critical / full-charge alerts,
+   percent readout on hover.~~ **Dropped as a card.** The readout lives on the notch's
+   "now" page beside the time, and collapses on a machine without a battery. What is
+   genuinely not covered there is the ALERT half — low, critical, fully charged — which
+   is an event rather than a readout and belongs wherever the interception layer handles
+   events, not in a card of its own. Recorded here rather than deleted so the distinction
+   survives: the number is done, the alerts were never started.
 5. **Notifications** — a peek at the last N Windows notifications,
    plus quick dismiss. Windows' Action Center is ugly and slow; a
    Plith notification card is a natural extension.
@@ -288,7 +293,12 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
 - **System Controls card** — brightness, backlight, mic mute, lock
   keys, airplane mode. This is what makes Plith stop being "an audio
   OSD" from the user's perspective. **Not started.**
-- **Battery card** — laptop-first. **Not started.**
+- ~~**Battery card** — laptop-first.~~ **Dropped.** The battery is on the notch's "now"
+  page, beside the time it belongs with, and it collapses on a machine that has none. A
+  card would be a second place for one fact — the same reason the audio widget page was
+  removed once the volume HUD already answered a volume key. If a laptop-specific reading
+  ever needs more room than a line (time remaining, health, per-app drain), that is a
+  different feature and deserves its own entry rather than this one reopened.
 - Preset migration: existing installs default to Classic OSD; a
   one-shot "meet the new Plith" nudge lets them try Ambient / Full. **Not started.**
 - Success metric: install-to-second-launch retention crosses 60 %
