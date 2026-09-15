@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
 using Plith.Services;
+using Plith.ViewModels;
 
 namespace Plith.Views.Widgets;
 
@@ -18,9 +19,19 @@ public partial class ClockWidget : UserControl
 {
     private readonly DispatcherTimer _tick;
 
-    public ClockWidget()
+    private readonly MediaViewModel? _media;
+
+    /// <param name="media">Optional. Without it the page is the time and the battery, which is
+    /// what it was — the track line never appears rather than appearing empty.</param>
+    public ClockWidget(MediaViewModel? media = null)
     {
         InitializeComponent();
+        _media = media;
+
+        // Repainted on every media change, not only on the tick: a track can change while this
+        // page is the one being looked at, and up to a second of saying nothing is long enough
+        // to notice.
+        if (_media is not null) _media.PropertyChanged += (_, _) => Render();
 
         _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
         {
@@ -67,15 +78,39 @@ public partial class ClockWidget : UserControl
 
         // Collapsed on a desktop, which the formatter decides: a battery line reading "no
         // battery" is worse than no line, and this is the same call the ambient row used.
-        Battery.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        BatteryText.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         BatteryText.Text = text;
-        ChargingBolt.Visibility = charging ? Visibility.Visible : Visibility.Collapsed;
+        ChargingBolt.Visibility = show && charging ? Visibility.Visible : Visibility.Collapsed;
+
+        RenderNowPlaying();
 
         // The announced name is the whole reading, not just the digits: a screen reader user
-        // landing on "21:04" alone has no way to know what it is. The battery joins it rather
+        // landing on "21:04" alone has no way to know what it is. Everything joins it rather
         // than announcing separately — a StackPanel has no automation peer, so a name set there
         // would reach nothing at all.
-        var announced = show ? $"{Time.Text}, {Date.Text}, battery {text}" : $"{Time.Text}, {Date.Text}";
+        var announced = $"{Time.Text}, {Date.Text}";
+        if (show) announced += $", battery {text}";
+        if (NowPlaying.Visibility == Visibility.Visible) announced += $", playing {NowTitle.Text}";
         System.Windows.Automation.AutomationProperties.SetName(Time, announced);
+    }
+
+    /// <summary>
+    /// The track line, present only while something is playing.
+    ///
+    /// Collapsed rather than blank, and the rule above it collapses with it: a divider over
+    /// nothing says "more below" and then does not deliver it.
+    /// </summary>
+    private void RenderNowPlaying()
+    {
+        var playing = _media is { HasSession: true } && !string.IsNullOrWhiteSpace(_media.Title);
+
+        NowPlaying.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
+        Rule.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
+        if (!playing) return;
+
+        NowTitle.Text = string.IsNullOrWhiteSpace(_media!.Artist)
+            ? _media.Title
+            : $"{_media.Title} — {_media.Artist}";
+        NowArt.Source = _media.AlbumArt;
     }
 }

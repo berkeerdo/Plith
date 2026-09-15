@@ -3,6 +3,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:w="clr-namespace:Plith.Views.Widgets"
              mc:Ignorable="d"
              Focusable="False">
     <UserControl.Resources>
@@ -12,52 +13,88 @@
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </UserControl.Resources>
-    <!-- Centred in a frame that does not resize to it. The empty space above and below is the
-         cost of the fixed frame, and it is the correct one: a clock centred in a steady frame
-         reads as deliberate, while a frame that shrank to hug it would read as unstable every
-         time the page turned. -->
-    <StackPanel Margin="18,14,18,29" VerticalAlignment="Center" HorizontalAlignment="Center">
-        <!-- AutomationProperties.Name on the TextBlock, not on the StackPanel: a panel has no
-             automation peer, so a name set there reaches nothing at all. The time is announced
-             from Time itself, and Date is left to its own text. -->
-        <TextBlock x:Name="Time"
-                   HorizontalAlignment="Center"
-                   FontSize="40" FontWeight="SemiBold"
-                   Typography.NumeralAlignment="Tabular"
-                   LineHeight="40" LineStackingStrategy="BlockLineHeight"
-                   Foreground="{DynamicResource NotchInk}">
-        </TextBlock>
-        <TextBlock x:Name="Date"
-                   HorizontalAlignment="Center"
-                   Margin="0,4,0,0"
-                   FontSize="12"
-                   Foreground="{DynamicResource NotchInkMuted}" />
 
-        <!-- The battery, on a machine that has one.
+    <!-- The "now" page: the time, and the two other things that are true right now.
 
-             It lives here rather than on a page of its own because it is one short line that
-             nobody would swipe to, and because the clock page has room by design — the fixed
-             frame is sized by the fullest page, so this one carries empty space either way.
+         It was the time alone, centred in a frame that does not resize to it, and it read as an
+         empty page with a clock on it - which is what "the clock widget is bad" meant. The frame
+         is fixed, so that space is paid for whether or not anything uses it; a page that leaves
+         it blank is not restrained, it is unfinished.
 
-             It went missing entirely when slice 3 replaced the ambient row with widget pages:
-             slice 2 built the reader, the formatter and their tests, and then nothing rendered
-             any of it. Restored rather than rebuilt. -->
-        <StackPanel x:Name="Battery"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center"
-                    Margin="0,9,0,0"
-                    Visibility="Collapsed">
+         What goes in it is chosen rather than found: the battery, which is a fact about now, and
+         what is playing, which is the other one. Both collapse when they do not apply - no
+         battery on a desktop, no track line with nothing playing - so on a machine where neither
+         is true the page is the clock again, deliberately this time. -->
+    <Grid Margin="18,12,18,27">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <!-- Time and date on one line, the date against the time's baseline rather than under
+             it. Stacked, they took the height the track line now uses - and a date is a caption
+             for the time, not a second reading. -->
+        <StackPanel Grid.Row="0" Orientation="Horizontal" HorizontalAlignment="Center">
+            <TextBlock x:Name="Time"
+                       FontSize="36" FontWeight="SemiBold"
+                       Typography.NumeralAlignment="Tabular"
+                       LineHeight="36" LineStackingStrategy="BlockLineHeight"
+                       Foreground="{DynamicResource NotchInk}" />
+            <TextBlock x:Name="Date"
+                       Margin="10,0,0,3"
+                       VerticalAlignment="Bottom"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}" />
             <Path x:Name="ChargingBolt"
                   Data="{StaticResource IconBolt}"
                   Fill="{DynamicResource NotchInkMuted}"
                   Width="10" Height="10" Stretch="Uniform"
-                  Margin="0,0,4,0"
-                  VerticalAlignment="Center"
+                  Margin="10,0,3,4"
+                  VerticalAlignment="Bottom"
                   Visibility="Collapsed" />
             <TextBlock x:Name="BatteryText"
-                       FontSize="11"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource NotchInkMuted}" />
+                       Margin="0,0,0,3"
+                       VerticalAlignment="Bottom"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       Visibility="Collapsed" />
         </StackPanel>
-    </StackPanel>
+
+        <!-- A hairline, and only when something is under it. A divider over nothing is a line
+             that says "more below" and then does not deliver it. -->
+        <Border x:Name="Rule" Grid.Row="1"
+                Height="1" Margin="52,11,52,0"
+                Background="#1AFFFFFF"
+                Visibility="Collapsed" />
+
+        <Grid x:Name="NowPlaying" Grid.Row="2" Margin="0,9,0,0"
+              HorizontalAlignment="Center"
+              Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <Border Grid.Column="0" Width="18" Height="18" CornerRadius="4"
+                    Background="{DynamicResource NotchTrack}">
+                <Border.Clip>
+                    <RectangleGeometry Rect="0,0,18,18" RadiusX="4" RadiusY="4" />
+                </Border.Clip>
+                <Image x:Name="NowArt" Stretch="UniformToFill" />
+            </Border>
+
+            <!-- MaxWidth rather than a star column: the row is centred, and a star would stretch
+                 it to the page and strand a short title's art at the left edge. The marquee needs
+                 a bounded viewport either way - that is what it measures overflow against. -->
+            <w:MarqueeText x:Name="NowTitle"
+                           Grid.Column="1"
+                           Margin="8,0,0,0"
+                           MaxWidth="250"
+                           Height="16"
+                           VerticalAlignment="Center"
+                           FontSize="12"
+                           Foreground="{DynamicResource NotchInkMuted}" />
+        </Grid>
+    </Grid>
 </UserControl>

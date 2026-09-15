@@ -144,7 +144,7 @@ $mediaVm.HasSession = $true
 
 "Rendering to $OutDir"
 
-$clock = [Plith.Views.Widgets.ClockWidget]::new()
+$clock = [Plith.Views.Widgets.ClockWidget]::new($mediaVm)
 Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 
 $media = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null)
@@ -168,7 +168,7 @@ Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 $frame = [Plith.Views.Widgets.WidgetFrame]::new()
 $pager = [Plith.Services.NotchPager]::new(3)
 $pages = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
-$pages.Add([Plith.Views.Widgets.ClockWidget]::new())
+$pages.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm))
 $pages.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
 $pages.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null))
 $frame.SetPages($pager, $pages)
@@ -178,7 +178,7 @@ Save-Visual -Element $frame -W $frameW -H $frameH -Name 'frame-page1'
 $frame2 = [Plith.Views.Widgets.WidgetFrame]::new()
 $pager2 = [Plith.Services.NotchPager]::new(3)
 $pages2 = [System.Collections.Generic.List[Windows.FrameworkElement]]::new()
-$pages2.Add([Plith.Views.Widgets.ClockWidget]::new())
+$pages2.Add([Plith.Views.Widgets.ClockWidget]::new($mediaVm))
 $pages2.Add([Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null))
 $pages2.Add([Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null))
 $frame2.SetPages($pager2, $pages2)

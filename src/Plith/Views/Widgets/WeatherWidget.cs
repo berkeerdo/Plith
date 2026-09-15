@@ -309,13 +309,20 @@ public partial class WeatherWidget : UserControl
             Canvas.SetTop(puff, 6 + i * 17);
             Clouds.Children.Add(puff);
 
-            // Staggered by both duration and start, so the set never lines up into one moving
-            // band. Derived from the index rather than randomised: this runs in a workflow where
-            // randomness would make the same page look different on every open for no reason.
+            // Two corrections here, and together they are why the sky looked motionless.
+            //
+            // Speed: 34 to 78 seconds to cross 500 DIP is six to fourteen DIP a second, so in the
+            // few seconds a notch is actually open a cloud moved about twenty pixels. The design
+            // crosses in 26 to 34; matched.
+            //
+            // Start: the stagger was a POSITIVE delay, so on opening, every cloud but the first
+            // had not begun - one shape crawling across an otherwise still sky. A negative begin
+            // time starts each one part-way through instead, so the set is already spread and
+            // already moving the moment the page appears.
             var travel = new DoubleAnimation(-puff.Width, width + puff.Width,
-                TimeSpan.FromSeconds(34 + i * 11))
+                TimeSpan.FromSeconds(24 + i * 6))
             {
-                BeginTime = delay + TimeSpan.FromSeconds(i * 4),
+                BeginTime = delay - TimeSpan.FromSeconds(7.0 * i),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
             Run((TranslateTransform)puff.RenderTransform, TranslateTransform.XProperty, travel);
@@ -353,7 +360,9 @@ public partial class WeatherWidget : UserControl
             var fall = new DoubleAnimation(0, height + 26,
                 TimeSpan.FromSeconds(snow ? 5.5 + i % 4 : 1.1 + (i % 5) * 0.12))
             {
-                BeginTime = delay + TimeSpan.FromMilliseconds(i * (snow ? 260 : 90)),
+                // Negative, for the same reason as the cloud: rain that begins falling when you
+                // open the page is rain you watch start, not rain that is already falling.
+                BeginTime = delay - TimeSpan.FromMilliseconds(i * (snow ? 260 : 90)),
                 RepeatBehavior = RepeatBehavior.Forever,
             };
             Run((TranslateTransform)drop.RenderTransform, TranslateTransform.YProperty, fall);
