@@ -95,6 +95,23 @@ public sealed class SettingsModel
     /// battery). Notch-only; Classic never opens the home view at all.</summary>
     public bool ShowAmbientOnHover { get; set; } = true;
 
+    /// <summary>
+    /// Whether a window covering the screen puts the OSD back into Classic.
+    ///
+    /// Off by default, and the default is the interesting half. The notch used to fall back
+    /// unconditionally, on the premise that a covering window is a game — which is wrong often
+    /// enough to matter, since fullscreen video and a borderless browser cover the screen too,
+    /// and the OSD then answered volume keys as a card at the Classic position for most of a
+    /// session. What a game actually needs is the resting strip gone, and that happens either
+    /// way: while covered the notch rests as a hidden window.
+    ///
+    /// On is still a real preference rather than a compatibility switch. In a game the notch
+    /// cannot be hovered, opened or paged, so it degrades to exactly what Classic is — a
+    /// transient HUD — and the only difference left is where it appears. Top-center is where
+    /// many games put their own scoreboard, and the Classic position is one the user chose.
+    /// </summary>
+    public bool UseClassicOverFullscreen { get; set; }
+
     /// <summary>Whether the ambient row fetches weather. Off disables the location lookup and
     /// every network call outright — "clock and battery but nothing phoning home" is a
     /// reasonable position, and the alternative is turning off the whole row.</summary>

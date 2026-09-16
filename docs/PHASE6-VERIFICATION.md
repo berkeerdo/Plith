@@ -1156,45 +1156,28 @@ item in §15 and §16 is still open.
 
 ---
 
-## 18. System Controls — what was measured, and what was not
+## 18. System Controls — built, measured, and removed
 
-The first System Controls work to reach a running surface rather than a plan. Recorded here
-because the ratio is unusual for this branch: most of it was measured, and the part that was not
-is named rather than implied.
+Built as a four-tile page, driven on real hardware, and then deleted at the user's request. The
+measurements are kept in `docs/ROADMAP.md` rather than here, because they are facts about this
+machine that outlive the code: DDC/CI answers where WMI cannot, `IPolicyConfig` switches the
+default output, and endpoint names need a tile-sized form.
 
-### Measured on this machine
+What is worth keeping is why it failed, because it was not a bug.
 
-| Check | How | Result |
-|---|---|---|
-| Does WMI brightness exist here? | `Get-CimInstance root/WMI WmiMonitorBrightness` | **No.** Chassis type 3, no battery — a desktop. The WMI implementation was written first and would never have run once. |
-| Does DDC/CI exist here? | `dxva2.dll` probe before writing any of it | **Yes.** `GetMonitorBrightness` answered, range 0..100, current 40. |
-| Does `BrightnessClient` work end to end? | Driven from PowerShell against the real display: `Start` → `Current` → `TrySet` → `Refresh` → `Dispose` | Attached, read 40, write accepted, round trip preserved 40, dispose cleared to null. |
-| Does the page fit the frame? | `Measure` against infinity, compared to 356×116 | **Initially no — 130.6 DIP tall, clipped by 15.** Found because the rendered rail was a half-drawn thumb. Trimmed to 122.6, which the `VerticalAlignment="Center"` and the 29 DIP bottom margin absorb, the same way the audio page's 122.2 always has. |
-| Does it draw what it should? | `scripts/render-widgets.ps1`, at the frame's exact size | Rail, accent fill at the display's real 40%, sun, muted mic. |
-| Does the rail survive a fourth page? | New `frame-system` render with the rail forced visible | Four segments, pip on the fourth. |
-| Range arithmetic on panels nobody here owns | `BrightnessMathTests` — coarse 0..10, non-zero floor, zero-width, out-of-range | 26 tests. The identity case this monitor exercises would have passed a completely wrong implementation. |
+The page worked. Brightness read and wrote, the mic toggled, the output switched, the tiles
+carried live readings. It was rejected on how it looked and felt, over four rounds of rework, and
+the last round found the actual cause of the last complaint: **the tiles were built from
+hard-coded blue-grey hex while the panel takes an accent tint from the theme.** On a lime accent
+the panel is green and the tiles sat on it as cold blue rectangles. Absolute colour in a themed
+surface is the defect; relative colour — a translucent lift over whatever the panel is — is the
+fix. That correction was never applied; the page was removed instead.
 
-### Not measured
-
-- **A live drag.** The coalescing — one pending value, one writer thread, intermediates dropped —
-  is what keeps a DDC/CI write off the mouse-move path. It is structurally sound (a single slot
-  cannot queue) but no finger has been on it. If the rail stutters under a drag, this is where to
-  look, and the 900 ms driving window is the first constant to question.
-- **A display that refuses a write.** The refusal path re-reads and corrects the optimistic
-  value. It exists because the doc comment claimed it before the code did; it has never run.
-- **A laptop.** Internal panels that refuse DDC/CI get nothing, and the WMI fallback that would
-  serve them is deliberately absent rather than written on faith.
-- **Anything on the running app.** Not deployed: a game was open at the point this was finished,
-  and the standing rule is that nothing touches the app while one is.
-
-### The render harness gained a blind spot, and lost it
-
-`frame-page1` had never shown the page rail, and that went unnoticed until a fourth page made the
-rail the thing worth looking at. The rail fades in on a page change and fades out after a linger,
-so a still frame catches it at zero every time — the harness was photographing a transient at the
-one moment it is invisible. `frame-system` forces it visible. This matters because a lane clipped
-in half is exactly the class of defect this harness was built to catch, and it had quietly stopped
-being able to.
+**The render harness could not have caught it**, and that is the durable lesson. It renders
+widgets on a flat `#06070A` ground, while the running app renders them on an accent-tinted
+gradient. Every colour judgement made from those renders was made against the wrong background.
+If the harness is ever used to judge colour again, it must paint the real surface first —
+`AccentTheme.DeriveOsdSurfaces` with the user's accent, the same call `ThemeService` makes.
 
 ---
 

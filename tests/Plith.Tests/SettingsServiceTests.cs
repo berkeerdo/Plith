@@ -395,6 +395,32 @@ public class SettingsServiceTests
         Assert.Equal(24, svc.Current.NotchStripHeightDip);
     }
 
+    /// <summary>
+    /// The covering-window fallback round-trips, and defaults to off.
+    ///
+    /// The default is the half worth asserting. It used to be the only behaviour and was not a
+    /// setting at all, so "off" here is the statement that a covering window no longer takes the
+    /// notch away by itself — a regression to the old behaviour would show up as this failing
+    /// rather than as a bug report weeks later.
+    /// </summary>
+    [Fact]
+    public void Save_Then_Load_RoundTripsClassicOverFullscreen()
+    {
+        using var dir = new TempIniDir();
+        var svc = new SettingsService(dir.IniPath);
+
+        Assert.False(svc.Current.UseClassicOverFullscreen);
+
+        var m = svc.Current.Clone();
+        m.UseClassicOverFullscreen = true;
+        svc.Save(m);
+
+        var reloaded = new SettingsService(dir.IniPath);
+        reloaded.Load();
+
+        Assert.True(reloaded.Current.UseClassicOverFullscreen);
+    }
+
     [Fact]
     public void Save_Then_Load_RoundTripsWeatherSettings()
     {

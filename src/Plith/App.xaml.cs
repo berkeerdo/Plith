@@ -27,7 +27,6 @@ public partial class App : Application
     private IpLocationProvider? _ipLocation;
     private WeatherService? _weatherService;
     private MicrophoneClient? _microphone;
-    private BrightnessClient? _brightness;
     private MediaSessionClient? _mediaSession;
     private HotkeyService? _hotkey;
     private ThemeService? _theme;
@@ -108,23 +107,12 @@ public partial class App : Application
         // I2C traffic down the display cable, tens of milliseconds at best and occasionally far
         // worse, and a slow cable would become a visible pause at startup. It is asked on a
         // background thread, and the page appears if and when the display answers.
-        _brightness = new BrightnessClient(_diagnosticLog);
-
         _osd.AttachAudioSource(_audioCard.Vm, _orchestrator.TrySetNormalizedVolume, _mediaCard.Vm,
                                () => _weatherService.Current,
                                _orchestrator.TryToggleMute,
                                () => _mediaSession.TryOpenSourceApp(),
-                               () => _microphone.Current,
-                               _brightness,
-                               () => _microphone.TryToggleMute());
+                               () => _microphone.Current);
 
-        var osdForBrightness = _osd;
-        var brightnessClient = _brightness;
-        Task.Run(() =>
-        {
-            if (!brightnessClient.Start()) return;
-            osdForBrightness.Dispatcher.BeginInvoke(new Action(osdForBrightness.OnBrightnessAvailable));
-        });
 
         // Marshalled, because the endpoint's notification arrives on a COM thread.
         var osdForMic = _osd;
@@ -223,7 +211,6 @@ public partial class App : Application
         // as part of that Dispose, so the service must still be alive when it runs.
         DisposeStep("WeatherService",     () => _weatherService?.Dispose());
         DisposeStep("MicrophoneClient",   () => _microphone?.Dispose());
-        DisposeStep("BrightnessClient",   () => _brightness?.Dispose());
         DisposeStep("OpenMeteoClient",    () => _weatherClient?.Dispose());
         DisposeStep("IpLocationProvider", () => _ipLocation?.Dispose());
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());

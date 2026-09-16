@@ -59,6 +59,7 @@ public sealed class SettingsService
                 NotchStripHeightDip = ParseDouble(data[SectionOsd]["NotchStripHeightDip"], 5, 2, 24),
                 HoverKeepAlive = ParseBool(data[SectionOsd]["HoverKeepAlive"], true),
                 ShowAmbientOnHover = ParseBool(data[SectionOsd]["ShowAmbientOnHover"], true),
+                UseClassicOverFullscreen = ParseBool(data[SectionOsd]["UseClassicOverFullscreen"], false),
                 ShowWeather = ParseBool(data[SectionOsd]["ShowWeather"], true),
                 WeatherLocation = data[SectionOsd]["WeatherLocation"] ?? string.Empty,
                 WeatherLatitude = ParseDouble(data[SectionOsd]["WeatherLatitude"], 0, -90, 90),
@@ -124,6 +125,7 @@ public sealed class SettingsService
         data[SectionOsd]["NotchStripHeightDip"] = m.NotchStripHeightDip.ToString("G", inv);
         data[SectionOsd]["HoverKeepAlive"] = m.HoverKeepAlive.ToString(inv);
         data[SectionOsd]["ShowAmbientOnHover"] = m.ShowAmbientOnHover.ToString(inv);
+        data[SectionOsd]["UseClassicOverFullscreen"] = m.UseClassicOverFullscreen.ToString(inv);
         data[SectionOsd]["ShowWeather"] = m.ShowWeather.ToString(inv);
         data[SectionOsd]["WeatherLocation"] = m.WeatherLocation ?? string.Empty;
         data[SectionOsd]["WeatherLatitude"] = m.WeatherLatitude.ToString("G", inv);

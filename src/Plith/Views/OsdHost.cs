@@ -160,6 +160,7 @@ public sealed class OsdHost : BandWindow
         PreviewMouseLeftButtonDown += (_, _) => OnNotchClicked();
         HorizontalWheel += OnHorizontalWheel;
 
+
         MouseEnter += OnMouseEnter;
         MouseLeave += OnMouseLeave;
 
@@ -227,7 +228,8 @@ public sealed class OsdHost : BandWindow
     // What a game needs is the resting strip gone, not the notch gone; AmbientNotchPresentation
     // hides its window at rest while covered, which is the same thing Classic did.
     private bool WantsNotch =>
-        _settings.Current.Presentation == PresentationMode.AmbientNotch;
+        _settings.Current.Presentation == PresentationMode.AmbientNotch
+        && !(_coversMonitor && _settings.Current.UseClassicOverFullscreen);
 
     private IOsdPresentation BuildPresentation() => WantsNotch
         ? new AmbientNotchPresentation(this, _content, () => _settings.Current.NotchStripHeightDip,
@@ -524,7 +526,7 @@ public sealed class OsdHost : BandWindow
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
                                   Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null,
                                   Action? openSource = null, Func<MicrophoneSnapshot?>? microphone = null,
-                                  BrightnessClient? brightness = null, Func<bool?>? toggleMicMute = null)
+                                  Func<bool?>? toggleMicMute = null)
     {
         _toggleMute = toggleMute;
         // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
@@ -537,12 +539,6 @@ public sealed class OsdHost : BandWindow
         _clockPage = new Widgets.ClockWidget(media, weather, microphone);
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
-
-        // The system page is built even on a machine that has neither a reachable display nor a
-        // microphone. Building it costs nothing until it is installed, and the two things it
-        // shows arrive at different times - brightness answers from a background thread some
-        // milliseconds after startup - so the page has to exist before it has anything to say.
-        _systemPage = new Widgets.SystemWidget(brightness, microphone, toggleMicMute);
 
         ApplyWidgetPages();
 
@@ -561,46 +557,16 @@ public sealed class OsdHost : BandWindow
 
     /// <summary>The microphone's mute changed. The now page reads the state where it draws it,
     /// so it only needs telling that something moved.</summary>
-    public void OnMicrophoneChanged()
-    {
-        _clockPage?.Refresh();
-        _systemPage?.Refresh();
-
-        // A capture device arriving or leaving changes whether the system page has anything at
-        // all, not just what it says. Guarded by the installed flag for the reason the weather
-        // one is: SetPages resets the pager and rebuilds the rail, so doing it on every mute
-        // would throw the reader back to page one for pressing a mute key.
-        if (_systemPage?.HasAnything != _systemPageInstalled) ApplyWidgetPages();
-    }
-
-    /// <summary>
-    /// The display answered DDC/CI.
-    ///
-    /// Called from App, off the background thread that asked. Brightness is the one page input
-    /// that arrives after the pages have already been built: the query goes down the display
-    /// cable and takes long enough that doing it inline would have been a visible pause at
-    /// startup, so the page is installed when the answer comes back instead.
-    /// </summary>
-    public void OnBrightnessAvailable()
-    {
-        _systemPage?.Refresh();
-        if (_systemPage?.HasAnything != _systemPageInstalled) ApplyWidgetPages();
-    }
+    public void OnMicrophoneChanged() => _clockPage?.Refresh();
 
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;
     private Widgets.MediaWidget? _mediaPage;
-    private Widgets.SystemWidget? _systemPage;
 
     /// <summary>Whether the weather page is currently in the pager, so a settings change that
     /// does not affect it does not rebuild the list.</summary>
     private bool _weatherPageInstalled;
 
-    /// <summary>Whether the system page is currently in the pager. Tracked separately from the
-    /// weather one because it appears for a different reason and at a different time — the
-    /// display answers DDC/CI on a background thread after startup, so this flips once, late,
-    /// rather than when a setting changes.</summary>
-    private bool _systemPageInstalled;
 
     /// <summary>
     /// Put the right pages in the frame for the current settings.
@@ -616,20 +582,12 @@ public sealed class OsdHost : BandWindow
 
         var wantsWeather = _settings.Current.ShowWeather;
 
-        // The system page carries no setting. It is present exactly when it has something to
-        // show, which is the machine's answer rather than a preference: a desktop whose monitor
-        // refuses DDC/CI and has no microphone attached would get a page you can swipe to and be
-        // told nothing on.
-        var wantsSystem = _systemPage?.HasAnything == true;
-
-        List<FrameworkElement> pages = [_clockPage];
-        if (wantsWeather) pages.Add(_weatherPage);
-        pages.Add(_mediaPage);
-        if (wantsSystem) pages.Add(_systemPage!);
+        List<FrameworkElement> pages = wantsWeather
+            ? [_clockPage, _weatherPage, _mediaPage]
+            : [_clockPage, _mediaPage];
 
         _widgets.SetPages(_pager, pages);
         _weatherPageInstalled = wantsWeather;
-        _systemPageInstalled = wantsSystem;
     }
 
     /// <summary>
@@ -881,6 +839,10 @@ public sealed class OsdHost : BandWindow
                               && _presentation is AmbientNotchPresentation open
                               && open.IsOpenEnoughToShowContent;
 
+            // An event may take the open frame away only when the page being looked at does not
+            // already show that thing: a track change while the media page is up is an answer you
+            // can already see, and replacing the frame with a HUD would take away the place you
+            // deliberately went to in order to show you what is already there.
             var pageAlreadyShowsIt = frameIsOpen
                                      && PickHudKind(reason) == NotchHudKind.Media
                                      && ReferenceEquals(_widgets.CurrentPage, _mediaPage);

@@ -407,9 +407,23 @@
                              decides whether the OSD appears at all rather than which shape it
                              takes. -->
                         <Border x:Name="NotchFallbackRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">
-                            <TextBlock Style="{StaticResource RowHintStyle}"
-                                       TextWrapping="Wrap"
-                                       Text="The notch steps aside when a window covers the screen — a full-screen game, a borderless browser, a full-screen video — and Plith shows the Classic OSD until that ends. The notch sits flush against the top edge, which is the first place a covering window takes." />
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock Style="{StaticResource RowLabelStyle}" Text="Use Classic over full-screen apps" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}"
+                                               TextWrapping="Wrap"
+                                               Text="While a window covers the screen — a game, a borderless browser, a full-screen video — show the Classic card at its saved position instead of the notch. The notch never rests over a covering window either way, so this changes where an event appears, not whether the strip is in the way." />
+                                </StackPanel>
+                                <CheckBox x:Name="ClassicOverFullscreenToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          VerticalAlignment="Center"
+                                          AutomationProperties.Name="Use Classic over full-screen apps" />
+                            </Grid>
                         </Border>
 
                         <Border x:Name="StripHeightRow" Style="{StaticResource RowStyle}" Visibility="Collapsed">

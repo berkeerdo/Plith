@@ -117,7 +117,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 |---|---|
 | Volume / mute keys | `WH_KEYBOARD_LL` (already wired). |
 | Media transport keys | `WH_KEYBOARD_LL` VK_MEDIA_*. |
-| Brightness up/down | `WH_KEYBOARD_LL` VK_BRIGHTNESS_*, apply via DDC/CI (`dxva2.dll`) — see the Phase 6 note; WMI reaches laptop panels only. |
+| Brightness up/down | `WH_KEYBOARD_LL` VK_BRIGHTNESS_*, apply via DDC/CI (`dxva2.dll`) — measured working; WMI reaches laptop panels only. See the Phase 6 note. |
 | Keyboard backlight | Vendor SDKs (Razer Chroma, Corsair iCUE, Logitech G HUB) — start with Microsoft Precision + laptop-native, add vendor SDKs later. |
 | Mic mute | Vendor keys → intercept + broadcast via Windows.Devices.Enumeration. |
 | Caps / Num / Scroll Lock | `WH_KEYBOARD_LL`, read state via `GetKeyState`. |
@@ -291,33 +291,33 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
   strip. Both now exist: the clock is the "now" page and the mic is on it as well as on
   the system page. What Full Notch still lacks is a decision rather than a part — which
   of them earns permanent space on a strip that is 28 px tall.
-- **System Controls — a page, not a card. Brightness and mic mute shipped; backlight,
-  lock keys and airplane mode not started.**
+- **System Controls — built, and removed again. Not started.**
 
-  The rename is a design correction rather than wording. Cards were the shape the OSD
-  had when everything it showed answered something you had just pressed; the notch
-  replaced that with two shapes — a HUD that answers a key, and a frame you deliberately
-  open. Nobody presses a key to be told their microphone's state, so a card would have
-  been a thing that appeared unasked.
+  A four-tile page (brightness, volume, mic, output device) was built and driven on real
+  hardware, then deleted at the user's request: it never came to look like it belonged in the
+  notch, and the value it added over the controls Windows already has did not justify the
+  rounds. The code is in git history on `feature/phase-6-notch-shell` if it is ever wanted.
 
-  Brightness goes over **DDC/CI**, not `WmiMonitorBrightnessMethods` as the table below
-  originally said. The WMI version was written first and thrown away: it reaches a
-  laptop's built-in panel and nothing else, so on the desktop this is developed on it was
-  code that could never once run. DDC/CI talks to the monitor over the video cable, which
-  is the case a desktop actually has — measured before a line was written, and the
-  attached panel answers with a 0..100 range. Laptop panels that refuse DDC/CI will need
-  the WMI path back as a fallback, added when there is a machine to prove it on.
+  **What was measured, so a second attempt does not rediscover it:**
 
-  The page installs itself only when it has something: a display that refuses DDC/CI and
-  a machine with no capture device leave it out of the pager entirely, rather than adding
-  a page you can swipe to and be told nothing on.
+  - **Brightness works over DDC/CI, not WMI.** `WmiMonitorBrightness` reaches a laptop's
+    built-in panel only — on the desktop this is developed on it is code that can never once
+    run. `dxva2.dll` (`GetPhysicalMonitorsFromHMONITOR` + `Get/SetMonitorBrightness`) talks to
+    an external monitor over the cable and answered here with a 0..100 range. Every call is I2C
+    traffic, tens of milliseconds at best, so writes must be coalesced off the UI thread. The
+    answer is also not stable for the life of the process: the monitor here stopped answering
+    after a display-mode change and started again later, so it has to be re-asked on
+    `DisplaySettingsChanged` rather than once at startup.
+  - **Switching the default audio output needs `IPolicyConfig`.** Windows exposes no documented
+    API for it at all; the Sound control panel uses an undocumented COM interface
+    (CLSID `870af99c-…`, IID `f8679f50-…`). Verified working here — `SetDefaultEndpoint`
+    returned S_OK — by re-selecting the endpoint that was already default, which proves the call
+    path without changing what anyone is listening to.
+  - **Device names need a tile-sized form.** Every render endpoint on this machine begins
+    "Hoparlör (", so trimming to fit produces the same useless string for all five. The
+    distinguishing token is the model number (`G733`, `PG27AQDM`); vendor names are identity,
+    not noise.
 
-  **Verified offscreen, not on a running build.** The client was driven end to end against
-  the real display (attach, read, write, re-read, dispose) and the page was rendered at
-  the frame's exact size; the range arithmetic is covered by `BrightnessMathTests` for the
-  coarse and non-zero-floor panels no machine here has. What has NOT been exercised is a
-  live drag — the coalescing that keeps a DDC/CI write off the mouse-move path is reasoned
-  and structurally sound, not measured.
 - ~~**Battery card** — laptop-first.~~ **Dropped.** The battery is on the notch's "now"
   page, beside the time it belongs with, and it collapses on a machine that has none. A
   card would be a second place for one fact — the same reason the audio widget page was

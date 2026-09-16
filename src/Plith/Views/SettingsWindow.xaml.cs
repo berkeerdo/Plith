@@ -751,6 +751,7 @@ public partial class SettingsWindow : Window
             PresentationCombo.SelectedValue = m.Presentation;
             StripHeightSlider.Value = m.NotchStripHeightDip;
             WidgetsToggle.IsChecked = m.ShowNotchWidgets;
+            ClassicOverFullscreenToggle.IsChecked = m.UseClassicOverFullscreen;
             WeatherToggle.IsChecked = m.ShowWeather;
             WeatherLocationBox.Text = m.WeatherLocation;
         }
@@ -912,6 +913,7 @@ public partial class SettingsWindow : Window
         if (PresentationCombo.SelectedValue is PresentationMode p) m.Presentation = p;
         m.NotchStripHeightDip = StripHeightSlider.Value;
         m.ShowNotchWidgets = WidgetsToggle.IsChecked == true;
+        m.UseClassicOverFullscreen = ClassicOverFullscreenToggle.IsChecked == true;
         m.ShowWeather = WeatherToggle.IsChecked == true;
         m.WeatherLocation = WeatherLocationBox.Text.Trim();
 
