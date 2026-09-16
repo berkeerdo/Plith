@@ -179,6 +179,11 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         _device = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
         _volume = _device.AudioEndpointVolume;
         _volume.OnVolumeNotification += OnNotification;
+
+        // Logged for the same reason the failure now is. The pinned branch above says which
+        // endpoint it took; this one said nothing, so after a default-device change the log went
+        // quiet whether the re-attach had worked or not.
+        _log?.Info("WindowsAudio", $"Attached to default endpoint '{AudioLabel.Shorten(_device.FriendlyName)}'");
     }
 
     /// <summary>Repoint the client to a different render endpoint. Pass null or empty to
@@ -270,7 +275,29 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         }
     }
 
-    private void OnNotification(AudioVolumeNotificationData data) => EmitSnapshot();
+    /// <summary>When a volume notification was last written to the log, so a sweep of the volume
+    /// wheel produces one line rather than forty.</summary>
+    private long _lastNotificationLogMs;
+
+    private const long NotificationLogThrottleMs = 2000;
+
+    private void OnNotification(AudioVolumeNotificationData data)
+    {
+        // Throttled, and kept rather than removed after the investigation it was added for.
+        // The failure it exists to show is the absence of these lines: an OSD frozen on a stale
+        // level looks exactly like one whose endpoint stopped reporting, and from the outside
+        // those are indistinguishable. One line every two seconds is the difference between
+        // "the endpoint is silent" and "the endpoint is fine and the display is wrong".
+        var now = Environment.TickCount64;
+        if (now - _lastNotificationLogMs >= NotificationLogThrottleMs)
+        {
+            _lastNotificationLogMs = now;
+            _log?.Info("WindowsAudio",
+                $"Volume notification: {data.MasterVolume * 100:0}%{(data.Muted ? " (muted)" : string.Empty)}");
+        }
+
+        EmitSnapshot();
+    }
 
     private void EmitSnapshot()
     {
@@ -323,10 +350,16 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
                 DetachFromCurrentDevice();
                 AttachToCurrentDefault();
             }
-            catch
+            catch (Exception ex)
             {
-                // The new device evaporated mid-swap (rare but possible). Drop everything so the
-                // orchestrator's reconcile pass can re-try by calling Start again.
+                // Logged, not swallowed. This catch was silent, and the silence cost real time:
+                // the OSD froze on a stale level after a default-device change and the log showed
+                // the notification arriving and then nothing at all - which looks identical to a
+                // successful re-attach. A recovery path that cannot be seen failing is a recovery
+                // path nobody can trust.
+                _log?.Error("WindowsAudio", $"Re-attach after default-device change failed: {ExceptionText.Describe(ex)}");
+
+                // Drop everything so the orchestrator's reconcile pass can re-try via Start.
                 DetachFromCurrentDevice();
                 return;
             }
