@@ -455,7 +455,7 @@ Expected in the log: the approach, the handoff, `Dropped` with the file names, t
 **Files:**
 - Create: `src/Plith/Services/Shelf/ShelfStore.cs`, `tests/Plith.Tests/ShelfStoreTests.cs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 /// <summary>Paths arrive from a lower-integrity process, so they are claims rather than facts.
@@ -475,7 +475,7 @@ public void Add_KeepsTheMostRecentFirst() { /* ... */ }
 public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 ```
 
-- [ ] **Steps 2-5:** run-fail, implement, run-pass, commit.
+- [x] **Steps 2-5:** run-fail, implement, run-pass, commit.
 
 ---
 

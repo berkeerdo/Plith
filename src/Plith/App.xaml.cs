@@ -36,6 +36,7 @@ public partial class App : Application
     private VolumeKeyHook? _volumeKeyHook;
     private FullscreenVideoWatcher? _fullscreenWatcher;
     private DropChannelServer? _dropChannel;
+    private ShelfStore? _shelf;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -192,6 +193,9 @@ public partial class App : Application
             return;
         }
 
+        _shelf = new ShelfStore();
+        _diagnosticLog?.Info("Shelf", $"Shelf loaded with {_shelf.Items.Count} item(s).");
+
         _dropChannel = new DropChannelServer(sid, _diagnosticLog);
         _dropChannel.Received += OnDropChannelMessage;
         _dropChannel.Start();
@@ -215,6 +219,17 @@ public partial class App : Application
             case DropVerb.Dropped:
                 _diagnosticLog?.Info("Shelf", $"Drop reported: {message.Paths.Count} path(s).");
                 _osd?.OnCatcherStoodDown();
+                // Onto the UI thread: ShelfStore is not thread-safe, and whatever ends up
+                // painting these rows will read them from there.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var before = _shelf?.Items.Count ?? 0;
+                    _shelf?.Add(message.Paths);
+                    var after = _shelf?.Items.Count ?? 0;
+                    // Both numbers, because they differ whenever a path did not resolve - which
+                    // is the one failure this path has and is otherwise completely silent.
+                    _diagnosticLog?.Info("Shelf", $"Shelf now holds {after} item(s) (was {before}).");
+                }));
                 break;
             case DropVerb.Hide:
                 // From the catcher this means "I withdrew" — it stood in, no file drag arrived,
