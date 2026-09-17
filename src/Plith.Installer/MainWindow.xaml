@@ -67,16 +67,29 @@
                             Orientation="Horizontal"
                             HorizontalAlignment="Right"
                             shell:WindowChrome.IsHitTestVisibleInChrome="True">
+                    <!-- Drawn marks, not glyph code points.
+
+                         These were Segoe MDL2 characters - E921 and E8BB - and the shared
+                         CaptionButtonStyle stopped supplying that font when the product moved to
+                         drawn geometry. The characters stayed, the font did not, and the buttons
+                         rendered as nothing at all: still there, still clickable, invisible.
+
+                         The change that drew every other icon updated Plith's own windows and
+                         missed this one, and the lint that fails the build on icon fonts only
+                         scanned src/Plith. Both gaps are closed now; this is the same markup
+                         SettingsWindow uses. -->
                     <Button x:Name="MinimizeButton"
                             Style="{StaticResource CaptionButtonStyle}"
-                            Content="&#xE921;"
                             ToolTip="Minimize"
-                            AutomationProperties.Name="Minimize" />
+                            AutomationProperties.Name="Minimize">
+                        <Path Style="{StaticResource CaptionIconStyle}" Data="{StaticResource IconMinimize}" />
+                    </Button>
                     <Button x:Name="CloseButton"
                             Style="{StaticResource CloseCaptionButtonStyle}"
-                            Content="&#xE8BB;"
                             ToolTip="Close"
-                            AutomationProperties.Name="Close" />
+                            AutomationProperties.Name="Close">
+                        <Path Style="{StaticResource CaptionIconStyle}" Data="{StaticResource IconClose}" />
+                    </Button>
                 </StackPanel>
             </Grid>
         </Border>

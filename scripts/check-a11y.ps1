@@ -135,10 +135,28 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
 # Both XAML and code-behind. Scanning only XAML was the rule's own blind spot on the day it was
 # written: SettingsWindow built three marks in C# with new FontFamily("Segoe MDL2 Assets"), and a
 # gate that misses the half of the codebase where a thing is easiest to do is not a gate.
+# Two forms, because the name is only half of it.
+#
+# A glyph can be used WITHOUT ever naming the font: Plith.Installer's caption buttons carried
+# Content="&#xE921;" and Content="&#xE8BB;" and no font name anywhere, inheriting one from a
+# shared style. When that style stopped supplying Segoe MDL2, the characters stayed and the
+# buttons rendered as nothing - present, clickable, invisible. Shipped in 0.1.6. A rule that
+# searches only for font names would have scanned that file and passed it.
+#
+# So code points are checked too. U+E000-U+F8FF is the Private Use Area: no standard character
+# lives there, and a literal one in markup is an icon-font glyph by definition.
+#
+# And the scan covers the installer, which it did not. The exclusion below is right for the
+# accessibility NAME checks - that pass never covered the installer and would fail on gaps nobody
+# has signed off on - but this rule is about not depending on a font that varies between Windows
+# builds, and the installer proved it needs the rule as much as anything else.
 $iconFontUses = [System.Collections.Generic.List[string]]::new()
-$iconFontFiles = @(Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) +
-                 @(Get-ChildItem -Path $Root -Filter '*.cs' -Recurse |
-                   Where-Object { $_.FullName -notmatch '[\/](obj|bin)[\/]' })
+$iconFontRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.Installer')) |
+                 Where-Object { Test-Path $_ }
+$iconFontFiles = @($iconFontRoots | ForEach-Object {
+                     @(Get-ChildItem -Path $_ -Filter '*.xaml' -Recurse) +
+                     @(Get-ChildItem -Path $_ -Filter '*.cs' -Recurse)
+                 }) | Where-Object { $_.FullName -notmatch '[\/](obj|bin)[\/]' }
 foreach ($file in $iconFontFiles) {
     $text = Get-Content -LiteralPath $file.FullName -Raw
     # Strip comments in both languages, so a comment explaining why the font is NOT used does
@@ -151,6 +169,14 @@ foreach ($file in $iconFontFiles) {
             $rel = Resolve-Path -Relative -LiteralPath $file.FullName
             $iconFontUses.Add("${rel}: uses '$font'. Draw the icon in Resources/PlithIcons.xaml instead.")
         }
+    }
+
+    # A Private Use Area code point, with or without a font named beside it.
+    $pua = [regex]::Matches($stripped, '&#x(?<cp>[eE][0-9a-fA-F]{3}|[fF][0-8][0-9a-fA-F]{2});')
+    if ($pua.Count -gt 0) {
+        $rel = Resolve-Path -Relative -LiteralPath $file.FullName
+        $points = ($pua | ForEach-Object { 'U+' + $_.Groups['cp'].Value.ToUpper() } | Select-Object -Unique) -join ', '
+        $iconFontUses.Add("${rel}: icon-font code point(s) $points. Draw the icon in Resources/PlithIcons.xaml instead.")
     }
 }
 
