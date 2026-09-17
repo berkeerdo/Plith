@@ -18,7 +18,7 @@
     <Authors>Plith</Authors>
     <Product>Plith Setup</Product>
     <Description>Plith setup wizard.</Description>
-    <Version>0.1.6</Version>
+    <Version>0.1.7</Version>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <!-- Recommended (not All) — matches src/Plith/Plith.csproj's strict-but-pragmatic stance. -->
@@ -44,6 +44,11 @@
     </Page>
     <Page Include="..\Plith\Resources\SettingsTheme.xaml">
       <Link>Resources\SettingsTheme.xaml</Link>
+    </Page>
+    <!-- SettingsTheme.xaml merges PlithIcons.xaml, so linking one without the other leaves a
+         dangling reference that only fails at run time. -->
+    <Page Include="..\Plith\Resources\PlithIcons.xaml">
+      <Link>Resources\PlithIcons.xaml</Link>
     </Page>
     <Resource Include="..\Plith\Resources\icons\plith.ico">
       <Link>Resources\icons\plith.ico</Link>

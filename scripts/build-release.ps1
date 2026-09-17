@@ -30,6 +30,15 @@ $installerTests = Join-Path $repoRoot 'tests\Plith.Installer.Tests\Plith.Install
 $releaseDir = Join-Path $repoRoot 'release'
 $publishDir = Join-Path $releaseDir 'publish'
 
+# 0. Shared XAML must not name an assembly.
+#
+# Before the tests, because it is the cheaper check and because the failure it guards against is
+# one no test sees: 0.1.6 shipped an installer that crashed in App.InitializeComponent, and the
+# build, both suites and the lint were all green.
+Write-Host "Checking shared XAML..."
+& pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check-shared-xaml.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Shared XAML check failed." }
+
 # 1. Tests must pass.
 Write-Host "Running Plith.Tests..."
 & dotnet test $plithTests

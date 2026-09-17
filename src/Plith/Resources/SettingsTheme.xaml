@@ -6,7 +6,21 @@
         <!-- The drawn icon set, shared with the OSD. Merged here rather than referenced from
              each window so a caption mark and a transport mark cannot end up being two
              different drawings of the same idea. -->
-        <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
+        <!-- Relative, NOT an absolute pack URI naming the Plith assembly.
+
+                 This file is linked into Plith.Installer as a Page, so it is compiled into that
+                 assembly too - and an absolute "/Plith;component/..." URI still names Plith when
+                 it runs there. The installer has no Plith assembly (it carries Plith as an
+                 embedded zip, not as a reference), so the lookup threw FileNotFoundException
+                 inside App.InitializeComponent and the installer died before its first log line.
+
+                 Shipped that way in 0.1.6 and found only when someone ran the installer on
+                 another machine. Nothing caught it: a pack URI is resolved at RUN time, so the
+                 build is clean, and no test launches the installer's UI.
+
+                 A relative source resolves against whichever assembly is hosting this
+                 dictionary, which is what both cases need. -->
+            <ResourceDictionary Source="PlithIcons.xaml" />
     </ResourceDictionary.MergedDictionaries>
 
     <!-- Palette brushes live in Palette.Dark.xaml / Palette.Light.xaml so the active
