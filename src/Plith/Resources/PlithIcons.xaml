@@ -69,4 +69,10 @@
     <Geometry x:Key="IconWxBolt">M13.4,3 L6.6,13.4 L11.2,13.4 L10.2,21 L17.4,10.4 L12.6,10.4 Z</Geometry>
 
     <Geometry x:Key="IconDisc">F0 M12,3 A9,9 0 1 1 11.99,3 Z M12,9.6 A2.4,2.4 0 1 0 12.01,9.6 Z</Geometry>
+
+    <!-- The shelf. A sheet with its corner turned, and a folder - the two things the shell can
+         hand over. Stroked outlines rather than filled shapes, so they read at 22 DIP on a dark
+         panel the way the rest of the notch's marks do. -->
+    <Geometry x:Key="IconDocument">M6.5,3.5 L14,3.5 L17.5,7 L17.5,20.5 L6.5,20.5 Z M14,3.5 L14,7 L17.5,7</Geometry>
+    <Geometry x:Key="IconFolder">M3.5,6.5 L9.5,6.5 L11.5,9 L20.5,9 L20.5,18.5 L3.5,18.5 Z</Geometry>
 </ResourceDictionary>

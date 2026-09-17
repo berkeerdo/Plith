@@ -1,0 +1,32 @@
+<UserControl x:Class="Plith.Views.Widgets.ShelfWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- What is on the shelf.
+
+         A row of tiles rather than a list of lines, because the shelf answers "what did I put
+         here" at a glance, and a name is a slower way to recognise your own file than its shape
+         and position.
+
+         No heading. The first pass had one, with a "+3 more" label in the opposite corner, and
+         rendering it showed why neither survives: the heading cost 25 of the 76 DIP the page
+         has, which clipped every tile label through the middle. The page dots already say which
+         page this is, and no other page in the frame introduces itself. What the row cannot show
+         is now the last tile instead — a count in a corner is something to read, a tile is
+         something that looks like the rest of the row and is understood without being read. -->
+    <StackPanel x:Name="Tiles"
+                Orientation="Horizontal"
+                Margin="20,12,20,24"
+                VerticalAlignment="Top" />
+</UserControl>

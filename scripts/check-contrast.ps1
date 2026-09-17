@@ -120,8 +120,24 @@ foreach ($file in $xamlFiles) {
     }
 }
 
+# Pairs a page builds in code rather than declaring, so the scan above cannot see them. Named
+# here so they are still measured across every accent and both themes — the alternative is a page
+# whose colours nothing checks, which is how the OSD's ink reached 1.2:1 and stayed there.
+# The shelf's tiles, whose colours are set in code. Pointed at this check, the first version
+# failed twice over and both failures were invisible in a render: NotchInkMuted on a track tile
+# measured 1.5:1 on every accent, and NotchInk on the same tile still only reached 4.0:1 with a
+# white accent. NotchTrack is built by ContrastInk.TrackOn, which targets 3:1 - a non-text
+# surface by construction. The tiles have no chip behind them now and sit on the panel, which is
+# the surface NotchInk is derived against.
+$codeBehindPairs = @(
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfWidget.cs:tile label, icon and count' }
+)
+foreach ($cb in $codeBehindPairs) {
+    $pairs.Add([pscustomobject]@{ Bg = $cb.Bg; Fg = $cb.Fg; Where = $cb.Where; File = 'ShelfWidget.cs' })
+}
+
 $pairs = $pairs | Sort-Object Bg, Fg, Where, File -Unique
-Write-Host "Pairs declared in XAML: $($pairs.Count)"
+Write-Host "Pairs declared in XAML: $($pairs.Count - $codeBehindPairs.Count), named from code-behind: $($codeBehindPairs.Count)"
 
 # --- resolving a key to a colour ------------------------------------------------------------
 function New-Scope([string]$Theme, $Override) {

@@ -194,6 +194,7 @@ public partial class App : Application
         }
 
         _shelf = new ShelfStore();
+        _osd?.AttachShelf(_shelf);
         _diagnosticLog?.Info("Shelf", $"Shelf loaded with {_shelf.Items.Count} item(s).");
 
         _dropChannel = new DropChannelServer(sid, _diagnosticLog);

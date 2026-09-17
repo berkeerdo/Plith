@@ -485,13 +485,13 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 - Create: `src/Plith/Views/Widgets/ShelfWidget.xaml` / `.cs`
 - Modify: `src/Plith/Views/OsdHost.cs` (`ApplyWidgetPages`)
 
-- [ ] **Step 1: Build the page against the render harness**
+- [x] **Step 1: Build the page against the render harness**
 
 `pwsh -STA -File scripts/render-widgets.ps1` — and render it in **both** themes with a tinted accent. The system page shipped unreadable because every colour judgement was made against a flat dark ground the product does not have; that harness now takes `-Theme` and `-Accent` precisely so this page does not repeat it.
 
-- [ ] **Step 2: Install the page only when the shelf has something**, the same rule the weather page follows.
+- [x] **Step 2: Install the page only when the shelf has something**, the same rule the weather page follows.
 
-- [ ] **Steps 3-5:** accessibility names, lint, commit.
+- [x] **Steps 3-5:** accessibility names, lint, commit.
 
 ---
 

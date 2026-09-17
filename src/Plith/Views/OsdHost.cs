@@ -639,6 +639,7 @@ public sealed class OsdHost : BandWindow
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
 
+        BuildShelfPage();
         ApplyWidgetPages();
 
         _hud = new Widgets.NotchHud(audio, media, _toggleMute);
@@ -657,6 +658,38 @@ public sealed class OsdHost : BandWindow
     /// <summary>The microphone's mute changed. The now page reads the state where it draws it,
     /// so it only needs telling that something moved.</summary>
     public void OnMicrophoneChanged() => _clockPage?.Refresh();
+
+    private Widgets.ShelfWidget? _shelfPage;
+    private Plith.Services.Shelf.ShelfStore? _shelf;
+    private bool _shelfPageInstalled;
+    private bool _pagesInstalled;
+
+    /// <summary>
+    /// Hand the shelf over. Set by App alongside the drop channel, and it may arrive before or
+    /// after the pages are built — whichever happens second installs the page.
+    /// </summary>
+    public void AttachShelf(Plith.Services.Shelf.ShelfStore shelf)
+    {
+        _shelf = shelf;
+
+        // The page's presence follows the shelf's contents, so a shelf that fills up while the
+        // notch is idle has to be able to install it from here.
+        _shelf.Changed += () =>
+        {
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyWidgetPages)); return; }
+            ApplyWidgetPages();
+        };
+
+        if (_clockPage is not null) BuildShelfPage();
+    }
+
+    private void BuildShelfPage()
+    {
+        if (_shelf is null || _shelfPage is not null) return;
+
+        _shelfPage = new Widgets.ShelfWidget(_shelf);
+        ApplyWidgetPages();
+    }
 
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;
@@ -681,12 +714,26 @@ public sealed class OsdHost : BandWindow
 
         var wantsWeather = _settings.Current.ShowWeather;
 
-        List<FrameworkElement> pages = wantsWeather
-            ? [_clockPage, _weatherPage, _mediaPage]
-            : [_clockPage, _mediaPage];
+        // Present only while the shelf has something in it, the same rule the weather page
+        // follows. An empty shelf page is a page that exists to say nothing is there, and the
+        // person paging past it learns that four times a day.
+        var wantsShelf = _shelfPage is not null && _shelf is { Items.Count: > 0 };
+
+        // Nothing to do when neither page's presence changed. The shelf raises Changed on every
+        // drop, and rebuilding the list each time would discard and re-add live pages that own
+        // timers and storyboards — for a list that came out identical.
+        if (_pagesInstalled && wantsWeather == _weatherPageInstalled && wantsShelf == _shelfPageInstalled)
+            return;
+
+        List<FrameworkElement> pages = [_clockPage];
+        if (wantsWeather) pages.Add(_weatherPage);
+        pages.Add(_mediaPage);
+        if (wantsShelf) pages.Add(_shelfPage!);
 
         _widgets.SetPages(_pager, pages);
         _weatherPageInstalled = wantsWeather;
+        _shelfPageInstalled = wantsShelf;
+        _pagesInstalled = true;
     }
 
     /// <summary>

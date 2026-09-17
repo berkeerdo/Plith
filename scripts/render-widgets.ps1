@@ -227,6 +227,32 @@ Save-Visual -Element $audio -W $frameW -H $frameH -Name 'widget-audio'
 $weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
 Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 
+# The shelf, against a store in a temp directory with real files in it. Real files rather than a
+# stub, because ShelfStore refuses to hold a path it cannot stat - that check is the point of it,
+# and a fake store would render a page the product cannot produce.
+$shelfDir = Join-Path $OutDir 'shelf-fixture'
+New-Item -ItemType Directory -Force -Path $shelfDir | Out-Null
+$fixtures = @(
+    'Quarterly report FINAL v3.pdf',
+    'screenshot.png',
+    'notes.md',
+    'invoice-2026-09.xlsx',
+    'archive.zip',
+    'one-more.txt',
+    'and-another.txt'
+)
+foreach ($f in $fixtures) { Set-Content -LiteralPath (Join-Path $shelfDir $f) -Value 'x' }
+$shelfFolder = Join-Path $shelfDir 'Project assets'
+New-Item -ItemType Directory -Force -Path $shelfFolder | Out-Null
+
+$storeFile = Join-Path $OutDir 'shelf-store.txt'
+Remove-Item -LiteralPath $storeFile -ErrorAction SilentlyContinue
+$store = [Plith.Services.Shelf.ShelfStore]::new($storeFile)
+$paths = [string[]](@($shelfFolder) + ($fixtures | ForEach-Object { Join-Path $shelfDir $_ }))
+$store.Add($paths)
+$shelf = [Plith.Views.Widgets.ShelfWidget]::new($store)
+Save-Visual -Element $shelf -W $frameW -H $frameH -Name 'widget-shelf'
+
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a
