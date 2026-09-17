@@ -113,6 +113,7 @@ internal sealed class NotchHoverPoller : IDisposable
         Polled?.Invoke();
 
         bool inside = NotchGeometry.IsInsideNotch(HoverRect, dip);
+
         if (inside == _wasInside) return;
 
         _wasInside = inside;

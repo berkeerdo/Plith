@@ -124,7 +124,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 | Airplane / Wi-Fi / BT | `RadioManager` COM API. |
 | Battery events | `RegisterPowerSettingNotification` + `GUID_BATTERY_*`. |
 | Notifications | `UserNotificationListener` (WinRT). |
-| Shelf drag targets | `IDropTarget` implementation, Explorer-integration API. |
+| Shelf drag targets | **Not reachable from the OSD window.** `IDropTarget` registers fine but UIPI blocks the drag: a UIAccess process runs at High integrity and Explorer at Medium. `WM_DROPFILES` is not a way around it. See the Phase 7 note. |
 
 Each becomes a `IEventSource` service; cards subscribe to the sources
 they care about.
@@ -336,6 +336,40 @@ The two features that Windows has no good answer for.
 - **Shelf card** — persistent floating drop target on the notch's
   underside. Drop files in, they stage; drag out to any destination.
   Multi-selection stashing.
+
+  **Blocked, and now measured rather than assumed. A drop cannot reach the notch's window
+  at all.** Both paths were armed on a running build and a real file was dragged onto an
+  open 384×130 panel and released there. Nothing arrived.
+
+  - **OLE is blocked by integrity.** The drop target IS registered — WPF's `AllowDrop`
+    reaches an HWND created by `CreateWindowInBand`, confirmed by reading the window's
+    `OleDropTargetInterface` property. But Plith runs at **High** integrity, because Windows
+    raises any UIAccess process there, and UIAccess is exactly what lets the OSD draw over a
+    full-screen game. Explorer runs at Medium, and UAC blocks the cross-integrity COM call
+    that `DoDragDrop` makes. Not one `DragEnter` was delivered.
+  - **The legacy path is not a second channel.** `DragAcceptFiles` plus
+    `ChangeWindowMessageFilterEx` for `WM_DROPFILES`, `WM_COPYDATA` and the undocumented
+    `WM_COPYGLOBALDATA` was tried next, on the theory that a posted message would cross where
+    a COM call could not. It does not: the shell posts `WM_DROPFILES` from inside its own OLE
+    drop-target implementation, so it is downstream of the call UIPI already refused. The log
+    recorded the release over the panel — `Drag ENDED WITH A RELEASE over the notch` — and no
+    message followed.
+
+  **What DOES work, and is worth keeping whatever happens to the shelf:** the notch can see a
+  drag coming. `GetCursorPos` and `GetAsyncKeyState` are state reads rather than messages, so
+  they keep answering while the drag source owns the mouse — the notch opens to meet a file
+  carried toward it, and distinguishes that from a press by requiring the button to have gone
+  down outside it.
+
+  **The way forward, if the shelf is wanted:** a companion window at Medium integrity that
+  owns the drop. It cannot simply sit under the notch — a Medium window cannot be above a
+  UIAccess band — so it would have to take the notch's place for the duration: on the
+  drag-approach signal above, hide the band window and show the helper in the same rectangle,
+  then hand the paths back over a pipe. That is a real design rather than a hope, and it is
+  built entirely on the one thing today's measurement proved.
+
+  The alternative is dropping UIAccess, which trades the shelf for the ability to draw over
+  games. That is the wrong trade for this product.
 - **Notifications card** — last N notifications with quick dismiss.
   Aspires to replace Action Center for people who never open it.
 - Notch dynamic sizing: notch grows when shelf has stashed items.

@@ -99,6 +99,7 @@ public sealed class OsdHost : BandWindow
         _presentation = new ClassicPresentation(this);
         _hoverPoller = new NotchHoverPoller(Dispatcher);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
+
         _hoverPoller.Polled += ResyncClickThrough;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
 
