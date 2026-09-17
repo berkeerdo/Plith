@@ -182,18 +182,54 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
             // what makes the picker feel real — before this, the bar stayed emerald no
             // matter what preset was selected.
             if (!_useColorThresholds) return _brushAccent;
-            // Thresholds ON: semantic loudness cue — green / amber / red — trumps accent
-            // because the safety signal is the whole point of the mode.
+
+            // Thresholds ON: amber and red are WARNINGS, and the safe level keeps the accent.
+            //
+            // It used to replace the accent with a fixed green below 0.70, which made the mode do
+            // two things when only one of them is its purpose. The cost was reported directly:
+            // with thresholds on - and they are on by default for anyone who turns them on once -
+            // the bar showed the same green whatever colour had been chosen, so the accent looked
+            // broken rather than overridden. The safety signal is the amber and the red; the
+            // green was never part of it.
+            //
+            // Unless the accent is itself a warning colour. An amber accent under an amber
+            // caution is a warning that cannot be seen, so in that case the green comes back and
+            // the mode behaves as it did. Measured by hue distance rather than assumed - see
+            // AccentLooksLikeAWarning.
+            var safe = AccentLooksLikeAWarning() ? _brushGreen : _brushAccent;
+
             return _gainNormalized switch
             {
                 // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
                 // 0.70 ≈ -7 dB on the VM scale, 70 % on the Windows scale.
                 // 0.90 ≈  6 dB on the VM scale, 90 % on the Windows scale.
-                <= 0.70 => _brushGreen,
+                <= 0.70 => safe,
                 <= 0.90 => _brushAmber,
                 _       => _brushRed,
             };
         }
+    }
+
+    /// <summary>
+    /// Whether the accent sits close enough to amber or red that using it as the safe colour
+    /// would hide the warning.
+    ///
+    /// Hue distance, not a guess. Amber and red occupy the warm end - roughly 0째 to 60째 - and an
+    /// accent in that arc would leave caution and danger indistinguishable from normal. Anything
+    /// outside it can carry the safe state without weakening the signal, which is most accents.
+    ///
+    /// Saturation matters too: a near-grey accent has no hue worth comparing, and it contrasts
+    /// with amber and red by luminance anyway.
+    /// </summary>
+    private bool AccentLooksLikeAWarning()
+    {
+        if (_brushAccent is not SolidColorBrush accent) return false;
+
+        var (h, s, _) = Plith.Services.AccentTheme.RgbToHsl(accent.Color);
+        if (s < 0.25) return false;
+
+        const double WarmArcEnd = 60.0;
+        return h <= WarmArcEnd || h >= 360.0 - 10.0;
     }
 
     /// <summary>Voicemeeter back-compat path — derives normalized + dB text from the snapshot.

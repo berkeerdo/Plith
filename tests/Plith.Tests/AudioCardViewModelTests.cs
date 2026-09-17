@@ -151,4 +151,49 @@ public class AudioCardViewModelColorTests
         var vm = new AudioCardViewModel { UseColorThresholds = true, GainNormalized = 0.95 };
         Assert.Equal(Red, ToArgb(vm.GainColor));
     }
+
+    /// <summary>
+    /// With thresholds on, the safe level keeps the accent; amber and red stay as warnings.
+    ///
+    /// It used to replace the accent with a fixed green below 0.70, which made the mode recolour
+    /// the safe state as well as warn — and the recolouring is not what the mode is for. Reported
+    /// as the accent simply not showing: with thresholds on, every colour produced the same green
+    /// bar. Thresholds are not the default, but they are sticky once turned on.
+    /// </summary>
+    [Fact]
+    public void GainColor_WithThresholds_KeepsTheAccentWhileTheLevelIsSafe()
+    {
+        var vm = new AudioCardViewModel { UseColorThresholds = true, GainNormalized = 0.50 };
+        var accent = ((SolidColorBrush)vm.GainColor).Color;
+
+        vm.UseColorThresholds = false;
+        var plainAccent = ((SolidColorBrush)vm.GainColor).Color;
+
+        Assert.Equal(plainAccent, accent);
+    }
+
+    [Theory]
+    [InlineData(0.80)]
+    [InlineData(0.95)]
+    public void GainColor_WithThresholds_StillWarnsAboveTheSafeBand(double level)
+    {
+        var vm = new AudioCardViewModel { UseColorThresholds = true, GainNormalized = 0.50 };
+        var safe = ((SolidColorBrush)vm.GainColor).Color;
+
+        vm.GainNormalized = level;
+        Assert.NotEqual(safe, ((SolidColorBrush)vm.GainColor).Color);
+    }
+
+    /// <summary>
+    /// A muted endpoint still overrides everything — the bar says "off", not "safe".
+    /// </summary>
+    [Fact]
+    public void GainColor_MutedBeatsBothModes()
+    {
+        var vm = new AudioCardViewModel { UseColorThresholds = true, GainNormalized = 0.50 };
+        var safe = ((SolidColorBrush)vm.GainColor).Color;
+
+        vm.Muted = true;
+        Assert.NotEqual(safe, ((SolidColorBrush)vm.GainColor).Color);
+    }
 }

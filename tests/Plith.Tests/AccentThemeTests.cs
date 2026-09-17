@@ -134,6 +134,53 @@ public class AccentThemeTests
         Assert.InRange(back.B, (byte)Math.Max(0, b - 1), (byte)Math.Min(255, b + 1));
     }
 
+    /// <summary>
+    /// A light-theme accent must be tellable from the panel it is drawn on, and must not shout.
+    ///
+    /// Reported as "the colours are too bright in light mode, especially the light ones", with
+    /// Praxvon's lime as the example. Two separate faults sat behind it and the measurement
+    /// separated them: the accent kept FULL saturation because only lightness was ever capped,
+    /// and its bar reached 1.5:1 against its own surface — a colour both loud and invisible, which
+    /// sounds contradictory until you notice that saturation and luminance are different axes.
+    ///
+    /// The dark theme reached 14.8:1 by accident of the palette. Nothing made the light one do
+    /// the same, so now something does.
+    /// </summary>
+    [Theory]
+    [InlineData(0xCA, 0xFF, 0x33)] // Praxvon lime — the reported case
+    [InlineData(0x4A, 0xD6, 0x95)] // emerald
+    [InlineData(0xF5, 0xA6, 0x23)] // amber
+    [InlineData(0x7A, 0xA2, 0xF7)] // sky
+    [InlineData(0xFF, 0xFF, 0x00)] // the worst case: pure saturated yellow
+    public void Derive_LightBg_AccentReadsAgainstItsOwnSurface(byte r, byte g, byte b)
+    {
+        var baseColor = Color.FromRgb(r, g, b);
+        var accent = AccentTheme.Derive(baseColor, isDarkBg: false).Accent;
+        var surface = AccentTheme.DeriveOsdSurfaces(baseColor, isDarkBg: false).SurfaceEnd;
+
+        var ratio = ContrastInk.ContrastRatio(accent, surface);
+        Assert.True(ratio >= 3.0 - 0.05,
+            $"#{r:X2}{g:X2}{b:X2} gave a bar at {ratio:F2}:1 against its own panel");
+
+        // Tolerance of 0.02, not 0.001. The accent is converted to RGB bytes and read back, and
+        // that round trip moves saturation by more than a thousandth - the first version of this
+        // assertion failed on a colour that had been damped exactly as intended. The claim worth
+        // making is "damped", and lime arrives at 1.00, so the margin is not what is being tested.
+        var (_, s, _) = AccentTheme.RgbToHsl(accent);
+        Assert.True(s <= 0.80 + 0.02, $"light-theme saturation {s:F2} was not damped");
+    }
+
+    /// <summary>The dark theme is untouched by that: an accent that already reads is passed
+    /// through at its own saturation, which is what keeps the OSD looking like itself.</summary>
+    [Theory]
+    [InlineData(0xCA, 0xFF, 0x33)]
+    [InlineData(0x4A, 0xD6, 0x95)]
+    public void Derive_DarkBg_LeavesTheAccentAlone(byte r, byte g, byte b)
+    {
+        var baseColor = Color.FromRgb(r, g, b);
+        Assert.Equal(baseColor, AccentTheme.Derive(baseColor, isDarkBg: true).Accent);
+    }
+
     [Fact]
     public void DeriveOsdSurfaces_DarkBg_KeepsSurfacesInDarkRange()
     {
@@ -152,6 +199,52 @@ public class AccentThemeTests
         }
     }
 
+    /// <summary>
+    /// The accent moves the surface only at the extremes, and every built-in preset is inside.
+    ///
+    /// Both halves matter. Without the pull, choosing black on the light theme produced a
+    /// near-white panel — the accent contributed hue and saturation, and black has neither, so
+    /// the lightness stayed where the theme put it. Reported as "I give it black and it looks
+    /// white", and it did.
+    ///
+    /// Without the band, the fix reached past the case it was for: at a band top of 0.75 the
+    /// violet preset (L 0.776) started lightening the dark surface, changing a shipped look to
+    /// serve a custom pick nobody had made. The test above caught that, which is why the band is
+    /// set from the presets rather than chosen.
+    /// </summary>
+    [Fact]
+    public void DeriveOsdSurfaces_FollowsAnExtremeAccentButLeavesPresetsAlone()
+    {
+        // An extreme is obeyed: black asks for a dark panel even on the light theme.
+        var black = AccentTheme.DeriveOsdSurfaces(Color.FromRgb(0, 0, 0), isDarkBg: false);
+        var (_, _, blackL) = AccentTheme.RgbToHsl(black.SurfaceEnd);
+        Assert.True(blackL < 0.30, $"a black accent left the light surface at {blackL:F3}");
+
+        // And symmetrically on the other theme.
+        var white = AccentTheme.DeriveOsdSurfaces(Color.FromRgb(255, 255, 255), isDarkBg: true);
+        var (_, _, whiteL) = AccentTheme.RgbToHsl(white.SurfaceEnd);
+        Assert.True(whiteL > 0.70, $"a white accent left the dark surface at {whiteL:F3}");
+
+        // While every preset produces exactly the theme's own surface, untouched.
+        foreach (var preset in AccentTheme.Presets)
+        {
+            foreach (var isDark in new[] { true, false })
+            {
+                var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDark);
+                var (_, _, l) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
+                // The theme's own surface, which moved when the tint was strengthened: the panel
+                // was deviating from a neutral grey by about 20 channel units on either theme,
+                // which is no tint at all. Colour needs room in the channels, and at L 0.07 or
+                // 0.90 there is none - so the panel came in from the extreme rather than simply
+                // taking more saturation, which would have changed nothing.
+                var expected = isDark ? 0.12 : 0.84;
+
+                Assert.True(Math.Abs(l - expected) < 0.005,
+                    $"{preset.Id} on {(isDark ? "dark" : "light")} moved the surface to {l:F3}, expected {expected:F2}");
+            }
+        }
+    }
+
     [Fact]
     public void DeriveOsdSurfaces_LightBg_KeepsSurfacesInLightRange()
     {
@@ -160,10 +253,10 @@ public class AccentThemeTests
             var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDarkBg: false);
             var (_, _, lStart) = AccentTheme.RgbToHsl(osd.SurfaceStart);
             var (_, _, lEnd) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
-            Assert.True(lStart >= 0.85 - 0.001,
-                $"{preset.Id} SurfaceStart luminance {lStart:F3} below 0.85 on light bg");
-            Assert.True(lEnd >= 0.85 - 0.001,
-                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} below 0.85 on light bg");
+            Assert.True(lStart >= 0.80 - 0.001,
+                $"{preset.Id} SurfaceStart luminance {lStart:F3} below 0.80 on light bg");
+            Assert.True(lEnd >= 0.80 - 0.001,
+                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} below 0.80 on light bg");
         }
     }
 

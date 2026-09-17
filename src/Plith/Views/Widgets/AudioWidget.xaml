@@ -43,9 +43,13 @@
                                         <RepeatButton.Template>
                                             <ControlTemplate TargetType="RepeatButton">
                                                 <Grid Background="Transparent">
+                                                    <!-- GainColor, not the fixed green: the
+                                                         accent when thresholds are off, the
+                                                         loudness colour when they are on. Same
+                                                         binding the classic card uses. -->
                                                     <Border Height="6" CornerRadius="3"
                                                             VerticalAlignment="Center"
-                                                            Background="{DynamicResource OsdGainGreen}" />
+                                                            Background="{Binding GainColor}" />
                                                 </Grid>
                                             </ControlTemplate>
                                         </RepeatButton.Template>

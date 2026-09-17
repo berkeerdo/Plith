@@ -89,10 +89,20 @@
             <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
                     VerticalAlignment="Center"
                     Background="{DynamicResource NotchTrack}">
+                <!-- The view model's colour, not the fixed green.
+
+                     GainColor already decides this correctly: the accent when colour thresholds
+                     are off, and green/amber/red when they are on. The classic card has bound to
+                     it since it was written; the notch wrote OsdGainGreen directly and so showed
+                     the same green whatever accent was chosen and whatever the setting said.
+
+                     Reported as "every colour looks the same in light mode" - and it was true of
+                     both themes, only harder to notice on the dark one where the tinted panel
+                     carries some of the colour. -->
                 <Border x:Name="LevelFill"
                         HorizontalAlignment="Left"
                         CornerRadius="3"
-                        Background="{DynamicResource OsdGainGreen}" />
+                        Background="{Binding GainColor}" />
             </Border>
 
             <TextBlock x:Name="LevelText" Grid.Column="2"

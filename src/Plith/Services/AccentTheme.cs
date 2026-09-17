@@ -63,6 +63,22 @@ public static class AccentTheme
     // (Praxvon Lime, native L ~0.6) still reads on #FFFFFF cards.
     private const double LightLuminanceCap = 0.42;
 
+    // And a saturation guardrail, which the cap above never had.
+    //
+    // Reported as "the colours are too bright in light mode, especially the light ones", and the
+    // measurement agreed: lime came out at full saturation, S 1.00, sitting at L 0.42 on a pale
+    // panel. Damping lightness alone leaves a colour just as loud - the surfaces have been damping
+    // saturation since they were written, and the accent itself was the one thing that was not.
+    private const double LightSaturationCap = 0.80;
+
+    // How much a light-theme accent must stand out from the panel it is drawn on.
+    //
+    // 3:1 is WCAG's bar for a non-text shape, which is what a 6 DIP level bar is. Measured before
+    // this existed: lime's bar against its own surface was 1.5:1 - the same colour family at the
+    // same luminance, so a bar that was loud and invisible at once. The dark theme reached 14.8:1
+    // by accident of the palette, and nothing made the light one do the same.
+    private const double LightAccentOnSurface = 3.0;
+
     /// <summary>
     /// Returns the base <see cref="Color"/> that <paramref name="id"/> refers to.
     /// For <see cref="CustomId"/>, <paramref name="customHex"/> is parsed; when it
@@ -89,53 +105,166 @@ public static class AccentTheme
     public static AccentDerived Derive(Color baseColor, bool isDarkBg)
     {
         var (h, s, l) = RgbToHsl(baseColor);
-        if (!isDarkBg && l > LightLuminanceCap) l = LightLuminanceCap;
+
+        if (!isDarkBg)
+        {
+            if (l > LightLuminanceCap) l = LightLuminanceCap;
+            if (s > LightSaturationCap) s = LightSaturationCap;
+
+            // Then darken until the accent actually reads against the panel it will sit on.
+            //
+            // The surface is derived from the same base, so this asks the real question rather
+            // than a proxy for it: not "is this colour dark enough in the abstract" but "can this
+            // bar be told from the panel behind it". A fixed cap cannot answer that, because how
+            // dark is dark enough depends on the hue - a saturated yellow at L 0.42 is far
+            // brighter than a saturated blue at the same L, and only the measurement knows.
+            var surface = DeriveOsdSurfaces(baseColor, isDarkBg: false).SurfaceEnd;
+            while (l > 0.12 &&
+                   ContrastInk.ContrastRatio(HslToRgb(h, s, l), surface) < LightAccentOnSurface)
+            {
+                l -= 0.02;
+            }
+        }
 
         var accent = HslToRgb(h, s, l);
-        var hover = isDarkBg
-            ? HslToRgb(h, s, System.Math.Min(1.0, l + 0.06))
-            : HslToRgb(h, s, System.Math.Max(0.0, l - 0.06));
-        var pressed = isDarkBg
-            ? HslToRgb(h, s, System.Math.Max(0.0, l - 0.08))
-            : HslToRgb(h, s, System.Math.Max(0.0, l - 0.12));
+
+        // Preferred direction, but only while there is room to move in it.
+        //
+        // These used to clamp instead: a dark theme brightened on hover, a light theme darkened,
+        // and both saturated at the end of the scale. Pure black in the light theme therefore
+        // produced hover and pressed identical to the accent - every accent-coloured control
+        // went dead, responding to neither hover nor press. Pure white did the same on the dark
+        // theme. Reported as "it breaks when I pick black", and it did.
+        //
+        // Clamping is the wrong answer at an extreme because the answer is not "as far as you
+        // can go", it is "somewhere visibly different". When the preferred direction has no
+        // headroom, the other one has all of it.
+        var hover = HslToRgb(h, s, Nudge(l, 0.06, preferUp: isDarkBg));
+        var pressed = HslToRgb(h, s, Nudge(l, isDarkBg ? 0.08 : 0.12, preferUp: false));
         var glow = Color.FromArgb(0x1A, accent.R, accent.G, accent.B);
         return new AccentDerived(accent, hover, pressed, glow);
     }
 
     /// <summary>
-    /// Derives the tinted OSD card surfaces from a base accent so the whole overlay
-    /// feels themed, not just the volume bar. Dark surfaces sit at L≈0.07-0.11 so
-    /// the OSD stays readable over exclusive-fullscreen games; light surfaces sit
-    /// at L≈0.90-0.94 so they stay legible on bright content. Saturation is damped
-    /// so loud primaries (lime, magenta) don't turn the whole card into a beacon —
-    /// the bar itself still sits at the full accent tone for contrast.
+    /// Move a lightness by <paramref name="delta"/>, in the preferred direction when it fits and
+    /// the opposite one when it does not.
+    ///
+    /// The point is that the result must DIFFER from where it started. A clamp satisfies the
+    /// bounds and loses the difference, which is exactly what it must not do for a hover state.
+    /// </summary>
+    private static double Nudge(double l, double delta, bool preferUp)
+    {
+        if (preferUp && l + delta <= 1.0) return l + delta;
+        if (!preferUp && l - delta >= 0.0) return l - delta;
+
+        // No room the preferred way; the other way has it by definition, since delta is small.
+        return preferUp
+            ? System.Math.Max(0.0, l - delta)
+            : System.Math.Min(1.0, l + delta);
+    }
+
+    /// <summary>
+    /// Derives the tinted OSD card surfaces from a base accent so the whole overlay feels themed,
+    /// not just the volume bar.
+    ///
+    /// The theme sets where this starts: dark surfaces around L 0.07-0.11 so the OSD stays
+    /// readable over a full-screen game, light ones around 0.90-0.95 so they hold up on bright
+    /// content. Saturation is damped either way, so a loud primary reads as a tint rather than as
+    /// paint — the bar itself still sits at the full accent tone.
+    ///
+    /// What the accent ALSO does now is pull that lightness toward its own.
+    ///
+    /// It used to contribute only hue and saturation, which made one case absurd: choosing black
+    /// on the light theme produced a near-white panel, because black has no hue to tint with and
+    /// the lightness was fixed by the theme. Reported exactly that way — "I give it black and it
+    /// looks white". The accent was a hue signal wearing the clothes of a colour picker.
+    ///
+    /// The pull only engages outside the band the theme is comfortable in, so every accent that
+    /// looks right today is untouched: a lime, a pink, a blue all sit well inside it and produce
+    /// precisely what they produced before. It is the far ends — the choices that currently read
+    /// as broken — that move. Readability does not depend on where they land: the ink is computed
+    /// from the surface by <see cref="ContrastInk"/>, and scripts/check-contrast.ps1 measures
+    /// every accent against both themes.
     /// </summary>
     public static OsdSurfaceDerived DeriveOsdSurfaces(Color baseColor, bool isDarkBg)
     {
-        var (h, s, _) = RgbToHsl(baseColor);
+        var (h, s, l) = RgbToHsl(baseColor);
+
+        // Stronger than it was, in both themes, because it was not carrying the accent at all.
+        //
+        // Measured before changing it: the panel deviated from a neutral grey of the same
+        // lightness by about 20 channel units on either theme - invisible unless two of them are
+        // side by side. Reported as "the colour I give does not show, it goes white", which on
+        // the light theme is literally what a 1.3:1 difference from white looks like.
+        //
+        // Raising saturation alone would not have helped, and that is the part worth keeping:
+        // colour needs room in the channels to exist, and at L 0.07 or L 0.90 there is none. The
+        // panel had to come in from the extreme. Dark stops at 0.15, which is the limit a test
+        // has enforced since long before this for readability over a full-screen game.
+        double surfSat = System.Math.Min(s, isDarkBg ? 0.70 : 0.55);
+
+        var startL = SurfaceLightness(l, isDarkBg, themeDefault: isDarkBg ? 0.15 : 0.88);
+        var endL = SurfaceLightness(l, isDarkBg, themeDefault: isDarkBg ? 0.12 : 0.84);
+
+        // Border, track and divider are offsets FROM the surface rather than absolute values, and
+        // they move away from it — toward whichever side has the contrast. As absolutes they were
+        // correct only while the surface stayed where the theme put it; a panel pulled dark on the
+        // light theme would have kept a border lighter than nothing it sits on.
+        var away = endL < 0.5 ? 1.0 : -1.0;
+
+        return new OsdSurfaceDerived(
+            SurfaceStart: HslToRgb(h, surfSat, startL),
+            SurfaceEnd:   HslToRgb(h, surfSat, endL),
+            Border:       HslToRgb(h, surfSat, Clamp01(endL + away * 0.15)),
+            TrackBg:      HslToRgb(h, surfSat, Clamp01(endL + away * 0.21)),
+            Divider:      HslToRgb(h, surfSat, Clamp01(endL + away * 0.13)));
+    }
+
+    /// <summary>
+    /// Where a surface sits: the theme's own lightness, pulled toward the accent's when the accent
+    /// is outside the band the theme is comfortable in.
+    ///
+    /// The band is deliberately wide. Inside it nothing happens at all, which is what keeps every
+    /// accent that already looks right looking identical; outside it the pull ramps in smoothly,
+    /// so there is no step where one hex behaves completely differently from the one next to it.
+    ///
+    /// The target is the accent's lightness eased off the very end — a surface at pure black or
+    /// pure white is a hole or a glare rather than a panel, and the accent is still a tint even
+    /// when it is being obeyed.
+    /// </summary>
+    private static double SurfaceLightness(double accentL, bool isDarkBg, double themeDefault)
+    {
+        // Dark themes are comfortable with any accent up to fairly bright; light themes with any
+        // accent down to fairly dark. Beyond that the theme and the choice disagree, and the
+        // choice is the one the user made.
+        // Set from the built-in presets rather than by taste: the highest of them is violet at
+        // L 0.776, and a preset is by definition a choice the product says looks right. A band
+        // that catches one would change a shipped look to fix a custom pick nobody made.
+        // Measured, not guessed - 0.75 caught violet, and the test that has asserted dark
+        // surfaces stay dark since before any of this existed is what said so.
+        const double DarkBandTop = 0.85;
+        const double LightBandBottom = 0.25;
+
+        double t;
+        double target;
 
         if (isDarkBg)
         {
-            // Darker surfaces tolerate more saturation than lighter ones without
-            // shouting; still cap so a highly saturated pick reads as a tint, not paint.
-            double surfSat = System.Math.Min(s, 0.55);
-            return new OsdSurfaceDerived(
-                SurfaceStart: HslToRgb(h, surfSat, 0.11),
-                SurfaceEnd:   HslToRgb(h, surfSat, 0.07),
-                Border:       HslToRgb(h, surfSat, 0.22),
-                TrackBg:      HslToRgb(h, surfSat, 0.28),
-                Divider:      HslToRgb(h, surfSat, 0.20));
+            if (accentL <= DarkBandTop) return themeDefault;
+            t = (accentL - DarkBandTop) / (1.0 - DarkBandTop);
+            target = accentL - 0.10;
         }
-        // Light surfaces bleach out fast — hold saturation lower so the tint stays
-        // "a note of colour" instead of turning into pastel highlighter.
-        double lightSat = System.Math.Min(s, 0.35);
-        return new OsdSurfaceDerived(
-            SurfaceStart: HslToRgb(h, lightSat, 0.95),
-            SurfaceEnd:   HslToRgb(h, lightSat, 0.90),
-            Border:       HslToRgb(h, lightSat, 0.78),
-            TrackBg:      HslToRgb(h, lightSat, 0.84),
-            Divider:      HslToRgb(h, lightSat, 0.82));
+        else
+        {
+            if (accentL >= LightBandBottom) return themeDefault;
+            t = (LightBandBottom - accentL) / LightBandBottom;
+            target = accentL + 0.10;
+        }
+
+        return Clamp01(themeDefault + (target - themeDefault) * Clamp01(t));
     }
+
+    private static double Clamp01(double v) => System.Math.Clamp(v, 0.0, 1.0);
 
     /// <summary>Parses "#RRGGBB" / "RRGGBB" / "#AARRGGBB". Returns <paramref name="fallback"/>
     /// on null / empty / malformed input so the caller never crashes on a corrupt config.</summary>
