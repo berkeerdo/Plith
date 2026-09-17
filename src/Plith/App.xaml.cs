@@ -1,6 +1,7 @@
 using System.Windows;
 using Plith.Cards;
 using Plith.Services;
+using Plith.Services.Shelf;
 using Plith.Views;
 
 namespace Plith;
@@ -34,6 +35,7 @@ public partial class App : Application
     private NativeFlyoutSuppressor? _flyoutSuppressor;
     private VolumeKeyHook? _volumeKeyHook;
     private FullscreenVideoWatcher? _fullscreenWatcher;
+    private DropChannelServer? _dropChannel;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -172,6 +174,49 @@ public partial class App : Application
 
         _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
         _trayHost.Initialize();
+
+        StartShelf();
+    }
+
+    /// <summary>
+    /// The drop catcher and the pipe it talks over. Started last, because nothing else waits on
+    /// it: the pipe is listening from this point and the catcher connects whenever it comes up,
+    /// which may be seconds later or — if Explorer is being slow — not at all this session.
+    /// </summary>
+    private void StartShelf()
+    {
+        var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
+        if (sid is null)
+        {
+            _diagnosticLog?.Warn("Shelf", "No user SID; the shelf cannot name its pipe.");
+            return;
+        }
+
+        _dropChannel = new DropChannelServer(sid, _diagnosticLog);
+        _dropChannel.Received += OnDropChannelMessage;
+        _dropChannel.Start();
+        _diagnosticLog?.Info("Shelf", "Drop channel listening.");
+
+        DropCatcherLauncher.EnsureRunning(_diagnosticLog);
+    }
+
+    private void OnDropChannelMessage(DropMessage message)
+    {
+        // Raised off the UI thread by the pipe's read loop.
+        switch (message.Verb)
+        {
+            case DropVerb.Hello:
+                // The one line that says the design is working end to end: a Medium process
+                // reached a pipe owned by a High one. Without the explicit ACL on that pipe this
+                // never appears, and the catcher logs an access denial instead.
+                _diagnosticLog?.Info("Shelf", "Drop catcher connected.");
+                break;
+            case DropVerb.Dropped:
+                _diagnosticLog?.Info("Shelf", $"Drop reported: {message.Paths.Count} path(s).");
+                break;
+            default:
+                break;
+        }
     }
 
     private void ApplyHotkeyFromSettings(SettingsModel m)
@@ -216,6 +261,11 @@ public partial class App : Application
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
+        DisposeStep("DropChannel",       () =>
+        {
+            if (_dropChannel is not null) _dropChannel.Received -= OnDropChannelMessage;
+            _dropChannel?.Dispose();
+        });
         DisposeStep("TrayIconHost",      () => _trayHost?.Dispose());
 
         _diagnosticLog?.Info("App", "OnExit — base.OnExit");

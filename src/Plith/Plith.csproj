@@ -45,6 +45,27 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Built alongside Plith, but NOT referenced as an assembly: the catcher is a separate
+         process on purpose and must not be linked into this one. ReferenceOutputAssembly=false
+         gives the build ordering without the reference. -->
+    <ProjectReference Include="../Plith.DropCatcher/Plith.DropCatcher.csproj"
+                      ReferenceOutputAssembly="false"
+                      Private="false" />
+  </ItemGroup>
+
+  <!-- The launcher looks for the catcher beside Plith.exe and nowhere else, so the build has to
+       put it there. Without this the shelf is silently absent in every dev run: Plith starts, the
+       pipe listens, and nothing ever connects. -->
+  <Target Name="CopyDropCatcherBesidePlith" AfterTargets="Build">
+    <ItemGroup>
+      <DropCatcherOutput Include="$(MSBuildThisFileDirectory)../Plith.DropCatcher/bin/$(Configuration)/$(TargetFramework)/**/*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(DropCatcherOutput)"
+          DestinationFolder="$(OutDir)%(RecursiveDir)"
+          SkipUnchangedFiles="true" />
+  </Target>
+
+  <ItemGroup>
     <PackageReference Include="Hardcodet.NotifyIcon.Wpf" Version="2.0.1" />
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="WpfScreenHelper" Version="1.1.0" />
