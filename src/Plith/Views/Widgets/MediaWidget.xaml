@@ -12,6 +12,20 @@
                 <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
+            <!-- This page carries its own ink, because it carries its own ground.
+
+                 NotchInk is computed from the themed surface now - dark on the light theme, light
+                 on the dark one - which is right for the pages that sit ON that surface. This one
+                 does not: the artwork below is covered by a near-black scrim in both themes, so
+                 the ground here is dark whatever the theme is. Inheriting the themed ink put dark
+                 text on that scrim the moment the light theme was selected.
+
+                 The weather page has the same shape for the same reason - it paints a sky, so it
+                 sets its own colours too. A page that paints its own background owns its own
+                 foreground. Declared after the merge above so it wins over anything merged. -->
+            <SolidColorBrush x:Key="NotchInk" Color="#F2F5F8" />
+            <SolidColorBrush x:Key="NotchInkMuted" Color="#9AA6B2" />
+
             <Style x:Key="TransportButtonStyle" TargetType="Button">
                 <Setter Property="Width" Value="30" />
                 <Setter Property="Height" Value="30" />

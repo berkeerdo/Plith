@@ -38,6 +38,10 @@
     <SolidColorBrush x:Key="TextDisabled" Color="{x:Static SystemColors.GrayTextColor}" />
 
     <SolidColorBrush x:Key="Accent" Color="{x:Static SystemColors.HighlightColor}" />
+    <!-- The system's own pairing. High contrast returns an empty accent override, so this is
+         the value that is actually used there - and the one the user has chosen at OS level. -->
+    <SolidColorBrush x:Key="OnAccent" Color="{x:Static SystemColors.HighlightTextColor}" />
+    <SolidColorBrush x:Key="AccentTrack" Color="{x:Static SystemColors.ControlColor}" />
     <SolidColorBrush x:Key="AccentHover" Color="{x:Static SystemColors.HighlightColor}" />
     <SolidColorBrush x:Key="AccentPressed" Color="{x:Static SystemColors.HighlightColor}" />
     <SolidColorBrush x:Key="AccentGlow" Color="{x:Static SystemColors.HighlightColor}" />

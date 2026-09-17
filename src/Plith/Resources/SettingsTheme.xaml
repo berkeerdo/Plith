@@ -422,7 +422,9 @@
         <Setter Property="FontFamily" Value="{StaticResource UiFont}" />
         <Setter Property="FontWeight" Value="SemiBold" />
         <Setter Property="FontSize" Value="13" />
-        <Setter Property="Foreground" Value="#0A0A0A" />
+        <!-- Computed from the accent behind it, not fixed. Near-black is right for a pale
+             accent and unreadable on a deep one, and the accent is the user's to choose. -->
+        <Setter Property="Foreground" Value="{DynamicResource OnAccent}" />
         <Setter Property="Background" Value="{DynamicResource Accent}" />
         <Setter Property="Padding" Value="22,9" />
         <Setter Property="MinHeight" Value="34" />
@@ -523,7 +525,10 @@
         <Setter Property="OverridesDefaultStyle" Value="True" />
         <Setter Property="Height" Value="4" />
         <Setter Property="Foreground" Value="{DynamicResource Accent}" />
-        <Setter Property="Background" Value="{DynamicResource ButtonGhost}" />
+        <!-- The groove is derived from the accent, not a general neutral: ButtonGhost knows
+             nothing about which accent is running in front of it, and a deep one measured 1.6:1
+             against it — a bar with no visible progress. -->
+        <Setter Property="Background" Value="{DynamicResource AccentTrack}" />
         <Setter Property="BorderThickness" Value="0" />
         <Setter Property="SnapsToDevicePixels" Value="True" />
         <Setter Property="Template">

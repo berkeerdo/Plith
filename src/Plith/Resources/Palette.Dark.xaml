@@ -22,6 +22,10 @@
     <SolidColorBrush x:Key="TextDisabled" Color="#52525B" />
 
     <SolidColorBrush x:Key="Accent" Color="{StaticResource SignalColor}" />
+    <!-- Text on the accent. ThemeService overrides this with a value computed from whichever
+         accent the user picked; this is the fallback for the untinted default. -->
+    <SolidColorBrush x:Key="OnAccent" Color="#14171C" />
+    <SolidColorBrush x:Key="AccentTrack" Color="#2A323C" />
     <SolidColorBrush x:Key="AccentHover" Color="#5BE0A5" />
     <SolidColorBrush x:Key="AccentPressed" Color="#3FBF85" />
     <SolidColorBrush x:Key="AccentGlow" Color="#1A4AD695" />

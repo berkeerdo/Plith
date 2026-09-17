@@ -1282,11 +1282,6 @@ public partial class SettingsWindow : Window
         }
     }
 
-    // Rec.601 luma is close enough for a pass/fail readability decision against pure
-    // black vs pure white overlay glyphs on a coloured swatch. Threshold picked so
-    // Praxvon Lime (#CAFF33, luma 218) shows black text, Emerald (#4AD695, luma 175)
-    // shows black text, and Violet (#BD93F9, luma 158) also picks black — while any
-    // saturated dark tone gets white.
     /// <summary>
     /// A swatch mark, drawn rather than set from a font.
     ///
@@ -1313,7 +1308,14 @@ public partial class SettingsWindow : Window
 
     private static SolidColorBrush ContrastText(Color bg)
     {
-        double luma = 0.299 * bg.R + 0.587 * bg.G + 0.114 * bg.B;
-        return luma > 150 ? Brushes.Black : Brushes.White;
+        // ContrastInk, not a luma threshold of its own.
+        //
+        // This was Rec.601 weights against a hand-picked cut-off of 150, tuned by checking three
+        // presets by eye. It answered the same question the rest of the theme now answers
+        // properly, with different arithmetic and a different answer near the crossover - and a
+        // second way of deciding a foreground is exactly how a product ends up with a readable
+        // panel and an unreadable swatch on it.
+        // ContrastInk.On returns the ink; this only has to say which of the two brushes that is.
+        return ContrastInk.RelativeLuminance(ContrastInk.On(bg)) < 0.5 ? Brushes.Black : Brushes.White;
     }
 }

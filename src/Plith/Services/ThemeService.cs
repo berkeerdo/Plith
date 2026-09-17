@@ -57,6 +57,14 @@ public sealed class ThemeService : IDisposable
     private const string KeyOsdTrackBg = "OsdTrackBg";
     private const string KeyOsdDivider = "OsdDivider";
 
+    // Ink computed from the tinted surface rather than declared in a palette. The palettes still
+    // carry defaults for the untinted case; these override them once a tint is in play.
+    private const string KeyNotchInk = "NotchInk";
+    private const string KeyNotchInkMuted = "NotchInkMuted";
+    private const string KeyNotchTrack = "NotchTrack";
+    private const string KeyOnAccent = "OnAccent";
+    private const string KeyAccentTrack = "AccentTrack";
+
     // Alpha channels match the values the base OsdPalette.*.xaml files already use, so
     // swapping in a tinted brush keeps the same drop-shadow-over-game translucency the
     // OSD had before the Theme Studio landed.
@@ -223,8 +231,23 @@ public sealed class ThemeService : IDisposable
 
         var s = _settings.Current;
         var baseColor = AccentTheme.ResolveBase(s.AccentThemeId, s.CustomAccentColor);
-        var derived = AccentTheme.Derive(baseColor, IsEffectiveDark);
-        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, IsEffectiveDark);
+        return BuildAccentOverride(baseColor, IsEffectiveDark);
+    }
+
+    /// <summary>
+    /// The same dictionary, from an explicit accent and theme rather than from settings.
+    ///
+    /// Static and public so the offscreen render harness can build exactly what the running app
+    /// builds. That is not a convenience: the harness spent this branch painting widgets on a
+    /// flat ground while the app painted them on an accent-tinted gradient, so every colour
+    /// judgement made from its output was made against the wrong background — including the one
+    /// that shipped a page nobody could read. A harness that recomputes the colours itself would
+    /// drift from this method the first time either changed; calling it cannot.
+    /// </summary>
+    public static ResourceDictionary BuildAccentOverride(Color baseColor, bool isDark)
+    {
+        var derived = AccentTheme.Derive(baseColor, isDark);
+        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, isDark);
 
         return new ResourceDictionary
         {
@@ -241,6 +264,35 @@ public sealed class ThemeService : IDisposable
             [KeyOsdBorder]     = FrozenBrush(osd.Border),
             [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(osd.TrackBg, OsdTrackAlpha)),
             [KeyOsdDivider]    = FrozenBrush(WithAlpha(osd.Divider, OsdDividerAlpha)),
+
+            // Ink for the notch, computed from the surface it will actually be drawn on.
+            //
+            // It used to be a constant in each palette - near-white in both - on the reasoning
+            // that the notch is a near-black cutout rather than a surface. That reasoning was
+            // sound for the bezel and wrong for what got built: NotchSurface paints itself with
+            // OsdSurfaceBrush, which IS tinted, and on the light theme that lands around 90%
+            // lightness. A pink accent gave a pale pink panel with near-white text on it,
+            // reported as simply unreadable.
+            //
+            // Derived from the surface END rather than the start: the gradient runs top to
+            // bottom, the end is the darker of the two on dark themes and the lighter on light
+            // ones, and choosing the harder half means the text clears the threshold across the
+            // whole panel rather than only at the easy end.
+            [KeyNotchInk]      = FrozenBrush(ContrastInk.PairOn(osd.SurfaceEnd).Ink),
+            [KeyNotchInkMuted] = FrozenBrush(ContrastInk.PairOn(osd.SurfaceEnd).Muted),
+            [KeyNotchTrack]    = FrozenBrush(ContrastInk.TrackOn(osd.SurfaceEnd)),
+
+            // Text on the accent itself - the primary button. It was hard-coded near-black,
+            // which is right for a pale accent and unreadable on a deep one.
+            [KeyOnAccent]      = FrozenBrush(ContrastInk.On(derived.Accent)),
+
+            // The groove a progress bar's accent fill runs in. It used to be ButtonGhost, a
+            // general neutral that knows nothing about the accent - and a deep blue accent on it
+            // measured 1.6:1, which is a progress bar you cannot see progressing. Derived from
+            // the accent instead, so the fill always reads against its own track whatever the
+            // accent is, and still looks like the same material recessed rather than a second
+            // colour introduced.
+            [KeyAccentTrack]   = FrozenBrush(ContrastInk.TrackOn(derived.Accent)),
         };
     }
 
@@ -351,11 +403,15 @@ public sealed class ThemeService : IDisposable
 
     private static bool IsColorDark(Color c)
     {
-        // Perceived-luminance heuristic (Rec. 601 weights). Windows high-contrast themes
-        // can be either polarity (e.g. "High Contrast Black" vs "High Contrast White"), so
-        // this can't be assumed the way Dark/Light palette kind can.
-        double luminance = ((0.299 * c.R) + (0.587 * c.G) + (0.114 * c.B)) / 255.0;
-        return luminance < 0.5;
+        // "Is this dark" and "what ink goes on it" are the same question, so they are answered in
+        // the same place. This was a separate Rec.601 heuristic with its own 0.5 cut-off; it
+        // agreed with ContrastInk most of the time, which is the worst property a duplicate rule
+        // can have - it disagrees only near the crossover, where the answer matters most.
+        //
+        // Windows high-contrast themes can be either polarity ("High Contrast Black" vs "High
+        // Contrast White"), which is why this cannot simply follow the palette kind.
+        // Light ink was chosen for it, so the surface is dark.
+        return ContrastInk.RelativeLuminance(ContrastInk.On(c)) > 0.5;
     }
 
     private static bool IsSystemDark()

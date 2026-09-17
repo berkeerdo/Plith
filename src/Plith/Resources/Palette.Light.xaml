@@ -23,6 +23,8 @@
     <SolidColorBrush x:Key="TextDisabled" Color="#A1A1AA" />
 
     <SolidColorBrush x:Key="Accent" Color="{StaticResource SignalColor}" />
+    <SolidColorBrush x:Key="OnAccent" Color="#14171C" />
+    <SolidColorBrush x:Key="AccentTrack" Color="#2A323C" />
     <SolidColorBrush x:Key="AccentHover" Color="#047857" />
     <SolidColorBrush x:Key="AccentPressed" Color="#065F46" />
     <SolidColorBrush x:Key="AccentGlow" Color="#1A059669" />
