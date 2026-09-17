@@ -39,6 +39,15 @@ Write-Host "Checking shared XAML..."
 & pwsh -NoProfile -ExecutionPolicy Bypass -File (Join-Path $PSScriptRoot 'check-shared-xaml.ps1')
 if ($LASTEXITCODE -ne 0) { throw "Shared XAML check failed." }
 
+# 0b. Text must be readable on every theme and accent.
+#
+# Also before the tests, and for the same reason as the check above it: 0.1.6 shipped ink declared
+# as a constant on a surface the user tints, and on the light theme every accent put it below
+# 1.3:1 - unreadable, and invisible to the build, the suite and the render harness alike.
+Write-Host "Checking contrast..."
+& pwsh -NoProfile -ExecutionPolicy Bypass -STA -File (Join-Path $PSScriptRoot 'check-contrast.ps1')
+if ($LASTEXITCODE -ne 0) { throw "Contrast check failed." }
+
 # 1. Tests must pass.
 Write-Host "Running Plith.Tests..."
 & dotnet test $plithTests

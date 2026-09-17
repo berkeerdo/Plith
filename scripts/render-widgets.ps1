@@ -14,7 +14,18 @@
 [CmdletBinding()]
 param(
     [string]$OutDir = "$env:TEMP\plith-render",
-    [string]$Configuration = 'Debug'
+    [string]$Configuration = 'Debug',
+
+    # The theme to render in. Light exists because the OSD's ink was a constant chosen for a dark
+    # panel, and on the light theme the accent-tinted surface goes pale - white on pale pink,
+    # measured at 1.2:1. Nothing in this harness could show that while it only rendered dark.
+    [ValidateSet('Dark', 'Light')]
+    [string]$Theme = 'Dark',
+
+    # The accent to tint with, as the user would pick it. Empty renders the untinted palette.
+    # Tinting matters more than it sounds: the running app paints the OSD on a gradient derived
+    # from this colour, so a render on a flat ground is a render of something that never ships.
+    [string]$Accent = '#A3E635'
 )
 
 $ErrorActionPreference = 'Stop'
@@ -51,9 +62,25 @@ else { $app = [Windows.Application]::Current }
 # shorter and more certain path - and it sidesteps the fact that a ResourceDictionary reached
 # through Application.Current in PowerShell does not behave like the dictionary it wraps.
 $paletteSources = @(
-    'Resources/Theme.xaml', 'Resources/Palette.Dark.xaml',
-    'Resources/OsdPalette.Dark.xaml', 'Resources/PlithIcons.xaml'
+    'Resources/Theme.xaml', "Resources/Palette.$Theme.xaml",
+    "Resources/OsdPalette.$Theme.xaml", 'Resources/PlithIcons.xaml'
 )
+
+# The accent override, built by the SAME method the running app calls.
+#
+# Not recomputed here. A harness that derives its own colours drifts from the app the first time
+# either changes, and this branch has already paid for that once: every colour judged from these
+# renders was judged against a flat ground the product does not have.
+$accentOverride = $null
+if ($Accent) {
+    $baseColor = [Plith.Services.AccentTheme]::ParseHexColor($Accent, [Windows.Media.Colors]::Gray)
+    $accentOverride = [Plith.Services.ThemeService]::BuildAccentOverride($baseColor, ($Theme -eq 'Dark'))
+}
+
+# The ground the OSD actually sits on, so a render shows the contrast a person gets.
+$osdSurfaces = if ($Accent) {
+    [Plith.Services.AccentTheme]::DeriveOsdSurfaces($baseColor, ($Theme -eq 'Dark'))
+} else { $null }
 
 # The classic cards resolve StaticResource at CONSTRUCTION, which searches the application
 # rather than a tree the control is not in yet. The widget pages get away with DynamicResource
@@ -63,6 +90,8 @@ foreach ($rel in $paletteSources) {
     $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
     $app.Resources.MergedDictionaries.Add($d)
 }
+
+if ($accentOverride) { $app.Resources.MergedDictionaries.Add($accentOverride) }
 
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
@@ -77,6 +106,9 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
         $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
         $Element.Resources.MergedDictionaries.Add($d)
     }
+
+    # Last, so it wins over the palette defaults it is there to override.
+    if ($accentOverride) { $Element.Resources.MergedDictionaries.Add($accentOverride) }
 }
 
 # Proven before anything is drawn: an unresolved resource renders as WPF's default, which is
@@ -87,7 +119,7 @@ foreach ($k in 'NotchInk','NotchTrack','OsdGainGreen','OsdTextPrimary','OsdUiFon
     $v = $probe.TryFindResource($k)
     if ($null -eq $v) { throw "Resource '$k' did not resolve - the render would be meaningless." }
 }
-"  palette resolved"
+"  palette resolved ($Theme theme, accent $(if ($Accent) { $Accent } else { 'none' }))"
 
 function Save-Visual {
     # [double] on a PowerShell param is not enough: a caller passing 356.0 through a variable
@@ -103,7 +135,17 @@ function Save-Visual {
     # element floating on transparency.
     $host_ = [Windows.Controls.Border]::new()
     Add-Palette $host_
-    $host_.Background = [Windows.Media.BrushConverter]::new().ConvertFromString($Background)
+    # The surface the OSD is actually drawn on, not a flat colour. This is the whole reason the
+    # light-theme contrast bug was invisible here for a whole branch.
+    if ($osdSurfaces -and -not $PSBoundParameters.ContainsKey('Background')) {
+        $g = [Windows.Media.LinearGradientBrush]::new()
+        $g.StartPoint = [Windows.Point]::new(0, 0); $g.EndPoint = [Windows.Point]::new(0, 1)
+        $g.GradientStops.Add([Windows.Media.GradientStop]::new($osdSurfaces.SurfaceStart, 0))
+        $g.GradientStops.Add([Windows.Media.GradientStop]::new($osdSurfaces.SurfaceEnd, 1))
+        $host_.Background = $g
+    } else {
+        $host_.Background = [Windows.Media.BrushConverter]::new().ConvertFromString($Background)
+    }
     $host_.Width = $W; $host_.Height = $H
     $host_.Child = $Element
 
@@ -226,13 +268,17 @@ Save-Visual -Element $hud2 -W 372.0 -H 54.0 -Name 'hud-media'
 # --- the classic card ----------------------------------------------------------------------
 # Rendered on its own ground rather than the notch's bezel: it is a floating card, and judging
 # it against black would flatter a border that has to work over a desktop.
+#
+# The stand-in desktop follows the theme. A light-theme card judged against a near-black ground
+# is a card judged against a desktop nobody using the light theme has.
+$desktop = if ($Theme -eq 'Light') { '#E9EAEC' } else { '#151A21' }
 $audioCard = [Plith.Views.AudioCardView]::new()
 $audioCard.DataContext = $audioVm
-Save-Visual -Element $audioCard -W 382.0 -H 56.0 -Name 'card-audio' -Background '#151A21'
+Save-Visual -Element $audioCard -W 382.0 -H 56.0 -Name 'card-audio' -Background $desktop
 
 $mediaCard = [Plith.Views.MediaCardView]::new()
 $mediaCard.DataContext = $mediaVm
-Save-Visual -Element $mediaCard -W 382.0 -H 56.0 -Name 'card-media' -Background '#151A21'
+Save-Visual -Element $mediaCard -W 382.0 -H 56.0 -Name 'card-media' -Background $desktop
 
 # --- the cloud silhouette on its own ------------------------------------------------------
 # The sky builds its clouds only once the page is visible, which an offscreen render never is -
