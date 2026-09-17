@@ -9,7 +9,7 @@ public enum DropVerb
     /// catcher is alive before it hides the notch for one.</summary>
     Hello,
 
-    /// <summary>Take the notch's place: the rectangle travels in X/Y/W/H, in DIP.</summary>
+    /// <summary>Take the notch's place: the rectangle travels in X/Y/W/H.</summary>
     Show,
 
     /// <summary>Give it back.</summary>
@@ -19,6 +19,11 @@ public enum DropVerb
     Dropped,
 }
 
+/// <param name="X">Physical screen pixels, not DIP, and the same for Y/W/H.
+/// Plith reads them straight off its own window handle with GetWindowRect and the catcher applies
+/// them with SetWindowPos, so neither end converts and neither end has to agree with the other
+/// about what a DIP is. Two processes that each do their own DIP arithmetic would disagree on any
+/// monitor that is not at 100%, and put the catcher somewhere other than the notch.</param>
 /// <param name="Paths">Only ever populated on <see cref="DropVerb.Dropped"/>, and always from
 /// the catcher — which runs at a lower integrity level than this process. Untrusted.</param>
 public readonly record struct DropMessage(

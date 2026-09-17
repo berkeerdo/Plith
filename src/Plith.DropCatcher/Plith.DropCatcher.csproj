@@ -1,0 +1,38 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net10.0-windows10.0.22000.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.22000.0</SupportedOSPlatformVersion>
+    <RootNamespace>Plith.DropCatcher</RootNamespace>
+    <AssemblyName>Plith.DropCatcher</AssemblyName>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <LangVersion>latest</LangVersion>
+    <UseWPF>true</UseWPF>
+    <Platforms>x64</Platforms>
+    <PlatformTarget>x64</PlatformTarget>
+    <!-- No app.release.manifest counterpart, deliberately. Plith swaps in a uiAccess=true
+         manifest for Release; this process must stay asInvoker in every configuration, because
+         UIAccess is exactly what puts a process at High integrity and makes it unable to
+         receive a drop. That is the whole reason this project exists. -->
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Authors>Plith</Authors>
+    <Product>Plith</Product>
+    <Description>Receives file drops on behalf of the Plith OSD, which cannot receive them itself.</Description>
+    <Version>0.1.8</Version>
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+    <AnalysisMode>Recommended</AnalysisMode>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <!-- Linked, not project-referenced: a reference would pull Plith's assembly into a process
+         that must stay small and must not share its startup. One file, compiled into both, so
+         the two ends of the wire cannot drift apart. -->
+    <Compile Include="..\Plith\Services\Shelf\DropChannel.cs">
+      <Link>Shared\DropChannel.cs</Link>
+    </Compile>
+  </ItemGroup>
+
+</Project>

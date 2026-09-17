@@ -1,6 +1,7 @@
 <Solution>
   <Folder Name="/src/">
     <Project Path="src/Plith/Plith.csproj" />
+    <Project Path="src/Plith.DropCatcher/Plith.DropCatcher.csproj" />
     <Project Path="src/Plith.Installer/Plith.Installer.csproj" />
   </Folder>
   <Folder Name="/tests/">

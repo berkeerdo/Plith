@@ -1,0 +1,42 @@
+<Window x:Class="Plith.DropCatcher.CatcherWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        WindowStyle="None"
+        Background="#141414"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="False"
+        AllowDrop="True"
+        ResizeMode="NoResize"
+        Width="384" Height="130"
+        Left="-32000" Top="-32000"
+        Title="Plith drop catcher">
+
+    <!-- Opaque, and not layered. AllowsTransparency would make this a layered window, which
+         buys per-pixel alpha at the cost of being invisible to every screen-capture route there
+         is — the exact blind spot that has hidden defects in the OSD itself. The rounded corners
+         come from DWM instead (see OnSourceInitialized), which an ordinary composited window can
+         have. The fill also matters for its own sake: a fully transparent window takes no
+         hit-tests, so a drag would pass straight through it and the catcher would be as deaf as
+         the notch it stands in for. -->
+    <Border Background="#141414" BorderThickness="1.5" BorderBrush="#4DFFFFFF" CornerRadius="8">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <!-- Drawn geometry rather than a glyph font: the same rule the rest of the product
+                 follows, and the accessibility lint fails the build on a Segoe MDL2 code point. -->
+            <Path HorizontalAlignment="Center"
+                  Width="26" Height="26"
+                  Stretch="Uniform"
+                  Opacity="0.85"
+                  Data="M 12,2 L 12,15 M 12,15 L 7,10 M 12,15 L 17,10 M 3,17 L 3,20 A 2,2 0 0 0 5,22 L 19,22 A 2,2 0 0 0 21,20 L 21,17"
+                  Stroke="#FFFFFFFF" StrokeThickness="2"
+                  StrokeStartLineCap="Round" StrokeEndLineCap="Round" StrokeLineJoin="Round" />
+            <TextBlock x:Name="Caption"
+                       Margin="0,10,0,0"
+                       HorizontalAlignment="Center"
+                       FontSize="13"
+                       Foreground="#FFFFFFFF"
+                       Opacity="0.85"
+                       Text="Drop to keep on the shelf" />
+        </StackPanel>
+    </Border>
+</Window>
