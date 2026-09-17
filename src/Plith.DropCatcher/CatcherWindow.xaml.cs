@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Threading;
 
 namespace Plith.DropCatcher;
 
@@ -40,12 +41,41 @@ public partial class CatcherWindow : Window
 
     private readonly CatcherLog _log;
 
+    /// <summary>
+    /// How long the catcher will stand in the notch's place before deciding no file drag is
+    /// coming and withdrawing.
+    ///
+    /// It exists because nothing readable from the cursor distinguishes a file being carried to
+    /// the top of the screen from a window being dragged there to maximise, so Plith hands over
+    /// for both. A real drag raises DragEnter within a frame or two of this window appearing —
+    /// it is already under the cursor — so anything past this is the other case.
+    /// </summary>
+    private static readonly TimeSpan WithdrawAfter = TimeSpan.FromMilliseconds(450);
+
+    private readonly DispatcherTimer _withdraw;
+    private bool _sawDrag;
+
     internal CatcherWindow(CatcherLog log)
     {
         _log = log;
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
+
+        _withdraw = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = WithdrawAfter };
+        _withdraw.Tick += (_, _) =>
+        {
+            _withdraw.Stop();
+            if (_sawDrag) return;
+
+            _log.Info("No drag arrived; withdrawing.");
+            HideNow();
+            Withdrew?.Invoke();
+        };
     }
+
+    /// <summary>Raised when the catcher took itself down without a drop, so Plith can put the
+    /// notch back rather than leaving it hidden for the rest of the gesture.</summary>
+    public event Action? Withdrew;
 
     /// <summary>Raised on the UI thread with whatever the shell handed over. The paths are not
     /// checked here — Plith stats them, because Plith is the side that has to care.</summary>
@@ -82,6 +112,10 @@ public partial class CatcherWindow : Window
         // was MainWindowHandle staying 0.
         if (!IsVisible) Show();
 
+        _sawDrag = false;
+        _withdraw.Stop();
+        _withdraw.Start();
+
         var handle = new WindowInteropHelper(this).Handle;
         _ = SetWindowPos(handle, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
         _log.Info($"Shown at {x},{y} {width}x{height}. AllowDrop={AllowDrop}, handle=0x{handle:X}");
@@ -89,6 +123,7 @@ public partial class CatcherWindow : Window
 
     public void HideNow()
     {
+        _withdraw.Stop();
         if (!IsVisible) return;
 
         // Hide() rather than SWP_HIDEWINDOW, so WPF's own idea of visibility stays in step with
@@ -101,6 +136,8 @@ public partial class CatcherWindow : Window
     protected override void OnDragEnter(DragEventArgs e)
     {
         base.OnDragEnter(e);
+        _sawDrag = true;
+        _withdraw.Stop();
         _log.Info($"DragEnter. FileDrop present: {e.Data.GetDataPresent(DataFormats.FileDrop)}");
         e.Effects = Effects(e);
         e.Handled = true;

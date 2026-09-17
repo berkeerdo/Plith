@@ -34,6 +34,7 @@ public partial class App : Application, IDisposable
 
         _window = new CatcherWindow(_log);
         _window.FilesDropped += OnFilesDropped;
+        _window.Withdrew += OnWithdrew;
 
         if (TryReadProbeRect(e.Args, out var probe))
         {
@@ -64,6 +65,11 @@ public partial class App : Application, IDisposable
                 break;
         }
     }, DispatcherPriority.Send);
+
+    /// <summary>Tell Plith to put the notch back. Hide is the verb in this direction too — the
+    /// two ends distinguish them by who sent it.</summary>
+    private void OnWithdrew()
+        => _ = _client?.SendAsync(new DropMessage(DropVerb.Hide, 0, 0, 0, 0, []));
 
     private void OnFilesDropped(IReadOnlyList<string> paths)
         => _ = _client?.SendAsync(new DropMessage(DropVerb.Dropped, 0, 0, 0, 0, paths));

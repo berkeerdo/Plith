@@ -178,6 +178,49 @@ public static class NotchGeometry
     }
 
     /// <summary>
+    /// Minimum height of the band that counts as a drag arriving, in DIP.
+    ///
+    /// Taller than the hover target, and for a different reason. A hover is a pointer placed
+    /// deliberately; a drag is a hand carrying something toward the top of the screen, usually
+    /// faster and rarely stopping exactly on an 8 DIP strip. Too shallow and the drop never
+    /// registers; too deep and every window dragged toward the top edge to maximise reads as
+    /// one. This is the smaller error of the two, because the catcher withdraws on its own when
+    /// no file drag follows.
+    /// </summary>
+    public const double DragApproachHeightDip = 28;
+
+    /// <summary>The band that counts as a drag arriving: the hover target, made deep enough to
+    /// catch a moving hand.</summary>
+    public static Rect DragApproachRect(Rect hoverRect)
+        => new(hoverRect.Left, hoverRect.Top, hoverRect.Width,
+               Math.Max(hoverRect.Height, DragApproachHeightDip));
+
+    /// <summary>
+    /// Where the catcher stands while it holds the notch's place: the open frame, centred on the
+    /// same anchor the notch rests at.
+    ///
+    /// The open frame rather than the resting pill, because this is a target a person has to hit
+    /// while already holding something — and rather than the OSD window's own rectangle, which
+    /// is mostly transparent and whose width follows whatever card happens to be showing.
+    /// </summary>
+    public static Rect DropTargetRect(Rect hoverRect)
+        => new(hoverRect.Left + (hoverRect.Width - OpenFrameDip.Width) / 2, hoverRect.Top,
+               OpenFrameDip.Width, OpenFrameDip.Height);
+
+    /// <summary>
+    /// The one conversion back out of DIP, mirroring <see cref="PhysicalToDip"/>.
+    ///
+    /// Needed because the rectangle is handed to another process, which applies it with
+    /// SetWindowPos and must not repeat this arithmetic with its own idea of the scale.
+    /// </summary>
+    public static (int X, int Y, int Width, int Height) DipToPhysical(Rect dip, double scale)
+    {
+        if (scale <= 0) scale = 1.0;
+        return ((int)Math.Round(dip.Left * scale), (int)Math.Round(dip.Top * scale),
+                (int)Math.Round(dip.Width * scale), (int)Math.Round(dip.Height * scale));
+    }
+
+    /// <summary>
     /// Screen rectangle of the cursor target over the collapsed pill, in DIP.
     ///
     /// <paramref name="windowLeft"/> and <paramref name="windowTop"/> are the values

@@ -195,6 +195,7 @@ public partial class App : Application
         _dropChannel = new DropChannelServer(sid, _diagnosticLog);
         _dropChannel.Received += OnDropChannelMessage;
         _dropChannel.Start();
+        _osd?.AttachDropChannel(_dropChannel);
         _diagnosticLog?.Info("Shelf", "Drop channel listening.");
 
         DropCatcherLauncher.EnsureRunning(_diagnosticLog);
@@ -213,6 +214,14 @@ public partial class App : Application
                 break;
             case DropVerb.Dropped:
                 _diagnosticLog?.Info("Shelf", $"Drop reported: {message.Paths.Count} path(s).");
+                _osd?.OnCatcherStoodDown();
+                break;
+            case DropVerb.Hide:
+                // From the catcher this means "I withdrew" — it stood in, no file drag arrived,
+                // and it has taken itself down. Plith sends the same verb the other way; the
+                // direction is what distinguishes them.
+                _diagnosticLog?.Info("Shelf", "Catcher withdrew; no file drag arrived.");
+                _osd?.OnCatcherStoodDown();
                 break;
             default:
                 break;

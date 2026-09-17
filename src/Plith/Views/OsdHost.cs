@@ -99,6 +99,7 @@ public sealed class OsdHost : BandWindow
         _presentation = new ClassicPresentation(this);
         _hoverPoller = new NotchHoverPoller(Dispatcher);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
+        _hoverPoller.DraggingOverChanged += OnDragApproachChanged;
 
         _hoverPoller.Polled += ResyncClickThrough;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
@@ -402,6 +403,103 @@ public sealed class OsdHost : BandWindow
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_SHOWWINDOW = 0x0040;
+    private const uint SWP_HIDEWINDOW = 0x0080;
+
+    private Plith.Services.Shelf.DropChannelServer? _dropChannel;
+    private bool _standingAside;
+
+    /// <summary>
+    /// Hand the drop catcher over. Set by App once the channel exists, which is after this
+    /// window is constructed — hence a property rather than a constructor parameter.
+    /// </summary>
+    public void AttachDropChannel(Plith.Services.Shelf.DropChannelServer channel) => _dropChannel = channel;
+
+    /// <summary>
+    /// A drag has arrived at the notch, or has left it.
+    ///
+    /// Plith cannot receive the drop and never will: UIAccess puts it at High integrity and UIPI
+    /// refuses Explorer's cross-integrity call. So it steps out of the way instead — the window
+    /// goes down and the catcher, a Medium process, takes the same rectangle for as long as the
+    /// drag lasts.
+    ///
+    /// The window has to go down rather than merely yield z-order. The catcher cannot enter the
+    /// UIAccess band, so while the notch is up the catcher is underneath it and the drop lands
+    /// on a window that cannot take it — which is exactly the state this whole design exists to
+    /// leave behind.
+    /// </summary>
+    private void OnDragApproachChanged(bool approaching)
+    {
+        if (_presentation is not AmbientNotchPresentation)
+        {
+            // Classic has no shelf. Nothing to stand aside for, and standing aside would hide an
+            // OSD the person may be reading.
+            return;
+        }
+
+        if (approaching) BeginStandAside();
+        else EndStandAside();
+    }
+
+    private void BeginStandAside()
+    {
+        if (_standingAside) return;
+
+        if (_dropChannel is not { IsConnected: true })
+        {
+            // No catcher, so hiding would buy nothing and cost the notch. Logged rather than
+            // silent: this is what a catcher that failed to start looks like from Plith's side,
+            // and it is otherwise indistinguishable from no drag having happened.
+            _log?.Info("Shelf", "Drag arrived but no catcher is connected; staying put.");
+            return;
+        }
+
+        var target = NotchGeometry.DropTargetRect(_hoverPoller.HoverRect);
+        var (x, y, w, h) = NotchGeometry.DipToPhysical(target, _hoverPoller.DpiScale);
+
+        _standingAside = true;
+        if (Handle != 0) _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        _ = _dropChannel.SendAsync(new Plith.Services.Shelf.DropMessage(
+            Plith.Services.Shelf.DropVerb.Show, x, y, w, h, []));
+
+        _log?.Info("Shelf", $"Standing aside for a drag: {x},{y} {w}x{h}.");
+    }
+
+    /// <summary>
+    /// The catcher is no longer standing in — it took a drop, or it withdrew because no file
+    /// drag ever materialised. Either way the notch comes back.
+    ///
+    /// Needed as a second route because the poller cannot supply one: the detector is still in
+    /// its approaching state while the button is held, so it raises no transition, and the notch
+    /// would stay down until the person let go of a window they were dragging somewhere else.
+    /// </summary>
+    public void OnCatcherStoodDown()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnCatcherStoodDown));
+            return;
+        }
+
+        EndStandAside();
+    }
+
+    private void EndStandAside()
+    {
+        if (!_standingAside) return;
+        _standingAside = false;
+
+        _ = _dropChannel?.SendAsync(new Plith.Services.Shelf.DropMessage(
+            Plith.Services.Shelf.DropVerb.Hide, 0, 0, 0, 0, []));
+
+        // Only back up if the notch has somewhere to be. While a window covers the monitor the
+        // resting state IS hidden, and re-showing here would put a permanently composited strip
+        // back over a game — the one thing the covered state exists to prevent.
+        if (Handle != 0 && !_coversMonitor)
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+        _log?.Info("Shelf", "Drag over; notch back.");
+    }
 
     /// <summary>Re-assert HWND_TOPMOST so a game / video player that raised itself topmost
     /// after our last ShowOsd doesn't sit above us. Safe to call repeatedly: SetWindowPos

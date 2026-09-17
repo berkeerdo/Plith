@@ -23,6 +23,7 @@ internal sealed class NotchHoverPoller : IDisposable
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(60);
 
     private readonly DispatcherTimer _timer;
+    private readonly DragApproachDetector _drag = new();
     private bool _wasInside;
     private bool _wasInsidePanel;
 
@@ -42,6 +43,17 @@ internal sealed class NotchHoverPoller : IDisposable
 
     /// <summary>True on entering the rectangle, false on leaving. Raised on transitions only.</summary>
     public event Action<bool>? HoverChanged;
+
+    /// <summary>
+    /// True when a drag that began elsewhere has reached the notch, false when it leaves or is
+    /// released. Transitions only.
+    ///
+    /// This is readable at all only because GetCursorPos and GetAsyncKeyState are state reads
+    /// rather than messages: the drag source owns the mouse for the duration and the notch
+    /// receives no input of its own, but both calls keep answering. It is the single mechanism
+    /// the shelf is built on — Plith's own window can see a drag coming and can never receive it.
+    /// </summary>
+    public event Action<bool>? DraggingOverChanged;
 
     /// <summary>
     /// The whole OSD window's screen rectangle in DIP — the open panel, not just the resting
@@ -87,12 +99,21 @@ internal sealed class NotchHoverPoller : IDisposable
     {
         _wasInside = false;
         _wasInsidePanel = false;
+        _drag.Reset();
         _timer.Start();
     }
 
     public void Stop()
     {
         _timer.Stop();
+
+        // Before the hover reset below, because a stop mid-drag has to put the notch back: the
+        // OSD is hidden and the catcher is standing in its place, and nothing else would ever
+        // tell either of them the drag is over.
+        var wasApproaching = _drag.IsApproaching;
+        _drag.Reset();
+        if (wasApproaching) DraggingOverChanged?.Invoke(false);
+
         // Leave the world believing the cursor is outside, so a restart cannot open with a
         // stale "still inside" that never produces an enter transition.
         if (_wasInside)
@@ -112,6 +133,17 @@ internal sealed class NotchHoverPoller : IDisposable
 
         Polled?.Invoke();
 
+        var buttonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+        if (_drag.Update(buttonDown,
+                         cursorOverOsd: _wasInsidePanel,
+                         cursorInApproachBand: NotchGeometry.IsInsideNotch(
+                             NotchGeometry.DragApproachRect(HoverRect), dip),
+                         cursorInHoldBand: NotchGeometry.IsInsideNotch(
+                             NotchGeometry.DropTargetRect(HoverRect), dip)))
+        {
+            DraggingOverChanged?.Invoke(_drag.IsApproaching);
+        }
+
         bool inside = NotchGeometry.IsInsideNotch(HoverRect, dip);
 
         if (inside == _wasInside) return;
@@ -127,4 +159,11 @@ internal sealed class NotchHoverPoller : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
+
+    private const int VK_LBUTTON = 0x01;
+
+    /// <summary>A state read, not a message. That is why it still answers while a drag source
+    /// owns the mouse and this window receives no input at all.</summary>
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 }

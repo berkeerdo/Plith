@@ -10,6 +10,25 @@
 
 **Spec:** `docs/ROADMAP.md` — Phase 7, the Shelf card entry, which records the measurements this plan is built on.
 
+> **Tasks 1-4 are done and their boxes are ticked. A tick means the step was taken, NOT that
+> nothing was deviated from.** Four deviations, each recorded in the code that carries it:
+>
+> 1. **The wire carries physical pixels, not DIP.** Two processes each doing their own DIP
+>    arithmetic disagree on any monitor that is not at 100%.
+> 2. **Task 4 Step 1 could not be done as written.** `efd0db8^` does not contain the drag
+>    detection — the spike lived only in a working tree and was never committed. It was rebuilt
+>    from the roadmap's description, which that commit wrote for exactly this case.
+> 3. **The plan's own `DropChannel` code had two defects** and was not copied as printed: chained
+>    Replace calls corrupt ordinary Windows paths, and the numbers were culture-formatted while
+>    the decoder parsed invariant.
+> 4. **Entering and staying use different rectangles.** Not in the plan; found by running it.
+>
+> Three defects were found by running rather than building, all with a green build behind them:
+> `EnsureHandle` + `SWP_SHOWWINDOW` makes a window WPF does not consider shown (no visual tree,
+> no drop target, nothing on screen); `AllowsTransparency` makes it layered and therefore
+> invisible to every screen-capture route over RDP; and a single approach threshold pulled the
+> notch back 700 ms into a live drag.
+
 ## Global Constraints
 
 - All code, comments and commit messages in English. Conventional Commits. No AI attribution anywhere.
@@ -73,7 +92,7 @@ The riskiest assumption in the design, so it goes first and is proven in code ra
 - Consumes: nothing.
 - Produces: `DropChannel.PipeName(string userSid) -> string`; `DropChannel.Encode(DropMessage) -> string`; `DropChannel.TryDecode(string, out DropMessage) -> bool`; `DropMessage(DropVerb Verb, double X, double Y, double W, double H, IReadOnlyList<string> Paths)`; `DropVerb { Show, Hide, Dropped, Hello }`; `DropChannelServer.Start()`, `.SendAsync(DropMessage)`, `event Action<DropMessage> Received`, `.Dispose()`.
 
-- [ ] **Step 1: Write the failing test for the wire format**
+- [x] **Step 1: Write the failing test for the wire format**
 
 ```csharp
 [Fact]
@@ -103,12 +122,12 @@ public void Encode_NeutralisesSeparatorsInsidePaths(string hostile)
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: FAIL — `DropChannel` does not exist.
 
-- [ ] **Step 3: Write `DropChannel`**
+- [x] **Step 3: Write `DropChannel`**
 
 ```csharp
 namespace Plith.Services.Shelf;
@@ -165,12 +184,12 @@ public static class DropChannel
 }
 ```
 
-- [ ] **Step 4: Run the test and watch it pass**
+- [x] **Step 4: Run the test and watch it pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing test for the server's reachability**
+- [x] **Step 5: Write the failing test for the server's reachability**
 
 ```csharp
 /// <summary>
@@ -196,12 +215,12 @@ public void Server_OpensThePipeToEveryone()
 }
 ```
 
-- [ ] **Step 6: Run it and watch it fail**
+- [x] **Step 6: Run it and watch it fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: FAIL — `DropChannelServer` does not exist.
 
-- [ ] **Step 7: Write `DropChannelServer`**
+- [x] **Step 7: Write `DropChannelServer`**
 
 ```csharp
 using System.IO;
@@ -264,12 +283,12 @@ public sealed class DropChannelServer : IDisposable
 }
 ```
 
-- [ ] **Step 8: Run the test and watch it pass**
+- [x] **Step 8: Run the test and watch it pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 9: Write the read/write loop**
+- [x] **Step 9: Write the read/write loop**
 
 ```csharp
     private async Task AcceptLoop(CancellationToken ct)
@@ -323,12 +342,12 @@ Expected: PASS.
     }
 ```
 
-- [ ] **Step 10: Run the whole suite**
+- [x] **Step 10: Run the whole suite**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: PASS, count up by the new tests.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf tests/Plith.Tests/DropChannelTests.cs
@@ -347,7 +366,7 @@ git commit -m "feat(shelf): a pipe a lower-integrity process can reach"
 - Consumes: `DropChannel` (linked compile item, not a project reference — the catcher must not drag Plith's assembly in).
 - Produces: an exe that connects, shows a window on `Show`, hides on `Hide`, and sends `Dropped`.
 
-- [ ] **Step 1: Create the project and manifest**
+- [x] **Step 1: Create the project and manifest**
 
 `app.manifest` — the critical file:
 
@@ -357,7 +376,7 @@ git commit -m "feat(shelf): a pipe a lower-integrity process can reach"
 
 This is the entire reason the catcher exists. A uiAccess manifest here would raise it to High and it would be as unreachable as Plith.
 
-- [ ] **Step 2: Link the shared contract rather than referencing Plith**
+- [x] **Step 2: Link the shared contract rather than referencing Plith**
 
 ```xml
 <ItemGroup>
@@ -369,15 +388,15 @@ This is the entire reason the catcher exists. A uiAccess manifest here would rai
 
 Note for whoever adds more links here: `scripts/check-shared-xaml.ps1` exists because a file compiled into two assemblies must not name one of them. It only reads the installer's csproj today; extend it to this one at the same time.
 
-- [ ] **Step 3: Write the window**
+- [x] **Step 3: Write the window**
 
 Borderless, `WindowStyle=None`, `AllowsTransparency=True`, `Topmost=True`, `ShowInTaskbar=False`, `AllowDrop=True`, `Background` a nearly-transparent brush — fully transparent takes no hit-tests, so it needs about 1% alpha to be droppable while invisible.
 
-- [ ] **Step 4: Verify by hand that the catcher receives a drop**
+- [x] **Step 4: Verify by hand that the catcher receives a drop**
 
 Run the catcher alone with a hard-coded rectangle, drag a file onto it, confirm the log records the paths. This is the step that proves a Medium window can do what the notch cannot; nothing later is worth building if it fails.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Plith.DropCatcher Plith.sln
@@ -391,7 +410,7 @@ git commit -m "feat(shelf): a medium-integrity window that can receive a drop"
 **Files:**
 - Modify: `src/Plith/App.xaml.cs`, `src/Plith.Installer/Services/InstallSteps.cs` (Run-key entry)
 
-- [ ] **Step 1: Start the catcher through the shell, never as a child**
+- [x] **Step 1: Start the catcher through the shell, never as a child**
 
 ```csharp
 // Started via explorer.exe, which makes Explorer the parent and gives the catcher Explorer's
@@ -400,11 +419,11 @@ git commit -m "feat(shelf): a medium-integrity window that can receive a drop"
 Process.Start(new ProcessStartInfo("explorer.exe", $"\"{catcherPath}\"") { UseShellExecute = true });
 ```
 
-- [ ] **Step 2: Verify the integrity level of the launched process**
+- [x] **Step 2: Verify the integrity level of the launched process**
 
 Read its token integrity and assert Medium in the log at startup. If it comes up High, the launch route is wrong and every later task is dead — so it is checked here, once, loudly.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -413,21 +432,21 @@ Read its token integrity and assert Medium in the log at startup. If it comes up
 **Files:**
 - Modify: `src/Plith/Views/Presentation/NotchHoverPoller.cs` (restore `DraggingOverChanged` from `efd0db8`), `src/Plith/Views/OsdHost.cs`
 
-- [ ] **Step 1: Restore the drag-approach detection**
+- [x] **Step 1: Restore the drag-approach detection**
 
 It was removed deliberately when it had nothing to serve. `git show efd0db8^:src/Plith/Views/Presentation/NotchHoverPoller.cs` has it, including the rule that separates a drag from a press — the button must have gone down outside the notch.
 
-- [ ] **Step 2: Hand the rectangle over on drag-approach**
+- [x] **Step 2: Hand the rectangle over on drag-approach**
 
 Hide the band window, send `Show` with the panel's screen rectangle in DIP.
 
-- [ ] **Step 3: Take it back on `Dropped` or on drag-end**
+- [x] **Step 3: Take it back on `Dropped` or on drag-end**
 
-- [ ] **Step 4: Verify by hand — drag a file onto the notch**
+- [x] **Step 4: Verify by hand — drag a file onto the notch**
 
 Expected in the log: the approach, the handoff, `Dropped` with the file names, the notch returning. This is the moment the feature either exists or does not.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ---
 
