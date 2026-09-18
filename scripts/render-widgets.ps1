@@ -279,14 +279,17 @@ $inkMutedBrush = $probe.TryFindResource('NotchInkMuted')
 $trackBrush = $probe.TryFindResource('NotchTrack')
 $accentBrush = $probe.TryFindResource('Accent')
 
-# The selection ring is NOT the raw accent: drawn as Accent it measured 1.25:1 against the panel
-# for a near-white accent, where this product holds a non-text surface to 3:1 (ContrastInk.
-# ContrastRatio confirmed the number; see the task report). Plith derives it with
-# ContrastInk.TrackOn against the surface, the same rule NotchTrack already uses, and sends the
-# ANSWER across the wire rather than the accent alone, so the catcher never repeats the
-# derivation. There is no sender for this yet (that is Task 6's work), so the harness derives it
-# here the same way Task 6 will, standing in for what the real message will eventually carry.
-$selectionRingColor = [Plith.Services.ContrastInk]::TrackOn($surfaceBrush.GradientStops[1].Color)
+# The selection ring keeps the accent when the accent already works, and only moves when it does
+# not: ContrastInk.RingOn returns the accent unchanged once it clears 3:1 against the surface, and
+# only walks its lightness (hue and saturation held fixed) when it does not. This replaced an
+# earlier attempt at ContrastInk.TrackOn, which is a function of the surface alone and threw the
+# accent's hue away every time - it fixed a near-white accent's measured 1.25:1 but also flattened
+# a lime accent's measured 8.87:1 down to 3.03:1, a dull grey-olive, for a threshold that colour
+# had already cleared. Plith sends the ANSWER across the wire rather than the accent alone, so the
+# catcher never repeats the derivation. There is no sender for this yet (that is Task 6's work),
+# so the harness derives it here the same way Task 6 will, standing in for what the real message
+# will eventually carry.
+$selectionRingColor = [Plith.Services.ContrastInk]::RingOn($accentBrush.Color, $surfaceBrush.GradientStops[1].Color)
 
 # ShelfPalette is not resolved as [Plith.Services.Shelf.ShelfPalette]: that name is compiled into
 # BOTH Plith.dll and Plith.DropCatcher.dll (ShelfPaletteWire.cs is LINKED into the catcher project

@@ -6,12 +6,15 @@ namespace Plith.Services.Shelf;
 /// <param name="SurfaceStart">Top of the panel's gradient. Two colours rather than one because
 /// OsdSurfaceBrush is a LinearGradientBrush: a single flat stand-in would be visibly not the
 /// product's surface, which is the exact drift this type exists to prevent.</param>
-/// <param name="SelectionRing">A non-text stroke for a selected tile, held to 3:1 against the
-/// surface by ContrastInk.TrackOn rather than sent as the raw Accent: drawn as the raw accent it
-/// measured 1.25:1 for a near-white accent, where every other accent-bearing element in the
-/// product routes through a contrast-derived colour instead. A second copy of that derivation in
-/// the catcher would drift, which is why the ANSWER travels here rather than the accent alone.
-/// </param>
+/// <param name="SelectionRing">A non-text stroke for a selected tile, from ContrastInk.RingOn:
+/// the accent unchanged when it already clears 3:1 against the surface, its lightness walked
+/// toward that threshold when it does not. Sent as the raw Accent it measured 1.25:1 for a
+/// near-white accent; derived instead with ContrastInk.TrackOn, which ignores the accent's hue
+/// entirely, it fixed that case but also flattened a lime accent's 8.87:1 down to a dull 3.03:1
+/// for a threshold that colour had already cleared three times over. RingOn keeps the accent
+/// visible in the common case and only moves it in the rare one. A second copy of this
+/// derivation in the catcher would drift from Plith's, which is why the ANSWER travels here
+/// rather than the accent alone.</param>
 /// <param name="IsDark">Carried rather than inferred from the ink. The catcher needs it for the
 /// things a contrast ratio does not answer, such as which way a shadow falls.</param>
 public readonly record struct ShelfPalette(

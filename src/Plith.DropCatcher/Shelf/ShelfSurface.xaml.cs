@@ -97,9 +97,12 @@ public partial class ShelfSurface : UserControl
             ["AccentBrush"] = Solid(palette.Accent),
             // NOT the raw accent. Drawn as Accent, the selection ring measured 1.25:1 against the
             // panel for a near-white accent, where this product holds a non-text surface to 3:1.
-            // Plith derives this with ContrastInk.TrackOn against the surface, the same rule
-            // NotchTrack already uses, and sends the answer rather than the accent alone, so the
-            // ring cannot drift from the rest of the product's contrast-derived colours.
+            // Plith derives this with ContrastInk.RingOn, which keeps the accent unchanged when
+            // it already clears 3:1 and only walks its lightness when it does not - unlike
+            // ContrastInk.TrackOn, which NotchTrack uses and which ignores the accent's hue
+            // entirely, flattening an already-good accent along with a broken one. Plith sends
+            // the answer rather than the accent alone, so the ring cannot drift from the rest of
+            // the product's contrast-derived colours.
             ["SelectionRing"] = Solid(palette.SelectionRing),
             // Two stops, not one: OsdSurfaceBrush is a LinearGradientBrush in Plith, and a flat
             // stand-in here would be visibly not the surface the shelf sits on everywhere else.
