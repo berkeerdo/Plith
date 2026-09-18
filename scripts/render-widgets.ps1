@@ -39,14 +39,26 @@ $bin = Join-Path $root "src\Plith\bin\$Configuration\net10.0-windows10.0.22000.0
 $dll = Join-Path $bin 'Plith.dll'
 if (-not (Test-Path $dll)) { throw "Build $Configuration first — $dll not found." }
 
+# The catcher's own assembly, loaded the same way and for the same reason: ShelfSurface lives
+# there, not in Plith, because the catcher is a second process that must not reference Plith.dll
+# (see Plith.DropCatcher.csproj). The harness is the one place that is allowed to load both, since
+# it is neither process: it is only looking at what each one would draw.
+$dcBin = Join-Path $root "src\Plith.DropCatcher\bin\$Configuration\net10.0-windows10.0.22000.0"
+$dcDll = Join-Path $dcBin 'Plith.DropCatcher.dll'
+if (-not (Test-Path $dcDll)) { throw "Build $Configuration first: $dcDll not found." }
+
 Add-Type -AssemblyName PresentationCore, PresentationFramework, WindowsBase
 # Resolve Plith's own dependencies out of its output folder rather than the script's directory.
 $null = [Reflection.Assembly]::LoadFrom($dll)
+$dcAssembly = [Reflection.Assembly]::LoadFrom($dcDll)
 [AppDomain]::CurrentDomain.add_AssemblyResolve({
     param($s, $e)
     $name = ($e.Name -split ',')[0]
-    $candidate = Join-Path $bin "$name.dll"
-    if (Test-Path $candidate) { [Reflection.Assembly]::LoadFrom($candidate) } else { $null }
+    foreach ($candidateBin in @($bin, $dcBin)) {
+        $candidate = Join-Path $candidateBin "$name.dll"
+        if (Test-Path $candidate) { return [Reflection.Assembly]::LoadFrom($candidate) }
+    }
+    $null
 })
 
 New-Item -ItemType Directory -Force -Path $OutDir | Out-Null
@@ -252,6 +264,61 @@ $paths = [string[]](@($shelfFolder) + ($fixtures | ForEach-Object { Join-Path $s
 $store.Add($paths)
 $shelf = [Plith.Views.Widgets.ShelfWidget]::new($store)
 Save-Visual -Element $shelf -W $frameW -H $frameH -Name 'widget-shelf'
+
+
+# --- the shelf SURFACE (the catcher's own page), at the same three call sites the widgets use --
+#
+# ShelfSurface lives in Plith.DropCatcher, not Plith, and takes its palette as a ShelfPalette
+# rather than through the resource dictionaries this harness merges for the widgets above. Built
+# from the SAME resolved colours those widgets render with, read back off the probe, so this
+# render is judged against exactly what the running app would send across the wire, not a second,
+# hand-picked palette that could drift from it.
+$surfaceBrush = $probe.TryFindResource('OsdSurfaceBrush')
+$inkBrush = $probe.TryFindResource('NotchInk')
+$inkMutedBrush = $probe.TryFindResource('NotchInkMuted')
+$trackBrush = $probe.TryFindResource('NotchTrack')
+$accentBrush = $probe.TryFindResource('Accent')
+
+# ShelfPalette is not resolved as [Plith.Services.Shelf.ShelfPalette]: that name is compiled into
+# BOTH Plith.dll and Plith.DropCatcher.dll (ShelfPaletteWire.cs is LINKED into the catcher project
+# rather than referenced, precisely so the catcher never depends on Plith's assembly - see that
+# project's own comment on it). Two separate compiles of the same source make two separate CLR
+# types that merely share a name, and PowerShell's bare type literal binds to whichever assembly
+# it saw first - which is Plith's, not the catcher's. ShelfSurface.Apply demands the catcher's own
+# type, so the value has to be built through THAT assembly's Type object.
+$shelfPaletteType = $dcAssembly.GetType('Plith.Services.Shelf.ShelfPalette')
+$shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
+    $surfaceBrush.GradientStops[0].Color, $surfaceBrush.GradientStops[1].Color,
+    $inkBrush.Color, $inkMutedBrush.Color, $trackBrush.Color, $accentBrush.Color,
+    [bool]($Theme -eq 'Dark')))
+
+# Seven entries across two stacks: one stack deliberately OVER the visible-rows cap (a folder
+# plus four files, so the overflow tile and a folder icon both appear in the same render) and one
+# exactly AT it (two files, so the ordinary two-tile column appears too). Reuses the same fixture
+# files as widget-shelf above rather than a second stub set - ShelfModel stats nothing itself,
+# but the tiles it paints should still carry real file names of a plausible length.
+$surfaceModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
+$stack0 = [string[]](@($shelfFolder) + ($fixtures[0..3] | ForEach-Object { Join-Path $shelfDir $_ }))
+$stack1 = [string[]](($fixtures[4..5] | ForEach-Object { Join-Path $shelfDir $_ }))
+$surfaceModel.SetStack(0, 2, $stack0)
+$surfaceModel.SetStack(1, 2, $stack1)
+
+# 384 x 224. Width was the arithmetic guess (five 64 DIP tiles, four 8 DIP gaps, two 16 DIP
+# margins) and the render confirmed it exactly - a five-stack, no-overflow model fits with the
+# last tile's icon and full file name clear of the rounded corner. Height was NOT: the arithmetic
+# guess of 264 left roughly a quarter of the page blank below the second tile row in every render.
+# Measured instead, with ShelfSurface.Measure(new Size(384, PositiveInfinity)): the control wants
+# 210 DIP at this width. 224 is that measurement plus 14 DIP of margin, not a second guess - the
+# same shape kept in sync here by hand as frameW/frameH are with WidgetFrame, since the harness
+# and the control it renders are deliberately two separate assemblies (see the DropCatcher DLL
+# load above).
+$shelfSurfaceW = 384.0
+$shelfSurfaceH = 224.0
+
+$shelfSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+$shelfSurface.Apply($shelfPalette)
+$shelfSurface.Render($surfaceModel)
+Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
 
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------

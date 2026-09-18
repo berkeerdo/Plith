@@ -25,4 +25,14 @@
     <ProjectReference Include="..\..\src\Plith\Plith.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- The catcher's own model, linked rather than referenced. It holds no WPF types precisely
+         so it can be tested here: the selection rule and the stack assembly are the two pieces
+         of the surface that are logic rather than pixels, and they are the two that a headless
+         suite can still reach. -->
+    <Compile Include="..\..\src\Plith.DropCatcher\Shelf\ShelfModel.cs">
+      <Link>Linked\ShelfModel.cs</Link>
+    </Compile>
+  </ItemGroup>
+
 </Project>

@@ -1,0 +1,115 @@
+<UserControl x:Class="Plith.DropCatcher.Shelf.ShelfSurface"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True"
+             TextOptions.TextFormattingMode="Ideal"
+             TextOptions.TextRenderingMode="ClearType">
+
+    <!-- The shelf page, as a UserControl rather than a Window: a render harness can instantiate
+         and photograph this, and it cannot do that with a layered Window. See CatcherWindow for
+         the shape this stands beside: that one is the brief prompt shown mid-drag, this is the
+         page a click into the resting shelf opens.
+
+         No dictionary from Plith is merged here, deliberately. This project does not reference
+         Plith.csproj (see Plith.DropCatcher.csproj's own comment on why: it must stay small and
+         must not share Plith's startup), so pack://application:,,,/Plith;component/... would
+         resolve only inside the render harness, which loads Plith.dll itself, and would fail
+         silently the moment this runs as the real catcher process. The handful of icon shapes
+         below are duplicated literal geometry rather than a shared resource for that reason, the
+         same reason NotchGeometry.cs is LINKED rather than referenced: a real dependency on
+         Plith's assembly is not available to pay for it.
+
+         Every colour brush used below is resolved from THIS control's own Resources, filled in
+         by Apply(ShelfPalette) at runtime, under the same keys Plith uses for the same things
+         (OsdSurfaceBrush, NotchInk, NotchInkMuted, NotchTrack, AccentBrush). Nothing here reaches
+         through Application.Resources: this process has no application-level theme, and the
+         render harness proved once already (ShelfWidget) that anything reaching through
+         Application renders in colours the product never shows. -->
+
+    <Border x:Name="Surface"
+            CornerRadius="16"
+            Background="{DynamicResource OsdSurfaceBrush}"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource NotchTrack}">
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header: a title, and the two shelf-wide actions. Both are real Buttons rather
+                 than pressable Borders, so Tab and a screen reader reach them the same way any
+                 other control in the product is reached. The tiles below cannot be, because a
+                 tile's action (select, then drag) has no equivalent gesture on a keyboard, which
+                 is the same reason ShelfWidget's tiles are Borders and not Buttons. -->
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="Shelf"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource NotchInk}" />
+
+                <Button x:Name="NewStackButton"
+                        Grid.Column="1"
+                        Width="28" Height="28"
+                        Margin="0,0,8,0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0"
+                        Cursor="Hand"
+                        AutomationProperties.Name="Start a new stack"
+                        Click="OnNewStackClick">
+                    <!-- A plus, drawn rather than a glyph. Same coordinates as PlithIcons'
+                         IconPlus, duplicated rather than shared: see the header comment. -->
+                    <Path Data="M12,5.5 L12,18.5 M5.5,12 L18.5,12"
+                          Width="16" Height="16"
+                          Stretch="Uniform"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" />
+                </Button>
+
+                <Button x:Name="ClearButton"
+                        Grid.Column="2"
+                        Width="28" Height="28"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="0"
+                        Cursor="Hand"
+                        AutomationProperties.Name="Clear the shelf"
+                        Click="OnClearClick">
+                    <!-- Same coordinates as PlithIcons' IconClose, duplicated: see the header
+                         comment. -->
+                    <Path Data="M6,6 L18,18 M18,6 L6,18"
+                          Width="14" Height="14"
+                          Stretch="Uniform"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6"
+                          StrokeStartLineCap="Round"
+                          StrokeEndLineCap="Round" />
+                </Button>
+            </Grid>
+
+            <!-- The stacks, built in code the same way ShelfWidget builds its tiles: each one
+                 needs its own AutomationProperties.Name and its own press handler, which an
+                 ItemsControl template cannot give an individual generated element. -->
+            <StackPanel x:Name="Columns"
+                        Grid.Row="1"
+                        Orientation="Horizontal"
+                        VerticalAlignment="Top" />
+        </Grid>
+    </Border>
+</UserControl>
