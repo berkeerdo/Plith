@@ -81,7 +81,7 @@ public partial class App : Application
 
         _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
 
-        _cardHost = new CardHost(_settings, _fullscreenWatcher);
+        _cardHost = new CardHost(_settings, _fullscreenWatcher, line => _diagnosticLog?.Info("Cards", line));
         _cardHost.Register(_ambientCard);  // Order 5 — the notch's ambient row, above media
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
@@ -307,8 +307,20 @@ public partial class App : Application
         _brightnessUpHotkey ??= BuildBrightnessHotkey(hotkeyId: 2, up: true);
         _brightnessDownHotkey ??= BuildBrightnessHotkey(hotkeyId: 3, up: false);
 
-        _brightnessUpHotkey.Apply(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey);
-        _brightnessDownHotkey.Apply(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey);
+        // Logged, because "did the key even bind" was a question the log could not answer and
+        // it is the first thing to ask when a direction does nothing. Windows refuses a combo
+        // another process already owns, and says so only through this return value.
+        var boundUp = _brightnessUpHotkey.Apply(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey);
+        var boundDown = _brightnessDownHotkey.Apply(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey);
+
+        _diagnosticLog?.Info("Brightness",
+            $"Hotkeys bound: brighter {HotkeyService.FormatCombo(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey)}={boundUp}"
+            + (boundUp ? "" : $" (err {_brightnessUpHotkey.LastError})")
+            + $", dimmer {HotkeyService.FormatCombo(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey)}={boundDown}"
+            + (boundDown ? "" : $" (err {_brightnessDownHotkey.LastError})")
+            // Only when something actually failed. A note about an error code printed next to
+            // two successes is noise in the one file that has to stay readable.
+            + (boundUp && boundDown ? "." : ". Error 1409 means another window already owns that combination."));
     }
 
     private HotkeyService BuildBrightnessHotkey(int hotkeyId, bool up)

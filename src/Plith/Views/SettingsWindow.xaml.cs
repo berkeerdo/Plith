@@ -47,8 +47,18 @@ public partial class SettingsWindow : Window
     private sealed record AccentSwatch(string Id, FrameworkElement Root, Border Fill, Shape Tick, Shape? PlusIcon, bool IsCustom);
 
     // Captured combo for the in-progress hotkey recording. Apply on first valid KeyDown.
+    /// <summary>Scratch for the capture in progress, and NOTHING else. It used to be read
+    /// directly when saving the summon hotkey, which meant capturing a brightness key wrote
+    /// that combination into the summon binding too. The result on a running machine: the
+    /// summon service claimed Ctrl+Alt+Down at startup and the brightness service was then
+    /// refused it by Windows with ERROR_HOTKEY_ALREADY_REGISTERED, so one direction silently
+    /// did nothing. Every target now owns its own pair and this one is copied into the right
+    /// pair when a capture completes.</summary>
     private uint _capturedMods;
     private int _capturedKey;
+
+    private uint _summonMods;
+    private int _summonKey;
     private bool _isCapturingHotkey;
 
     // Latest CheckAsync result held between the check button and the download button so we
@@ -725,15 +735,20 @@ public partial class SettingsWindow : Window
             return;
         }
 
-        if (_captureTarget == HotkeyTarget.BrightnessUp)
+        switch (_captureTarget)
         {
-            _brightnessUpMods = _capturedMods;
-            _brightnessUpKey = _capturedKey;
-        }
-        else if (_captureTarget == HotkeyTarget.BrightnessDown)
-        {
-            _brightnessDownMods = _capturedMods;
-            _brightnessDownKey = _capturedKey;
+            case HotkeyTarget.BrightnessUp:
+                _brightnessUpMods = _capturedMods;
+                _brightnessUpKey = _capturedKey;
+                break;
+            case HotkeyTarget.BrightnessDown:
+                _brightnessDownMods = _capturedMods;
+                _brightnessDownKey = _capturedKey;
+                break;
+            default:
+                _summonMods = _capturedMods;
+                _summonKey = _capturedKey;
+                break;
         }
 
         RefreshHotkeyButton(_captureTarget, _capturedMods, _capturedKey);
@@ -766,8 +781,8 @@ public partial class SettingsWindow : Window
 
     private void ClearHotkey()
     {
-        _capturedMods = 0;
-        _capturedKey = 0;
+        _summonMods = 0;
+        _summonKey = 0;
         RefreshHotkeyButton(0, 0);
         AutoSave();
     }
@@ -810,8 +825,8 @@ public partial class SettingsWindow : Window
             CompactToggle.IsChecked = m.CompactMode;
             FullscreenVideoToggle.IsChecked = m.HideDuringFullscreenVideo;
             FullscreenHideListBox.Text = m.FullscreenVideoHideList;
-            _capturedMods = m.SummonHotkeyMods;
-            _capturedKey = m.SummonHotkeyKey;
+            _summonMods = m.SummonHotkeyMods;
+            _summonKey = m.SummonHotkeyKey;
             RefreshHotkeyButton(m.SummonHotkeyMods, m.SummonHotkeyKey);
             SourceCombo.SelectedItem = m.AudioSource;
             BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
@@ -981,8 +996,8 @@ public partial class SettingsWindow : Window
         m.CompactMode = CompactToggle.IsChecked == true;
         m.HideDuringFullscreenVideo = FullscreenVideoToggle.IsChecked == true;
         m.FullscreenVideoHideList = FullscreenHideListBox.Text ?? string.Empty;
-        m.SummonHotkeyMods = _capturedMods;
-        m.SummonHotkeyKey = _capturedKey;
+        m.SummonHotkeyMods = _summonMods;
+        m.SummonHotkeyKey = _summonKey;
         if (SourceCombo.SelectedItem is AudioSourceMode src) m.AudioSource = src;
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
         m.MonitoredWindowsEndpointId = (EndpointCombo.SelectedItem as WindowsAudioEndpointInfo)?.Id ?? string.Empty;

@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using System.Linq;
 using Plith.Services;
 
 namespace Plith.Cards;
@@ -28,10 +29,23 @@ public sealed class CardHost : IDisposable
     private readonly List<ICard> _cards = new();
     private bool _disposed;
 
-    public CardHost(SettingsService settings, IShowSuppressor? suppressor = null)
+    /// <summary>The card currently holding the OSD to itself, or null. Cleared by the card
+    /// going invisible or by any other card asking to be shown, so it can never outlive the
+    /// appearance it belongs to.</summary>
+    private string? _exclusiveCardId;
+
+    private readonly Action<string>? _log;
+    private string _lastLoggedVisible = "";
+
+    /// <param name="log">Optional. Receives the visible card set whenever it changes, which is
+    /// the one thing a log could never answer before: what was actually on screen. Kept as a
+    /// plain delegate rather than a DiagnosticLog reference, so this class still depends on
+    /// nothing it cannot be tested without.</param>
+    public CardHost(SettingsService settings, IShowSuppressor? suppressor = null, Action<string>? log = null)
     {
         _settings = settings;
         _suppressor = suppressor;
+        _log = log;
         if (_suppressor is not null)
             _suppressor.SuppressionChanged += OnSuppressionChanged;
     }
@@ -104,6 +118,10 @@ public sealed class CardHost : IDisposable
         if (_disposed) return;
         if (_suppressor?.IsSuppressed == true) return;
 
+        // Set or cleared on every request, so an ordinary show ends an exclusive one rather
+        // than being swallowed by it.
+        _exclusiveCardId = request.Exclusive ? request.OriginCardId : null;
+
         RecomputeVisibleCards();
 
         var duration = request.DurationOverride
@@ -127,6 +145,14 @@ public sealed class CardHost : IDisposable
 
     private void RecomputeVisibleCards()
     {
+        // An exclusive card that has gone invisible releases the surface. Checked here rather
+        // than only where it is set, because the card's own hide timer is what usually ends it
+        // and that arrives as a visibility change.
+        var exclusive = _exclusiveCardId is null
+            ? null
+            : _cards.Find(c => c.Id == _exclusiveCardId && c.IsVisible);
+        if (_exclusiveCardId is not null && exclusive is null) _exclusiveCardId = null;
+
         // _cards is already Order-sorted, so a positional in-place reconcile preserves order
         // without clearing the collection — clearing would make the ItemsControl rebuild every
         // card container and restart any animation the views own.
@@ -134,6 +160,7 @@ public sealed class CardHost : IDisposable
         foreach (var card in _cards)
         {
             if (!card.IsVisible) continue;
+            if (exclusive is not null && !ReferenceEquals(card, exclusive)) continue;
 
             if (target < VisibleCards.Count && ReferenceEquals(VisibleCards[target], card))
             {
@@ -148,6 +175,24 @@ public sealed class CardHost : IDisposable
         }
 
         while (VisibleCards.Count > target) VisibleCards.RemoveAt(VisibleCards.Count - 1);
+
+        LogVisibleSet();
+    }
+
+    /// <summary>Report the visible set, and only when it actually changed. Recompute runs on
+    /// every settings save and every visibility flip, most of which change nothing.</summary>
+    private void LogVisibleSet()
+    {
+        if (_log is null) return;
+
+        var ids = VisibleCards.Count == 0 ? "(none)" : string.Join(", ", VisibleCards.Select(c => c.Id));
+        if (ids == _lastLoggedVisible) return;
+
+        _lastLoggedVisible = ids;
+        // "Visible set" rather than "on screen": this is the policy output, and it is recomputed
+        // while the OSD is hidden too. A log that says "on screen" about a hidden window sends
+        // the next reader looking for a bug that is not there.
+        _log(_exclusiveCardId is null ? $"Visible set: {ids}." : $"Visible set: {ids} (exclusive).");
     }
 
     public void Dispose()

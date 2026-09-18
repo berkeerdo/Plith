@@ -125,4 +125,35 @@ public class BrightnessCardTests
     {
         Assert.Equal(30, new BrightnessCard(NewSettings()).Order);
     }
+
+    [Fact]
+    public void TheShowRequestIsRaisedBeforeTheVisibilityChange()
+    {
+        // Both events make CardHost recompute, and only the request carries the exclusivity.
+        // The other order pushes a set containing every card into the bound collection first,
+        // which is one frame of the volume bar before the brightness bar replaces it. It was
+        // visible in the log as "On screen: media, audio, brightness" followed immediately by
+        // "On screen: brightness (exclusive)".
+        var card = new BrightnessCard(NewSettings());
+        var order = new List<string>();
+        card.VisibilityChanged += () => order.Add("visibility");
+        card.ShowRequested += _ => order.Add("show");
+
+        card.Report(40);
+
+        Assert.Equal(["show", "visibility"], order);
+    }
+
+    [Fact]
+    public void TheShowRequestAsksForTheSurfaceToItself()
+    {
+        var card = new BrightnessCard(NewSettings());
+        ShowRequest? seen = null;
+        card.ShowRequested += r => seen = r;
+
+        card.Report(40);
+
+        Assert.True(seen!.Exclusive);
+    }
+
 }

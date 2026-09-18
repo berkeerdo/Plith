@@ -81,11 +81,22 @@ public sealed class BrightnessCard : ICard
 
         var wasVisible = _visible;
         _visible = true;
-        if (!wasVisible) VisibilityChanged?.Invoke();
 
         _scheduleHide(TimeSpan.FromMilliseconds(_settings.Current.ShowDurationMs), Hide);
 
-        ShowRequested?.Invoke(new ShowRequest(ShowReason.BrightnessChange, Id));
+        // The show request goes FIRST, and the order is load-bearing rather than incidental.
+        // Both events make CardHost recompute, and only the request carries the exclusivity.
+        // Raising the visibility change first produced a recompute with every card in it,
+        // pushed straight into the bound collection, and then a second one with only this
+        // card: on screen, one frame of the volume bar before the brightness bar replaced it.
+        // Measured in the log as "On screen: media, audio, brightness" immediately followed by
+        // "On screen: brightness (exclusive)".
+        //
+        // Exclusive: a brightness key is not a question about the volume, and the Audio card
+        // is always visible, so without this the volume bar appears every time the level moves.
+        ShowRequested?.Invoke(new ShowRequest(ShowReason.BrightnessChange, Id, Exclusive: true));
+
+        if (!wasVisible) VisibilityChanged?.Invoke();
     }
 
     private void Hide()

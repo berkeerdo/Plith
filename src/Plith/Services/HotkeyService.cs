@@ -33,6 +33,11 @@ public sealed class HotkeyService : IDisposable
     /// <summary>Whether a held key fires once or repeats.</summary>
     public bool NoRepeat { get; }
 
+    /// <summary>The Win32 error from the last refused registration, or 0 if none has been
+    /// refused. 1409 is ERROR_HOTKEY_ALREADY_REGISTERED, which means another window owns the
+    /// combo and the person has to pick a different one.</summary>
+    public int LastError { get; private set; }
+
     [Flags]
     public enum HotkeyMods : uint
     {
@@ -97,10 +102,15 @@ public sealed class HotkeyService : IDisposable
             _isRegistered = true;
             _activeMods = mods;
             _activeKey = vk;
+            LastError = 0;
             ok = true;
         }
         else
         {
+            // Captured immediately: anything between the failed call and the read can replace
+            // the thread's last error, and 1409 (already registered by another window) is a
+            // different problem from every other value this can return.
+            LastError = Marshal.GetLastWin32Error();
             _activeMods = 0;
             _activeKey = 0;
             ok = false;

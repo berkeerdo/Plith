@@ -261,4 +261,72 @@ public class CardHostTests
         Assert.Equal(new[] { "first", "middle" }, host.VisibleCards.Select(c => c.Id));
         Assert.Equal(2, host.VisibleCards.Count);
     }
+
+    // A brightness key press must not raise the volume bar. The Audio card is always visible,
+    // so before this an event from any card showed every card, and pressing "dimmer" put a
+    // volume row on screen that the person had not asked about and could not act on.
+
+    [Fact]
+    public void AnExclusiveRequestShowsOnlyTheCardThatMadeIt()
+    {
+        var host = new CardHost(NewSettings());
+        var audio = new FakeCard("audio", 20);
+        var brightness = new FakeCard("brightness", 30);
+        host.Register(audio);
+        host.Register(brightness);
+
+        brightness.RaiseShow(new ShowRequest(ShowReason.BrightnessChange, "brightness", Exclusive: true));
+
+        Assert.Single(host.VisibleCards);
+        Assert.Equal("brightness", host.VisibleCards[0].Id);
+    }
+
+    [Fact]
+    public void TheOthersComeBackOnceTheExclusiveCardGoesAway()
+    {
+        var host = new CardHost(NewSettings());
+        var audio = new FakeCard("audio", 20);
+        var brightness = new FakeCard("brightness", 30);
+        host.Register(audio);
+        host.Register(brightness);
+
+        brightness.RaiseShow(new ShowRequest(ShowReason.BrightnessChange, "brightness", Exclusive: true));
+        brightness.IsVisible = false;
+
+        Assert.Single(host.VisibleCards);
+        Assert.Equal("audio", host.VisibleCards[0].Id);
+    }
+
+    [Fact]
+    public void AnOrdinaryRequestEndsAnExclusiveOne()
+    {
+        // A volume key arriving while the brightness card is still on screen is a new question,
+        // and it gets the usual answer rather than being hidden behind the old one.
+        var host = new CardHost(NewSettings());
+        var audio = new FakeCard("audio", 20);
+        var brightness = new FakeCard("brightness", 30);
+        host.Register(audio);
+        host.Register(brightness);
+
+        brightness.RaiseShow(new ShowRequest(ShowReason.BrightnessChange, "brightness", Exclusive: true));
+        audio.RaiseShow(new ShowRequest(ShowReason.VolumeKey, "audio"));
+
+        Assert.Equal(2, host.VisibleCards.Count);
+    }
+
+    [Fact]
+    public void AnExclusiveRequestFromAnInvisibleCardChangesNothing()
+    {
+        var host = new CardHost(NewSettings());
+        var audio = new FakeCard("audio", 20);
+        var hidden = new FakeCard("hidden", 30, visible: false);
+        host.Register(audio);
+        host.Register(hidden);
+
+        hidden.RaiseShow(new ShowRequest(ShowReason.BrightnessChange, "hidden", Exclusive: true));
+
+        Assert.Single(host.VisibleCards);
+        Assert.Equal("audio", host.VisibleCards[0].Id);
+    }
+
 }
