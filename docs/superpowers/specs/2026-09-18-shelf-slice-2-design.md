@@ -108,6 +108,22 @@ catcher removes every round trip and makes the surface snappier, at the price of
 being unable to show the shelf at all when the catcher is down, and of the lower-integrity
 process becoming the sole authority over a file Plith reads.
 
+### What the new verbs widen
+
+The pipe's ACL is open to Everyone, by measurement and by necessity. Until this slice the only
+verb that did anything was `Dropped`, which adds paths that `ShelfStore` then stats. `ClearShelf`,
+`RemoveItems` and `Restack` mean any local process can now rearrange or empty the shelf.
+
+This is accepted rather than redesigned, and the bound is why: the shelf holds references, nothing
+is copied or moved, and clearing it deletes no file. Anything running at Medium can already read
+and write the user's own files. It belongs in `DropChannelServer`'s summary so the next reader does
+not have to rediscover the reasoning.
+
+One consequence is not optional. `Enum.TryParse` accepts a number for any enum, so a line reading
+`9` decodes to whatever verb happens to sit at 9, and one past the end decodes to a verb that does
+not exist. `TryDecode` must check `Enum.IsDefined` as well. A verb reachable by counting is the
+wrong field to leave guessable on a pipe anything can write.
+
 ## 3. Wire protocol
 
 The format does not change: `Verb \t X \t Y \t W \t H \t path...`, with the existing escaping
@@ -129,10 +145,14 @@ second thing to get wrong.
 the set is complete when it has seen `stackCount` of them. An empty shelf is a single
 `Items 0 0 0 0` with no paths.
 
-`Palette` carries exactly six values, in this order and no other: surface background, ink,
-muted ink, track, accent, and `#FFFFFFFF` for a light theme or `#FF000000` for a dark one. The
-order is the contract; a named format would mean a parser on the far side and a second thing
-to keep in step.
+`Palette` carries exactly seven values, in this order and no other: surface gradient start,
+surface gradient end, ink, muted ink, track, accent, and `1` for a dark theme or `0` for a light
+one. The order is the contract; a named format would mean a parser on the far side and a second
+thing to keep in step.
+
+Two surface colours rather than one, found while planning: `OsdSurfaceBrush` is a
+`LinearGradientBrush`, and a single flat stand-in for it would be visibly not the product's
+surface, which is the exact drift this message exists to prevent.
 
 **Catcher to Plith**
 
@@ -142,7 +162,8 @@ to keep in step.
 | `Hide` | zero | none | existing: withdrew without a drop |
 | `RemoveItems` | zero | paths to remove | |
 | `ClearShelf` | zero | none | |
-| `Restack` | target stack index, 0, 0, 0 | paths to move | index equal to the stack count creates a new stack |
+| `NewStack` | zero | none | put an empty stack at the front for the next drop |
+| `Restack` | target stack index, 0, 0, 0 | paths to move | index equal to the stack count appends a new stack |
 | `ShelfClosed` | zero | none | the surface is gone; put the notch back |
 
 The catcher receives paths only. Display names and icons are its own work, because it is the
@@ -303,10 +324,12 @@ Stated so they are not discovered as omissions.
    crash cost one drop. It will now be holding a surface mid-gesture, and its crash is
    visible. Plith relaunching it on the next open is the whole recovery story in this slice,
    deliberately.
-3. **Paging versus clicking inside the notch frame.** The shelf page lives in a frame whose
-   pages are changed by clicks on page dots and by swipes. Whether a click on the page body
-   can be distinguished from a paging gesture is not answerable from this spec and needs
-   `WidgetFrame`'s input path read during implementation.
+3. ~~**Paging versus clicking inside the notch frame.**~~ **Resolved while planning, and left
+   here as the record.** `OsdHost.OnNotchClicked` is wired at `PreviewMouseLeftButtonDown` but
+   returns early once the frame is open (`src/Plith/Views/OsdHost.cs:877`), and the rail marks
+   its own clicks handled on the rail element (`src/Plith/Views/Widgets/WidgetFrame.cs:218`). A
+   click on the page body reaches the page with no change to either. Read rather than run, so it
+   is still confirmed by clicking.
 4. **Focus.** Opening the shelf takes focus from the person's application. That is what
    comparable tools do, and Windows returns focus on close, but it is a behaviour change from
    a notch that never took focus at all.
