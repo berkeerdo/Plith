@@ -117,6 +117,11 @@ public partial class ShelfWindow : Window
     internal ShelfWindow(CatcherLog log)
     {
         _log = log;
+        // Set once, here, rather than threaded through ShelfSurface's constructor or Apply: it
+        // is the one place in the catcher that already holds the shared CatcherLog when a
+        // ShelfSurface is about to start extracting icons. Left null (a no-op) in the render
+        // harness and anywhere else that never runs this constructor.
+        ShellIcons.Log = log.Info;
         InitializeComponent();
         SourceInitialized += OnSourceInitialized;
 

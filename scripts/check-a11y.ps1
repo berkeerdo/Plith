@@ -150,8 +150,17 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
 # accessibility NAME checks - that pass never covered the installer and would fail on gaps nobody
 # has signed off on - but this rule is about not depending on a font that varies between Windows
 # builds, and the installer proved it needs the rule as much as anything else.
+#
+# The catcher is scanned here too, added for the same reason as the installer: this rule is
+# about a font varying between Windows builds, not about the accessibility NAME pass's scope,
+# and Plith.DropCatcher renders a real user-facing surface (the shelf) that every root above
+# left untouched. Task 5 added a shell-icon Image beside the shelf's drawn geometry without this
+# line ever reading either file it touched. Added to the glyph roots ONLY, not to $Root itself:
+# widening $Root would also turn on the accessibility NAME checks for a project nobody has
+# reviewed for that yet, which is a separate gap this line is not the one to close.
 $iconFontUses = [System.Collections.Generic.List[string]]::new()
-$iconFontRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.Installer')) |
+$iconFontRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.Installer'),
+                    (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
                  Where-Object { Test-Path $_ }
 $iconFontFiles = @($iconFontRoots | ForEach-Object {
                      @(Get-ChildItem -Path $_ -Filter '*.xaml' -Recurse) +

@@ -212,8 +212,20 @@ public partial class ShelfSurface : UserControl
             Height = 22,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
-        iconHost.Children.Add(BuildFallbackIcon(entry));
-        RequestShellIcon(entry.Path, iconHost);
+        // Cache checked synchronously, on the UI thread, before anything is drawn: this is a
+        // dictionary lookup, never an extraction, so it cannot stall. A hit paints the real icon
+        // on the very first frame; without this check, every tile drew the fallback first and
+        // raced a background swap into it on every repaint, including every selection change,
+        // one frame of drawn geometry that a cache hit never needed to show at all.
+        if (ShellIcons.TryGetCached(entry.Path, out var cachedIcon))
+        {
+            iconHost.Children.Add(BuildIconImage(cachedIcon));
+        }
+        else
+        {
+            iconHost.Children.Add(BuildFallbackIcon(entry));
+            RequestShellIcon(entry.Path, iconHost);
+        }
 
         var label = new TextBlock
         {
@@ -307,16 +319,21 @@ public partial class ShelfSurface : UserControl
             Dispatcher.BeginInvoke(() =>
             {
                 host.Children.Clear();
-                host.Children.Add(new Image
-                {
-                    Source = icon,
-                    Width = 22,
-                    Height = 22,
-                    Stretch = Stretch.Uniform,
-                });
+                host.Children.Add(BuildIconImage(icon));
             });
         });
     }
+
+    /// <summary>Same 22x22 box as <see cref="BuildFallbackIcon"/>, so a real icon never shifts
+    /// the row whether it arrives on the first frame (a cache hit) or a moment later (a swap
+    /// after extraction).</summary>
+    private static Image BuildIconImage(ImageSource icon) => new()
+    {
+        Source = icon,
+        Width = 22,
+        Height = 22,
+        Stretch = Stretch.Uniform,
+    };
 
     /// <summary>
     /// The last slot in a column, when its stack holds more than the column can show. Not
