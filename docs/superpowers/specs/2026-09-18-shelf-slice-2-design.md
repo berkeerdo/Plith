@@ -145,14 +145,22 @@ second thing to get wrong.
 the set is complete when it has seen `stackCount` of them. An empty shelf is a single
 `Items 0 0 0 0` with no paths.
 
-`Palette` carries exactly seven values, in this order and no other: surface gradient start,
-surface gradient end, ink, muted ink, track, accent, and `1` for a dark theme or `0` for a light
-one. The order is the contract; a named format would mean a parser on the far side and a second
+`Palette` carries exactly eight values, in this order and no other: surface gradient start,
+surface gradient end, ink, muted ink, track, accent, selection ring, and `1` for a dark theme or
+`0` for a light one. The order is the contract; a named format would mean a parser on the far side and a second
 thing to keep in step.
 
 Two surface colours rather than one, found while planning: `OsdSurfaceBrush` is a
 `LinearGradientBrush`, and a single flat stand-in for it would be visibly not the product's
 surface, which is the exact drift this message exists to prevent.
+
+The selection ring is the eighth field, and it was found by building the surface rather than by
+designing it. Drawn as the raw accent it measures 1.25:1 against the panel for a near-white
+accent, where the product holds non-text surfaces to 3:1. Every other accent-bearing element in
+the product routes through a contrast-derived ink or track colour, which is exactly why
+`check-contrast.ps1` passes on a white accent today; a raw accent stroke on the panel would have
+made the shelf the one place that breaks. Plith derives it with `ContrastInk.TrackOn` against the
+surface and sends the answer, which is this message's whole principle.
 
 **Catcher to Plith**
 

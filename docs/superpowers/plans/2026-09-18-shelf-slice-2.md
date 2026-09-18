@@ -30,6 +30,19 @@ Recorded here rather than left as a silent divergence. The spec is amended to ma
 2. **A `NewStack` verb exists.** The spec has new stacks created empty and at the front, and `Restack` appending at the end. Those are two different operations and overloading one verb to mean both would be a puzzle at the decode site.
 3. **Spec risk 3 is resolved and needs no investigation task.** `OsdHost.OnNotchClicked` is wired at `PreviewMouseLeftButtonDown` but returns early once `notch.IsOpenEnoughToShowContent` (`src/Plith/Views/OsdHost.cs:877`), so an open frame keeps its own clicks. The rail handles its clicks on the rail element with `e.Handled = true` (`src/Plith/Views/Widgets/WidgetFrame.cs:218`). A click on the shelf page body therefore reaches the page. Task 6 uses button **up** on the page.
 
+## What changed while executing
+
+Recorded here rather than by rewriting a task that has already shipped and been reviewed.
+
+1. **The palette carries eight values, not seven.** Task 3 measured the selection ring at 1.25:1
+   against the panel for a near-white accent, where this product holds non-text surfaces to 3:1.
+   The ring becomes an eighth field that Plith derives with `ContrastInk.TrackOn`. Task 2's text
+   below still says seven, which was true when it was written and executed; the spec and
+   `ShelfPaletteWire.FieldCount` are the current authority.
+2. **The verb check needs both `Enum.IsDefined` and a name round trip.** My pre-flight ruling said
+   the round trip alone was enough. It is not: `ToString` on a value with no name prints the
+   number, so `"99"` round trips. Task 2's text was corrected before it shipped.
+
 ## Threat note, to be repeated in code
 
 The pipe's ACL is open to Everyone, by measurement and by necessity. Until this slice the only verb that did anything was `Dropped`, which adds paths that `ShelfStore` then stats. This slice adds `ClearShelf`, `RemoveItems` and `Restack`, so any local process can now rearrange or empty the shelf.
