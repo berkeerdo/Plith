@@ -58,17 +58,25 @@ public partial class ShelfWindow : Window
     /// to a tile at its edge, and on the way to anything this window later opens beside itself.
     /// Closing on the leave itself would make the shelf impossible to reach around its own edge.
     ///
-    /// 500 ms was CHOSEN, not measured. Nothing has put a pointer over this window yet: it is a
-    /// layered window, it can only be judged at a physical console, and the session that wrote it
-    /// was a Remote Desktop one. The hardware pass in docs/SHELF-VERIFICATION.md is what would
-    /// correct it, and a person finding the shelf hard to leave or too eager to stay is reading
-    /// this number.
+    /// 500 ms was CHOSEN, not measured. What has been measured is only that it WORKS: driven with
+    /// SetCursorPos, leaving and returning inside 250 ms keeps the shelf, and leaving and staying
+    /// away takes it down once. Whether 500 ms is the right length is a different question and a
+    /// scripted pointer cannot answer it, because the thing being judged is how a hand moving
+    /// toward a tile at the edge feels. The hardware pass in docs/SHELF-VERIFICATION.md is what
+    /// would correct it, and a person finding the shelf hard to leave, or too eager to go, is
+    /// reading this number.
     /// </summary>
     private static readonly TimeSpan LeaveGrace = TimeSpan.FromMilliseconds(500);
 
     private readonly CatcherLog _log;
     private readonly ShelfModel _model = new();
     private readonly DispatcherTimer _leave;
+
+    /// <summary>Why the shelf is waiting to go away, or null when it is not. Set when a dismissal
+    /// arrives while a drag or a menu suspends it, and acted on by the next leave-timer tick. See
+    /// <see cref="Dismiss"/> for the sequence that makes a deferral necessary rather than a
+    /// nicety.</summary>
+    private string? _pendingDismissal;
 
     /// <summary>Whether the shelf is currently up. Guards <see cref="CloseNow"/> so a second
     /// dismissal (an Esc landing in the same frame as a Deactivated, which does happen) cannot
@@ -117,12 +125,19 @@ public partial class ShelfWindow : Window
         // until then the shelf is drawn in the product's own dark palette rather than in WPF's
         // defaults, so a Palette message that never arrives shows as slightly wrong colours
         // rather than as an exception in the middle of a drop.
-        Page.Apply(BuiltInDark);
-
-        // Rendered once here as well, so an OpenShelf that arrives before any Items message shows
-        // the page's empty state rather than a blank panel. Plith sends the shelf whole on every
-        // change, but a shelf with nothing on it has no stacks to send.
-        Page.Render(_model);
+        //
+        // The whole Apply, not just Page.Apply, and that distinction cost the probe its point.
+        // Apply is also what paints the GROWING SHAPE's gradient, and the shape is what is on
+        // screen for the first half of every growth. Applying the fallback to the page alone left
+        // the shape at the flat XAML colour, so the page faded in over a background of a
+        // different colour: exactly the shift this window paints its own gradient to avoid. No
+        // palette sender exists yet, so that is the probe's own configuration, and the probe is
+        // what the hardware pass judges.
+        //
+        // Apply ends in Render, so this also means an OpenShelf arriving before any Items message
+        // shows the page's empty state rather than a blank panel. Plith sends the shelf whole on
+        // every change, but a shelf with nothing on it has no stacks to send.
+        Apply(BuiltInDark);
 
         _leave = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = LeaveGrace };
         _leave.Tick += (_, _) =>
@@ -131,9 +146,19 @@ public partial class ShelfWindow : Window
             Dismiss("the pointer left and did not come back");
         };
 
-        MouseEnter += (_, _) => _leave.Stop();
+        // Stopped only when there is nothing waiting. With a deferred dismissal pending, the
+        // timer is the clock that re-evaluates it, and stopping it because the pointer came back
+        // would strand the shelf in exactly the way the deferral exists to prevent.
+        MouseEnter += (_, _) => { if (_pendingDismissal is null) _leave.Stop(); };
         MouseLeave += (_, _) => { _leave.Stop(); _leave.Start(); };
         Deactivated += (_, _) => Dismiss("another window took focus");
+
+        // Getting activation back cancels a deferred dismissal, because the thing that asked for
+        // it is no longer true. The case is a context menu: it takes activation, which raises
+        // Deactivated, which defers; when the menu closes the shelf is foreground again and
+        // closing it then would punish the person for having opened a menu on it. A drag out does
+        // not reach here, since the shelf is not activated again at the end of one.
+        Activated += (_, _) => _pendingDismissal = null;
         PreviewKeyDown += OnPreviewKeyDown;
 
         // ShelfSurface's three events (EntryPressed, ClearRequested, NewStackRequested) are
@@ -183,12 +208,19 @@ public partial class ShelfWindow : Window
     /// </summary>
     public void OpenAt(int x, int y, int width, int height)
     {
+        // A second OpenShelf while the shelf is already up is a RE-ASSERTION, not a re-open: the
+        // monitor changed, the DPI changed, or Plith simply restated where the shelf belongs. It
+        // moves and resizes, and it does NOT grow again. Growing again would snap the shape back
+        // to the notch's frame and the page back to invisible, so a message meaning "you are in
+        // the right place" would read on screen as the shelf having been closed and reopened.
+        var reasserting = IsVisible;
+
         // Show() first, and it is not optional. EnsureHandle() alone creates the HWND and
         // SWP_SHOWWINDOW alone makes it visible to the window manager, but WPF does not consider
         // the window shown: it builds no visual tree, so the page inside never loads and every
         // FindResource in ShelfSurface runs against a control that was never there. Measured on
         // CatcherWindow's first probe run, where the only symptom was MainWindowHandle staying 0.
-        if (!IsVisible)
+        if (!reasserting)
         {
             // Collapsed BEFORE the window is shown, or the first frame is the whole page and the
             // growth animates out of something the person has already seen whole.
@@ -214,10 +246,21 @@ public partial class ShelfWindow : Window
         Activate();
         Keyboard.Focus(this);
 
-        BeginAnimation(ExpansionProperty, new DoubleAnimation(0, 1, GrowDuration)
+        if (reasserting)
         {
-            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-        });
+            // Re-applied at full expansion rather than animated, because the rectangle may have
+            // changed and both the shape and the page are sized from it. The property is already
+            // held at 1 by the finished animation, so assigning it would be ignored; calling the
+            // handler directly is the one path that re-reads the new ActualWidth/ActualHeight.
+            ApplyExpansion(1);
+        }
+        else
+        {
+            BeginAnimation(ExpansionProperty, new DoubleAnimation(0, 1, GrowDuration)
+            {
+                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+            });
+        }
 
         // Logged rather than assumed. A process that is not already the foreground process is not
         // always allowed to become one (Windows' foreground lock), and when Activate() loses that
@@ -226,7 +269,8 @@ public partial class ShelfWindow : Window
         // screen to a working shelf, so it is recorded here rather than left to be reported as
         // "Esc does not close it".
         var foreground = GetForegroundWindow() == handle;
-        _log.Info($"Shelf opened at {x},{y} {width}x{height}. handle=0x{handle:X}, foreground={foreground}");
+        _log.Info($"Shelf {(reasserting ? "re-asserted" : "opened")} at {x},{y} {width}x{height}. " +
+                  $"handle=0x{handle:X}, foreground={foreground}");
     }
 
     /// <summary>Repaints the shelf in the theme Plith resolved. Safe at any time: the page is
@@ -283,8 +327,15 @@ public partial class ShelfWindow : Window
 
         // The selection belongs to a shelf that is on screen. Kept across a close, the next
         // OpenShelf would come up with tiles ringed from a session the person has already ended.
+        //
+        // Rendered as well, and the render is the half that does the work. ShelfSurface paints
+        // the ring at Render time from the selection it was handed, and OpenAt does not render,
+        // so a shelf re-opened without an intervening Items message would come up still showing
+        // the old rings no matter what the model said.
         _model.ClearSelection();
+        Page.Render(_model);
 
+        _pendingDismissal = null;
         Dismissed?.Invoke();
     }
 
@@ -295,18 +346,44 @@ public partial class ShelfWindow : Window
     /// application, the shelf has lost activation by definition, and closing under them would
     /// cancel the gesture they are in the middle of. A context menu takes activation too, for
     /// the same reason and with the same answer.
+    ///
+    /// Suppressed means DEFERRED, never cancelled, and that distinction is the whole of the
+    /// second half of this method. The failing sequence, written down so it cannot be simplified
+    /// back out: once Task 8 sets _dragInFlight, pressing a tile, dragging off the shelf and
+    /// releasing over another application consumes BOTH remaining dismissals. The leave timer
+    /// fires, is suppressed, and nothing re-arms it; the Deactivated fires, is suppressed, and no
+    /// second one can ever follow, because the window is not active any more. The shelf is then
+    /// stranded on screen with no way off it. So a suppressed dismissal is remembered and the
+    /// leave timer is re-armed as the clock that re-evaluates it: a retry needs no cooperation
+    /// from the task that sets the flag, which is what makes it correct before that task exists.
     /// </summary>
     private void Dismiss(string why)
     {
-        if (_dragInFlight || _menuOpen) return;
-
         // CloseNow guards on this too, and it has to, because it is public. The check is repeated
-        // here so the LOG stays honest: Hide() deactivates the window, so an Esc is always
-        // followed a millisecond later by a Deactivated, and without this the log claimed the
-        // shelf closed twice for two different reasons. Measured on the first probe run.
+        // here, and FIRST, for two reasons. The log stays honest: Hide() deactivates the window,
+        // so an Esc is always followed a millisecond later by a Deactivated, and without this the
+        // log claimed the shelf closed twice for two different reasons (measured on the first
+        // probe run). And a dismissal arriving after the shelf is already down must not leave a
+        // retry clock running against a window nobody can see.
         if (!_open) return;
 
-        _log.Info($"Shelf closing: {why}.");
+        if (_dragInFlight || _menuOpen)
+        {
+            // The FIRST reason is kept, not the latest. What the person did to dismiss the shelf
+            // is the interesting line in the log; the retries after it are this method talking to
+            // itself.
+            if (_pendingDismissal is null)
+            {
+                _pendingDismissal = why;
+                _log.Info($"Shelf dismissal deferred ({why}): a drag or a menu is in flight.");
+            }
+
+            _leave.Stop();
+            _leave.Start();
+            return;
+        }
+
+        _log.Info($"Shelf closing: {_pendingDismissal ?? why}.");
         CloseNow();
     }
 

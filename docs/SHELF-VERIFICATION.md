@@ -79,8 +79,13 @@ of them apart from its own success.
 8. **The pointer leaving and coming back does NOT close it.** Move the pointer off the shelf and
    back within about half a second: it must still be there. Move it off and leave it off for a
    second or more: it must go away. The grace period exists because the pointer crosses outside
-   the surface on the way to a tile at the edge.
+   the surface on the way to a tile at the edge. Both halves of this have been driven with a
+   scripted cursor and behave, so what is left here is the only part a script cannot judge:
+   whether 500 ms is the right length for a hand rather than for a `SetCursorPos` call.
 9. **It does not appear in Alt+Tab** while it is open, and it does not steal the taskbar.
+10. **A second `OpenShelf` on an open shelf moves it, it does not re-grow it.** Not reachable from
+    the probe, which opens once; this one waits for Task 6, when Plith can send a second message.
+    The log distinguishes them: `Shelf opened` against `Shelf re-asserted`.
 
 ### Status: NOT YET RUN
 
@@ -101,7 +106,16 @@ regardless of whether anyone could see the screen. They cover the plumbing, not 
 | `Esc` dismisses | `Shelf closing: Esc.` then the probe exits |
 | Another window taking focus dismisses | `Shelf closing: another window took focus.` then the probe exits |
 | The shelf does NOT dismiss itself when nothing happens | still running after 4 s |
-| `Closed` fires exactly once per dismissal | the probe's subscriber logged one exit line, not two, even though `Hide()` raises `Deactivated` a millisecond after an `Esc` had already closed it |
+| The dismissal event fires exactly once per dismissal | the probe's subscriber logged one exit line, not two, even though `Hide()` raises `Deactivated` a millisecond after an `Esc` had already closed it |
+| The pointer leaving dismisses, after the grace period | cursor driven with `SetCursorPos` onto the shelf and off it: `Shelf closing: the pointer left and did not come back.` about 500 ms later, one line |
+| The pointer leaving and RETURNING does not dismiss | off for 250 ms and back: still up 1.5 s later, then gone 1.5 s after leaving again |
+
+The pointer rows are the only ones driven with a real cursor rather than a message. They are worth
+separating out because they are what exercises `MouseEnter`/`MouseLeave` at all, and because they
+happened to answer a second question: moving the physical cursor counts as user input, and on both
+of those runs the shelf logged `foreground=True` where an otherwise identical scripted run logged
+`False`. That is consistent with the foreground note below, and it is the reason that note does not
+claim the real gesture is broken.
 
 That last row found a real defect while it was being measured: `Dismiss` logged a second
 "Shelf closing" line for the `Deactivated` that `Hide()` itself causes. `CloseNow` was already
@@ -122,6 +136,14 @@ not already the foreground process is not allowed to become one.
 
 In the `foreground=False` state the shelf is **on screen and dismissable only by the mouse-leave
 timer**. `Esc` does nothing and `Deactivated` never fires, because the window was never activated.
+
+And the mouse-leave timer is not a floor. It is armed by `MouseLeave`, which WPF raises only after
+a `MouseEnter`, so if the pointer never goes over the shelf at all, **nothing dismisses it**: no
+keyboard, no focus change, no timer. If you are at the console and the shelf appears stuck, it is
+not frozen and it does not need the process killed. **Click it.** The click activates the window,
+after which `Esc` works and clicking away closes it as normal; moving the pointer across it and
+off also arms the leave timer. Then read the log: an open line with `foreground=False` on it is
+this case, and an open line with `foreground=True` is something else and worth reporting.
 
 The fix belongs on Plith's side and is not written yet: **Plith must call
 `AllowSetForegroundWindow(catcherProcessId)` before it sends `OpenShelf`**, which is the

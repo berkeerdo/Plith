@@ -88,9 +88,6 @@ public partial class App : Application, IDisposable
         _window.FilesDropped += OnFilesDropped;
         _window.Withdrew += OnWithdrew;
 
-        _shelf = new ShelfWindow(_log);
-        _shelf.Dismissed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
-
         if (TryReadProbeRect(e.Args, out var probe))
         {
             _log.Info($"Started. Integrity: {IntegrityLevel.Describe()}");
@@ -101,6 +98,13 @@ public partial class App : Application, IDisposable
             _window.ShowAt(probe.x, probe.y, probe.w, probe.h);
             return;
         }
+
+        // After the catcher probe returns, not before it. Constructing a ShelfWindow builds its
+        // visual tree, applies a palette and renders the page, and the catcher probe never shows
+        // a shelf: doing that work above would put a second window's worth of layout into the one
+        // mode that exists to measure the first window on its own.
+        _shelf = new ShelfWindow(_log);
+        _shelf.Dismissed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
 
         // Per-user, matching the pipe name: one catcher per signed-in session, and a second
         // instance quits rather than fighting the first for the same rectangle.
