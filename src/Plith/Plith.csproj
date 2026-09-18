@@ -49,6 +49,7 @@
     <PackageReference Include="NAudio" Version="2.3.0" />
     <PackageReference Include="WpfScreenHelper" Version="1.1.0" />
     <PackageReference Include="ini-parser-netstandard" Version="2.5.2" />
+    <PackageReference Include="System.Management" Version="9.0.0" />
   </ItemGroup>
 
 </Project>
