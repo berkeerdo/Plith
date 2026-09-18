@@ -276,12 +276,16 @@ Replace the `private readonly List<ShelfItem> _items = [];` field and the member
     public void Add(IEnumerable<string> paths)
     {
         var kept = false;
-        if (_stacks.Count == 0) _stacks.Add([]);
-        var front = _stacks[0];
 
         foreach (var path in paths)
         {
             if (!TryResolve(path, out var item)) continue;
+
+            // The front stack is created LAZILY, on the first path that resolves. Created up
+            // front, a drop of nothing but dead paths leaves an empty stack behind that nobody
+            // asked for.
+            if (_stacks.Count == 0) _stacks.Add([]);
+            var front = _stacks[0];
 
             // Removed from EVERY stack before inserting, not just the front one. A repeat drop
             // moves the row to the front rather than leaving a second copy in another stack,
@@ -616,11 +620,14 @@ public enum DropVerb
 In `TryDecode`, replace the verb parse:
 
 ```csharp
-        // IsDefined as well as TryParse, because TryParse accepts a NUMBER for any enum: "9"
-        // decodes to whatever verb happens to sit at 9, and a number past the end decodes to a
-        // verb that does not exist at all. This pipe is reachable by every process on this
-        // machine, so the verb is precisely the field that must not be reachable by counting.
-        if (!Enum.TryParse<DropVerb>(parts[0], out var verb) || !Enum.IsDefined(verb)) return false;
+        // A NAME round trip, not Enum.IsDefined, and the difference is the whole check.
+        //
+        // TryParse accepts a NUMBER for any enum. "9" decodes to whatever verb happens to sit at
+        // 9, and "3" decodes to Dropped, which IsDefined would happily confirm. A pipe every
+        // process on this machine can write is precisely the place a verb must not be reachable
+        // by counting, so the test is whether the sender wrote the verb's own name.
+        if (!Enum.TryParse<DropVerb>(parts[0], out var verb)) return false;
+        if (!string.Equals(verb.ToString(), parts[0], StringComparison.Ordinal)) return false;
 ```
 
 - [ ] **Step 4: Run the verb tests and watch them pass**
@@ -819,7 +826,7 @@ The shelf's visuals go in a `UserControl`, not in the `Window`. That is the whol
 
 **Interfaces:**
 - Consumes: `ShelfPalette` from Task 2.
-- Produces: `ShelfEntry(string Path, string Name, bool IsDirectory)`; `ShelfModel` with `IReadOnlyList<IReadOnlyList<ShelfEntry>> Stacks`, `void SetStack(int index, int total, IReadOnlyList<string> paths)`, `bool IsComplete`, `IReadOnlyCollection<string> Selection`, `void Select(string path, bool additive)`, `void ClearSelection()`, `IReadOnlyList<string> DragPaths(string pressedPath)`; `ShelfSurface` with `void Apply(ShelfPalette palette)`, `void Show(ShelfModel model)`, and the events `event Action<string, bool>? EntryPressed`, `event Action? ClearRequested`, `event Action? NewStackRequested`.
+- Produces: `ShelfEntry(string Path, string Name, bool IsDirectory)`; `ShelfModel` with `IReadOnlyList<IReadOnlyList<ShelfEntry>> Stacks`, `void SetStack(int index, int total, IReadOnlyList<string> paths)`, `bool IsComplete`, `IReadOnlyCollection<string> Selection`, `void Select(string path, bool additive)`, `void ClearSelection()`, `IReadOnlyList<string> DragPaths(string pressedPath)`; `ShelfSurface` with `void Apply(ShelfPalette palette)`, `void Render(ShelfModel model)`, and the events `event Action<string, bool>? EntryPressed`, `event Action? ClearRequested`, `event Action? NewStackRequested`.
 
 - [ ] **Step 1: Make `ShelfModel` reachable from the test project**
 
@@ -1131,6 +1138,18 @@ Dismissal, all of it in one place:
         _log.Info($"Shelf closing: {why}.");
         CloseNow();
     }
+```
+
+Declare both suspending fields here, defaulting false, even though nothing sets them yet:
+
+```csharp
+    /// <summary>Set by the drag out in Task 8. Declared here because Dismiss reads it, and a
+    /// window that can only be dismissed correctly after a later task is a window that is wrong
+    /// in between.</summary>
+    private bool _dragInFlight;
+
+    /// <summary>Set by the context menu in Task 7, same reason.</summary>
+    private bool _menuOpen;
 ```
 
 Wire `PreviewKeyDown` for `Key.Escape`, `Deactivated`, and a `MouseLeave` that starts a short `DispatcherTimer` rather than closing immediately, cancelled by `MouseEnter`. The grace period exists because the pointer crosses outside the surface on the way to a tile at its edge.
@@ -1609,6 +1628,6 @@ git commit -m "docs(shelf): record what slice 2 does, and what nothing verified"
 
 **Gaps found and closed.** The spec's "open and show in the file manager" were listed in its build order but had no owner in the first draft of this plan; they are Task 7. The spec's `NewStack` gap and the palette's seventh field are recorded at the top rather than left as silent divergence.
 
-**Type consistency.** `ShelfStore.RemoveMany` is used under that name in Task 6; `ShelfModel.DragPaths` is used under that name in Tasks 7 and 8; `ShelfPaletteWire.TryFromPaths` is used under that name in Task 4; `CatcherStart` is produced in Task 6 Step 1 and consumed in Step 2 of the same task. `ShelfSurface.Apply`, `.Show` and `.SetStack` are declared in Task 3's Interfaces block and called from Task 4.
+**Type consistency.** `ShelfStore.RemoveMany` is used under that name in Task 6; `ShelfModel.DragPaths` is used under that name in Tasks 7 and 8; `ShelfPaletteWire.TryFromPaths` is used under that name in Task 4; `CatcherStart` is produced in Task 6 Step 1 and consumed in Step 2 of the same task. `ShelfSurface.Apply`, `.Render` and `ShelfWindow.SetStack` are declared in Task 3's Interfaces block and called from Task 4.
 
 **Known weakness of this plan, stated rather than hidden.** Tasks 3, 4, 5 and 7 carry constraints and acceptance criteria rather than complete code, because they are windows and their real content is what a render and a run show. That is the same limit the slice 1 plan had on its Tasks 5 and 6, and it is honest about the same thing: nobody can write a surface's final geometry into a plan without having looked at it. Every one of those tasks names the command that produces the picture and what to look for in it.
