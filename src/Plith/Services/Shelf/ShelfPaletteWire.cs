@@ -59,11 +59,17 @@ public static class ShelfPaletteWire
     /// Parsed by hand rather than through ColorConverter, because ColorConverter accepts named
     /// colours and malformed input by throwing, and this input arrives over a pipe any process
     /// can write. A parser that throws on hostile input is a parser that takes the catcher down.
+    ///
+    /// The null check on <paramref name="value"/> is not academic despite the non-nullable
+    /// parameter type: the values in a decoded DropMessage arrive from another process, over a
+    /// wire that carries text, and the C# type system describes what this method promises to
+    /// callers on this side of that boundary, not what the boundary itself can guarantee. A null
+    /// element must fail this parse the same as any other malformed value, not throw past it.
     /// </summary>
-    private static bool TryParseHex(string value, out Color color)
+    private static bool TryParseHex(string? value, out Color color)
     {
         color = default;
-        if (value.Length != 9 || value[0] != '#') return false;
+        if (value is null || value.Length != 9 || value[0] != '#') return false;
 
         var channels = new byte[4];
         for (var i = 0; i < 4; i++)

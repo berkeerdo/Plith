@@ -45,4 +45,21 @@ public sealed class ShelfPaletteWireTests
 
         Assert.False(ShelfPaletteWire.TryFromPaths(paths, out _));
     }
+
+    /// <summary>
+    /// The list is typed as IReadOnlyList of string, non-nullable under Nullable=enable, but that
+    /// type describes what this side of the wire promises, not what the wire itself can
+    /// guarantee: DropChannel.TryDecode builds its Paths array from whatever another process
+    /// wrote, and a decoder is free to change in ways the compiler here cannot see. The null!
+    /// below is deliberate, standing in for exactly that gap between the declared type and the
+    /// untrusted source behind it.
+    /// </summary>
+    [Fact]
+    public void TryFromPaths_RefusesANullElementInsteadOfThrowing()
+    {
+        var paths = ShelfPaletteWire.ToPaths(Sample()).ToArray();
+        paths[2] = null!;
+
+        Assert.False(ShelfPaletteWire.TryFromPaths(paths, out _));
+    }
 }
