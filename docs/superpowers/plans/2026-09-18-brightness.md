@@ -31,6 +31,9 @@ measurement this plan rests on.
   must all exit 0 before this branch is called done.
 - **No Segoe MDL2 or any icon font.** `check-a11y.ps1` fails the build on one, in
   code-behind as well as XAML. Icons are drawn geometry in `Resources/PlithIcons.xaml`.
+- **No hardware check is meaningful over Remote Desktop.** Measured: inside an RDP session
+  `EnumDisplayMonitors` returns the remote virtual display, no physical monitor is reachable,
+  and every DDC/CI call fails. Check `$env:SESSIONNAME` before believing any hardware result.
 - **`GetMonitorCapabilities` must never gate anything.** Measured: it returns false with
   caps=0x0 on the PG27AQDM attached to this machine while brightness reads and writes both
   work. Capability is decided by attempting a read.
@@ -526,9 +529,17 @@ because a passing test prints nothing:
 ```
 
 Run: `dotnet test tests/Plith.Tests -m:1 --nologo --filter TemporaryHardwareProbe`
-Expected on this machine: the failure message reports **one** device with
-`min=0 current=<whatever it is now> max=100`. If it reports zero devices, stop: discovery is
-broken and nothing after this task can work. Delete the fact once it has answered.
+Expected from a **console session**: one device, `min=0 current=<whatever it is now> max=100`.
+
+**Check the session first, because zero devices is the normal answer over Remote Desktop and
+says nothing about the code.** Run `echo $env:SESSIONNAME`: `Console` means the probe is
+meaningful, `RDP-Tcp#N` means it is not. This was measured the hard way while writing this
+plan: the same code that read 0/30/100 from the console returned `ERROR_NOT_SUPPORTED` an hour
+later, because the session had moved to RDP and `EnumDisplayMonitors` was returning the remote
+virtual display.
+
+From a console session, zero devices means discovery is broken and nothing after this task can
+work. Delete the fact once it has answered.
 
 - [ ] **Step 7: Commit**
 

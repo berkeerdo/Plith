@@ -23,7 +23,34 @@ a desktop (chassis type 3, no battery) with a single external monitor, an ASUS P
 | Does `GetMonitorCapabilities` report brightness? | **It fails outright.** Returns false, caps=0x0 | Same probe, same monitor, immediately before a read that worked |
 | Is there a `VK_BRIGHTNESS` to hook? | **No such constant.** Zero hits, and no brightness `APPCOMMAND` either | `grep` over `WinUser.h`, Windows SDK 10.0.26100.0 |
 
-Two of these decide the architecture.
+### 1.1 And then it stopped answering, which is the third thing that decides the architecture
+
+Every measurement above was taken from a **console session**. Later the same day, with the
+same binary and the same monitor, `GetMonitorBrightness` began returning `ERROR_NOT_SUPPORTED`
+and the low-level `GetVCPFeatureAndVCPFeatureReply(0x10)` failed alongside it, three times in
+a row. The cause was not the code:
+
+```
+SESSIONNAME = RDP-Tcp#0        SM_REMOTESESSION = 1
+console   ...  2  Conn
+```
+
+The session had been moved from the console to Remote Desktop. `EnumDisplayMonitors` then
+returns the RDP virtual display rather than the physical panel, `WmiMonitorConnectionParams`
+lists both (`AUS27FD` and a `Default_Monitor`), and the handle that comes back describes a
+"Generic PnP Monitor" that answers no DDC/CI at all.
+
+Two consequences, and the second is a design change rather than a note:
+
+- **Brightness cannot be developed or verified over RDP**, the same way this repo already
+  knows the OSD cannot be captured over RDP. The hardware checks in the plan need a console
+  session.
+- **Capability is not a startup-time fact.** A person who connects to their desktop remotely
+  and later returns to it is an ordinary case, not an edge one, and discovery that runs once
+  would leave the feature permanently off for them. Discovery reruns on display and session
+  change; see §3.2.
+
+Two of the earlier measurements decide the rest of the architecture.
 
 **`GetMonitorCapabilities` is not a usable gate.** On the one monitor available to this
 project it reports nothing while brightness reads and writes both work. Any implementation
@@ -120,8 +147,12 @@ percentage of the device's own span and clamped to it.
 
 **Discovery attempts a read and keeps whatever answers.** `GetMonitorCapabilities` is not
 consulted, for the reason measured above. A device that fails a read is dropped rather than
-retried, and discovery reruns on display change (`WM_DISPLAYCHANGE`), because a monitor can
-be plugged in.
+retried.
+
+**Discovery reruns on `WM_DISPLAYCHANGE` and on `WM_WTSSESSION_CHANGE`.** A monitor can be
+plugged in, and a session can move between the console and Remote Desktop, which was measured
+taking every DDC/CI-capable display away mid-session and would otherwise leave the feature
+dead until a restart. The rerun is what turns "no devices" from a verdict into a state.
 
 Handles are cached for the life of the device rather than opened per write. The measured 56
 ms is the DDC/CI exchange itself; reopening the handle every time would add to it.
@@ -197,6 +228,8 @@ when there is nothing behind it.
 
 - No device answered discovery: the card never becomes visible, the hotkeys are not
   registered, and the Settings section says so rather than offering controls that do nothing.
+  This is the normal state inside a Remote Desktop session and must read as "not here right
+  now" rather than as "not supported".
 - A write fails: the device is dropped for the session and the card does not show. A monitor
   that has gone away must not produce an OSD reporting a value nobody changed.
 - The WMI watcher throws on construction (stripped SKU, service disabled): the sense half is
@@ -234,6 +267,9 @@ What cannot be tested that way, and must be driven on hardware before this is ca
 - That a held key produces a smooth ramp rather than a stutter or a backlog.
 - The whole sense half. There is no laptop here, so `WmiMonitorBrightnessEvent` is
   **unverified on real hardware** and stays that way until someone runs it on a laptop panel.
+- **Every hardware check needs a console session.** Measured: inside Remote Desktop no
+  physical display is reachable at all, so a run there proves nothing except that the
+  no-devices path is quiet.
 
 That last one is the honest limit of this slice and is recorded as such rather than assumed.
 
