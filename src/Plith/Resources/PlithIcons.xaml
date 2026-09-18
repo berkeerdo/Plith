@@ -20,6 +20,11 @@
          waves want a stroke, and a single Path cannot have a different treatment per subpath.
          The call site stacks them; splitting here is also what lets the wave count change
          between the loud, quiet and muted states without redrawing the cone. -->
+    <!-- A sun: the disc as two half arcs, then eight rays. One stroked Geometry rather than a
+         group, because every other icon here is a path string and the call site supplies the
+         stroke width. -->
+    <Geometry x:Key="IconBrightness">M7.5,12 A4.5,4.5 0 1 1 16.5,12 A4.5,4.5 0 1 1 7.5,12 M12,1.8 L12,4.2 M12,19.8 L12,22.2 M1.8,12 L4.2,12 M19.8,12 L22.2,12 M4.75,4.75 L6.45,6.45 M17.55,17.55 L19.25,19.25 M19.25,4.75 L17.55,6.45 M6.45,17.55 L4.75,19.25</Geometry>
+
     <Geometry x:Key="IconSpeakerBody">M4,9.5 L7.2,9.5 L12,5.5 L12,18.5 L7.2,14.5 L4,14.5 Z</Geometry>
     <Geometry x:Key="IconSpeakerWaveInner">M15.6,9.4 A3.6,3.6 0 0 1 15.6,14.6</Geometry>
     <Geometry x:Key="IconSpeakerWaveOuter">M18.2,6.8 A7.2,7.2 0 0 1 18.2,17.2</Geometry>
