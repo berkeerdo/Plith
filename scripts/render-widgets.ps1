@@ -180,6 +180,25 @@ function Save-Visual {
     "  $Name.png  ($W x $H)"
 }
 
+# ShelfSurface fetches a real shell icon off the UI thread and marshals it back with
+# Dispatcher.BeginInvoke, on purpose (see ShellIcons.cs): a slow network path must not stall the
+# surface. Nothing in this script runs a Dispatcher.Run() message loop, so a BeginInvoke callback
+# just sits queued and unrun unless something pumps it - a capture taken right after Render()
+# would show only the drawn fallback and never prove the extraction path exists at all. This
+# drains the queue in short bursts, sleeping briefly between each so the background Task.Run has
+# a chance to finish and enqueue its callback before the next drain.
+function Wait-ForDispatcher {
+    param([int]$Bursts = 20, [int]$DelayMs = 25)
+    for ($i = 0; $i -lt $Bursts; $i++) {
+        Start-Sleep -Milliseconds $DelayMs
+        $frame = [Windows.Threading.DispatcherFrame]::new()
+        $exit = [Action[Windows.Threading.DispatcherFrame]] { param($f) $f.Continue = $false }
+        [Windows.Threading.Dispatcher]::CurrentDispatcher.BeginInvoke(
+            [Windows.Threading.DispatcherPriority]::Background, $exit, $frame) | Out-Null
+        [Windows.Threading.Dispatcher]::PushFrame($frame)
+    }
+}
+
 # --- the frame's own size, and stand-in data for each page --------------------------------
 $frameW = 356.0
 $frameH = 116.0
@@ -309,9 +328,27 @@ $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
 # exactly AT it (two files, so the ordinary two-tile column appears too). Reuses the same fixture
 # files as widget-shelf above rather than a second stub set - ShelfModel stats nothing itself,
 # but the tiles it paints should still carry real file names of a plausible length.
+#
+# The fixture files above are real (Set-Content wrote them), so ShellIcons can already extract
+# something for them, but their extension-based icons look enough like the drawn document
+# fallback that a render alone cannot prove a real shell icon is in the picture, or that a
+# fallback sits at the same size and baseline beside one when the two are mixed. Stack1 carries
+# both halves of that proof instead of two more ordinary fixtures.
+#
+# The built Plith.exe is the real-icon half: its icon is unmistakably not the drawn geometry.
+#
+# The fallback half turned out to be harder to earn than expected. SHGFI_USEFILEATTRIBUTES is
+# built to answer from the extension alone, and measured directly it does that for nearly
+# anything handed to it - an empty string, a 5000-character name, a reserved device name, even
+# a well-formed but unreachable \\host\share\file.txt all came back a real icon, because
+# Windows still knows what a ".txt" is without ever touching the network. The one path that
+# reliably made SHGetFileInfo return nothing at all, checked five times over, is a single
+# leading backslash rather than the two a UNC path needs: Windows reads it as a path rooted on
+# the current drive (something like "C:\nosuchhost\share\ghost.txt"), and that specific
+# malformed shape is what the fallback in this render actually exercises.
 $surfaceModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
 $stack0 = [string[]](@($shelfFolder) + ($fixtures[0..3] | ForEach-Object { Join-Path $shelfDir $_ }))
-$stack1 = [string[]](($fixtures[4..5] | ForEach-Object { Join-Path $shelfDir $_ }))
+$stack1 = [string[]]('\nosuchhost\share\ghost.txt', (Join-Path $bin 'Plith.exe'))
 $surfaceModel.SetStack(0, 2, $stack0)
 $surfaceModel.SetStack(1, 2, $stack1)
 
@@ -337,6 +374,7 @@ $shelfSurfaceH = 224.0
 $shelfSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
 $shelfSurface.Apply($shelfPalette)
 $shelfSurface.Render($surfaceModel)
+Wait-ForDispatcher
 Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
 
 

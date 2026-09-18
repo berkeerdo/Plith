@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -201,17 +202,18 @@ public partial class ShelfSurface : UserControl
 
     private Border BuildTile(ShelfEntry entry, bool selected, bool last)
     {
-        var icon = new Path
+        // A fixed-size host rather than the icon itself, so the later swap from the drawn
+        // fallback to a real shell icon changes what fills this box without changing the box:
+        // same 22x22 size, same centered position, so the row does not shift when the two are
+        // mixed on the same shelf.
+        var iconHost = new Grid
         {
-            Data = entry.IsDirectory ? FolderIcon : DocumentIcon,
-            Stroke = (Brush)FindResource("NotchInk"),
-            StrokeThickness = 1.4,
-            StrokeLineJoin = PenLineJoin.Round,
-            Stretch = Stretch.Uniform,
             Width = 22,
             Height = 22,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
+        iconHost.Children.Add(BuildFallbackIcon(entry));
+        RequestShellIcon(entry.Path, iconHost);
 
         var label = new TextBlock
         {
@@ -244,7 +246,7 @@ public partial class ShelfSurface : UserControl
         };
 
         var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(icon);
+        content.Children.Add(iconHost);
         content.Children.Add(label);
 
         var tile = new Border
@@ -268,6 +270,52 @@ public partial class ShelfSurface : UserControl
             EntryPressed?.Invoke(entry.Path, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
 
         return tile;
+    }
+
+    /// <summary>
+    /// The drawn document or folder geometry, shown until (and unless) a real shell icon
+    /// replaces it. Also the permanent answer for anything ShellIcons could not resolve: a path
+    /// that no longer exists with no recognisable extension, or a network path that never
+    /// answers. A shelf of empty tiles is worse than a shelf of generic ones, so this is what
+    /// stays on screen rather than a blank box.
+    /// </summary>
+    private Path BuildFallbackIcon(ShelfEntry entry) => new()
+    {
+        Data = entry.IsDirectory ? FolderIcon : DocumentIcon,
+        Stroke = (Brush)FindResource("NotchInk"),
+        StrokeThickness = 1.4,
+        StrokeLineJoin = PenLineJoin.Round,
+        Stretch = Stretch.Uniform,
+        Width = 22,
+        Height = 22,
+        HorizontalAlignment = HorizontalAlignment.Center,
+    };
+
+    /// <summary>
+    /// Asks ShellIcons for the real icon off the UI thread (a cache miss can be as slow as the
+    /// shell, or a network share that never answers, takes to reply), and swaps it into
+    /// <paramref name="host"/> only if one comes back. <paramref name="host"/> keeps the drawn
+    /// fallback otherwise, which is the point: a resolution failure must never leave a blank
+    /// tile behind.
+    /// </summary>
+    private void RequestShellIcon(string path, Grid host)
+    {
+        Task.Run(() =>
+        {
+            if (!ShellIcons.TryGet(path, out var icon)) return;
+
+            Dispatcher.BeginInvoke(() =>
+            {
+                host.Children.Clear();
+                host.Children.Add(new Image
+                {
+                    Source = icon,
+                    Width = 22,
+                    Height = 22,
+                    Stretch = Stretch.Uniform,
+                });
+            });
+        });
     }
 
     /// <summary>
