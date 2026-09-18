@@ -32,6 +32,7 @@ public partial class App : Application
     private BrightnessRunLog? _brightnessRunLog;
     private System.Windows.Threading.DispatcherTimer? _brightnessRunTimer;
     private bool _loggedNoBrightnessDevices;
+    private readonly BrightnessLevelCache _brightnessLevel = new();
     private OpenMeteoClient? _weatherClient;
     private WindowsLocationProvider? _windowsLocation;
     private IpLocationProvider? _ipLocation;
@@ -205,7 +206,16 @@ public partial class App : Application
         // a line per write. A write is 56 ms, so a held key produces roughly fifteen a second
         // and per-write logging would flood the file during the one gesture worth reading.
         _brightnessRunTimer = new System.Windows.Threading.DispatcherTimer();
-        _brightnessRunTimer.Tick += (_, _) => { _brightnessRunTimer.Stop(); _brightnessRunLog?.Close(); };
+        _brightnessRunTimer.Tick += (_, _) =>
+        {
+            _brightnessRunTimer.Stop();
+            _brightnessRunLog?.Close();
+
+            // The level is only cached for the length of a gesture. Someone can change
+            // brightness from the monitor's own buttons and nothing tells us, so holding the
+            // value past the run would let it drift away from the screen.
+            _brightnessLevel.Invalidate();
+        };
         _brightnessRunLog = new BrightnessRunLog(
             line => _diagnosticLog?.Info("Brightness", line),
             (after, _) =>
@@ -265,6 +275,7 @@ public partial class App : Application
         if (_brightnessDevices.Count == 0) return _brightnessDevices;
 
         _diagnosticLog?.Info("Brightness", $"Rediscovery found {_brightnessDevices.Count} device(s).");
+        _brightnessLevel.Invalidate();
 
         // The writer holds the list it was built with, so a new set needs a new writer.
         _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
@@ -279,8 +290,15 @@ public partial class App : Application
     /// </summary>
     private int ToBrightnessPercent(int value)
     {
-        if (_brightnessDevices.Count == 0) return value;
-        if (!_brightnessDevices[0].TryRead(out var reading)) return value;
+        // From the cached range rather than a fresh read. This runs on every write, and a read
+        // here was the third DDC/CI round trip of a single key press: 60 ms spent re-asking the
+        // monitor for a minimum and a maximum that cannot change while it is plugged in.
+        if (!_brightnessLevel.TryGet(out var reading))
+        {
+            if (_brightnessDevices.Count == 0) return value;
+            if (!_brightnessDevices[0].TryRead(out reading)) return value;
+            _brightnessLevel.Set(reading);
+        }
 
         var span = reading.Max - reading.Min;
         if (span <= 0) return 100;
@@ -354,13 +372,23 @@ public partial class App : Application
 
         // The first device is the one the step is measured from. They all move together, so a
         // second display with a different span follows rather than leads.
-        if (!devices[0].TryRead(out var reading))
+        //
+        // Read only when the cache is empty, which means once per gesture. A read costs the
+        // same 60 ms as a write, so asking before every step made a held key half as fast as
+        // the hardware allows and a single press twice as slow as it needed to be.
+        if (!_brightnessLevel.TryGet(out var reading))
         {
-            _diagnosticLog?.Info("Brightness", $"{devices[0].Id} stopped answering a read.");
-            return;
+            if (!devices[0].TryRead(out reading))
+            {
+                _diagnosticLog?.Info("Brightness", $"{devices[0].Id} stopped answering a read.");
+                return;
+            }
+
+            _brightnessLevel.Set(reading);
         }
 
         var next = BrightnessStep.Next(reading, _settings.Current.BrightnessStepPercent, up);
+        _brightnessLevel.NoteWritten(next);
         _brightnessRunLog?.Step(up, reading.Current, next);
         _brightnessWriter.Request(next);
     }
