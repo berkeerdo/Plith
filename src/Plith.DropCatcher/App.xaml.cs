@@ -66,7 +66,7 @@ public partial class App : Application, IDisposable
             // says what to look at.
             _log.Info($"SHELF PROBE. Integrity: {IntegrityLevel.Describe()}. Log: {_log.LogPath}");
             _shelf = new ShelfWindow(_log);
-            _shelf.Closed += () =>
+            _shelf.Dismissed += () =>
             {
                 _log.Info("SHELF PROBE: the shelf reported itself closed. Exiting.");
                 Shutdown();
@@ -89,7 +89,7 @@ public partial class App : Application, IDisposable
         _window.Withdrew += OnWithdrew;
 
         _shelf = new ShelfWindow(_log);
-        _shelf.Closed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
+        _shelf.Dismissed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
 
         if (TryReadProbeRect(e.Args, out var probe))
         {

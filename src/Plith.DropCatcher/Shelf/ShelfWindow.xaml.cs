@@ -57,6 +57,12 @@ public partial class ShelfWindow : Window
     /// It is not zero, and that is the point. The pointer crosses outside the surface on the way
     /// to a tile at its edge, and on the way to anything this window later opens beside itself.
     /// Closing on the leave itself would make the shelf impossible to reach around its own edge.
+    ///
+    /// 500 ms was CHOSEN, not measured. Nothing has put a pointer over this window yet: it is a
+    /// layered window, it can only be judged at a physical console, and the session that wrote it
+    /// was a Remote Desktop one. The hardware pass in docs/SHELF-VERIFICATION.md is what would
+    /// correct it, and a person finding the shelf hard to leave or too eager to stay is reading
+    /// this number.
     /// </summary>
     private static readonly TimeSpan LeaveGrace = TimeSpan.FromMilliseconds(500);
 
@@ -133,20 +139,26 @@ public partial class ShelfWindow : Window
         // ShelfSurface's three events (EntryPressed, ClearRequested, NewStackRequested) are
         // deliberately NOT subscribed here. Every one of them answers with a message back over
         // the wire (RemoveItems, ClearShelf, NewStack, Restack), and the send side of this
-        // process belongs to a later task. Subscribing now would mean either a handler that
-        // silently does nothing, or a second subscriber that the later task has to notice and
-        // remove rather than simply add to.
+        // process belongs to a later task: TASK 7 subscribes all three. Named so that an
+        // unsubscribed event does not read as an oversight. Task 3 drew these controls and
+        // declared their events together, because the controls had to be in the picture for the
+        // render to be judged; wiring them here instead would mean either a handler that silently
+        // does nothing, or a second subscriber Task 7 has to notice and remove rather than simply
+        // add to.
     }
 
     /// <summary>
     /// Raised when the shelf has gone away, so Plith can put the notch back.
     ///
-    /// This deliberately HIDES <see cref="Window.Closed"/>, which is unusual enough to justify:
-    /// this window is hidden and reshown rather than closed, so the base event never fires and
-    /// there is nothing here to lose; and the base signature would force every subscriber to
-    /// carry a sender and an EventArgs that neither end of this wire has any use for.
+    /// Deliberately NOT called Closed. That name is taken by <see cref="Window.Closed"/>, and
+    /// naming it the same would mean hiding a base member: any code holding a Window-typed
+    /// reference and writing <c>window.Closed += ...</c> would silently bind WPF's event instead
+    /// of this one, compile, and never fire the handler anyone meant. It would also be the wrong
+    /// word. This window is hidden and shown again rather than closed, so Window.Closed never
+    /// fires here at all, and a reader who saw both names would have to guess which one meant
+    /// what.
     /// </summary>
-    public new event Action? Closed;
+    public event Action? Dismissed;
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
@@ -273,7 +285,7 @@ public partial class ShelfWindow : Window
         // OpenShelf would come up with tiles ringed from a session the person has already ended.
         _model.ClearSelection();
 
-        Closed?.Invoke();
+        Dismissed?.Invoke();
     }
 
     /// <summary>
