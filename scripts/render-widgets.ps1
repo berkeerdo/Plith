@@ -177,6 +177,13 @@ function Save-Visual {
     $path = Join-Path $OutDir "$Name.png"
     $fs = [IO.File]::Create($path)
     try { $enc.Save($fs) } finally { $fs.Dispose() }
+
+    # Detached rather than left parented to $host_, which is about to go out of scope anyway:
+    # WPF refuses to give an element a second parent while it still has one, and without this a
+    # caller could never pass the SAME element to Save-Visual twice - which a two-pass check
+    # (render once, mutate state, render the same control again) needs to do.
+    $host_.Child = $null
+
     "  $Name.png  ($W x $H)"
 }
 
@@ -197,6 +204,28 @@ function Wait-ForDispatcher {
             [Windows.Threading.DispatcherPriority]::Background, $exit, $frame) | Out-Null
         [Windows.Threading.Dispatcher]::PushFrame($frame)
     }
+}
+
+# Walks the visual tree under $Root (VisualTreeHelper, not the logical tree: everything this
+# harness builds is added through a Children collection, which is visual children straight
+# away) and returns every descendant for which $Predicate returns true. Used to reach into
+# ShelfSurface's generated tiles from outside the assembly, without needing a private field:
+# the tree itself is the only contract this checks against.
+function Find-VisualDescendants {
+    param([Windows.DependencyObject]$Root, [scriptblock]$Predicate)
+    $results = [System.Collections.Generic.List[Windows.DependencyObject]]::new()
+    $stack = [System.Collections.Generic.Stack[Windows.DependencyObject]]::new()
+    $stack.Push($Root)
+    while ($stack.Count -gt 0) {
+        $node = $stack.Pop()
+        $count = [Windows.Media.VisualTreeHelper]::GetChildrenCount($node)
+        for ($i = 0; $i -lt $count; $i++) {
+            $child = [Windows.Media.VisualTreeHelper]::GetChild($node, $i)
+            if (& $Predicate $child) { $results.Add($child) }
+            $stack.Push($child)
+        }
+    }
+    return $results
 }
 
 # --- the frame's own size, and stand-in data for each page --------------------------------
@@ -376,6 +405,60 @@ $shelfSurface.Apply($shelfPalette)
 $shelfSurface.Render($surfaceModel)
 Wait-ForDispatcher
 Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
+
+# --- second pass, same instance, proving the cache-hit fast path rather than reading it ------
+#
+# Review found that BuildTile now probes ShellIcons' cache synchronously and, on a hit, builds
+# the real Image directly instead of drawing the fallback first, but nothing had ever rendered
+# that path: the render above is always a cache MISS (a fresh process, an empty cache), so it
+# only ever exercises the fallback-then-swap route Task 5 originally shipped. Rendering the same
+# $shelfSurface a second time, after the first pass's background extraction has populated the
+# cache, is what actually reaches the fast path: Render() rebuilds every tile from scratch, so
+# BuildTile runs again and this time finds Plith.exe's icon already cached.
+#
+# Two things are asserted, not one, because the more interesting failure is not the flicker:
+#   1. the icon host on the second pass never contains the drawn fallback element at all
+#      (the flicker claim - if this fails, the cache-hit branch stopped being taken)
+#   2. the second pass's image IS the same object the first pass extracted (the claim that
+#      actually catches a broken fast path: a wrong or stale icon would still pass check 1)
+$findPlithTile = { param($n) $n -is [Windows.Controls.Border] -and
+    [Windows.Automation.AutomationProperties]::GetName($n) -eq 'Plith.exe' }
+
+$pass1Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $pass1Tile) { throw "second-pass check: could not find the Plith.exe tile after the first render." }
+$pass1IconHost = $pass1Tile.Child.Children[0]
+$pass1Image = $pass1IconHost.Children | Where-Object { $_ -is [Windows.Controls.Image] } | Select-Object -First 1
+if (-not $pass1Image) {
+    throw "second-pass check: the first render never resolved a real icon for Plith.exe (still " +
+          "the fallback after Wait-ForDispatcher) - the cache has nothing for the second pass to hit."
+}
+$pass1Icon = $pass1Image.Source
+
+$shelfSurface.Render($surfaceModel)
+Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface-pass2'
+
+$pass2Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $pass2Tile) { throw "second-pass check: could not find the Plith.exe tile after the second render." }
+$pass2IconHost = $pass2Tile.Child.Children[0]
+
+$pass2Fallback = $pass2IconHost.Children | Where-Object { $_ -is [Windows.Shapes.Path] }
+if ($pass2Fallback) {
+    throw "second-pass check FAILED (assertion 1): the icon host still drew the fallback " +
+          "geometry on a cache hit. The synchronous cache probe in BuildTile did not take."
+}
+
+$pass2Image = $pass2IconHost.Children | Where-Object { $_ -is [Windows.Controls.Image] } | Select-Object -First 1
+if (-not $pass2Image) {
+    throw "second-pass check FAILED (assertion 1): no Image at all in the icon host on the " +
+          "cache-hit pass - not even a late one, since this pass never calls Wait-ForDispatcher."
+}
+if (-not [object]::ReferenceEquals($pass2Image.Source, $pass1Icon)) {
+    throw "second-pass check FAILED (assertion 2): the second render's icon is not the same " +
+          "object the first render extracted - the fast path produced A icon, not the RIGHT one."
+}
+
+"  second-pass check passed: cache hit on pass two painted the real icon directly (no fallback " +
+"element in the icon host), and it is reference-equal to what pass one actually extracted."
 
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------
