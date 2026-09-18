@@ -1,7 +1,10 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
+using System.Windows.Media.Animation;
 using System.Windows.Threading;
+using Plith.Views.Presentation;
 
 namespace Plith.DropCatcher;
 
@@ -33,12 +36,6 @@ public partial class CatcherWindow : Window
     [DllImport("user32.dll", SetLastError = true, EntryPoint = "SetWindowLongPtrW")]
     private static extern nint SetWindowLongPtr(nint hWnd, int nIndex, nint dwNewLong);
 
-    private const int DWMWA_WINDOW_CORNER_PREFERENCE = 33;
-    private const int DWMWCP_ROUND = 2;
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(nint hWnd, int attribute, ref int value, int size);
-
     private readonly CatcherLog _log;
 
     /// <summary>
@@ -54,6 +51,28 @@ public partial class CatcherWindow : Window
 
     private readonly DispatcherTimer _withdraw;
     private bool _sawDrag;
+
+    /// <summary>
+    /// How long the shape takes to grow into place. Matched to the notch's own open rather than
+    /// chosen: the catcher is standing in for it, and a stand-in that arrives at a different
+    /// speed reads as a second object rather than the same one continuing.
+    /// </summary>
+    private static readonly Duration GrowDuration = new(TimeSpan.FromMilliseconds(220));
+
+    /// <summary>
+    /// Expansion progress, 0 = the resting strip, 1 = the open panel. One value drives width,
+    /// height, corner radius and content opacity, so none of them can drift out of step with the
+    /// others — the same single-value rule NotchGeometry exists to enforce for the notch.
+    /// </summary>
+    private static readonly DependencyProperty ExpansionProperty = DependencyProperty.Register(
+        nameof(Expansion), typeof(double), typeof(CatcherWindow),
+        new PropertyMetadata(0.0, (d, e) => ((CatcherWindow)d).ApplyExpansion((double)e.NewValue)));
+
+    private double Expansion
+    {
+        get => (double)GetValue(ExpansionProperty);
+        set => SetValue(ExpansionProperty, value);
+    }
 
     internal CatcherWindow(CatcherLog log)
     {
@@ -90,11 +109,6 @@ public partial class CatcherWindow : Window
         var style = GetWindowLongPtr(handle, GWL_EXSTYLE);
         _ = SetWindowLongPtr(handle, GWL_EXSTYLE, style | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE);
 
-        // Rounded corners without AllowsTransparency, which would make this a layered window and
-        // take it out of reach of every screen-capture route — the blind spot that let four
-        // accessibility defects ship green in the OSD itself.
-        var round = DWMWCP_ROUND;
-        _ = DwmSetWindowAttribute(handle, DWMWA_WINDOW_CORNER_PREFERENCE, ref round, sizeof(int));
     }
 
     /// <summary>
@@ -110,7 +124,14 @@ public partial class CatcherWindow : Window
         // result is a window that exists, sits in the right rectangle, draws nothing, and
         // silently refuses every drop. Measured on the first probe run, where the only symptom
         // was MainWindowHandle staying 0.
-        if (!IsVisible) Show();
+        if (!IsVisible)
+        {
+            // Collapsed BEFORE the window is shown, or the first frame is the open panel and the
+            // growth animates out of something the person already saw whole.
+            BeginAnimation(ExpansionProperty, null);
+            Expansion = 0;
+            Show();
+        }
 
         _sawDrag = false;
         _withdraw.Stop();
@@ -118,8 +139,40 @@ public partial class CatcherWindow : Window
 
         var handle = new WindowInteropHelper(this).Handle;
         _ = SetWindowPos(handle, HWND_TOPMOST, x, y, width, height, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+
+        BeginAnimation(ExpansionProperty, new DoubleAnimation(0, 1, GrowDuration)
+        {
+            EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
+        });
+
         _log.Info($"Shown at {x},{y} {width}x{height}. AllowDrop={AllowDrop}, handle=0x{handle:X}");
     }
+
+    /// <summary>
+    /// The shape at a given expansion. Width, height and radius all read from NotchGeometry —
+    /// the notch's own file, linked into this project — so the stand-in grows the curve the notch
+    /// grows rather than an approximation of it.
+    /// </summary>
+    private void ApplyExpansion(double t)
+    {
+        // ActualWidth/Height rather than the XAML values: the window has just been sized to the
+        // rectangle Plith handed over, which is where the open shape has to end up.
+        var open = new Size(ActualWidth, ActualHeight);
+        var size = NotchGeometry.SurfaceSize(NotchGeometry.CollapsedWidthDip, CollapsedHeightDip, open, t);
+
+        Shape.Width = size.Width;
+        Shape.Height = size.Height;
+        Shape.CornerRadius = new CornerRadius(0, 0,
+            NotchGeometry.SurfaceRadius(t, size.Height), NotchGeometry.SurfaceRadius(t, size.Height));
+        Body.Opacity = NotchGeometry.ContentOpacity(t);
+    }
+
+    /// <summary>
+    /// Where the shape starts from. The notch's own resting height is a user setting that goes
+    /// down to 2 DIP, and the catcher is not told it — but this is a transition's first frame
+    /// rather than a state anyone looks at, and a few DIP either way is invisible at 220 ms.
+    /// </summary>
+    private const double CollapsedHeightDip = 6;
 
     public void HideNow()
     {
@@ -130,6 +183,14 @@ public partial class CatcherWindow : Window
         // the window manager's. Out of step, the next ShowAt would skip Show() and land back in
         // the bug above.
         Hide();
+
+        // Cleared rather than left at 1. BeginAnimation(prop, null) removes the clock WITHOUT
+        // raising Completed, which is a trap this codebase has been caught by four times — but
+        // here nothing is waiting on a callback, and leaving the animation attached would hold
+        // the property at its final value and make the next ShowAt start from the open panel.
+        BeginAnimation(ExpansionProperty, null);
+        Expansion = 0;
+
         _log.Info("Hidden.");
     }
 

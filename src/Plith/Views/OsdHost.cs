@@ -97,7 +97,7 @@ public sealed class OsdHost : BandWindow
         _home = home;
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
-        _hoverPoller = new NotchHoverPoller(Dispatcher);
+        _hoverPoller = new NotchHoverPoller(Dispatcher, _log);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
         _hoverPoller.DraggingOverChanged += OnDragApproachChanged;
 
@@ -660,6 +660,44 @@ public sealed class OsdHost : BandWindow
     public void OnMicrophoneChanged() => _clockPage?.Refresh();
 
     private Widgets.ShelfWidget? _shelfPage;
+    private int _shelfPageIndex = -1;
+
+    /// <summary>
+    /// Open the notch on the shelf page, because a file just landed there.
+    ///
+    /// Without this the whole gesture ends in silence: the notch steps aside, the catcher takes
+    /// the drop, the notch comes back, and nothing anywhere says the file arrived. Reported from
+    /// a live run as the feature having crashed — which is the right reading of an interaction
+    /// that gives no answer.
+    ///
+    /// The frame rather than a HUD, and that is the exception to this window's own rule. An event
+    /// normally gets the HUD because an answer to something you did must not look like a place
+    /// you went; here the answer IS a place — the shelf now holds something, and the page showing
+    /// what it holds is the acknowledgement.
+    /// </summary>
+    public void ShowShelfLanding()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(ShowShelfLanding));
+            return;
+        }
+
+        if (_presentation is not AmbientNotchPresentation) return;
+
+        ApplyWidgetPages();
+        if (_shelfPageIndex < 0) return;
+
+        var before = _pager.Index;
+        if (_pager.GoTo(_shelfPageIndex)) _widgets.SyncToPager(Math.Sign(_pager.Index - before));
+
+        _content.SetPanelContent(NotchPanelContent.Widgets);
+
+        // fromHover: true is what stops ShowOsd taking the frame straight back off us and
+        // replacing it with a HUD. The flag names the click path rather than a hover, and this
+        // is the same kind of caller — something that has already decided which panel it wants.
+        ShowOsd(TimeSpan.FromMilliseconds(2600), fromHover: true);
+    }
     private Plith.Services.Shelf.ShelfStore? _shelf;
     private bool _shelfPageInstalled;
     private bool _pagesInstalled;
@@ -714,10 +752,13 @@ public sealed class OsdHost : BandWindow
 
         var wantsWeather = _settings.Current.ShowWeather;
 
-        // Present only while the shelf has something in it, the same rule the weather page
-        // follows. An empty shelf page is a page that exists to say nothing is there, and the
-        // person paging past it learns that four times a day.
-        var wantsShelf = _shelfPage is not null && _shelf is { Items.Count: > 0 };
+        // Always present, which is the opposite of the weather page's rule and deliberately so.
+        // It was conditional first, on the reasoning that an empty page exists to say nothing is
+        // there — and that reasoning is wrong for this page, because a shelf nobody can see is a
+        // feature nobody discovers. Weather absent means there is no reading; a shelf absent
+        // means the person never learns they can drop a file on the notch at all. The empty page
+        // carries that sentence.
+        var wantsShelf = _shelfPage is not null;
 
         // Nothing to do when neither page's presence changed. The shelf raises Changed on every
         // drop, and rebuilding the list each time would discard and re-add live pages that own
@@ -729,6 +770,8 @@ public sealed class OsdHost : BandWindow
         if (wantsWeather) pages.Add(_weatherPage);
         pages.Add(_mediaPage);
         if (wantsShelf) pages.Add(_shelfPage!);
+
+        _shelfPageIndex = wantsShelf ? pages.Count - 1 : -1;
 
         _widgets.SetPages(_pager, pages);
         _weatherPageInstalled = wantsWeather;

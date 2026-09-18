@@ -32,6 +32,11 @@ internal sealed class DragApproachDetector
     /// <summary>True while a drag that began elsewhere is over the approach band.</summary>
     public bool IsApproaching { get; private set; }
 
+    /// <summary>Where the held button went down, for diagnostics. A drag that reaches the band
+    /// and still does not register is either this or nothing, and from the outside the two are
+    /// the same silence.</summary>
+    public bool PressStartedOutside => _pressStartedOutside;
+
     /// <summary>
     /// Returns true when <see cref="IsApproaching"/> changed on this update, so the caller raises
     /// a transition rather than a state.

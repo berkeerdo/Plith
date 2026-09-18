@@ -75,6 +75,27 @@ public partial class ShelfWidget : UserControl
 
         var items = _shelf.Items;
 
+        if (items.Count == 0)
+        {
+            // The page is present even when empty, so the empty state has to earn the space. A
+            // sentence rather than a blank: this is the only place the product ever says that a
+            // file can be dropped on the notch, and nobody discovers that on their own.
+            Tiles.Children.Add(new TextBlock
+            {
+                Text = "Drop files on the notch to keep them here",
+                FontSize = 12,
+                Width = 300,
+                TextWrapping = TextWrapping.Wrap,
+                TextAlignment = TextAlignment.Center,
+                Foreground = (Brush)FindResource("NotchInk"),
+                VerticalAlignment = VerticalAlignment.Center,
+                Height = TileHeight,
+                Padding = new Thickness(0, 26, 0, 0),
+            });
+            AutomationProperties.SetName(Tiles, "Shelf, empty. Drop files on the notch to keep them here.");
+            return;
+        }
+
         // One slot is spent on the count whenever there is anything to count, so a shelf of six
         // shows five files and a "+1" rather than six files and a lie.
         var overflow = Math.Max(0, items.Count - Slots);
@@ -88,10 +109,8 @@ public partial class ShelfWidget : UserControl
         // Announced on the row, because a StackPanel carries no automation peer of its own and a
         // name set on one would reach nothing. The count first: a screen reader user needs to
         // know how much is here before hearing a list of file names.
-        AutomationProperties.SetName(Tiles, items.Count == 0
-            ? "Shelf, empty"
-            : string.Create(CultureInfo.CurrentCulture,
-                $"Shelf, {items.Count} item{(items.Count == 1 ? "" : "s")}"));
+        AutomationProperties.SetName(Tiles, string.Create(CultureInfo.CurrentCulture,
+            $"Shelf, {items.Count} item{(items.Count == 1 ? "" : "s")}"));
     }
 
     private Border BuildTile(ShelfItem item, bool last)
@@ -172,13 +191,13 @@ public partial class ShelfWidget : UserControl
     }
 
     /// <summary>
-    /// An instance method, not a static one, and deliberately: the palette reaches these controls
-    /// through the element tree, and the render harness puts it on the HOST element rather than
-    /// on Application.Resources. A static version resolving through Application would find
-    /// nothing there and fall back to a default — rendering a page in colours the product never
-    /// shows, which is the exact failure the harness exists to prevent.
+    /// Layout only. It resolved a brush until the tiles lost their filled chip, and now touches
+    /// no palette at all — every colour is resolved by the callers, on the instance, because the
+    /// render harness puts the palette on the HOST element rather than on Application.Resources
+    /// and anything resolving through Application would silently render in colours the product
+    /// never shows.
     /// </summary>
-    private Border Tile(IEnumerable<UIElement> children, bool last, string tooltip, string announced)
+    private static Border Tile(IEnumerable<UIElement> children, bool last, string tooltip, string announced)
     {
         // Top, not centre: every tile's contents are now the same height, so centring would only
         // reintroduce a dependency on content that the fixed label height just removed.

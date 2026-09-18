@@ -230,6 +230,11 @@ public partial class App : Application
                     // Both numbers, because they differ whenever a path did not resolve - which
                     // is the one failure this path has and is otherwise completely silent.
                     _diagnosticLog?.Info("Shelf", $"Shelf now holds {after} item(s) (was {before}).");
+
+                    // The acknowledgement. A drop that changes nothing on screen reads as the
+                    // app having crashed, which is exactly how the first live run of this
+                    // reported it.
+                    _osd?.ShowShelfLanding();
                 }));
                 break;
             case DropVerb.Hide:

@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using Plith.Services;
 
 namespace Plith.Views.Presentation;
 
@@ -27,8 +28,11 @@ internal sealed class NotchHoverPoller : IDisposable
     private bool _wasInside;
     private bool _wasInsidePanel;
 
-    public NotchHoverPoller(Dispatcher dispatcher)
+    private readonly DiagnosticLog? _log;
+
+    public NotchHoverPoller(Dispatcher dispatcher, DiagnosticLog? log = null)
     {
+        _log = log;
         _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = Interval };
         _timer.Tick += (_, _) => Poll();
     }
@@ -134,10 +138,42 @@ internal sealed class NotchHoverPoller : IDisposable
         Polled?.Invoke();
 
         var buttonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+
+        // One line per press, which is the only volume at which this is affordable and the only
+        // one that answers the question. A drag that produces no handoff is otherwise completely
+        // silent, and "nothing happened" cannot distinguish a cursor that never entered the band
+        // from a band that is in the wrong place, an empty rectangle, or a press the detector
+        // read as starting on the OSD.
+        if (buttonDown && !_buttonWasDownForLog)
+        {
+            _log?.Info("DragWatch",
+                $"Press at {dip.X:0},{dip.Y:0} dip; hover={Describe(HoverRect)} " +
+                $"band={Describe(NotchGeometry.DragApproachRect(HoverRect))} " +
+                $"panel={Describe(PanelRect)} dpi={DpiScale:0.##}");
+        }
+        _buttonWasDownForLog = buttonDown;
+
+        var inBand = NotchGeometry.IsInsideNotch(NotchGeometry.DragApproachRect(HoverRect), dip);
+
+        // The other half of the question. The press line above says where a gesture began; this
+        // says whether it ever arrived — and if it arrived and still produced no handoff, it
+        // names the clause that rejected it. Without both, a drag that does nothing is the same
+        // silence whether the cursor missed the band by a pixel or the origin test refused it.
+        var heldInBand = buttonDown && inBand;
+        if (heldInBand != _wasHeldInBandForLog)
+        {
+            _wasHeldInBandForLog = heldInBand;
+            if (heldInBand)
+            {
+                _log?.Info("DragWatch",
+                    $"Held cursor entered the band at {dip.X:0},{dip.Y:0}; " +
+                    $"startedOutside={_drag.PressStartedOutside}");
+            }
+        }
+
         if (_drag.Update(buttonDown,
                          cursorOverOsd: _wasInsidePanel,
-                         cursorInApproachBand: NotchGeometry.IsInsideNotch(
-                             NotchGeometry.DragApproachRect(HoverRect), dip),
+                         cursorInApproachBand: inBand,
                          cursorInHoldBand: NotchGeometry.IsInsideNotch(
                              NotchGeometry.DropTargetRect(HoverRect), dip)))
         {
@@ -151,6 +187,12 @@ internal sealed class NotchHoverPoller : IDisposable
         _wasInside = inside;
         HoverChanged?.Invoke(inside);
     }
+
+    private bool _buttonWasDownForLog;
+    private bool _wasHeldInBandForLog;
+
+    private static string Describe(Rect r) =>
+        r.IsEmpty || r.Width <= 0 ? "EMPTY" : $"{r.Left:0},{r.Top:0} {r.Width:0}x{r.Height:0}";
 
     public void Dispose() => _timer.Stop();
 

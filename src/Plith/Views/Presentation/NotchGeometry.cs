@@ -178,22 +178,38 @@ public static class NotchGeometry
     }
 
     /// <summary>
-    /// Minimum height of the band that counts as a drag arriving, in DIP.
+    /// Depth of the band that counts as a drag arriving, in DIP.
     ///
-    /// Taller than the hover target, and for a different reason. A hover is a pointer placed
+    /// Deeper than the hover target, and for a different reason. A hover is a pointer placed
     /// deliberately; a drag is a hand carrying something toward the top of the screen, usually
-    /// faster and rarely stopping exactly on an 8 DIP strip. Too shallow and the drop never
-    /// registers; too deep and every window dragged toward the top edge to maximise reads as
-    /// one. This is the smaller error of the two, because the catcher withdraws on its own when
-    /// no file drag follows.
+    /// faster and rarely stopping within a few pixels of the edge.
+    ///
+    /// This was 28 and that was measured wrong. Every failed attempt on the first live run
+    /// produced no band entry at all, and the one that worked entered at y=0 — the person had to
+    /// press the file against the very top edge of the screen to be seen. A band you can only
+    /// hit by hitting the edge is not a target.
+    ///
+    /// Too deep has a cost too: a window dragged to the top to maximise ends up in the same
+    /// place. That error is the cheaper one, because the catcher withdraws on its own when no
+    /// file drag follows it.
     /// </summary>
-    public const double DragApproachHeightDip = 28;
+    public const double DragApproachHeightDip = 48;
 
-    /// <summary>The band that counts as a drag arriving: the hover target, made deep enough to
-    /// catch a moving hand.</summary>
+    /// <summary>
+    /// The band that counts as a drag arriving: as wide as the target it opens, and deep enough
+    /// to catch a moving hand.
+    ///
+    /// The width matters as much as the depth and was wrong for the same reason. The hover
+    /// target is 190 DIP because that is the resting pill; the panel a drop lands in is 356. A
+    /// drag aimed at the middle of what it can see could be 80 DIP outside the band that decides
+    /// whether it was aimed at all.
+    /// </summary>
     public static Rect DragApproachRect(Rect hoverRect)
-        => new(hoverRect.Left, hoverRect.Top, hoverRect.Width,
-               Math.Max(hoverRect.Height, DragApproachHeightDip));
+    {
+        var target = DropTargetRect(hoverRect);
+        return new Rect(target.Left, target.Top, target.Width,
+                        Math.Max(hoverRect.Height, DragApproachHeightDip));
+    }
 
     /// <summary>
     /// Where the catcher stands while it holds the notch's place: the open frame, centred on the
