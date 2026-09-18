@@ -537,8 +537,55 @@ behaviour in isolation, which the return value already answers.
 
 **Verification got cheaper since this was written.** From a console session a gesture can be
 synthesised with `keybd_event` and `mouse_event`, and the screen can be photographed with
-`Graphics.CopyFromScreen`. See `docs/PHASE6-VERIFICATION.md`. Neither works over Remote Desktop,
-and over RDP this probe is meaningless anyway.
+`Graphics.CopyFromScreen`. Both techniques are written up on `feature/brightness`, in that
+branch's `docs/PHASE6-VERIFICATION.md` — NOT in this branch's copy, which predates them. Neither
+works over Remote Desktop, and over RDP this probe is meaningless anyway.
+
+- [x] **Step 1: Build the probe.** `src/Plith.DropCatcher/DragSourceProbe.cs`, reached by
+  `Plith.DropCatcher.exe --dragsource "<file>"`, beside the two existing hand-run probe modes and
+  ahead of the single-instance guard. It carries its own `GetCursorPos`/`GetAsyncKeyState` loop:
+  the premise above, that the catcher already polls, was wrong — that polling lives in Plith's
+  `NotchHoverPoller`, and the catcher has none of its own.
+- [x] **Step 2: Run it.** Console session, 18.09.2026, gesture synthesised with `mouse_event` and
+  the screen photographed at three points.
+
+#### The answer: it does not work. Stop, as this task said to.
+
+**`DoDragDrop` never delivers a drag for a press that landed in another process.** Three valid
+runs, at MEDIUM integrity (logged by `IntegrityLevel` each time), press verified by
+`WindowFromPoint` to belong to a different process:
+
+| Run | Press origin | Release over | Result |
+|---|---|---|---|
+| A | Windows Terminal | the same terminal | blocked 3.6 s, returned `None` on release |
+| B | a window of the harness's own, stand-in not yet painted | a window that accepts `FileDrop` and logs it | **never returned** — still blocked 17 s after the release |
+| C | the same, stand-in painted first (`Visible=True`) | the same | returned `None` 9 s after the release, and only once unrelated mouse input arrived |
+
+**No drop target ever saw the drag.** In B and C the release landed on a window whose whole
+purpose was to accept a file and write down what it received, and its log records no `DragEnter`
+and no drop. The target is not the variable.
+
+**The control is Task 7's run**: the same binary, the same integrity, the same
+`DragDropEffects.Copy | Link` call, differing only in where the button went down — press on the
+probe's own window returned `Copy, Move` and the file landed. One variable changed, and the drag
+stopped working.
+
+**A second finding, and it is the more dangerous one.** The call does not merely fail, it can
+fail to RETURN. Run B blocked indefinitely on the thread that called it. In the real design that
+is the catcher's UI thread, so a press-a-tile gesture would not just do nothing — it would hang
+the catcher, which is the process the whole shelf depends on. Any future design must treat
+`DoDragDrop` from a foreign press as a hazard, not merely as a dead end.
+
+**Limits of this measurement, stated rather than left to be discovered.** The input was injected
+rather than pressed by a hand; one machine, one session. And the press origin was a MEDIUM window,
+while in the real design the press lands on Plith at HIGH — untested, and a difference that could
+not turn a blocked path into a working one, but it is not measured either.
+
+**What this closes.** The press-a-tile interaction is dead, and with it the assumption behind
+Task 7 Step 3 that the catcher can simply "serve as the drag SOURCE as well". It can start a drag
+for a press on its OWN window, and that is the only shape left: the tile the person presses has to
+BE the catcher's window, not Plith's. That is a different design for the notch, not a detail, and
+it belongs in its own plan.
 
 ---
 

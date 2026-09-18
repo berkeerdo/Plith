@@ -58,8 +58,25 @@ catcher must become the drag source as well — a different design, deliberately
 plus the Alcove/Dropover-style shelf actions the user asked for (clear, remove, open in Explorer,
 stacking, real shell icons) is the next slice and needs its own plan.
 
-Full ledger: `docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md` (Tasks 1-6 done, Task 7
-measured), and `docs/ROADMAP.md` Phase 7 for every measurement behind it.
+**Task 8 measured how that drag source would have to work, and killed the obvious answer.** The
+stand-aside cannot carry a drag out: the press lands on Plith's window, and `DoDragDrop` does not
+deliver a drag for a press that happened in another process. Three runs at Medium, press verified
+by `WindowFromPoint` to belong to another process, releasing over a window built to accept files
+and log what it got — no `DragEnter` ever arrived and the call returned `None`, once only after
+not returning at all for seventeen seconds. The control is Task 7's own run: same binary, same
+integrity, same call, press on its own window, `Copy, Move`, file lands. A call that may never
+return would hang the catcher's UI thread, so this is a hazard rather than a retry. What is left:
+the tile has to BE the catcher's window, not Plith's — a different shape for the notch.
+
+Full ledger: `docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md` (Tasks 1-6 done, Tasks 7
+and 8 measured), and `docs/ROADMAP.md` Phase 7 for every measurement behind it.
+
+> **This file's Status section is SPLIT across two branches, and neither half is right on its
+> own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
+> unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected
+> phase status and the brightness work, and has no shelf paragraph at all. Whichever merges
+> second must merge this section by hand rather than taking one side. Both branches also sit on
+> `beea6e8` and are missing `main`'s media track-change fix.
 
 **Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
 Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged

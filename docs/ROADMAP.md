@@ -395,9 +395,23 @@ The two features that Windows has no good answer for.
   | MEDIUM (identical exe) | `Copy, Move`, twice | yes |
 
   So UIPI blocks both directions, and the initiator changing sides does not help. The consequence
-  is a design rather than a tweak: the catcher has to be the drag SOURCE as well, reached by the
-  same stand-aside it already performs — press a shelf tile, the notch goes down, the catcher
-  takes its rectangle and starts the drag. That deserves its own plan and does not have one yet.
+  is a design rather than a tweak: the catcher has to be the drag SOURCE as well.
+
+  **And the obvious way of reaching that is dead too, measured 18.09.2026.** The stand-aside the
+  catcher already performs cannot carry the gesture: press a shelf tile, the notch goes down, the
+  catcher takes its rectangle and starts the drag — except the press landed on PLITH's window, in
+  another process, and `DoDragDrop` does not deliver a drag for a press it did not receive. Three
+  runs at MEDIUM with the press verified to belong to another process: no drop target ever saw a
+  `DragEnter`, and the call returned `None` — once after not returning at all for seventeen
+  seconds. The control is the row above: the same binary, same integrity, same call, press on its
+  OWN window, `Copy, Move`, file lands.
+
+  Worse than dead: a call that does not return would hang the catcher's UI thread, so this is a
+  hazard to design away from rather than an avenue to retry.
+
+  What survives is narrow but real — the catcher CAN start a drag for a press on its own window.
+  So the tile a person presses has to BE the catcher's window rather than Plith's, which is a
+  different shape for the notch and needs its own plan. Full ledger in the shelf plan, Task 8.
 
   The alternative is dropping UIAccess, which trades the shelf for the ability to draw over
   games. That is the wrong trade for this product.
