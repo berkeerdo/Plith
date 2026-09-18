@@ -70,6 +70,7 @@ public sealed class OsdOrchestrator : IDisposable
         ReconcileActiveSource();
 
         _media.Changed += OnMediaChanged;
+        _media.SessionReplaced += OnMediaSessionReplaced;
         _ = _media.StartAsync();
     }
 
@@ -337,6 +338,23 @@ public sealed class OsdOrchestrator : IDisposable
         _mediaCard.Apply(snapshot);
     }
 
+    /// <summary>
+    /// Windows moved the current session to a different player. Told to the card rather than
+    /// acted on here: the card owns when the OSD asks to appear, and the snapshot that follows
+    /// a swap is the new player's existing state rather than something that happened.
+    /// </summary>
+    private void OnMediaSessionReplaced()
+    {
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => { if (!_disposed) OnMediaSessionReplaced(); });
+            return;
+        }
+        if (_disposed) return;
+
+        _mediaCard.NoteSessionReplaced();
+    }
+
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
     {
         _ = command switch
@@ -358,6 +376,7 @@ public sealed class OsdOrchestrator : IDisposable
         _settings.Changed -= OnSettingsChanged;
         _mediaCard.CommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
+        _media.SessionReplaced -= OnMediaSessionReplaced;
         _windowsAudio.Changed -= OnWindowsAudioChanged;
         // _media is owned by App (shared with the fullscreen watcher) — not disposed here.
         _windowsAudio.Dispose();
