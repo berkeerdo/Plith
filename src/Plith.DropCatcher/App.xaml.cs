@@ -20,6 +20,40 @@ public partial class App : Application, IDisposable
         _log = new CatcherLog();
         var sid = WindowsIdentity.GetCurrent().User?.Value ?? "unknown";
 
+        // The single-instance guard is taken only in normal mode, and deliberately AFTER the
+        // hand-run probe modes below. Both probes exist to be run alongside the real catcher -
+        // the drag-out one has to run elevated, which is a second process by definition - and a
+        // guard applied first would make them exit silently, which reads exactly like the thing
+        // being measured having failed.
+        if (e.Args.Length == 2 && e.Args[0].Equals("--dragout", StringComparison.OrdinalIgnoreCase))
+        {
+            // The other direction, and it is a MEASUREMENT rather than a feature. Dragging an
+            // item out of the shelf means DoDragDrop from a High-integrity process to a Medium
+            // one — the reverse of the direction already known to be blocked, and it may behave
+            // differently: UIPI restricts what a LOWER integrity process may send to a higher
+            // one, and here the higher one initiates. Run this elevated to stand in for an
+            // installed Plith, drag from it into an Explorer window, and read the log.
+            _log.Info($"DRAG-OUT PROBE. Integrity: {IntegrityLevel.Describe()}");
+            var source = new DragOutWindow(_log, e.Args[1]);
+            source.Show();
+            return;
+        }
+
+        _window = new CatcherWindow(_log);
+        _window.FilesDropped += OnFilesDropped;
+        _window.Withdrew += OnWithdrew;
+
+        if (TryReadProbeRect(e.Args, out var probe))
+        {
+            _log.Info($"Started. Integrity: {IntegrityLevel.Describe()}");
+            // Stand-alone mode, for measuring whether a Medium window can receive a drop at all
+            // without Plith having to be involved. Nothing else in the design is worth building
+            // if this fails, so it is reachable on its own.
+            _log.Info($"PROBE MODE. Log: {_log.LogPath}");
+            _window.ShowAt(probe.x, probe.y, probe.w, probe.h);
+            return;
+        }
+
         // Per-user, matching the pipe name: one catcher per signed-in session, and a second
         // instance quits rather than fighting the first for the same rectangle.
         _single = new Mutex(true, @"Local\Plith.DropCatcher." + sid, out var isFirst);
@@ -31,20 +65,6 @@ public partial class App : Application, IDisposable
         }
 
         _log.Info($"Started. Integrity: {IntegrityLevel.Describe()}");
-
-        _window = new CatcherWindow(_log);
-        _window.FilesDropped += OnFilesDropped;
-        _window.Withdrew += OnWithdrew;
-
-        if (TryReadProbeRect(e.Args, out var probe))
-        {
-            // Stand-alone mode, for measuring whether a Medium window can receive a drop at all
-            // without Plith having to be involved. Nothing else in the design is worth building
-            // if this fails, so it is reachable on its own.
-            _log.Info($"PROBE MODE. Log: {_log.LogPath}");
-            _window.ShowAt(probe.x, probe.y, probe.w, probe.h);
-            return;
-        }
 
         _client = new CatcherClient(sid, _log);
         _client.Received += OnReceived;

@@ -499,9 +499,9 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 
 **Not planned in detail, on purpose.** Dragging an item OUT of the shelf means `DoDragDrop` from a High-integrity process to a Medium one, which is the reverse of the direction that is already known to be blocked and may well behave differently — the source initiates, and UIPI restricts what a *lower* integrity process may send to a higher one, not the other way round.
 
-- [ ] **Step 1: Measure it.** A throwaway build that starts a drag from the notch with one hard-coded file, dropped onto an Explorer window. Log whether it lands.
-- [ ] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
-- [ ] **Step 3: Plan the rest only then.** If it is blocked too, the catcher window has to serve as the drag SOURCE as well, which is a different design and deserves its own plan rather than a guess appended to this one.
+- [x] **Step 1: Measure it.** Done, and with a control: the same binary at HIGH returns `None` three times and copies nothing, at MEDIUM returns `Copy, Move` and the file lands. Integrity is the cause, not the probe.
+- [x] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
+- [ ] **Step 3: Plan the rest only then.** It IS blocked too, so this is now the live branch: the catcher has to serve as the drag SOURCE as well. Still deliberately unplanned here — it is a different design and deserves its own plan rather than a guess appended to this one.
 
 ---
 

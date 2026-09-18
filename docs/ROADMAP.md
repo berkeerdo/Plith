@@ -124,7 +124,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 | Airplane / Wi-Fi / BT | `RadioManager` COM API. |
 | Battery events | `RegisterPowerSettingNotification` + `GUID_BATTERY_*`. |
 | Notifications | `UserNotificationListener` (WinRT). |
-| Shelf drag targets | **Not reachable from the OSD window.** `IDropTarget` registers fine but UIPI blocks the drag: a UIAccess process runs at High integrity and Explorer at Medium. `WM_DROPFILES` is not a way around it. See the Phase 7 note. |
+| Shelf drag targets | **Not reachable from the OSD window, in EITHER direction, and solved by a second process.** `IDropTarget` registers fine but UIPI blocks the drag: a UIAccess process runs at High integrity and Explorer at Medium. `WM_DROPFILES` is not a way around it, and neither is initiating the drag from the High side — measured, `DoDragDrop` returns `None` from High and `Copy, Move` from Medium with everything else identical. `Plith.DropCatcher` owns both sides. See the Phase 7 note. |
 
 Each becomes a `IEventSource` service; cards subscribe to the sources
 they care about.
@@ -361,12 +361,43 @@ The two features that Windows has no good answer for.
   carried toward it, and distinguishes that from a press by requiring the button to have gone
   down outside it.
 
-  **The way forward, if the shelf is wanted:** a companion window at Medium integrity that
-  owns the drop. It cannot simply sit under the notch — a Medium window cannot be above a
-  UIAccess band — so it would have to take the notch's place for the duration: on the
-  drag-approach signal above, hide the band window and show the helper in the same rectangle,
-  then hand the paths back over a pipe. That is a real design rather than a hope, and it is
-  built entirely on the one thing today's measurement proved.
+  **BUILT, and it works.** `Plith.DropCatcher` is a second process at Medium integrity that owns
+  the drop. It cannot sit under the notch — a Medium window cannot enter the UIAccess band — so
+  it takes the notch's place for the duration: the notch sees the drag coming, its window goes
+  down, the catcher appears in the same rectangle, receives the drop, and hands the paths back
+  over a named pipe. Measured end to end on a running build, drag to drop to a row on the shelf
+  page.
+
+  Four things that had to be true, each measured rather than assumed:
+
+  - **A Medium process CAN reach a High process's pipe — but only with an explicit ACL.** The
+    default gives "Access to the path is denied"; a rule for Everyone connects and delivers. That
+    is a real widening, so everything arriving is treated as a CLAIM about paths, never a command:
+    `ShelfStore` stats what it is told about and stores nothing it cannot see.
+  - **The launch route decides the integrity level.** Measured from an elevated parent: launched
+    directly the catcher comes up HIGH, handed to the running Explorer it comes up MEDIUM. The
+    first case is the dangerous one — it starts, connects and shows itself normally, and simply
+    never receives a drop. Explorer does not forward arguments to the target, so nothing may be
+    appended after the path.
+  - **The approach band is 356x48 DIP, not 190x28.** The first live run failed every time and
+    produced no band entry at all; the one attempt that worked entered at y=0, meaning the file
+    had to be pressed against the top edge of the screen to be seen.
+  - **Entering and staying are different rectangles.** With one threshold the catcher stood in,
+    DragEnter arrived, and 700 ms later the notch came back while the file was still in the air —
+    because aiming a drop inside the 356x116 panel means leaving the 190-wide band that started it.
+
+  **Dragging back OUT is blocked too, and that was measured by controlled comparison rather than
+  inferred.** The same binary, the same code path, the same gesture, differing only in integrity:
+
+  | Source | `DoDragDrop` returns | File copied |
+  |---|---|---|
+  | HIGH (elevated, standing in for an installed Plith) | `None`, three times | no |
+  | MEDIUM (identical exe) | `Copy, Move`, twice | yes |
+
+  So UIPI blocks both directions, and the initiator changing sides does not help. The consequence
+  is a design rather than a tweak: the catcher has to be the drag SOURCE as well, reached by the
+  same stand-aside it already performs — press a shelf tile, the notch goes down, the catcher
+  takes its rectangle and starts the drag. That deserves its own plan and does not have one yet.
 
   The alternative is dropping UIAccess, which trades the shelf for the ability to draw over
   games. That is the wrong trade for this product.
