@@ -620,13 +620,17 @@ public enum DropVerb
 In `TryDecode`, replace the verb parse:
 
 ```csharp
-        // A NAME round trip, not Enum.IsDefined, and the difference is the whole check.
+        // BOTH checks, and each one covers a hole the other leaves.
         //
-        // TryParse accepts a NUMBER for any enum. "9" decodes to whatever verb happens to sit at
-        // 9, and "3" decodes to Dropped, which IsDefined would happily confirm. A pipe every
-        // process on this machine can write is precisely the place a verb must not be reachable
-        // by counting, so the test is whether the sender wrote the verb's own name.
+        // TryParse accepts a NUMBER for any enum. "3" decodes to Dropped, which IsDefined would
+        // happily confirm, so IsDefined alone lets a verb through that was reached by counting
+        // rather than by name. And a name round trip alone is not enough either: for a value with
+        // no name at all, such as 99, ToString falls back to printing the number, so "99" round
+        // trips successfully. A pipe every process on this machine can write is precisely the
+        // place a verb must not be reachable by counting, so the value must be one of ours AND
+        // the sender must have written its name.
         if (!Enum.TryParse<DropVerb>(parts[0], out var verb)) return false;
+        if (!Enum.IsDefined(verb)) return false;
         if (!string.Equals(verb.ToString(), parts[0], StringComparison.Ordinal)) return false;
 ```
 
@@ -799,7 +803,7 @@ In `src/Plith.DropCatcher/Plith.DropCatcher.csproj`, beside the existing linked 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfPaletteWireTests -v q -m:1`
 Expected: PASS.
 
-Run: `dotnet build Plith.sln -m:1`
+Run: `dotnet build Plith.slnx -m:1`
 Expected: build succeeds, including `Plith.DropCatcher` with the new linked file.
 
 - [ ] **Step 10: Commit**
@@ -1180,7 +1184,7 @@ Construct `_shelf` beside `_window`, and send `ShelfClosed` from its `Closed` ev
 
 - [ ] **Step 3: Build**
 
-Run: `dotnet build Plith.sln -m:1`
+Run: `dotnet build Plith.slnx -m:1`
 Expected: succeeds.
 
 - [ ] **Step 4: Drive it by hand, before anything depends on it**
@@ -1347,7 +1351,7 @@ Add the hint the empty state already has, for the case where the shelf is not em
 
 - [ ] **Step 5: Build and run the suite**
 
-Run: `dotnet build Plith.sln -m:1`
+Run: `dotnet build Plith.slnx -m:1`
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: both succeed.
 
