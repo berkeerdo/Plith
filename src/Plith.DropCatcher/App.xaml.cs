@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Security.Principal;
 using System.Windows;
 using System.Windows.Threading;
+using Plith.DropCatcher.Shelf;
 using Plith.Services.Shelf;
 
 namespace Plith.DropCatcher;
@@ -10,6 +11,7 @@ public partial class App : Application, IDisposable
 {
     private CatcherLog _log = null!;
     private CatcherWindow _window = null!;
+    private ShelfWindow _shelf = null!;
     private CatcherClient? _client;
     private DragSourceProbe? _probe;
     private Mutex? _single;
@@ -53,9 +55,41 @@ public partial class App : Application, IDisposable
             return;
         }
 
+        if (TryReadRect(e.Args, "--shelfprobe", out var shelfRect))
+        {
+            // The shelf, driven by hand, before anything on Plith's side depends on it.
+            //
+            // It is a probe rather than a test for the reason every other probe in this file is
+            // one: the shelf is a layered window, and a layered window cannot be captured over
+            // Remote Desktop by any means. Nothing automated can look at it, so the only honest
+            // check is a person at the physical console looking at it. docs/SHELF-VERIFICATION.md
+            // says what to look at.
+            _log.Info($"SHELF PROBE. Integrity: {IntegrityLevel.Describe()}. Log: {_log.LogPath}");
+            _shelf = new ShelfWindow(_log);
+            _shelf.Closed += () =>
+            {
+                _log.Info("SHELF PROBE: the shelf reported itself closed. Exiting.");
+                Shutdown();
+            };
+
+            // Two stacks rather than one, so a stack separator is in the picture, and three
+            // entries rather than two, so one column carries two tiles and the other carries one:
+            // a page with every column the same shape cannot show a column that lines up wrongly.
+            // The paths are invented and need not exist. ShelfModel stats them only to choose
+            // between the folder icon and the document icon, and a path that is neither is drawn
+            // as a document, which is what these three are meant to be.
+            _shelf.SetStack(0, 2, ["C:\\Probe\\quarterly-report.pdf", "C:\\Probe\\screenshot.png"]);
+            _shelf.SetStack(1, 2, ["C:\\Probe\\invoice-2026-09.xlsx"]);
+            _shelf.OpenAt(shelfRect.x, shelfRect.y, shelfRect.w, shelfRect.h);
+            return;
+        }
+
         _window = new CatcherWindow(_log);
         _window.FilesDropped += OnFilesDropped;
         _window.Withdrew += OnWithdrew;
+
+        _shelf = new ShelfWindow(_log);
+        _shelf.Closed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
 
         if (TryReadProbeRect(e.Args, out var probe))
         {
@@ -95,6 +129,19 @@ public partial class App : Application, IDisposable
             case DropVerb.Hide:
                 _window.HideNow();
                 break;
+            case DropVerb.OpenShelf:
+                _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
+                break;
+            case DropVerb.Items:
+                // X is the stack's index and Y is how many stacks the delivery declares. Passed
+                // through untouched: ShelfModel is the side that decides whether the message
+                // belongs to the delivery being assembled, and it needs both numbers to do it.
+                _shelf.SetStack((int)message.X, (int)message.Y, message.Paths);
+                break;
+            case DropVerb.Palette:
+                if (ShelfPaletteWire.TryFromPaths(message.Paths, out var palette)) _shelf.Apply(palette);
+                else _log.Info("Palette payload did not decode; keeping the built-in colours.");
+                break;
             default:
                 break;
         }
@@ -109,9 +156,14 @@ public partial class App : Application, IDisposable
         => _ = _client?.SendAsync(new DropMessage(DropVerb.Dropped, 0, 0, 0, 0, paths));
 
     private static bool TryReadProbeRect(string[] args, out (int x, int y, int w, int h) rect)
+        => TryReadRect(args, "--probe", out rect);
+
+    /// <summary>Reads "&lt;flag&gt; x y w h" in physical screen pixels, the same four numbers the
+    /// wire carries, so a probe puts a window exactly where a real message would.</summary>
+    private static bool TryReadRect(string[] args, string flag, out (int x, int y, int w, int h) rect)
     {
         rect = default;
-        if (args.Length != 5 || !args[0].Equals("--probe", StringComparison.OrdinalIgnoreCase)) return false;
+        if (args.Length != 5 || !args[0].Equals(flag, StringComparison.OrdinalIgnoreCase)) return false;
 
         var numbers = new int[4];
         for (var i = 0; i < 4; i++)

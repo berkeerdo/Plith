@@ -1,0 +1,63 @@
+<Window x:Class="Plith.DropCatcher.Shelf.ShelfWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:shelf="clr-namespace:Plith.DropCatcher.Shelf"
+        WindowStyle="None"
+        AllowsTransparency="True"
+        Background="#01000000"
+        Topmost="True"
+        ShowInTaskbar="False"
+        ShowActivated="True"
+        ResizeMode="NoResize"
+        Width="384" Height="224"
+        Left="-32000" Top="-32000"
+        Title="Plith shelf">
+
+    <!-- The shelf page, as a window of its own, and a SIBLING of CatcherWindow rather than a
+         mode of it. The two look almost identical here and a later reader will want to merge
+         them, so the reason they cannot be one window is written down rather than left to be
+         rediscovered:
+
+           - CatcherWindow must never take activation. It appears under a pointer that is
+             already holding a file, and pulling focus mid-drag is how a drag gets cancelled.
+             It therefore carries WS_EX_NOACTIVATE and ShowActivated="False".
+           - ShelfWindow must take activation. Esc, arrow keys and a visible selection have
+             nothing to arrive at in a window that never takes focus, and Deactivated is this
+             window's main dismissal.
+
+         Those are opposite answers to the same question, and WS_EX_NOACTIVATE is applied to the
+         HWND at SourceInitialized. One window cannot hold both, and a window that flipped the
+         style between two modes would be flipping it exactly while a drag or a focus change was
+         in flight. Two windows, one job each.
+
+         Everything below that is the same as CatcherWindow is the same DELIBERATELY: layered
+         with per-pixel alpha so the shape can grow out of the notch rather than cut into place,
+         1% alpha on the background because WPF hit-tests a Transparent brush but not a null one,
+         and the same off-screen Left/Top so the first frame is never painted at 0,0. The cost is
+         the same too, and it is the reason this file is hard to check: a layered window cannot be
+         captured over RDP by any means, so it can only be judged by looking at it. -->
+    <Grid>
+        <!-- ONE surface whose width, height and corner radius all come from a single expansion
+             value, the same rule NotchGeometry exists to enforce for the notch. Aligned to the
+             top-centre because the shelf grows out of the notch, which is part of the screen's
+             top edge.
+
+             ClipToBounds, because the page inside is held at its FULL size for the whole growth
+             (see ApplyExpansion): re-laying the page out every frame would squeeze its tiles and
+             read as a window being resized rather than a shape opening. -->
+        <Border x:Name="Shape"
+                HorizontalAlignment="Center"
+                VerticalAlignment="Top"
+                Width="356" Height="116"
+                ClipToBounds="True"
+                Background="#F0111111">
+            <!-- The page fades in only after the shape has mostly settled, which is the whole
+                 effect: the surface arrives first and the content arrives into it. Opacity is
+                 driven from the same expansion value as the shape around it. -->
+            <shelf:ShelfSurface x:Name="Page"
+                                Opacity="0"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Top" />
+        </Border>
+    </Grid>
+</Window>
