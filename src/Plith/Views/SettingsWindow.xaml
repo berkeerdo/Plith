@@ -804,7 +804,7 @@
                             </Grid.ColumnDefinitions>
                             <StackPanel Grid.Column="0" Margin="0,0,24,0">
                                 <TextBlock x:Name="ShowOnTrackChangeLabel" Style="{StaticResource RowLabelStyle}" Text="Show on track change" />
-                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Off by default. When on, the OSD pops every time the current player advances or toggles play/pause." />
+                                <TextBlock Style="{StaticResource RowHintStyle}" Text="Off by default. When on, the OSD appears when the player moves to a different track. Seeking, pausing, and switching to a player that is not playing leave it alone." />
                             </StackPanel>
                             <CheckBox x:Name="AutoShowMediaToggle"
                                       Grid.Column="1"

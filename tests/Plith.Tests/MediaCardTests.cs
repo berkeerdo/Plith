@@ -20,21 +20,176 @@ public class MediaCardTests
     private static MediaSnapshot Playing(string title = "Sample track")
         => new(title, "Sample artist", null, IsPlaying: true, HasSession: true);
 
+    private static MediaSnapshot Paused(string title = "Sample track")
+        => new(title, "Sample artist", null, IsPlaying: false, HasSession: true);
+
     private static MediaSnapshot NoSession()
         => new("", "", null, IsPlaying: false, HasSession: false);
 
     [Fact]
-    public void Apply_WithAutoShowOn_RaisesShowRequested()
+    public void Apply_WithAutoShowOn_RaisesShowRequestedOnTheTrackChange()
     {
         var card = new MediaCard(NewSettings(autoShowOnMedia: true));
         var shows = new List<ShowRequest>();
         card.ShowRequested += r => shows.Add(r);
 
-        card.Apply(Playing());
+        // Two snapshots, because one cannot be a change. The first is what the session already
+        // held when Plith looked at it.
+        card.Apply(Playing("First track"));
+        card.Apply(Playing("Second track"));
 
         Assert.Single(shows);
         Assert.Equal(ShowReason.MediaChange, shows[0].Reason);
         Assert.Equal("media", shows[0].OriginCardId);
+    }
+
+    // The setting is called "Show on track change", and until these tests it meant "show on any
+    // SMTC event at all". The card compared nothing and every snapshot became a show. Each test
+    // below is a gesture that produced an OSD it had no business producing.
+
+    [Fact]
+    public void TheFirstSnapshotIsABaseline_AndShowsNothing()
+    {
+        // Plith reads the session once at startup. The person did nothing, so nothing pops.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("Already playing when Plith started"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void SeekingWithinTheSameTrack_ShowsNothing()
+    {
+        // Seeking in a YouTube or Netflix tab raises a session event with the title unchanged.
+        // Content is what is compared, so it does not matter which event it was.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("The same video"));
+        card.Apply(Playing("The same video"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void PausingTheCurrentTrack_ShowsNothing()
+    {
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("The same video"));
+        card.Apply(Paused("The same video"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void ASessionThatIsNotPlaying_ShowsNothingEvenWithADifferentTitle()
+    {
+        // Pausing a video hands the current session to whatever else holds one, a Spotify that
+        // is sitting paused. Its track is not the one that was showing, but nobody played it.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("A video"));
+        card.Apply(Paused("A paused song in another player"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void ResumingATrackThatArrivedPaused_ShowsNothing()
+    {
+        // The baseline follows every snapshot, playing or not. Without that, pressing play on
+        // the session that just arrived paused would read as a change from the OLD title and
+        // pop the OSD for a play/pause.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("A video"));
+        card.Apply(Paused("A paused song in another player"));
+        card.Apply(Playing("A paused song in another player"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void ReturningToASessionAfterASwap_ShowsNothing()
+    {
+        // Pausing a video hands the session to a paused Spotify; playing it again hands it back.
+        // Comparing titles alone, that return looks exactly like a new track. It is not one, and
+        // the session swap is the only thing that says so.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("A video"));
+        card.NoteSessionReplaced();
+        card.Apply(Paused("A paused song in another player"));
+        card.NoteSessionReplaced();
+        card.Apply(Playing("A video"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void ASwapSuppressesOnlyItsOwnSnapshot_NotTheSessionAfterIt()
+    {
+        // The suppression covers the arrival of the new session, which nobody asked for. A track
+        // change inside that session afterwards is a real one.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("A video"));
+        card.NoteSessionReplaced();
+        card.Apply(Playing("The song that was already queued"));
+        card.Apply(Playing("The next song"));
+
+        Assert.Single(shows);
+    }
+
+    [Fact]
+    public void AnEmptyTitle_IsNotATrack_AndNeitherShowsNorDisturbsTheBaseline()
+    {
+        // Sources fill their properties progressively, so a transition can pass through a
+        // momentarily empty title. Treating that as a track would show twice for one change.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("First track"));
+        card.Apply(Playing(""));
+        card.Apply(Playing("First track"));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void TheBaselineIsKeptWhileTheSettingIsOff_SoTurningItOnShowsNothingByItself()
+    {
+        var settings = NewSettings(autoShowOnMedia: false);
+        var card = new MediaCard(settings);
+        card.Activate();
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Apply(Playing("First track"));
+
+        var m = settings.Current.Clone();
+        m.AutoShowOnMedia = true;
+        settings.Save(m);
+
+        card.Apply(Playing("First track"));
+
+        Assert.Empty(shows);
     }
 
     [Fact]
