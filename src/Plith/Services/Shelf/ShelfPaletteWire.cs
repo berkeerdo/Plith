@@ -6,10 +6,17 @@ namespace Plith.Services.Shelf;
 /// <param name="SurfaceStart">Top of the panel's gradient. Two colours rather than one because
 /// OsdSurfaceBrush is a LinearGradientBrush: a single flat stand-in would be visibly not the
 /// product's surface, which is the exact drift this type exists to prevent.</param>
+/// <param name="SelectionRing">A non-text stroke for a selected tile, held to 3:1 against the
+/// surface by ContrastInk.TrackOn rather than sent as the raw Accent: drawn as the raw accent it
+/// measured 1.25:1 for a near-white accent, where every other accent-bearing element in the
+/// product routes through a contrast-derived colour instead. A second copy of that derivation in
+/// the catcher would drift, which is why the ANSWER travels here rather than the accent alone.
+/// </param>
 /// <param name="IsDark">Carried rather than inferred from the ink. The catcher needs it for the
 /// things a contrast ratio does not answer, such as which way a shadow falls.</param>
 public readonly record struct ShelfPalette(
-    Color SurfaceStart, Color SurfaceEnd, Color Ink, Color InkMuted, Color Track, Color Accent, bool IsDark);
+    Color SurfaceStart, Color SurfaceEnd, Color Ink, Color InkMuted, Color Track, Color Accent,
+    Color SelectionRing, bool IsDark);
 
 /// <summary>
 /// The theme, crossing a process boundary.
@@ -24,14 +31,14 @@ public readonly record struct ShelfPalette(
 /// </summary>
 public static class ShelfPaletteWire
 {
-    /// <summary>Six colours and a flag. The ORDER is the contract; a named format would mean a
+    /// <summary>Seven colours and a flag. The ORDER is the contract; a named format would mean a
     /// parser on the far side and a second thing to keep in step.</summary>
-    public const int FieldCount = 7;
+    public const int FieldCount = 8;
 
     public static IReadOnlyList<string> ToPaths(ShelfPalette p) =>
     [
         Hex(p.SurfaceStart), Hex(p.SurfaceEnd), Hex(p.Ink), Hex(p.InkMuted), Hex(p.Track), Hex(p.Accent),
-        p.IsDark ? "1" : "0",
+        Hex(p.SelectionRing), p.IsDark ? "1" : "0",
     ];
 
     public static bool TryFromPaths(IReadOnlyList<string> paths, out ShelfPalette palette)
@@ -39,16 +46,16 @@ public static class ShelfPaletteWire
         palette = default;
         if (paths.Count != FieldCount) return false;
 
-        var colors = new Color[6];
-        for (var i = 0; i < 6; i++)
+        var colors = new Color[7];
+        for (var i = 0; i < 7; i++)
         {
             if (!TryParseHex(paths[i], out colors[i])) return false;
         }
 
-        if (paths[6] is not ("0" or "1")) return false;
+        if (paths[7] is not ("0" or "1")) return false;
 
         palette = new ShelfPalette(colors[0], colors[1], colors[2], colors[3], colors[4], colors[5],
-                                   IsDark: paths[6] == "1");
+                                   colors[6], IsDark: paths[7] == "1");
         return true;
     }
 

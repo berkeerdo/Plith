@@ -279,6 +279,15 @@ $inkMutedBrush = $probe.TryFindResource('NotchInkMuted')
 $trackBrush = $probe.TryFindResource('NotchTrack')
 $accentBrush = $probe.TryFindResource('Accent')
 
+# The selection ring is NOT the raw accent: drawn as Accent it measured 1.25:1 against the panel
+# for a near-white accent, where this product holds a non-text surface to 3:1 (ContrastInk.
+# ContrastRatio confirmed the number; see the task report). Plith derives it with
+# ContrastInk.TrackOn against the surface, the same rule NotchTrack already uses, and sends the
+# ANSWER across the wire rather than the accent alone, so the catcher never repeats the
+# derivation. There is no sender for this yet (that is Task 6's work), so the harness derives it
+# here the same way Task 6 will, standing in for what the real message will eventually carry.
+$selectionRingColor = [Plith.Services.ContrastInk]::TrackOn($surfaceBrush.GradientStops[1].Color)
+
 # ShelfPalette is not resolved as [Plith.Services.Shelf.ShelfPalette]: that name is compiled into
 # BOTH Plith.dll and Plith.DropCatcher.dll (ShelfPaletteWire.cs is LINKED into the catcher project
 # rather than referenced, precisely so the catcher never depends on Plith's assembly - see that
@@ -290,7 +299,7 @@ $shelfPaletteType = $dcAssembly.GetType('Plith.Services.Shelf.ShelfPalette')
 $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
     $surfaceBrush.GradientStops[0].Color, $surfaceBrush.GradientStops[1].Color,
     $inkBrush.Color, $inkMutedBrush.Color, $trackBrush.Color, $accentBrush.Color,
-    [bool]($Theme -eq 'Dark')))
+    $selectionRingColor, [bool]($Theme -eq 'Dark')))
 
 # Seven entries across two stacks: one stack deliberately OVER the visible-rows cap (a folder
 # plus four files, so the overflow tile and a folder icon both appear in the same render) and one

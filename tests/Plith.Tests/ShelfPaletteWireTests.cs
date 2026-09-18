@@ -12,6 +12,7 @@ public sealed class ShelfPaletteWireTests
         Color.FromRgb(0x9A, 0xA6, 0xB2),
         Color.FromRgb(0x2A, 0x32, 0x3C),
         Color.FromRgb(0xA3, 0xE6, 0x35),
+        Color.FromRgb(0x5A, 0x6E, 0x3E),
         IsDark: true);
 
     [Fact]
@@ -24,12 +25,12 @@ public sealed class ShelfPaletteWireTests
         Assert.Equal(sent, back);
     }
 
-    /// <summary>Seven values, and the order IS the contract. A short or long payload is a
+    /// <summary>Eight values, and the order IS the contract. A short or long payload is a
     /// version mismatch between the two executables, and the catcher must fall back to its own
     /// colours rather than paint with whatever it managed to parse.</summary>
     [Theory]
-    [InlineData(6)]
-    [InlineData(8)]
+    [InlineData(7)]
+    [InlineData(9)]
     public void TryFromPaths_RefusesAPayloadOfTheWrongLength(int count)
     {
         var padded = Enumerable.Repeat("#FF000000", count).ToArray();

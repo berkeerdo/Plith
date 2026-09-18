@@ -95,6 +95,12 @@ public partial class ShelfSurface : UserControl
             ["NotchInkMuted"] = Solid(palette.InkMuted),
             ["NotchTrack"] = Solid(palette.Track),
             ["AccentBrush"] = Solid(palette.Accent),
+            // NOT the raw accent. Drawn as Accent, the selection ring measured 1.25:1 against the
+            // panel for a near-white accent, where this product holds a non-text surface to 3:1.
+            // Plith derives this with ContrastInk.TrackOn against the surface, the same rule
+            // NotchTrack already uses, and sends the answer rather than the accent alone, so the
+            // ring cannot drift from the rest of the product's contrast-derived colours.
+            ["SelectionRing"] = Solid(palette.SelectionRing),
             // Two stops, not one: OsdSurfaceBrush is a LinearGradientBrush in Plith, and a flat
             // stand-in here would be visibly not the surface the shelf sits on everywhere else.
             ["OsdSurfaceBrush"] = Gradient(palette.SurfaceStart, palette.SurfaceEnd),
@@ -244,11 +250,9 @@ public partial class ShelfSurface : UserControl
             Height = TileSize,
             CornerRadius = new CornerRadius(8),
             Margin = new Thickness(0, 0, 0, last ? 0 : Gap),
-            // The selection ring is the accent, at a thickness that reads as a ring rather than
-            // a coincidental extra pixel. Nothing else on this surface uses the accent, so
-            // there is no other pair for check-contrast.ps1 to measure it against and this one
-            // is judged in the render instead, the same way the media transport chip is.
-            BorderBrush = selected ? (Brush)FindResource("AccentBrush") : Brushes.Transparent,
+            // SelectionRing, not the raw accent: see Apply's own comment. Drawn at a thickness
+            // that reads as a ring rather than a coincidental extra pixel.
+            BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
             BorderThickness = new Thickness(selected ? 1.5 : 0),
             Padding = new Thickness(4),
             Cursor = Cursors.Hand,
