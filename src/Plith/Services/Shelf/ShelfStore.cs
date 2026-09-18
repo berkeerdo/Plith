@@ -31,7 +31,7 @@ public sealed class ShelfStore
     public const int MaxItems = 20;
 
     private readonly string _storePath;
-    private readonly List<ShelfItem> _items = [];
+    private readonly List<List<ShelfItem>> _stacks = [];
 
     public ShelfStore() : this(DefaultStorePath()) { }
 
@@ -43,16 +43,31 @@ public sealed class ShelfStore
 
     public event Action? Changed;
 
-    /// <summary>Most recent first.</summary>
-    public IReadOnlyList<ShelfItem> Items => _items;
+    /// <summary>
+    /// Front stack first, newest item first inside a stack.
+    ///
+    /// A list of lists rather than a ShelfStack type: a stack has no property other than the
+    /// items in it, and a wrapper carrying nothing would be a type to keep in step for no
+    /// information.
+    /// </summary>
+    public IReadOnlyList<IReadOnlyList<ShelfItem>> Stacks => _stacks;
+
+    /// <summary>
+    /// Every item, flattened in stack order. Kept because the notch's glance page and the
+    /// existing tests are written against it, and because the flat view is genuinely what a
+    /// five-slot row wants: five slots cannot show grouping, and half-drawn grouping is worse
+    /// than none.
+    /// </summary>
+    public IReadOnlyList<ShelfItem> Items => _stacks.SelectMany(s => s).ToList();
 
     public static string DefaultStorePath() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Plith", "shelf.txt");
 
     /// <summary>
     /// Stage everything in <paramref name="paths"/> that resolves to something on disk, newest
-    /// first. Raises <see cref="Changed"/> once for the batch, and not at all when nothing was
-    /// kept — a drop of three paths is one event, and a drop of nothing is none.
+    /// first, joining the front stack. Raises <see cref="Changed"/> once for the batch, and not
+    /// at all when nothing was kept — a drop of three paths is one event, and a drop of nothing
+    /// is none.
     /// </summary>
     public void Add(IEnumerable<string> paths)
     {
@@ -62,24 +77,91 @@ public sealed class ShelfStore
         {
             if (!TryResolve(path, out var item)) continue;
 
-            // Removed before inserting, so a repeat drop moves the row to the front instead of
-            // creating a second one. Ordinal-ignore-case because Windows paths are.
-            _items.RemoveAll(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-            _items.Insert(0, item);
+            // The front stack is created LAZILY, on the first path that resolves. Created up
+            // front, a drop of nothing but dead paths leaves an empty stack behind that nobody
+            // asked for.
+            if (_stacks.Count == 0) _stacks.Add([]);
+            var front = _stacks[0];
+
+            // Removed from EVERY stack before inserting, not just the front one. A repeat drop
+            // moves the row to the front rather than leaving a second copy in another stack,
+            // which is the same rule as before stacks existed, applied across all of them.
+            foreach (var stack in _stacks)
+                stack.RemoveAll(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+
+            front.Insert(0, item);
             kept = true;
         }
 
         if (!kept) return;
 
-        if (_items.Count > MaxItems) _items.RemoveRange(MaxItems, _items.Count - MaxItems);
+        TrimToCap();
+        Save();
+        Changed?.Invoke();
+    }
+
+    public void Remove(string path) => RemoveMany([path]);
+
+    public void RemoveMany(IEnumerable<string> paths)
+    {
+        var removed = 0;
+        foreach (var path in paths)
+        {
+            foreach (var stack in _stacks)
+                removed += stack.RemoveAll(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
+        }
+
+        if (removed == 0) return;
 
         Save();
         Changed?.Invoke();
     }
 
-    public void Remove(string path)
+    /// <summary>An empty stack at the front, so the next drop joins it rather than the one
+    /// before it. Nothing is persisted for it: an empty stack has no lines to write.</summary>
+    public void NewStack()
     {
-        if (_items.RemoveAll(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase)) == 0) return;
+        if (_stacks.Count > 0 && _stacks[0].Count == 0) return;   // one empty front stack is enough
+
+        _stacks.Insert(0, []);
+        Changed?.Invoke();
+    }
+
+    /// <summary>
+    /// Move items into <paramref name="targetStackIndex"/>. A target equal to the stack count
+    /// appends a new stack; anything else out of range is ignored, because the index arrives
+    /// from the catcher and is a claim like everything else that does.
+    /// </summary>
+    public void Restack(int targetStackIndex, IEnumerable<string> paths)
+    {
+        if (targetStackIndex < 0 || targetStackIndex > _stacks.Count) return;
+
+        var moving = new List<ShelfItem>();
+        foreach (var path in paths)
+        {
+            foreach (var stack in _stacks)
+            {
+                var found = stack.FindIndex(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
+                if (found < 0) continue;
+
+                moving.Add(stack[found]);
+                stack.RemoveAt(found);
+                break;
+            }
+        }
+
+        if (moving.Count == 0) return;
+
+        if (targetStackIndex == _stacks.Count) _stacks.Add([]);
+        _stacks[targetStackIndex].InsertRange(0, moving);
+
+        Save();
+        Changed?.Invoke();
+    }
+
+    public void PruneEmptyStacks()
+    {
+        if (_stacks.RemoveAll(s => s.Count == 0) == 0) return;
 
         Save();
         Changed?.Invoke();
@@ -87,11 +169,26 @@ public sealed class ShelfStore
 
     public void Clear()
     {
-        if (_items.Count == 0) return;
+        if (_stacks.Count == 0) return;
 
-        _items.Clear();
+        _stacks.Clear();
         Save();
         Changed?.Invoke();
+    }
+
+    /// <summary>The cap is on the shelf as a whole. Oldest first, which means from the back of
+    /// the last non-empty stack.</summary>
+    private void TrimToCap()
+    {
+        var total = _stacks.Sum(s => s.Count);
+        for (var i = _stacks.Count - 1; i >= 0 && total > MaxItems; i--)
+        {
+            while (_stacks[i].Count > 0 && total > MaxItems)
+            {
+                _stacks[i].RemoveAt(_stacks[i].Count - 1);
+                total--;
+            }
+        }
     }
 
     private static bool TryResolve(string path, out ShelfItem item)
@@ -128,9 +225,12 @@ public sealed class ShelfStore
     }
 
     /// <summary>
-    /// One path per line, newest first. A text file rather than a serialized format because that
-    /// is the whole content — and because a shelf file a person can read and edit in Notepad is
-    /// a feature for something that holds references to their own files.
+    /// One path per line, newest first, with a blank line between stacks. Still a text file a
+    /// person can read and edit in Notepad, which was a deliberate property before stacks and is
+    /// not given up for them: a blank line is the one separator that needs no explaining.
+    ///
+    /// Empty stacks write nothing, so a stack created and never filled leaves no trace in the
+    /// file even if PruneEmptyStacks has not run yet.
     /// </summary>
     private void Save()
     {
@@ -138,7 +238,15 @@ public sealed class ShelfStore
         {
             var directory = Path.GetDirectoryName(_storePath);
             if (directory is not null) Directory.CreateDirectory(directory);
-            File.WriteAllLines(_storePath, _items.Select(i => i.Path));
+
+            var lines = new List<string>();
+            foreach (var stack in _stacks.Where(s => s.Count > 0))
+            {
+                if (lines.Count > 0) lines.Add(string.Empty);
+                lines.AddRange(stack.Select(i => i.Path));
+            }
+
+            File.WriteAllLines(_storePath, lines);
         }
         catch (IOException) { /* a shelf that cannot persist still works for this session */ }
         catch (UnauthorizedAccessException) { }
@@ -155,12 +263,30 @@ public sealed class ShelfStore
         catch (IOException) { return; }
         catch (UnauthorizedAccessException) { return; }
 
+        var current = new List<ShelfItem>();
+        var total = 0;
+
         foreach (var line in lines)
         {
+            if (string.IsNullOrWhiteSpace(line))
+            {
+                // A blank line ends a stack. Consecutive blanks, or a leading one, produce no
+                // empty stack: a file edited by hand should not be able to make litter.
+                if (current.Count > 0) _stacks.Add(current);
+                current = [];
+                continue;
+            }
+
+            if (total >= MaxItems) break;
+
             // The same check as on the way in, because a staged file can be deleted or moved
             // between sessions and a row that opens nothing is worse than no row.
-            if (_items.Count >= MaxItems) break;
-            if (TryResolve(line, out var item)) _items.Add(item);
+            if (!TryResolve(line, out var item)) continue;
+
+            current.Add(item);
+            total++;
         }
+
+        if (current.Count > 0) _stacks.Add(current);
     }
 }

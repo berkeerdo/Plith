@@ -186,4 +186,158 @@ public sealed class ShelfStoreTests : IDisposable
     {
         Assert.Empty(new ShelfStore(Path.Combine(_directory, "never-written.txt")).Items);
     }
+
+    [Fact]
+    public void Add_JoinsTheFrontStack()
+    {
+        var store = new ShelfStore(_storePath);
+
+        store.Add([MakeFile("a.txt")]);
+        store.Add([MakeFile("b.txt")]);
+
+        Assert.Single(store.Stacks);
+        Assert.Equal(2, store.Stacks[0].Count);
+        Assert.Equal("b.txt", store.Stacks[0][0].Name);
+    }
+
+    /// <summary>The new stack is empty and at the front, so the NEXT drop joins it. A stack created
+    /// behind the existing one would only be useful after a drop had already gone to the wrong
+    /// place.</summary>
+    [Fact]
+    public void NewStack_GoesToTheFrontAndTakesTheNextDrop()
+    {
+        var store = new ShelfStore(_storePath);
+        store.Add([MakeFile("a.txt")]);
+
+        store.NewStack();
+        store.Add([MakeFile("b.txt")]);
+
+        Assert.Equal(2, store.Stacks.Count);
+        Assert.Equal("b.txt", store.Stacks[0][0].Name);
+        Assert.Equal("a.txt", store.Stacks[1][0].Name);
+    }
+
+    [Fact]
+    public void Restack_MovesAnItemIntoAnExistingStack()
+    {
+        var store = new ShelfStore(_storePath);
+        var a = MakeFile("a.txt");
+        store.Add([a]);
+        store.NewStack();
+        store.Add([MakeFile("b.txt")]);
+
+        store.Restack(0, [a]);
+
+        Assert.Equal(2, store.Stacks[0].Count);
+        Assert.Empty(store.Stacks[1]);
+    }
+
+    /// <summary>A target one past the end appends a stack. That is the only way to create a stack at
+    /// the back, and it is what dragging a tile onto empty space means.</summary>
+    [Fact]
+    public void Restack_PastTheEndAppendsANewStack()
+    {
+        var store = new ShelfStore(_storePath);
+        var a = MakeFile("a.txt");
+        store.Add([a, MakeFile("b.txt")]);
+
+        store.Restack(store.Stacks.Count, [a]);
+
+        Assert.Equal(2, store.Stacks.Count);
+        Assert.Single(store.Stacks[1]);
+        Assert.Equal("a.txt", store.Stacks[1][0].Name);
+    }
+
+    [Fact]
+    public void Restack_IgnoresATargetThatIsOutOfRange()
+    {
+        var store = new ShelfStore(_storePath);
+        var a = MakeFile("a.txt");
+        store.Add([a]);
+
+        store.Restack(7, [a]);
+        store.Restack(-1, [a]);
+
+        Assert.Single(store.Stacks);
+        Assert.Single(store.Stacks[0]);
+    }
+
+    [Fact]
+    public void RemoveMany_TakesOutSeveralAndRaisesOneEvent()
+    {
+        var store = new ShelfStore(_storePath);
+        var a = MakeFile("a.txt");
+        var b = MakeFile("b.txt");
+        store.Add([a, b, MakeFile("c.txt")]);
+        var events = 0;
+        store.Changed += () => events++;
+
+        store.RemoveMany([a, b]);
+
+        Assert.Single(store.Items);
+        Assert.Equal(1, events);
+    }
+
+    /// <summary>An empty stack that is still empty when the shelf closes is litter. The control that
+    /// creates one is useful before a drop, so it cannot refuse to create it, which means something
+    /// has to clean up after the drop that never came.</summary>
+    [Fact]
+    public void PruneEmptyStacks_DropsThemAndKeepsTheRest()
+    {
+        var store = new ShelfStore(_storePath);
+        store.Add([MakeFile("a.txt")]);
+        store.NewStack();
+
+        store.PruneEmptyStacks();
+
+        Assert.Single(store.Stacks);
+        Assert.Equal("a.txt", store.Stacks[0][0].Name);
+    }
+
+    /// <summary>The cap is on the shelf, not on a stack. Twenty items spread over four stacks is the
+    /// same twenty items.</summary>
+    [Fact]
+    public void Add_CapsTheTotalAcrossStacks()
+    {
+        var store = new ShelfStore(_storePath);
+        for (var i = 0; i < ShelfStore.MaxItems + 5; i++)
+        {
+            if (i % 4 == 0) store.NewStack();
+            store.Add([MakeFile($"f{i}.txt")]);
+        }
+
+        Assert.Equal(ShelfStore.MaxItems, store.Items.Count);
+    }
+
+    [Fact]
+    public void Save_SeparatesStacksWithABlankLine_AndLoadsThemBack()
+    {
+        var store = new ShelfStore(_storePath);
+        store.Add([MakeFile("a.txt")]);
+        store.NewStack();
+        store.Add([MakeFile("b.txt")]);
+
+        var text = File.ReadAllText(_storePath);
+        Assert.Contains(Environment.NewLine + Environment.NewLine, text, StringComparison.Ordinal);
+
+        var reloaded = new ShelfStore(_storePath);
+        Assert.Equal(2, reloaded.Stacks.Count);
+        Assert.Equal("b.txt", reloaded.Stacks[0][0].Name);
+    }
+
+    /// <summary>Backward compatibility, and it costs nothing: a file written before stacks existed
+    /// has no blank lines in it, so it loads as exactly one stack with no version marker anywhere.
+    /// </summary>
+    [Fact]
+    public void Load_ReadsAPreStacksFileAsASingleStack()
+    {
+        var a = MakeFile("a.txt");
+        var b = MakeFile("b.txt");
+        File.WriteAllLines(_storePath, [a, b]);
+
+        var store = new ShelfStore(_storePath);
+
+        Assert.Single(store.Stacks);
+        Assert.Equal(2, store.Stacks[0].Count);
+    }
 }
