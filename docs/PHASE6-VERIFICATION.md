@@ -1245,3 +1245,59 @@ and noise is how a log stops being read.
 the wrong place. The three previous ones were fixed by recomputing where used. This one could not
 be, because the value was not stale; it was circular. The difference was only visible from a
 measurement.
+
+---
+
+## Brightness (feature/brightness)
+
+Spec: `docs/superpowers/specs/2026-09-18-brightness-design.md`.
+Plan: `docs/superpowers/plans/2026-09-18-brightness.md`.
+
+### What is green
+
+Build 0 errors with the 3 known CA1861 warnings, 429 tests (412 + 17), and
+`check-a11y`, `check-shared-xaml` and `check-contrast` all exit 0.
+
+None of that reaches the feature. The suite covers the step arithmetic, the rule that a
+device is kept when it answers a read, the writer's coalescing, the card's transient
+visibility and the settings round trip. Everything those talk to is a fake.
+
+### What was measured on the running product
+
+The product was launched and stayed up. Both halves reported themselves:
+
+```
+[Brightness] Discovery found 0 device(s).
+[Brightness] No brightness event source: ManagementException: Invalid parameter
+```
+
+Both lines are correct here and both are the degraded path, so what this run proves is that
+the degraded path is quiet rather than fatal. That is worth having: a Phase 6 slice shipped
+equally green and crashed on the first hover.
+
+**One plan step gave a false all-clear.** A probe in the test host reported that
+`BrightnessMonitor.Start()` throws nothing on this machine. In the real product it throws
+`ManagementException: Invalid parameter`, which is what a machine with no internal panel
+answers. The wide catch was already there and held. The lesson is the repo's usual one in a
+new place: a probe run inside the test host is not the path the product takes.
+
+### What is NOT verified, and why
+
+**Nothing about brightness actually changing has been verified on hardware, and it could not
+be from this session.** Measured with `$env:SESSIONNAME` and `GetSystemMetrics(SM_REMOTESESSION)`:
+the session is Remote Desktop. Inside one, `EnumDisplayMonitors` returns the RDP virtual
+display, no physical panel is reachable, and every DDC/CI call fails. The same code read
+`min=0 current=30 max=100` from the console earlier the same day.
+
+From a console session, these six are still open:
+
+1. One press changes the monitor's brightness and the OSD appears showing the new level.
+2. The level shown matches what the monitor actually did, confirmed by an independent read.
+3. Holding the key ramps smoothly and stops when the key comes up, with no run of writes
+   continuing afterwards. This is the coalescing, and the thing most likely to be wrong.
+4. The brightness row is NOT present when the OSD appears for a volume key.
+5. In notch mode the change uses the short HUD shape, the one a volume key gets.
+6. Turning the feature off in Settings unbinds both keys immediately.
+
+**The sense half is unverified and stays that way.** There is no laptop here, so
+`WmiMonitorBrightnessEvent` has never fired in this product. On a desktop it cannot.

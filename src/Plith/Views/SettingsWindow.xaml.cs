@@ -89,6 +89,26 @@ public partial class SettingsWindow : Window
         LoadIntoUi(_settings.Current);
 
         HotkeyCaptureButton.Click += (_, _) => StartHotkeyCapture();
+        BrightnessUpCaptureButton.Click += (_, _) => StartHotkeyCapture(HotkeyTarget.BrightnessUp);
+        BrightnessDownCaptureButton.Click += (_, _) => StartHotkeyCapture(HotkeyTarget.BrightnessDown);
+        BrightnessUpClearButton.Click += (_, _) =>
+        {
+            _brightnessUpMods = 0;
+            _brightnessUpKey = 0;
+            RefreshHotkeyButton(HotkeyTarget.BrightnessUp, 0, 0);
+            AutoSave();
+        };
+        BrightnessDownClearButton.Click += (_, _) =>
+        {
+            _brightnessDownMods = 0;
+            _brightnessDownKey = 0;
+            RefreshHotkeyButton(HotkeyTarget.BrightnessDown, 0, 0);
+            AutoSave();
+        };
+        BrightnessToggle.Checked += (_, _) => AutoSave();
+        BrightnessToggle.Unchecked += (_, _) => AutoSave();
+        BrightnessStepCombo.ItemsSource = new[] { 5, 10, 15, 20, 25 };
+        BrightnessStepCombo.SelectionChanged += (_, _) => AutoSave();
         HotkeyClearButton.Click += (_, _) => ClearHotkey();
 
         MinimizeButton.Click += (_, _) => WindowState = WindowState.Minimized;
@@ -292,7 +312,7 @@ public partial class SettingsWindow : Window
     }
 
     private RadioButton[] SectionRailItems() =>
-        new[] { RailAppearance, RailOsd, RailAudio, RailMedia, RailGeneral, RailGameMode, RailUpdates };
+        new[] { RailAppearance, RailOsd, RailAudio, RailMedia, RailBrightness, RailGeneral, RailGameMode, RailUpdates };
 
     private void ShowSection(string sectionName)
     {
@@ -606,15 +626,39 @@ public partial class SettingsWindow : Window
         }
     }
 
-    private void StartHotkeyCapture()
+    /// <summary>Which binding a capture in progress is for. The capture flow was written for
+    /// the one summon hotkey; brightness added two more, so the target became a value rather
+    /// than an assumption.</summary>
+    private enum HotkeyTarget { Summon, BrightnessUp, BrightnessDown }
+
+    private HotkeyTarget _captureTarget = HotkeyTarget.Summon;
+
+    private Button CaptureButtonFor(HotkeyTarget target) => target switch
+    {
+        HotkeyTarget.BrightnessUp => BrightnessUpCaptureButton,
+        HotkeyTarget.BrightnessDown => BrightnessDownCaptureButton,
+        _ => HotkeyCaptureButton,
+    };
+
+    private Button ClearButtonFor(HotkeyTarget target) => target switch
+    {
+        HotkeyTarget.BrightnessUp => BrightnessUpClearButton,
+        HotkeyTarget.BrightnessDown => BrightnessDownClearButton,
+        _ => HotkeyClearButton,
+    };
+
+    private void StartHotkeyCapture(HotkeyTarget target = HotkeyTarget.Summon)
     {
         _isCapturingHotkey = true;
+        _captureTarget = target;
         _capturedMods = 0;
         _capturedKey = 0;
-        HotkeyCaptureButton.Content = "Press a combo…";
-        HotkeyCaptureButton.FontStyle = FontStyles.Italic;
-        HotkeyClearButton.Visibility = Visibility.Collapsed;
-        Keyboard.Focus(HotkeyCaptureButton);
+
+        var button = CaptureButtonFor(target);
+        button.Content = "Press a combo…";
+        button.FontStyle = FontStyles.Italic;
+        ClearButtonFor(target).Visibility = Visibility.Collapsed;
+        Keyboard.Focus(button);
     }
 
     private void CaptureHotkeyKeyDown(KeyEventArgs e)
@@ -651,7 +695,7 @@ public partial class SettingsWindow : Window
         // with normal typing the moment the user focuses any input control.
         if (modsMask == 0)
         {
-            HotkeyCaptureButton.Content = "Need a modifier (Ctrl / Alt / Shift)";
+            CaptureButtonFor(_captureTarget).Content = "Need a modifier (Ctrl / Alt / Shift)";
             e.Handled = true;
             return;
         }
@@ -666,30 +710,57 @@ public partial class SettingsWindow : Window
     private void EndHotkeyCapture(bool cancelled)
     {
         _isCapturingHotkey = false;
-        HotkeyCaptureButton.FontStyle = FontStyles.Normal;
+        CaptureButtonFor(_captureTarget).FontStyle = FontStyles.Normal;
 
         if (cancelled)
         {
             // Restore the visual to whatever was previously saved.
-            RefreshHotkeyButton(_settings.Current.SummonHotkeyMods, _settings.Current.SummonHotkeyKey);
+            var (mods, vk) = _captureTarget switch
+            {
+                HotkeyTarget.BrightnessUp => (_settings.Current.BrightnessUpHotkeyMods, _settings.Current.BrightnessUpHotkeyKey),
+                HotkeyTarget.BrightnessDown => (_settings.Current.BrightnessDownHotkeyMods, _settings.Current.BrightnessDownHotkeyKey),
+                _ => (_settings.Current.SummonHotkeyMods, _settings.Current.SummonHotkeyKey),
+            };
+            RefreshHotkeyButton(_captureTarget, mods, vk);
             return;
         }
 
-        RefreshHotkeyButton(_capturedMods, _capturedKey);
+        if (_captureTarget == HotkeyTarget.BrightnessUp)
+        {
+            _brightnessUpMods = _capturedMods;
+            _brightnessUpKey = _capturedKey;
+        }
+        else if (_captureTarget == HotkeyTarget.BrightnessDown)
+        {
+            _brightnessDownMods = _capturedMods;
+            _brightnessDownKey = _capturedKey;
+        }
+
+        RefreshHotkeyButton(_captureTarget, _capturedMods, _capturedKey);
     }
 
-    private void RefreshHotkeyButton(uint mods, int vk)
+    private uint _brightnessUpMods;
+    private int _brightnessUpKey;
+    private uint _brightnessDownMods;
+    private int _brightnessDownKey;
+
+    private void RefreshHotkeyButton(uint mods, int vk) => RefreshHotkeyButton(HotkeyTarget.Summon, mods, vk);
+
+    private void RefreshHotkeyButton(HotkeyTarget target, uint mods, int vk)
     {
+        var button = CaptureButtonFor(target);
+        var clear = ClearButtonFor(target);
         var label = HotkeyService.FormatCombo(mods, vk);
+
         if (string.IsNullOrEmpty(label))
         {
-            HotkeyCaptureButton.Content = "Not set";
-            HotkeyClearButton.Visibility = Visibility.Collapsed;
+            button.Content = "Not set";
+            clear.Visibility = Visibility.Collapsed;
         }
         else
         {
-            HotkeyCaptureButton.Content = label;
-            HotkeyClearButton.Visibility = Visibility.Visible;
+            button.Content = label;
+            clear.Visibility = Visibility.Visible;
         }
     }
 
@@ -746,6 +817,14 @@ public partial class SettingsWindow : Window
             BusCombo.SelectedIndex = Math.Clamp(m.MonitoredBusIndex, 0, BusCombo.Items.Count - 1);
             SelectEndpointById(m.MonitoredWindowsEndpointId);
             AutoShowMediaToggle.IsChecked = m.AutoShowOnMedia;
+            BrightnessToggle.IsChecked = m.BrightnessEnabled;
+            BrightnessStepCombo.SelectedItem = m.BrightnessStepPercent;
+            _brightnessUpMods = m.BrightnessUpHotkeyMods;
+            _brightnessUpKey = m.BrightnessUpHotkeyKey;
+            _brightnessDownMods = m.BrightnessDownHotkeyMods;
+            _brightnessDownKey = m.BrightnessDownHotkeyKey;
+            RefreshHotkeyButton(HotkeyTarget.BrightnessUp, _brightnessUpMods, _brightnessUpKey);
+            RefreshHotkeyButton(HotkeyTarget.BrightnessDown, _brightnessDownMods, _brightnessDownKey);
             AutoStartToggle.IsChecked = m.AutoStart;
             ThemeCombo.SelectedItem = m.Theme;
             PresentationCombo.SelectedValue = m.Presentation;
@@ -908,6 +987,12 @@ public partial class SettingsWindow : Window
         m.MonitoredBusIndex = Math.Max(0, BusCombo.SelectedIndex);
         m.MonitoredWindowsEndpointId = (EndpointCombo.SelectedItem as WindowsAudioEndpointInfo)?.Id ?? string.Empty;
         m.AutoShowOnMedia = AutoShowMediaToggle.IsChecked == true;
+        m.BrightnessEnabled = BrightnessToggle.IsChecked == true;
+        if (BrightnessStepCombo.SelectedItem is int step) m.BrightnessStepPercent = step;
+        m.BrightnessUpHotkeyMods = _brightnessUpMods;
+        m.BrightnessUpHotkeyKey = _brightnessUpKey;
+        m.BrightnessDownHotkeyMods = _brightnessDownMods;
+        m.BrightnessDownHotkeyKey = _brightnessDownKey;
         m.AutoStart = AutoStartToggle.IsChecked == true;
         if (ThemeCombo.SelectedItem is Plith.Services.ThemeMode t) m.Theme = t;
         if (PresentationCombo.SelectedValue is PresentationMode p) m.Presentation = p;

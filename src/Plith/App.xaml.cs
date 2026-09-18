@@ -1,6 +1,7 @@
 using System.Windows;
 using Plith.Cards;
 using Plith.Services;
+using Plith.Services.Brightness;
 using Plith.Views;
 
 namespace Plith;
@@ -22,6 +23,12 @@ public partial class App : Application
     private AudioCard? _audioCard;
     private MediaCard? _mediaCard;
     private AmbientCard? _ambientCard;
+    private BrightnessCard? _brightnessCard;
+    private BrightnessMonitor? _brightnessMonitor;
+    private BrightnessWriter? _brightnessWriter;
+    private IReadOnlyList<IBrightnessDevice> _brightnessDevices = [];
+    private HotkeyService? _brightnessUpHotkey;
+    private HotkeyService? _brightnessDownHotkey;
     private OpenMeteoClient? _weatherClient;
     private WindowsLocationProvider? _windowsLocation;
     private IpLocationProvider? _ipLocation;
@@ -67,6 +74,7 @@ public partial class App : Application
         _ipLocation = new IpLocationProvider(_diagnosticLog);
         _weatherService = new WeatherService(_settings, _weatherClient, _windowsLocation, _ipLocation, _diagnosticLog);
         _ambientCard = new AmbientCard(_home, _settings, _weatherService);
+        _brightnessCard = new BrightnessCard(_settings);
 
         _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
 
@@ -74,6 +82,7 @@ public partial class App : Application
         _cardHost.Register(_ambientCard);  // Order 5 — the notch's ambient row, above media
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
+        _cardHost.Register(_brightnessCard);  // Order 30, below audio, and only while it has something to say
 
         _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += (reason, d) => _osd.ShowOsd(d, reason: reason);
@@ -170,8 +179,132 @@ public partial class App : Application
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
 
+        StartBrightness();
+
         _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
         _trayHost.Initialize();
+    }
+
+    /// <summary>
+    /// Bring up both halves of brightness: the WMI watcher that notices a change on an
+    /// internal panel, and the writer plus hotkeys that make one on an external monitor.
+    /// </summary>
+    private void StartBrightness()
+    {
+        if (_settings is null || _osd is null) return;
+
+        // Discovery costs one DDC/CI read per attached monitor, measured at 56 ms each, so it
+        // happens here rather than per key press. It can legitimately find nothing: inside a
+        // Remote Desktop session no physical display is reachable at all. See
+        // EnsureBrightnessDevices.
+        _brightnessDevices = BrightnessDiscovery.Discover();
+        _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
+        _diagnosticLog?.Info("Brightness", $"Discovery found {_brightnessDevices.Count} device(s).");
+
+        _brightnessMonitor = new BrightnessMonitor(_osd.Dispatcher, _diagnosticLog);
+        _brightnessMonitor.Changed += percent => _brightnessCard?.Report(percent);
+        _brightnessMonitor.Start();
+
+        ApplyBrightnessHotkeys(_settings.Current);
+        _settings.Changed += ApplyBrightnessHotkeys;
+    }
+
+    /// <summary>The writer, with its result routed to the card on the dispatcher. The pump runs
+    /// on the thread pool, and CardHost's own documentation names an off-dispatcher card update
+    /// as the expected cause of a crash inside the WPF binding engine.</summary>
+    private BrightnessWriter NewBrightnessWriter(IReadOnlyList<IBrightnessDevice> devices)
+    {
+        var writer = new BrightnessWriter(devices);
+        writer.Wrote += value => _osd?.Dispatcher.BeginInvoke(
+            new Action(() => _brightnessCard?.Report(ToBrightnessPercent(value))));
+        return writer;
+    }
+
+    /// <summary>
+    /// The devices, rediscovering them first if there are none.
+    ///
+    /// Measured: moving a session from the console to Remote Desktop takes every DDC/CI capable
+    /// display away mid-session, and moving back returns it. Discovery that ran only at startup
+    /// would leave the feature dead until a restart for anyone who connects to their desktop
+    /// remotely and later sits back down at it.
+    ///
+    /// Retried here rather than from a WM_DISPLAYCHANGE and WM_WTSSESSION_CHANGE listener,
+    /// which is the fuller answer and needs a message window this slice does not have. The cost
+    /// of this version is one enumeration per key press while the list is empty, and nothing at
+    /// all once it is not.
+    /// </summary>
+    private IReadOnlyList<IBrightnessDevice> EnsureBrightnessDevices()
+    {
+        if (_brightnessDevices.Count > 0) return _brightnessDevices;
+
+        _brightnessDevices = BrightnessDiscovery.Discover();
+        if (_brightnessDevices.Count == 0) return _brightnessDevices;
+
+        _diagnosticLog?.Info("Brightness", $"Rediscovery found {_brightnessDevices.Count} device(s).");
+
+        // The writer holds the list it was built with, so a new set needs a new writer.
+        _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
+        return _brightnessDevices;
+    }
+
+    /// <summary>
+    /// The first device's value expressed as 0 to 100, because the card shows one number while
+    /// every display is written together. On two monitors reporting different ranges the OSD is
+    /// exact about the first and approximate about the rest, which is a display inaccuracy
+    /// rather than a control bug. Recorded in the spec as the known limit of this slice.
+    /// </summary>
+    private int ToBrightnessPercent(int value)
+    {
+        if (_brightnessDevices.Count == 0) return value;
+        if (!_brightnessDevices[0].TryRead(out var reading)) return value;
+
+        var span = reading.Max - reading.Min;
+        if (span <= 0) return 100;
+        return (int)Math.Round((value - reading.Min) * 100.0 / span);
+    }
+
+    /// <summary>
+    /// Bind or unbind the two brightness keys.
+    ///
+    /// Deliberately NOT conditioned on any device having been found. Inside a Remote Desktop
+    /// session none can be, and a binding that only appeared after a restart would strand the
+    /// person who walks back to their machine. The key press is also what triggers rediscovery.
+    /// </summary>
+    private void ApplyBrightnessHotkeys(SettingsModel m)
+    {
+        if (!m.BrightnessEnabled)
+        {
+            _brightnessUpHotkey?.Apply(0, 0);
+            _brightnessDownHotkey?.Apply(0, 0);
+            return;
+        }
+
+        // noRepeat: false, so holding the key keeps moving the value. The coalescing writer is
+        // what makes that safe at 56 ms per write.
+        _brightnessUpHotkey ??= BuildBrightnessHotkey(hotkeyId: 2, up: true);
+        _brightnessDownHotkey ??= BuildBrightnessHotkey(hotkeyId: 3, up: false);
+
+        _brightnessUpHotkey.Apply(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey);
+        _brightnessDownHotkey.Apply(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey);
+    }
+
+    private HotkeyService BuildBrightnessHotkey(int hotkeyId, bool up)
+    {
+        var service = new HotkeyService(hotkeyId, noRepeat: false);
+        service.Pressed += () => StepBrightness(up);
+        return service;
+    }
+
+    private void StepBrightness(bool up)
+    {
+        var devices = EnsureBrightnessDevices();
+        if (devices.Count == 0 || _brightnessWriter is null || _settings is null) return;
+
+        // The first device is the one the step is measured from. They all move together, so a
+        // second display with a different span follows rather than leads.
+        if (!devices[0].TryRead(out var reading)) return;
+
+        _brightnessWriter.Request(BrightnessStep.Next(reading, _settings.Current.BrightnessStepPercent, up));
     }
 
     private void ApplyHotkeyFromSettings(SettingsModel m)
@@ -206,9 +339,12 @@ public partial class App : Application
                 _fullscreenWatcher.ForegroundCoversMonitorChanged -= _osd.OnForegroundCoversMonitorChanged;
             _fullscreenWatcher?.Dispose();
         });
+        DisposeStep("BrightnessMonitor",  () => _brightnessMonitor?.Dispose());
+        DisposeStep("BrightnessHotkeys",  () => { _brightnessUpHotkey?.Dispose(); _brightnessDownHotkey?.Dispose(); });
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
         // After CardHost: AmbientCard.Deactivate() unsubscribes from _weatherService.Updated
         // as part of that Dispose, so the service must still be alive when it runs.
+        DisposeStep("BrightnessDevices",  () => { foreach (var d in _brightnessDevices) (d as IDisposable)?.Dispose(); });
         DisposeStep("WeatherService",     () => _weatherService?.Dispose());
         DisposeStep("MicrophoneClient",   () => _microphone?.Dispose());
         DisposeStep("OpenMeteoClient",    () => _weatherClient?.Dispose());
