@@ -36,7 +36,10 @@ Recorded here rather than by rewriting a task that has already shipped and been 
 
 1. **The palette carries eight values, not seven.** Task 3 measured the selection ring at 1.25:1
    against the panel for a near-white accent, where this product holds non-text surfaces to 3:1.
-   The ring becomes an eighth field that Plith derives with `ContrastInk.TrackOn`. Task 2's text
+   The ring becomes an eighth field that Plith derives with `ContrastInk.RingOn`, which keeps
+   the accent when it already clears 3:1 and otherwise walks its lightness with hue and saturation
+   preserved. An intermediate round used `TrackOn` and was reverted: it is a function of the
+   surface alone and flattened a vivid lime ring from 8.87:1 to 3.03:1. Task 2's text
    below still says seven, which was true when it was written and executed; the spec and
    `ShelfPaletteWire.FieldCount` are the current authority.
 2. **The verb check needs both `Enum.IsDefined` and a name round trip.** My pre-flight ruling said

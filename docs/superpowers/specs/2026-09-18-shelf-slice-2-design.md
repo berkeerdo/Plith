@@ -159,8 +159,15 @@ designing it. Drawn as the raw accent it measures 1.25:1 against the panel for a
 accent, where the product holds non-text surfaces to 3:1. Every other accent-bearing element in
 the product routes through a contrast-derived ink or track colour, which is exactly why
 `check-contrast.ps1` passes on a white accent today; a raw accent stroke on the panel would have
-made the shelf the one place that breaks. Plith derives it with `ContrastInk.TrackOn` against the
+made the shelf the one place that breaks. Plith derives it with `ContrastInk.RingOn` against the
 surface and sends the answer, which is this message's whole principle.
+
+`RingOn` rather than `TrackOn`, and the difference was measured rather than argued. `TrackOn` is a
+function of the surface alone, so it throws the accent away: it took a vivid lime ring from 8.87:1
+down to a dull grey-olive at 3.03:1, paying the common case to fix a rare one. `RingOn` returns the
+accent untouched whenever the accent already clears 3:1, and otherwise walks its lightness, keeping
+hue and saturation, in the direction the surface's own luminance chooses. That is the shape
+`AccentTheme.Derive` already uses for a light background, generalised to both.
 
 **Catcher to Plith**
 
