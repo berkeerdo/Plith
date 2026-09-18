@@ -142,6 +142,22 @@ public class BrightnessWriterTests
     }
 
     [Fact]
+    public void ARefusedWriteIsAnnounced()
+    {
+        // A monitor that refuses every write looks exactly like one that works unless the
+        // refusal leaves a trace. This is what the log reports.
+        var runner = new ManualRunner();
+        var writer = new BrightnessWriter([new RefusingDevice()], runner.Post);
+        var refused = new List<string>();
+        writer.Refused += id => refused.Add(id);
+
+        writer.Request(35);
+        runner.RunAll();
+
+        Assert.Equal(["refusing"], refused);
+    }
+
+    [Fact]
     public void ADeviceThatRefusesAWriteDoesNotStopTheOthers()
     {
         var refusing = new RefusingDevice();

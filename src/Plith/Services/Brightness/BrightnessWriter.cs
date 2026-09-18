@@ -34,6 +34,11 @@ public sealed class BrightnessWriter
     /// Subscribers that touch UI must marshal; see CardHost's note on the dispatcher.</summary>
     public event Action<int>? Wrote;
 
+    /// <summary>Raised on the pump's thread with the id of a device that refused a write. The
+    /// write itself is not retried and the other devices still get the value; this exists so a
+    /// display that answers nothing leaves a trace instead of looking like one that works.</summary>
+    public event Action<string>? Refused;
+
     public void Request(int value)
     {
         lock (_gate)
@@ -65,10 +70,10 @@ public sealed class BrightnessWriter
 
             foreach (var device in _devices)
             {
-                // The result is deliberately ignored. One monitor refusing a write is not a
-                // reason to leave the others where they were, and a display that has gone
-                // away must not take the gesture down with it.
-                _ = device.TryWrite(value);
+                // A refusal is announced but never retried and never fatal. One monitor
+                // refusing is not a reason to leave the others where they were, and a display
+                // that has gone away must not take the gesture down with it.
+                if (!device.TryWrite(value)) Refused?.Invoke(device.Id);
             }
 
             Wrote?.Invoke(value);

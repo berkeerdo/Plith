@@ -29,6 +29,9 @@ public partial class App : Application
     private IReadOnlyList<IBrightnessDevice> _brightnessDevices = [];
     private HotkeyService? _brightnessUpHotkey;
     private HotkeyService? _brightnessDownHotkey;
+    private BrightnessRunLog? _brightnessRunLog;
+    private System.Windows.Threading.DispatcherTimer? _brightnessRunTimer;
+    private bool _loggedNoBrightnessDevices;
     private OpenMeteoClient? _weatherClient;
     private WindowsLocationProvider? _windowsLocation;
     private IpLocationProvider? _ipLocation;
@@ -181,7 +184,7 @@ public partial class App : Application
 
         StartBrightness();
 
-        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
+        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService, _diagnosticLog);
         _trayHost.Initialize();
     }
 
@@ -197,6 +200,20 @@ public partial class App : Application
         // happens here rather than per key press. It can legitimately find nothing: inside a
         // Remote Desktop session no physical display is reachable at all. See
         // EnsureBrightnessDevices.
+        // One line when a run of key presses starts and one summary when it ends, rather than
+        // a line per write. A write is 56 ms, so a held key produces roughly fifteen a second
+        // and per-write logging would flood the file during the one gesture worth reading.
+        _brightnessRunTimer = new System.Windows.Threading.DispatcherTimer();
+        _brightnessRunTimer.Tick += (_, _) => { _brightnessRunTimer.Stop(); _brightnessRunLog?.Close(); };
+        _brightnessRunLog = new BrightnessRunLog(
+            line => _diagnosticLog?.Info("Brightness", line),
+            (after, _) =>
+            {
+                _brightnessRunTimer.Stop();
+                _brightnessRunTimer.Interval = after;
+                _brightnessRunTimer.Start();
+            });
+
         _brightnessDevices = BrightnessDiscovery.Discover();
         _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
         _diagnosticLog?.Info("Brightness", $"Discovery found {_brightnessDevices.Count} device(s).");
@@ -217,6 +234,12 @@ public partial class App : Application
         var writer = new BrightnessWriter(devices);
         writer.Wrote += value => _osd?.Dispatcher.BeginInvoke(
             new Action(() => _brightnessCard?.Report(ToBrightnessPercent(value))));
+
+        // Refusals arrive on the pump thread and the run log is only ever touched on the
+        // dispatcher, alongside the steps it is summarising.
+        writer.Refused += id => _osd?.Dispatcher.BeginInvoke(
+            new Action(() => _brightnessRunLog?.NoteRefusal(id)));
+
         return writer;
     }
 
@@ -298,13 +321,35 @@ public partial class App : Application
     private void StepBrightness(bool up)
     {
         var devices = EnsureBrightnessDevices();
-        if (devices.Count == 0 || _brightnessWriter is null || _settings is null) return;
+
+        if (devices.Count == 0 || _brightnessWriter is null || _settings is null)
+        {
+            // Logged once per dry spell rather than per press. Held down, this path runs as
+            // fast as the key repeats, and the reader only needs to know the key arrived and
+            // had nothing to write to.
+            if (!_loggedNoBrightnessDevices)
+            {
+                _loggedNoBrightnessDevices = true;
+                _diagnosticLog?.Info("Brightness",
+                    $"{(up ? "Brighter" : "Dimmer")} pressed with no display answering. "
+                    + "Inside a Remote Desktop session this is expected.");
+            }
+            return;
+        }
+
+        _loggedNoBrightnessDevices = false;
 
         // The first device is the one the step is measured from. They all move together, so a
         // second display with a different span follows rather than leads.
-        if (!devices[0].TryRead(out var reading)) return;
+        if (!devices[0].TryRead(out var reading))
+        {
+            _diagnosticLog?.Info("Brightness", $"{devices[0].Id} stopped answering a read.");
+            return;
+        }
 
-        _brightnessWriter.Request(BrightnessStep.Next(reading, _settings.Current.BrightnessStepPercent, up));
+        var next = BrightnessStep.Next(reading, _settings.Current.BrightnessStepPercent, up);
+        _brightnessRunLog?.Step(up, reading.Current, next);
+        _brightnessWriter.Request(next);
     }
 
     private void ApplyHotkeyFromSettings(SettingsModel m)
@@ -339,6 +384,7 @@ public partial class App : Application
                 _fullscreenWatcher.ForegroundCoversMonitorChanged -= _osd.OnForegroundCoversMonitorChanged;
             _fullscreenWatcher?.Dispose();
         });
+        DisposeStep("BrightnessRunLog",   () => { _brightnessRunTimer?.Stop(); _brightnessRunLog?.Close(); });
         DisposeStep("BrightnessMonitor",  () => _brightnessMonitor?.Dispose());
         DisposeStep("BrightnessHotkeys",  () => { _brightnessUpHotkey?.Dispose(); _brightnessDownHotkey?.Dispose(); });
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
