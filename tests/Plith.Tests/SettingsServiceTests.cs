@@ -461,6 +461,69 @@ public class SettingsServiceTests
 
         Assert.Equal(string.Empty, reloaded.Current.WeatherLocation);
     }
+
+    [Fact]
+    public void BrightnessSettingsRoundTrip()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        var svc = new SettingsService(path);
+
+        var m = svc.Current.Clone();
+        m.BrightnessEnabled = true;
+        m.BrightnessStepPercent = 15;
+        m.BrightnessUpHotkeyMods = 3;
+        m.BrightnessUpHotkeyKey = 0x26;
+        m.BrightnessDownHotkeyMods = 3;
+        m.BrightnessDownHotkeyKey = 0x28;
+        svc.Save(m);
+
+        var reader = new SettingsService(path);
+        reader.Load();
+        var reloaded = reader.Current;
+
+        Assert.True(reloaded.BrightnessEnabled);
+        Assert.Equal(15, reloaded.BrightnessStepPercent);
+        Assert.Equal(3u, reloaded.BrightnessUpHotkeyMods);
+        Assert.Equal(0x26, reloaded.BrightnessUpHotkeyKey);
+        Assert.Equal(3u, reloaded.BrightnessDownHotkeyMods);
+        Assert.Equal(0x28, reloaded.BrightnessDownHotkeyKey);
+        Assert.True(reloaded.HasBrightnessHotkeys);
+    }
+
+    [Fact]
+    public void BrightnessIsOffAndUnboundOnAFreshConfig()
+    {
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        var svc = new SettingsService(path);
+        svc.Load();
+        var m = svc.Current;
+
+        Assert.False(m.BrightnessEnabled);
+        Assert.Equal(0u, m.BrightnessUpHotkeyMods);
+        Assert.Equal(0, m.BrightnessUpHotkeyKey);
+        Assert.Equal(10, m.BrightnessStepPercent);
+        Assert.False(m.HasBrightnessHotkeys);
+    }
+
+    [Fact]
+    public void OneDirectionBoundIsNotEnough()
+    {
+        // A brightness control that can only go down is worse than none.
+        var path = Path.Combine(Path.GetTempPath(), "PlithTests", Guid.NewGuid().ToString("N"), "config.ini");
+        var svc = new SettingsService(path);
+
+        var m = svc.Current.Clone();
+        m.BrightnessUpHotkeyMods = 3;
+        m.BrightnessUpHotkeyKey = 0x26;
+        svc.Save(m);
+
+        var reader = new SettingsService(path);
+        reader.Load();
+        Assert.False(reader.Current.HasBrightnessHotkeys);
+    }
+
+
+
 }
 
 internal sealed class TempIniDir : IDisposable

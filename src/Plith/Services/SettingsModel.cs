@@ -194,6 +194,27 @@ public sealed class SettingsModel
     /// <summary>True when both the modifier mask and the virtual key are set.</summary>
     public bool HasSummonHotkey => SummonHotkeyMods != 0 && SummonHotkeyKey != 0;
 
+    /// <summary>Off by default. New surfaces in this product ship off.</summary>
+    public bool BrightnessEnabled { get; set; }
+
+    /// <summary>How far one key press moves brightness, as a percentage of each display's own
+    /// span rather than of 0 to 100. DDC/CI does not require a minimum of zero.</summary>
+    public int BrightnessStepPercent { get; set; } = 10;
+
+    /// <summary>Modifier mask and virtual key for the brightness-up hotkey. Same layout as the
+    /// summon hotkey: Alt=1, Ctrl=2, Shift=4, Win=8. Both zero means unbound.</summary>
+    public uint BrightnessUpHotkeyMods { get; set; }
+    public int BrightnessUpHotkeyKey { get; set; }
+
+    public uint BrightnessDownHotkeyMods { get; set; }
+    public int BrightnessDownHotkeyKey { get; set; }
+
+    /// <summary>True only when BOTH directions are bound. One direction on its own is a
+    /// brightness control that cannot come back.</summary>
+    public bool HasBrightnessHotkeys =>
+        BrightnessUpHotkeyMods != 0 && BrightnessUpHotkeyKey != 0 &&
+        BrightnessDownHotkeyMods != 0 && BrightnessDownHotkeyKey != 0;
+
     /// <summary>Theme applied to both the Settings window and the OSD overlay.
     /// Auto follows the Windows apps-use-light-theme preference live.</summary>
     public ThemeMode Theme { get; set; } = ThemeMode.Dark;
@@ -236,6 +257,12 @@ public sealed class SettingsModel
         AutoStart = AutoStart,
         SummonHotkeyMods = SummonHotkeyMods,
         SummonHotkeyKey = SummonHotkeyKey,
+        BrightnessEnabled = BrightnessEnabled,
+        BrightnessStepPercent = BrightnessStepPercent,
+        BrightnessUpHotkeyMods = BrightnessUpHotkeyMods,
+        BrightnessUpHotkeyKey = BrightnessUpHotkeyKey,
+        BrightnessDownHotkeyMods = BrightnessDownHotkeyMods,
+        BrightnessDownHotkeyKey = BrightnessDownHotkeyKey,
         Theme = Theme,
         AccentThemeId = AccentThemeId,
         CustomAccentColor = CustomAccentColor,

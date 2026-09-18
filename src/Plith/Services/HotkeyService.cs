@@ -16,7 +16,22 @@ namespace Plith.Services;
 public sealed class HotkeyService : IDisposable
 {
     private const int WM_HOTKEY = 0x0312;
-    private const int HotkeyId = 1;
+    private readonly int _hotkeyId;
+
+    /// <param name="hotkeyId">Unique per window. Each instance owns its own message-only
+    /// window, so two instances could both use 1, but naming the id keeps a future
+    /// shared-window refactor from silently overwriting one binding with another.</param>
+    /// <param name="noRepeat">True for a hotkey that should fire once while held, which is
+    /// what the summon hotkey wants. False for brightness, where holding the key must keep
+    /// moving the value and the coalescing writer is what makes that safe.</param>
+    public HotkeyService(int hotkeyId = 1, bool noRepeat = true)
+    {
+        _hotkeyId = hotkeyId;
+        NoRepeat = noRepeat;
+    }
+
+    /// <summary>Whether a held key fires once or repeats.</summary>
+    public bool NoRepeat { get; }
 
     [Flags]
     public enum HotkeyMods : uint
@@ -65,7 +80,7 @@ public sealed class HotkeyService : IDisposable
 
         if (_isRegistered)
         {
-            _ = UnregisterHotKey(_source.Handle, HotkeyId);
+            _ = UnregisterHotKey(_source.Handle, _hotkeyId);
             _isRegistered = false;
         }
 
@@ -76,7 +91,8 @@ public sealed class HotkeyService : IDisposable
             _activeKey = 0;
             ok = true;
         }
-        else if (RegisterHotKey(_source.Handle, HotkeyId, mods | (uint)HotkeyMods.NoRepeat, (uint)vk))
+        else if (RegisterHotKey(_source.Handle, _hotkeyId,
+                                NoRepeat ? mods | (uint)HotkeyMods.NoRepeat : mods, (uint)vk))
         {
             _isRegistered = true;
             _activeMods = mods;
@@ -134,7 +150,7 @@ public sealed class HotkeyService : IDisposable
 
     private nint HwndHook(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {
-        if (msg == WM_HOTKEY && wParam.ToInt32() == HotkeyId)
+        if (msg == WM_HOTKEY && wParam.ToInt32() == _hotkeyId)
         {
             Pressed?.Invoke();
             handled = true;
@@ -150,7 +166,7 @@ public sealed class HotkeyService : IDisposable
         {
             if (_isRegistered)
             {
-                try { _ = UnregisterHotKey(_source.Handle, HotkeyId); } catch { }
+                try { _ = UnregisterHotKey(_source.Handle, _hotkeyId); } catch { }
                 _isRegistered = false;
             }
             _source.Dispose();
