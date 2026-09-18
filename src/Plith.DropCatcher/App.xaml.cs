@@ -11,6 +11,7 @@ public partial class App : Application, IDisposable
     private CatcherLog _log = null!;
     private CatcherWindow _window = null!;
     private CatcherClient? _client;
+    private DragSourceProbe? _probe;
     private Mutex? _single;
 
     protected override void OnStartup(StartupEventArgs e)
@@ -36,6 +37,19 @@ public partial class App : Application, IDisposable
             _log.Info($"DRAG-OUT PROBE. Integrity: {IntegrityLevel.Describe()}");
             var source = new DragOutWindow(_log, e.Args[1]);
             source.Show();
+            return;
+        }
+
+        if (e.Args.Length == 2 && e.Args[0].Equals("--dragsource", StringComparison.OrdinalIgnoreCase))
+        {
+            // The follow-on question, and the last one the outbound direction needs answered
+            // before it can be designed: the drag the catcher would have to start belongs to a
+            // press that landed in ANOTHER process, because the tile the person pressed is
+            // Plith's. Run this one at Medium — the level the catcher really runs at — and press
+            // somewhere else. DragSourceProbe carries the whole explanation.
+            _log.Info($"DRAG-SOURCE PROBE. Integrity: {IntegrityLevel.Describe()}");
+            _probe = new DragSourceProbe(_log, e.Args[1]);
+            _probe.Start();
             return;
         }
 
@@ -120,6 +134,8 @@ public partial class App : Application, IDisposable
     {
         _client?.Dispose();
         _client = null;
+        _probe?.Dispose();
+        _probe = null;
         _single?.Dispose();
         _single = null;
         GC.SuppressFinalize(this);
