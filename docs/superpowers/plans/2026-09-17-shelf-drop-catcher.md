@@ -503,6 +503,43 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 - [x] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
 - [ ] **Step 3: Plan the rest only then.** It IS blocked too, so this is now the live branch: the catcher has to serve as the drag SOURCE as well. Still deliberately unplanned here — it is a different design and deserves its own plan rather than a guess appended to this one.
 
+### Task 8: The probe that answers whether the stand-aside can work at all
+
+**Designed and agreed on 18.09.2026, not yet built.** It was worked out in a session that then
+went elsewhere, so it is written here rather than left in a transcript nobody will read.
+
+**The question.** The catcher has to become the drag SOURCE. But the press that starts the drag
+lands on PLITH's window, and only then does the notch stand aside and the catcher take its
+place. So the catcher would be calling `DoDragDrop` for a gesture whose button went down in a
+different process. Nothing in Task 7's measurement says whether OLE's drag loop will pick that
+up: Task 7 measured a press on the catcher's OWN window.
+
+**The probe.** A mode in `Plith.DropCatcher` that shows nothing until it sees, by the
+`GetAsyncKeyState` polling the catcher already does, that the left button is down and was
+pressed somewhere else. It then puts itself under the cursor and calls `DoDragDrop` with a test
+file, logging the return value.
+
+Run it, press and hold on any ordinary window, drag toward the top of the screen, and release
+over an Explorer window. `dropcatcher.log` has the answer, and `IntegrityLevel.cs` confirms the
+probe ran at Medium.
+
+**The control already exists**, which is what makes this worth one run: Task 7 measured the same
+binary returning `Copy, Move` from Medium with the press on its own window. The only variable
+being changed is where the press landed.
+
+**If it returns `None`, stop.** The press-a-tile interaction is dead and the design question
+becomes a different one, which is exactly what this plan would rather find out before a spec
+than after one.
+
+Two things deliberately NOT probed: whether Plith hiding the notch mid-press disturbs anything,
+which is the implementation and only matters if this passes, and the OLE loop's capture
+behaviour in isolation, which the return value already answers.
+
+**Verification got cheaper since this was written.** From a console session a gesture can be
+synthesised with `keybd_event` and `mouse_event`, and the screen can be photographed with
+`Graphics.CopyFromScreen`. See `docs/PHASE6-VERIFICATION.md`. Neither works over Remote Desktop,
+and over RDP this probe is meaningless anyway.
+
 ---
 
 ## Self-Review
