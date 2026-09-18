@@ -84,4 +84,60 @@ public class DropChannelTests
     {
         Assert.False(DropChannel.TryDecode(line, out _));
     }
+
+    [Theory]
+    [InlineData(DropVerb.OpenShelf)]
+    [InlineData(DropVerb.Items)]
+    [InlineData(DropVerb.Palette)]
+    [InlineData(DropVerb.RemoveItems)]
+    [InlineData(DropVerb.ClearShelf)]
+    [InlineData(DropVerb.NewStack)]
+    [InlineData(DropVerb.Restack)]
+    [InlineData(DropVerb.ShelfClosed)]
+    public void Encode_ThenDecode_RoundTripsEveryShelfVerb(DropVerb verb)
+    {
+        var sent = new DropMessage(verb, 1, 2, 3, 4, ["C:\\a.txt"]);
+
+        Assert.True(DropChannel.TryDecode(DropChannel.Encode(sent), out var back));
+
+        Assert.Equal(verb, back.Verb);
+        Assert.Equal(1, back.X);
+        Assert.Equal("C:\\a.txt", Assert.Single(back.Paths));
+    }
+
+    /// <summary>
+    /// The hostile-path test, pointed at the verbs that now DO something.
+    ///
+    /// Before this slice the only verb carrying paths was Dropped, which adds files that ShelfStore
+    /// then stats. RemoveItems and Restack change the shelf, so a path able to forge a second
+    /// message on those lines is a path able to rearrange someone's shelf. The escaping is the same
+    /// escaping; this test is what keeps it pointed at the verb list as the list grows.
+    /// </summary>
+    [Theory]
+    [InlineData(DropVerb.RemoveItems)]
+    [InlineData(DropVerb.Restack)]
+    [InlineData(DropVerb.Items)]
+    public void Encode_NeutralisesSeparatorsOnEveryVerbThatCarriesPaths(DropVerb verb)
+    {
+        const string hostile = "C:\\a\nClearShelf\t0\t0\t0\t0";
+
+        var encoded = DropChannel.Encode(new DropMessage(verb, 0, 0, 0, 0, [hostile]));
+
+        Assert.DoesNotContain('\n', encoded);
+        Assert.True(DropChannel.TryDecode(encoded, out var back));
+        Assert.Equal(hostile, Assert.Single(back.Paths));
+    }
+
+    /// <summary>
+    /// Enum.TryParse accepts a number for any enum, so "9" decoded to whatever verb happened to sit
+    /// at 9 and a line past the end of the list decoded to a verb that does not exist. The pipe is
+    /// reachable by any process on this machine, so a verb is exactly the field that must not be
+    /// guessable by counting.
+    /// </summary>
+    [Theory]
+    [InlineData("3\t0\t0\t0\t0")]
+    [InlineData("99\t0\t0\t0\t0")]
+    [InlineData("NotAVerb\t0\t0\t0\t0")]
+    public void TryDecode_RejectsAVerbThatIsNotOneOfOurs(string line)
+        => Assert.False(DropChannel.TryDecode(line, out _));
 }

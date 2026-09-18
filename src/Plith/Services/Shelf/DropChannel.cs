@@ -15,8 +15,36 @@ public enum DropVerb
     /// <summary>Give it back.</summary>
     Hide,
 
-    /// <summary>Files were released on the catcher. The only verb that carries paths.</summary>
+    /// <summary>Files were released on the catcher.</summary>
     Dropped,
+
+    /// <summary>Plith has stood down for the shelf rather than for a drop. The rectangle to grow
+    /// out of travels in X/Y/W/H, the same way Show carries it.</summary>
+    OpenShelf,
+
+    /// <summary>One stack of the shelf. X is its index, Y is how many stacks there are in total,
+    /// and the paths are its items, newest first. Sent once per stack so a stack boundary needs
+    /// no separator inside a field.</summary>
+    Items,
+
+    /// <summary>The resolved theme, as seven values. See ShelfPaletteWire.</summary>
+    Palette,
+
+    /// <summary>Catcher to Plith: take these off the shelf.</summary>
+    RemoveItems,
+
+    /// <summary>Catcher to Plith: empty the shelf.</summary>
+    ClearShelf,
+
+    /// <summary>Catcher to Plith: put an empty stack at the front for the next drop.</summary>
+    NewStack,
+
+    /// <summary>Catcher to Plith: move these paths into the stack at index X. An index equal to
+    /// the stack count appends a new one.</summary>
+    Restack,
+
+    /// <summary>Catcher to Plith: the shelf surface is gone, put the notch back.</summary>
+    ShelfClosed,
 }
 
 /// <param name="X">Physical screen pixels, not DIP, and the same for Y/W/H.
@@ -72,7 +100,19 @@ public static class DropChannel
 
         var parts = line.Split(Separator);
         if (parts.Length < 5) return false;
+        // A NAME round trip, not Enum.IsDefined alone, and the difference is the whole check.
+        //
+        // TryParse accepts a NUMBER for any enum. "3" decodes to Dropped, which IsDefined would
+        // happily confirm, so IsDefined by itself lets a verb through that was reached by
+        // counting rather than by name. But IsDefined is still needed alongside the round trip:
+        // for a value with no name at all, such as 99, ToString falls back to printing the
+        // number itself, so a name round trip on its own would let "99" through too. A pipe every
+        // process on this machine can write is precisely the place a verb must not be reachable
+        // by counting, so both checks are required: the value must be one of ours, and the sender
+        // must have written its name rather than its number.
         if (!Enum.TryParse<DropVerb>(parts[0], out var verb)) return false;
+        if (!Enum.IsDefined(verb)) return false;
+        if (!string.Equals(verb.ToString(), parts[0], StringComparison.Ordinal)) return false;
 
         var numbers = new double[4];
         for (var i = 0; i < 4; i++)

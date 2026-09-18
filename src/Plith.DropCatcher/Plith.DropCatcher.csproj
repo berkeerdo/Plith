@@ -33,6 +33,12 @@
     <Compile Include="..\Plith\Services\Shelf\DropChannel.cs">
       <Link>Shared\DropChannel.cs</Link>
     </Compile>
+    <!-- The theme crosses the wire, and both ends need the same seven fields in the same order.
+         Linked for the same reason DropChannel is: two copies of a positional format drift, and
+         the drift shows as the shelf painted in colours the product never uses. -->
+    <Compile Include="..\Plith\Services\Shelf\ShelfPaletteWire.cs">
+      <Link>Shared\ShelfPaletteWire.cs</Link>
+    </Compile>
     <!-- The catcher stands in for the notch, so it has to grow the same shape. Linked rather
          than reimplemented: two copies of a morph drift, and the drift would show as the
          stand-in visibly not being the thing it replaced. -->
