@@ -6,9 +6,13 @@ Modern Windows audio OSD with Voicemeeter-first design + integrated media contro
 > **Corrected 18.09.2026, by measuring rather than reading.** This section said 0.1.5 and
 > described Phases 5 and 6 as unmerged. `main` is at **0.1.8** and already carries `CardHost`,
 > `WidgetFrame` and `NotchGeometry`, so both phases ARE merged. The only unmerged work is the
-> shelf. Test count on `main`, run rather than quoted: **398** (381 in `Plith.Tests`, 17 in
+> shelf. Close Plith before building: a running instance locks `Plith.exe` and `Plith.dll`,
+> and `Plith.DropCatcher.exe` outlives it and locks its own copies.
+>
+> (Superseded in part: the media fix below is now merged, so `main` has moved on. 381 in
 > `Plith.Installer.Tests`). A stale "344 tests" further down has been removed rather than
-> corrected, because a count in prose goes stale again the next time anyone adds a test. The
+> corrected, and this banner no longer quotes one either: a count in prose goes stale the next
+> time anyone adds a test. Run `dotnet test Plith.slnx -m:1 --nologo` and read it. The
 > paragraphs that follow are kept: their findings are still true, only their merge status was
 > wrong.
 
@@ -102,6 +106,43 @@ only be corrected from the log line each commit writes.
 Two things are deliberately left undone: the ambient row that slice 3 made unreachable is
 still wired (its removal is gated on slice 3 being driven on hardware first), and
 `Palette.Dark` and `OsdPalette.Dark` still each declare the accent green.
+
+**Brightness is code-complete on `feature/brightness`, and unusually well measured.** A
+brightness key changes the display and shows Plith's OSD. Two independent halves: Windows
+raises `WmiMonitorBrightnessEvent` on any brightness change of a built-in panel, which is the
+whole feature on a laptop and needs no keyboard hook, and Plith's own pair of hotkeys drives
+DDC/CI on an external monitor, which is the only possible trigger on a desktop because DDC/CI
+never announces anything. The roadmap's old entry for this was wrong twice: `VK_BRIGHTNESS_*`
+does not exist in the Windows SDK, and no hook is needed.
+
+Measured rather than assumed, and each one changed the design: a DDC/CI write costs 56 ms and a
+read the same, so writes coalesce to the newest value and the level is cached for the length of
+a gesture; `GetMonitorCapabilities` returns false with caps=0 on a monitor whose brightness
+works, so capability is decided by attempting a read; and **inside a Remote Desktop session no
+physical display is reachable at all**, which is why discovery reruns rather than deciding once
+at startup. That last one also means no hardware check of this feature is meaningful over RDP.
+
+**Four defects were found by running it, with a green build behind every one.** The hotkey
+capture wrote a brightness combination into the summon binding too, so one direction silently
+lost its key to Windows. An event in notch mode never reaches the card stack, so the brightness
+change drew the volume HUD until the HUD gained a brightness row. The card raised its visibility
+before its show request, which put one frame of the volume bar on screen. And every key press
+asked the monitor three times when once would do, on the UI thread, which is what made the key
+feel heavy. The OSD **can** be photographed from a console session, which is how the second one
+was found; it cannot over RDP, which is what the earlier phases recorded.
+
+Verified on hardware: both directions, holding a key, the HUD's appearance. Not verified and
+cannot be here: everything to do with a laptop panel, both the sense half and the WMI write
+path, because this machine is a desktop. `docs/PHASE6-VERIFICATION.md` carries the ledger.
+
+**Diagnostics grew with it.** The log rotates at 512 KB instead of being deleted at startup, the
+brightness path is traced with a held key summarised rather than logged per write, `CardHost`
+reports its visible set, and the tray offers "Create diagnostic bundle": a zip on the Desktop
+with both logs and a snapshot of the machine, including whether the session is remote.
+
+**The media track-change fix is merged into `main`.** "Show on track change" used to ask only
+whether a session existed, so seeking, pausing, and Windows moving the session to a paused
+player all popped the OSD. Verified on hardware before merging.
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).

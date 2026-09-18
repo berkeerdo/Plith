@@ -1356,3 +1356,24 @@ backslashes, a backslash escapes the next character in WQL, and an unescaped nam
 nothing silently, which looks exactly like a panel that is not there. It is escaped, and the
 reason is in the code.
 
+### How this was verified without asking anyone to press anything
+
+Both techniques are new to this repo and both only work from a **console session**. They are
+written down because the whole of today's brightness verification rested on them, and the next
+person to need them should not have to invent them again.
+
+**Synthesising a hotkey.** `keybd_event` from PowerShell fires a combination that
+`RegisterHotKey` responds to, so a global hotkey can be tested without a human at the keyboard.
+Repeating the key-down at roughly 31 per second stands in for auto-repeat, which is what turned
+"holding it feels slow" into a number: 26 steps in 2.3 s before the level cache, 53 after.
+
+**Photographing the OSD.** `Graphics.CopyFromScreen` captures the OSD from a console session.
+The earlier phases recorded that the OSD cannot be captured over RDP, which is true and is why
+nobody tried; it does not follow that it cannot be captured at all. A screenshot is what proved
+the notch was drawing the volume HUD for a brightness key, after the log had said, correctly,
+that the card stack held only the brightness card. The log was describing a surface that was not
+the one on screen.
+
+The general lesson is the second one: a log can be perfectly truthful about the wrong thing.
+When a log and a person disagree, photograph the screen before trusting either.
+
