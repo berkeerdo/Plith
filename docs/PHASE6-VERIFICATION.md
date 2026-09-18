@@ -1301,3 +1301,44 @@ From a console session, these six are still open:
 
 **The sense half is unverified and stays that way.** There is no laptop here, so
 `WmiMonitorBrightnessEvent` has never fired in this product. On a desktop it cannot.
+
+### Verified on hardware, 18.09.2026
+
+Driven on the running product from a console session, with both key presses synthesised and
+the result read out of the log rather than watched.
+
+- Both directions bind and both move the monitor: `brighter Ctrl+Alt+Up=True, dimmer
+  Ctrl+Alt+Down=True`, then `Brighter 70 to 80.` and `Dimmer 80 to 70.`
+- Holding a key produces one line and one summary, not one line per write:
+  `held Brighter: 3 steps, 30 to 60.`
+- A brightness change shows the brightness card alone: `Visible set: brightness (exclusive).`
+  with no intermediate frame containing the others.
+
+Three defects were found doing it, all with a green build and green tests behind them:
+
+1. **Capturing the dimmer hotkey also wrote it into the summon binding.** SettingsWindow kept
+   one pair of scratch fields for the capture in progress and saved the summon hotkey straight
+   out of them. The summon service then claimed Ctrl+Alt+Down at startup and Windows refused
+   it to the brightness service, so the key summoned the OSD instead of dimming. Both of the
+   symptoms reported by hand were this one bug.
+2. **A brightness change raised the whole card stack**, because the Audio card is always
+   visible. `ShowRequest.Exclusive` now lets a card ask for the surface alone.
+3. **The card raised its visibility change before its show request**, so the first recompute
+   contained every card and the second contained one. One frame of the volume bar.
+
+None of the three was reachable from the suite. The first needed two key presses and a
+registry of who owns a hotkey; the second and third needed to know what was on screen, which
+is why CardHost now reports its visible set into the log.
+
+### Still not built: the internal panel write path
+
+The spec describes an internal-panel device using `WmiMonitorBrightnessMethods.WmiSetBrightness`
+alongside the DDC/CI one. The implementation plan's file list dropped it and nothing was built,
+which was not noticed until someone asked whether this works on a laptop.
+
+So on a laptop today: pressing the machine's own brightness key should show Plith's OSD,
+because the sense half is wired, while Plith's own hotkeys will find no device to write to. A
+built-in panel is not normally reachable over DDC/CI, and discovery creates DDC devices only.
+
+Both halves of that sentence are unverified. There is no laptop here.
+
