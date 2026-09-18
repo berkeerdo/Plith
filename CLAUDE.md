@@ -38,6 +38,29 @@ composited path and that the D3D veto is dead code for such titles.
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).
 
+**Phase 7 slice 1 (the Shelf) code-complete on `feature/shelf-drop-catcher`, not yet merged.**
+A file dropped on the notch now lands on a shelf page. The roadmap called this blocked, and it
+was: UIAccess puts Plith at High integrity and UIPI refuses Explorer's cross-integrity drag, by
+both the OLE and the `WM_DROPFILES` route. It works through a second process — `Plith.DropCatcher`,
+Medium integrity, launched via Explorer so it does not inherit Plith's token — which takes the
+notch's place for the duration of a drag and hands the paths back over a named pipe with an
+explicit ACL.
+
+**Verified on hardware, unusually for this repo.** The drop, the round trip, the shelf page and
+persistence were all driven on a running build; three defects were found that way with a green
+build behind them (a window WPF did not consider shown, a layered window nothing could capture,
+and one approach threshold used for two different questions). Two more came from pointing
+`check-contrast.ps1` at colours set in code, which it could not see before and now can.
+
+**Dragging back OUT is blocked too, measured by controlled comparison:** the same binary returns
+`None` from High with nothing copied and `Copy, Move` from Medium with the file landing. So the
+catcher must become the drag source as well — a different design, deliberately unplanned. That
+plus the Alcove/Dropover-style shelf actions the user asked for (clear, remove, open in Explorer,
+stacking, real shell icons) is the next slice and needs its own plan.
+
+Full ledger: `docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md` (Tasks 1-6 done, Task 7
+measured), and `docs/ROADMAP.md` Phase 7 for every measurement behind it.
+
 **Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
 Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged
 behaviour, moved behind the seam) and Ambient Notch — a 190 DIP wide shape of
