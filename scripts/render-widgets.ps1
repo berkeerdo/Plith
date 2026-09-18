@@ -303,6 +303,13 @@ $stack1 = [string[]](($fixtures[4..5] | ForEach-Object { Join-Path $shelfDir $_ 
 $surfaceModel.SetStack(0, 2, $stack0)
 $surfaceModel.SetStack(1, 2, $stack1)
 
+# One tile selected, so the accent ring (AccentBrush, the one place this control paints the
+# accent) is actually in the saved renders. Without this none of the three showed it at all, and
+# the white-accent render exists specifically to catch an accent-on-surface contrast defect it
+# could not catch on an empty selection. The folder tile, stack0's only real tile beside its
+# overflow count, so the ring is visible next to that tile in the same picture.
+$surfaceModel.Select($shelfFolder, $false)
+
 # 384 x 224. Width was the arithmetic guess (five 64 DIP tiles, four 8 DIP gaps, two 16 DIP
 # margins) and the render confirmed it exactly - a five-stack, no-overflow model fits with the
 # last tile's icon and full file name clear of the rounded corner. Height was NOT: the arithmetic

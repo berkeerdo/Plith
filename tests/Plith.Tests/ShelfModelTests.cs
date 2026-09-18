@@ -98,6 +98,54 @@ public sealed class ShelfModelTests
         Assert.Equal("C:\\b.txt", Assert.Single(model.Selection));
     }
 
+    /// <summary>
+    /// Index 1 arriving before index 0 is exactly the reordering DropChannelServer's
+    /// fire-and-forget sends can produce (see SetStack's own comment). The model has no way yet
+    /// to know the set's shape when this happens, so it must not guess a position for it; it
+    /// waits rather than placing the message somewhere it might not belong.
+    /// </summary>
+    [Fact]
+    public void SetStack_ArrivingOutOfOrderDoesNotProduceAMisplacedStack()
+    {
+        var model = new ShelfModel();
+
+        model.SetStack(1, 2, ["C:\\b.txt"]);
+        Assert.False(model.IsComplete);
+        Assert.Empty(model.Stacks);
+
+        model.SetStack(0, 2, ["C:\\a.txt"]);
+        Assert.False(model.IsComplete);
+
+        model.SetStack(1, 2, ["C:\\b.txt"]);
+        Assert.True(model.IsComplete);
+        Assert.Equal("C:\\a.txt", model.Stacks[0][0].Path);
+        Assert.Equal("C:\\b.txt", model.Stacks[1][0].Path);
+    }
+
+    /// <summary>
+    /// A message from a delivery that has already been superseded by a new one must not be
+    /// folded into the new, smaller delivery just because it happens to arrive after that
+    /// delivery's own index-0 message. Its stale `total` (2, from the old delivery) no longer
+    /// matches what the model now expects (1, from the new one), which is what lets this be
+    /// recognised as not belonging here rather than accepted as if it still applied.
+    /// </summary>
+    [Fact]
+    public void SetStack_StaleMessageFromAPreviousSetIsIgnored()
+    {
+        var model = new ShelfModel();
+        model.SetStack(0, 2, ["C:\\a.txt"]);
+        model.SetStack(1, 2, ["C:\\b.txt"]);
+        Assert.True(model.IsComplete);
+
+        model.SetStack(0, 1, ["C:\\c.txt"]);
+        Assert.True(model.IsComplete);
+
+        model.SetStack(1, 2, ["C:\\b.txt"]);
+
+        Assert.True(model.IsComplete);
+        Assert.Equal("C:\\c.txt", Assert.Single(model.Stacks)[0].Path);
+    }
+
     private static ShelfModel Loaded()
     {
         var model = new ShelfModel();

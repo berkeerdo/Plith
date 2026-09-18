@@ -31,8 +31,12 @@
          render harness proved once already (ShelfWidget) that anything reaching through
          Application renders in colours the product never shows. -->
 
+    <!-- Only the BOTTOM corners are round, the same rule NotchGeometry.BottomRoundedClip states
+         for the notch itself: this page grows out of the notch and is anchored at the same top
+         screen edge (OpenShelf carries the same X/Y/W/H rectangle Show does), and rounding the
+         top would carve two notches of desktop out of the edge the shape is part of. -->
     <Border x:Name="Surface"
-            CornerRadius="16"
+            CornerRadius="0,0,16,16"
             Background="{DynamicResource OsdSurfaceBrush}"
             BorderThickness="1"
             BorderBrush="{DynamicResource NotchTrack}">

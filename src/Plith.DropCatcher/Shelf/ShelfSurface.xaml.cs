@@ -214,7 +214,16 @@ public partial class ShelfSurface : UserControl
             Foreground = (Brush)FindResource("NotchInk"),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
-            TextWrapping = TextWrapping.Wrap,
+            // WrapWithOverflow, not Wrap. ShelfWidget settled on the surrounding shape here (two
+            // fixed lines, ellipsis-trimmed) and that shape is kept, but Wrap itself is the wrong
+            // half of the choice: it breaks a run with no space in it wherever it has to, so a
+            // rendered probe of this exact tile showed "screenshot.p" over "ng" and "invoice-202"
+            // over "6-09.xlsx", splitting a filename and a date mid-character. WrapWithOverflow
+            // still wraps at real word and hyphen boundaries (confirmed by rendering "Project
+            // assets" and "one-more.txt" beside it, unchanged), but lets an unbreakable run
+            // overflow its line instead of tearing it apart, where CharacterEllipsis then trims
+            // it. Verified by rendering both modes on the same two names side by side.
+            TextWrapping = TextWrapping.WrapWithOverflow,
             // A FIXED height, not a maximum: ShelfWidget's tiles found this the hard way. With a
             // maximum, a one-line name makes a shorter stack than a two-line one and neighbouring
             // tiles' icons land at different heights, visible in the render as a row that does
