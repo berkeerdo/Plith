@@ -5,6 +5,7 @@ namespace Plith.Cards;
 public enum ShowReason
 {
     AudioChange,
+    BrightnessChange,
     MediaChange,
     MediaCommand,
     SummonHotkey,
