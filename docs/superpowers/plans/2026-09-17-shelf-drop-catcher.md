@@ -501,12 +501,13 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 
 - [x] **Step 1: Measure it.** Done, and with a control: the same binary at HIGH returns `None` three times and copies nothing, at MEDIUM returns `Copy, Move` and the file lands. Integrity is the cause, not the probe.
 - [x] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
-- [ ] **Step 3: Plan the rest only then.** It IS blocked too, so this is now the live branch: the catcher has to serve as the drag SOURCE as well. Still deliberately unplanned here — it is a different design and deserves its own plan rather than a guess appended to this one.
+- [x] **Step 3: Plan the rest only then.** It IS blocked too, so the catcher has to serve as the drag SOURCE as well. Still deliberately unplanned here, and Task 8 has since narrowed what that plan may assume: the catcher can only start a drag for a press on its OWN window, so the stand-aside route this step originally implied is dead. Read Task 8 before designing anything on top of this step.
 
 ### Task 8: The probe that answers whether the stand-aside can work at all
 
-**Designed and agreed on 18.09.2026, not yet built.** It was worked out in a session that then
-went elsewhere, so it is written here rather than left in a transcript nobody will read.
+**Built and run on 18.09.2026. The answer is below, and it is no.** Designed in an earlier
+session that then went elsewhere, written down here rather than left in a transcript nobody
+would read, and measured the next day.
 
 **The question.** The catcher has to become the drag SOURCE. But the press that starts the drag
 lands on PLITH's window, and only then does the notch stand aside and the catcher take its
@@ -586,6 +587,39 @@ Task 7 Step 3 that the catcher can simply "serve as the drag SOURCE as well". It
 for a press on its OWN window, and that is the only shape left: the tile the person presses has to
 BE the catcher's window, not Plith's. That is a different design for the notch, not a detail, and
 it belongs in its own plan.
+
+#### Driving a drag gesture on this machine, and what fought it
+
+Five of the eight attempts at this measurement were lost to the harness rather than to the
+question, and every one of them failed SILENTLY: a run that aims at the wrong window still
+produces a plausible log line. Written down so the next hardware run starts from attempt six.
+
+- **Ask `qwinsta`, never `$env:SESSIONNAME`.** This session's environment said `RDP-Tcp#0` and the
+  session was in fact `console`, active, with no RDP connected. The variable is stamped when the
+  process starts and never updated. Believing it would have skipped a measurement that was
+  perfectly possible.
+- **`explorer.exe <path>` does not open Explorer here.** The default file manager on this machine
+  is Files, so the window that appears is `WinUIDesktopWin32WindowClass`, not `CabinetWClass`. A
+  script that opens a folder and then looks for `CabinetWClass` never finds the window it just
+  opened, and opens another one on every retry. That is what put a stream of folder windows on
+  the user's screen.
+- **Never match a window by a generic title.** Matching `Notepad` found the user's own open
+  document and dragged across it. Use a window the harness creates and owns, or match on a title
+  the harness itself set.
+- **Windows 11 answers `MainWindowHandle = 0`** for both Notepad and Explorer, because the process
+  that was started is a launcher and the window belongs to another one. Enumerate top-level
+  windows instead.
+- **Stage and gesture in ONE process, and re-verify the aim in the same breath as the press.**
+  Across two separate scripts another window came forward in the gap, twice, and took both the
+  press and the release. The check must abort, not warn.
+- **Topmost is not enough; minimise the competitor.** Pinning the staged windows `HWND_TOPMOST`
+  still lost to a maximised terminal on two runs. Minimising that one window for the eight seconds
+  of the gesture, and restoring it in a `finally`, is what finally made runs repeatable.
+- **`WindowFromPoint` returns the CHILD under the cursor**, never the top-level handle a window
+  was found by. Compare owning process ids.
+- **Let WPF paint before the UI thread disappears into a modal call.** Calling `DoDragDrop`
+  straight after `Show()` leaves the stand-in unrendered, which a screenshot caught and a log
+  never would. Same family as the catcher's own `Show()` trap in Task 2.
 
 ---
 
