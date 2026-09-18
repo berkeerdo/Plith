@@ -3,12 +3,21 @@
 Modern Windows audio OSD with Voicemeeter-first design + integrated media controls. Replaces Windows' aging volume flyout with a Mica/rounded overlay that works over fullscreen games and shows now-playing media inline.
 
 ## Status
-**Phases 1–4f shipped (0.1.5).** Voicemeeter + Windows Core Audio + SMTC media
+> **Corrected 18.09.2026, by measuring rather than reading.** This section said 0.1.5 and
+> described Phases 5 and 6 as unmerged. `main` is at **0.1.8** and already carries `CardHost`,
+> `WidgetFrame` and `NotchGeometry`, so both phases ARE merged. The only unmerged work is the
+> shelf. Test count on `main`, run rather than quoted: **398** (381 in `Plith.Tests`, 17 in
+> `Plith.Installer.Tests`). A stale "344 tests" further down has been removed rather than
+> corrected, because a count in prose goes stale again the next time anyone adds a test. The
+> paragraphs that follow are kept: their findings are still true, only their merge status was
+> wrong.
+
+**Phases 1–4f shipped.** Voicemeeter + Windows Core Audio + SMTC media
 integration, Settings UI with live theming, Game mode (UIAccess-signed BandWindow),
 free-form hotkey capture, mixer-agnostic endpoint pinning (Sonar / Unify / Wave Link
 channels), Win11-safe native flyout suppression, WH_KEYBOARD_LL hook.
 
-**Phase 5 code-complete on `feature/phase-5-cardhost`, not yet merged.** The OSD now
+**Phase 5 shipped in `main`.** The OSD now
 renders through a `CardHost` service that owns card visibility and is the single
 authority for when the OSD appears; today's OSD is an Audio card plus a Media card.
 Adds fullscreen-video auto-hide (on by default, never fires during games) and an
@@ -38,7 +47,7 @@ composited path and that the D3D veto is dead code for such titles.
 Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
 API deep integration).
 
-**Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
+**Phase 6 slice 1 shipped in `main`.**
 Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged
 behaviour, moved behind the seam) and Ambient Notch — a 190 DIP wide shape of
 configurable height (2–24 DIP) resting at top-center that **grows** into the full
@@ -56,8 +65,7 @@ appearing moved the anchor. It is now one surface whose width, height, corner ra
 shadow and content opacity all derive from a single expansion value, with the content
 fading in only after the shape has mostly settled. Spec §2 records why.
 
-**Phase 6 slice 2 (notch home view) code-complete on the same branch, not yet
-merged.** Hovering the resting notch now opens an ambient row above the OSD's other
+**Phase 6 slice 2 (notch home view) shipped in `main`.** Hovering the resting notch now opens an ambient row above the OSD's other
 cards — a clock, current weather, and battery — with each column collapsing
 independently (no battery column on a desktop; weather disappears with no location,
 no network, or a stale reading). A volume or media event never opens the row; only a
@@ -69,7 +77,7 @@ gained "Show weather" and "Weather location", hidden while Classic is selected.
 (The "Show ambient info on hover" toggle this slice added is gone — slice 3 made hover a
 peek and a click the way in, so it described a behaviour that no longer happens.)
 
-**Phase 6 slice 3 (notch widgets) code-complete on the same branch, not yet merged.**
+**Phase 6 slice 3 (notch widgets) shipped in `main`.**
 The open notch is now a fixed 356×116 frame with paged widgets — clock, weather, media,
 audio — reached by a two-finger swipe, a tilt wheel, `Shift`+wheel or a click on the page
 dots. An event no longer opens that frame: a volume key or a track change gets its own
@@ -77,14 +85,14 @@ short HUD shape instead, because an answer to something you did must not look li
 you went. Plith also gained its **first audio write path** — the audio widget's level is
 draggable, on Voicemeeter and on a Windows endpoint.
 
-**The Classic OSD and Settings redesign is code-complete too, through Task 7 of its plan.**
+**The Classic OSD and Settings redesign shipped in `main` too, through Task 7 of its plan.**
 Every icon in the product is now drawn geometry rather than Segoe MDL2, and the
 accessibility lint fails the build on any that are not — in code-behind as well as XAML,
 which was the rule's own blind spot on the day it was written. The classic card is sized by
 its fullest row (300 DIP, 224 compact), titles scroll rather than ellipse, and Settings has
 a grouped left rail and a preview that finally knows the notch exists.
 
-**None of it is verified on a running build.** Build, 344 tests and the lint are green, and
+**None of it is verified on a running build.** Build, the tests and the lint are green, and
 none of that reaches any of it: the suite is not STA, and the OSD renders in a layered
 window nothing can capture over RDP. Slice 2 shipped equally green and then crashed on the
 first hover. Full ledgers in `docs/PHASE6-VERIFICATION.md` §15 and §16; the highest-risk
