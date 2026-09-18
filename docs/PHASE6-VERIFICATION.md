@@ -1330,7 +1330,7 @@ None of the three was reachable from the suite. The first needed two key presses
 registry of who owns a hotkey; the second and third needed to know what was on screen, which
 is why CardHost now reports its visible set into the log.
 
-### Still not built: the internal panel write path
+### The internal panel write path: built, unverifiable here
 
 The spec describes an internal-panel device using `WmiMonitorBrightnessMethods.WmiSetBrightness`
 alongside the DDC/CI one. The implementation plan's file list dropped it and nothing was built,
@@ -1341,4 +1341,18 @@ because the sense half is wired, while Plith's own hotkeys will find no device t
 built-in panel is not normally reachable over DDC/CI, and discovery creates DDC devices only.
 
 Both halves of that sentence are unverified. There is no laptop here.
+
+**Built on 18.09.2026, and still unverified.** `WmiBrightnessDevice` now reads
+`WmiMonitorBrightness` and writes through `WmiMonitorBrightnessMethods.WmiSetBrightness`, and
+discovery offers built-in panels ahead of DDC/CI displays because on a laptop the panel is
+"the screen". Every line of it is reasoned from the documentation rather than measured.
+
+What could be measured was: on this desktop the internal-panel path finds **0 panels** and
+discovery still returns the same single DDC/CI monitor, so the addition changes nothing here.
+That is the whole of what this machine can say about it.
+
+The trap most likely to bite on a laptop is the WQL escaping. An instance name is full of
+backslashes, a backslash escapes the next character in WQL, and an unescaped name matches
+nothing silently, which looks exactly like a panel that is not there. It is escaped, and the
+reason is in the code.
 

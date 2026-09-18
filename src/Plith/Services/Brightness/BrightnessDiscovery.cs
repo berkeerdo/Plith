@@ -30,7 +30,10 @@ public static class BrightnessDiscovery
     /// </summary>
     public static IReadOnlyList<IBrightnessDevice> Discover()
     {
-        var candidates = new List<IBrightnessDevice>();
+        // The built-in panel first, because on a laptop it is "the screen" and the first device
+        // is the one a step is measured from and the one the OSD reports. On a desktop this
+        // returns nothing and the order is moot.
+        var candidates = new List<IBrightnessDevice>(WmiBrightnessDevice.Enumerate());
 
         try
         {
