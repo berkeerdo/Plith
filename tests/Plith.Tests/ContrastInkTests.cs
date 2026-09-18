@@ -136,4 +136,127 @@ public class ContrastInkTests
             "the reported pairing should be far below any threshold");
         Assert.True(ContrastInk.ContrastRatio(palePink, ContrastInk.On(palePink)) >= 4.5);
     }
+
+    /// <summary>
+    /// RingOn is not merely allowed to still clear 3:1 after the raw accent already did, it must
+    /// return the exact same colour. This is the distinction the earlier fix round got wrong: a
+    /// derivation that always ran (TrackOn, which ignores the accent entirely) took a lime accent
+    /// already at 8.87:1 down to a dull 3.03:1 grey for a threshold that colour had never failed.
+    /// Asserting equality here, not merely "still passes", is what would have caught that.
+    /// </summary>
+    [Fact]
+    public void RingOn_ReturnsTheAccentUnchangedWhenItAlreadyClearsTheThreshold()
+    {
+        var accent = Hex("#A3E635");
+        var surface = Hex("#243409");
+
+        Assert.True(ContrastInk.ContrastRatio(accent, surface) >= 3.0,
+            "test setup: this pair must already clear the threshold");
+        Assert.Equal(accent, ContrastInk.RingOn(accent, surface));
+    }
+
+    /// <summary>The reported case, as measured: white on the near-white surface the Dark /
+    /// #FFFFFF palette resolves to, at 1.25:1 in the shelf's own render.</summary>
+    [Fact]
+    public void RingOn_WalksAnAccentThatFailsUntilItClearsTheThreshold()
+    {
+        var accent = Colors.White;
+        var surface = Hex("#E6E6E6");
+
+        Assert.True(ContrastInk.ContrastRatio(accent, surface) < 3.0,
+            "test setup: this pair must start below the threshold");
+
+        var ring = ContrastInk.RingOn(accent, surface);
+
+        Assert.NotEqual(accent, ring);
+        Assert.True(ContrastInk.ContrastRatio(surface, ring) >= 3.0,
+            $"ring on white was {ContrastInk.ContrastRatio(surface, ring):F2}:1");
+    }
+
+    /// <summary>
+    /// Hue and saturation are the whole reason RingOn exists instead of TrackOn: only lightness
+    /// may move. Compared through AccentTheme.RgbToHsl rather than by eye, with a small tolerance
+    /// for the rounding an RGB round trip through a byte-quantised colour introduces.
+    /// </summary>
+    [Fact]
+    public void RingOn_PreservesHueAndSaturationThroughTheWalk()
+    {
+        var accent = Hex("#3D7A22");
+        var surface = accent;   // guarantees a 1:1 ratio, forcing the walk
+
+        var ring = ContrastInk.RingOn(accent, surface);
+
+        var (accentHue, accentSat, _) = AccentTheme.RgbToHsl(accent);
+        var (ringHue, ringSat, _) = AccentTheme.RgbToHsl(ring);
+
+        Assert.True(Math.Abs(accentHue - ringHue) < 1.0,
+            $"hue moved from {accentHue:F1} to {ringHue:F1}");
+        Assert.True(Math.Abs(accentSat - ringSat) < 0.02,
+            $"saturation moved from {accentSat:F3} to {ringSat:F3}");
+    }
+
+    /// <summary>Direction one: a light surface must push a failing accent DARKER, never
+    /// lighter.</summary>
+    [Fact]
+    public void RingOn_DarkensAgainstALightSurfaceWhenTheAccentIsTooPale()
+    {
+        var accent = Hex("#FFE082");
+        var surface = Colors.White;
+
+        Assert.True(ContrastInk.ContrastRatio(accent, surface) < 3.0, "test setup");
+
+        var ring = ContrastInk.RingOn(accent, surface);
+        var (_, _, accentLightness) = AccentTheme.RgbToHsl(accent);
+        var (_, _, ringLightness) = AccentTheme.RgbToHsl(ring);
+
+        Assert.True(ringLightness < accentLightness,
+            "a pale accent on a light surface must move darker, not lighter");
+        Assert.True(ContrastInk.ContrastRatio(surface, ring) >= 3.0);
+    }
+
+    /// <summary>Direction two: a dark surface must push a failing accent LIGHTER, never
+    /// darker, so the direction choice is pinned rather than accidentally correct for only one
+    /// case.</summary>
+    [Fact]
+    public void RingOn_BrightensAgainstADarkSurfaceWhenTheAccentIsTooDeep()
+    {
+        var accent = Hex("#1B0E06");
+        var surface = Colors.Black;
+
+        Assert.True(ContrastInk.ContrastRatio(accent, surface) < 3.0, "test setup");
+
+        var ring = ContrastInk.RingOn(accent, surface);
+        var (_, _, accentLightness) = AccentTheme.RgbToHsl(accent);
+        var (_, _, ringLightness) = AccentTheme.RgbToHsl(ring);
+
+        Assert.True(ringLightness > accentLightness,
+            "a deep accent on a dark surface must move lighter, not darker");
+        Assert.True(ContrastInk.ContrastRatio(surface, ring) >= 3.0);
+    }
+
+    /// <summary>
+    /// The case that made the lightness bound and the direction fallback necessary in the first
+    /// place, found by search rather than by guessing: pure blue against a mid-grey surface. The
+    /// surface reads as dark (luminance 0.30, under the 0.5 split), so the preferred direction is
+    /// brighten, and brighten alone tops out at 1.75:1 even walked to its ceiling, confirmed by
+    /// calling the private walk directly during investigation; blue cannot get much brighter than
+    /// a pale lavender before it stops being distinguishable from the surface at all. What this
+    /// test holds RingOn to is only its public contract: it must terminate, and it must return a
+    /// colour that actually clears the threshold, which is only possible if the OTHER direction
+    /// was tried rather than the function giving up or spinning.
+    /// </summary>
+    [Fact]
+    public void RingOn_TriesTheOtherDirectionWhenThePreferredOneCannotReachTheThreshold()
+    {
+        var accent = Colors.Blue;
+        var surface = Color.FromRgb(150, 150, 150);
+
+        Assert.True(ContrastInk.ContrastRatio(accent, surface) < 3.0, "test setup");
+
+        var ring = ContrastInk.RingOn(accent, surface);
+
+        Assert.NotEqual(accent, ring);
+        Assert.True(ContrastInk.ContrastRatio(surface, ring) >= 3.0,
+            $"ring on blue against grey150 was {ContrastInk.ContrastRatio(surface, ring):F2}:1");
+    }
 }
