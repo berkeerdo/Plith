@@ -16,7 +16,7 @@
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <!-- Two rows, never both. Which one is showing is set from code, and the control's own size
+    <!-- Three rows, never more than one. Which one is showing is set from code, and the control's own size
          changes with it - a HUD carrying a media row needs the width for a title and the height
          for two lines beside the art, and one size that fitted both would be the wrong size for
          each. The notch's surface follows this control's measurement, so changing it here is all
@@ -106,6 +106,50 @@
             </Border>
 
             <TextBlock x:Name="LevelText" Grid.Column="2"
+                       MinWidth="38" TextAlignment="Right"
+                       FontSize="12"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       VerticalAlignment="Center" />
+        </Grid>
+
+        <!-- Brightness. The volume row's shape with the one control taken out: this answers a
+             key press and there is nothing here to press back. The sun is inert for the same
+             reason the transport is absent from the media row.
+
+             Before this row existed, a brightness change fell through PickHudKind's default and
+             drew the VOLUME hud, so pressing a brightness key showed the speaker and the volume
+             level. The card stack had the right answer all along; in notch mode an event never
+             reaches the card stack. -->
+        <Grid x:Name="BrightnessRow" Margin="16,0" VerticalAlignment="Center" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <!-- Margin matches the width the speaker's button adds on the volume row, so the two
+                 HUDs put their bar in the same place and switching between them does not shift
+                 the one thing the eye is tracking. -->
+            <Viewbox Grid.Column="0" Width="19" Height="19" Margin="3,0">
+                <Canvas Width="24" Height="24">
+                    <Path Data="{StaticResource IconBrightness}"
+                          Stroke="{DynamicResource NotchInk}"
+                          StrokeThickness="1.6"
+                          StrokeLineJoin="Round"
+                          StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                </Canvas>
+            </Viewbox>
+
+            <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource NotchTrack}">
+                <Border x:Name="BrightnessFill"
+                        HorizontalAlignment="Left"
+                        CornerRadius="3"
+                        Background="{DynamicResource OsdAccent}" />
+            </Border>
+
+            <TextBlock x:Name="BrightnessText" Grid.Column="2"
                        MinWidth="38" TextAlignment="Right"
                        FontSize="12"
                        Foreground="{DynamicResource NotchInkMuted}"

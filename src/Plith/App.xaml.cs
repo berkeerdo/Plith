@@ -123,7 +123,8 @@ public partial class App : Application
                                () => _weatherService.Current,
                                _orchestrator.TryToggleMute,
                                () => _mediaSession.TryOpenSourceApp(),
-                               () => _microphone.Current);
+                               () => _microphone.Current,
+            brightness: _brightnessCard.Vm);
 
 
         // Marshalled, because the endpoint's notification arrives on a COM thread.
