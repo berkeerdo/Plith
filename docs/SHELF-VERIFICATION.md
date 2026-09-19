@@ -905,6 +905,15 @@ The first fixture put three files in a stack and produced four such false alarms
 fixture is now four files in two stacks of two, and the steps are ordered so that every tile a
 later step needs is still drawn.
 
+**Half of §3.4 is already answered, and the half that is answered is the one a reader would
+doubt.** The plus control does produce an empty column, and that column does announce itself:
+a run that got that far reported `empty stack announced: True`, with an element matching
+`Stack N, 0 items` in the tree. That matters because an empty stack writes **nothing** to
+`shelf.txt` — `ShelfStore.Save` skips empty stacks — so the page is the only witness the click
+has, and the driver's §3.4 step is built on that name. What is still unrun is the second half:
+a drag landing in the new column. A `FAIL` on §3.4 from a future run is therefore about the
+drag, not about whether the name exists.
+
 **The catcher owns more than one layered window.** Taking "the first layered catcher window"
 found the wrong one the moment a drag had run, and every check after it reported "not in the UIA
 tree". The shelf is now identified by the one whose tree announces itself as `Shelf, N stacks`.
