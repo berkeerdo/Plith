@@ -85,8 +85,27 @@ this needed: `docs/SHELF-VERIFICATION.md` §5.
 
 **Verified on hardware for slice 1's plumbing only.** Slice 2 builds clean, passes every lint, and
 renders correctly offscreen in both themes and three accents. None of that presses a key, drags
-a tile, or runs a screen reader. That still needs a person, because synthetic input cannot reach
-a UIAccess window.
+a tile, or runs a screen reader. ~~That still needs a person, because synthetic input cannot reach
+a UIAccess window.~~ **Wrong, and about a different window** — see below.
+
+**The shelf CAN be pressed by a script, and pressing it found a defect immediately (2026-09-19).**
+The "needs a person" premise is true of Plith's own OSD, a UIAccess window at High integrity, and
+the shelf is not that window: it belongs to `Plith.DropCatcher` at **Medium**, where UIPI blocks
+nothing. UI Automation reads its whole tree and `SendInput` drives it, over Remote Desktop. The
+instrument is `scripts/drive-shelf.ps1`. §3.1, §3.2 and §3.9 of `docs/SHELF-VERIFICATION.md` are
+now RUN and passing, along with the tile context menu.
+
+**What it found:** a tile answered a pointer only where its icon or label painted and was dead
+everywhere else, **including its exact centre** — no hover affordance, no selection, and no press,
+so no drag could start there either. One missing `Background = Brushes.Transparent` (WPF
+hit-tests a Transparent brush but not a null one, a rule `ShelfWindow.xaml` states in its own
+comment). Fixed, with a `tile-hit` check in `render-widgets.ps1` that fails the build if it
+returns. Every gate was green before the fix as well, which is this branch's recurring lesson.
+Record: `docs/SHELF-VERIFICATION.md` §3.10.
+
+That makes **three** claims in these documents inherited from the OSD's notes and applied to the
+shelf unmeasured: layered windows cannot be captured, Remote Desktop cannot capture them, and
+nothing can press them. All three were false here. The pattern is the finding.
 
 **But it no longer needs a physical console session to be LOOKED at.** The shelf's centred
 surface was captured live over Remote Desktop on 2026-09-19, which this repo's documents said

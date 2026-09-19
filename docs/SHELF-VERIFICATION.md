@@ -79,6 +79,25 @@ having to suspect it.
 **What is genuinely unchanged**: a person is still required to PRESS things, for the reason given
 above. Nothing here touches that.
 
+## The PRESSING half is false too, and for the third time the claim was about a different window (2026-09-19)
+
+The sentence directly above is wrong. It is true of Plith's own OSD — a **UIAccess** window at
+High integrity, which synthetic input genuinely cannot reach — and the shelf is not that window.
+The shelf belongs to `Plith.DropCatcher` at **Medium** integrity, and UIPI does not stand between
+one Medium process and another. Measured from an `rdp-tcp#0` session: UI Automation reads the
+shelf's whole tree with names and screen rectangles, `AutomationElement.FromPoint` resolves every
+element in it, and `SendInput` drives the window. The instrument is `scripts/drive-shelf.ps1` and
+the record is §3.10.
+
+That is three claims in this document, all inherited from the OSD's notes and applied to the
+shelf without ever being measured against it: that layered windows cannot be captured, that
+Remote Desktop cannot capture them, and now that nothing can press them. **The pattern is the
+finding.** Whoever reads the next such sentence here should assume it is about a different window
+until they have measured it against this one.
+
+The first thing pressing it found was a tile that answered a pointer only where its icon or label
+painted, and was dead in the middle. See §3.10.
+
 ---
 
 ## 1. The shelf probe (Task 4)
@@ -486,19 +505,35 @@ Remove, clear, new stack, restack, open and show in the file manager, all raised
 them directly, in this process, at the Medium integrity it already has. See that class's own
 header comment for why Plith cannot do either on the catcher's behalf.
 
-### Status: NOT YET RUN
+### Status: PARTLY RUN, 2026-09-19 — and the first thing running it found was a dead tile
+
+**§3.1, §3.2 and §3.9 have now been driven on a running build**, along with the context menu that
+§3.7 and §3.8 depend on. The instrument is `scripts/drive-shelf.ps1` and the record is §3.10,
+which also carries the defect that running them found: **a tile only answered a pointer where its
+icon or its label happened to paint, and was dead everywhere else, including its exact centre.**
+Fixed on this branch, with an automated check that fails the build if it comes back.
+
+Everything whose expectation is "the tile disappears" or "`shelf.txt` no longer lists it" is
+still NOT YET RUN, and cannot be run by that instrument at all. §3.10 says why: the shelf probe
+has no Plith behind it, so those requests are raised and go nowhere.
 
 **And §3.5 and §3.6 could not have passed before 2026-09-19 regardless of who ran them.** The
 whole-branch review found the tile drag could never start at all (see §6.1), so the two items
 that restack by dragging were describing a gesture the product did not have. They are unchanged
 here and still NOT YET RUN; what changed is that running them is now capable of the result they
-ask for.
+ask for — and that the press such a drag starts from now lands anywhere on a tile rather than
+only on its icon.
 
-Same constraint as §1 and §2: the shelf is a layered window in a second process and cannot be
-captured over Remote Desktop, so none of the items below has been looked at. What has been
-measured without a console is listed at the end of this section, and it is not a substitute for
-any of these: build, tests and lint all stayed green through every defect §1 and §2 found on
-hardware, and would have stayed green through these too.
+~~Same constraint as §1 and §2: the shelf is a layered window in a second process and cannot be
+captured over Remote Desktop, so none of the items below has been looked at.~~ **That sentence was
+wrong when it was written, and is struck rather than deleted because it set the cost of this
+section for as long as it stood.** The claim is dealt with at the top of this document: it was
+inherited from the OSD's notes and applied to a window it had never been measured against. The
+shelf captures fine over Remote Desktop while the session is connected.
+
+What has been measured without pressing anything is listed at the end of this section, and it is
+not a substitute for any of these: build, tests and lint all stayed green through every defect §1
+and §2 found on hardware, stayed green through §3.10's, and would stay green through the rest.
 
 ### 3.1 Remove, hover and menu, agree with `shelf.txt`
 
@@ -580,6 +615,150 @@ elsewhere). Expected: the shelf now behaves normally again, in particular still 
 `Esc` or by the mouse leaving. A shelf that survives the menu but can never be dismissed
 afterwards means `_menuOpen` was set and never cleared; a shelf that vanishes out from under an
 open menu means the opposite.
+
+### 3.10 Driven on a running build, and the tile that was dead in the middle (2026-09-19)
+
+**The premise that a person was required to PRESS things is false for this window, and it is the
+third inherited claim in this document to fall the same way.** It is true of Plith's own OSD,
+which is a UIAccess window at High integrity that synthetic input genuinely cannot reach. The
+shelf is not that window. It belongs to `Plith.DropCatcher`, which runs at **Medium**, and UIPI
+does not stand between one Medium process and another. Measured from an `rdp-tcp#0` session:
+UI Automation reads the shelf's entire tree with accessible names and screen rectangles
+(17 elements), `AutomationElement.FromPoint` resolves every one of them, and `SendInput` drives
+the window. The catcher's own integrity is in its log on every run (`Integrity: MEDIUM`), which
+is where this could have been noticed at any point.
+
+The instrument is committed as `scripts/drive-shelf.ps1`, for the reason `capture-shelf.ps1` is:
+it is the only thing in this repository that presses what a person presses.
+
+#### The defect: a tile answered a pointer only where it painted
+
+**Measured by controlled comparison, the same click on the same tile at two points:**
+
+| Point | Hover | Click |
+|---|---|---|
+| The tile's exact centre | 0 px changed, no remove control in the UIA tree | 0 px changed, no selection |
+| The tile's icon, 14 px away | 48 px changed, remove button present and named | 593 px changed, the selection ring |
+
+The cause is one missing line. `BuildTile`'s `NamedBorder` had **no `Background` at all**, and WPF
+hit-tests a `Transparent` brush but not a `null` one, so only the painted icon and label answered
+the pointer. The gaps between them — which on a 64 DIP tile holding a 22 DIP icon and a 24 DIP
+label includes the middle, where a person aims — fell through to the layout `Grid` behind.
+
+The product said so itself once it was asked. With a temporary log line on the tile's own
+`MouseEnter`/`MouseLeave`, a pointer travelling **inside** one tile produced
+`MouseEnter quarterly-report.pdf` over the icon and `MouseLeave quarterly-report.pdf` thirty-two
+milliseconds later, still inside the tile, at its centre.
+
+**`ShelfWindow.xaml` states this exact rule in its own comment** — "1% alpha on the background
+because WPF hit-tests a Transparent brush but not a null one" — for the window's background. The
+tile did not follow it. Fixed by giving the tile `Background = Brushes.Transparent`, with the
+measurement in the comment beside it.
+
+**What it cost, and it is more than a hover.** `tile.PreviewMouseLeftButtonDown` is what calls
+`BeginPress`, so a press in the dead area never selected, never armed a press, and therefore
+could never become a drag. That is §3.2, and it is the press that §3.5, §3.6 and the whole of
+Task 8's drag-out design start from. This is the same failure family as §6.1, arriving by a
+different route: the gesture existed and the pointer could not reach it.
+
+#### Why nothing here could have caught it, and what now does
+
+Every other check in `render-widgets.ps1` hands an event straight to the element it means — the
+press-to-drag check calls `$pressedTile.RaiseEvent($down)`, which is a press the tile receives
+**by construction**. Real input arrives at a POINT and the window decides whose it is. Those are
+different questions, and the second had never been asked.
+
+`render-widgets.ps1` now asks it: the **tile-hit check** hit-tests five points inside every tile
+(the centre and a quarter of the way in from each corner) and requires each to resolve to that
+tile. Verified red-green against freshly built binaries, not against a stale one: with the
+`Background` line removed it fails on ten points across three tiles, every centre among them;
+with it restored it passes and the script reaches `Done.`
+
+#### What was driven, and what passed
+
+`scripts/drive-shelf.ps1`, eight checks, all passing after the fix:
+
+| | |
+|---|---|
+| §3.1 hover reveals the remove control, **at the tile centre** | 48 px changed; the UIA button is present at 16x16, named `Remove quarterly-report.pdf from the shelf` |
+| §3.2 a click at the tile **centre** selects it | 593 px changed, the selection ring |
+| The tile context menu | opens anchored to the pressed tile, carrying exactly `Open`, `Show in file manager`, `Remove` |
+| §3.9 the shelf survives its own open menu | pointer held off the shelf for 2.5 s against a 500 ms grace, shelf still up, and the product logs `Shelf dismissal deferred ... a menu is in flight` |
+| §3.9 `Esc` closes the menu | no menu items left in the UIA tree |
+| §3.9 the shelf outlives its menu | still up after the menu closed |
+| §3.9 the shelf holds still afterwards | no dismissal in 1.5 s with the pointer on the shelf, so the next step's `Esc` is credited with a dismissal it actually caused |
+| §3.9 `Esc` still dismisses afterwards | it did, within 5 s — but see the log finding below |
+
+So §3.9 is **RUN and passing**, including the part the render harness's menu-survives-render
+check explicitly could not reach: that the popup appears anchored to the right tile, and that the
+grace period and `Esc` behave around it.
+
+#### A finding NOT fixed: the log credits the wrong reason for a dismissal
+
+`ShelfWindow.Dismiss` ends `_log.Info($"Shelf closing: {_pendingDismissal ?? why}.")`. The
+first-reason-wins rule is right for the retries a deferral causes, but it also overrides a
+genuinely new one. Measured, with a control: an ordinary `Esc` logs `Shelf closing: Esc.`, while
+an `Esc` pressed after a dismissal was deferred logs `Shelf closing: the pointer left and did not
+come back.` — even with the pointer back on the shelf and the menu closed, so the recorded reason
+has already been refuted.
+
+Behaviour is correct; only the record is wrong. It is filed rather than fixed because this
+document's method depends on that log being honest (§1 tells a reader to distinguish states by
+it), and because the surrounding dismissal logic records three previous defects in this exact
+area, so it is not a line to change while finishing something else. The underlying cause is that
+`_pendingDismissal` is cleared only by `Activated`, never by the pointer coming back and
+refuting it.
+
+#### What this instrument CANNOT answer, and it is most of the rest of this section
+
+In `--shelfprobe` mode `App`'s `CatcherClient` is null, so `RemoveItems`, `ClearShelf`,
+`NewStack` and `Restack` are raised and go nowhere. **Plith owns the shelf model** and answers
+those verbs with a fresh set of `Items` messages, so with no Plith the page never changes in
+response to them. Every item expecting a tile to disappear or `shelf.txt` to change — §3.1's
+second half, §3.3, §3.4, §3.5, §3.6 — needs the real pair of processes, not this probe.
+
+§3.7 and §3.8 are blocked for a smaller reason: the probe's three paths are invented
+(`C:\Probe\...`), so `Open` and `Show in file manager` have nothing real to act on. Their menu
+items exist and are correctly named, which is as far as this goes.
+
+#### Harness lessons, which cost more than the defect did
+
+Three instrument faults each produced a confident, plausible, wrong number first, and two of them
+read as product defects. They are written into `drive-shelf.ps1`'s header so they are not
+rediscovered:
+
+1. **PowerShell assigns to a COPY** when the target is a field of a nested value type, so every
+   `$input.u.mi.dwFlags = ...` was discarded and `SendInput` received an all-zero structure while
+   reporting success. Nothing was being sent at all, and the run reported a 128-pixel "hover".
+   All input construction now lives in C#, and the script proves the pointer moves before it
+   measures anything.
+2. **A pointer that TELEPORTS is not a pointer that arrives.** A single absolute move onto a
+   window leaves WPF's `Mouse.DirectlyOver` stale and nothing under it sees a `MouseEnter`.
+3. **`LeaveGrace` is 500 ms.** A "rest" baseline taken with the pointer parked off the shelf, then
+   compared against a "hover" taken a second later, is two captures of the same desktop — the
+   shelf had dismissed itself in between. It reports **exactly zero** changed pixels, which reads
+   precisely like a product ignoring the mouse. Baselines are now taken over a neutral part of
+   the shelf.
+
+The pattern worth keeping: every one of those was caught by asking the product rather than the
+picture — the catcher's own log, a temporary handler, the UIA tree, the cursor shape. A pixel
+count says something changed; it never says the right thing changed, and it says nothing at all
+about why it did not.
+
+#### The gates, after the fix
+
+| | |
+|---|---|
+| Build | `dotnet build Plith.slnx -m:1`: succeeded, 0 errors |
+| Tests | `dotnet test Plith.slnx -m:1`: 473 + 17 passed, 0 failed |
+| `check-a11y` · `check-shared-xaml` · `check-win32-flags` | passed, exit 0 |
+| `check-contrast` | passed, 288 measurements across 9 accents and both themes |
+| `render-widgets` | reached `Done.`, with second-pass, menu-survives-render, press-to-drag, drop-target and the new **tile-hit** check all passing |
+| `drive-shelf` | 8 of 8 checks passing on a running build |
+
+Worth saying plainly, because it is this branch's recurring lesson: **every one of those gates was
+green before the fix as well.** The tile had been dead in the middle since Task 7, through a
+whole-branch review, and nothing in the repository was capable of noticing.
 
 ### What HAS been measured, on 2026-09-19
 

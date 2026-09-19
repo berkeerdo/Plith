@@ -453,9 +453,32 @@ The two features that Windows has no good answer for.
   three real defects that a green build had missed. Slice 2's stacks, actions, drag-out and
   keyboard support are code-complete, build clean, pass every lint including the widened contrast
   check, and render correctly offscreen in both themes. None of that presses a key, drags a
-  tile, or runs a screen reader. That needs a physical console session, which this work was not
-  done in; see `docs/SHELF-VERIFICATION.md` for exactly what was and was not driven, and by what
+  tile, or runs a screen reader. ~~That needs a physical console session, which this work was not
+  done in~~; see `docs/SHELF-VERIFICATION.md` for exactly what was and was not driven, and by what
   date.
+
+  **The shelf can be PRESSED by a script, and the premise that it could not was about a different
+  window (2026-09-19).** "Synthetic input cannot reach it" is true of Plith's own OSD, a UIAccess
+  window at High integrity; the shelf belongs to `Plith.DropCatcher` at **Medium**, where UIPI
+  blocks nothing. UI Automation reads its whole tree and `SendInput` drives it, over Remote
+  Desktop, with no console session. `scripts/drive-shelf.ps1` is the instrument; sections 3.1,
+  3.2 and 3.9 plus the tile context menu are now RUN and passing.
+
+  **Pressing it found the tile dead in the middle.** A tile answered a pointer only where its icon
+  or label painted: at its exact centre there was no hover affordance, no selection, and no press,
+  so no drag could start there either — the same gesture-unreachable family as the Task 8 finding
+  above, by a different route. Cause: the tile carried no `Background`, and WPF hit-tests a
+  `Transparent` brush but not a `null` one. Fixed, plus a `tile-hit` check in `render-widgets.ps1`
+  that fails the build if it returns. Every gate was green before the fix too, which is why the
+  check asks the one question the others never did: not "does the tile handle this event" but
+  "whose element is this POINT". Record: `docs/SHELF-VERIFICATION.md` section 3.10.
+
+  That is the THIRD claim in these documents inherited from the OSD's notes and applied to the
+  shelf unmeasured, after "layered windows cannot be captured" and "Remote Desktop cannot capture
+  them". All three were false here. **The same premise still stands unexamined over Phases 5 and
+  6**, where it gates most of the open items — and note that the OSD is genuinely a UIAccess
+  window, so the pressing half may well hold there even though the capturing half should be
+  measured before it is believed.
 
   **Known limit, for the next slice to pick up: a tile's selection has no automation semantics.**
   Every tile, stack, and the clear/new-stack controls reach a real automation peer now (a review
