@@ -66,7 +66,25 @@ $ErrorActionPreference = 'Stop'
 $interactive = @('Button', 'ComboBox', 'Slider', 'ToggleButton', 'CheckBox', 'TextBox', 'RadioButton', 'ScrollViewer')
 $failures = [System.Collections.Generic.List[string]]::new()
 
-foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
+# The XAML the NAME checks read. src/Plith.DropCatcher is in it, and was not: Checks 1 and 2 both
+# scanned $Root alone, so the catcher's two XAML files - one of which draws the shelf, a real
+# user-facing surface with two real Buttons on it - were never read by either. They are clean
+# today, which is luck rather than coverage: nothing here would have failed if they were not.
+#
+# The argument that kept them out was about Check 1 firing on the REST of Plith.DropCatcher,
+# a project nobody had reviewed for accessible names. That has now been done, by running this
+# check against it: the two Buttons in ShelfSurface.xaml both declare AutomationProperties.Name,
+# and no other file in the project declares an interactive control at all. So the exclusion was
+# buying nothing and costing the coverage this whole script exists for.
+#
+# src/Plith.Installer stays out, for the reason $Root's own comment gives: it has never had an
+# accessibility pass, and its gaps are real rather than absent.
+$nameCheckRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
+                   Where-Object { Test-Path $_ } | Select-Object -Unique
+$nameCheckXaml = @($nameCheckRoots | ForEach-Object { Get-ChildItem -Path $_ -Filter '*.xaml' -Recurse }) |
+                  Where-Object { $_.FullName -notmatch '[\/](obj|bin)[\/]' }
+
+foreach ($file in $nameCheckXaml) {
     $lines = Get-Content -LiteralPath $file.FullName
     for ($i = 0; $i -lt $lines.Count; $i++) {
         $match = [regex]::Match($lines[$i], '<(' + ($interactive -join '|') + ')[\s>]')
@@ -105,7 +123,7 @@ $peerless = @(
 
 $deadProperties = [System.Collections.Generic.List[string]]::new()
 
-foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
+foreach ($file in $nameCheckXaml) {
     try {
         $xml = [xml](Get-Content -Raw -LiteralPath $file.FullName)
     }
@@ -164,26 +182,38 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
 $codeBehindRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
                     Where-Object { Test-Path $_ } | Select-Object -Unique
 
-# Known, pre-existing gaps this new scan finds but this task does not fix. Recorded as a finding
+# Known, pre-existing gaps this scan finds but has not been asked to fix. Recorded as findings
 # with a file to look at, not silenced by widening the Installer-style root exclusion above: that
 # shape would also hide anything else this scan ever finds in the same file, forever, past the day
-# this specific gap is closed. Fix the file, then delete the line here.
+# this specific gap is closed. Fix the target, then delete the line here.
 #
-# The first run of this new check found four files, not one. Task 9 was asked to check only
+# KEYED BY THE FINDING, "<file>:<target>", NOT BY THE FILE. Keying by file was the exact shape
+# this comment's own first paragraph rejects one level up, adopted one level down: every
+# dead-property and unresolved-type hit in ShelfWidget.cs, MediaWidget.cs, NotchHud.cs and
+# WeatherWidget.cs was downgraded to a yellow notice, so a NEW inert accessible name added to any
+# of them tomorrow would pass green - including in ShelfWidget.cs, which this branch rewrote. A
+# whole-branch review found that. The known gap is a named element in a named file; anything else
+# in the same file is a new finding and fails.
+#
+# The first run of the code-behind check found four files, not one. Task 9 was asked to check only
 # ShelfWidget.cs; running the scan for real also caught MediaWidget.cs, NotchHud.cs and
 # WeatherWidget.cs naming a Border/Grid/StackPanel the exact same way, in code that shipped well
-# before this branch and is nowhere near the shelf. All four are filed here rather than fixed,
-# for the same reason: fixing widget accessibility is not this task, and a lint that starts
+# before this branch and is nowhere near the shelf. All six findings are filed here rather than
+# fixed, for the same reason: fixing widget accessibility is not this task, and a lint that starts
 # quietly rewriting product code to stay green is a worse habit than the gaps it found.
 $knownCodeBehindGaps = @{
-    'ShelfWidget.cs' = 'predates Task 9: Tiles (a StackPanel) and every Border built by Tile(...) ' +
-        'were already named before this scan existed to see them. Filed, not fixed, in ' +
-        'docs/SHELF-VERIFICATION.md section 5.4.'
-    'MediaWidget.cs' = 'found by this same scan, unrelated to the shelf: OpenSourceArea is a ' +
-        'Border. Predates this branch. Filed, not fixed.'
-    'NotchHud.cs' = 'found by this same scan, unrelated to the shelf: VolumeRow and MediaRow ' +
-        'are both a Grid. Predates this branch. Filed, not fixed.'
-    'WeatherWidget.cs' = 'found by this same scan, unrelated to the shelf: Readout is a ' +
+    'ShelfWidget.cs:tile' = 'predates Task 9: every Border built by Tile(...) was already named ' +
+        'before this scan existed to see it. Filed, not fixed, in docs/SHELF-VERIFICATION.md ' +
+        'section 5.4.'
+    'ShelfWidget.cs:Tiles' = 'predates Task 9: Tiles is a StackPanel, x:Name-d in ShelfWidget.xaml. ' +
+        'Filed, not fixed, in docs/SHELF-VERIFICATION.md section 5.4.'
+    'MediaWidget.cs:OpenSourceArea' = 'found by this same scan, unrelated to the shelf: ' +
+        'OpenSourceArea is a Border. Predates this branch. Filed, not fixed.'
+    'NotchHud.cs:VolumeRow' = 'found by this same scan, unrelated to the shelf: VolumeRow is a ' +
+        'Grid. Predates this branch. Filed, not fixed.'
+    'NotchHud.cs:MediaRow' = 'found by this same scan, unrelated to the shelf: MediaRow is a ' +
+        'Grid. Predates this branch. Filed, not fixed.'
+    'WeatherWidget.cs:Readout' = 'found by this same scan, unrelated to the shelf: Readout is a ' +
         'StackPanel. Predates this branch. Filed, not fixed.'
 }
 $knownGapNotices = [System.Collections.Generic.List[string]]::new()
@@ -285,9 +315,41 @@ foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -
         $typeOf[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
     }
 
-    foreach ($m in [regex]::Matches($text, 'AutomationProperties\.Set(?<prop>\w+)\s*\(\s*(?<target>\w+)\s*,')) {
-        $target = $m.Groups['target'].Value
+    # The call finder matches the call, then reads its first argument BY HAND.
+    #
+    # It used to capture the target with `(?<target>\w+)` inside the same regex, which meant the
+    # pattern matched nothing at all for any target that is not a bare identifier:
+    # `SetName(BuildTile(), ...)`, `SetName(tiles[i], ...)` and `SetName(this.Foo, ...)` produced
+    # no match, so they were not a third answer beside "fine" and "could not resolve" - they were
+    # NO ANSWER, invisible to a check whose whole purpose is that "could not tell" must never
+    # print the same nothing as "this is fine". A whole-branch review found it. Scanning the
+    # argument by hand is what makes the call itself impossible to miss; whether its type can then
+    # be resolved is the separate question the passes above answer, and an argument shape none of
+    # them can read now lands in $unresolvedProperties and fails, as it should.
+    foreach ($m in [regex]::Matches($text, 'AutomationProperties\.Set(?<prop>\w+)\s*\(')) {
         $prop = $m.Groups['prop'].Value
+
+        # Read to the comma that ends the first argument, tracking bracket depth so a comma inside
+        # a nested call or an index (`SetName(Tile(a, b), ...)`) does not end it early.
+        $i = $m.Index + $m.Length
+        $depth = 0
+        $end = -1
+        while ($i -lt $text.Length) {
+            $c = $text[$i]
+            if ($c -eq '(' -or $c -eq '[') { $depth++ }
+            elseif ($c -eq ']') { $depth-- }
+            elseif ($c -eq ')') {
+                if ($depth -eq 0) { break }   # a one-argument call: no target/value pair to read
+                $depth--
+            }
+            elseif ($c -eq ',' -and $depth -eq 0) { $end = $i; break }
+            $i++
+        }
+        if ($end -lt 0) {
+            $unresolvedProperties.Add("${rel}: AutomationProperties.Set$prop(...) - this scan could not read the call's first argument at all")
+            continue
+        }
+        $target = $text.Substring($m.Index + $m.Length, $end - ($m.Index + $m.Length)).Trim()
 
         # `this` is not looked up anywhere above: it names the class this whole file defines, not
         # a local or a field, and every class in this codebase that can reach an
@@ -298,9 +360,16 @@ foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -
         # not separately re-verified here.
         if ($target -eq 'this') { continue }
 
+        # `this.Foo` is the same field `Foo` names, written the long way. Unwrapped rather than
+        # reported, since the answer is identical and pretending otherwise would be a gap that
+        # exists only because of a style choice.
+        if ($target -match '^this\.(?<field>\w+)$') { $target = $Matches['field'] }
+
         $type = $null
-        if ($typeOf.ContainsKey($target)) { $type = $typeOf[$target] }
-        elseif ($fieldTypes.ContainsKey($target)) { $type = $fieldTypes[$target] }
+        if ($target -match '^\w+$') {
+            if ($typeOf.ContainsKey($target)) { $type = $typeOf[$target] }
+            elseif ($fieldTypes.ContainsKey($target)) { $type = $fieldTypes[$target] }
+        }
 
         if ($null -eq $type) {
             # UNRESOLVED IS NOT A PASS. The first draft of this check `continue`d here, which made
@@ -310,8 +379,9 @@ foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -
             # (see the XAML parse-failure branch above), not a silent skip, so the same rule
             # applies here: a name this scan cannot classify fails the build, loudly, distinct
             # from a confirmed dead property so the two are never mistaken for each other.
-            if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
-                $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) - type could not be determined ($($knownCodeBehindGaps[$file.Name]))")
+            $gapKey = "$($file.Name):$target"
+            if ($knownCodeBehindGaps.ContainsKey($gapKey)) {
+                $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) - type could not be determined ($($knownCodeBehindGaps[$gapKey]))")
                 continue
             }
             $unresolvedProperties.Add("${rel}: AutomationProperties.Set$prop($target, ...) - this scan could not determine $target's type, so it cannot say whether WPF gives it an automation peer")
@@ -320,8 +390,9 @@ foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -
 
         if ($peerless -notcontains $type) { continue }
 
-        if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
-            $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) targets a $type ($($knownCodeBehindGaps[$file.Name]))")
+        $gapKey = "$($file.Name):$target"
+        if ($knownCodeBehindGaps.ContainsKey($gapKey)) {
+            $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) targets a $type ($($knownCodeBehindGaps[$gapKey]))")
             continue
         }
 
