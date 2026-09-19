@@ -341,6 +341,12 @@ header comment for why Plith cannot do either on the catcher's behalf.
 
 ### Status: NOT YET RUN
 
+**And §3.5 and §3.6 could not have passed before 2026-09-19 regardless of who ran them.** The
+whole-branch review found the tile drag could never start at all (see §6.1), so the two items
+that restack by dragging were describing a gesture the product did not have. They are unchanged
+here and still NOT YET RUN; what changed is that running them is now capable of the result they
+ask for.
+
 Same constraint as §1 and §2: the shelf is a layered window in a second process and cannot be
 captured over Remote Desktop, so none of the items below has been looked at. What has been
 measured without a console is listed at the end of this section, and it is not a substitute for
@@ -480,6 +486,14 @@ any drag whose source element does not belong to its own window, and why every i
 touches the catcher's liveness is worth doing rather than assuming.
 
 ### Status: NOT YET RUN
+
+**Every item in this section was unreachable until 2026-09-19, and not for want of a console.**
+`DoDragDrop` was never called: the press that would start it was recorded in a local captured by
+the tile's own handlers, and that tile was destroyed by the re-render the same press triggers, so
+the replacement tile came up with no press behind it and `DragOutRequested` was never raised. A
+person at the console would have found §4.1 through §4.9 all failing the same way, with no line in
+the log at all rather than a wrong one. Fixed and now driven by the render harness: see §6.1. The
+items below stay NOT YET RUN.
 
 The session that built this is `rdp-tcp#0` (`qwinsta`, 2026-09-19), so a drag gesture cannot be
 driven and the layered window cannot be captured. Nothing below has been looked at. What was
@@ -973,3 +987,205 @@ suite that is not STA and a render harness that never constructs `ShelfWindow` c
 `ShelfSurface` lays out correctly and that its colours clear their thresholds; neither can prove
 that a key press reaches it, that the announced names make sense read aloud, or that the shelf is
 usable by someone who cannot see it. That is the console's job, and it is still undone.
+
+---
+
+## 6. The whole-branch review (2026-09-19)
+
+Nine tasks were built and each was reviewed against its own brief. A review of the whole branch
+then found four defects that no task-scoped review could have seen, because each task was correct
+and the JOINS between them were not. This section records what was wrong, how it was settled, and
+what is now measured as against reasoned.
+
+### 6.1 The headline feature could not execute, and now has an automated check
+
+**What was wrong.** `ShelfWindow` answers `ShelfSurface.EntryPressed` by calling `Page.Render`,
+and `Render` clears `Columns.Children` and rebuilds every tile. `ShelfSurface` kept the press
+(`pressStart`) in a local captured by the pressed tile's own handlers. So the element that took
+the press was out of the tree before the button came up, the replacement tile's `PreviewMouseMove`
+returned early on a fresh null, and `DragOutRequested` was never raised. **Dragging a file out to
+another application and dragging a tile between stacks were both dead**, on the first gesture and
+on every one after, because a second press re-rendered again.
+
+One task wrote the press-then-render, another wrote the press-then-drag, and each is correct on
+its own. Nothing on this branch could have caught it: the suite is not STA, and the render harness
+had never pressed a tile.
+
+**How it was settled.** The press moved off the element and onto the surface, keyed by PATH
+(`ShelfSurface.BeginPress` / `ContinuePress` / `EndPress`). The alternative offered was to
+re-render only when the selection actually changed and preserve the pressed element; it was not
+taken, because it closes only the render this press causes. Plith re-sends the whole shelf after
+every mutating verb and a `Palette` message re-renders too, so ANY render can land between a press
+and the move that follows it, and a fix aimed at one of them leaves the next person to add a
+render call to rediscover the same defect. The origin point also moved from tile coordinates to
+the surface's, so a rebuild that puts the same path in a different slot cannot read as a large
+pointer movement and start a drag nobody asked for.
+
+**The check, and what it said.** `scripts/render-widgets.ps1` gained a **press-to-drag check**,
+in the style of the second-pass icon check and the menu-survives-render check beside it: it
+asserts its preconditions first so it cannot pass vacuously.
+
+It raises a real `PreviewMouseLeftButtonDown` on a real tile, with `EntryPressed` wired exactly
+the way `ShelfWindow` wires it (select, then re-render), then asserts that the press reached
+`EntryPressed`, that a tile for the pressed path still exists, and that it is **not the same
+object** as the one pressed (so the teardown this check exists for really happened). Only then
+does it drive the move: once under the system drag threshold, which must raise nothing and must
+not consume the press, and once past it, which must raise `DragOutRequested` exactly once, for the
+element under the pointer, carrying the pressed path.
+
+Before the fix, against a press keyed to the element that took it (which is what a per-tile
+closure is):
+
+```
+press-to-drag check FAILED: a press that triggered a re-render can no longer become a drag.
+The rebuilt tile has no press behind it, so DragOutRequested is never raised - dragging a file
+OUT and dragging a tile between stacks are both dead. This is the Critical the whole-branch
+review found.
+```
+
+After:
+
+```
+  press-to-drag check passed: a press that re-rendered the shelf under itself still became a
+  drag on the rebuilt tile (threshold 4 x 4 honoured on both sides), carrying the pressed path.
+```
+
+**What this check does NOT reach, stated because this document's whole job is that line.** The
+move's position and button state come from the mouse device, and neither can be synthesized
+offscreen: `MouseDevice.GetPosition` returns (0,0) for an element in no `PresentationSource`, and
+`MouseEventArgs.LeftButton` reports the physical button, which no script can hold down. So the
+move arrives through `ShelfSurface.ContinuePress`, the same method with the same arguments that
+the tile's own `PreviewMouseMove` calls, and the only thing the handler adds is the `e.LeftButton`
+test. The press, the render and the tile teardown are all real; the pointer is not. `DoDragDrop`
+is still executed by nothing in any gate, so section 4 stays NOT YET RUN in full.
+
+### 6.2 The shelf could close under the pointer, for the third time
+
+**What was wrong.** The leave timer does two jobs: it is the pointer's grace period, and it is
+also the clock that re-evaluates a deferred dismissal. Every place that made a deferral moot
+therefore owed it a `Stop()`. `OpenAt` and `StartDrag` had both been taught; `Activated` had not.
+
+The sequence: right-click a tile, the menu takes activation, `Deactivated` fires, `Dismiss`
+defers and arms the leave clock, the menu closes, `Activated` sets `_pendingDismissal` to null
+while the timer keeps running, and within the grace period the tick fires a now-unsuppressed
+`Dismiss` and closes the shelf with the pointer sitting on it. `MouseEnter` only saved it when it
+happened to arrive after `Activated`.
+
+**How it was settled.** Not by stopping the clock in one more place. **The tick itself now asks
+where the pointer is**, through `PointerIsOverShelf` (the window manager, not WPF, for the reason
+that method documents), and refuses to dismiss while the pointer is over the shelf, re-arming
+instead so a pending deferral is never left without a clock. The only reason this timer ever
+closes the shelf is "the pointer left and did not come back", so the pointer being here refutes it
+outright, whoever armed the clock and for whatever reason. A fourth instance of this defect cannot
+be written by adding a fifth arming site.
+
+`Activated` deliberately does NOT stop the clock: activation says nothing about where the pointer
+is, and stopping it from there would leave a shelf whose pointer really had left with no clock, no
+pending dismissal, and no second `Deactivated` to come.
+
+**Status: REASONED, NOT RUN.** Nothing automated executes `ShelfWindow`. Section 3.9 is the item
+that drives this at the console, and it is still NOT YET RUN. What to add to it when it is run:
+right-click a tile, close the menu with the pointer resting on the shelf, and wait out the grace
+period twice over. The shelf must still be there.
+
+### 6.3 One end of the pipe was serialized and the other was not
+
+**What was wrong.** `DropChannelServer.SendAsync` (Plith's end) grew a call-ordered chain because
+overlapping fire-and-forget sends corrupted lines on the shared stream. The catcher's end still
+wrote straight to one shared `StreamWriter`, and every call site there is fire-and-forget too.
+
+Two sends in flight used to be hard to reach, with two verbs on this side. This slice added five
+more and made it ordinary: a `Restack` raised from inside `DoDragDrop`, followed milliseconds
+later by the dismissal's `ShelfClosed`. A `StreamWriter` throws `InvalidOperationException` for
+the overlap, `SendAsync` did not catch it, the task faulted unobserved, and the message was
+silently lost. **A lost `ShelfClosed` leaves Plith's window hidden with no notch and no OSD on any
+volume key until the catcher dies.**
+
+**How it was settled.** `CatcherClient.SendAsync` got the same treatment the server end has: a
+task chain linked under a lock (not a `SemaphoreSlim`, which documents no FIFO guarantee for async
+waiters), a `Task.Run` first so a pipe write never runs on the caller's UI thread inside the lock,
+and a link that cannot fault. It catches one type the server's does not need to:
+`InvalidOperationException`, which is both what a `StreamWriter` raises for the overlap above and
+what `PipeStream` raises for a write into a pipe that has gone.
+
+**Status: NOT DIRECTLY TESTED, and this is the honest half.** The server end has
+`DropChannelServerTests.Server_DoesNotInterleaveOverlappingSends`, which fails without its fix.
+The catcher end has no equivalent: `CatcherClient` is `internal` to a project `Plith.Tests` does
+not reference (it links `ShelfModel.cs` by file, precisely because that one class holds no WPF or
+pipe types), and this pipe is created with both buffer sizes at zero, so a test that awaits a send
+before starting a read deadlocks rather than fails. What exists is the symmetry with a fix that
+WAS measured on the other end, and that is weaker than a test.
+
+### 6.4 The accessibility gate was blinded by its own suppression list
+
+**What was wrong.** `check-a11y.ps1` looked its known code-behind gaps up by FILE NAME, so every
+dead-property and unresolved-type hit in `ShelfWidget.cs`, `MediaWidget.cs`, `NotchHud.cs` and
+`WeatherWidget.cs` was downgraded to a yellow notice. A new inert accessible name added to any of
+them would have passed green, including in `ShelfWidget.cs`, which this branch rewrote. The
+script's own header rejects exactly that shape for its root exclusion, saying it would hide
+anything else the scan ever finds in the same file, forever, and then adopted it one level down.
+
+Two more holes in the same scan. The call finder matched the target as a bare identifier inside
+the same regex, so `SetName(BuildTile(), ...)`, `SetName(tiles[i], ...)` and `SetName(this.Foo,
+...)` matched nothing at all: not a third answer, **no answer**, invisible to a check whose whole
+point is that "could not tell" must never print the same nothing as "this is fine". And Check 1
+and the XAML half of Check 2 still never ran on `src/Plith.DropCatcher`, so its two XAML files
+were unscanned. They were clean, which is luck rather than coverage.
+
+**How it was settled.** The suppression is keyed `<file>:<target>`, so the known gap is a named
+element in a named file and anything else in the same file fails. The finder matches the call and
+then reads its first argument by hand, tracking bracket depth, so a target that is not a bare
+identifier is seen and lands in the existing "could not resolve a type" failure rather than
+vanishing (`this.Foo` is unwrapped to `Foo`, since that is the same field written the long way).
+Both name checks now scan `src/Plith.DropCatcher` as well; the exclusion was reviewed rather than
+merely dropped, by running the check against it: the two `Button`s in `ShelfSurface.xaml` both
+declare `AutomationProperties.Name`, and no other file in the project declares an interactive
+control at all, so the exclusion was buying nothing.
+
+**Measured, both holes, on 2026-09-19.** A `Border` named inertly in `ShelfWidget.cs` (an already
+suppressed file) and a `SetName(BuildProbe(), ...)` beside it were added temporarily and the check
+run:
+
+```
+Accessibility check failed:
+    ShelfWidget.cs: AutomationProperties.SetName(probeBorder, ...) targets a Border, which WPF gives no automation peer
+  AutomationProperties.SetName targets this scan could NOT resolve a type for:
+    ShelfWidget.cs: AutomationProperties.SetName(BuildProbe(), ...) - this scan could not determine BuildProbe()'s type
+```
+
+Before the fix both were silent. The probes were removed and the check passes again, with the
+same six known gaps (now six findings rather than four files) reported as notices.
+
+### 6.5 Minor findings
+
+- **`ShelfModel.SetStack` pre-allocated `total` slots with no cap**, so a hostile `Items` message
+  could exhaust memory in the process holding the shelf, the notch's stand-in and the pipe. The
+  pipe name is deterministic and any local process can write to it, or squat it before Plith
+  starts. Clamped to 20, which is not a taste: `ShelfStore.MaxItems` is 20 across the whole shelf
+  and an empty stack is discarded when the surface closes, so 20 stacks is the most Plith can ever
+  legitimately send, and the surface draws five. Truncated rather than rejected, so `_expected`
+  then disagrees with the `total` its siblings carry and the set assembles NOTHING rather than
+  something plausible and wrong. Covered by
+  `ShelfModelTests.SetStack_WithAHostileStackCountIsClampedAndAssemblesNothing`.
+- **`DropCatcherLauncher.EnsureRunning` leaked a process handle per shelf open.** Disposed, the
+  way `FindProcessId` next door already did.
+- **One em dash in `ShelfStore.Add`'s doc comment**, in a sentence this branch re-wrapped. Gone.
+
+### What HAS been measured, on 2026-09-19, after these fixes
+
+| Measured | Result |
+|---|---|
+| Build | `dotnet build Plith.slnx -m:1`: succeeded, 0 errors |
+| Tests | `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`: 473 passed, 0 failed (was 472: +1 for the stack cap) |
+| `scripts/check-a11y.ps1` | passed, with six known gaps as notices; both new holes proven closed by temporary probes (6.4) |
+| `scripts/check-shared-xaml.ps1` | passed: 3 files compiled into both Plith and the installer, none naming an assembly |
+| `scripts/check-contrast.ps1` | passed: 288 measurements across 9 accents and both themes |
+| `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the new press-to-drag check |
+| `scripts/render-widgets.ps1 -Theme Light -Accent '#A3E635'` | passed, same |
+| `scripts/render-widgets.ps1 -Theme Dark -Accent '#FFFFFF'` | passed, same |
+| Session type | `qwinsta`: `rdp-tcp#0`, active. Not the console, so nothing in sections 1 to 5 was driven |
+
+Every NOT YET RUN in sections 1 to 5 is still NOT YET RUN. Three of the four defects above lived
+in code that a green build, a green suite and a green lint had all passed over, which is this
+document's recurring finding rather than a new one: 6.1 is the only one of the four that now has a
+gate standing over it.
