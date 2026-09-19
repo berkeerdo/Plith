@@ -44,6 +44,41 @@ rather than by a person squinting at a 22 DIP icon.
 for that case: the flag does not help there, because the layered surface is never composed into
 the remote session's frame buffer to begin with.
 
+## The Remote Desktop half is FALSE TOO, and the real rule is about the SESSION (2026-09-19)
+
+The paragraph directly above is wrong, and it was wrong when it was written. Measured from an
+`rdp-tcp#0` session, confirmed by `qwinsta` rather than by `$env:SESSIONNAME`: the catcher's
+layered shelf window was captured, magnified and read. Over Remote Desktop. The capture is in
+`docs/screenshots/shelf-live-centred.png` and it is what section 7.5 is written from.
+
+Worse than wrong, it was never measured against the shelf at all. The claim is inherited: the
+`CAPTUREBLT` sentence appears in `docs/PHASE5-VERIFICATION.md`, `docs/PHASE6-VERIFICATION.md` and
+`docs/ROADMAP.md`, all three about the OSD, which is Plith's own UIAccess window in a different
+process at a different integrity level. It was carried into this document and applied to a
+different window, and then the conclusion it licensed ("or it is not a claim at all") set the
+cost of every remaining item here.
+
+**And `CAPTUREBLT` is not what makes it work.** Falsified on purpose, as this document requires
+of its own checks: with the `-bor` removed, the shelf was still captured, pixel for pixel as
+colourful as before. The flag is kept in `scripts/capture-shelf.ps1` because it is genuinely
+required where the surface is not already composited into the desktop DC and it costs nothing,
+but on this path it is not load-bearing.
+
+**What the failure actually tracks is whether the session is connected.** The captures succeeded
+repeatedly while `qwinsta` showed the session `Active`, and began failing, with `BitBlt` simply
+returning false, the moment the RDP client disconnected and the session turned to `Disc`. A
+disconnected or locked session has no composed desktop to blit from and this fails for ANY
+window, layered or not. That is a property of the session, not of the window.
+
+This is very probably how the original premise was born. "`BitBlt` returned false while I was on
+RDP" is one observation away from "layered windows cannot be captured over RDP", and nothing in
+the failure distinguishes them. `scripts/capture-shelf.ps1` now prints the session state inside
+that exact error message, so the next person gets the distinction handed to them rather than
+having to suspect it.
+
+**What is genuinely unchanged**: a person is still required to PRESS things, for the reason given
+above. Nothing here touches that.
+
 ---
 
 ## 1. The shelf probe (Task 4)
@@ -1585,3 +1620,92 @@ render agreed exactly, but it is not nothing and it is not claimed.
 
 Not verified by any of the above, unchanged from the rest of this document: pressing, dragging,
 and every screen reader behaviour.
+
+> **Two sentences above are false, corrected on 2026-09-19 and left standing as the record.**
+> `render-widgets` did NOT pass in those three runs: it threw on its last render in every one of
+> them, and the reason was the drop-target check this same section introduced. See 7.5.
+> The centred version HAS now been captured live, and no install was needed to do it.
+
+### 7.5 The centred design, captured live, and what the capture showed
+
+Driven on 2026-09-19 over Remote Desktop, which the top of this document said was impossible and
+which is dealt with there. The instrument is now committed as `scripts/capture-shelf.ps1` rather
+than retyped from memory, since it is the only thing in this repository that sees what a person
+sees.
+
+**No install, and no elevation.** The two cancelled UAC prompts in 7.4 were paid for a question
+that did not require them. `--shelfprobe` runs the catcher straight out of `bin\Debug`, at Medium
+integrity, ahead of the single-instance guard; installing is what the DROP path needs, not what
+looking at the surface needs. The probe window came up at exactly the `708,0 384x224` asked for,
+`WS_EX_LAYERED` confirmed by `GetWindowLongW`.
+
+**The capture agrees with the offscreen render.** Centred row, dashed one-column new-stack zone
+past the last stack, both stack captions, the separator, the muted overflow line. Everything 7.2
+claims to have changed is there on screen. `docs/screenshots/shelf-live-centred.png`, and the
+3x body crop beside it.
+
+**The capture is faithful, proved rather than assumed.** Faint text was visible through the
+surface, which is exactly the kind of artefact that would make a capture untrustworthy. It is
+not an artefact: the window behind was captured on its own after the probe was closed, and the
+ghost is that window, alpha blended. The shelf paints at `0xF0`, so 6 % of whatever is behind it
+comes through by design. At that ratio a near-black surface moves by about 12 levels of
+luminance, which is why `check-contrast.ps1`'s solid-surface assumption is still sound.
+
+**A defect the capture found: a date in a filename stops the name wrapping.** `invoice-2026-09.xlsx`
+renders as `invoice-20...` on one line, with the tile's second line empty, while
+`quarterly-report.pdf` wraps at its hyphen and shows in full. The tile reserves a fixed two lines
+either way, so the name loses half the room it was given.
+
+The cause is in the label's own comment, one step short. `WrapWithOverflow` was chosen over `Wrap`
+precisely so unbreakable runs are not torn mid-character, and the comment records confirming it
+against `one-more.txt`. But Unicode line breaking does not treat a hyphen before a DIGIT as a
+break opportunity, because there it is a sign attached to a number, so every date-stamped name is
+one unbreakable run. `one-more.txt` is hyphen-then-letter and could never have shown this.
+
+Isolated by a controlled pair rather than by reasoning: `report-abc.pdf` measures two lines and
+`report-2026.pdf` measures one, at identical length and structure, differing only in the
+character after the hyphen.
+
+Not fixed here. It is a visible change to how every filename is laid out, and 7.2 records
+deliberately declining a change of that class to finish a list. Filed for whoever takes the next
+slice, with the measurement above ready to reuse. Worth weighing because date-stamped filenames
+are close to the common case for a shelf.
+
+**A defect the capture did NOT find, because it had never run to the end.** See below.
+
+### 7.6 `render-widgets.ps1` threw on its last render, in every run 7.4 called passing
+
+`$probes` is the drop-target check's list of release points, added by 7.3. Its loop was written
+`foreach ($probe in $probes)`, and `$probe` was already the palette-bearing `Border` that the
+whole script does its resource lookups through. A `foreach` variable outlives its loop in
+PowerShell, so from that point on `$probe` was a `Hashtable`, and the `cloud-shape` render eighty
+lines later died on `TryFindResource`.
+
+Deterministic, unconditional, and in every theme and accent. It cannot have passed on the day
+7.4 was written.
+
+**What this says about the gate, which is the part worth keeping.** The failure was at the very
+end of a long script whose earlier output is a stream of reassuring lines, and every check that
+7.4 actually cared about had already printed `passed` before the throw. Reading the tail for
+`check passed` finds four of them and misses that the run never reached `Done.`. That is the same
+shape as 6.9, where a real failure was invisible because the caller piped the output through
+`Select-Object -Last 6`: in both cases the script reported honestly and the way it was read threw
+the answer away.
+
+Fixed by renaming the loop variable to `$dropProbe`, with the collision named in a comment so it
+is not reintroduced. Verified by the script reaching `Done.` and writing `cloud-shape.png` in all
+three runs below, with all four in-harness checks still passing.
+
+### 7.7 What is verified after 7.5 and 7.6
+
+| | |
+|---|---|
+| Build | clean, 0 warnings |
+| Tests | 473 + 17, all passing |
+| `check-a11y`, `check-shared-xaml`, `check-win32-flags` | passed |
+| `check-contrast` | passed, 288 measurements across 9 accents and both themes |
+| `render-widgets` dark / light / white accent | passed **to `Done.`**, second-pass, menu-survives-render, press-to-drag and drop-target checks all passing |
+| The centred surface on a real screen | captured, `docs/screenshots/shelf-live-centred.png` |
+
+Still not verified, unchanged: pressing, dragging, and every screen reader behaviour. Those need
+a person, for the reason at the top of this document, and that reason survives everything above.

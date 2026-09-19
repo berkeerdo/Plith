@@ -85,7 +85,20 @@ this needed: `docs/SHELF-VERIFICATION.md` §5.
 
 **Verified on hardware for slice 1's plumbing only.** Slice 2 builds clean, passes every lint, and
 renders correctly offscreen in both themes and three accents. None of that presses a key, drags
-a tile, or runs a screen reader. That needs a physical console session, undone as of this slice.
+a tile, or runs a screen reader. That still needs a person, because synthetic input cannot reach
+a UIAccess window.
+
+**But it no longer needs a physical console session to be LOOKED at.** The shelf's centred
+surface was captured live over Remote Desktop on 2026-09-19, which this repo's documents said
+was impossible by any means. That claim turned out to be inherited from the OSD's notes and never
+measured against the shelf, `CAPTUREBLT` turned out not to be what makes the capture work, and
+what actually breaks capture is the session being disconnected or locked, not the window being
+layered. The instrument is `scripts/capture-shelf.ps1`; the reasoning is in
+`docs/SHELF-VERIFICATION.md` §7.5 and the dated section at the top.
+
+**The same premise still stands unexamined over Phases 5 and 6**, where it gates most of the
+open verification items. Nobody has yet pointed a capture at the OSD's own layered window, and
+whoever does should assume the claim is wrong until it is measured, not the other way round.
 
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
