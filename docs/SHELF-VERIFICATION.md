@@ -10,7 +10,39 @@ harness reaches it. So every visual claim about the shelf is either something a 
 at the physical console, or it is not a claim at all.
 
 Session type is read from `qwinsta`, not from `$env:SESSIONNAME`. The environment variable is
-stamped at process start and was wrong on this machine once already.
+stamped at process start and was wrong on this machine once already. Measured again on
+2026-09-19, after moving the session to the console with `tscon`: `qwinsta` reported `console`
+and `$env:SESSIONNAME` still read `RDP-Tcp#0`. The variable is not merely unreliable, it is
+stale by construction.
+
+## The sentence above is true of Remote Desktop and FALSE of the console (2026-09-19)
+
+**At the physical console the shelf CAN be captured, and this changes what this document is
+for.** Driven on 2026-09-19: the catcher's layered shelf window was captured, magnified, and read
+pixel by pixel, including a forty-frame burst taken through its growth animation.
+
+The trick is one flag. `BitBlt` must be called with `SRCCOPY | CAPTUREBLT`; without `CAPTUREBLT`
+layered windows are simply absent from the result, and .NET's `Graphics.CopyFromScreen` cannot
+pass it (its `CopyPixelOperation` enum has no member for the combination, and the OR of the two
+is rejected as an invalid value). So the convenient API silently returns a screenshot with the
+shelf missing, which is indistinguishable from a shelf that never appeared. That is very likely
+how "no screenshot tool reaches it" became the premise in the first place.
+
+What this buys, and it is worth stating plainly because it changes the cost of every remaining
+item here: a person at the console is still required to PRESS things, because synthetic input
+from a Medium process cannot reach Plith's UIAccess window at all (which is this feature's whole
+subject). But they are no longer required to JUDGE things. Alignment, clipping, colour, the
+growth animation, whether a control is where it should be: all of it can now be measured off a
+capture rather than reported from memory.
+
+It already paid for itself twice on the day it was found. A stale installed catcher was caught by
+measuring the pixels along one row of a capture and finding the new-stack outline absent
+(see 6.9), and the extension tag's overflow out of its glyph was caught in a magnified crop
+rather than by a person squinting at a 22 DIP icon.
+
+**What is still out of reach over Remote Desktop is unchanged**, and the paragraph above stands
+for that case: the flag does not help there, because the layered surface is never composed into
+the remote session's frame buffer to begin with.
 
 ---
 
@@ -89,12 +121,28 @@ of them apart from its own success.
     DPI change re-asserting the rectangle, which nothing does yet. The log distinguishes the two:
     `Shelf opened` against `Shelf re-asserted`.
 
-### Status: NOT YET RUN
+### Status: PARTLY RUN at the console, 2026-09-19
 
-**None of the nine items above has been looked at.** The session that built this is
-`rdp-tcp#0` (`qwinsta`, 2026-09-19), a Remote Desktop session, where the window in question cannot
-be captured or judged. Nothing in this section may be reported as passing until a person has run
-the command above at the physical console.
+Driven at the physical console on 2026-09-19, over four runs. Item by item:
+
+| Item | At the console |
+|---|---|
+| 1, 2, 3 (it grows, the page arrives into it, it does not reflow) | NOT looked at. "It appears" was reported, which is not the same claim |
+| 4 (it is readable) | half: the page was legible, the clipping and tearing checks were not made |
+| 5 (the colours) | behaved as designed, which here means the dark FALLBACK, not the product's accent. See the two subsections below |
+| 6 (`Esc` closes it) | **NOT tested.** Zero `Shelf closing: Esc.` lines on 2026-09-19. `foreground=True` makes it possible, which is not the same as testing it |
+| 7 (clicking another application closes it) | PASSES, twice |
+| 8 (the pointer leaving) | the leave-and-stay-away half fired twice. The return-within-the-grace half, and the question the item exists for (is 500 ms right for a hand), are unanswered |
+| 9 (not in Alt+Tab, no taskbar) | NOT tested |
+| 10 (a second `OpenShelf` re-asserts) | still unreachable, unchanged |
+
+The rectangle for this machine is `1088 0 384 224`, not the 1920-wide example above. What was
+measured, what the mode cannot show, and the false alarm it caused are two subsections below,
+after the scripted table.
+
+The earlier text here said none of the items had been looked at, and named `rdp-tcp#0` as the
+reason. That was true when written and is kept in the history rather than in the banner, because
+a stale NOT YET RUN reads as a claim about today.
 
 ### What HAS been measured, scripted, on 2026-09-19
 
@@ -158,6 +206,70 @@ It is also genuinely unknown whether the real gesture hits this at all: the shel
 response to a physical click, and user input relaxes the foreground lock in ways a scripted
 `Start-Process` does not. That is a thing to measure at the console, not to assume in either
 direction.
+
+### What was measured AT THE CONSOLE, on 2026-09-19
+
+The session was moved to the physical console with `tscon 1 /dest:console`. Confirmed by
+`qwinsta` (session 1, `console`, active) and, separately, by the desktop's own display stack:
+the adapter attached to the desktop became `\.\DISPLAY1`, an NVIDIA GeForce RTX 5080, one
+monitor 2560x1440 at 96 DPI, scale 1.0. The rectangle for THIS machine is therefore
+`1088 0 384 224` rather than the 1920-wide example above: `(2560 - 384) / 2 = 1088`, and at
+scale 1.0 a DIP is a physical pixel, so the page's 384 x 224 needs no scaling.
+
+A caution worth keeping, because it cost a round: **`tscon` moves the session but does not move
+the display.** For several minutes the session read `console` while the desktop was still being
+drawn by the `Microsoft Remote Display Adapter` at 1800x1131, which is the old RDP client's
+window size, with the physical output not attached to the desktop at all. `qwinsta` saying
+`console` is necessary and not sufficient. The check that settles it is `EnumDisplayDevices`:
+whether the adapter carrying the desktop is a physical one.
+
+| Measured at the console | Result |
+|---|---|
+| The rectangle is applied | `Shelf opened at 1088,0 384x224` |
+| The window reaches the foreground | `foreground=True`, on all four runs |
+| It does not dismiss itself | one run stood 3 m 45 s untouched |
+| Another window taking focus dismisses it | twice, `Shelf closing: another window took focus.` |
+| The pointer leaving dismisses it after the grace | `Shelf closing: the pointer left and did not come back.` |
+| Selection, including multi-selection | a drag carried `2 path(s)`, which only a two-tile selection can produce |
+| A tile drags OUT | `Drag out returned Copy for 1 path(s).` |
+| A drag does not strand the shelf | `Shelf dismissal deferred (...): a drag or a menu is in flight.` |
+
+**Still not looked at**, and not inferable from any row above: items 1, 2 and 3, the growth
+animation itself. What was reported was "it appears", which is a different claim from "it grows
+rather than cuts". Item 4 is half answered, the page was legible. Right-click was not tried, so
+the context menu is unmeasured here.
+
+### What this mode CANNOT show, written down because it produced a false alarm
+
+A person at the console clicked the header controls, saw nothing happen, and reported the
+feature as broken. That reading was correct about what was visible and wrong about the product,
+and the fault is this section's: it listed ten things to look at and never said which controls
+are inert here.
+
+Three different reasons, worth keeping apart because they are not one finding:
+
+1. **Dead because there is no wire.** Clear, new stack, remove, and restack-by-drag all go
+   through `App.WireShelf` onto `_client`, and in the probe `_client` is null, so every send is
+   a silent no-op. The page does not update itself either: in the real product Plith answers by
+   re-sending the whole shelf, and that reply is what repaints. `WireShelf`'s own header comment
+   states this. This document did not.
+2. **Dead because the paths are invented.** Open and "Show in file manager" never touch the
+   wire, but the probe's three paths do not exist, so they fail for an unrelated reason. A drag
+   out likewise returns `Copy` with nothing landing, which reads as a broken drag and is not
+   one.
+3. **Not the product's colours.** No Plith means no `Palette` message, so the window opens in
+   its built-in dark fallback carrying none of the configured accent. Item 5 says this already;
+   it is repeated here because it was raised as a defect, which is the evidence that saying it
+   once, in a numbered item, was not enough.
+
+What DOES work here, all of it local and repainted locally: selection and multi-selection
+(`ShelfWindow.xaml.cs:260-262`), arrow and `Space` navigation (`ShelfSurface.xaml.cs:331-341`),
+the context menu opening, dragging a tile out, and every dismissal path.
+
+One procedural finding, from driving it: **this section cannot be run item by item by someone
+who reports between items.** Both routes back to a terminal dismiss the shelf, moving the
+pointer off it and clicking another window. The items have to be run in one pass and reported
+afterwards.
 
 ---
 
@@ -442,7 +554,7 @@ open menu means the opposite.
 | Tests | `dotnet test Plith.slnx -m:1`: 472 + 17 passed, 0 failed |
 | `scripts/check-a11y.ps1` | passed: every interactive control has an accessible name, no icon-font use |
 | `scripts/check-shared-xaml.ps1` | passed |
-| `scripts/check-contrast.ps1 -STA` | passed: 234 measurements across 9 accents and both themes |
+| `scripts/check-contrast.ps1` | passed: 234 measurements across 9 accents and both themes |
 | The shelf surface, offscreen, dark theme, lime accent | `shelf-surface.png`: header controls and tile layout unchanged from Task 6's render; the hover remove control is correctly invisible at rest, since nothing in an offscreen render hovers a tile |
 | Same, light theme, lime accent | unchanged layout, ink and surface both legible |
 | Same, dark theme, white accent | unchanged layout, selection ring legible against the white accent |
@@ -717,7 +829,7 @@ window, and Task 8 gave it a consequence it did not have before.
 | Tests | `dotnet test Plith.slnx -m:1`: 472 + 17 passed, 0 failed |
 | `scripts/check-a11y.ps1` | passed |
 | `scripts/check-shared-xaml.ps1` | passed |
-| `scripts/check-contrast.ps1 -STA` | passed, 234 measurements across 9 accents and both themes |
+| `scripts/check-contrast.ps1` | passed, 234 measurements across 9 accents and both themes |
 | `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the Task 5 second-pass check and the Task 7 menu-survives-render check |
 | Session type | `qwinsta`: `rdp-tcp#0`, active. Not the console, so no gesture could be driven |
 
@@ -976,7 +1088,7 @@ reviewed for that yet.
 | Tests | `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`: 472 passed, 0 failed |
 | `scripts/check-a11y.ps1` | passed |
 | `scripts/check-shared-xaml.ps1` | passed |
-| `scripts/check-contrast.ps1 -STA` | passed: 288 measurements across 9 accents and both themes (was 234 before this task: +36 from the two new `ShelfSurface.xaml.cs` pairs, +18 from the selection ring) |
+| `scripts/check-contrast.ps1` | passed: 288 measurements across 9 accents and both themes (was 234 before this task: +36 from the two new `ShelfSurface.xaml.cs` pairs, +18 from the selection ring) |
 | `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the Task 5 second-pass check and the Task 7 menu-survives-render check; `shelf-surface.png` shows both stack captions, no clipping |
 | `scripts/render-widgets.ps1 -Theme Light -Accent '#A3E635'` | passed; same layout, legible in light theme |
 | `scripts/render-widgets.ps1 -Theme Dark -Accent '#FFFFFF'` | passed; selection ring visibly walked off the raw (illegible) white accent |
@@ -1227,6 +1339,141 @@ stand-aside and putting the notch back, and that path is tested
 and has its own console item at section 2.7. So the case where a `ShelfClosed` cannot be delivered
 is the case where Plith already knows the catcher is gone.
 
+### 6.8 The catcher shipped nowhere, found at the console
+
+**The shelf could not work in any installed build, and every gate this repository has was green
+while that was true.**
+
+Found on 2026-09-19 at the physical console, while trying to start Plith the way it really
+starts in order to make section 2.1 mean anything. The autostart entry points at
+`C:\Program Files\Plith\Plith.exe`. That directory held `Plith.exe`, dated 2026-09-17, and **no
+`Plith.DropCatcher.exe` at all**.
+
+The chain, each link measured rather than inferred:
+
+1. `Plith.csproj` copies the catcher beside `Plith.exe` from `CopyDropCatcherBesidePlith`, which
+   runs `AfterTargets="Build"` and writes into `$(OutDir)`. That is the BUILD output.
+2. `dotnet publish` computes `ResolvedFileToPublish` on its own and does not sweep up files a
+   custom target dropped into the build folder. Measured: a fresh publish produced 17 files in
+   the stage root and the catcher was in none of them.
+3. `scripts/manual-install.ps1` publishes into a stage and copies THAT into
+   `C:\Program Files\Plith`. `src/Plith.Installer/Plith.Installer.csproj` does the same publish,
+   zips the whole staging directory and embeds it as `PlithBundle.zip`. Both install paths carry
+   the publish output, so both carried the hole.
+4. `DropCatcherLauncher` resolves the catcher from
+   `Path.GetDirectoryName(Environment.ProcessPath)` and nowhere else, and returns
+   `CatcherStart.NotFound` when the file is absent.
+
+So an installed Plith answers every shelf drop with `NotFound`. Section 2.6 wrote that sentence
+as an edge case reachable by renaming the executable by hand. It was in fact the default state
+of the product.
+
+**What no gate could see.** The build is green because the catcher builds. The 473 + 17 tests
+are green because none of them looks at an artifact. `check-a11y.ps1`, `check-shared-xaml.ps1`
+and `check-contrast.ps1` are green because all three read source. `render-widgets.ps1` is green
+because it renders controls in-process. Every one of them looks at the build output or at the
+code; not one looks at what ships. That is the gap, and it is a category rather than an
+oversight: a file that builds correctly and publishes nowhere is invisible to all of them.
+
+**Fixed** by a second target, `PublishDropCatcherBesidePlith`, hooked to
+`ComputeResolvedFilesToPublishList`, which adds the catcher's output to `ResolvedFileToPublish`.
+The glob both targets need now lives in one `DropCatcherOutputDir` property, because two copies
+of it drifting apart is the same defect class again. Everything is published rather than a
+hand-picked list, so the installed layout matches the one dev runs against.
+
+**Gated** by `scripts/check-publish-shape.ps1`, which publishes for real and inspects the
+artifact. It names each required file with the consequence of its absence rather than as a
+missing path.
+
+**The gate was falsified before it was trusted**, as this document requires. Run against `HEAD`
+before the csproj change it failed, naming `Plith.DropCatcher.exe`, `Plith.DropCatcher.dll` and
+`Plith.DropCatcher.runtimeconfig.json`, with the stage at 17 files. Run after, it passes with
+the stage at 22.
+
+One thing this does NOT prove: no installer has been built and run end to end since the fix. The
+chain from publish output to `PlithBundle.zip` is a `ZipDirectory` over the whole staging
+directory, so it follows, but it follows by reading rather than by measurement. Worth an actual
+installer run before release.
+
+### 6.9 The installer shipped the old catcher, silently, whenever one was running
+
+Found on 2026-09-19 while trying to look at a redesigned shelf and being shown the previous
+design by a build that had just reported a successful install.
+
+`scripts/manual-install.ps1` stopped `Plith.exe` before copying and did not stop
+`Plith.DropCatcher.exe`. The catcher is a separate process holding its own
+`Plith.DropCatcher.dll` open out of `C:\Program Files\Plith`, so the copy over that one file
+failed with a sharing violation while the other twenty-one landed.
+
+Every signal said the install had worked. The script's own verification reads `Plith.exe`'s
+version, and `Plith.exe` copied fine. The result is a product running new code in one process
+and five-hour-old code in the other, across a named pipe whose message format both ends must
+agree on.
+
+Measured rather than inferred: the installed `Plith.DropCatcher.dll` was stamped `10:03:55` and
+92,672 bytes while `bin/Release` held `15:07:14` and 93,696 bytes, and a fresh publish into a
+temporary directory produced the newer one, which ruled out the publish path (6.8) as the cause.
+
+**Fixed**: the script now stops the catcher too, Plith first and the catcher second, because
+Plith restarts the catcher when it sees it go and the other order can leave a fresh one holding
+the file again by the time the copy starts. A catcher that will not die is reported as a warning
+naming the consequence rather than as a silent skip.
+
+**Not fixed, and worth someone's attention**: the verification step still only checks
+`Plith.exe`'s version. An install that fails to replace the catcher can still pass it. What would
+close this properly is comparing the installed catcher against the staged one, and that is a
+small change nobody has written yet.
+
+One honest note about how this was found, because it was nearly missed: the install output WAS
+reporting the failure. It prints a `failed: N` line with the file name and the exception message.
+It was invisible because the command that ran it piped the output through `Select-Object -Last 6`,
+which cut exactly the lines that mattered. The script did its job and the way it was called threw
+the answer away.
+
+### 6.10 The notch came back in the corner, and the flags were the reason
+
+Reported from the physical console on 2026-09-19: after the shelf closed, the notch reappeared in
+the TOP-LEFT corner of the screen and stayed there for several seconds before returning to
+centre.
+
+First instrumented against the wrong window. A watcher polling Plith's main window rect reported
+`1088,0 384x130`, dead centre, delta 0, across a full minute: the gesture had simply not been
+made during that window, and the run was reported as "not reproduced" rather than as proof of
+anything. A second watcher, over EVERY visible window of both processes, caught it on the first
+try:
+
+```
+12:31:04.494  CATCHER 1088,0 384x224 'Plith shelf'      <- the shelf, centred
+12:31:05.753  PLITH      0,0 384x130                    <- the notch, 1088 px left of centre
+```
+
+The cause is two `SetWindowPos` calls in `OsdHost`:
+
+```csharp
+SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_HIDEWINDOW);   // HideForCatcher
+SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);   // RestoreNotch
+```
+
+The four zeros are the conventional filler for "not moving or sizing anything", but that meaning
+lives in `SWP_NOMOVE` and `SWP_NOSIZE`, which neither call passed. So the hide really did move the
+window to 0,0, where nobody could see it because it was hidden, and the restore showed it there.
+It stayed until the next `Reposition` ran, which is the several seconds the report described. The
+correct call was already in the same file fifty lines below.
+
+A second symptom from the same cause, reported in the same breath and worth recording because it
+looks like a different bug: the notch could still be OPENED from the centre of the screen while
+the visible strip sat in the corner. Only the window had moved; the hover rectangle and the
+positioning arithmetic still described the centre.
+
+**Fixed** by adding both flags, and **gated** by `scripts/check-win32-flags.ps1`, which fails any
+`SetWindowPos` passing four zero coordinates without declaring them. The gate was falsified before
+it was trusted: removing either flag from either call site fails it with that call site's line
+number, and it distinguishes the two spellings in this repository (`SWP_NOMOVE` in `OsdHost`,
+`SWP.NOMOVE` in `BandWindow`) after reporting BandWindow's perfectly correct call as a defect on
+its first run.
+
+**Verified at the console after the fix**: `1088,0 384x130`, and no window at the left edge.
+
 ### What HAS been measured, on 2026-09-19, after these fixes
 
 | Measured | Result |
@@ -1235,6 +1482,7 @@ is the case where Plith already knows the catcher is gone.
 | Tests | `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`: 473 passed, 0 failed (was 472: +1 for the stack cap) |
 | `scripts/check-a11y.ps1` | passed, with six known gaps as notices; both new holes proven closed by temporary probes (6.4) |
 | `scripts/check-shared-xaml.ps1` | passed: 3 files compiled into both Plith and the installer, none naming an assembly |
+| `scripts/check-publish-shape.ps1` | NEW, see 6.8. Failed before the fix (17 files, catcher absent), passes after (22 files) |
 | `scripts/check-contrast.ps1` | passed: 288 measurements across 9 accents and both themes |
 | `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the new press-to-drag check |
 | `scripts/render-widgets.ps1 -Theme Light -Accent '#A3E635'` | passed, same |
@@ -1253,3 +1501,87 @@ makes the second half fail with its own message. The stack cap: removing the cla
 fail with `Assert.Single() Failure: The collection contained 2 items`, a clean assertion rather
 than the `OutOfMemoryException` an `int.MaxValue` total would have produced, which is why the test
 uses 100,000 and says so. A check nobody has seen fail is a check nobody has seen.
+
+---
+
+## 7. The look, reworked after the first person saw it (2026-09-19)
+
+The first time the shelf was looked at on real hardware by the person it is for, the report was
+that the design was bad, and, separately, that the feature might not be needed at all. The second
+half is a product decision recorded in `docs/ROADMAP.md`. This section is the first half.
+
+### 7.1 What was wrong, and what turned out not to be
+
+The loudest complaint was that the panel is olive green. **That one is not the shelf's.** The
+shelf takes its surface from `AccentTheme.DeriveOsdSurfaces`, the same call every other card in
+the product makes, and `ShelfSession.DerivePalette`'s header says why it must: a second derivation
+would drift and the shelf would stop looking like the product it belongs to. Rendered side by
+side, the clock widget is exactly as green. What makes it olive is the ACCENT: `#CAFF33` is a
+saturated yellow-green, and tinting a dark surface toward it lands on olive, while emerald and
+sky land on clean deep green and navy from the same code.
+
+Recorded as a product finding rather than acted on here, because acting on it means changing how
+every surface derives from every accent and re-measuring nine accents across two themes:
+`AccentTheme.Presets`' own comment calls the presets "tuned to look decent on both dark and light
+surfaces", and lime on a dark surface falsifies that sentence. **A preset the product ships and
+does not look decent in is the product's defect, not the user's choice.** The accent was left as
+the user set it.
+
+The media widget looking near-black in the same renders is not a counter-example: it paints its
+own dark scrim over album artwork and covers the gradient.
+
+### 7.2 What was changed
+
+| | |
+|---|---|
+| Dead space | Two stacks used about 45 % of the card and the rest was blank. The area past the last stack is now a drawn, dashed new-stack zone, one column wide, and the whole row is centred |
+| The count | "+4" over the word "more", at 18-20 point in full ink, inside a full-size tile, read as another FILE. It is one muted line now on both surfaces, with the sentence kept in the tooltip and the automation name |
+| Icons | Every tile on the notch page drew the same document outline. The extension is now drawn inside the glyph |
+| Empty state | A sentence alone, instructing without showing where. It sits inside a dashed outline now, on both surfaces |
+| Stack captions | "Stack 1" says nothing when there is one stack. The caption is silent then; its band is kept so the separator height and tile alignment do not move |
+| Header proportions | **Deliberately not changed.** It was on the list, and once the body calmed down the header no longer read as oversized. Changing something that looks right to finish a list is how a list wins an argument against a screen |
+
+### 7.3 Two things this changed that were not visual at all
+
+**The icon fix was redesigned mid-implementation.** The approved plan was to compile
+`ShellIcons.cs` into Plith so the notch page could show real shell icons like the catcher's window
+does. That class's header forbids exactly this, and the reason is good: extracting a shell icon
+loads the icon handler the extension is registered to, which is third-party code chosen by the
+shell, and Plith runs UIAccess-signed at High integrity. The extension tag closes the same
+complaint without crossing that boundary, and it recovers information the name trim takes away
+("invoice-2..." keeps its XLSX).
+
+**Centring the row moved the drop target into a different coordinate space**, and this is the
+dangerous part of a change that looks purely cosmetic. `Columns` used to span the full card and
+catch its own drops. It is centred now, so the drop handler moved to a full-width `ColumnsHost` —
+releasing a tile past the last stack is how a new stack is made, and a panel shrunk to its content
+would stop receiving that release. `TargetStackIndex` translates columns into the host's space to
+match.
+
+`scripts/render-widgets.ps1` gained a `drop-target check` for it, and **the check was falsified
+before it was trusted**: with the translation put back to the old space, a release inside the
+FIRST column resolves to stack 1, the second one. Silently restacking onto the wrong stack, from a
+change whose entire visible effect was where a row sits. This branch has lost the drag gesture to
+a layout change once already (6.1).
+
+The check also had to be fixed before it could pass honestly. Its first two runs failed because
+the tree had not been arranged since the previous check's `Render`, so every column reported
+`0 x 0` and every probe fell through to "new stack". Calling `Measure`/`Arrange`/`UpdateLayout`
+on the surface does not help: `Save-Visual` detaches the element, and a detached element with no
+`PresentationSource` does not run a layout pass on request. It has to be parented first. That was
+diagnosed by dumping every child's translated bounds rather than by a third guess.
+
+### 7.4 What is verified, and what is not
+
+Measured: build clean, 473 + 17 tests, `check-a11y`, `check-shared-xaml`, `check-contrast` at 288
+measurements, `check-publish-shape`, `check-win32-flags`, and `render-widgets` in dark, light and
+white-accent runs, each including the new drop-target check.
+
+Looked at on a real screen: the catcher's shelf window, captured at the console (see the note at
+the top of this document) in its pre-centring form. **The centred version has been rendered and
+gated but not yet captured live**, because two attempts to install it were cancelled at the UAC
+prompt. What that leaves unverified is narrow, since a capture of the previous build and its
+render agreed exactly, but it is not nothing and it is not claimed.
+
+Not verified by any of the above, unchanged from the rest of this document: pressing, dragging,
+and every screen reader behaviour.
