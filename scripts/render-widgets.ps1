@@ -526,6 +526,105 @@ if ($menuEvents.Count -ne 2 -or $menuEvents[1]) {
 "Render rebuilds the tiles under it, and MenuOpenChanged reports both the open and the close."
 
 
+# --- a press must survive the render that press itself triggers ----------------------------
+#
+# The whole-branch review found the headline feature of this slice could not execute, and no
+# gate on the branch could see it, because it lived in a SEAM: one task taught a press to
+# re-render (ShelfWindow answers EntryPressed with Page.Render), another taught a press to grow
+# into a drag, and each was correct on its own. Render clears Columns.Children and rebuilds
+# every tile, so the element that took the press was out of the tree before the button came up;
+# with the press state kept in a local captured by that element's own handlers, the replacement
+# tile came up with nothing to continue and DragOutRequested could never be raised. Dragging a
+# file out to another application, and dragging a tile between stacks, were both dead on the
+# first gesture and on every one after it.
+#
+# This drives that seam for real: a genuine PreviewMouseLeftButtonDown raised on a genuine tile,
+# EntryPressed wired exactly the way ShelfWindow wires it (select, then re-render), and then the
+# move that should still become a drag afterwards.
+#
+# WHAT IS SUBSTITUTED, and why, so this check is not read as more than it is. The move's
+# position and button state come from the MOUSE DEVICE, and neither can be synthesized offscreen:
+# MouseDevice.GetPosition returns (0,0) for an element in no PresentationSource, and
+# MouseEventArgs.LeftButton reports the physical button, which no script can hold down. So the
+# move arrives through ShelfSurface.ContinuePress - the same method, with the same arguments,
+# that the tile's own PreviewMouseMove handler calls, and the ONLY thing the handler adds is the
+# e.LeftButton test. The press, the render and the tile teardown are all real.
+$dragEvents = [System.Collections.Generic.List[object]]::new()
+$shelfSurface.add_DragOutRequested([Action[Windows.DependencyObject, System.Collections.Generic.IReadOnlyList[string]]]{
+    param($src, $paths) $dragEvents.Add([pscustomobject]@{ Source = $src; Paths = @($paths) })
+})
+
+# Exactly what ShelfWindow's constructor does with EntryPressed, including the unconditional
+# Render that is the whole point of this check.
+$pressRenders = 0
+$shelfSurface.add_EntryPressed([Action[string, bool]]{
+    param($path, $additive)
+    $script:pressRenders++
+    if ($additive) { $surfaceModel.Select($path, $true) } else { $surfaceModel.DragPaths($path) | Out-Null }
+    $shelfSurface.Render($surfaceModel)
+})
+
+$pressedPath = Join-Path $bin 'Plith.exe'
+$pressedTile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $pressedTile) { throw "press-to-drag check: no Plith.exe tile to press." }
+if ($dragEvents.Count -ne 0) { throw "press-to-drag check: a drag was raised before anything was pressed." }
+
+# The press start, read the same way the down handler reads it (the same device, the same
+# relative element), so the threshold arithmetic below is measured against what was recorded
+# rather than against an assumption about it.
+$pressOrigin = [Windows.Input.Mouse]::GetPosition($shelfSurface)
+
+$down = [Windows.Input.MouseButtonEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice, 0, [Windows.Input.MouseButton]::Left)
+$down.RoutedEvent = [Windows.UIElement]::PreviewMouseLeftButtonDownEvent
+$pressedTile.RaiseEvent($down)
+
+# PRECONDITIONS, asserted before the thing this check is about, so it cannot pass vacuously.
+if ($pressRenders -ne 1) {
+    throw "press-to-drag check: the press did not reach EntryPressed (renders: $pressRenders). " +
+          "Nothing below would prove anything - the defect being checked is a press SURVIVING a render."
+}
+$rebuiltTile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $rebuiltTile) { throw "press-to-drag check: the tile is gone entirely after the render." }
+if ([object]::ReferenceEquals($rebuiltTile, $pressedTile)) {
+    throw "press-to-drag check: Render did NOT replace the pressed tile, so the seam this check " +
+          "exists for is not being exercised. Either Render stopped rebuilding tiles or the " +
+          "press stopped triggering one, and either way this check has become decoration."
+}
+
+# Below the threshold it is still a click: this must NOT raise, and must NOT consume the press.
+$hMin = [Windows.SystemParameters]::MinimumHorizontalDragDistance
+$vMin = [Windows.SystemParameters]::MinimumVerticalDragDistance
+$near = [Windows.Point]::new($pressOrigin.X + $hMin - 1, $pressOrigin.Y + $vMin - 1)
+if ($shelfSurface.ContinuePress($rebuiltTile, $pressedPath, $near)) {
+    throw "press-to-drag check FAILED: a move of ($($hMin - 1), $($vMin - 1)) started a drag, " +
+          "under the system threshold of ($hMin, $vMin). A click would become a drag."
+}
+if ($dragEvents.Count -ne 0) { throw "press-to-drag check FAILED: DragOutRequested fired below the drag threshold." }
+
+# And past it, it is a drag. THIS is the assertion the review asked for.
+$far = [Windows.Point]::new($pressOrigin.X + $hMin + 1, $pressOrigin.Y + $vMin + 1)
+if (-not $shelfSurface.ContinuePress($rebuiltTile, $pressedPath, $far)) {
+    throw "press-to-drag check FAILED: a press that triggered a re-render can no longer become " +
+          "a drag. The rebuilt tile has no press behind it, so DragOutRequested is never raised - " +
+          "dragging a file OUT and dragging a tile between stacks are both dead. This is the " +
+          "Critical the whole-branch review found."
+}
+if ($dragEvents.Count -ne 1) {
+    throw "press-to-drag check FAILED: expected exactly one DragOutRequested, got $($dragEvents.Count)."
+}
+if (-not [object]::ReferenceEquals($dragEvents[0].Source, $rebuiltTile)) {
+    throw "press-to-drag check FAILED: the drag was raised for an element that is not the tile " +
+          "under the pointer. ShelfWindow.StartDrag refuses a source that is not in its own " +
+          "window, so a detached tile here would be refused at the next step instead of dragging."
+}
+if ($dragEvents[0].Paths -notcontains $pressedPath) {
+    throw "press-to-drag check FAILED: the drag carries $($dragEvents[0].Paths -join ', '), not the pressed path $pressedPath."
+}
+
+"  press-to-drag check passed: a press that re-rendered the shelf under itself still became a " +
+"drag on the rebuilt tile (threshold $hMin x $vMin honoured on both sides), carrying the pressed path."
+
+
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a
 # clipped dots lane went unnoticed: the pages looked fine on their own.

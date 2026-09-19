@@ -126,9 +126,24 @@ public partial class ShelfSurface : UserControl
     /// <inheritdoc cref="_focusColumn"/>
     private int? _focusRow;
 
+    /// <summary>
+    /// The press a drag could still grow out of: which PATH was pressed, and where the pointer
+    /// was when it happened, in THIS control's coordinates. Null between gestures.
+    ///
+    /// On this control, keyed by path, and both halves of that are the fix for a defect a green
+    /// build could not see. See <see cref="BeginPress"/>.
+    /// </summary>
+    private (string Path, Point Start)? _press;
+
     public ShelfSurface()
     {
         InitializeComponent();
+
+        // A button-up ANYWHERE on this control ends the press, not only one on the tile that
+        // took it. A preview event tunnels through this root whatever the pointer is over, so a
+        // release in the gap between two tiles, or on the header, is caught here rather than
+        // leaving a press outstanding with no gesture behind it.
+        PreviewMouseLeftButtonUp += (_, _) => EndPress();
     }
 
     /// <summary>A tile was pressed: the path, and whether the press was additive (Ctrl held).
@@ -407,6 +422,71 @@ public partial class ShelfSurface : UserControl
             $"Shelf, {stacks.Count} stack{(stacks.Count == 1 ? "" : "s")}"));
     }
 
+    /// <summary>
+    /// Remember a press, so a later move can decide it was the start of a drag.
+    ///
+    /// THE TRAP THIS SHAPE EXISTS TO CLOSE, because it cost the headline feature of this slice
+    /// and nothing on this branch could see it: the press state used to be a local in
+    /// <see cref="BuildTile"/>, captured by that one tile's own handlers. A press raises
+    /// <see cref="EntryPressed"/>, ShelfWindow answers it by re-rendering, and
+    /// <see cref="Render"/> clears Columns.Children and rebuilds every tile from scratch. So the
+    /// element that took the press was out of the tree before the button came up, the
+    /// REPLACEMENT tile's handlers saw a fresh null, and no move on it could ever reach the drag
+    /// threshold. Dragging a file out to another application, and dragging a tile between
+    /// stacks, were both dead on the first gesture and on every one after it.
+    ///
+    /// Keeping it here, keyed by the path rather than by the element, is what makes a render
+    /// survivable rather than merely avoidable. ANY Render may run between a press and the move
+    /// that follows it - not just the one this press causes: Plith re-sends the whole shelf after
+    /// every mutating verb, and a Palette message re-renders too. A fix that only stopped this
+    /// one render would leave the next person to add one to rediscover the same defect. If you
+    /// are adding a Render call, that is the trap: it is safe, and it is safe BECAUSE nothing
+    /// about a gesture in progress is stored on the elements Render destroys.
+    ///
+    /// The point is in THIS control's coordinates rather than the tile's, for the same reason.
+    /// A tile-relative origin measures the pointer against something a re-render is allowed to
+    /// move, so a rebuild that put the same path in a different slot would read as a large
+    /// pointer movement and start a drag nobody asked for. This control does not move under its
+    /// own tiles.
+    /// </summary>
+    public void BeginPress(string path, Point start) => _press = (path, start);
+
+    /// <summary>The press is over without a drag: a button-up, anywhere on this control.</summary>
+    public void EndPress() => _press = null;
+
+    /// <summary>
+    /// A pointer moved while a press is outstanding. Raises <see cref="DragOutRequested"/> and
+    /// returns true once the move clears the system's drag threshold, and does nothing at all
+    /// below it, which is what keeps a click a click.
+    ///
+    /// <paramref name="path"/> is the path of the tile the pointer is over now, and it must
+    /// match the pressed one: a press on tile A followed by a move over tile B is not a drag of
+    /// B. <paramref name="tile"/> is the live element under the pointer, which after a re-render
+    /// is a different object from the one pressed - it is passed on to ShelfWindow.StartDrag,
+    /// whose guard asks whether the element belongs to the window about to call DoDragDrop, and
+    /// only an element that is still IN the tree can answer that.
+    /// </summary>
+    public bool ContinuePress(DependencyObject tile, string path, Point current)
+    {
+        if (_press is not { } press || !PathEquals(press.Path, path)) return false;
+
+        if (Math.Abs(current.X - press.Start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+            Math.Abs(current.Y - press.Start.Y) < SystemParameters.MinimumVerticalDragDistance) return false;
+
+        // Cleared before the drag starts, not after: ShelfWindow.StartDrag runs DoDragDrop
+        // synchronously on this stack frame, that call pumps its own message loop until the drag
+        // ends, and a MouseMove that reaches this method again while it is still running must not
+        // try to start a second drag on top of the first.
+        _press = null;
+        var paths = _lastModel?.DragPaths(path) ?? [path];
+
+        DragOutRequested?.Invoke(tile, paths);
+        return true;
+    }
+
+    private static bool PathEquals(string a, string b) =>
+        string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
     private void OnNewStackClick(object sender, RoutedEventArgs e) => NewStackRequested?.Invoke();
 
     // Asks nothing first, on purpose: the shelf holds references, not the files themselves, so
@@ -639,10 +719,6 @@ public partial class ShelfSurface : UserControl
         tile.MouseEnter += (_, _) => removeButton.Visibility = Visibility.Visible;
         tile.MouseLeave += (_, _) => removeButton.Visibility = Visibility.Collapsed;
 
-        // Where the current press started, so PreviewMouseMove can tell a click from the
-        // beginning of a drag. Null between gestures and while none is in progress.
-        Point? pressStart = null;
-
         tile.PreviewMouseLeftButtonDown += (_, e) =>
         {
             // The remove button sits inside this tile's own visual tree, so a click on it
@@ -651,7 +727,9 @@ public partial class ShelfSurface : UserControl
             // selection change the person never asked for on a tile that is a moment from gone.
             if (IsDescendantOf(e.OriginalSource as DependencyObject, removeButton)) return;
 
-            pressStart = e.GetPosition(tile);
+            // Recorded BEFORE EntryPressed is raised, because raising it is what destroys this
+            // element. See BeginPress for the whole of that trap.
+            BeginPress(entry.Path, e.GetPosition(this));
 
             // Keyboard navigation's position follows the mouse, not just the other way round:
             // without this, clicking a tile and then pressing an arrow key would move relative to
@@ -665,26 +743,19 @@ public partial class ShelfSurface : UserControl
 
         tile.PreviewMouseMove += (_, e) =>
         {
-            if (pressStart is not { } start || e.LeftButton != MouseButtonState.Pressed) return;
+            // e.LeftButton, checked here rather than inside ContinuePress, because it is the one
+            // part of a press this control cannot hold for itself: it is the mouse device's live
+            // state, and only an element in a real input route can be asked for it.
+            if (e.LeftButton != MouseButtonState.Pressed) return;
 
-            var current = e.GetPosition(tile);
-            if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
-                Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
-
-            // Cleared before the drag starts, not after: ShelfWindow.StartDrag runs DoDragDrop
-            // synchronously on this stack frame, that call pumps its own message loop until the
-            // drag ends, and a MouseMove that reaches this handler again while it is still
-            // running must not try to start a second drag on top of the first.
-            pressStart = null;
-            var paths = _lastModel?.DragPaths(entry.Path) ?? [entry.Path];
-
-            // The tile, not this control and not the window: StartDrag's guard asks whether the
-            // element the press actually landed on belongs to the window about to call
-            // DoDragDrop, and only the pressed element can answer that.
-            DragOutRequested?.Invoke(tile, paths);
+            // `tile` is whichever tile the pointer is over NOW, which after a re-render is a
+            // different object from the one the press landed on. That is fine and is the point:
+            // the press lives on this control, keyed by path, so the replacement tile can finish
+            // the gesture the destroyed one started.
+            _ = ContinuePress(tile, entry.Path, e.GetPosition(this));
         };
 
-        tile.PreviewMouseLeftButtonUp += (_, _) => pressStart = null;
+        tile.PreviewMouseLeftButtonUp += (_, _) => EndPress();
 
         return tile;
     }

@@ -202,6 +202,16 @@ public partial class ShelfWindow : Window
         // collapsing it to the one pressed, which is what lets a following drag still carry more
         // than one path. The paths DragPaths returns are not needed by this handler; only its
         // effect on Selection is, which Render then paints as the selection ring.
+        //
+        // THIS RENDER RUNS INSIDE THE PRESS, and it tears down the very tile the press landed
+        // on: Render clears Columns.Children and rebuilds every tile. That killed drag-out and
+        // restack outright for as long as ShelfSurface kept its press state in a local captured
+        // by one tile's own handlers, because the replacement tile came up with nothing to
+        // continue. It is safe now, and it is safe for a reason worth knowing before adding
+        // another Render call anywhere: ShelfSurface.BeginPress keeps the press on the SURFACE,
+        // keyed by path, precisely so no render can take a gesture down with the elements it
+        // rebuilds. The render harness drives that seam (scripts/render-widgets.ps1, the
+        // press-to-drag check) rather than leaving it to be reasoned about a second time.
         Page.EntryPressed += (path, additive) =>
         {
             if (additive) _model.Select(path, true);
