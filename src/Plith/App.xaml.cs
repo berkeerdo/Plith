@@ -200,6 +200,10 @@ public partial class App : Application
 
         _dropChannel = new DropChannelServer(sid, _diagnosticLog);
         _dropChannel.Received += OnDropChannelMessage;
+        // A catcher that dies while the shelf is up sends no ShelfClosed, and Plith's own window
+        // is hidden for the duration of one. Without this the OSD stays hidden until Plith
+        // restarts, which is a great deal worse than a missing shelf.
+        _dropChannel.Disconnected += OnDropChannelDisconnected;
         _dropChannel.Start();
         _osd?.AttachDropChannel(_dropChannel);
         _diagnosticLog?.Info("Shelf", "Drop channel listening.");
@@ -218,6 +222,14 @@ public partial class App : Application
         var settings = _settings?.Current;
         var baseColor = AccentTheme.ResolveBase(settings?.AccentThemeId, settings?.CustomAccentColor);
         return ShelfSession.DerivePalette(baseColor, _theme?.IsEffectiveDark ?? true);
+    }
+
+    /// <summary>Raised off the UI thread by the pipe's read loop, like every other signal from
+    /// it, so it takes the same route onto the UI thread.</summary>
+    private void OnDropChannelDisconnected()
+    {
+        _diagnosticLog?.Info("Shelf", "Drop catcher disconnected.");
+        Dispatcher.BeginInvoke(new Action(() => _shelfSession?.OnChannelLost()));
     }
 
     private void OnDropChannelMessage(DropMessage message)

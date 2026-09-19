@@ -60,7 +60,15 @@ public sealed class ShelfSession
     /// mean the notch staying up over a shelf that is already growing.</summary>
     public event Action? Opened;
 
-    /// <summary>The shelf reported itself gone.</summary>
+    /// <summary>
+    /// The shelf is gone, whichever way it went.
+    ///
+    /// TWO causes, and the second is the one that matters. Usually the surface reported itself
+    /// closed. But the catcher can also die while the shelf is up, and then no ShelfClosed ever
+    /// arrives: Plith's own window is hidden for the duration, so without a second cause the
+    /// result is not a missing notch, it is a missing OSD, with volume keys showing nothing until
+    /// Plith restarts. <see cref="OnChannelLost"/> is that second cause.
+    /// </summary>
     public event Action? Closed;
 
     /// <summary>The shelf cannot be shown, with a sentence saying why. A click that does nothing
@@ -100,17 +108,55 @@ public sealed class ShelfSession
         SendStacks();
         Send(DropVerb.OpenShelf, [], x, y, w, h);
 
+        // Asked AGAIN, after the sends. The first check can be stale by the time it matters: the
+        // read loop runs on its own thread and may have noticed the catcher was gone while this
+        // method was resolving a palette. Reporting Opened anyway takes the notch down for a
+        // shelf that will never appear and never close, which is the worst outcome this method
+        // has. It does not close the window fully, because PipeStream caches its state rather
+        // than probing it, so a catcher killed a microsecond ago still reads as connected here;
+        // that case is answered by OnChannelLost instead, which is why both exist.
+        if (!_channel.IsConnected)
+        {
+            _log?.Warn("Shelf", "The catcher went away while the shelf was being sent.");
+            Unavailable?.Invoke("The shelf helper stopped responding.");
+            return;
+        }
+
+        _shelfOpen = true;
         _log?.Info("Shelf", $"Shelf requested at {x},{y} {w}x{h} with {_store.Stacks.Count} stack(s).");
         Opened?.Invoke();
     }
 
     /// <summary>
+    /// The catcher is gone and a shelf was up. Put the notch back.
+    ///
+    /// Called from the channel's Disconnected signal, marshalled onto the UI thread by App. Does
+    /// NOT prune empty stacks, unlike an orderly ShelfClosed: pruning is a tidy-up for a surface
+    /// that finished its work, and this surface did not. A stack the person made and had not yet
+    /// filled survives to the next open rather than being swept away because a process crashed.
+    /// </summary>
+    public void OnChannelLost()
+    {
+        if (!_shelfOpen) return;
+
+        _shelfOpen = false;
+        _log?.Warn("Shelf", "The catcher went away while the shelf was open; putting the notch back.");
+        Closed?.Invoke();
+    }
+
+    /// <summary>Whether a shelf is believed to be on screen. Believed rather than known: the only
+    /// evidence is what has been sent and what has come back, and the whole point of
+    /// <see cref="OnChannelLost"/> is that the answer can stop being true without anyone saying
+    /// so.</summary>
+    private bool _shelfOpen;
+
+    /// <summary>
     /// Something the catcher asked for.
     ///
     /// Every verb below changes the SHELF, never this process: there is no verb here that runs
-    /// anything, opens anything or touches a file. That is the whole shape of the trust boundary
-    /// — the catcher describes what the person did to the surface, and ShelfStore decides what
-    /// that means, including refusing paths it cannot stat and indices out of range.
+    /// anything, opens anything or touches a file. That is the whole shape of the trust
+    /// boundary. The catcher describes what the person did to the surface, and ShelfStore decides
+    /// what that means, including refusing paths it cannot stat and indices out of range.
     /// </summary>
     public void HandleMessage(DropMessage message)
     {
@@ -145,6 +191,7 @@ public sealed class ShelfSession
                 // somewhere of its own to go, and removing the last item from a stack must not
                 // make the stack vanish under the pointer. Once the surface is gone there is
                 // nothing to hold a place for.
+                _shelfOpen = false;
                 _store.PruneEmptyStacks();
                 Closed?.Invoke();
                 break;
@@ -163,7 +210,7 @@ public sealed class ShelfSession
     /// A shelf holds at most twenty items, so "cheapest" is not a figure of speech.
     ///
     /// An EMPTY shelf still sends one message, and that is not a formality. The obvious loop
-    /// sends nothing when there are no stacks, which is silence — and silence on this wire means
+    /// sends nothing when there are no stacks, which is silence, and silence on this wire means
     /// "nothing changed", so clearing the shelf while it is open would leave every tile on
     /// screen. ShelfModel reads index 0 as the start of a fresh delivery and a total of 0 as a
     /// delivery with no stacks in it, so one message saying (0, 0, no paths) is how "there is
@@ -207,7 +254,7 @@ public sealed class ShelfSession
             return;
         }
 
-        // Logged either way. The grant fails silently by design — the call returns FALSE when
+        // Logged either way. The grant fails silently by design: the call returns FALSE when
         // this process does not itself hold the foreground right, and Plith's OSD window is
         // never activated, so that is a real possibility rather than a theoretical one. A shelf
         // that opens unfocused is indistinguishable on screen from one that opens focused, and
@@ -220,7 +267,7 @@ public sealed class ShelfSession
     private static string Explain(CatcherStart start) => start switch
     {
         // Two different waits, and they need different sentences: one has just been started and
-        // will be along, the other was already running and therefore is NOT along — it is up but
+        // will be along, the other was already running and therefore is NOT along: it is up but
         // has not reached the pipe, which is what a catcher still starting looks like.
         CatcherStart.Started => "Starting the shelf helper. Try again in a moment.",
         CatcherStart.AlreadyRunning => "The shelf helper is starting up. Try again in a moment.",
@@ -235,8 +282,8 @@ public sealed class ShelfSession
     /// Every value here is taken from the same call ThemeService.BuildAccentOverride makes for
     /// the key beside it, rather than being derived a second way: NotchInk is PairOn(SurfaceEnd)
     /// there and is PairOn(SurfaceEnd) here, and so on down the list. A second derivation would
-    /// drift, and the drift would show as the shelf not looking like the product it belongs to
-    /// — which is the whole reason the ANSWER crosses the wire rather than the accent.
+    /// drift, and the drift would show as the shelf not looking like the product it belongs to,
+    /// which is the whole reason the ANSWER crosses the wire rather than the accent.
     ///
     /// The two surfaces are sent WITHOUT the F0 alpha ThemeService applies. The catcher paints
     /// them on its own layered window with its own opacity, and an alpha applied twice would

@@ -32,11 +32,16 @@
          a row that measures taller than it was meant to: the row clips inside its own track
          instead, which is the same rule WidgetFrame applies to the page as a whole.
 
-         The bottom margin is 22, not 24, and the row is 70 tall rather than 76. Those four DIP
-         plus the six are what the line under the row is made of. It has to end above y=96, where
-         WidgetFrame's rail lane begins - the rail is invisible most of the time and fades in on
-         every page turn, so anything overlapping it is a collision that only appears while the
-         page is being changed. -->
+         The bottom margin is 22, not 24, and the row is 68 tall rather than 76. Those two DIP
+         plus the eight are what the line under the row is made of: 116 less 12 and 22 leaves an
+         82 DIP content box, the line measures about 13.3, and 68 is what is left.
+
+         Where that has to end is the part worth stating precisely, because the first version of
+         this comment got it wrong. WidgetFrame's bottom row is 23 DIP, so its rail LANE begins at
+         y=93, not 96 - the page's content ends at about that line. The rail's own 16 DIP target
+         is centred in the lane and starts at 96.5, and its visible 3 DIP mark sits at about 101.
+         The rail is invisible most of the time and fades in on every page turn, so anything
+         overlapping it is a collision that only appears while the page is being changed. -->
     <Grid Margin="20,12,20,22">
         <Grid.RowDefinitions>
             <RowDefinition Height="*" />

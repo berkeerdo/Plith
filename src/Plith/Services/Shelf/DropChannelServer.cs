@@ -35,6 +35,19 @@ public sealed class DropChannelServer : IDisposable
     /// <summary>Raised off the UI thread, once per decoded line.</summary>
     public event Action<DropMessage>? Received;
 
+    /// <summary>
+    /// A catcher that WAS connected is gone. Raised off the UI thread, once per connection lost,
+    /// and never for a connection that was never made.
+    ///
+    /// It exists because IsConnected cannot be polled for this. PipeStream caches its state and
+    /// does not probe, so the flag only turns false once an operation on the pipe has failed or
+    /// this loop has called Disconnect. Anything waiting on an answer from the catcher therefore
+    /// has no way to learn that no answer is coming, and the shelf is exactly that: Plith's own
+    /// window is down for the duration, and without this signal a catcher dying while the shelf
+    /// is up leaves the OSD hidden until Plith restarts.
+    /// </summary>
+    public event Action? Disconnected;
+
     /// <summary>True while a catcher is on the other end. Plith must not hide the notch for a
     /// catcher that is not there — that would leave the drag over nothing at all.</summary>
     public bool IsConnected => _pipe is { IsConnected: true };
@@ -90,6 +103,11 @@ public sealed class DropChannelServer : IDisposable
                 _log?.Info("DropChannel", $"Client gone: {ExceptionText.Describe(ex)}");
             }
 
+            // Announced BEFORE Disconnect, while the flag still says what happened, and guarded
+            // on it so a cancelled wait for a first connection does not report a loss. Whoever
+            // handles it is on this thread, so it must not block: App marshals it.
+            if (_pipe is { IsConnected: true }) Disconnected?.Invoke();
+
             try { _pipe!.Disconnect(); }
             catch (ObjectDisposedException) { return; }
             catch (InvalidOperationException) { /* was never connected */ }
@@ -132,13 +150,58 @@ public sealed class DropChannelServer : IDisposable
     private readonly object _sendGate = new();
     private Task _sendChain = Task.CompletedTask;
 
-    /// <summary>Wait for the send before this one, then write. <see cref="WriteAsync"/> swallows
-    /// its own failures, so the chain cannot be left faulted and a single failed send cannot
-    /// poison every send after it.</summary>
+    /// <summary>
+    /// Wait for the send before this one, then write.
+    ///
+    /// The Task.Run comes FIRST and is not decoration. An async method runs synchronously until
+    /// its first await, and this one is called from inside the lock; without the hop, a send
+    /// whose predecessor had already finished would run the whole write on the caller's thread
+    /// and inside the lock. The caller is normally the UI thread and the write is pipe I/O, so
+    /// the cost of getting this wrong is a frozen OSD rather than a wrong one.
+    /// </summary>
     private async Task AfterAsync(Task previous, DropMessage message)
+        => await Task.Run(() => WriteAfterAsync(previous, message)).ConfigureAwait(false);
+
+    /// <summary>
+    /// The chain's link, and it CANNOT FAULT. That is the whole design of this method.
+    ///
+    /// The first version let exceptions through, and that was a real defect rather than an
+    /// untidiness: a faulted task assigned to _sendChain is rethrown by the next link's
+    /// `await previous`, which faults that one too, and so on for the life of the process. Every
+    /// call site is fire-and-forget, so nothing would ever have noticed. After one broken write
+    /// the channel would be silently and permanently mute, and the way to reach it was ordinary:
+    /// the catcher dying mid-send.
+    ///
+    /// Two catches rather than one. The first keeps a PREVIOUS send's failure from becoming this
+    /// send's failure, which is what makes the chain self-healing. The second means this link
+    /// never hands a faulted task to the next one at all, for an exception nobody predicted, and
+    /// stops the last send of a run from ending as an unobserved fault, since every call site
+    /// discards the task it gets back.
+    ///
+    /// The alternative was resetting _sendChain to Task.CompletedTask on a fault. Not taken: it
+    /// needs a second place that mutates the chain, and it has to do so from a continuation
+    /// running outside the lock that fixes the order, which is the one property the lock exists
+    /// to guarantee. A link that cannot fault needs neither.
+    /// </summary>
+    private async Task WriteAfterAsync(Task previous, DropMessage message)
     {
-        await previous.ConfigureAwait(false);
-        await WriteAsync(message).ConfigureAwait(false);
+        try
+        {
+            await previous.ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log?.Info("DropChannel", $"The send before this one failed; continuing: {ExceptionText.Describe(ex)}");
+        }
+
+        try
+        {
+            await WriteAsync(message).ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            _log?.Warn("DropChannel", $"Send failed unexpectedly: {ExceptionText.Describe(ex)}");
+        }
     }
 
     private async Task WriteAsync(DropMessage message)
@@ -158,7 +221,17 @@ public sealed class DropChannelServer : IDisposable
         }
         catch (ObjectDisposedException)
         {
-            // Shutting down mid-send.
+            // Shutting down mid-send. FIRST, because ObjectDisposedException derives from
+            // InvalidOperationException and the compiler rejects the other order outright: the
+            // narrower clause has to precede the wider one.
+        }
+        catch (InvalidOperationException ex)
+        {
+            // What PipeStream throws for a write on a pipe that is no longer connected, and it is
+            // RACED rather than avoidable: the IsConnected check above and AcceptLoop's
+            // Disconnect() run on different threads, and the window between them is exactly when
+            // the catcher dies. Caught beside IOException because it means the same thing.
+            _log?.Info("DropChannel", $"Send into a closed pipe: {ExceptionText.Describe(ex)}");
         }
     }
 

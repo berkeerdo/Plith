@@ -34,12 +34,19 @@ public partial class ShelfWidget : UserControl
     /// <summary>
     /// Fixed rather than measured, so the row cannot grow past what the frame gives it.
     ///
-    /// 70 rather than the 76 it was. The page's content box is 82 DIP now, and the six DIP given
-    /// up here are part of what pays for the line underneath saying the shelf opens on a click.
-    /// The tile's own contents are 52 DIP (a 22 icon, 6 of margin, two 12 DIP lines of name)
-    /// plus 8 of padding, so 70 still leaves slack rather than clipping.
+    /// 68 rather than the 76 it was, and the arithmetic is worth writing down because the first
+    /// attempt at it was a DIP and a half out.
+    ///
+    /// The page is 116 DIP. Its root grid takes 12 off the top and 22 off the bottom, leaving 82.
+    /// The hint line under the row measures about 13.3 (a 10 DIP font at its default line
+    /// height), and its track is Auto, so the row's star track is about 68.7. At 70 the row
+    /// overhung its own track by more than a DIP and drew into the line below it; nothing
+    /// clipped, which is exactly why it would have stayed. At 68 it fits.
+    ///
+    /// The tile's own contents are 52 (a 22 icon, 6 of margin, two 12 DIP lines of name) plus 8
+    /// of padding, so 68 still leaves slack rather than clipping.
     /// </summary>
-    private const double TileHeight = 70;
+    private const double TileHeight = 68;
 
     /// <summary>
     /// How long a "the shelf cannot open" sentence stays on the page.
@@ -56,6 +63,7 @@ public partial class ShelfWidget : UserControl
 
     private readonly ShelfStore _shelf;
     private DispatcherTimer? _unavailable;
+    private bool _pressedHere;
 
     public ShelfWidget(ShelfStore shelf)
     {
@@ -75,7 +83,24 @@ public partial class ShelfWidget : UserControl
         // tests a panel with no background straight through to whatever is behind it, which here
         // is OsdContent's SlidingRoot: without the brush this handler would fire on the file
         // names and the icons and nowhere else on the page.
-        MouseLeftButtonUp += (_, _) => OpenRequested?.Invoke();
+        // And only for a release whose PRESS was on this page.
+        //
+        // WidgetFrame's rail overlays the bottom of the page rather than sitting beside it, and
+        // it marks only the button DOWN as handled. A press on the rail that drifts up onto the
+        // page before release would otherwise deliver the up here and open the shelf, which is a
+        // page change answered by leaving the page.
+        //
+        // The flag is cleared on the way out as well as on the way in. Without that, a press that
+        // began here and ended somewhere else would leave it set, and the next stray release over
+        // the page would be taken as a click that never happened.
+        PreviewMouseLeftButtonDown += (_, _) => _pressedHere = true;
+        MouseLeave += (_, _) => _pressedHere = false;
+        MouseLeftButtonUp += (_, _) =>
+        {
+            if (!_pressedHere) return;
+            _pressedHere = false;
+            OpenRequested?.Invoke();
+        };
 
         _shelf.Changed += OnShelfChanged;
 
@@ -225,7 +250,18 @@ public partial class ShelfWidget : UserControl
             TextAlignment = TextAlignment.Center,
             // Two lines and then trimmed. One line reduces most real file names to a syllable;
             // three does not fit under the icon in a 116 DIP frame.
-            TextWrapping = TextWrapping.Wrap,
+            //
+            // WrapWithOverflow, not Wrap, and it took a render to see why. Wrap breaks a run with
+            // no space in it wherever it has to, so this page showed "invoice-20" over
+            // "26-09.xlsx": a filename torn mid-token. WrapWithOverflow still wraps at real word
+            // and hyphen boundaries and lets an unbreakable run overflow its line instead, where
+            // CharacterEllipsis then trims it.
+            //
+            // The catcher's ShelfSurface settled this in Task 3 and this page did not follow, so
+            // the product had two shelf surfaces breaking names differently, and the one a person
+            // meets FIRST was the worse of the two. The empty-state sentence above keeps plain
+            // Wrap on purpose: a sentence is words, and words are what Wrap is right for.
+            TextWrapping = TextWrapping.WrapWithOverflow,
             // A FIXED height, not a maximum. With a maximum the stack is as tall as its label,
             // so a one-line name makes a shorter tile contents than a two-line one and the two
             // icons sit at different heights — visible in the render as a row that does not line

@@ -38,14 +38,55 @@ public static class DropCatcherLauncher
     /// </summary>
     public static int? FindProcessId()
     {
+        var expected = ExpectedExecutablePath();
         var processes = Process.GetProcessesByName(ProcessName);
         try
         {
-            return processes.Length == 0 ? null : processes[0].Id;
+            foreach (var process in processes)
+            {
+                // The name alone is not enough, and this is the one function whose whole job is
+                // naming the right process. Any process on the machine may call itself
+                // Plith.DropCatcher; one that did would collect the foreground grant meant for
+                // the real catcher, and would also make EnsureRunning decide a catcher is already
+                // up and never start one. The pipe's ACL makes the impact small; the check costs
+                // a line.
+                if (expected is not null && !PathMatches(process, expected)) continue;
+                return process.Id;
+            }
+
+            return null;
         }
         finally
         {
             foreach (var p in processes) p.Dispose();
+        }
+    }
+
+    /// <summary>Null when Plith cannot locate its own directory, which is the one case where the
+    /// name is all there is to go on. Falling back to the name is deliberate: refusing to find a
+    /// catcher at all would be a worse answer than finding one by name.</summary>
+    private static string? ExpectedExecutablePath()
+    {
+        var directory = Path.GetDirectoryName(Environment.ProcessPath);
+        return directory is null ? null : ResolveExecutablePath(directory);
+    }
+
+    private static bool PathMatches(Process process, string expected)
+    {
+        try
+        {
+            return string.Equals(process.MainModule?.FileName, expected, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (System.ComponentModel.Win32Exception)
+        {
+            // A process this one cannot open. Not the catcher then: Plith runs at High integrity
+            // and the catcher at Medium, so the real one is always readable from here.
+            return false;
+        }
+        catch (InvalidOperationException)
+        {
+            // It exited between the enumeration and this call.
+            return false;
         }
     }
 

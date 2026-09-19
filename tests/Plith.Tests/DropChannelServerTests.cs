@@ -143,5 +143,86 @@ public class DropChannelServerTests
         }
     }
 
+    /// <summary>
+    /// A send that fails must not take the channel with it.
+    ///
+    /// The chain that fixed the interleave introduced this: a faulted task assigned to the chain
+    /// is rethrown by the next link's `await previous`, which faults that one, and so on for the
+    /// life of the process. Every call site is fire-and-forget, so the symptom would have been a
+    /// channel that went permanently and silently mute after one broken write, and the way to
+    /// reach it was ordinary - the catcher dying mid-send, which is a thing that happens to a
+    /// helper process a person can close from Task Manager.
+    ///
+    /// Driven the way it really happens rather than by injecting an exception: a client connects
+    /// and goes away, a send is attempted into the corpse, and then a new client connects and is
+    /// sent to. The assertion is on the SECOND client, because the first send's failure is
+    /// expected and uninteresting; what matters is that anything works afterwards.
+    /// </summary>
+    [Fact]
+    public async Task Server_KeepsSendingAfterASendFailed()
+    {
+        var sid = TestSid();
+        using var server = new DropChannelServer(sid);
+        server.Start();
+
+        using (var doomed = new NamedPipeClientStream(".", DropChannel.PipeName(sid), PipeDirection.InOut))
+        {
+            await doomed.ConnectAsync(5000);
+            for (var i = 0; i < 100 && !server.IsConnected; i++) await Task.Delay(20);
+            Assert.True(server.IsConnected);
+        }
+
+        // Into a pipe whose other end has just gone. Awaited rather than discarded, because the
+        // point of the test is that this task COMPLETES rather than faulting.
+        await server.SendAsync(new DropMessage(DropVerb.Hide, 0, 0, 0, 0, []));
+
+        using var client = new NamedPipeClientStream(".", DropChannel.PipeName(sid), PipeDirection.InOut);
+        await client.ConnectAsync(5000);
+        for (var i = 0; i < 100 && !server.IsConnected; i++) await Task.Delay(20);
+        Assert.True(server.IsConnected);
+
+        // The read is STARTED BEFORE the send is awaited, and getting that backwards deadlocks
+        // rather than fails. The pipe is created with both buffer sizes set to zero, so a write
+        // does not return until the other end has taken the bytes; awaiting a send that nobody is
+        // reading hangs the test host hard enough that the runner reports it as a crash. Measured
+        // here the expensive way.
+        using var reader = new StreamReader(client);
+        var read = reader.ReadLineAsync();
+
+        await server.SendAsync(new DropMessage(DropVerb.OpenShelf, 1, 2, 3, 4, [SomePath]));
+        Assert.Same(read, await Task.WhenAny(read, Task.Delay(5000)));
+
+        Assert.True(DropChannel.TryDecode((await read)!, out var message));
+        Assert.Equal(DropVerb.OpenShelf, message.Verb);
+        Assert.Equal(SomePath, Assert.Single(message.Paths));
+    }
+
+    /// <summary>
+    /// A catcher that goes away must say so, because nothing can ask.
+    ///
+    /// PipeStream caches its connection state rather than probing, so IsConnected only turns
+    /// false once an operation has failed or the read loop has disconnected. Anything waiting on
+    /// the catcher therefore cannot poll for bad news, and the shelf is exactly that: Plith's own
+    /// window is hidden for as long as a shelf is up.
+    /// </summary>
+    [Fact]
+    public async Task Server_ReportsAClientThatGoesAway()
+    {
+        var sid = TestSid();
+        using var server = new DropChannelServer(sid);
+        var lost = new TaskCompletionSource();
+        server.Disconnected += () => lost.TrySetResult();
+        server.Start();
+
+        using (var client = new NamedPipeClientStream(".", DropChannel.PipeName(sid), PipeDirection.InOut))
+        {
+            await client.ConnectAsync(5000);
+            for (var i = 0; i < 100 && !server.IsConnected; i++) await Task.Delay(20);
+            Assert.True(server.IsConnected);
+        }
+
+        Assert.Same(lost.Task, await Task.WhenAny(lost.Task, Task.Delay(5000)));
+    }
+
     private const string SomePath = @"C:\temp\x.txt";
 }

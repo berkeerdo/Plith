@@ -1,4 +1,5 @@
 using System.IO;
+using System.IO.Pipes;
 using System.Windows;
 using System.Windows.Media;
 using Plith.Services;
@@ -79,6 +80,59 @@ public sealed class ShelfSessionTests : IDisposable
 
         Assert.False(opened);
         Assert.False(string.IsNullOrWhiteSpace(said));
+    }
+
+    /// <summary>
+    /// The catcher dying while the shelf is up must put the notch back.
+    ///
+    /// This is not a missing shelf, it is a missing OSD: Plith's whole window is hidden for the
+    /// duration of a shelf, no ShelfClosed can arrive from a process that is gone, and the hide
+    /// timer cannot re-show a window that was hidden with SWP_HIDEWINDOW. Without a second cause
+    /// for Closed the volume keys show nothing until Plith restarts.
+    ///
+    /// A real connected pipe, because Open refuses to report itself open without one, and that
+    /// refusal is half of the answer to the same hazard.
+    /// </summary>
+    [Fact]
+    public async Task ChannelLost_WithAShelfOpen_PutsTheNotchBack()
+    {
+        var sid = "S-1-5-21-test-" + Guid.NewGuid().ToString("N");
+        using var server = new DropChannelServer(sid);
+        server.Start();
+
+        using var client = new NamedPipeClientStream(".", DropChannel.PipeName(sid), PipeDirection.InOut);
+        await client.ConnectAsync(5000);
+        for (var i = 0; i < 100 && !server.IsConnected; i++) await Task.Delay(20);
+        Assert.True(server.IsConnected);
+
+        var session = new ShelfSession(server, new ShelfStore(_storePath), () => AnyPalette);
+        var opened = false;
+        var closed = false;
+        session.Opened += () => opened = true;
+        session.Closed += () => closed = true;
+
+        session.Open(new Rect(0, 0, 190, 6), dpiScale: 1.0);
+        Assert.True(opened);
+        Assert.False(closed);
+
+        session.OnChannelLost();
+        Assert.True(closed);
+    }
+
+    /// <summary>A channel loss with no shelf on screen reports nothing. The notch is already up,
+    /// and a Closed for a shelf nobody opened would be a second restore of a window that was
+    /// never hidden.</summary>
+    [Fact]
+    public void ChannelLost_WithNoShelfOpen_ReportsNothing()
+    {
+        var (session, _) = Build();
+
+        var closed = false;
+        session.Closed += () => closed = true;
+
+        session.OnChannelLost();
+
+        Assert.False(closed);
     }
 
     /// <summary>

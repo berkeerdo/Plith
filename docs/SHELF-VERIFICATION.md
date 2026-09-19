@@ -150,7 +150,7 @@ this case, and an open line with `foreground=True` is something else and worth r
 The fix belongs on Plith's side, and **Task 6 wrote it**: `ShelfSession.Open` calls
 `AllowSetForegroundWindow(catcherProcessId)` before it sends `OpenShelf`, which is the documented
 way one process hands its foreground privilege to another. What is NOT established is that it
-works, because the return value turned out to say nothing. See §2.7, where it returned `True`
+works, because the return value turned out to say nothing. See §2.8, where it returned `True`
 from a process that plainly did not hold the foreground. The line to check in the log is still
 `foreground=` on every `Shelf opened` entry; it is now paired with a grant line in `plith.log`.
 
@@ -225,7 +225,7 @@ With the shelf open, press `Esc`. The shelf goes away and the notch comes back.
 Read `dropcatcher.log` for `foreground=` on the `Shelf opened` line first. `foreground=True` means
 this test is meaningful. `foreground=False` means the catcher never got activation, in which case
 `Esc` cannot work by construction and the thing to report is the `False`, not the `Esc`. See
-§2.7.
+§2.8.
 
 Then check that the notch does not come back OPEN and stay open: it should either already be at
 rest, or collapse on its usual schedule once the pointer leaves.
@@ -254,7 +254,29 @@ few seconds later should open the shelf normally, because the first click restar
 
 To reach the third, rename `Plith.DropCatcher.exe` beside `Plith.exe` and click.
 
-### 2.7 The foreground hand-over
+### 2.7 Killing the catcher WHILE the shelf is open
+
+The worst failure this feature has, and the one that is least obvious from the outside.
+
+Open the shelf, then kill `Plith.DropCatcher.exe` from Task Manager while it is on screen.
+
+Expected: the shelf vanishes with the process, the notch comes back within a moment, and
+`plith.log` carries `Drop catcher disconnected.` followed by `The catcher went away while the
+shelf was open; putting the notch back.` Then press a volume key: the OSD must appear.
+
+That last sentence is the whole test. Plith's window is hidden for the duration of a shelf, and
+no `ShelfClosed` can arrive from a process that no longer exists, so the failure is not a missing
+shelf but a missing OSD: volume keys showing nothing at all until Plith is restarted. If the notch
+does not come back, check that `plith.log` has the disconnect line; if it does not, the channel's
+`Disconnected` signal is what broke, and if it does, the `Shelf` stand-aside is not being ended.
+
+Worth running twice, because there are two mechanisms and they cover different instants. Killing
+the catcher while the shelf is up is the case above. Killing it and clicking the shelf page in the
+same second exercises the other one: `ShelfSession.Open` asks the channel a second time after it
+has sent, and should show "The shelf helper stopped responding." rather than taking the notch
+down. Both end with the notch up and the OSD working.
+
+### 2.8 The foreground hand-over
 
 `ShelfSession` calls `AllowSetForegroundWindow` with the catcher's process id before it sends
 `OpenShelf`, which is the fix §1's open hazard asked for. `plith.log` logs what it passed and what
@@ -274,7 +296,7 @@ The half that answers the question is the catcher's own line. Pair them: a `plit
 followed by `foreground=False` means the grant did not take, and `Esc` will not work, which is the
 state §1 describes, where the shelf is dismissable only by moving the pointer across it and away.
 
-### 2.8 Shelf actions come back and are answered
+### 2.9 Shelf actions come back and are answered
 
 Not reachable until Task 7 wires the catcher's `EntryPressed`, `ClearRequested` and
 `NewStackRequested` to the wire. Listed here so it is not mistaken for something Task 6 covered:
@@ -292,6 +314,16 @@ of them yet.
 | Overlapping sends on one pipe cannot interleave | `DropChannelServerTests.Server_DoesNotInterleaveOverlappingSends`, 20 messages queued unawaited, all 20 lines decode in order |
 | The same test fails without the fix | one line came back with 96 fields instead of 5, and DECODED as a plausible `Items` message |
 | The shelf page's three states, rendered offscreen at frame size, dark and light | `scripts/render-widgets.ps1`: `widget-shelf`, `widget-shelf-empty`, `widget-shelf-unavailable` |
+| The glance page breaks long names the way the catcher's surface does | rendered: `invoice-2026-09.xlsx` is trimmed to `invoice-2...` rather than torn into `invoice-20` over `26-09.xlsx` |
+| A send that fails does not mute the channel | `DropChannelServerTests.Server_KeepsSendingAfterASendFailed`: a client connects and goes, a send is made into the corpse, a new client connects and is sent to successfully |
+| A catcher that goes away is reported | `DropChannelServerTests.Server_ReportsAClientThatGoesAway` |
+| A channel loss with a shelf open puts the notch back | `ShelfSessionTests.ChannelLost_WithAShelfOpen_PutsTheNotchBack`, against a real connected pipe |
+| The server survives a catcher restart and sends to the new one | driven in a standalone harness as well as in the suite: connect, disconnect, reconnect, send, read |
+
+One thing measured by accident and worth writing down, because it cost an hour: **this pipe is
+created with both buffer sizes set to zero, so a write does not return until the other end reads
+it.** A test that awaits a send before starting a read does not fail, it deadlocks, and the runner
+reports that as "Test host process crashed" rather than as a hang.
 
 The render harness reaches the notch's shelf PAGE because it is an ordinary WPF control rendered
 to a bitmap. It does not reach the shelf SURFACE in place: `shelf-surface.png` is that control
