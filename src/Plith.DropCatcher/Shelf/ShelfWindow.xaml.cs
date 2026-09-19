@@ -104,10 +104,22 @@ public partial class ShelfWindow : Window
     /// be left set.</summary>
     private bool _menuOpen;
 
-    /// <summary>Set when a <see cref="CloseNow"/> arrived while a drag was in flight and was
-    /// refused, so the close can be honoured the moment that drag returns rather than lost.
-    /// Cleared at the one place that honours it, before the close it asks for, so it cannot
-    /// recur. See CloseNow's own refusal for why the order is refused rather than obeyed.</summary>
+    /// <summary>
+    /// Set when a <see cref="CloseNow"/> arrived while a drag was in flight and was refused, so
+    /// the close can be honoured the moment that drag returns rather than lost. Cleared at the
+    /// one place that honours it, before the close it asks for, so it cannot recur. See
+    /// CloseNow's own refusal for why the order is refused rather than obeyed.
+    ///
+    /// UNEXERCISED TODAY, and labelled so rather than left to look load-bearing. CloseNow has two
+    /// callers: Dismiss, which already defers while _dragInFlight and so never reaches it during
+    /// a drag, and the settlement at the end of StartDrag, which runs with _dragInFlight already
+    /// false. Nothing can currently set this flag. What would first run its honour path is a
+    /// CloseShelf verb on the wire that the catcher's App routes to CloseNow, which is the shape
+    /// Plith would need the day it has to take the shelf down on its own account. Kept as
+    /// scaffolding because the refusal it belongs to has to exist before that caller does, not
+    /// after: a close arriving mid-drag is exactly the case that would otherwise be discovered by
+    /// someone losing a file.
+    /// </summary>
     private bool _closeOrderedDuringDrag;
 
     /// <summary>Set for the whole of a tile drag, and cleared by that drag's own finally so no
@@ -294,10 +306,23 @@ public partial class ShelfWindow : Window
         // outright: the person would watch the file they are carrying evaporate because Plith
         // restated a rectangle.
         //
-        // Nothing is lost by refusing. A drag can only start from a tile on a visible shelf, so
+        // Little is lost by refusing. A drag can only start from a tile on a visible shelf, so
         // _dragInFlight true means the shelf is already up, which means every OpenShelf refused
-        // here is a RE-ASSERTION (see the comment below) and never a first open. The cost is at
-        // most a stale rectangle until the next one, against a cancelled gesture.
+        // here is a RE-ASSERTION (see the comment below) and never a first open.
+        //
+        // What it costs when the refused rectangle is genuinely DIFFERENT, stated rather than
+        // glossed, because this is the price of the choice: the window keeps the old physical
+        // rect, ApplyExpansion is not re-run, and Shape and Page keep the DIP sizes derived from
+        // the old ActualWidth. After a scale change that means a card visibly smaller than the
+        // window it sits in, and it stays that way until the shelf is closed and opened again.
+        // That is ugly for the rest of one shelf session. A cancelled drag loses the file the
+        // person is carrying, and no amount of correct geometry is worth that.
+        //
+        // UNREACHABLE in today's code, and that is worth knowing before anyone tests it:
+        // OsdHost.OpenShelf, the only caller of ShelfSession.Open, returns early while
+        // _standAside is StandAsideReason.Shelf, which is its state for the whole life of the
+        // shelf. So no second OpenShelf can be sent while one is open, from any cause. This guard
+        // is correct and currently unexercised. See docs/SHELF-VERIFICATION.md section 4.10.
         if (_dragInFlight)
         {
             _log.Info($"Shelf re-assertion refused at {x},{y} {width}x{height}: a drag is in flight.");
@@ -693,15 +718,28 @@ public partial class ShelfWindow : Window
 
         _leave.Stop();
 
-        // _menuOpen counts as the pointer being over the shelf, and it is not a courtesy. A
-        // context menu is its own top-level HWND, so WindowFromPoint answers about the POPUP when
-        // the pointer is over one, and the shelf underneath would read as "not ours" and be
-        // dismissed about half a second later. Treating an open menu as the pointer being here is
-        // also the answer Dismiss already gives: a menu suspends dismissal, because it takes
-        // activation exactly the way losing focus to another window does. Nothing is stranded by
-        // stopping the clock in that case, since Esc, the pointer leaving and Deactivated all
-        // still work once the menu is gone.
-        if (_menuOpen || PointerIsOverShelf()) _pendingDismissal = null;
+        // An open menu RE-ARMS the clock. It does NOT clear the deferral, and the difference
+        // between those two is a bug this line has already had once, so it is written down rather
+        // than left to be simplified back out.
+        //
+        // Why a menu has to be asked about at all: a ContextMenu is its own top-level HWND, so
+        // WindowFromPoint answers about the POPUP when the pointer is over one, and the shelf
+        // underneath it would read as "not ours" and be taken down about half a second later.
+        //
+        // Why the fix cannot be to treat a menu as the pointer being here: that clears
+        // _pendingDismissal AND leaves the clock stopped, and the combination costs the shelf its
+        // last way out. With the pointer off the shelf and the window already deactivated, Esc
+        // cannot arrive (it needs activation), Deactivated cannot fire a second time (the window
+        // is already deactivated), and with nothing pending and no clock running the shelf then
+        // waits for the pointer to visit it and leave again before anything at all can dismiss
+        // it. Recoverable, but only by an action the person has no reason to perform.
+        //
+        // Re-arming keeps the deferral and hands it back to the clock that re-evaluates it, which
+        // is exactly what Dismiss does for a menu, so the two agree instead of contradicting each
+        // other one level apart. The deferral is cleared only when the pointer really is over the
+        // shelf, because that is the only case where what asked for the dismissal has stopped
+        // being true.
+        if (!_menuOpen && PointerIsOverShelf()) _pendingDismissal = null;
         else _leave.Start();
     }
 

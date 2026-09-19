@@ -502,11 +502,11 @@ does, that is the finding, not the drag that failed. The middle one is the guard
 measurement this task exists because of, so it is the one to look for first: it refuses a call that
 arrives with no live button press behind it, which is the shape that hung for seventeen seconds.
 
-Two further refusal lines belong to the window rather than to the drag, and both are EXPECTED in
-the one situation they describe rather than being faults: `Shelf close refused: a drag is in
-flight. It will be taken down when the drag ends.` and `Shelf re-assertion refused at X,Y WxH: a
-drag is in flight.` They mean a message arrived over the pipe during a drag and was held off the
-live drag source. See §4.10.
+Two further refusal lines belong to the window rather than to the drag: `Shelf close refused: a
+drag is in flight. It will be taken down when the drag ends.` and `Shelf re-assertion refused at
+X,Y WxH: a drag is in flight.` They mean a message arrived over the pipe during a drag and was held
+off the live drag source. **Neither can appear in today's code**, for the reasons §4.10 sets out;
+if one ever does, something new is sending mid-drag messages and §4.10 is the item to read.
 
 ### 4.1 One tile into a file manager
 
@@ -611,41 +611,73 @@ the shelf is in the same state as §4.6's second half afterwards. This exercises
 as a successful drop, which is the point: `_dragInFlight` is cleared by a `finally`, so a cancel
 has to be as safe as a drop.
 
-### 4.9 `Esc` still closes the shelf after an internal restack
+### 4.9 Did the shelf keep its activation across a restack
 
 Drag a tile onto another stack, release, do not move the mouse (this is §4.6's setup), and then
-press `Esc`.
+press `Esc`. **Both outcomes are results. Record which one happened rather than looking for a
+pass.**
 
-Expected: the shelf closes and the notch comes back.
+- **The shelf closes and the notch comes back.** The window still had activation when the drag
+  ended, so `Esc` reached it. Nothing further to check.
+- **`Esc` does nothing.** The window lost activation during the drag and never got it back, which
+  is a real and expected possibility: `Esc` needs keyboard focus, and a window that is not
+  foreground has none. That is not a bug by itself. What matters next is whether anything is left
+  that CAN close it, so move the pointer off the shelf and leave it off. Expected: the shelf goes
+  down within the leave grace period (500 ms) and the notch comes back.
 
-Why this is its own item rather than part of §4.6: when the drag ends with the pointer over the
-shelf, `StartDrag` clears `_pendingDismissal` and stops the leave clock. If the window was
-deactivated at some point during the drag and never activated again, `Deactivated` cannot fire a
-second time, so the closers left are `Esc` and the pointer leaving. This item checks the first one
-and §4.6's second half checks the other. A shelf that answers neither is stranded, which is the
-failure mode the whole deferral machinery exists to prevent, arriving by yet another route.
+Why this is its own item rather than part of §4.6: when a drag ends with the pointer over the
+shelf, `StartDrag` clears `_pendingDismissal` and stops the leave clock. `Deactivated` cannot fire
+a second time on a window that is already deactivated, so after that the ONLY closer guaranteed to
+still exist is the pointer leaving. This item finds out whether `Esc` is a second one, which
+depends on something the log does not record: whether the drag left the window foreground. A shelf
+that answers neither `Esc` nor the pointer leaving is stranded, and that is the failure the whole
+deferral machinery exists to prevent, arriving by yet another route.
 
-### 4.10 A pipe message arriving in the middle of a drag
+### 4.10 A pipe message arriving in the middle of a drag: NOT TESTABLE TODAY
 
 `DoDragDrop` pumps a modal message loop, so the catcher's pipe reader keeps running and a message
-from Plith CAN be dispatched while a drag is in flight. Both messages that would touch this window
-are now refused while `_dragInFlight` is true, and the close is remembered and honoured the moment
-the drag returns.
+from Plith can be dispatched while a drag is in flight. `OpenAt` and `CloseNow` both refuse while
+`_dragInFlight` is true, and the close is remembered and honoured the moment the drag returns.
 
-Driving this needs Plith to send something mid-drag. The simplest reliable trigger is a monitor or
-DPI change (`OpenShelf` is re-sent), so: start a drag from a tile, keep the button held, and change
-the display scale or the primary monitor from Windows Settings with the other hand, then release
-over a file manager.
+**There is nothing to run here, and this section says so rather than offering a step that would
+produce a false pass.** An earlier draft of this item told a tester to change the display scale
+mid-drag and look for `Shelf re-assertion refused`. That step was wrong twice over, and both ways
+would have looked like a pass:
 
-Expected: the drag SURVIVES. The file lands, the log has an ordinary `Drag out returned` line, and
-somewhere before it a `Shelf re-assertion refused at ...: a drag is in flight.` line. A drag that
-dies the instant the display changes means the refusal is not working and `Activate()` cancelled
-it, which is exactly what the guard exists to prevent.
+- **`OpenAt`'s refusal is unreachable.** `ShelfSession.Open` has one caller, `OsdHost.OpenShelf`,
+  which returns early while `_standAside` is `StandAsideReason.Shelf`. That is its state for the
+  entire life of the shelf, so no second `OpenShelf` can be sent while one is open, from any
+  cause at all.
+- **The trigger does not exist.** Nothing in Plith hooks `DpiChanged` or a display-settings change
+  to re-send the shelf's rectangle. Changing the scale mid-drag sends nothing.
 
-For the close half, `CloseShelf` has no external sender today, so there is nothing to drive. If one
-is ever added, the expected shape is: `Shelf close refused: a drag is in flight.` during the drag,
-then the shelf goes down as soon as the drag returns, with no second gesture needed, and the drag
-itself completes normally.
+A tester following that step would have watched the drag survive for a reason having nothing to do
+with the guard, found no refusal line, and ticked a check that exercised nothing.
+
+**What would have to exist before either half becomes testable**, which is the useful thing to
+write down:
+
+- For the `OpenAt` half: something that re-sends `OpenShelf` while the shelf is up. That means
+  both a sender (a `DpiChanged` or display-change hook that re-derives the rectangle) and a change
+  in `OsdHost.OpenShelf`, which currently refuses to send anything at all while standing aside.
+- For the `CloseNow` half: a `CloseShelf` verb on the wire that the catcher's `App` routes to
+  `CloseNow`. There is no such verb, and `App` calls `CloseNow` nowhere.
+
+When either exists, the shape to expect is: the refusal line in the log during the drag
+(`Shelf re-assertion refused at X,Y WxH: a drag is in flight.` or `Shelf close refused: a drag is
+in flight. It will be taken down when the drag ends.`), the drag completing normally, and for the
+close, the shelf going down as soon as the drag returns with no second gesture needed. Note for the
+re-assertion half that a refused rectangle that genuinely DIFFERS leaves the card visibly smaller
+than its window until the shelf is closed and reopened; that is the documented price of the
+refusal, not a second defect.
+
+**Not every mid-drag message is refused, and that is deliberate.** `Items` and `Palette` arrive the
+same way and are obeyed: both re-render, which tears down and rebuilds the tiles, including the one
+the drag started from. That is survivable where `Hide()` and `Activate()` are not, because the
+`DataObject` was built before the render and does not reference any tile, and the drag source
+handed to `DoDragDrop` is the WINDOW rather than the tile. A tile vanishing mid-drag is a visual
+oddity, not a cancelled gesture. If a hardware run ever shows a drag dying when the shelf refreshes
+under it, that reasoning is what was wrong.
 
 ### 4.11 The stand-in must not be visible while the shelf is open
 
