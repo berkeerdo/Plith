@@ -178,6 +178,42 @@ public partial class ShelfWindow : Window
         _leave.Tick += (_, _) =>
         {
             _leave.Stop();
+
+            // THE TICK ITSELF ASKS WHERE THE POINTER IS, rather than trusting that whoever armed
+            // this clock is still right about it. That is the fix for a defect this file had
+            // THREE TIMES, and the third instance is why the answer moved here instead of
+            // becoming a fourth call to _leave.Stop() somewhere else.
+            //
+            // The shape of all three: this timer does two jobs at once. It is the leave grace
+            // period, and it is also the clock that re-evaluates a deferred dismissal (see
+            // Dismiss). Every place that made a deferral moot therefore owed it a Stop(), and the
+            // list of such places kept growing - OpenAt was taught, StartDrag was taught, and
+            // Activated was not. The sequence that got through: right-click a tile, the menu
+            // takes activation, Deactivated fires, Dismiss defers and arms this clock, the menu
+            // closes, Activated clears _pendingDismissal while the clock keeps running, and this
+            // tick then fires a no-longer-suppressed Dismiss and closes the shelf with the
+            // pointer sitting on it. MouseEnter only saved it when it happened to arrive after
+            // Activated.
+            //
+            // A guard that every future arming site has to remember is a guard that will be
+            // forgotten again. This one cannot be: the only reason this timer ever closes the
+            // shelf is "the pointer left and did not come back", so the pointer being HERE
+            // refutes it outright, whoever started the clock and for whatever reason.
+            //
+            // Asked of the window manager, not of WPF, for the reason PointerIsOverShelf
+            // documents: IsMouseOver is derived from the last mouse message WPF processed, and a
+            // pointer that came to rest during a drag or under a menu produces no further mouse
+            // message at all.
+            //
+            // Re-armed rather than dropped when the pointer IS here and a dismissal is still
+            // pending, because a deferral must never be left without a clock - that stranding is
+            // the whole reason Dismiss defers rather than cancels.
+            if (PointerIsOverShelf())
+            {
+                if (_pendingDismissal is not null) _leave.Start();
+                return;
+            }
+
             Dismiss("the pointer left and did not come back");
         };
 
@@ -193,6 +229,13 @@ public partial class ShelfWindow : Window
         // Deactivated, which defers; when the menu closes the shelf is foreground again and
         // closing it then would punish the person for having opened a menu on it. A drag out does
         // not reach here, since the shelf is not activated again at the end of one.
+        //
+        // The clock this leaves running is NOT settled here, and deliberately not. Activation
+        // says nothing about where the pointer is, so stopping the timer from here would answer
+        // a question this handler cannot see: with the pointer genuinely off the shelf, the shelf
+        // would then be left with no clock, no pending dismissal, and (having just been
+        // activated) no second Deactivated to come. The tick itself asks about the pointer now,
+        // which is the answer that holds however the clock came to be running.
         Activated += (_, _) => _pendingDismissal = null;
         PreviewKeyDown += OnPreviewKeyDown;
 
