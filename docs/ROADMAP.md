@@ -233,6 +233,21 @@ absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns 
 black — while the window is provably on screen and correctly positioned. Anything
 pixel-based has to run from the physical console. UI Automation works fine over RDP.
 
+**Worth re-measuring, and NOT yet contradicted (2026-09-19.)** The shelf's own layered
+window was captured over RDP on that date, which falsified the same sentence where
+`docs/SHELF-VERIFICATION.md` had copied it. That does not overturn this one: the band
+window is drawn with `UpdateLayeredWindow`, the shelf is an `AllowsTransparency` WPF
+window, and those are different mechanisms. Nobody has pointed the new
+`scripts/capture-shelf.ps1` at the OSD.
+
+What makes it worth redoing is a confound found the same day. Capture stops working when
+the session is **disconnected or locked**, and it then fails for any window, layered or
+not, with `BitBlt` simply returning false. Session state was not recorded when the
+measurement above was taken, and over RDP a session drops without the person at the
+keyboard necessarily noticing. So "absent with `CAPTUREBLT`" and "the session had no
+composed desktop" are not distinguished by the evidence as written. Re-run it with
+`qwinsta` showing `Active`, and record that it did, before treating this as settled.
+
 Deferred to Phase 6 (recorded so they are not rediscovered):
 
 - Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
