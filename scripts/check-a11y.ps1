@@ -141,16 +141,26 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
 # below already uses for the same directory.
 #
 # This is necessarily a heuristic, not a compiler: PowerShell regex over C# text cannot resolve a
-# variable's real type the way Roslyn could. It catches the two shapes this bug has actually
-# taken so far, and only those two:
-#   1. A local built and named in the same file: `var tile = new Border { ... };` followed later
-#      by `AutomationProperties.SetName(tile, ...)`, wherever in the file that call sits.
-#   2. A field named in the sibling XAML file: `<StackPanel x:Name="Tiles" .../>` in Foo.xaml,
-#      read from `AutomationProperties.SetName(Tiles, ...)` in Foo.xaml.cs.
-# A name set through an alias, a variable built in one method and named from another with a type
-# this cannot re-derive, or a collection element, is a gap in this heuristic's own coverage, not a
-# pass - the same limit the XAML-side check above already has for a name set on a child of a
-# parent it did not declare itself.
+# variable's real type the way Roslyn could. A first draft of it resolved only ONE shape (`var
+# name = new Peerless { ... }`) and treated every OTHER shape as silently fine, which a review
+# caught by feeding it four ordinary ways to write the same code: an explicit type with no `var`,
+# a target-typed `new()`, a name resolved through a factory method, and a bare declaration
+# followed by a separate assignment. All four passed silently. The fix has two halves:
+#   1. Resolve more shapes (see the numbered passes inside the loop below): a bare declaration
+#      later assigned, an `is Type name` pattern, a same-file factory method's return type, an
+#      explicit-type declaration constructed with `new Type(...)` or target-typed `new()`, and
+#      the original `var name = new Type(...)`.
+#   2. NEVER let "I could not resolve this" print the same nothing as "this is fine". A target
+#      this scan cannot classify at all is now its own failure category - see
+#      $unresolvedProperties below - reported loudly rather than skipped with `continue`.
+# A name set through an alias this scan still cannot follow, one resolved via a method declared
+# in a DIFFERENT file, a collection element, or a target that is not a bare identifier at all
+# (`AutomationProperties.SetName(GetElement(), ...)` is invisible to the regex that finds the
+# calls in the first place, not merely to the type resolution after it) remain gaps in this
+# heuristic's own coverage - the same limit the XAML-side check above already has for a name set
+# on a child of a parent it did not declare itself. Anything in that remaining gap either resolves
+# to a real type (and is judged) or resolves to nothing (and fails loudly as "could not
+# determine"); nothing in it can silently pass any more.
 $codeBehindRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
                     Where-Object { Test-Path $_ } | Select-Object -Unique
 
@@ -177,6 +187,7 @@ $knownCodeBehindGaps = @{
         'StackPanel. Predates this branch. Filed, not fixed.'
 }
 $knownGapNotices = [System.Collections.Generic.List[string]]::new()
+$unresolvedProperties = [System.Collections.Generic.List[string]]::new()
 
 foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -Filter '*.cs' -Recurse }) |
                    Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }) {
@@ -197,30 +208,124 @@ foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -
     $xamlPath = $xamlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
     if ($xamlPath) {
         $xamlText = Get-Content -Raw -LiteralPath $xamlPath
-        foreach ($m in [regex]::Matches($xamlText, '<(?<type>[A-Za-z_][\w.]*)\s[^>]*?x:Name="(?<name>\w+)"')) {
-            $fieldTypes[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
+        # The type prefix is OPTIONAL and can itself carry a XAML namespace prefix
+        # (`<w:WeatherMark x:Name="Mark" .../>` in ClockWidget.xaml, a custom control in its own
+        # namespace) - missed by the first draft of this pattern, which required the type name to
+        # sit directly after `<` and so could never match past the `w:` in front of it. Both the
+        # namespace prefix and a CLR namespace (`Foo.Bar.TypeName`) are stripped the same way:
+        # keep only the last `:` - or `.` - separated segment.
+        foreach ($m in [regex]::Matches($xamlText, '<(?<type>(?:[A-Za-z_][\w]*:)?[A-Za-z_][\w.]*)\s[^>]*?x:Name="(?<name>\w+)"')) {
+            $fieldTypes[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '[:.]')[-1]
         }
     }
 
-    # local variable -> peerless type, from `var name = new Peerless`.
-    $localTypes = @{}
-    foreach ($m in [regex]::Matches($text, '\bvar\s+(?<name>\w+)\s*=\s*new\s+(?<type>' + ($peerless -join '|') + ')\b')) {
-        $localTypes[$m.Groups['name'].Value] = $m.Groups['type'].Value
+    # Every name -> type this file lets us pin down, built from several shapes at once so the
+    # SAME variable resolves the same way no matter which of them wrote it. Lowest-confidence
+    # first, each later pass overwriting rather than skipping, so a stronger signal for the same
+    # name always wins over a weaker one seen earlier in the file.
+    #
+    # A re-review of this check's first draft fed it four ordinary ways to write the same code
+    # and every one slipped past SILENTLY, as a pass: an explicit type with no `var`, a
+    # target-typed `new()`, a name resolved through a factory method, and declare-then-assign in
+    # two statements. The cause was the SAME everywhere: an unresolved type `continue`d rather
+    # than being reported, so "I could not tell" and "this is fine" produced identical output.
+    # That is the exact failure this whole task exists because of, reproduced one layer in. Fixed
+    # two ways at once: resolve more shapes (below), and never again let "unresolved" mean
+    # nothing (see the loop after this one, and its "could not determine" branch).
+    $typeOf = @{}
+
+    # 1 (weakest). A bare declaration with no initializer at all: `Border tile;`. Only a
+    # declaration can legally look like "identifier identifier;" in C#, so this is syntactically
+    # safe to assume even though it is a plain regex rather than a parser. Covers "declare in one
+    # statement, assign in the next" together with pass 3 or 4 below, whichever resolves the
+    # assignment.
+    foreach ($m in [regex]::Matches($text, '(?<![.\w])(?!var\b|new\b|return\b)(?<type>[A-Za-z_]\w*)\s+(?<name>\w+)\s*;')) {
+        $name = $m.Groups['name'].Value
+        if (-not $typeOf.ContainsKey($name)) { $typeOf[$name] = $m.Groups['type'].Value }
+    }
+
+    # 2. `x is Type name` / `x is Type name when ...` - a real shape in this codebase today
+    # (SettingsWindow.xaml.cs's swatch loop), not one of the four the review fed this check, but
+    # the same class of gap: a binding this scan did not previously look for at all.
+    foreach ($m in [regex]::Matches($text, '\bis\s+(?<type>[A-Za-z_][\w.]*)\s+(?<name>\w+)\b')) {
+        $typeOf[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
+    }
+
+    # 3. A name resolved through a factory or helper method declared in the SAME file: `var tile
+    # = BuildTile(...)`, where `private NamedBorder BuildTile(...)` says what it returns. Method
+    # return types are collected once per file and matched by name; a method declared elsewhere
+    # (another partial, a base class, an extension method) is outside what a single file's text
+    # can answer and falls through to "could not determine" rather than being guessed at.
+    $methodReturns = @{}
+    foreach ($m in [regex]::Matches($text,
+        '\b(?:public|private|internal|protected)(?:\s+(?:static|sealed|override|virtual|async))*\s+(?<ret>[A-Za-z_][\w<>\[\],\s]*?)\s+(?<name>[A-Za-z_]\w*)\s*\(')) {
+        $ret = ($m.Groups['ret'].Value.Trim() -split '\s+')[-1]
+        $methodReturns[$m.Groups['name'].Value] = ($ret -split '\.')[-1]
+    }
+    foreach ($m in [regex]::Matches($text, '\bvar\s+(?<name>\w+)\s*=\s*(?<method>[A-Za-z_]\w*)\s*\(')) {
+        $method = $m.Groups['method'].Value
+        if ($methodReturns.ContainsKey($method)) { $typeOf[$m.Groups['name'].Value] = $methodReturns[$method] }
+    }
+
+    # 4. An explicit type on the left, constructed either as `Type name = new Type(...)` /
+    # `new Type { ... }`, or as a target-typed `Type name = new();`. The declared (left-hand)
+    # type is what is kept, deliberately, even on the rare line where it differs from whatever
+    # the constructor call names: WPF creates a peer for the RUNTIME type, a plain regex cannot
+    # see past a declared type to whatever a factory really handed back, and treating the
+    # declared type as authoritative fails safe - it can only flag a real Border kept behind a
+    # wider declared type as "worth a second look", never wave one through unseen.
+    foreach ($m in [regex]::Matches($text,
+        '(?<![.\w])(?!var\b)(?<type>[A-Za-z_][\w.]*)\s+(?<name>\w+)\s*=\s*new\s*(?:\(\)|<[^>]*>\s*\(\)|[A-Za-z_][\w<>]*\s*[({])')) {
+        $typeOf[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
+    }
+
+    # 5 (strongest). `var name = new Type(...)` / `new Type { ... }` - the shape this check was
+    # first written against, and still the most common one in this codebase.
+    foreach ($m in [regex]::Matches($text, '\bvar\s+(?<name>\w+)\s*=\s*new\s+(?<type>[A-Za-z_][\w.<>]*)\b')) {
+        $typeOf[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
     }
 
     foreach ($m in [regex]::Matches($text, 'AutomationProperties\.Set(?<prop>\w+)\s*\(\s*(?<target>\w+)\s*,')) {
         $target = $m.Groups['target'].Value
-        $type = $null
-        if ($localTypes.ContainsKey($target)) { $type = $localTypes[$target] }
-        elseif ($fieldTypes.ContainsKey($target)) { $type = $fieldTypes[$target] }
-        if ($null -eq $type -or $peerless -notcontains $type) { continue }
+        $prop = $m.Groups['prop'].Value
 
-        if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
-            $knownGapNotices.Add("${rel}: AutomationProperties.Set$($m.Groups['prop'].Value)($target, ...) targets a $type ($($knownCodeBehindGaps[$file.Name]))")
+        # `this` is not looked up anywhere above: it names the class this whole file defines, not
+        # a local or a field, and every class in this codebase that can reach an
+        # AutomationProperties call is a UserControl, a Window, or another Control-derived root.
+        # UserControl was checked by hand, not assumed: UIElementAutomationPeer.CreatePeerForElement
+        # returns a real peer for a plain UserControl instance. Window and other Control-derived
+        # roots carry a peer by the same WPF mechanism (WindowAutomationPeer and so on) and are
+        # not separately re-verified here.
+        if ($target -eq 'this') { continue }
+
+        $type = $null
+        if ($typeOf.ContainsKey($target)) { $type = $typeOf[$target] }
+        elseif ($fieldTypes.ContainsKey($target)) { $type = $fieldTypes[$target] }
+
+        if ($null -eq $type) {
+            # UNRESOLVED IS NOT A PASS. The first draft of this check `continue`d here, which made
+            # "I could not tell" print nothing at all - the identical output to a genuine pass,
+            # and the review that found this called that worse than no check. This script is a
+            # release gate, and the rest of it already treats an unreadable file as a failure
+            # (see the XAML parse-failure branch above), not a silent skip, so the same rule
+            # applies here: a name this scan cannot classify fails the build, loudly, distinct
+            # from a confirmed dead property so the two are never mistaken for each other.
+            if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
+                $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) - type could not be determined ($($knownCodeBehindGaps[$file.Name]))")
+                continue
+            }
+            $unresolvedProperties.Add("${rel}: AutomationProperties.Set$prop($target, ...) - this scan could not determine $target's type, so it cannot say whether WPF gives it an automation peer")
             continue
         }
 
-        $deadProperties.Add("${rel}: AutomationProperties.Set$($m.Groups['prop'].Value)($target, ...) targets a $type, which WPF gives no automation peer")
+        if ($peerless -notcontains $type) { continue }
+
+        if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
+            $knownGapNotices.Add("${rel}: AutomationProperties.Set$prop($target, ...) targets a $type ($($knownCodeBehindGaps[$file.Name]))")
+            continue
+        }
+
+        $deadProperties.Add("${rel}: AutomationProperties.Set$prop($target, ...) targets a $type, which WPF gives no automation peer")
     }
 }
 
@@ -292,7 +397,7 @@ foreach ($file in $iconFontFiles) {
     }
 }
 
-if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0 -or $iconFontUses.Count -gt 0) {
+if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0 -or $unresolvedProperties.Count -gt 0 -or $iconFontUses.Count -gt 0) {
     Write-Host "Accessibility check failed:`n" -ForegroundColor Red
     if ($failures.Count -gt 0) {
         Write-Host "  Interactive controls without an accessible name:" -ForegroundColor Red
@@ -303,6 +408,18 @@ if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0 -or $iconFontUses.Coun
         Write-Host "`n  AutomationProperties that never reach UI Automation:" -ForegroundColor Red
         $deadProperties | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
         Write-Host "`n  Move them onto the nearest element that owns a peer, usually the UserControl or Control root." -ForegroundColor Yellow
+    }
+    if ($unresolvedProperties.Count -gt 0) {
+        # A DIFFERENT failure from the one above, on purpose: this is not a confirmed dead
+        # property, it is code-behind's own version of the XAML-parse failure earlier in this
+        # script - a gap in what this scan could read, treated as a failure rather than a pass it
+        # has no grounds to report. See this section's own header comment for why "could not
+        # tell" must never print the same nothing as "this is fine" again.
+        Write-Host "`n  AutomationProperties.SetName targets this scan could NOT resolve a type for:" -ForegroundColor Red
+        $unresolvedProperties | ForEach-Object { Write-Host "    $_" -ForegroundColor Red }
+        Write-Host "`n  Either the target's type is genuinely undecidable from this file alone (say so with a" -ForegroundColor Yellow
+        Write-Host "  narrower AutomationProperties call this scan CAN read), or this scan's heuristic needs a" -ForegroundColor Yellow
+        Write-Host "  new pattern for a real shape it has not seen yet." -ForegroundColor Yellow
     }
     if ($iconFontUses.Count -gt 0) {
         Write-Host "`n  System icon fonts, whose glyphs differ between Windows builds:" -ForegroundColor Red

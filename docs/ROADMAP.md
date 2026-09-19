@@ -441,6 +441,14 @@ The two features that Windows has no good answer for.
   tile, or runs a screen reader. That needs a physical console session, which this work was not
   done in; see `docs/SHELF-VERIFICATION.md` for exactly what was and was not driven, and by what
   date.
+
+  **Known limit, for the next slice to pick up: a tile's selection has no automation semantics.**
+  Every tile, stack, and the clear/new-stack controls reach a real automation peer now (a review
+  caught the first version naming a plain Border and StackPanel, neither of which WPF gives one
+  at all), but a tile's selection ring is not backed by a SelectionItemPattern. Toggling a tile
+  with Space changes what is on screen and announces nothing. Fixing this needs the tiles to move
+  onto a real Selector/ListBoxItem, deliberately not attempted in this slice; see
+  `docs/SHELF-VERIFICATION.md` section 5.4 for the full reasoning.
 - **Notifications card** — last N notifications with quick dismiss.
   Aspires to replace Action Center for people who never open it.
 - Notch dynamic sizing: notch grows when shelf has stashed items.

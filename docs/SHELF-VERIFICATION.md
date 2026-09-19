@@ -839,6 +839,18 @@ per-stack `NamedBorder` wrapper, the `ShelfSurface` `UserControl` root (carrying
 per-tile icon/label stack) and the separator `Path` - nothing is named on them, so their being
 peerless costs nothing.
 
+**KNOWN LIMIT, not fixed in this task: a tile's SELECTION is invisible to the automation tree.**
+`Space` toggles a tile into or out of the current selection and the ring changes on screen, but
+`NamedBorder` carries a plain `FrameworkElementAutomationPeer`, not a `SelectionItemPattern`.
+Nothing in the automation tree announces that a toggle happened at all: a screen reader hears a
+tile's name once, when it is first reached, and nothing when its selection state changes
+afterwards. This is the direct cost of choosing `NamedBorder` over a `ListBoxItem` rewrite (see
+above); the review that accepted that choice for now still asked for the gap itself to be written
+down where the next slice will look for it, not only in a task report nobody re-reads. A real fix
+needs the `Selector`/`ListBoxItem` rewrite this section already describes, or some other way to
+raise a `SelectionItemPattern` (or a live-region announcement on toggle) without it - not attempted
+here.
+
 None of this - whether a screen reader actually reaches any of it, whether the announced text
 reads sensibly in sequence, whether Narrator's own quirks change any of it - has been checked with
 a screen reader. `check-a11y.ps1` (as extended in §5.6) catches a name on a peerless element and a
