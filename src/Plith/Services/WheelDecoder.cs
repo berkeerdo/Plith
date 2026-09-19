@@ -4,11 +4,17 @@ namespace Plith.Services;
 /// Turns the two wheel messages that can mean "sideways" into one signed delta, where positive
 /// always means "towards the next page".
 ///
-/// Separate from the window hook, and pure, for one reason: the sign conventions are the part
-/// most likely to be wrong, and they are exactly the part that cannot be checked by running the
-/// app on this machine — the mouse here has no tilt wheel and no agent may drive input anyway.
-/// A pure decoder can at least be pinned down by tests, so that when the behaviour is finally
-/// measured on real hardware there is one place to change.
+/// Separate from the window hook, and pure, because the sign conventions are the part most
+/// likely to be wrong and a pure decoder can be pinned down by tests.
+///
+/// Its header used to add "and no agent may drive input anyway", which was wrong. A Debug build
+/// runs at MEDIUM integrity — app.manifest sets uiAccess="false" and only Release swaps in the
+/// signed manifest — so the notch takes scripted input like any other window. Measured on
+/// 2026-09-19 by paging this decoder's own output with SendInput: one wheel notch, one page,
+/// three times, logged as `Widget page committed: delta=120, index=N/4`. See
+/// docs/SHELF-VERIFICATION.md §3.11. The WM_MOUSEHWHEEL path is still unmeasured: the mouse here
+/// has no tilt wheel, and a touchpad's two-finger swipe delivers many small deltas rather than
+/// one of 120, which is the case the pager's constants were actually chosen for.
 /// </summary>
 public static class WheelDecoder
 {
