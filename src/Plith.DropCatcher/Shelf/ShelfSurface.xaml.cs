@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Automation;
+using System.Windows.Automation.Peers;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
@@ -375,7 +376,14 @@ public partial class ShelfSurface : UserControl
                 Foreground = (Brush)FindResource("NotchInk"),
                 Margin = new Thickness(0, 36, 0, 0),
             });
-            AutomationProperties.SetName(Columns, "Shelf, empty. Drop files on the notch to keep them here.");
+            // Named on THIS control, not on Columns: Columns is a StackPanel, and WPF gives a
+            // StackPanel no automation peer at all, so a name set on one reaches nothing (see
+            // NamedBorder's own header comment for the review that caught this same defect on
+            // every Border below). The UserControl root does have a peer - the same fix
+            // AmbientCardView/AudioCardView/MediaCardView already use for the same reason, on the
+            // same principle: a Grid or StackPanel that composes several peerless children names
+            // the WHOLE control instead, one level up from where the name was tried first.
+            AutomationProperties.SetName(this, "Shelf, empty. Drop files on the notch to keep them here.");
 
             // Nothing left for keyboard navigation to be on. Left set, the next non-empty
             // Render would resolve a stale index against an entirely unrelated delivery -
@@ -394,7 +402,8 @@ public partial class ShelfSurface : UserControl
             Columns.Children.Add(BuildColumn(i, stacks[i], model.Selection));
         }
 
-        AutomationProperties.SetName(Columns, string.Create(CultureInfo.CurrentCulture,
+        // On THIS control, not on Columns - see the empty branch above for why.
+        AutomationProperties.SetName(this, string.Create(CultureInfo.CurrentCulture,
             $"Shelf, {stacks.Count} stack{(stacks.Count == 1 ? "" : "s")}"));
     }
 
@@ -499,7 +508,7 @@ public partial class ShelfSurface : UserControl
     /// OsdSurfaceBrush/NotchInkMuted pair for this file a real measurement of shipped code rather
     /// than a check written against a colour nothing draws.
     /// </summary>
-    private Border BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
+    private NamedBorder BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
     {
         var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top };
 
@@ -528,7 +537,7 @@ public partial class ShelfSurface : UserControl
 
         if (overflow > 0) column.Children.Add(BuildOverflowTile(stack.Count - shown));
 
-        var wrapper = new Border { Tag = index, Child = column };
+        var wrapper = new NamedBorder { Tag = index, Child = column };
         AutomationProperties.SetName(wrapper, string.Create(CultureInfo.CurrentCulture,
             $"Stack {index + 1}, {stack.Count} item{(stack.Count == 1 ? "" : "s")}"));
 
@@ -540,7 +549,7 @@ public partial class ShelfSurface : UserControl
     /// navigation's position to match (see the press handler below), so an arrow key pressed
     /// right after a click moves on from the tile that was actually clicked rather than from
     /// wherever a previous arrow key last left it.</param>
-    private Border BuildTile(ShelfEntry entry, bool selected, bool last, int stackIndex, int rowIndex)
+    private NamedBorder BuildTile(ShelfEntry entry, bool selected, bool last, int stackIndex, int rowIndex)
     {
         // A fixed-size host rather than the icon itself, so the later swap from the drawn
         // fallback to a real shell icon changes what fills this box without changing the box:
@@ -609,7 +618,7 @@ public partial class ShelfSurface : UserControl
         overlay.Children.Add(content);
         overlay.Children.Add(removeButton);
 
-        var tile = new Border
+        var tile = new NamedBorder
         {
             Width = TileSize,
             Height = TileSize,
@@ -842,7 +851,7 @@ public partial class ShelfSurface : UserControl
     /// once, and ShelfModel has no such operation. Same reason ShelfWidget's own overflow
     /// tile carries no press handler either.
     /// </summary>
-    private Border BuildOverflowTile(int hidden)
+    private NamedBorder BuildOverflowTile(int hidden)
     {
         var count = new TextBlock
         {
@@ -869,7 +878,7 @@ public partial class ShelfSurface : UserControl
         var announced = string.Create(CultureInfo.CurrentCulture,
             $"{hidden} more item{(hidden == 1 ? "" : "s")} in this stack");
 
-        var tile = new Border
+        var tile = new NamedBorder
         {
             Width = TileSize,
             Height = TileSize,
@@ -902,5 +911,34 @@ public partial class ShelfSurface : UserControl
         var geometry = Geometry.Parse(data);
         geometry.Freeze();
         return geometry;
+    }
+
+    /// <summary>
+    /// A Border that actually has an automation peer, which a bare Border never does. WPF only
+    /// creates a peer for a type that overrides <c>OnCreateAutomationPeer</c>, Border is not one
+    /// of them, and <c>check-a11y.ps1</c>'s own <c>$peerless</c> list already named it as such
+    /// before this class existed.
+    ///
+    /// A review of this task found every AutomationProperties.SetName below was landing on a
+    /// plain Border - the tile, the overflow tile, the per-stack wrapper - and reaching nothing
+    /// at all, the exact defect check-a11y.ps1 exists to catch. It missed it only because that
+    /// script never read code-behind at all (see check-a11y.ps1's own updated header comment).
+    ///
+    /// This is the SMALLER of two fixes the review raised, and the choice is recorded rather than
+    /// assumed. The bigger one is real: these tiles are selectable and activatable, arrow keys
+    /// move between them, and a genuine <see cref="ListBoxItem"/> would give a screen reader the
+    /// SelectionItem pattern for free - "N of M selected" rather than a name alone. That would
+    /// also mean rebuilding drag-out, the hover remove affordance, the context menu and the
+    /// keyboard handling this same task just wrote on top of a Selector's own model instead of
+    /// ShelfModel's, none of it verified on hardware yet either. <see cref="NamedBorder"/> is the
+    /// smaller fix: every name below now reaches a real automation peer today, with the standard
+    /// <see cref="FrameworkElementAutomationPeer"/> WPF gives a plain Control - Name, HelpText and
+    /// so on all work - but no selection semantics beyond that. If the console pass this project
+    /// still owes finds that insufficient for how Narrator actually presents the shelf, the
+    /// Selector-based rewrite is the next step, not a surprise.
+    /// </summary>
+    private sealed class NamedBorder : Border
+    {
+        protected override AutomationPeer OnCreateAutomationPeer() => new FrameworkElementAutomationPeer(this);
     }
 }

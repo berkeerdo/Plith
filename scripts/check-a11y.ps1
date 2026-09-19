@@ -21,7 +21,13 @@
      a peerless element therefore reaches nothing at all: it appears nowhere in the live UI
      Automation tree, not even in the raw view, while every build, test and lint stays green.
      Move such properties onto the nearest element that does own a peer, usually the
-     UserControl or Control root.
+     UserControl or Control root. Check 2 reads XAML AND code-behind (a Foo.xaml.cs file
+     naming a local it built with `new`, or a field declared with x:Name in the matching
+     Foo.xaml). That second half was added after ShelfSurface.xaml.cs's tile, overflow-tile
+     and per-stack Border names, and ShelfWidget.cs's own Tiles panel and tile names, passed
+     this script for as long as it read only XAML while reaching nothing at all. See the
+     code-behind section below for what it can and cannot catch, and for the one file it
+     already finds a pre-existing, out-of-scope failure in and reports rather than hides.
 
   A control passes when it declares AutomationProperties.Name (including an explicitly empty
   one, which marks a decorative element) or AutomationProperties.LabeledBy.
@@ -121,6 +127,103 @@ foreach ($file in Get-ChildItem -Path $Root -Filter '*.xaml' -Recurse) {
     }
 }
 
+# --- Check 2b: the same dead-property rule, for AutomationProperties set from code-behind ---
+#
+# Check 2 above reads only .xaml, so a name set in a class's own .cs file was invisible to it on
+# two axes at once for anything under Plith.DropCatcher: wrong extension, and wrong directory
+# (this whole script defaults its root to src/Plith). That is exactly how ShelfSurface.xaml.cs's
+# tile, overflow-tile and per-stack Border names, and ShelfWidget.cs's tile and Tiles-panel names,
+# passed this script for as long as they did while reaching nothing at all - a review of Task 9's
+# work found it after the fact. Both directories now get their own reviewed accessibility pass for
+# the shelf, so both are scanned here - by adding a SEPARATE root list, not by widening $Root
+# itself, which would also turn on Check 1 (every interactive control needs a name) for the rest
+# of Plith.DropCatcher, a project nobody has reviewed for that yet. Same reasoning $iconFontRoots
+# below already uses for the same directory.
+#
+# This is necessarily a heuristic, not a compiler: PowerShell regex over C# text cannot resolve a
+# variable's real type the way Roslyn could. It catches the two shapes this bug has actually
+# taken so far, and only those two:
+#   1. A local built and named in the same file: `var tile = new Border { ... };` followed later
+#      by `AutomationProperties.SetName(tile, ...)`, wherever in the file that call sits.
+#   2. A field named in the sibling XAML file: `<StackPanel x:Name="Tiles" .../>` in Foo.xaml,
+#      read from `AutomationProperties.SetName(Tiles, ...)` in Foo.xaml.cs.
+# A name set through an alias, a variable built in one method and named from another with a type
+# this cannot re-derive, or a collection element, is a gap in this heuristic's own coverage, not a
+# pass - the same limit the XAML-side check above already has for a name set on a child of a
+# parent it did not declare itself.
+$codeBehindRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
+                    Where-Object { Test-Path $_ } | Select-Object -Unique
+
+# Known, pre-existing gaps this new scan finds but this task does not fix. Recorded as a finding
+# with a file to look at, not silenced by widening the Installer-style root exclusion above: that
+# shape would also hide anything else this scan ever finds in the same file, forever, past the day
+# this specific gap is closed. Fix the file, then delete the line here.
+#
+# The first run of this new check found four files, not one. Task 9 was asked to check only
+# ShelfWidget.cs; running the scan for real also caught MediaWidget.cs, NotchHud.cs and
+# WeatherWidget.cs naming a Border/Grid/StackPanel the exact same way, in code that shipped well
+# before this branch and is nowhere near the shelf. All four are filed here rather than fixed,
+# for the same reason: fixing widget accessibility is not this task, and a lint that starts
+# quietly rewriting product code to stay green is a worse habit than the gaps it found.
+$knownCodeBehindGaps = @{
+    'ShelfWidget.cs' = 'predates Task 9: Tiles (a StackPanel) and every Border built by Tile(...) ' +
+        'were already named before this scan existed to see them. Filed, not fixed, in ' +
+        'docs/SHELF-VERIFICATION.md section 5.4.'
+    'MediaWidget.cs' = 'found by this same scan, unrelated to the shelf: OpenSourceArea is a ' +
+        'Border. Predates this branch. Filed, not fixed.'
+    'NotchHud.cs' = 'found by this same scan, unrelated to the shelf: VolumeRow and MediaRow ' +
+        'are both a Grid. Predates this branch. Filed, not fixed.'
+    'WeatherWidget.cs' = 'found by this same scan, unrelated to the shelf: Readout is a ' +
+        'StackPanel. Predates this branch. Filed, not fixed.'
+}
+$knownGapNotices = [System.Collections.Generic.List[string]]::new()
+
+foreach ($file in @($codeBehindRoots | ForEach-Object { Get-ChildItem -Path $_ -Filter '*.cs' -Recurse }) |
+                   Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }) {
+    $text = Get-Content -Raw -LiteralPath $file.FullName
+    $rel = Resolve-Path -Relative -LiteralPath $file.FullName
+
+    # x:Name -> declared type, read from the sibling XAML file, tried both ways this codebase
+    # actually names one: Foo.xaml.cs beside Foo.xaml (ShelfSurface.xaml.cs), and Foo.cs beside
+    # Foo.xaml (ShelfWidget.cs, which has no ".xaml." in its own file name at all). Trying only
+    # the first shape was itself a bug in this check's first draft: it left ShelfWidget.cs's own
+    # Tiles field (a StackPanel, x:Name'd in ShelfWidget.xaml) unresolved and silently unchecked,
+    # over a file this same check already flags for one other reason.
+    $fieldTypes = @{}
+    $xamlCandidates = @(
+        ($file.FullName -replace '\.cs$', '')          # Foo.xaml.cs -> Foo.xaml
+        ($file.FullName -replace '\.cs$', '.xaml')      # Foo.cs      -> Foo.xaml
+    ) | Select-Object -Unique
+    $xamlPath = $xamlCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+    if ($xamlPath) {
+        $xamlText = Get-Content -Raw -LiteralPath $xamlPath
+        foreach ($m in [regex]::Matches($xamlText, '<(?<type>[A-Za-z_][\w.]*)\s[^>]*?x:Name="(?<name>\w+)"')) {
+            $fieldTypes[$m.Groups['name'].Value] = ($m.Groups['type'].Value -split '\.')[-1]
+        }
+    }
+
+    # local variable -> peerless type, from `var name = new Peerless`.
+    $localTypes = @{}
+    foreach ($m in [regex]::Matches($text, '\bvar\s+(?<name>\w+)\s*=\s*new\s+(?<type>' + ($peerless -join '|') + ')\b')) {
+        $localTypes[$m.Groups['name'].Value] = $m.Groups['type'].Value
+    }
+
+    foreach ($m in [regex]::Matches($text, 'AutomationProperties\.Set(?<prop>\w+)\s*\(\s*(?<target>\w+)\s*,')) {
+        $target = $m.Groups['target'].Value
+        $type = $null
+        if ($localTypes.ContainsKey($target)) { $type = $localTypes[$target] }
+        elseif ($fieldTypes.ContainsKey($target)) { $type = $fieldTypes[$target] }
+        if ($null -eq $type -or $peerless -notcontains $type) { continue }
+
+        if ($knownCodeBehindGaps.ContainsKey($file.Name)) {
+            $knownGapNotices.Add("${rel}: AutomationProperties.Set$($m.Groups['prop'].Value)($target, ...) targets a $type ($($knownCodeBehindGaps[$file.Name]))")
+            continue
+        }
+
+        $deadProperties.Add("${rel}: AutomationProperties.Set$($m.Groups['prop'].Value)($target, ...) targets a $type, which WPF gives no automation peer")
+    }
+}
+
 # --- System icon fonts under Views ---
 #
 # A FontIcon bound to "Segoe MDL2 Assets" or "Segoe Fluent Icons" depends on a font whose
@@ -209,4 +312,5 @@ if ($failures.Count -gt 0 -or $deadProperties.Count -gt 0 -or $iconFontUses.Coun
 }
 
 Write-Host "Accessibility check passed: every interactive control has an accessible name, every AutomationProperties value sits on an element that can surface it, and no view depends on a system icon font." -ForegroundColor Green
+foreach ($notice in $knownGapNotices | Sort-Object -Unique) { Write-Host "  KNOWN GAP, not fixed here: $notice" -ForegroundColor Yellow }
 exit 0

@@ -719,11 +719,15 @@ unexecuted code as far as every green line above is concerned.
 ## 5. Accessibility and keyboard (Task 9)
 
 Every tile, every stack, and the header's clear and new-stack controls now carry an
-`AutomationProperties.Name`; arrow keys move the selection, `Space` toggles it, `Enter` opens the
-current tile, and `Delete` removes the current selection (or just the current tile, if nothing is
-selected). `scripts/check-contrast.ps1` now scans `src\Plith.DropCatcher` as well as `src\Plith`,
-and measures two more code-behind pairs plus the selection ring, which had never been measured at
-all before this task.
+`AutomationProperties.Name` that actually reaches a real automation peer - a review of this
+section's first draft found that "carry a name" and "reach an automation peer" were not the same
+claim, and §5.4 is the corrected record of what was wrong and what fixed it. Arrow keys move the
+selection, `Space` toggles it, `Enter` opens the current tile, and `Delete` removes the current
+selection (or just the current tile, if nothing is selected). `scripts/check-contrast.ps1` now
+scans `src\Plith.DropCatcher` as well as `src\Plith`, and measures two more code-behind pairs plus
+the selection ring, which had never been measured at all before this task. `scripts/check-a11y.ps1`
+now reads code-behind as well as XAML, which is what found the automation-peer defect in the
+first place; §5.6 has its own before-and-after record of that.
 
 ### What a green build, a green test run and a green lint prove about this section: nothing
 
@@ -781,7 +785,8 @@ against ("a gate that reports pairs the product does not have is a gate people l
 with"). Rather than add the check and leave it hollow, `BuildColumn` now draws a small "Stack N"
 caption above each column in `NotchInkMuted`, which is also the sighted match for the per-stack
 `AutomationProperties.Name` §Step 1 below required, and which needed a wrapping `Border` around
-each column regardless (a `StackPanel` has no automation peer of its own - see §5.4).
+each column regardless. The first version of that wrapper reached nothing at all; see §5.4 for
+why, and for what actually carries the name now.
 
 This added height to a control whose frame size (`NotchGeometry.ShelfFrameDip`, 384 x 224) is a
 measured constant from an earlier task, fixed elsewhere, and out of this task's file list to
@@ -795,21 +800,69 @@ limit of what a render proves: it says the OFFSCREEN control fits at this size, 
 on-screen shelf window does, since the render harness does not construct `ShelfWindow` and cannot
 reach the layered window at all.
 
-### 5.4 Automation names, and the defect class they were built to dodge
+### 5.4 Automation names, and the defect class they were built to dodge, then reproduced, then fixed
 
-A `StackPanel` carries no automation peer of its own, so a name set directly on one reaches
-nothing - the exact defect that shipped green through Phase 5's accessibility pass four times, per
-this project's `CLAUDE.md`. `BuildColumn`'s stack wrapper is a `Border` for that reason (it adds no
-visible chrome; no `Background`, no `BorderBrush`), and carries
-`AutomationProperties.Name` = `"Stack N, K items"`, count before the list the same way
-`ShelfWidget` already announces its row. Every tile `Border`, the overflow tile, the empty-shelf
-message, the whole `Columns` panel's aggregate name, and the header's clear and new-stack buttons
-all carry peers already (`Border` and `Button` both have one) and already had names before this
-task; this task's own addition is the per-stack name and caption. None of this - whether a screen
-reader actually reaches any of it, whether the announced text reads sensibly in sequence, whether
-Narrator's own quirks change any of it - has been checked with a screen reader. `check-a11y.ps1`
-catches a name on a peerless element and a missing name on an interactive control; it does not,
-and cannot, catch whether the resulting announcement makes sense to a person listening to it.
+**Correction to what this section claimed on first submission.** It said "Every tile `Border`,
+the overflow tile, ... and the header's clear and new-stack buttons all carry peers already
+(`Border` and `Button` both have one)". That is false. `Border` does not have an automation
+peer, `check-a11y.ps1`'s own `$peerless` list already named it as one of the WPF types that
+never gets one, and this project's own `WidgetFrame.xaml` says the same thing in these words. A
+review of this task caught it: every `AutomationProperties.SetName` this task had written landed
+on a `Border` (the tile, the overflow tile, the new per-stack wrapper) or on the `Columns`
+`StackPanel` (also peerless), which reproduced the exact defect this section's first paragraph
+was busy describing, one layer further out. `Button` genuinely does have a peer; that half of the
+sentence was correct.
+
+**The fix, and the smaller of two shapes it could have taken.** Every `Border` that carries a
+name in `ShelfSurface.xaml.cs` (the tile, the overflow tile, the per-stack wrapper) is now a
+`NamedBorder`, a private nested class that overrides `OnCreateAutomationPeer` to return a real
+`FrameworkElementAutomationPeer`. The whole-shelf aggregate name (`"Shelf, N stacks"` / the
+empty-shelf sentence) moved off `Columns` onto `ShelfSurface` itself, the `UserControl` root,
+which does have a peer - the same fix `AmbientCardView`/`AudioCardView`/`MediaCardView` already
+use for the same reason, recorded in `AmbientCardView.xaml`'s own header comment.
+
+This was the SMALLER of two fixes the review raised. The larger one: these tiles are selectable
+and activatable, arrow keys move between them, and a genuine `ListBoxItem` would give a screen
+reader the `SelectionItem` pattern for free rather than a name alone. That was not done here,
+because it would mean rebuilding drag-out, the hover remove affordance, the context menu and this
+same task's keyboard handling on top of a `Selector`'s own model instead of `ShelfModel`'s, all of
+it unverified on hardware either way. `NamedBorder` is real (every name below now reaches an
+actual automation peer, checked by construction and by the extended lint in §5.6, not merely
+argued for) but it is not the richer shape. If the console pass this project still owes finds that
+insufficient, the `ListBoxItem` rewrite is the next step, not a surprise; see `NamedBorder`'s own
+header comment in `ShelfSurface.xaml.cs` for the same reasoning kept next to the code.
+
+**What carries a peer now:** every tile `NamedBorder`, the overflow tile `NamedBorder`, the new
+per-stack `NamedBorder` wrapper, the `ShelfSurface` `UserControl` root (carrying the aggregate
+"Shelf, N stacks" / empty-shelf name), and the header's clear and new-stack `Button`s.
+**What does not, and carries no name:** the inner `StackPanel`s (the per-stack column, the
+per-tile icon/label stack) and the separator `Path` - nothing is named on them, so their being
+peerless costs nothing.
+
+None of this - whether a screen reader actually reaches any of it, whether the announced text
+reads sensibly in sequence, whether Narrator's own quirks change any of it - has been checked with
+a screen reader. `check-a11y.ps1` (as extended in §5.6) catches a name on a peerless element and a
+missing name on an interactive control; it does not, and cannot, catch whether the resulting
+announcement makes sense to a person listening to it.
+
+**The notch's own glance page has the identical defect, and predates this task.**
+`src/Plith/Views/Widgets/ShelfWidget.cs` sets `AutomationProperties.SetName` on `Tiles` (a
+`StackPanel`, `x:Name`'d in `ShelfWidget.xaml`) and on every tile `Border` its `Tile(...)` method
+builds. Both are peerless by the same rule as above, so both names are inert, and this has
+shipped since before this branch existed. Not fixed here: this task's job is the shelf surface in
+`Plith.DropCatcher`, not the notch's read-only glance page, and the review that found this asked
+for it to be reported rather than fixed in the same pass that found it. Filed in `check-a11y.ps1`
+itself (§5.6) as a known, named gap with an owner, so it is not rediscovered from scratch later.
+
+Extending the lint to see code-behind at all (§5.6) also surfaced three MORE pre-existing
+instances of the same defect, none of them related to the shelf: `MediaWidget.cs`'s
+`OpenSourceArea` (a `Border`), `NotchHud.cs`'s `VolumeRow` and `MediaRow` (both a `Grid`), and
+`WeatherWidget.cs`'s `Readout` (a `StackPanel`). All three predate this branch and are also filed,
+not fixed, in `check-a11y.ps1`'s own `$knownCodeBehindGaps` table. This is worth a look from
+whoever owns the notch widgets: `check-a11y.ps1`'s original motivating bug (its own header
+comment: "the OSD's live region was completely inert" on `AmbientCardView`/`AudioCardView`/
+`MediaCardView`) was fixed on those three views by moving the name to the `UserControl` root, and
+these three files did not get the same fix even though they carry the identical pattern.
 
 ### 5.5 Harness lessons, carried forward for whoever drives this section at the console
 
@@ -834,6 +887,60 @@ person preparing to test §5.1-§5.4 by hand will actually be looking:
 None of these is specific to a drag; every one of them applies just as much to a script that drives
 a keyboard gesture against `ShelfWindow` and then reads `dropcatcher.log` or a screen reader's
 output afterwards.
+
+### 5.6 `check-a11y.ps1` could not see any of this, and now can, for code-behind
+
+The lint that should have caught §5.4's defect never ran against the code that carried it.
+`check-a11y.ps1`'s dead-property check (the one that fails a `Grid`/`StackPanel`/`Border` named
+with `AutomationProperties`) parsed only `.xaml` files, and defaulted its scan root to
+`src\Plith`. `ShelfSurface.xaml.cs` was invisible on both axes at once: wrong extension, wrong
+directory. Running it and reading "Accessibility check passed" was true and worthless at the same
+time - it never read a single line of the file it needed to.
+
+**Before the fix**, the extended check run against the version of `ShelfSurface.xaml.cs` this
+task first submitted (recovered from git history and checked in isolation, not left as a
+guess):
+
+```
+Accessibility check failed:
+  AutomationProperties that never reach UI Automation:
+    ShelfSurface.xaml.cs: AutomationProperties.SetName(Columns, ...) targets a StackPanel, which WPF gives no automation peer
+    ShelfSurface.xaml.cs: AutomationProperties.SetName(wrapper, ...) targets a Border, which WPF gives no automation peer
+    ShelfSurface.xaml.cs: AutomationProperties.SetName(tile, ...) targets a Border, which WPF gives no automation peer
+```
+
+**After the fix** (the `NamedBorder`/root-name change in §5.4), the same run against the current
+file:
+
+```
+Accessibility check passed: every interactive control has an accessible name, every AutomationProperties
+value sits on an element that can surface it, and no view depends on a system icon font.
+  KNOWN GAP, not fixed here: ShelfWidget.cs: AutomationProperties.SetName(tile, ...) targets a Border (...)
+  KNOWN GAP, not fixed here: ShelfWidget.cs: AutomationProperties.SetName(Tiles, ...) targets a StackPanel (...)
+  KNOWN GAP, not fixed here: MediaWidget.cs: AutomationProperties.SetName(OpenSourceArea, ...) targets a Border (...)
+  KNOWN GAP, not fixed here: NotchHud.cs: AutomationProperties.SetName(VolumeRow, ...) targets a Grid (...)
+  KNOWN GAP, not fixed here: NotchHud.cs: AutomationProperties.SetName(MediaRow, ...) targets a Grid (...)
+  KNOWN GAP, not fixed here: WeatherWidget.cs: AutomationProperties.SetName(Readout, ...) targets a StackPanel (...)
+```
+
+`ShelfSurface.xaml.cs` and `ShelfWindow.xaml.cs` carry nothing on that list now. The five findings
+that remain are pre-existing, filed as known gaps with an owner rather than fixed or hidden (see
+§5.4's last two paragraphs), and are what `check-a11y.ps1`'s own `$knownCodeBehindGaps` table
+names them as.
+
+**What the extension covers, and what it cannot.** It is a regex heuristic over C# text, not a
+compiler: it resolves a target's type from either a local `var name = new Peerless { ... }` in
+the same file, or an `x:Name="name"` in the sibling XAML file (tried both as `Foo.xaml.cs` beside
+`Foo.xaml`, and as `Foo.cs` beside `Foo.xaml` - `ShelfWidget.cs` uses the second shape, and the
+first draft of this extension only tried the first, which is why it missed `Tiles` until that
+was corrected too). A name set through an alias, built in one method and named from another in a
+way this cannot re-derive, or set on a collection element, is a gap in this heuristic's own
+coverage, not a pass - the same limit the XAML-side check already states for a name set on a
+child of a parent it did not itself declare. It now scans `src\Plith.DropCatcher` as well as
+`src\Plith`, added as a separate root list rather than by widening `$Root` itself, for the same
+reason `$iconFontRoots` already keeps its own list: widening `$Root` would also turn on Check 1
+(every interactive control needs a name) for the rest of `Plith.DropCatcher`, which nobody has
+reviewed for that yet.
 
 ### What HAS been measured, on 2026-09-19
 

@@ -417,8 +417,8 @@ The two features that Windows has no good answer for.
   games. That is the wrong trade for this product.
 
   **Slice 2, code-complete on `feature/shelf-drop-catcher`, not yet merged: the shelf became a
-  real, interactive surface — stacks, actions, real shell icons, drag-out, and an accessibility
-  pass — and the drag-out design the slice 1 note above called for turned out to work.** The
+  real, interactive surface (stacks, actions, real shell icons, drag-out, and an accessibility
+  pass), and the drag-out design the slice 1 note above called for turned out to work.** The
   shelf's whole interactive page moved into `Plith.DropCatcher` (a `UserControl`, so it can be
   rendered offscreen and photographed rather than only judged live), because that is where a drag
   can start at all: `ShelfWindow` presses its OWN tile, so `DoDragDrop` receives the press it
@@ -427,9 +427,9 @@ The two features that Windows has no good answer for.
   existing pipe with four new verbs (`RemoveItems`, `ClearShelf`, `NewStack`, `Restack`). Files
   drop into named stacks rather than one flat list, each tile carries a real shell icon (falling
   back to drawn geometry when the shell has none), a tile drags out to any application or onto
-  another stack through the one `DoDragDrop` call above, and every control — every tile, every
-  stack, the clear and new-stack buttons, arrow-key/Space/Enter/Delete navigation — carries an
-  accessible name and a keyboard path. `check-contrast.ps1` now scans the catcher's own XAML too,
+  another stack through the one `DoDragDrop` call above, and every control (every tile, every
+  stack, the clear and new-stack buttons) now has arrow-key/Space/Enter/Delete navigation and
+  carries an accessible name. `check-contrast.ps1` now scans the catcher's own XAML too,
   including the selection ring, which is computed at runtime and had been invisible to that check
   until this slice.
 
@@ -437,7 +437,7 @@ The two features that Windows has no good answer for.
   drop, the round trip, the shelf page and persistence were driven on a running build and found
   three real defects that a green build had missed. Slice 2's stacks, actions, drag-out and
   keyboard support are code-complete, build clean, pass every lint including the widened contrast
-  check, and render correctly offscreen in both themes — none of which presses a key, drags a
+  check, and render correctly offscreen in both themes. None of that presses a key, drags a
   tile, or runs a screen reader. That needs a physical console session, which this work was not
   done in; see `docs/SHELF-VERIFICATION.md` for exactly what was and was not driven, and by what
   date.

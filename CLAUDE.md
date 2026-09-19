@@ -77,14 +77,14 @@ whole interactive page moved into `Plith.DropCatcher` as a `UserControl`, `Shelf
 its OWN tile so `DoDragDrop` gets a press it can actually use, and a tile now drags out to any
 application or restacks onto another column through that one call. Files land in named stacks,
 each carries a real shell icon with a drawn fallback, and every tile, stack, and the clear/new-stack
-controls carry an accessible name plus arrow-key/Space/Enter/Delete navigation — forwarded from
+controls carry an accessible name plus arrow-key/Space/Enter/Delete navigation, forwarded from
 `ShelfWindow`, which is what actually holds keyboard focus, not the page itself.
 `check-contrast.ps1` now scans the catcher's XAML too and measures the selection ring, which is
 computed at runtime and had been invisible to it. Full record, including the file-list deviation
 this needed: `docs/SHELF-VERIFICATION.md` §5.
 
 **Verified on hardware for slice 1's plumbing only.** Slice 2 builds clean, passes every lint, and
-renders correctly offscreen in both themes and three accents — none of which presses a key, drags
+renders correctly offscreen in both themes and three accents. None of that presses a key, drags
 a tile, or runs a screen reader. That needs a physical console session, undone as of this slice.
 
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
