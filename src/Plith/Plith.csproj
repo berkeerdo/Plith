@@ -53,16 +53,47 @@
                       Private="false" />
   </ItemGroup>
 
+  <!-- One definition of where the catcher's output lives, because the two targets below both
+       need it and a glob that drifts between them is the defect this pair already produced once.
+       It cannot be an ItemGroup out here: top-level globs evaluate before the catcher is built,
+       so on a clean tree the item would come out empty. Hence a property, expanded inside each
+       target where the files actually exist by then. -->
+  <PropertyGroup>
+    <DropCatcherOutputDir>$(MSBuildThisFileDirectory)../Plith.DropCatcher/bin/$(Configuration)/$(TargetFramework)</DropCatcherOutputDir>
+  </PropertyGroup>
+
   <!-- The launcher looks for the catcher beside Plith.exe and nowhere else, so the build has to
        put it there. Without this the shelf is silently absent in every dev run: Plith starts, the
        pipe listens, and nothing ever connects. -->
   <Target Name="CopyDropCatcherBesidePlith" AfterTargets="Build">
     <ItemGroup>
-      <DropCatcherOutput Include="$(MSBuildThisFileDirectory)../Plith.DropCatcher/bin/$(Configuration)/$(TargetFramework)/**/*" />
+      <DropCatcherOutput Include="$(DropCatcherOutputDir)/**/*" />
     </ItemGroup>
     <Copy SourceFiles="@(DropCatcherOutput)"
           DestinationFolder="$(OutDir)%(RecursiveDir)"
           SkipUnchangedFiles="true" />
+  </Target>
+
+  <!-- And the same again for publish, which is a SEPARATE file set that the target above never
+       reached.
+       The target above writes into $(OutDir), the build output. `dotnet publish` computes
+       ResolvedFileToPublish on its own and does not sweep up files a custom target dropped into
+       the build folder, so the published product had Plith.exe and no catcher beside it. Since
+       scripts/manual-install.ps1 installs the PUBLISH output, every installed Plith answered a
+       shelf drop with NotFound: the feature built, passed its tests, passed every lint, and did
+       not exist in the shipped product. Measured at the console on 2026-09-19, against a
+       C:\Program Files\Plith that had been missing the catcher since it was written.
+       Everything is published, not a hand-picked list, so the installed layout matches the one
+       dev runs against. A file that is present in one and absent in the other is exactly how
+       this was missed. scripts/check-publish-shape.ps1 fails the moment it stops matching. -->
+  <Target Name="PublishDropCatcherBesidePlith" BeforeTargets="ComputeResolvedFilesToPublishList">
+    <ItemGroup>
+      <DropCatcherPublishOutput Include="$(DropCatcherOutputDir)/**/*" />
+      <ResolvedFileToPublish Include="@(DropCatcherPublishOutput)">
+        <RelativePath>%(RecursiveDir)%(Filename)%(Extension)</RelativePath>
+        <CopyToPublishDirectory>PreserveNewest</CopyToPublishDirectory>
+      </ResolvedFileToPublish>
+    </ItemGroup>
   </Target>
 
   <ItemGroup>
