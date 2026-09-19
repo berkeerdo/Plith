@@ -441,11 +441,20 @@ open menu means the opposite.
 | Same, light theme, lime accent | unchanged layout, ink and surface both legible |
 | Same, dark theme, white accent | unchanged layout, selection ring legible against the white accent |
 | The cache-hit second pass (Task 5's own check) still passes after Task 7's tile restructuring | `shelf-surface-pass2.png`: "second-pass check passed" on all three renders above |
+| A context menu opened on a tile is force-closed, not orphaned, before a later `Render` tears that tile down | `render-widgets.ps1`'s new "menu-survives-render check": a real `ContextMenu.IsOpen` set true, `MenuOpenChanged` reports `true`, `Render` runs again, `IsOpen` reads `false` and `MenuOpenChanged` reports `false` after one dispatcher pump. This is the review-found Critical from the first round, reproduced and then shown fixed rather than reasoned about. |
 
 The renders confirm something narrower than the console items above, and it is worth being exact
 about the difference: wrapping each tile's content in a Grid (so the hover remove button has
 somewhere to sit without disturbing the icon and label) did not move anything on screen, and did
 not break the render harness's own structural assumption about where the icon host lives inside
 a tile (`scripts/render-widgets.ps1` needed one extra `.Children[0]` to reach it, now updated).
-Nothing about a render can show a hover, a drag, or a context menu, so none of §3.1-§3.9 is
-answered by it.
+Nothing about a render can show a hover or a drag, so §3.1, §3.2 and §3.4-§3.7 are unanswered by
+it. §3.9 is a partial exception: the new menu-survives-render check drives a real `ContextMenu`
+through exactly the sequence that broke the first version of `_menuOpen` (open it, force a
+`Render` while it is open, confirm it closes and `MenuOpenChanged` reports it), so the MECHANISM
+behind §3.9 is measured, off-screen, not reasoned about. What that check cannot reach is
+everything §3.9 actually asks a person to look at: whether the popup visually appears anchored to
+the right tile, whether `Esc` and the mouse-leave grace period behave as expected around it, and
+whether any of this looks right rather than merely being internally consistent. §3.9 stays
+NOT YET RUN for those reasons; only the stuck-flag hazard it exists to catch has independent,
+automated evidence now.

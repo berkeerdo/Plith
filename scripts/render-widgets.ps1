@@ -481,6 +481,50 @@ if (-not [object]::ReferenceEquals($pass2Image.Source, $pass1Icon)) {
 "  second-pass check passed: cache hit on pass two painted the real icon directly (no fallback " +
 "element in the icon host), and it is reference-equal to what pass one actually extracted."
 
+# --- a menu open on a tile must not survive that tile's own destruction --------------------
+#
+# Review of Task 7 found this the hard way: SetStack calls Render on every Items message, and
+# Plith re-sends the whole Items set after every one of the four mutating verbs, so a right-click
+# on tile A followed by ANY refresh (even one triggered by a totally different tile) tears tile A
+# out of the tree while its menu is still open. The first version derived ShelfWindow's _menuOpen
+# from ContextMenuOpening/Closing, routed events that bubble from the tile that opened them - and
+# a tile Render has already destroyed has nowhere left for that bubble to go, so Closing never
+# reached anyone and the shelf could never be dismissed again. The fix tracks the menu Render
+# itself is responsible for (ShelfSurface._openMenu) and force-closes it before a single child is
+# torn down. This drives that for real: a genuine ContextMenu, opened on a genuine tile, must
+# still be open when asked, and must be closed - not orphaned on screen - the moment a render
+# that did not know about it runs anyway.
+$menuEvents = [System.Collections.Generic.List[bool]]::new()
+$shelfSurface.add_MenuOpenChanged([Action[bool]]{ param($open) $menuEvents.Add($open) })
+
+$menuTile = $pass2Tile
+if (-not $menuTile.ContextMenu) { throw "menu-survives-render check: the Plith.exe tile has no ContextMenu." }
+
+$menuTile.ContextMenu.IsOpen = $true
+if (-not $menuTile.ContextMenu.IsOpen) { throw "menu-survives-render check: the context menu did not actually open." }
+if ($menuEvents.Count -ne 1 -or -not $menuEvents[0]) {
+    throw "menu-survives-render check: MenuOpenChanged did not report true when the menu opened (events: $($menuEvents -join ','))."
+}
+
+# The render this whole check exists for: something else on the shelf changed, Plith answered
+# with a fresh Items set, and SetStack calls this while tile A's menu is still open.
+$shelfSurface.Render($surfaceModel)
+
+# Closed is measured NOT to fire synchronously with Render's IsOpen = $false (the default
+# ContextMenu style animates its close), so this pumps the dispatcher the same way the shell-icon
+# cache hit above needs to, rather than asserting on the tick right after Render returns.
+Wait-ForDispatcher
+
+if ($menuTile.ContextMenu.IsOpen) {
+    throw "menu-survives-render check FAILED: the menu opened on a tile Render just destroyed is STILL OPEN, orphaned on screen with nothing left able to dismiss the shelf under it."
+}
+if ($menuEvents.Count -ne 2 -or $menuEvents[1]) {
+    throw "menu-survives-render check FAILED: MenuOpenChanged never reported false after Render tore the tile down (events: $($menuEvents -join ',')). This is exactly the bug review found: ShelfWindow's _menuOpen would stay true forever."
+}
+
+"  menu-survives-render check passed: a context menu opened on a tile is force-closed before " +
+"Render rebuilds the tiles under it, and MenuOpenChanged reports both the open and the close."
+
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a

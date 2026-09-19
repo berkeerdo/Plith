@@ -201,13 +201,18 @@ public partial class ShelfWindow : Window
         Page.OpenRequested += ShelfActions.Open;
         Page.RevealRequested += ShelfActions.ShowInFileManager;
 
-        // A context menu takes activation exactly the way losing focus to another window does,
-        // and ContextMenuOpening/Closing are routed events that bubble up from whichever tile
-        // opened one, so subscribing here on Page reaches every tile's menu without this window
-        // needing to know which tile it was. Cleared on close, not left set: leaving it set would
-        // mean nothing could ever dismiss the shelf again once a single menu had been opened.
-        Page.ContextMenuOpening += (_, _) => _menuOpen = true;
-        Page.ContextMenuClosing += (_, _) => _menuOpen = false;
+        // A context menu takes activation exactly the way losing focus to another window does.
+        // MenuOpenChanged, not ContextMenuOpening/Closing bubbling up from whichever tile opened
+        // one: the first version used those, and a re-render (Render tears every tile out of
+        // Columns and rebuilds them, and Plith re-sends the whole shelf after every mutating
+        // verb) could destroy the tile that opened a menu before its Closing had anywhere left
+        // to bubble through, leaving _menuOpen stuck true and the shelf undismissable forever.
+        // MenuOpenChanged is raised by ShelfSurface itself, from the menu's own Opened/Closed
+        // (popup content, not part of the tile's subtree) and force-closed inside Render before
+        // a single tile is torn down, so it cannot go missing the same way. Cleared on close, not
+        // left set: leaving it set would mean nothing could ever dismiss the shelf again once a
+        // single menu had been opened.
+        Page.MenuOpenChanged += open => _menuOpen = open;
     }
 
     /// <summary>

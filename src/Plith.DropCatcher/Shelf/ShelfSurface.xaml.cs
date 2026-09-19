@@ -83,6 +83,15 @@ public partial class ShelfSurface : UserControl
     /// not in anything the tile or the drop target itself remembers.</summary>
     private ShelfModel? _lastModel;
 
+    /// <summary>The context menu a tile currently has open, or null. Tracked here rather than
+    /// left to be inferred from ContextMenuOpening/Closing bubbling up from whatever tile owns
+    /// it: Render tears every tile out of Columns and rebuilds them from scratch, and a bubbling
+    /// routed event has nowhere to bubble THROUGH once its source has been removed from the
+    /// tree. A menu open on a tile that a later Render destroys would then never raise anything
+    /// this control could hear at all, which is exactly the bug this field exists to prevent -
+    /// see Render's own comment for the other half of the fix.</summary>
+    private ContextMenu? _openMenu;
+
     public ShelfSurface()
     {
         InitializeComponent();
@@ -114,6 +123,13 @@ public partial class ShelfSurface : UserControl
 
     /// <summary>Show this file in the file manager, from its context menu.</summary>
     public event Action<string>? RevealRequested;
+
+    /// <summary>Whether a tile's context menu is open, changed. True right after one opens,
+    /// false right after one closes - including a close Render forces because the tile that
+    /// owned the menu is about to be torn down. ShelfWindow reads this to know whether a menu
+    /// is suspending its own dismissal; see Render's comment for why the flag cannot be derived
+    /// from ContextMenuOpening/Closing instead.</summary>
+    public event Action<bool>? MenuOpenChanged;
 
     /// <summary>
     /// Resolves <paramref name="palette"/> onto this control's OWN Resources, under the keys
@@ -161,6 +177,26 @@ public partial class ShelfSurface : UserControl
         // drop handlers, and a handler built from a stale model would compute a remove or a
         // restack against a selection that is no longer the one on screen.
         _lastModel = model;
+
+        // A menu opened on a PREVIOUS render's tile is about to have that tile torn out from
+        // under it by the Children.Clear() below. Closed here, first: the menu is popup content,
+        // not a descendant of the tile that opened it, so setting IsOpen false works and raises
+        // Closed (see BuildTileMenu) whether or not that tile still exists by the time it does.
+        // Measured: Closed does NOT fire synchronously with this assignment (the default
+        // ContextMenu style animates its close), so _openMenu and MenuOpenChanged lag this line
+        // by roughly one dispatcher tick, not zero. That is harmless here - everything downstream
+        // (ShelfWindow's Dismiss) already tolerates _menuOpen being stale for a moment, because
+        // it retries rather than deciding once - but it is exactly the kind of timing detail that
+        // looks synchronous until measured, so it is written down rather than assumed.
+        //
+        // Measured the alternative too: leaving this out means a right-click on tile A followed
+        // by ANY refresh (Plith re-sends the whole Items set after every mutating verb, so a
+        // hover-remove on tile B is enough) tears tile A down mid-open, the menu's Closed then
+        // has no live tile to have bubbled through even if THAT were what was being listened to,
+        // and ShelfWindow's _menuOpen stays true forever, which means the shelf can never be
+        // dismissed again.
+        if (_openMenu is { IsOpen: true } openMenu) openMenu.IsOpen = false;
+
         Columns.Children.Clear();
 
         var stacks = model.Stacks;
@@ -195,6 +231,10 @@ public partial class ShelfSurface : UserControl
 
     private void OnNewStackClick(object sender, RoutedEventArgs e) => NewStackRequested?.Invoke();
 
+    // Asks nothing first, on purpose: the shelf holds references, not the files themselves, so
+    // clearing it deletes nothing on disk, and a confirmation dialog for a reversible action on
+    // a surface this small is friction rather than safety. If a future change makes Clear do
+    // something that is NOT trivially reversible, this is the line that stops being true.
     private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
 
     private void OnColumnsDragOver(object sender, DragEventArgs e)
@@ -467,6 +507,24 @@ public partial class ShelfSurface : UserControl
         menu.Items.Add(reveal);
         menu.Items.Add(new Separator());
         menu.Items.Add(remove);
+
+        // Opened/Closed, on the menu itself, not ContextMenuOpening/Closing bubbling up from the
+        // tile: a ContextMenu is popup content, hosted outside the tile's own visual subtree, so
+        // these fire correctly whether the tile that opened the menu still exists or not by the
+        // time it closes. That is what makes _openMenu (and Render's force-close of it) reliable
+        // in the one case that broke the previous design: a re-render destroying the tile while
+        // its menu is still up.
+        menu.Opened += (_, _) => { _openMenu = menu; MenuOpenChanged?.Invoke(true); };
+        menu.Closed += (_, _) =>
+        {
+            // Guards against stomping a DIFFERENT, newer menu: this fires both for an ordinary
+            // close (Esc, a click, losing focus) and for the force-close Render performs above,
+            // and either way _openMenu must already be (or be about to become) this same menu.
+            if (!ReferenceEquals(_openMenu, menu)) return;
+            _openMenu = null;
+            MenuOpenChanged?.Invoke(false);
+        };
+
         return menu;
     }
 
