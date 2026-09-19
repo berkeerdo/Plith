@@ -109,11 +109,19 @@
 
             <!-- The stacks, built in code the same way ShelfWidget builds its tiles: each one
                  needs its own AutomationProperties.Name and its own press handler, which an
-                 ItemsControl template cannot give an individual generated element. -->
+                 ItemsControl template cannot give an individual generated element.
+
+                 AllowDrop lives here, on the container, rather than on each built column: a
+                 drop past the last stack has to land somewhere too (it means "start a new
+                 stack"), and there is no column there to carry the flag. OnColumnsDrop works
+                 out which column, if any, the drop point actually fell inside. -->
             <StackPanel x:Name="Columns"
                         Grid.Row="1"
                         Orientation="Horizontal"
-                        VerticalAlignment="Top" />
+                        VerticalAlignment="Top"
+                        AllowDrop="True"
+                        DragOver="OnColumnsDragOver"
+                        Drop="OnColumnsDrop" />
         </Grid>
     </Border>
 </UserControl>

@@ -83,9 +83,16 @@ public partial class ShelfWindow : Window
     /// report the shelf closed twice and make Plith put the notch back twice.</summary>
     private bool _open;
 
-    // CS0649 is "never assigned to", and here that is the design rather than an oversight: both
-    // fields are read by Dismiss and written by tasks that do not exist yet. Suppressed at the
-    // two declarations only, and narrowly, so that the day a real never-assigned field appears
+    /// <summary>Set while a tile's context menu is up, and read by Dismiss: a context menu takes
+    /// activation the same way losing focus to another window does, and without this a menu
+    /// opening would dismiss the surface it belongs to out from under itself. Cleared on close,
+    /// which matters as much as setting it: see the constructor's own comment on why it cannot
+    /// be left set.</summary>
+    private bool _menuOpen;
+
+    // CS0649 is "never assigned to", and here that is the design rather than an oversight: this
+    // field is read by Dismiss and written by a task that does not exist yet. Suppressed at the
+    // one declaration only, and narrowly, so that the day a real never-assigned field appears
     // somewhere else in this file the compiler still says so.
 #pragma warning disable CS0649
 
@@ -93,9 +100,6 @@ public partial class ShelfWindow : Window
     /// window that can only be dismissed correctly after a later task is a window that is wrong
     /// in between.</summary>
     private bool _dragInFlight;
-
-    /// <summary>Set by the context menu in Task 7, same reason.</summary>
-    private bool _menuOpen;
 
 #pragma warning restore CS0649
 
@@ -166,15 +170,44 @@ public partial class ShelfWindow : Window
         Activated += (_, _) => _pendingDismissal = null;
         PreviewKeyDown += OnPreviewKeyDown;
 
-        // ShelfSurface's three events (EntryPressed, ClearRequested, NewStackRequested) are
-        // deliberately NOT subscribed here. Every one of them answers with a message back over
-        // the wire (RemoveItems, ClearShelf, NewStack, Restack), and the send side of this
-        // process belongs to a later task: TASK 7 subscribes all three. Named so that an
-        // unsubscribed event does not read as an oversight. Task 3 drew these controls and
-        // declared their events together, because the controls had to be in the picture for the
-        // render to be judged; wiring them here instead would mean either a handler that silently
-        // does nothing, or a second subscriber Task 7 has to notice and remove rather than simply
-        // add to.
+        // EntryPressed: additive (Ctrl held) is Select's ordinary toggle. Non-additive is
+        // DragPaths rather than a plain Select(path, false) - DragPaths carries the exact rule a
+        // press needs here, leaving an already-selected tile's whole selection alone rather than
+        // collapsing it to the one pressed, which is what lets a following drag still carry more
+        // than one path. The paths DragPaths returns are not needed by this handler; only its
+        // effect on Selection is, which Render then paints as the selection ring.
+        Page.EntryPressed += (path, additive) =>
+        {
+            if (additive) _model.Select(path, true);
+            else _model.DragPaths(path);
+            Page.Render(_model);
+        };
+
+        // ClearRequested, NewStackRequested, RemoveRequested and RestackRequested all cross the
+        // wire, and this window does not send them itself: App owns the one CatcherClient this
+        // process has, the same reason CatcherWindow's FilesDropped and Withdrew are plain events
+        // rather than direct sends. Bubbled through unchanged rather than translated to a
+        // DropMessage here, so this file does not have to know the wire format to raise them.
+        Page.ClearRequested += () => ClearShelfRequested?.Invoke();
+        Page.NewStackRequested += () => NewStackRequested?.Invoke();
+        Page.RemoveRequested += paths => RemoveItemsRequested?.Invoke(paths);
+        Page.RestackRequested += (index, paths) => RestackRequested?.Invoke(index, paths);
+
+        // OpenRequested and RevealRequested are the opposite: they never touch the wire at all,
+        // because opening a file or showing it in the file manager is something THIS process
+        // does on its own account, at the Medium integrity it already runs at. See ShelfActions'
+        // own header comment for why that has to be true rather than being a shortcut, and why
+        // Plith cannot do either of these itself.
+        Page.OpenRequested += ShelfActions.Open;
+        Page.RevealRequested += ShelfActions.ShowInFileManager;
+
+        // A context menu takes activation exactly the way losing focus to another window does,
+        // and ContextMenuOpening/Closing are routed events that bubble up from whichever tile
+        // opened one, so subscribing here on Page reaches every tile's menu without this window
+        // needing to know which tile it was. Cleared on close, not left set: leaving it set would
+        // mean nothing could ever dismiss the shelf again once a single menu had been opened.
+        Page.ContextMenuOpening += (_, _) => _menuOpen = true;
+        Page.ContextMenuClosing += (_, _) => _menuOpen = false;
     }
 
     /// <summary>
@@ -189,6 +222,22 @@ public partial class ShelfWindow : Window
     /// what.
     /// </summary>
     public event Action? Dismissed;
+
+    /// <summary>The shelf's own controls asked to change what is on the shelf, and none of them
+    /// are applied here: the model is a view of Plith's shelf, so every one of these is a
+    /// REQUEST, and the answer is a fresh set of Items messages, not this window updating
+    /// itself. App bridges these onto the wire as RemoveItems, ClearShelf, NewStack and Restack,
+    /// since it is the one place that holds the client connection.</summary>
+    public event Action? ClearShelfRequested;
+
+    /// <inheritdoc cref="ClearShelfRequested"/>
+    public event Action? NewStackRequested;
+
+    /// <inheritdoc cref="ClearShelfRequested"/>
+    public event Action<IReadOnlyList<string>>? RemoveItemsRequested;
+
+    /// <inheritdoc cref="ClearShelfRequested"/>
+    public event Action<int, IReadOnlyList<string>>? RestackRequested;
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {

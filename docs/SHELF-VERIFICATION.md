@@ -298,11 +298,10 @@ state §1 describes, where the shelf is dismissable only by moving the pointer a
 
 ### 2.9 Shelf actions come back and are answered
 
-Not reachable until Task 7 wires the catcher's `EntryPressed`, `ClearRequested` and
-`NewStackRequested` to the wire. Listed here so it is not mistaken for something Task 6 covered:
-`ShelfSession.HandleMessage` routes `RemoveItems`, `ClearShelf`, `NewStack` and `Restack` to
-`ShelfStore` and re-sends the whole shelf after each, but nothing on the catcher's side sends any
-of them yet.
+Wired in Task 7: see §3 for the console items that exercise this end to end. `ShelfSession.HandleMessage`
+routes `RemoveItems`, `ClearShelf`, `NewStack` and `Restack` to `ShelfStore` and re-sends the whole
+shelf after each, and the catcher now sends all four, from `ShelfSurface`'s hover affordance,
+context menu and tile drag, bridged onto the wire by `App.WireShelf`.
 
 ### What HAS been measured, on 2026-09-19
 
@@ -329,3 +328,124 @@ The render harness reaches the notch's shelf PAGE because it is an ordinary WPF 
 to a bitmap. It does not reach the shelf SURFACE in place: `shelf-surface.png` is that control
 rendered offscreen too, not the window on screen. Nothing in this document's §1 or §2 visual items
 is answered by a render.
+
+---
+
+## 3. The actions (Task 7)
+
+Remove, clear, new stack, restack, open and show in the file manager, all raised by
+`ShelfSurface` and sent by `App.WireShelf` as `RemoveItems`, `ClearShelf`, `NewStack` and
+`Restack`. Open and show in the file manager never touch the wire at all: `ShelfActions` runs
+them directly, in this process, at the Medium integrity it already has. See that class's own
+header comment for why Plith cannot do either on the catcher's behalf.
+
+### Status: NOT YET RUN
+
+Same constraint as §1 and §2: the shelf is a layered window in a second process and cannot be
+captured over Remote Desktop, so none of the items below has been looked at. What has been
+measured without a console is listed at the end of this section, and it is not a substitute for
+any of these: build, tests and lint all stayed green through every defect §1 and §2 found on
+hardware, and would have stayed green through these too.
+
+### 3.1 Remove, hover and menu, agree with `shelf.txt`
+
+Drop three files on the notch, open the shelf. Hover a tile: a small remove control appears in
+its top-right corner. Click it. Expected: the tile disappears from the page, and
+`%LOCALAPPDATA%\Plith\shelf.txt`, opened in Notepad, no longer lists that path. The file staying
+plain-text readable is a feature this slice deliberately kept, and this is the one item that
+actually looks at it rather than trusting that it still is.
+
+Right-click a second tile instead of hovering it, choose Remove from the context menu. Same two
+expectations: gone from the page, gone from `shelf.txt`.
+
+### 3.2 Remove acts on the selection, not just the one tile
+
+Ctrl+click two tiles in the same stack so both carry the selection ring, then click the remove
+control on ONE of them (or use its context menu). Expected: both selected tiles are removed, not
+only the one the control was on. This is `ShelfModel.DragPaths`'s own rule showing up on screen;
+`ShelfModelTests` covers the rule itself, but nothing before this item has looked at it wired to
+a real control.
+
+Then hover and remove a tile that is NOT part of any selection. Expected: only that one tile
+goes.
+
+### 3.3 Clear empties the shelf without asking
+
+Click the header's clear control (the X). Expected: every tile is gone immediately, no
+confirmation dialog, and `shelf.txt` is left with nothing in it (or absent, depending on how
+`ShelfStore` writes an empty shelf). If a confirmation appears, that is a regression: the header
+comment beside `ClearRequested`'s handling explains why this action was built to ask nothing
+first.
+
+### 3.4 New stack, then a drag lands in it
+
+Click the header's plus control. Expected: an additional, empty stack appears. Drag a tile from
+another stack onto the new one. Expected: the tile moves, `shelf.txt` reflects the new grouping,
+and the tile's origin stack no longer lists it.
+
+### 3.5 Dragging a tile onto another existing stack restacks it
+
+With at least two non-empty stacks, press a tile, drag it onto a different stack, release.
+Expected: the tile joins the target stack and leaves its old one, on screen and in `shelf.txt`.
+Try this once with a single tile and once with a multi-selection (Ctrl+click two tiles first,
+then drag one of the selected ones): the whole selection should move together, again by
+`ShelfModel.DragPaths`.
+
+### 3.6 Dragging past the last stack starts a new one
+
+Drag a tile into the empty area to the right of the last visible stack (not onto any column).
+Expected: the same result as making a new stack by hand and dragging into it (§3.4), reached by
+one gesture instead of two.
+
+### 3.7 Open, from the right process
+
+Right-click a tile and choose Open. Expected: the file opens in whatever handles it, at Medium
+integrity. There is no way to read integrity off a running window directly; Process Explorer's
+"Integrity Level" column against the opened application's process is the way to check it, and it
+should read Medium, not High. A High-integrity document window (dragging fails onto it, or it
+otherwise behaves oddly for reasons that are not visible on screen) is exactly the failure
+`ShelfActions.Open`'s header comment describes, and would mean this call happened from Plith
+instead of the catcher.
+
+### 3.8 Show in the file manager opens the right window class
+
+Right-click a tile and choose "Show in file manager". Expected: a file manager window opens with
+the file selected. On a machine where Files is the default file manager (this one, per
+`ShelfActions`' own header comment), that window's class is `WinUIDesktopWin32WindowClass`, not
+Explorer's `CabinetWClass`, checkable with a tool like WinSpy or the Accessibility Insights
+window property view. This item exists because that fact was measured once already for
+`ShelfActions` to be written correctly; it is listed here so a machine with a different default
+file manager does not get read as a regression when the window class simply differs for an
+unrelated reason.
+
+### 3.9 The context menu does not let the shelf close under itself
+
+Right-click a tile to open its context menu, and while the menu is up, let the mouse-leave grace
+period that would normally dismiss the shelf run out (wait past it, or move the pointer off the
+shelf first). Expected: the shelf stays up with the menu open. Close the menu (Esc or a click
+elsewhere). Expected: the shelf now behaves normally again, in particular still dismissable by
+`Esc` or by the mouse leaving. A shelf that survives the menu but can never be dismissed
+afterwards means `_menuOpen` was set and never cleared; a shelf that vanishes out from under an
+open menu means the opposite.
+
+### What HAS been measured, on 2026-09-19
+
+| Measured | Result |
+|---|---|
+| Build | `dotnet build Plith.slnx -m:1`: succeeded, 0 errors |
+| Tests | `dotnet test Plith.slnx -m:1`: 472 + 17 passed, 0 failed |
+| `scripts/check-a11y.ps1` | passed: every interactive control has an accessible name, no icon-font use |
+| `scripts/check-shared-xaml.ps1` | passed |
+| `scripts/check-contrast.ps1 -STA` | passed: 234 measurements across 9 accents and both themes |
+| The shelf surface, offscreen, dark theme, lime accent | `shelf-surface.png`: header controls and tile layout unchanged from Task 6's render; the hover remove control is correctly invisible at rest, since nothing in an offscreen render hovers a tile |
+| Same, light theme, lime accent | unchanged layout, ink and surface both legible |
+| Same, dark theme, white accent | unchanged layout, selection ring legible against the white accent |
+| The cache-hit second pass (Task 5's own check) still passes after Task 7's tile restructuring | `shelf-surface-pass2.png`: "second-pass check passed" on all three renders above |
+
+The renders confirm something narrower than the console items above, and it is worth being exact
+about the difference: wrapping each tile's content in a Grid (so the hover remove button has
+somewhere to sit without disturbing the icon and label) did not move anything on screen, and did
+not break the render harness's own structural assumption about where the icon host lives inside
+a tile (`scripts/render-widgets.ps1` needed one extra `.Children[0]` to reach it, now updated).
+Nothing about a render can show a hover, a drag, or a context menu, so none of §3.1-§3.9 is
+answered by it.

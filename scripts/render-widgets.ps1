@@ -444,7 +444,10 @@ $findPlithTile = { param($n) $n -is [Windows.Controls.Border] -and
 
 $pass1Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
 if (-not $pass1Tile) { throw "second-pass check: could not find the Plith.exe tile after the first render." }
-$pass1IconHost = $pass1Tile.Child.Children[0]
+# Border.Child is the overlay Grid Task 7 added for the hover remove button (content at
+# Children[0], the remove button at Children[1]), not the icon/label StackPanel directly any
+# more - one more Children[0] than before reaches the icon host again.
+$pass1IconHost = $pass1Tile.Child.Children[0].Children[0]
 $pass1Image = $pass1IconHost.Children | Where-Object { $_ -is [Windows.Controls.Image] } | Select-Object -First 1
 if (-not $pass1Image) {
     throw "second-pass check: the first render never resolved a real icon for Plith.exe (still " +
@@ -457,7 +460,7 @@ Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'sh
 
 $pass2Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
 if (-not $pass2Tile) { throw "second-pass check: could not find the Plith.exe tile after the second render." }
-$pass2IconHost = $pass2Tile.Child.Children[0]
+$pass2IconHost = $pass2Tile.Child.Children[0].Children[0]
 
 $pass2Fallback = $pass2IconHost.Children | Where-Object { $_ -is [Windows.Shapes.Path] }
 if ($pass2Fallback) {

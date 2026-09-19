@@ -5,6 +5,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Input;
 using System.Windows.Media;
+using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using Plith.Services.Shelf;
 
@@ -59,11 +60,28 @@ public partial class ShelfSurface : UserControl
     private static readonly Geometry FolderIcon =
         CreateIcon("M3.5,6.5 L9.5,6.5 L11.5,9 L20.5,9 L20.5,18.5 L3.5,18.5 Z");
 
+    /// <summary>Same coordinates as ClearButton's icon in ShelfSurface.xaml, duplicated for the
+    /// per-tile remove affordance rather than shared: it is a different Path in a different part
+    /// of the tree, built in code rather than declared, and this project keeps every icon shape
+    /// as its own literal geometry for the reason the file header comment gives.</summary>
+    private static readonly Geometry RemoveIcon = CreateIcon("M6,6 L18,18 M18,6 L6,18");
+
+    /// <summary>The private, in-process clipboard format an internal tile drag carries its paths
+    /// under. Not a real drag-and-drop format (no FileDrop, no text): this drag never leaves the
+    /// window it started in, so nothing outside this control ever needs to read it.</summary>
+    private const string ShelfDragFormat = "Plith.Shelf.Paths";
+
     /// <summary>The dictionary Apply last installed, so a second call replaces it instead of
     /// merging on top of it. Without this, a theme change would leave the old brushes reachable
     /// underneath the new ones, invisible until the day something asks for a key both define
     /// and gets whichever happened to merge first.</summary>
     private ResourceDictionary? _paletteResources;
+
+    /// <summary>The model Render last painted from. Not a source of truth (see the header
+    /// comment), only kept so a press, a drag or a drop can ask it what a remove or a restack
+    /// should act on: ShelfModel.DragPaths needs the current selection, and that lives here,
+    /// not in anything the tile or the drop target itself remembers.</summary>
+    private ShelfModel? _lastModel;
 
     public ShelfSurface()
     {
@@ -80,6 +98,22 @@ public partial class ShelfSurface : UserControl
 
     /// <summary>The "start a new stack" control was pressed.</summary>
     public event Action? NewStackRequested;
+
+    /// <summary>Take these paths off the shelf: the tile's own selection, or the whole current
+    /// selection if the tile removed belongs to it. Raised by the hover affordance and by the
+    /// tile's context menu, both computing the same set from ShelfModel.DragPaths.</summary>
+    public event Action<IReadOnlyList<string>>? RemoveRequested;
+
+    /// <summary>A tile drag landed on stack <c>index</c>, carrying <c>paths</c>. An index equal
+    /// to the current stack count means the drop missed every column, which is how landing past
+    /// the last stack (or on an empty shelf) asks for a new one instead.</summary>
+    public event Action<int, IReadOnlyList<string>>? RestackRequested;
+
+    /// <summary>Open this file, from its context menu.</summary>
+    public event Action<string>? OpenRequested;
+
+    /// <summary>Show this file in the file manager, from its context menu.</summary>
+    public event Action<string>? RevealRequested;
 
     /// <summary>
     /// Resolves <paramref name="palette"/> onto this control's OWN Resources, under the keys
@@ -123,6 +157,10 @@ public partial class ShelfSurface : UserControl
     /// </summary>
     public void Render(ShelfModel model)
     {
+        // Recorded before anything else: a tile built below captures this in its own press and
+        // drop handlers, and a handler built from a stale model would compute a remove or a
+        // restack against a selection that is no longer the one on screen.
+        _lastModel = model;
         Columns.Children.Clear();
 
         var stacks = model.Stacks;
@@ -148,7 +186,7 @@ public partial class ShelfSurface : UserControl
         for (var i = 0; i < shown; i++)
         {
             if (i > 0) Columns.Children.Add(BuildSeparator());
-            Columns.Children.Add(BuildColumn(stacks[i], model.Selection));
+            Columns.Children.Add(BuildColumn(i, stacks[i], model.Selection));
         }
 
         AutomationProperties.SetName(Columns, string.Create(CultureInfo.CurrentCulture,
@@ -158,6 +196,41 @@ public partial class ShelfSurface : UserControl
     private void OnNewStackClick(object sender, RoutedEventArgs e) => NewStackRequested?.Invoke();
 
     private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
+
+    private void OnColumnsDragOver(object sender, DragEventArgs e)
+    {
+        e.Effects = e.Data.GetDataPresent(ShelfDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Handled = true;
+    }
+
+    private void OnColumnsDrop(object sender, DragEventArgs e)
+    {
+        if (e.Data.GetData(ShelfDragFormat) is not IReadOnlyList<string> paths) return;
+
+        RestackRequested?.Invoke(TargetStackIndex(e.GetPosition(Columns)), paths);
+        e.Handled = true;
+    }
+
+    /// <summary>
+    /// Which stack a drop at <paramref name="position"/> belongs to, found by which built
+    /// column's own bounds the point falls inside. A point that matches no column, including
+    /// one past the last one or on a shelf with none at all, resolves to the current stack
+    /// count: exactly the index Restack (and ShelfStore.Restack behind it) treats as "make a new
+    /// one", which is what the brief calls dropping on the empty area past the last stack.
+    /// </summary>
+    private int TargetStackIndex(Point position)
+    {
+        foreach (var column in Columns.Children.OfType<StackPanel>())
+        {
+            if (column.Tag is not int index) continue;
+
+            var topLeft = column.TranslatePoint(new Point(0, 0), Columns);
+            var bounds = new Rect(topLeft, column.RenderSize);
+            if (position.X >= bounds.Left && position.X < bounds.Right) return index;
+        }
+
+        return _lastModel?.Stacks.Count ?? 0;
+    }
 
     /// <summary>
     /// A drawn line between stacks, not a Border edge: the brief for this surface calls for the
@@ -179,9 +252,11 @@ public partial class ShelfSurface : UserControl
         };
     }
 
-    private StackPanel BuildColumn(IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
+    private StackPanel BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
     {
-        var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top };
+        // Tag carries the index for TargetStackIndex to read back: the column itself is the only
+        // thing that knows where it sits once separators are mixed in between the children.
+        var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top, Tag = index };
 
         // One slot is spent on the count whenever a stack holds more than the column can show,
         // the same rule ShelfWidget uses for the row as a whole: a stack of four shows one file
@@ -261,6 +336,14 @@ public partial class ShelfSurface : UserControl
         content.Children.Add(iconHost);
         content.Children.Add(label);
 
+        // A Grid rather than handing content straight to the Border, so the hover-only remove
+        // affordance can sit on top of it without changing the tile's own layout: the overlay
+        // occupies the same cell, drawn last, and never affects where the icon or label lands.
+        var removeButton = BuildRemoveButton(entry);
+        var overlay = new Grid();
+        overlay.Children.Add(content);
+        overlay.Children.Add(removeButton);
+
         var tile = new Border
         {
             Width = TileSize,
@@ -273,15 +356,137 @@ public partial class ShelfSurface : UserControl
             BorderThickness = new Thickness(selected ? 1.5 : 0),
             Padding = new Thickness(4),
             Cursor = Cursors.Hand,
-            Child = content,
+            Child = overlay,
             ToolTip = entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name,
         };
 
         AutomationProperties.SetName(tile, entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
-        tile.PreviewMouseLeftButtonDown += (_, _) =>
+        tile.ContextMenu = BuildTileMenu(entry);
+        tile.MouseEnter += (_, _) => removeButton.Visibility = Visibility.Visible;
+        tile.MouseLeave += (_, _) => removeButton.Visibility = Visibility.Collapsed;
+
+        // Where the current press started, so PreviewMouseMove can tell a click from the
+        // beginning of a drag. Null between gestures and while none is in progress.
+        Point? pressStart = null;
+
+        tile.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            // The remove button sits inside this tile's own visual tree, so a click on it
+            // tunnels through here first. Left alone, every remove-button click would also
+            // select the tile it is about to remove, which is at best a flicker and at worst a
+            // selection change the person never asked for on a tile that is a moment from gone.
+            if (IsDescendantOf(e.OriginalSource as DependencyObject, removeButton)) return;
+
+            pressStart = e.GetPosition(tile);
             EntryPressed?.Invoke(entry.Path, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
+        };
+
+        tile.PreviewMouseMove += (_, e) =>
+        {
+            if (pressStart is not { } start || e.LeftButton != MouseButtonState.Pressed) return;
+
+            var current = e.GetPosition(tile);
+            if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
+                Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
+
+            // Cleared before DoDragDrop, not after: that call pumps its own message loop until
+            // the drag ends, and a MouseMove that reaches this handler again while it is still
+            // running must not try to start a second drag on top of the first.
+            pressStart = null;
+            var paths = _lastModel?.DragPaths(entry.Path) ?? [entry.Path];
+            DragDrop.DoDragDrop(tile, new DataObject(ShelfDragFormat, paths), DragDropEffects.Move);
+        };
+
+        tile.PreviewMouseLeftButtonUp += (_, _) => pressStart = null;
 
         return tile;
+    }
+
+    /// <summary>
+    /// The hover-only "take this off the shelf" control. Not the only way to remove a tile, and
+    /// deliberately not: its visibility depends on a mouse already hovering this exact tile,
+    /// which a keyboard or touch user cannot do, so <see cref="BuildTileMenu"/> carries the same
+    /// action somewhere that hover is not the price of admission.
+    /// </summary>
+    private Button BuildRemoveButton(ShelfEntry entry)
+    {
+        var icon = new Path
+        {
+            Data = RemoveIcon,
+            Stretch = Stretch.Uniform,
+            Stroke = (Brush)FindResource("NotchInk"),
+            StrokeThickness = 1.6,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+        };
+
+        var button = new Button
+        {
+            Width = 16,
+            Height = 16,
+            Padding = new Thickness(4),
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Cursor = Cursors.Hand,
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Top,
+            Visibility = Visibility.Collapsed,
+            Content = icon,
+        };
+
+        AutomationProperties.SetName(button, string.Create(CultureInfo.CurrentCulture,
+            $"Remove {entry.Name} from the shelf"));
+
+        button.Click += (_, e) =>
+        {
+            e.Handled = true;
+            RemoveRequested?.Invoke(_lastModel?.DragPaths(entry.Path) ?? [entry.Path]);
+        };
+
+        return button;
+    }
+
+    /// <summary>
+    /// Open, show in file manager, remove: the same three actions a mouse reaches through
+    /// hovering plus a click (open and reveal have no other way in at all), always present
+    /// regardless of hover, which is what makes the whole set reachable without one.
+    /// </summary>
+    private ContextMenu BuildTileMenu(ShelfEntry entry)
+    {
+        var open = new MenuItem { Header = "Open" };
+        open.Click += (_, _) => OpenRequested?.Invoke(entry.Path);
+
+        var reveal = new MenuItem { Header = "Show in file manager" };
+        reveal.Click += (_, _) => RevealRequested?.Invoke(entry.Path);
+
+        var remove = new MenuItem { Header = "Remove" };
+        remove.Click += (_, _) => RemoveRequested?.Invoke(_lastModel?.DragPaths(entry.Path) ?? [entry.Path]);
+
+        var menu = new ContextMenu();
+        menu.Items.Add(open);
+        menu.Items.Add(reveal);
+        menu.Items.Add(new Separator());
+        menu.Items.Add(remove);
+        return menu;
+    }
+
+    /// <summary>Whether <paramref name="source"/> is <paramref name="ancestor"/> or sits inside
+    /// it, walking up the visual tree. Used only to tell a click on the remove button apart from
+    /// a click on the rest of the tile it sits on top of: see the comment beside its one call
+    /// site.</summary>
+    private static bool IsDescendantOf(DependencyObject? source, DependencyObject ancestor)
+    {
+        // VisualTreeHelper.GetParent throws on anything that is not a Visual or a Visual3D, and
+        // MouseButtonEventArgs.OriginalSource carries no such guarantee. The loop condition
+        // checks that before every step rather than once, since the walk itself can only produce
+        // more Visuals from here, but the very first value handed in has not been checked yet.
+        while (source is Visual or Visual3D)
+        {
+            if (ReferenceEquals(source, ancestor)) return true;
+            source = VisualTreeHelper.GetParent(source);
+        }
+
+        return false;
     }
 
     /// <summary>

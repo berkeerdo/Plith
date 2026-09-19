@@ -66,6 +66,7 @@ public partial class App : Application, IDisposable
             // says what to look at.
             _log.Info($"SHELF PROBE. Integrity: {IntegrityLevel.Describe()}. Log: {_log.LogPath}");
             _shelf = new ShelfWindow(_log);
+            WireShelf(_shelf);
             _shelf.Dismissed += () =>
             {
                 _log.Info("SHELF PROBE: the shelf reported itself closed. Exiting.");
@@ -104,6 +105,7 @@ public partial class App : Application, IDisposable
         // a shelf: doing that work above would put a second window's worth of layout into the one
         // mode that exists to measure the first window on its own.
         _shelf = new ShelfWindow(_log);
+        WireShelf(_shelf);
         _shelf.Dismissed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
 
         // Per-user, matching the pipe name: one catcher per signed-in session, and a second
@@ -151,13 +153,34 @@ public partial class App : Application, IDisposable
         }
     }, DispatcherPriority.Send);
 
-    /// <summary>Tell Plith to put the notch back. Hide is the verb in this direction too — the
+    /// <summary>Tell Plith to put the notch back. Hide is the verb in this direction too, and the
     /// two ends distinguish them by who sent it.</summary>
     private void OnWithdrew()
         => _ = _client?.SendAsync(new DropMessage(DropVerb.Hide, 0, 0, 0, 0, []));
 
     private void OnFilesDropped(IReadOnlyList<string> paths)
         => _ = _client?.SendAsync(new DropMessage(DropVerb.Dropped, 0, 0, 0, 0, paths));
+
+    /// <summary>
+    /// Bridges the shelf's four wire-bound requests onto the client, the same way FilesDropped
+    /// and Withdrew are bridged above. Called from both places a ShelfWindow is constructed
+    /// (the real run and the hand-run shelf probe) rather than once, since neither construction
+    /// site shares a common caller. In the probe, _client is null and every send below is a
+    /// silent no-op through the null-conditional operator: correct, because the probe has no
+    /// Plith on the other end of a pipe to answer it, and a shelf whose remove or restack
+    /// visibly did nothing is exactly the reminder that this mode has no wire, not a bug in it.
+    /// </summary>
+    private void WireShelf(ShelfWindow shelf)
+    {
+        shelf.ClearShelfRequested += () =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.ClearShelf, 0, 0, 0, 0, []));
+        shelf.NewStackRequested += () =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.NewStack, 0, 0, 0, 0, []));
+        shelf.RemoveItemsRequested += paths =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.RemoveItems, 0, 0, 0, 0, paths));
+        shelf.RestackRequested += (index, paths) =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.Restack, index, 0, 0, 0, paths));
+    }
 
     private static bool TryReadProbeRect(string[] args, out (int x, int y, int w, int h) rect)
         => TryReadRect(args, "--probe", out rect);
