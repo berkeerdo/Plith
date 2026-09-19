@@ -458,3 +458,165 @@ the right tile, whether `Esc` and the mouse-leave grace period behave as expecte
 whether any of this looks right rather than merely being internally consistent. §3.9 stays
 NOT YET RUN for those reasons; only the stuck-flag hazard it exists to catch has independent,
 automated evidence now.
+
+---
+
+## 4. Dragging out (Task 8)
+
+A tile pressed on the shelf and dragged into any ordinary application. One `DoDragDrop`, started
+by `ShelfWindow.StartDrag` and by nothing else, carrying BOTH the shelf's private
+`Plith.Shelf.Paths` format and `DataFormats.FileDrop` in a single `DataObject`, offered as
+`Copy | Link` and never `Move`. The same gesture is therefore also the restack from Task 7: the
+destination is not known until the release, so nothing branches at the source and each target's
+own `DragOver` picks the format it understands.
+
+This is the step whose failure mode is not a wrong pixel but a hung process. Measured on
+18.09.2026, three runs at Medium integrity with the press verified by `WindowFromPoint` to belong
+to another process, `DoDragDrop` never delivered a drag for a press it did not receive: no drop
+target saw a `DragEnter`, the call returned `None`, and one of the three did not return at all and
+was still blocked seventeen seconds after the release. The full ledger is in
+`docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md`, Task 8. That is why `StartDrag` refuses
+any drag whose source element does not belong to its own window, and why every item below that
+touches the catcher's liveness is worth doing rather than assuming.
+
+### Status: NOT YET RUN
+
+The session that built this is `rdp-tcp#0` (`qwinsta`, 2026-09-19), so a drag gesture cannot be
+driven and the layered window cannot be captured. Nothing below has been looked at. What was
+measured without a console is listed at the end of this section, and it reaches none of it.
+
+**Record two things for every run below**, because this is the measurement the whole slice was
+built on top of and the next person should not have to take it on trust:
+
+- the `Drag out returned <effect> for <n> path(s).` line from
+  `%LOCALAPPDATA%\Plith\dropcatcher.log`, verbatim, including the effect name, and
+- the `Started. Integrity: <level>` line from the top of the same log for that run. It must read
+  **Medium**. A `High` there means the catcher was launched as a child of Plith and inherited
+  UIAccess, in which case every result in this section is about a different process than the one
+  that ships and none of it counts.
+
+A `Refused a drag whose press did not land on this window.` or `Refused a drag: one is already in
+flight.` line means `StartDrag`'s guard turned the gesture away. Neither should ever appear during
+an ordinary drag from a tile; if one does, that is the finding, not the drag that failed.
+
+### 4.1 One tile into a file manager
+
+Open the shelf with three items in one stack. Press one tile and drag it into an Explorer or Files
+window, release.
+
+Expected: the file lands in that folder, the log says `Copy` or `Link` (never `Move`), and **the
+row is still on the shelf**. The row staying is not a leftover, it is the contract: `Copy` is what
+was offered, so the shelf keeps its reference. A tile that disappears after a successful drop
+means `Move` reached the wire somehow, and the original file may have been deleted.
+
+Check the source folder afterwards: the original file must still be where it was.
+
+### 4.2 A multi-selection drags together
+
+`Ctrl`+click two tiles so both carry the selection ring, then press one of THEM and drag into the
+file manager.
+
+Expected: both files land. This is `ShelfModel.DragPaths`'s rule reaching a real drag for the
+first time; `ShelfModelTests` covers the rule, and nothing before this item has seen it decide
+what a `DataObject` carries.
+
+Then drag a tile that is NOT part of the selection. Expected: only that one file lands, and the
+selection on screen collapses to that tile.
+
+### 4.3 Below the threshold it is a click
+
+Press a tile, move about two pixels, release.
+
+Expected: the tile selects and **no drag starts**. Nothing in the log says `Drag out returned`.
+The threshold is `SystemParameters.MinimumHorizontalDragDistance` /
+`MinimumVerticalDragDistance`, so a machine whose owner has tuned that value will have a different
+number of pixels here, which is the point of using the system's value rather than one of ours.
+
+Then press, move clearly further than that (half a tile is plenty), and release back on the shelf.
+Expected: a drag DID start, and the log has a return value for it.
+
+### 4.4 Release over empty desktop, and the catcher survives it
+
+**This is the item that would find a hang, and it is the reason this task was scheduled last.**
+
+Drag a tile out and release it over bare desktop, where nothing accepts a drop.
+
+Expected: whatever the shell does with it (most likely nothing at all), the log records a return
+value (`None` is a perfectly good answer here), and then:
+
+1. The shelf still responds: `Esc` closes it, or the pointer leaving it takes it down.
+2. The notch comes back, which means `ShelfClosed` crossed the pipe, which means the catcher's UI
+   thread is still pumping.
+3. Drop another file on the notch. It must still be caught.
+
+If the log has **no** `Drag out returned` line for this gesture and the shelf has stopped
+responding, `DoDragDrop` did not return: that is the seventeen-second failure from 18.09.2026
+arriving in the shipped path, and it is a stop-everything finding rather than a bug to file.
+Record the elapsed time before killing `Plith.DropCatcher.exe`.
+
+### 4.5 The restack still works, through the same call
+
+Task 7's internal drag is now the same `DoDragDrop` with an extra format on it, so §3.4, §3.5 and
+§3.6 have to be re-run rather than assumed to still hold.
+
+Expected, unchanged from those items: a tile dragged onto another stack joins it, a tile dragged
+past the last stack starts a new one, and `shelf.txt` reflects both. The cursor now shows a COPY
+badge during a restack rather than a move badge, which is deliberate (Move is not offered at all,
+by anyone, for the reason in §4.1) and is worth a line in the result either way: whether it reads
+as confusing on screen is a judgement only a person at the console can make.
+
+### 4.6 The shelf does not close under a restack
+
+Drag a tile onto another stack, release, and then **do not move the mouse**.
+
+Expected: the shelf stays up. This is the one behaviour in this task that is reasoned rather than
+measured. Any drag can take the pointer off the window as far as WPF is concerned, which arms the
+leave timer, which fires during the drag and defers a dismissal; `StartDrag` therefore settles
+that deferral when the drag ends, asking `WindowFromPoint` where the pointer actually is rather
+than asking WPF, whose answer can be stale until the next mouse message arrives. If the shelf
+closes about half a second after a restack with the pointer sitting on it, that re-evaluation is
+wrong and this item is what found it.
+
+Then the opposite: drag a tile OUT to another application and release there, again without moving
+the mouse afterwards. Expected: the shelf goes away within the leave grace period (500 ms), and
+the notch comes back.
+
+### 4.7 A drag does not strand the shelf
+
+While a drag is in flight the shelf must not be dismissed by losing activation, because the person
+is holding a file over another application by definition. But a dismissal that arrives during one
+is DEFERRED, never dropped.
+
+Drag a tile out, hold it over another window for several seconds, then release. Expected: the
+shelf survives the whole hold, and goes away afterwards (§4.6's second half). A shelf that stays
+on screen forever after this, unreachable by `Esc` and by the pointer leaving, means
+`_dragInFlight` was left set: check the log for a `Shelf dismissal deferred` line with no `Shelf
+closing` after it.
+
+### 4.8 Cancel with `Esc` mid-drag
+
+Press a tile, drag it off the shelf, and press `Esc` while still holding the button.
+
+Expected: the drag cancels, the log records a return value (`None`), nothing lands anywhere, and
+the shelf is in the same state as §4.6's second half afterwards. This exercises the same exit path
+as a successful drop, which is the point: `_dragInFlight` is cleared by a `finally`, so a cancel
+has to be as safe as a drop.
+
+### What HAS been measured, on 2026-09-19
+
+| Measured | Result |
+|---|---|
+| Build | `dotnet build Plith.slnx -m:1`: succeeded, 0 errors |
+| Tests | `dotnet test Plith.slnx -m:1`: 472 + 17 passed, 0 failed |
+| `scripts/check-a11y.ps1` | passed |
+| `scripts/check-shared-xaml.ps1` | passed |
+| `scripts/check-contrast.ps1 -STA` | passed, 234 measurements across 9 accents and both themes |
+| `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the Task 5 second-pass check and the Task 7 menu-survives-render check |
+| Session type | `qwinsta`: `rdp-tcp#0`, active. Not the console, so no gesture could be driven |
+
+None of that reaches a single item above, and the difference is worth stating plainly rather than
+leaving it to be inferred. The test suite is not STA and never constructs `ShelfWindow`; the
+render harness constructs `ShelfSurface` but not the window that owns the drag, so `StartDrag` is
+not executed by anything in this list. The guard inside it, the `finally` that clears
+`_dragInFlight`, the two formats in the `DataObject` and the effect that comes back are all
+unexecuted code as far as every green line above is concerned.

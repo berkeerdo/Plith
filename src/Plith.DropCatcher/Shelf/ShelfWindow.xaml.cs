@@ -44,6 +44,20 @@ public partial class ShelfWindow : Window
     [DllImport("user32.dll")]
     private static extern nint GetForegroundWindow();
 
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out POINT point);
+
+    [DllImport("user32.dll")]
+    private static extern nint WindowFromPoint(POINT point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct POINT
+    {
+        public int X;
+        public int Y;
+    }
+
     /// <summary>
     /// How long the shape takes to grow into place. The same 220 ms the catcher uses, and for the
     /// same reason: both stand in for the notch, and a stand-in that arrives at a different speed
@@ -90,18 +104,12 @@ public partial class ShelfWindow : Window
     /// be left set.</summary>
     private bool _menuOpen;
 
-    // CS0649 is "never assigned to", and here that is the design rather than an oversight: this
-    // field is read by Dismiss and written by a task that does not exist yet. Suppressed at the
-    // one declaration only, and narrowly, so that the day a real never-assigned field appears
-    // somewhere else in this file the compiler still says so.
-#pragma warning disable CS0649
-
-    /// <summary>Set by the drag out in Task 8. Declared here because Dismiss reads it, and a
-    /// window that can only be dismissed correctly after a later task is a window that is wrong
-    /// in between.</summary>
+    /// <summary>Set for the whole of a tile drag, and cleared by that drag's own finally so no
+    /// exit from it - a drop, a cancel, or an exception out of OLE - can leave it stuck true. A
+    /// stuck true is not a cosmetic bug: Dismiss DEFERS while this is set, so a shelf that never
+    /// clears it is a shelf that can never close. See <see cref="StartDrag"/>, which is the only
+    /// place that writes it.</summary>
     private bool _dragInFlight;
-
-#pragma warning restore CS0649
 
     /// <summary>
     /// Expansion progress, 0 = the notch's open frame, 1 = the shelf page. One value drives
@@ -182,6 +190,11 @@ public partial class ShelfWindow : Window
             else _model.DragPaths(path);
             Page.Render(_model);
         };
+
+        // Subscribed as a method group, not a lambda, so there is exactly one place in the
+        // product where a drag can begin and it is a named method carrying its own guard. See
+        // StartDrag for what that guard is and why it is a control rather than a formality.
+        Page.DragOutRequested += StartDrag;
 
         // ClearRequested, NewStackRequested, RemoveRequested and RestackRequested all cross the
         // wire, and this window does not send them itself: App owns the one CatcherClient this
@@ -305,6 +318,19 @@ public partial class ShelfWindow : Window
         Activate();
         Keyboard.Focus(this);
 
+        // The invariant restored, not assumed: a deferred dismissal always has a clock.
+        //
+        // _leave.Stop() above takes that clock away, and until a drag could set _dragInFlight
+        // nothing could ever be pending when OpenAt ran, so it never mattered. It does now. A
+        // re-assertion (a monitor or DPI change, or Plith simply restating where the shelf
+        // belongs) can arrive while a drag has a dismissal deferred. Activate() clears it when it
+        // WINS, through Activated; when it loses the documented foreground race below, nothing
+        // clears it and nothing re-arms the timer that would re-evaluate it either. The shelf is
+        // then stranded on screen with a dismissal waiting and nothing left to act on it, which
+        // is exactly the stranding Dismiss's deferral was built to prevent, arriving by a second
+        // route.
+        if (_pendingDismissal is not null) _leave.Start();
+
         if (reasserting)
         {
             // Re-applied at full expansion rather than animated, because the rectangle may have
@@ -394,6 +420,22 @@ public partial class ShelfWindow : Window
         _model.ClearSelection();
         Page.Render(_model);
 
+        // Cleared here as well as by MenuOpenChanged, and it is not belt-and-braces. This method
+        // is public, and Dismiss is only its most common caller, not its only possible one: a
+        // CloseShelf arriving over the wire reaches it directly and does not consult _menuOpen at
+        // all. Left set by such a call, the flag would survive into the NEXT time the shelf
+        // opens, where Dismiss would defer every dismissal against a menu that closed minutes
+        // ago and the shelf could never be taken down again. Page.Render above force-closes any
+        // menu that is actually open (see ShelfSurface.Render), so this line agrees with the
+        // truth rather than papering over it; it only removes the one dispatcher tick that
+        // MenuOpenChanged would otherwise need to say the same thing.
+        //
+        // _dragInFlight is deliberately NOT cleared here. It is owned by StartDrag's finally,
+        // and clearing it from outside would say a drag had ended while its OLE loop was still
+        // pumping - which would let the very next dismissal close the shelf under a gesture the
+        // person is still in the middle of.
+        _menuOpen = false;
+
         _pendingDismissal = null;
         Dismissed?.Invoke();
     }
@@ -408,13 +450,17 @@ public partial class ShelfWindow : Window
     ///
     /// Suppressed means DEFERRED, never cancelled, and that distinction is the whole of the
     /// second half of this method. The failing sequence, written down so it cannot be simplified
-    /// back out: once Task 8 sets _dragInFlight, pressing a tile, dragging off the shelf and
-    /// releasing over another application consumes BOTH remaining dismissals. The leave timer
-    /// fires, is suppressed, and nothing re-arms it; the Deactivated fires, is suppressed, and no
-    /// second one can ever follow, because the window is not active any more. The shelf is then
-    /// stranded on screen with no way off it. So a suppressed dismissal is remembered and the
-    /// leave timer is re-armed as the clock that re-evaluates it: a retry needs no cooperation
-    /// from the task that sets the flag, which is what makes it correct before that task exists.
+    /// back out: pressing a tile, dragging off the shelf and releasing over another application
+    /// consumes BOTH remaining dismissals. The leave timer fires, is suppressed, and nothing
+    /// re-arms it; the Deactivated fires, is suppressed, and no second one can ever follow,
+    /// because the window is not active any more. The shelf is then stranded on screen with no
+    /// way off it. So a suppressed dismissal is remembered and the leave timer is re-armed as the
+    /// clock that re-evaluates it.
+    ///
+    /// Two other places now owe that clock the same care, and both learned it the same way.
+    /// OpenAt stops the timer, so it re-arms one whenever a dismissal is still pending after it
+    /// has tried to take activation back. StartDrag settles the deferral itself when its drag
+    /// ends, rather than leaving a clock running against a gesture that is over.
     /// </summary>
     private void Dismiss(string why)
     {
@@ -444,6 +490,122 @@ public partial class ShelfWindow : Window
 
         _log.Info($"Shelf closing: {_pendingDismissal ?? why}.");
         CloseNow();
+    }
+
+    /// <summary>
+    /// Start a drag for a press that landed on THIS window, and only ever for one.
+    ///
+    /// Measured on 18.09.2026, three runs at Medium integrity with the press verified by
+    /// WindowFromPoint to belong to another process: DoDragDrop never delivers a drag for a press
+    /// it did not receive. No drop target saw a DragEnter, and the call returned None. The
+    /// control is the run before it: same binary, same integrity, same call, press on its own
+    /// window, Copy, Move, and the file landed.
+    ///
+    /// The second finding is why this is a guard rather than a comment. One of those three runs
+    /// did not return AT ALL, and was still blocked seventeen seconds after the release. The
+    /// thread that would block here is the catcher's UI thread, which is the thread the whole
+    /// shelf depends on. So: only from a mouse event on our own element tree, never from a timer,
+    /// never from a pipe message, never from anywhere the press origin is not known.
+    ///
+    /// Full ledger: docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md, Task 8.
+    /// </summary>
+    private void StartDrag(DependencyObject source, IReadOnlyList<string> paths)
+    {
+        if (paths.Count == 0) return;
+
+        // Re-entrancy, refused before anything else. DoDragDrop pumps its own message loop, so
+        // this method is reachable again while a previous call is still inside one, and a nested
+        // drag would leave _dragInFlight cleared by the inner call's finally while the outer one
+        // is still running: the shelf would then be dismissable in the middle of a drag, which is
+        // the exact state Dismiss's deferral exists to prevent.
+        if (_dragInFlight)
+        {
+            _log.Info("Refused a drag: one is already in flight.");
+            return;
+        }
+
+        // The origin check, not a formality. If this element is not ours, the press was not ours.
+        // Both halves are required to be a real source: FromDependencyObject returns null for an
+        // element in no tree at all, and comparing two nulls would pass every caller that handed
+        // over something detached, which is precisely the caller this guard is here to refuse.
+        var windowSource = PresentationSource.FromVisual(this);
+        if (windowSource is null ||
+            !ReferenceEquals(PresentationSource.FromDependencyObject(source), windowSource))
+        {
+            _log.Info("Refused a drag whose press did not land on this window.");
+            return;
+        }
+
+        // ONE call carrying BOTH formats, rather than a branch that decides in advance which kind
+        // of drag this is. There is nothing to branch on: the destination is unknown until the
+        // release, and the same press has to be able to end on another stack of this shelf or in
+        // an Explorer window. Each target's own DragOver picks the format it understands -
+        // ShelfSurface's Columns takes the private one, everything else takes FileDrop - so the
+        // decision is made by the place that actually knows the answer.
+        var data = new DataObject();
+        data.SetData(ShelfSurface.ShelfDragFormat, paths);
+        data.SetData(DataFormats.FileDrop, paths.ToArray());
+
+        _dragInFlight = true;
+        try
+        {
+            // Copy and Link, never Move. The shelf stages references; Move invites the
+            // destination to delete the original, and a shelf that loses someone's work the
+            // first time they mistake it for a pocket is worse than no shelf. The rows therefore
+            // stay on the shelf after a successful drop, because Copy is what was offered.
+            var effect = DragDrop.DoDragDrop(this, data, DragDropEffects.Copy | DragDropEffects.Link);
+            _log.Info($"Drag out returned {effect} for {paths.Count} path(s).");
+        }
+        catch (Exception ex)
+        {
+            // Logged and swallowed rather than allowed to escape. This runs inside a WPF input
+            // event handler, where an escaping exception ends the process, and the process it
+            // would end is the catcher: the shelf, the notch's stand-in and the pipe all go with
+            // it, so a failed drag would cost the person the ability to catch anything at all.
+            // OLE reports its own failures here as COMException, and none of them is worth that.
+            _log.Info($"Drag out failed: {ex.GetType().Name}: {ex.Message}");
+        }
+        finally
+        {
+            _dragInFlight = false;
+        }
+
+        // The gesture is over, so the dismissal it was suspending is re-evaluated here rather
+        // than left to a clock that no longer knows what it is waiting for.
+        //
+        // Any drag at all can take the pointer off this window as far as WPF is concerned, which
+        // arms the leave timer, which fires while the drag is still running, which defers a
+        // dismissal. That is correct during the drag and wrong after it: a restack that started
+        // and ended on the shelf would otherwise close the shelf about half a second after the
+        // person dropped the tile, with the pointer sitting on it.
+        //
+        // So: stop the clock, and either cancel the pending dismissal (the pointer is back over
+        // the shelf, so the thing that asked for it is no longer true - the same rule Activated
+        // applies) or re-arm it (the pointer is elsewhere, and the shelf should go). Re-arming
+        // rather than closing immediately keeps the one grace period the rest of this window
+        // uses, instead of inventing a second, harsher one for drags alone.
+        _leave.Stop();
+        if (PointerIsOverShelf()) _pendingDismissal = null;
+        else _leave.Start();
+    }
+
+    /// <summary>
+    /// Whether the pointer is over this window right now, asked of the window manager rather than
+    /// of WPF.
+    ///
+    /// <see cref="UIElement.IsMouseOver"/> is the obvious answer and it is the wrong one HERE: it
+    /// is derived from the last mouse message WPF processed, and the drag loop that has just
+    /// ended took those messages for its whole duration. A pointer that finished a drag sitting
+    /// still produces no further mouse message at all, so WPF's idea of where it is can stay at
+    /// whatever the drag left behind until the person moves the mouse again. WindowFromPoint is
+    /// derived from nothing; it answers about the pointer's actual position now.
+    /// </summary>
+    private bool PointerIsOverShelf()
+    {
+        if (!GetCursorPos(out var point)) return false;
+
+        var handle = new WindowInteropHelper(this).Handle;
+        return handle != 0 && WindowFromPoint(point) == handle;
     }
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)

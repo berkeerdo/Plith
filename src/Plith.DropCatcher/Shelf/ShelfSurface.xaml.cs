@@ -66,10 +66,23 @@ public partial class ShelfSurface : UserControl
     /// as its own literal geometry for the reason the file header comment gives.</summary>
     private static readonly Geometry RemoveIcon = CreateIcon("M6,6 L18,18 M18,6 L6,18");
 
-    /// <summary>The private, in-process clipboard format an internal tile drag carries its paths
-    /// under. Not a real drag-and-drop format (no FileDrop, no text): this drag never leaves the
-    /// window it started in, so nothing outside this control ever needs to read it.</summary>
-    private const string ShelfDragFormat = "Plith.Shelf.Paths";
+    /// <summary>
+    /// The private clipboard format a tile drag carries its paths under, ALONGSIDE the ordinary
+    /// <see cref="DataFormats.FileDrop"/> the same drag now also offers.
+    ///
+    /// It no longer means "this drag never leaves the window", because since Task 8 it can: one
+    /// press and one <c>DoDragDrop</c> serve both a restack inside the shelf and a drag out into
+    /// another application. What it means now is "this drag came from the shelf itself", which is
+    /// what lets this control's own drop target tell a tile being restacked apart from a file
+    /// arriving from Explorer. The destination is not known until the release, so there is no
+    /// reliable signal to branch on at the source; both formats go out and each target's own
+    /// DragOver decides which one it wants.
+    ///
+    /// Internal rather than private because <see cref="ShelfWindow"/> builds the single
+    /// <see cref="DataObject"/> that carries both formats. See StartDrag there for why there is
+    /// exactly one call and why it lives in that file.
+    /// </summary>
+    internal const string ShelfDragFormat = "Plith.Shelf.Paths";
 
     /// <summary>The dictionary Apply last installed, so a second call replaces it instead of
     /// merging on top of it. Without this, a theme change would leave the old brushes reachable
@@ -123,6 +136,19 @@ public partial class ShelfSurface : UserControl
 
     /// <summary>Show this file in the file manager, from its context menu.</summary>
     public event Action<string>? RevealRequested;
+
+    /// <summary>
+    /// A press on a tile has moved further than the system's drag threshold: the element the
+    /// press landed on, and the paths that press drags.
+    ///
+    /// Raised SYNCHRONOUSLY from inside that tile's own mouse-move handler, and from nowhere
+    /// else, which is the whole of its contract. The drag itself is started by
+    /// <see cref="ShelfWindow"/>, which refuses any drag whose source element does not belong to
+    /// its own window: <c>DoDragDrop</c> has been measured to fail, and once to hang outright,
+    /// for a press it did not receive. Anything that raised this from a timer or a pipe message
+    /// would be refused there rather than obeyed here.
+    /// </summary>
+    public event Action<DependencyObject, IReadOnlyList<string>>? DragOutRequested;
 
     /// <summary>Whether a tile's context menu is open, changed. True right after one opens,
     /// false right after one closes - including a close Render forces because the tile that
@@ -237,9 +263,22 @@ public partial class ShelfSurface : UserControl
     // something that is NOT trivially reversible, this is the line that stops being true.
     private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
 
+    /// <summary>
+    /// Copy, not Move, and the reason is at the source rather than here. The one
+    /// <c>DoDragDrop</c> behind every tile drag offers <c>Copy | Link</c> and deliberately never
+    /// Move, because the same gesture can end over Explorer, where Move means "delete the
+    /// original once you have it". A target cannot ask for an effect the source never offered,
+    /// so Move is not available to this drop target either, whatever it would have preferred.
+    ///
+    /// Copy rather than Link of the two that remain, so that the cursor does not change meaning
+    /// when the pointer crosses the shelf's own edge in the middle of a drag: one gesture, one
+    /// badge, wherever it happens to be hovering. Nothing about a restack reads the effect
+    /// anyway - <see cref="OnColumnsDrop"/> raises <see cref="RestackRequested"/> on the paths,
+    /// and the files on disk are not touched by either side of it.
+    /// </summary>
     private void OnColumnsDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = e.Data.GetDataPresent(ShelfDragFormat) ? DragDropEffects.Move : DragDropEffects.None;
+        e.Effects = e.Data.GetDataPresent(ShelfDragFormat) ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
@@ -429,12 +468,17 @@ public partial class ShelfSurface : UserControl
             if (Math.Abs(current.X - start.X) < SystemParameters.MinimumHorizontalDragDistance &&
                 Math.Abs(current.Y - start.Y) < SystemParameters.MinimumVerticalDragDistance) return;
 
-            // Cleared before DoDragDrop, not after: that call pumps its own message loop until
-            // the drag ends, and a MouseMove that reaches this handler again while it is still
+            // Cleared before the drag starts, not after: ShelfWindow.StartDrag runs DoDragDrop
+            // synchronously on this stack frame, that call pumps its own message loop until the
+            // drag ends, and a MouseMove that reaches this handler again while it is still
             // running must not try to start a second drag on top of the first.
             pressStart = null;
             var paths = _lastModel?.DragPaths(entry.Path) ?? [entry.Path];
-            DragDrop.DoDragDrop(tile, new DataObject(ShelfDragFormat, paths), DragDropEffects.Move);
+
+            // The tile, not this control and not the window: StartDrag's guard asks whether the
+            // element the press actually landed on belongs to the window about to call
+            // DoDragDrop, and only the pressed element can answer that.
+            DragOutRequested?.Invoke(tile, paths);
         };
 
         tile.PreviewMouseLeftButtonUp += (_, _) => pressStart = null;
