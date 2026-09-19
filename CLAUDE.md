@@ -115,9 +115,23 @@ what actually breaks capture is the session being disconnected or locked, not th
 layered. The instrument is `scripts/capture-shelf.ps1`; the reasoning is in
 `docs/SHELF-VERIFICATION.md` §7.5 and the dated section at the top.
 
-**The same premise still stands unexamined over Phases 5 and 6**, where it gates most of the
-open verification items. Nobody has yet pointed a capture at the OSD's own layered window, and
-whoever does should assume the claim is wrong until it is measured, not the other way round.
+**And the premise over Phases 5 and 6 has now fallen too, which is the fourth (2026-09-19).**
+Plith's own OSD was never a UIAccess window in the build anyone verifies against: `app.manifest`
+sets `uiAccess="false"` and only Release swaps in the signed one, so a Debug Plith runs at
+**MEDIUM**, and it says so on every start (`UIAccess NOT granted — ... Expected for a Debug
+build`). UI Automation reads the OSD's whole tree and a script clicks the notch open, pages it
+and clicks a widget. Measured end to end: `scripts/drive-shelf-pair.ps1` drives the real Plith +
+catcher pair through the notch, and **§3.5 (restack) and §3.3 (clear) of the shelf are now RUN
+and passing**, judged by reading `shelf.txt` before and after rather than by looking at pixels.
+The same run answered §1's open foreground question (the real click path reaches
+`foreground=True`) and produced the first real-input evidence for Phase 6's provisional paging
+constants (one wheel notch, one page, three times).
+
+So most of the open items in `docs/PHASE5-VERIFICATION.md` and `docs/PHASE6-VERIFICATION.md` are
+reachable by script, and were reachable the whole time. Four shelf items (§3.1's second half,
+§3.2, §3.4, §3.6) are still NOT RUN for an unrelated reason: Riot Vanguard's driver filters
+injected mouse input on this machine, always for `MOUSEEVENTF_MOVE` and intermittently for
+`LEFTDOWN`. Record: `docs/SHELF-VERIFICATION.md` §3.11.
 
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as

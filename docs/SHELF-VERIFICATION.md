@@ -507,22 +507,38 @@ header comment for why Plith cannot do either on the catcher's behalf.
 
 ### Status: PARTLY RUN, 2026-09-19 — and the first thing running it found was a dead tile
 
-**§3.1, §3.2 and §3.9 have now been driven on a running build**, along with the context menu that
-§3.7 and §3.8 depend on. The instrument is `scripts/drive-shelf.ps1` and the record is §3.10,
-which also carries the defect that running them found: **a tile only answered a pointer where its
-icon or its label happened to paint, and was dead everywhere else, including its exact centre.**
-Fixed on this branch, with an automated check that fails the build if it comes back.
+**§3.1's first half, §3.2's selection ring, §3.3, §3.5 and §3.9 have now been driven on a running
+build**, along with the context menu that §3.7 and §3.8 depend on. Two instruments and two
+records:
 
-Everything whose expectation is "the tile disappears" or "`shelf.txt` no longer lists it" is
-still NOT YET RUN, and cannot be run by that instrument at all. §3.10 says why: the shelf probe
-has no Plith behind it, so those requests are raised and go nowhere.
+| Item | State | Record |
+|---|---|---|
+| §3.1 hover reveals the remove control, at the tile centre | RUN, passing | §3.10 |
+| §3.1 remove takes the row out of `shelf.txt` | NOT RUN | §3.11 |
+| §3.2 a click at the tile centre selects | RUN, passing | §3.10 |
+| §3.2 remove acts on the whole selection | NOT RUN | §3.11 |
+| §3.3 clear empties the shelf without asking | **RUN, passing** | §3.11 |
+| §3.4 new stack by the plus control, then a drag into it | NOT RUN | §3.11 |
+| §3.5 dragging a tile onto another stack restacks it | **RUN, passing** | §3.11 |
+| §3.6 dragging past the last stack starts a new one | NOT RUN | §3.11 |
+| §3.7 open, §3.8 show in the file manager | NOT RUN (menu items exist and are named) | §3.10 |
+| §3.9 the menu does not let the shelf close under itself | RUN, passing | §3.10 |
+
+§3.10 carries the defect that running the first set found: **a tile only answered a pointer where
+its icon or its label happened to paint, and was dead everywhere else, including its exact
+centre.** Fixed on this branch, with an automated check that fails the build if it comes back.
+
+§3.11 carries what the second set needed: `scripts/drive-shelf.ps1` drives the catcher alone, and
+everything whose expectation is "the tile disappears" or "`shelf.txt` no longer lists it" needs
+the REAL pair of processes, which `scripts/drive-shelf-pair.ps1` now drives — notch click, page,
+shelf, and `shelf.txt` read back as the oracle. The four items still NOT RUN are blocked by an
+anti-cheat driver filtering injected input on this machine rather than by anything in the product;
+§3.11 has the measurement and what it takes to clear it.
 
 **And §3.5 and §3.6 could not have passed before 2026-09-19 regardless of who ran them.** The
-whole-branch review found the tile drag could never start at all (see §6.1), so the two items
-that restack by dragging were describing a gesture the product did not have. They are unchanged
-here and still NOT YET RUN; what changed is that running them is now capable of the result they
-ask for — and that the press such a drag starts from now lands anywhere on a tile rather than
-only on its icon.
+whole-branch review found the tile drag could never start at all (see §6.1), so the two items that
+restack by dragging were describing a gesture the product did not have. §3.5 has since been run
+and passes; §3.6 is unchanged and still NOT RUN.
 
 ~~Same constraint as §1 and §2: the shelf is a layered window in a second process and cannot be
 captured over Remote Desktop, so none of the items below has been looked at.~~ **That sentence was
@@ -759,6 +775,166 @@ about why it did not.
 Worth saying plainly, because it is this branch's recurring lesson: **every one of those gates was
 green before the fix as well.** The tile had been dead in the middle since Task 7, through a
 whole-branch review, and nothing in the repository was capable of noticing.
+
+### 3.11 Driven against the REAL pair, and the fourth inherited premise falls (2026-09-19)
+
+§3.10 left most of this section unreachable for a stated reason: the shelf probe has no Plith
+behind it, so `RemoveItems`, `ClearShelf`, `NewStack` and `Restack` are raised and go nowhere.
+That reason was correct. What was never examined is whether the real pair could be driven at all,
+and the answer is that it can, by a script, end to end: **the notch can be clicked open, paged to
+the shelf widget and clicked, and the shelf opens on the wire with Plith answering it.**
+
+The instrument is `scripts/drive-shelf-pair.ps1`. It is a second script rather than a mode of
+`drive-shelf.ps1` because almost none of it is the same work: it starts both processes, reaches
+the shelf through the notch, and judges every result by reading `shelf.txt` rather than by
+counting pixels.
+
+#### Why a Debug build changes what is reachable, and why nobody had noticed
+
+**Plith's own OSD is not a UIAccess window in the build this repository verifies against.**
+`src/Plith/app.manifest` sets `uiAccess="false"` and `Plith.csproj` swaps in
+`app.release.manifest` only for Release. So a Debug Plith runs `asInvoker`, at **MEDIUM**
+integrity, measured from its token: `MEDIUM (0x2000)`, the same level as the catcher and the same
+level as the driving script. Plith says so itself on every Debug start:
+
+> `UIAccess NOT granted — the band window falls back to a plain topmost window ... Expected for a
+> Debug build; a signed install in Program Files should have it`
+
+UI Automation reads the OSD's whole tree, `SendInput` and `SetCursorPos` drive it, and the click
+that opens the widget frame is an ordinary click. The premise that a person is required to press
+Plith's OSD is **true of the signed install and false of every build anyone verifies against** —
+which is the fourth claim in these documents to be inherited from one window and applied,
+unmeasured, to another. §3.10 said the pattern is the finding; this is the pattern again, and it
+is the one with the widest reach: it gates most of the open items in
+`docs/PHASE5-VERIFICATION.md` and `docs/PHASE6-VERIFICATION.md`, and those were never about the
+shelf at all.
+
+`WheelDecoder`'s own header carried the same claim in source ("no agent may drive input anyway")
+and has been corrected in the same commit.
+
+#### What was driven, and what passed
+
+| | |
+|---|---|
+| §2.2 a click on the shelf page opens the shelf | `Shelf requested at 1088,0 384x224 with 2 stack(s).` then `Shelf opened at 1088,0 384x224 ... foreground=True` |
+| The shelf arrives holding what Plith loaded | `[alpha.txt bravo.txt charlie.txt] [delta.txt echo.txt]`, both stacks, in order |
+| **§3.5** dragging a tile onto another stack restacks it | `[alpha bravo charlie] [delta echo]` → `[echo alpha bravo charlie] [delta]` in `shelf.txt`, and the catcher logged `Drag out returned Copy, Link for 1 path(s).` |
+| **§3.3** clear empties the shelf without asking | `[echo alpha bravo charlie] [delta]` → `(empty)`, with no second catcher window on screen |
+
+**§3.5 and §3.3 are RUN and passing.** Both are round trips through two processes: the surface
+raises the verb, Plith's `ShelfStore` decides what is true, writes the file, and sends the page
+back. Neither could have been answered by the probe, and neither can be faked by a screenshot —
+the evidence is the file, on disk, before and after.
+
+#### The foreground question, answered by the real gesture
+
+§1's open hazard ends: *"It is also genuinely unknown whether the real gesture hits this at all:
+the shelf opens in response to a physical click, and user input relaxes the foreground lock in
+ways a scripted `Start-Process` does not. That is a thing to measure, not to assume in either
+direction."*
+
+Measured, on every run that reached the shelf:
+
+```
+[Shelf] AllowSetForegroundWindow(pid 63068) returned True.
+[Shelf] Shelf requested at 1088,0 384x224 with 2 stack(s).
+Shelf opened at 1088,0 384x224. handle=0x9E0135E, foreground=True
+```
+
+So the click path reaches the foreground. That does not vindicate `AllowSetForegroundWindow`'s
+return value, which §2.8 already showed says nothing — the grant and the click arrive together
+and this cannot separate them. What it does settle is the direction that mattered: the gesture a
+person actually makes does **not** land in the `foreground=False` state, so `Esc` and the
+focus-change dismissal are live on the real path.
+
+#### Three preconditions, each of which cost a run
+
+1. **The session must be Active.** Unchanged from `capture-shelf.ps1`: a disconnected or locked
+   session has no desktop and `BitBlt` fails for any window in it.
+
+2. **Nothing may cover the monitor.** `OsdHost.OnForegroundCoversMonitorChanged` hides the notch
+   outright while the foreground window covers the screen. That is the designed fallback, not a
+   fault, and **a maximised terminal triggers it** — so a driver cannot simply run from one, and
+   the first three attempts found no notch at all and said so in a way that read like a broken
+   build. The script now opens a 320x200 window of its own and lets that hold the foreground. It
+   deliberately does not minimise anything belonging to the person; a fullscreen game that keeps
+   taking the foreground back is reported as a precondition failure instead.
+
+3. **Injected input must actually reach the desktop.** See below.
+
+#### Instrument defect 4: an anti-cheat driver filters injected input, PARTIALLY
+
+`SendInput` began returning 0 with `ERROR_INVALID_PARAMETER` (87) mid-run, having worked minutes
+earlier. The cause is not Plith and not the script: **Riot Vanguard** (service `vgc`) was loaded,
+and it filters injected input process-wide. Bisected one flag at a time:
+
+| Event | Result |
+|---|---|
+| `MOUSEEVENTF_MOVE`, relative / absolute / absolute+virtualdesk | refused, 87, on every attempt across the whole afternoon |
+| `MOUSEEVENTF_LEFTDOWN` | **intermittent**: refused at 19:57, accepted at 20:02 and 20:04, refused again from 20:06, with a protected game running throughout |
+| `LEFTUP`, `RIGHTDOWN`, `RIGHTUP`, `WHEEL`, every keyboard event | accepted, from the same process, in the same second as a refused `LEFTDOWN` |
+| `SetCursorPos` | works throughout; it is not injection |
+
+**The obvious rule is not the measured one, and the difference is worth keeping.** "It blocks
+while a game is running" would be a tidy story and it is not what happened: the same binary, from
+the same session, with VALORANT running the entire time, had `LEFTDOWN` refused, then accepted
+twice, then refused again. Whatever Vanguard keys on, it is not simply the game's presence, and
+this section does not have the measurement to say what it is. What it can say is that the refusal
+is loud, unmistakable and never silent, which is all an instrument needs.
+
+**The partial is the trap.** An instrument that checks only "did `SendInput` succeed" on one
+event would send half a click — `LEFTDOWN` refused, `LEFTUP` accepted — and then measure the
+result, with the product blameless and the numbers meaningless. Movement therefore goes through
+`SetCursorPos`, stepped rather than jumped because defect 2 is about the pointer ARRIVING and not
+about which call moved it; and the script refuses to measure anything until a full button round
+trip has been accepted.
+
+This also bounds what can be finished here: **§3.1's second half, §3.2, §3.4 and §3.6 are still
+NOT RUN**, not for any reason in the product, but because the block reappeared before the run
+reached them. The run that does finish them needs a spell where `LEFTDOWN` is accepted, and the
+cheapest way to get one is a machine with Vanguard's driver unloaded, which means a reboot with
+no Riot game started rather than closing the game. Re-running costs about a minute: the script
+seeds its own fixture, restores the shelf it replaced, and stops everything it started.
+
+#### Two things the run found that are not defects, and one that is
+
+**The two-tile rule.** A stack column draws at most two tiles and folds the rest into one chip
+named `N more items in this stack`. A third item is therefore in no UIA tree, and asking for it
+by name reports "not found" — which reads exactly like a page that has lost its accessible names.
+The first fixture put three files in a stack and produced four such false alarms in one run. The
+fixture is now four files in two stacks of two, and the steps are ordered so that every tile a
+later step needs is still drawn.
+
+**The catcher owns more than one layered window.** Taking "the first layered catcher window"
+found the wrong one the moment a drag had run, and every check after it reported "not in the UIA
+tree". The shelf is now identified by the one whose tree announces itself as `Shelf, N stacks`.
+
+**And one that is: `ShelfWidget`'s row announcement reaches nothing, confirmed on a running
+build.** `AutomationProperties.SetName(Tiles, "Shelf, N items")` sets the name on a `StackPanel`,
+which WPF gives no automation peer, so a screen reader never hears it. This was already known —
+`check-a11y.ps1` carries it as a suppressed entry, filed under §5.4 as predating Task 9 — but it
+had been established by reading the code. The live tree now confirms it: with five files on the
+shelf page, the names present are the five file names, their type chips and `Click to open the
+shelf`, and `Shelf, 5 items` appears nowhere. Left filed rather than fixed, for the reason the
+lint's own comment gives; recorded here because a confirmed absence and an inferred one are not
+the same evidence.
+
+#### A Phase 6 constant, characterised by real input for the first time
+
+`docs/PHASE6-VERIFICATION.md` §16 names the three provisional paging constants as the
+highest-risk items on that branch, correctable only from the log line each commit writes. That
+line has now been produced by real input:
+
+```
+[OsdHost] Widget page committed: delta=120, index=1/4
+[OsdHost] Widget page committed: delta=120, index=2/4
+[OsdHost] Widget page committed: delta=120, index=3/4
+```
+
+One wheel notch is one page, at 700 ms spacing, with no accumulation carried across. That is
+`CommitThreshold = 120` and `IdleRearmMs = 150` behaving exactly as designed **for a wheel**. It
+says nothing about a touchpad's two-finger swipe, which delivers many small deltas rather than
+one of 120 and is the case those constants were actually chosen for.
 
 ### What HAS been measured, on 2026-09-19
 
