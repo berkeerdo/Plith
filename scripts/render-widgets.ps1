@@ -313,6 +313,24 @@ $store.Add($paths)
 $shelf = [Plith.Views.Widgets.ShelfWidget]::new($store)
 Save-Visual -Element $shelf -W $frameW -H $frameH -Name 'widget-shelf'
 
+# The EMPTY state, which nothing had ever rendered.
+#
+# It is not the same page with fewer tiles: it swaps the row for a sentence and hides the hint
+# line under it, so it has its own layout and its own way of overflowing an 82 DIP content box.
+# A second store on a path with no file behind it, because ShelfStore loads from disk in its
+# constructor and reusing the one above would come back full.
+$emptyStore = [Plith.Services.Shelf.ShelfStore]::new((Join-Path $OutDir 'shelf-store-empty.txt'))
+$shelfEmpty = [Plith.Views.Widgets.ShelfWidget]::new($emptyStore)
+Save-Visual -Element $shelfEmpty -W $frameW -H $frameH -Name 'widget-shelf-empty'
+
+# And the sentence the page shows when the shelf will not open, which replaces the hint rather
+# than the row. Rendered against the FULL store, because that is the only case where the line is
+# showing at all, and because a sentence longer than the hint it replaces is exactly the thing
+# that would push the page out of shape without anyone noticing.
+$shelfUnavailable = [Plith.Views.Widgets.ShelfWidget]::new($store)
+$shelfUnavailable.ShowUnavailable('The shelf helper is missing from this install.')
+Save-Visual -Element $shelfUnavailable -W $frameW -H $frameH -Name 'widget-shelf-unavailable'
+
 
 # --- the shelf SURFACE (the catcher's own page), at the same three call sites the widgets use --
 #

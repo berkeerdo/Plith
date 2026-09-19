@@ -42,11 +42,15 @@ public sealed class ShelfModel
     /// Places <paramref name="paths"/> at stack <paramref name="index"/> of a set of
     /// <paramref name="total"/> stacks.
     ///
-    /// This does NOT simply trust that messages arrive in the order they were sent. The sender,
-    /// DropChannelServer.SendAsync, opens a fresh StreamWriter per call and every call site fires
-    /// it without awaiting the result, so two overlapping sends (two shelf changes close enough
-    /// together to both be in flight) can interleave on the one pipe the catcher reads. A model
-    /// that appended each message to wherever the list currently ends, as this one used to,
+    /// This does NOT simply trust that messages arrive in the order they were sent, even though
+    /// the sender now guarantees it. DropChannelServer.SendAsync opens a fresh StreamWriter per
+    /// call and every call site fires it without awaiting the result, so two overlapping sends
+    /// (two shelf changes close enough together to both be in flight) could interleave on the one
+    /// pipe the catcher reads; Task 6 chained the sends so they cannot, which is the send-side
+    /// fix the last paragraph below asks for. The checks here stay all the same: this process
+    /// reads a pipe ANY process on the machine may write, so "the sender is well behaved" is a
+    /// statement about one sender rather than about the input. A model that appended each message
+    /// to wherever the list currently ends, as this one used to,
     /// would then assemble a shelf out of two different deliveries and call it complete: the
     /// result LOOKS like an ordinary shelf and is quietly wrong, which is worse than looking
     /// incomplete, because nothing about it invites a second look.

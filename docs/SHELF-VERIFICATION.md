@@ -83,9 +83,11 @@ of them apart from its own success.
    scripted cursor and behave, so what is left here is the only part a script cannot judge:
    whether 500 ms is the right length for a hand rather than for a `SetCursorPos` call.
 9. **It does not appear in Alt+Tab** while it is open, and it does not steal the taskbar.
-10. **A second `OpenShelf` on an open shelf moves it, it does not re-grow it.** Not reachable from
-    the probe, which opens once; this one waits for Task 6, when Plith can send a second message.
-    The log distinguishes them: `Shelf opened` against `Shelf re-asserted`.
+10. **A second `OpenShelf` on an open shelf moves it, it does not re-grow it.** Still not
+    reachable, and Task 6 did not make it so: `OsdHost.OpenShelf` refuses while it is already
+    standing aside, so a second click cannot produce a second message. It would take a monitor or
+    DPI change re-asserting the rectangle, which nothing does yet. The log distinguishes the two:
+    `Shelf opened` against `Shelf re-asserted`.
 
 ### Status: NOT YET RUN
 
@@ -145,12 +147,153 @@ after which `Esc` works and clicking away closes it as normal; moving the pointe
 off also arms the leave timer. Then read the log: an open line with `foreground=False` on it is
 this case, and an open line with `foreground=True` is something else and worth reporting.
 
-The fix belongs on Plith's side and is not written yet: **Plith must call
-`AllowSetForegroundWindow(catcherProcessId)` before it sends `OpenShelf`**, which is the
-documented way one process hands its foreground privilege to another. Until that exists, the line
-to check in the log is `foreground=` on every `Shelf opened` entry.
+The fix belongs on Plith's side, and **Task 6 wrote it**: `ShelfSession.Open` calls
+`AllowSetForegroundWindow(catcherProcessId)` before it sends `OpenShelf`, which is the documented
+way one process hands its foreground privilege to another. What is NOT established is that it
+works, because the return value turned out to say nothing. See §2.7, where it returned `True`
+from a process that plainly did not hold the foreground. The line to check in the log is still
+`foreground=` on every `Shelf opened` entry; it is now paired with a grant line in `plith.log`.
 
 It is also genuinely unknown whether the real gesture hits this at all: the shelf opens in
 response to a physical click, and user input relaxes the foreground lock in ways a scripted
 `Start-Process` does not. That is a thing to measure at the console, not to assume in either
 direction.
+
+---
+
+## 2. The hand-over (Task 6)
+
+Plith's notch goes down, `Plith.DropCatcher` opens the shelf in its place, and what the person
+does there comes back as requests Plith's own `ShelfStore` answers.
+
+The path: a click on the notch's shelf page raises `ShelfWidget.OpenRequested` on **button up**,
+`OsdHost.OpenShelf` calls `ShelfSession.Open`, and the session sends `Palette`, then one `Items`
+message per stack, then `OpenShelf` carrying the shelf's rectangle in physical pixels. The notch
+goes down on the session's `Opened` event, never before it. `ShelfClosed` coming back prunes empty
+stacks and brings the notch up again.
+
+### Status: NOT YET RUN
+
+The session that built this is `rdp-tcp#0` (`qwinsta`, 2026-09-19). The shelf is a layered window
+in a second process and cannot be captured over Remote Desktop, so nothing below has been looked
+at. Every item is phrased so that someone who was not here can execute it.
+
+### 2.1 The catcher must be at MEDIUM
+
+Start Plith and let it start the catcher. Read `%LOCALAPPDATA%\Plith\dropcatcher.log`: the first
+line of the run must say `Started. Integrity: MEDIUM`.
+
+If it says `HIGH` the launch route is wrong, and nothing after this works. That is the failure mode
+which looks exactly like success: the catcher starts, connects, shows itself, and simply never
+receives anything.
+
+`plith.log` should carry a matching `Drop catcher start: <Started|AlreadyRunning|NotFound|Failed>`
+on the same startup.
+
+### 2.2 The click opens the shelf
+
+Open the notch, page to the shelf, and click the page body (not the rail at the bottom).
+
+Expected: the notch goes down, and the shelf grows out of the same rectangle it was occupying,
+384 x 224 DIP against the top edge. `dropcatcher.log` gets one `Shelf opened at x,y 384x224`.
+
+What must NOT happen: the notch going down and nothing appearing; the shelf appearing somewhere
+other than under the notch; or the shelf appearing and the notch still being there underneath it.
+
+This is also the check that the click reaches the page at all. `OsdHost.OnNotchClicked` is wired at
+`PreviewMouseLeftButtonDown` and returns early once the frame is open, and `WidgetFrame` marks rail
+clicks handled on the rail element, so the page body should get the event untouched. That was read
+rather than run. The page also now carries `Background="Transparent"`, without which WPF hit-tests
+straight past it and only the file names and icons would be clickable. If a click on the gap
+between two tiles does nothing while a click directly on a file name works, that brush is the
+thing to look at.
+
+### 2.3 The shelf arrives dressed
+
+The shelf must be in Plith's colours from the first frame it is legible, not repaint after it has
+grown. `Palette` and every `Items` message are sent before `OpenShelf` for exactly this.
+
+What would show a failure: the shape growing in the built-in near-black fallback and then
+changing colour, or growing empty and filling in afterwards. Worth running once on a non-default
+accent and once on the light theme, since the fallback is a dark palette and the failure is
+invisible against a dark accent.
+
+### 2.4 `Esc` brings the notch back
+
+With the shelf open, press `Esc`. The shelf goes away and the notch comes back.
+
+Read `dropcatcher.log` for `foreground=` on the `Shelf opened` line first. `foreground=True` means
+this test is meaningful. `foreground=False` means the catcher never got activation, in which case
+`Esc` cannot work by construction and the thing to report is the `False`, not the `Esc`. See
+§2.7.
+
+Then check that the notch does not come back OPEN and stay open: it should either already be at
+rest, or collapse on its usual schedule once the pointer leaves.
+
+### 2.5 The drag detector must not pull the notch back under the shelf
+
+With the shelf open, move the pointer away from the top of the screen and back, and drag a window
+across the top edge. The notch must stay down the whole time.
+
+`OsdHost` tracks WHY it stood aside (`StandAsideReason.Drag` against `.Shelf`) precisely because
+the drag detector keeps polling under an open shelf and will raise a departure. If the notch
+reappears over or beside the shelf, that guard is not holding.
+
+### 2.6 No catcher: a sentence, not a dead click
+
+Kill `Plith.DropCatcher.exe`, then click the shelf page.
+
+Expected: the line under the tile row changes from "Click to open the shelf" to a sentence saying
+what is wrong, and goes back to the hint after six seconds. The notch must NOT go down.
+
+Four sentences are reachable and they are not interchangeable. "Starting the shelf helper" and
+"The shelf helper is starting up" both mean wait a moment; "missing from this install" means
+waiting will never help; "Windows would not start the shelf helper" means the launch was refused.
+Killing the catcher and clicking immediately should give one of the first two, and clicking again a
+few seconds later should open the shelf normally, because the first click restarted it.
+
+To reach the third, rename `Plith.DropCatcher.exe` beside `Plith.exe` and click.
+
+### 2.7 The foreground hand-over
+
+`ShelfSession` calls `AllowSetForegroundWindow` with the catcher's process id before it sends
+`OpenShelf`, which is the fix §1's open hazard asked for. `plith.log` logs what it passed and what
+came back:
+
+```
+AllowSetForegroundWindow(pid 16100) returned True.
+```
+
+**A `True` here does not mean the grant worked.** Measured on 2026-09-19: a background console
+process that plainly did not hold the foreground called it against the real catcher's pid and got
+`True` back, on a machine whose `ForegroundLockTimeout` is 150000 ms, so the lock is on. The return
+value is necessary and not sufficient.
+
+The half that answers the question is the catcher's own line. Pair them: a `plith.log` grant of
+`True` followed by a `dropcatcher.log` `foreground=True` is the working case. A grant of `True`
+followed by `foreground=False` means the grant did not take, and `Esc` will not work, which is the
+state §1 describes, where the shelf is dismissable only by moving the pointer across it and away.
+
+### 2.8 Shelf actions come back and are answered
+
+Not reachable until Task 7 wires the catcher's `EntryPressed`, `ClearRequested` and
+`NewStackRequested` to the wire. Listed here so it is not mistaken for something Task 6 covered:
+`ShelfSession.HandleMessage` routes `RemoveItems`, `ClearShelf`, `NewStack` and `Restack` to
+`ShelfStore` and re-sends the whole shelf after each, but nothing on the catcher's side sends any
+of them yet.
+
+### What HAS been measured, on 2026-09-19
+
+| Measured | Result |
+|---|---|
+| The catcher still starts at Medium when Explorer launches it, with this build | `Started. Integrity: MEDIUM` |
+| `AllowSetForegroundWindow` against the real catcher pid, from a process not holding the foreground | returned `True` |
+| `ForegroundLockTimeout` on this machine | `150000`, so the lock is enabled |
+| Overlapping sends on one pipe cannot interleave | `DropChannelServerTests.Server_DoesNotInterleaveOverlappingSends`, 20 messages queued unawaited, all 20 lines decode in order |
+| The same test fails without the fix | one line came back with 96 fields instead of 5, and DECODED as a plausible `Items` message |
+| The shelf page's three states, rendered offscreen at frame size, dark and light | `scripts/render-widgets.ps1`: `widget-shelf`, `widget-shelf-empty`, `widget-shelf-unavailable` |
+
+The render harness reaches the notch's shelf PAGE because it is an ordinary WPF control rendered
+to a bitmap. It does not reach the shelf SURFACE in place: `shelf-surface.png` is that control
+rendered offscreen too, not the window on screen. Nothing in this document's §1 or §2 visual items
+is answered by a render.

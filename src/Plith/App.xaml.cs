@@ -37,6 +37,7 @@ public partial class App : Application
     private FullscreenVideoWatcher? _fullscreenWatcher;
     private DropChannelServer? _dropChannel;
     private ShelfStore? _shelf;
+    private ShelfSession? _shelfSession;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -203,7 +204,20 @@ public partial class App : Application
         _osd?.AttachDropChannel(_dropChannel);
         _diagnosticLog?.Info("Shelf", "Drop channel listening.");
 
-        DropCatcherLauncher.EnsureRunning(_diagnosticLog);
+        // The palette is a FUNCTION rather than a value, so the shelf is painted in whatever the
+        // theme is at the moment it opens. A colour captured here would be whatever was true at
+        // startup, and both the accent and light/dark change while the app runs.
+        _shelfSession = new ShelfSession(_dropChannel, _shelf, ResolveShelfPalette, _diagnosticLog);
+        _osd?.AttachShelfSession(_shelfSession);
+
+        _diagnosticLog?.Info("Shelf", $"Drop catcher start: {DropCatcherLauncher.EnsureRunning(_diagnosticLog)}.");
+    }
+
+    private ShelfPalette ResolveShelfPalette()
+    {
+        var settings = _settings?.Current;
+        var baseColor = AccentTheme.ResolveBase(settings?.AccentThemeId, settings?.CustomAccentColor);
+        return ShelfSession.DerivePalette(baseColor, _theme?.IsEffectiveDark ?? true);
     }
 
     private void OnDropChannelMessage(DropMessage message)
@@ -245,6 +259,15 @@ public partial class App : Application
                 _osd?.OnCatcherStoodDown();
                 break;
             default:
+                // Everything the SHELF asks for, routed whole to the one object that owns that
+                // conversation. Onto the UI thread first, for the same reason the Dropped case
+                // above does it: ShelfStore is not thread-safe, and the pages that repaint from
+                // its Changed event are WPF controls.
+                //
+                // Verbs Plith sends rather than receives (Show, OpenShelf, Items, Palette) reach
+                // here only if something else on the machine wrote them to the pipe, which it
+                // may: the ACL is open to everyone. ShelfSession ignores them.
+                Dispatcher.BeginInvoke(new Action(() => _shelfSession?.HandleMessage(message)));
                 break;
         }
     }

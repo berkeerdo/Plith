@@ -84,6 +84,20 @@ public static class NotchGeometry
     public static readonly Size OpenFrameDip = new(356, 116);
 
     /// <summary>
+    /// The shelf surface, which is a second process's window and still belongs here.
+    ///
+    /// MEASURED rather than chosen: ShelfSurface wants 210 DIP of content at 384 wide, plus 14
+    /// DIP of margin. See scripts/render-widgets.ps1, the shelf-surface section, which renders it
+    /// at exactly this size.
+    ///
+    /// It lives in NotchGeometry because both ends of the wire need it and this file is already
+    /// linked into the catcher: Plith computes the rectangle it hands over, the catcher's
+    /// ShelfWindow.xaml declares the same numbers as its design size, and a third copy in a
+    /// service on Plith's side would be the one free to drift.
+    /// </summary>
+    public static readonly Size ShelfFrameDip = new(384, 224);
+
+    /// <summary>
     /// Height of the page-dot lane, and it is FIXED rather than sized to its content.
     ///
     /// Sized to content, a page measuring one pixel taller than its share pushes the dots past
@@ -222,6 +236,19 @@ public static class NotchGeometry
     public static Rect DropTargetRect(Rect hoverRect)
         => new(hoverRect.Left + (hoverRect.Width - OpenFrameDip.Width) / 2, hoverRect.Top,
                OpenFrameDip.Width, OpenFrameDip.Height);
+
+    /// <summary>
+    /// Where the shelf stands: the same top edge and the same centre as the open frame, in the
+    /// shelf's own larger size.
+    ///
+    /// The centre has to match <see cref="DropTargetRect"/> exactly, because the shelf grows OUT
+    /// of the open frame: the catcher animates from 356 x 116 to this rectangle, and a centre
+    /// that moved by even a few DIP would read as the shape sliding sideways while it opened
+    /// rather than as the notch continuing into something larger.
+    /// </summary>
+    public static Rect ShelfRect(Rect hoverRect)
+        => new(hoverRect.Left + (hoverRect.Width - ShelfFrameDip.Width) / 2, hoverRect.Top,
+               ShelfFrameDip.Width, ShelfFrameDip.Height);
 
     /// <summary>
     /// The one conversion back out of DIP, mirroring <see cref="PhysicalToDip"/>.

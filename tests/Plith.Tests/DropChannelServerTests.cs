@@ -58,5 +58,90 @@ public class DropChannelServerTests
         Assert.Equal(SomePath, Assert.Single(message.Paths));
     }
 
+    /// <summary>
+    /// The hazard Task 6 made reachable: several sends in flight on one pipe at once.
+    ///
+    /// The shelf sends one Items message PER STACK and every call site is fire-and-forget, so
+    /// this is the ordinary case rather than a corner. Each send builds a fresh StreamWriter over
+    /// the shared stream and awaits inside it; two overlapping writers can therefore put one
+    /// line's bytes in the middle of another's, and what arrives decodes to nonsense or, worse,
+    /// to a valid message with the wrong numbers in it.
+    ///
+    /// Asserted two ways, because one is not enough. That every line DECODES catches an
+    /// interleave that produced garbage; that the indices come back 0..n-1 IN ORDER catches an
+    /// interleave that happened to leave both lines parseable, and also catches a serialization
+    /// built on something with no ordering guarantee.
+    ///
+    /// Verified to catch a real break rather than a hypothetical one: with SendAsync reverted to
+    /// a direct call to the write, the reader got back a line carrying 96 fields instead of 5 -
+    /// many messages spliced into one - and it DECODED, as an Items message with the right verb
+    /// and the right index and ninety-one paths that are not paths. That is the failure worth
+    /// naming: not a line that arrives broken, but one that arrives plausible.
+    ///
+    /// The payload size is load-bearing and was measured too. At 400 characters a message the
+    /// same break does NOT reproduce here: StreamWriter buffers 1024 characters by default, so a
+    /// short line becomes one write with no await inside it and lands whole by construction. It
+    /// takes a line longer than that buffer to split into several writes with suspension points
+    /// between them. A shelf of twenty items with ordinary Windows paths clears 1024 characters
+    /// easily, so this is the product's own size rather than a size invented to fail.
+    /// </summary>
+    [Fact]
+    public async Task Server_DoesNotInterleaveOverlappingSends()
+    {
+        const int Messages = 20;
+
+        var sid = TestSid();
+        using var server = new DropChannelServer(sid);
+        server.Start();
+
+        using var client = new NamedPipeClientStream(".", DropChannel.PipeName(sid), PipeDirection.InOut);
+        await client.ConnectAsync(5000);
+
+        // The client's connect returning and the server's accept completing are two events, and
+        // a send before the second one is dropped on the floor by design (there is nobody to send
+        // to). Waited for rather than slept past, so the test measures ordering and not timing.
+        for (var i = 0; i < 100 && !server.IsConnected; i++) await Task.Delay(20);
+        Assert.True(server.IsConnected);
+
+        // A long payload per message, so a write is big enough for the OS to split rather than
+        // landing atomically by luck.
+        var padding = new string('p', 8000);
+
+        // The reader runs BESIDE the sends, not after them. The pipe's buffer is smaller than
+        // this many messages, so a test that queued everything first and only then started
+        // reading would block in the write and never reach its own assertions.
+        var read = Task.Run(async () =>
+        {
+            using var reader = new StreamReader(client);
+            var lines = new List<string>();
+            for (var i = 0; i < Messages; i++)
+            {
+                var line = await reader.ReadLineAsync();
+                if (line is null) break;
+                lines.Add(line);
+            }
+
+            return lines;
+        });
+
+        // Queued without awaiting any of them, which is exactly how ShelfSession sends a shelf.
+        var sends = new List<Task>();
+        for (var i = 0; i < Messages; i++)
+            sends.Add(server.SendAsync(new DropMessage(DropVerb.Items, i, Messages, 0, 0, [padding])));
+
+        await Task.WhenAll(sends);
+        Assert.Same(read, await Task.WhenAny(read, Task.Delay(10000)));
+
+        var received = await read;
+        Assert.Equal(Messages, received.Count);
+        for (var i = 0; i < Messages; i++)
+        {
+            Assert.True(DropChannel.TryDecode(received[i], out var message), $"Line {i} did not decode.");
+            Assert.Equal(DropVerb.Items, message.Verb);
+            Assert.Equal(i, (int)message.X);
+            Assert.Equal(padding, Assert.Single(message.Paths));
+        }
+    }
+
     private const string SomePath = @"C:\temp\x.txt";
 }

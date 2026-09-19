@@ -96,7 +96,52 @@ public sealed class DropChannelServer : IDisposable
         }
     }
 
-    public async Task SendAsync(DropMessage message)
+    /// <summary>
+    /// Queue a message. Returns the task that completes when THIS message has been written, and
+    /// every message queued before it has been written first.
+    ///
+    /// The serialization is here rather than at the call sites, and it is not a nicety. Every
+    /// send builds a fresh <see cref="StreamWriter"/> over the one shared pipe stream (see
+    /// <see cref="WriteAsync"/> for why it must), and every call site is fire-and-forget. Two
+    /// sends in flight at once are therefore two writers appending to the same stream with an
+    /// await in the middle of each: a named pipe preserves the order bytes are handed to it, so
+    /// no reordering is possible, but nothing stops one writer's bytes landing in the MIDDLE of
+    /// the other's line. What arrives is one line ending in another line's tail, which decodes
+    /// to nonsense, or worse, to a real message with the wrong numbers in it.
+    ///
+    /// That was reachable the moment the shelf started sending one Items message PER STACK.
+    /// ShelfModel on the far side rejects a stack whose declared total disagrees with the set it
+    /// is assembling, but that is a detection of last resort, not a substitute for sending
+    /// correctly: it cannot notice a corrupted line that still parses.
+    ///
+    /// A chain rather than a semaphore, because the order has to be the CALL order and nothing
+    /// else. SemaphoreSlim documents no FIFO guarantee for its async waiters, so two callers
+    /// could be released in the other order; here the link is made under the lock, in call
+    /// order, so the sequence is fixed before any await happens.
+    /// </summary>
+    public Task SendAsync(DropMessage message)
+    {
+        lock (_sendGate)
+        {
+            var next = AfterAsync(_sendChain, message);
+            _sendChain = next;
+            return next;
+        }
+    }
+
+    private readonly object _sendGate = new();
+    private Task _sendChain = Task.CompletedTask;
+
+    /// <summary>Wait for the send before this one, then write. <see cref="WriteAsync"/> swallows
+    /// its own failures, so the chain cannot be left faulted and a single failed send cannot
+    /// poison every send after it.</summary>
+    private async Task AfterAsync(Task previous, DropMessage message)
+    {
+        await previous.ConfigureAwait(false);
+        await WriteAsync(message).ConfigureAwait(false);
+    }
+
+    private async Task WriteAsync(DropMessage message)
     {
         if (_pipe is not { IsConnected: true } pipe) return;
 

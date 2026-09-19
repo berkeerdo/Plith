@@ -1299,7 +1299,7 @@ git commit -m "feat(shelf): show the shell's own icons, extracted where they bel
 - Consumes: `DropChannelServer`, `ShelfStore`, `ShelfPaletteWire`, `DropCatcherLauncher`.
 - Produces: `ShelfSession` with `void Open(Rect notchRectDip, double dpiScale)`, `event Action? Opened`, `event Action? Closed`, `event Action<string>? Unavailable`, and `void HandleMessage(DropMessage)`; `DropCatcherLauncher.EnsureRunning -> CatcherStart` where `enum CatcherStart { Started, AlreadyRunning, NotFound, Failed }`; `OsdHost.OpenShelf()`; `ShelfWidget.OpenRequested` event.
 
-- [ ] **Step 1: Split the launcher's result**
+- [x] **Step 1: Split the launcher's result**
 
 `EnsureRunning` returns `false` today both for "one is already running" and for "it could not be started". Nothing could distinguish them, and Task 6 has to tell a person which happened.
 
@@ -1312,7 +1312,7 @@ public enum CatcherStart { Started, AlreadyRunning, NotFound, Failed }
 
 Change the signature to `public static CatcherStart EnsureRunning(DiagnosticLog? log = null)` and return the matching value at each existing exit. Update the two call sites the compiler finds.
 
-- [ ] **Step 2: Write `ShelfSession`**
+- [x] **Step 2: Write `ShelfSession`**
 
 It owns the whole conversation, so `OsdHost` gains a call rather than a protocol. `OsdHost` is already long, and threading another eight-verb exchange through it is how a file stops being readable.
 
@@ -1337,7 +1337,7 @@ Palette before items, and items before `OpenShelf`, so the surface has everythin
 
 `HandleMessage` routes `RemoveItems` to `ShelfStore.RemoveMany`, `ClearShelf` to `Clear`, `NewStack` to `NewStack`, `Restack` to `Restack`, and `ShelfClosed` to `PruneEmptyStacks` followed by raising `Closed`. On any of the four that change the shelf, re-send the `Items` set, because the catcher's model is a view and this is what refreshes it.
 
-- [ ] **Step 3: Give standing aside a reason**
+- [x] **Step 3: Give standing aside a reason**
 
 In `OsdHost`, `_standingAside` becomes `private StandAsideReason _standAside;` with `enum StandAsideReason { None, Drag, Shelf }`. `EndStandAside` already exists and is called from two places; it must not pull the notch back while the reason is `Shelf`, because the shelf is not a 450 ms stand-in and the drag detector will happily raise a transition under it.
 
@@ -1355,7 +1355,7 @@ Add:
     public void OpenShelf()
 ```
 
-- [ ] **Step 4: Make the glance page a door**
+- [x] **Step 4: Make the glance page a door**
 
 In `ShelfWidget`, add `public event Action? OpenRequested;` and raise it from `MouseLeftButtonUp` on the root.
 
@@ -1365,13 +1365,13 @@ Button **up**, not down, and it matters: the hand-over is what Task 8 makes dang
 
 Add the hint the empty state already has, for the case where the shelf is not empty: a line under the row saying the shelf opens on a click. This is the only place the product will ever say so.
 
-- [ ] **Step 5: Build and run the suite**
+- [x] **Step 5: Build and run the suite**
 
 Run: `dotnet build Plith.slnx -m:1`
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: both succeed.
 
-- [ ] **Step 6: Drive the hand-over on a console session**
+- [ ] **Step 6: Drive the hand-over on a console session**. NOT RUN. This session is `rdp-tcp#0` (`qwinsta`), where the shelf's layered window cannot be captured. Written up as numbered items in `docs/SHELF-VERIFICATION.md` §2 instead, phrased for someone who was not here.
 
 Start Plith and let the catcher start through Explorer. Confirm `dropcatcher.log` says `MEDIUM`; if it says `HIGH` the launch route is wrong and nothing after this will work, which is the failure mode that looks exactly like success.
 
@@ -1379,7 +1379,7 @@ Then: open the notch, page to the shelf, click it. Expected: the notch goes down
 
 Write both into `docs/SHELF-VERIFICATION.md`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf/ShelfSession.cs src/Plith/Services/Shelf/DropCatcherLauncher.cs \

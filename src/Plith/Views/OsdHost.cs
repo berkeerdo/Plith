@@ -407,13 +407,41 @@ public sealed class OsdHost : BandWindow
     private const uint SWP_HIDEWINDOW = 0x0080;
 
     private Plith.Services.Shelf.DropChannelServer? _dropChannel;
-    private bool _standingAside;
+    private Plith.Services.Shelf.ShelfSession? _shelfSession;
+
+    /// <summary>
+    /// Why the notch is down, or None when it is not.
+    ///
+    /// It was a bool, and a bool cannot answer the question EndStandAside has to ask. The two
+    /// reasons have opposite lifetimes: a drag's stand-aside is armed to withdraw after 450 ms,
+    /// because nothing distinguishes a file being carried to the top of the screen from a window
+    /// being dragged there, while the shelf was asked for out loud and stays until it is
+    /// dismissed. The drag detector keeps running under an open shelf and will raise a
+    /// departure, so without the reason the shelf's own notch would come back up underneath it.
+    /// </summary>
+    private enum StandAsideReason { None, Drag, Shelf }
+
+    private StandAsideReason _standAside;
 
     /// <summary>
     /// Hand the drop catcher over. Set by App once the channel exists, which is after this
     /// window is constructed — hence a property rather than a constructor parameter.
     /// </summary>
     public void AttachDropChannel(Plith.Services.Shelf.DropChannelServer channel) => _dropChannel = channel;
+
+    /// <summary>
+    /// Hand over the conversation the shelf runs on, and take its three answers.
+    ///
+    /// Opened and Closed drive the notch; Unavailable is the one that reaches the person, so it
+    /// goes to the page they just clicked rather than to the log alone.
+    /// </summary>
+    public void AttachShelfSession(Plith.Services.Shelf.ShelfSession session)
+    {
+        _shelfSession = session;
+        session.Opened += OnShelfOpened;
+        session.Closed += OnShelfClosed;
+        session.Unavailable += OnShelfUnavailable;
+    }
 
     /// <summary>
     /// A drag has arrived at the notch, or has left it.
@@ -443,7 +471,7 @@ public sealed class OsdHost : BandWindow
 
     private void BeginStandAside()
     {
-        if (_standingAside) return;
+        if (_standAside != StandAsideReason.None) return;
 
         if (_dropChannel is not { IsConnected: true })
         {
@@ -457,12 +485,126 @@ public sealed class OsdHost : BandWindow
         var target = NotchGeometry.DropTargetRect(_hoverPoller.HoverRect);
         var (x, y, w, h) = NotchGeometry.DipToPhysical(target, _hoverPoller.DpiScale);
 
-        _standingAside = true;
-        if (Handle != 0) _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        _standAside = StandAsideReason.Drag;
+        HideForCatcher();
         _ = _dropChannel.SendAsync(new Plith.Services.Shelf.DropMessage(
             Plith.Services.Shelf.DropVerb.Show, x, y, w, h, []));
 
         _log?.Info("Shelf", $"Standing aside for a drag: {x},{y} {w}x{h}.");
+    }
+
+    /// <summary>
+    /// Stand aside for the shelf rather than for a drop.
+    ///
+    /// The same mechanism as BeginStandAside and deliberately not the same method: that one
+    /// arms a withdrawal after 450 ms, because nothing distinguishes a file being carried to the
+    /// top of the screen from a window being dragged there. The shelf was asked for, so it
+    /// stays until it is dismissed.
+    ///
+    /// The rectangle is read BEFORE anything is hidden, and the ORDER of the two steps after it
+    /// is the other half of the design. The notch does not go down here; it goes down in
+    /// OnShelfOpened, which the session raises only once it has decided the catcher is there to
+    /// send to. Hiding first and restoring on failure would mean a click on a broken install
+    /// blinks the notch out and back, and the sentence explaining why would arrive into a page
+    /// that had just been hidden.
+    /// </summary>
+    public void OpenShelf()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OpenShelf));
+            return;
+        }
+
+        if (_shelfSession is null) return;
+        if (_presentation is not AmbientNotchPresentation) return;
+        if (_standAside != StandAsideReason.None) return;
+
+        _shelfSession.Open(_hoverPoller.HoverRect, _hoverPoller.DpiScale);
+    }
+
+    private void OnShelfOpened()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnShelfOpened));
+            return;
+        }
+
+        _standAside = StandAsideReason.Shelf;
+        HideForCatcher();
+
+        // The hide timer is deliberately LEFT RUNNING, and stopping it was the first version.
+        //
+        // Stopping it means the notch is frozen in whatever shape it had when it went down, and
+        // the shelf closing would then put an open widget frame back on screen with nothing left
+        // to collapse it: the notch would stay open until the next event, which is a panel across
+        // the top of the screen that nothing takes away.
+        //
+        // Left running, both outcomes are right. With hover keep-alive on, the pointer is inside
+        // the panel rectangle for as long as the shelf covers it, so the timer keeps re-arming
+        // and the notch comes back open and collapses once the pointer leaves: the same rule a
+        // panel under the pointer already follows. With it off, the notch collapses while it is
+        // hidden and comes back at rest. The collapse animates on a window nobody can see, which
+        // costs one storyboard and no correctness: its completion only re-parks the presentation
+        // and re-derives click-through, and its HideWindowIfPossible is guarded by the same
+        // covered-monitor condition RestoreNotch is.
+        _log?.Info("Shelf", "Standing aside for the shelf.");
+    }
+
+    private void OnShelfClosed()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnShelfClosed));
+            return;
+        }
+
+        if (_standAside != StandAsideReason.Shelf) return;
+
+        _standAside = StandAsideReason.None;
+        RestoreNotch();
+
+        // No Hide sent back. That verb belongs to the catcher's OTHER window, the one that
+        // stands in during a drag; the shelf has already taken itself down, which is how this
+        // event got here.
+        _log?.Info("Shelf", "Shelf closed; notch back.");
+    }
+
+    /// <summary>
+    /// The shelf could not be shown, with the reason as a sentence.
+    ///
+    /// It goes onto the shelf page, because that is the thing the person just clicked. A click
+    /// that does nothing is indistinguishable from the product being broken, and this is the one
+    /// interaction in the product whose failure mode is entirely invisible: the helper process
+    /// is not something anyone knows exists.
+    /// </summary>
+    private void OnShelfUnavailable(string why)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnShelfUnavailable(why)));
+            return;
+        }
+
+        _shelfPage?.ShowUnavailable(why);
+        _log?.Warn("Shelf", $"Shelf unavailable: {why}");
+    }
+
+    private void HideForCatcher()
+    {
+        if (Handle != 0) _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_HIDEWINDOW);
+    }
+
+    /// <summary>
+    /// Only back up if the notch has somewhere to be. While a window covers the monitor the
+    /// resting state IS hidden, and re-showing here would put a permanently composited strip
+    /// back over a game, the one thing the covered state exists to prevent.
+    /// </summary>
+    private void RestoreNotch()
+    {
+        if (Handle != 0 && !_coversMonitor)
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
     /// <summary>
@@ -484,19 +626,25 @@ public sealed class OsdHost : BandWindow
         EndStandAside();
     }
 
+    /// <summary>
+    /// The DRAG's stand-aside ends. Called from the approach detector and from the catcher
+    /// standing down, and it must leave an open shelf alone.
+    ///
+    /// The detector keeps polling while the shelf is up, and it will raise a departure the
+    /// moment the pointer leaves the band, which is most of the time, since the shelf is taller
+    /// than the band that opened it. Without this guard the notch would come straight back up
+    /// underneath a shelf the person is still using, and the shelf's own close would then find
+    /// nothing to restore.
+    /// </summary>
     private void EndStandAside()
     {
-        if (!_standingAside) return;
-        _standingAside = false;
+        if (_standAside != StandAsideReason.Drag) return;
+        _standAside = StandAsideReason.None;
 
         _ = _dropChannel?.SendAsync(new Plith.Services.Shelf.DropMessage(
             Plith.Services.Shelf.DropVerb.Hide, 0, 0, 0, 0, []));
 
-        // Only back up if the notch has somewhere to be. While a window covers the monitor the
-        // resting state IS hidden, and re-showing here would put a permanently composited strip
-        // back over a game — the one thing the covered state exists to prevent.
-        if (Handle != 0 && !_coversMonitor)
-            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+        RestoreNotch();
 
         _log?.Info("Shelf", "Drag over; notch back.");
     }
@@ -726,6 +874,7 @@ public sealed class OsdHost : BandWindow
         if (_shelf is null || _shelfPage is not null) return;
 
         _shelfPage = new Widgets.ShelfWidget(_shelf);
+        _shelfPage.OpenRequested += OpenShelf;
         ApplyWidgetPages();
     }
 

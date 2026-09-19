@@ -3,6 +3,7 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Threading;
 using Plith.Services.Shelf;
 
 namespace Plith.Views.Widgets;
@@ -31,18 +32,50 @@ public partial class ShelfWidget : UserControl
     private const double TileGap = 5;
 
     /// <summary>
-    /// Fixed rather than measured, so the row cannot grow past what the frame gives it. The page
-    /// has 80 DIP; this is what a tile needs and leaves the difference as slack rather than as
-    /// clipping.
+    /// Fixed rather than measured, so the row cannot grow past what the frame gives it.
+    ///
+    /// 70 rather than the 76 it was. The page's content box is 82 DIP now, and the six DIP given
+    /// up here are part of what pays for the line underneath saying the shelf opens on a click.
+    /// The tile's own contents are 52 DIP (a 22 icon, 6 of margin, two 12 DIP lines of name)
+    /// plus 8 of padding, so 70 still leaves slack rather than clipping.
     /// </summary>
-    private const double TileHeight = 76;
+    private const double TileHeight = 70;
+
+    /// <summary>
+    /// How long a "the shelf cannot open" sentence stays on the page.
+    ///
+    /// It has to go away on its own: the notch closes itself and comes back showing whatever was
+    /// last rendered, so a sentence left in place would still be there the next time the page is
+    /// opened, describing a helper process that has since started perfectly well.
+    /// </summary>
+    private static readonly TimeSpan UnavailableFor = TimeSpan.FromSeconds(6);
+
+    /// <summary>Kept beside the timer that replaces it, so the sentence and the thing that
+    /// restores it cannot drift. Declared in XAML too, which is where it is first shown.</summary>
+    private const string OpenHint = "Click to open the shelf";
 
     private readonly ShelfStore _shelf;
+    private DispatcherTimer? _unavailable;
 
     public ShelfWidget(ShelfStore shelf)
     {
         InitializeComponent();
         _shelf = shelf;
+
+        // Button UP, never down, and this is the hand-over the whole slice turns on.
+        //
+        // The press and the release go to different processes: the press lands on Plith's
+        // window, and by the time the button comes up the notch is on its way down and the
+        // catcher is taking its place. Task 8 measured what a press split across two processes
+        // costs: DoDragDrop will not deliver a drag for a press that happened somewhere else,
+        // and one of the three runs did not return for seventeen seconds. On release there is no
+        // press in flight to be split. See docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md.
+        //
+        // It arrives here at all only because the root carries Background="Transparent". WPF hit
+        // tests a panel with no background straight through to whatever is behind it, which here
+        // is OsdContent's SlidingRoot: without the brush this handler would fire on the file
+        // names and the icons and nowhere else on the page.
+        MouseLeftButtonUp += (_, _) => OpenRequested?.Invoke();
 
         _shelf.Changed += OnShelfChanged;
 
@@ -53,10 +86,47 @@ public partial class ShelfWidget : UserControl
         Render();
     }
 
+    /// <summary>
+    /// A click on the page asked for the shelf.
+    ///
+    /// The page is a glance and the shelf is the place: five slots cannot show stacking, cannot
+    /// be selected from and cannot be dragged out of, so the row's job is to say there is
+    /// something here and to be the way to the surface that can do all three.
+    /// </summary>
+    public event Action? OpenRequested;
+
     /// <summary>Unsubscribe when the page is discarded. The store outlives every page built from
     /// it, so a page that never let go would be kept alive by the store's event for the life of
     /// the process — and would keep repainting a visual tree nothing is showing.</summary>
-    public void Detach() => _shelf.Changed -= OnShelfChanged;
+    public void Detach()
+    {
+        _shelf.Changed -= OnShelfChanged;
+        _unavailable?.Stop();
+    }
+
+    /// <summary>
+    /// Say why the shelf did not open, in place of the hint that says it does.
+    ///
+    /// In the hint's own line rather than over the tiles, because the sentence answers the click
+    /// and the click was on the page as a whole. Replacing the row would also throw away the
+    /// only thing on screen that is still true.
+    /// </summary>
+    public void ShowUnavailable(string why)
+    {
+        Hint.Text = why;
+        Hint.Visibility = Visibility.Visible;
+
+        if (_unavailable is null)
+        {
+            _unavailable = new DispatcherTimer(DispatcherPriority.Normal, Dispatcher) { Interval = UnavailableFor };
+            _unavailable.Tick += (_, _) => { _unavailable!.Stop(); Render(); };
+        }
+
+        // Stopped before started, so a second click restarts the clock rather than leaving the
+        // sentence to disappear on the first click's schedule.
+        _unavailable.Stop();
+        _unavailable.Start();
+    }
 
     private void OnShelfChanged()
     {
@@ -75,6 +145,16 @@ public partial class ShelfWidget : UserControl
 
         var items = _shelf.Items;
 
+        // Restored here rather than only on the timer, so a shelf that changes while a failure
+        // sentence is up goes back to the hint immediately. A drop landing is exactly that case:
+        // the catcher that could not be reached a moment ago is plainly reachable now.
+        Hint.Text = OpenHint;
+
+        // The hint only where the empty state is not. The empty state already carries the one
+        // sentence this page owes a person who has never used it, and two lines of instruction
+        // in an 82 DIP page is a page that reads as a form.
+        Hint.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
         if (items.Count == 0)
         {
             // The page is present even when empty, so the empty state has to earn the space. A
@@ -90,7 +170,10 @@ public partial class ShelfWidget : UserControl
                 Foreground = (Brush)FindResource("NotchInk"),
                 VerticalAlignment = VerticalAlignment.Center,
                 Height = TileHeight,
-                Padding = new Thickness(0, 26, 0, 0),
+                // The top padding is what centres two wrapped lines in a fixed-height block;
+                // TextBlock has no vertical alignment of its own content. It tracks TileHeight
+                // because it is the tile row's height that this stands in for.
+                Padding = new Thickness(0, 22, 0, 0),
             });
             AutomationProperties.SetName(Tiles, "Shelf, empty. Drop files on the notch to keep them here.");
             return;

@@ -130,7 +130,15 @@ foreach ($file in $xamlFiles) {
 # surface by construction. The tiles have no chip behind them now and sit on the panel, which is
 # the surface NotchInk is derived against.
 $codeBehindPairs = @(
-    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfWidget.cs:tile label, icon and count' }
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfWidget.cs:tile label, icon and count' },
+    # The line under the row saying the shelf opens on a click, and the sentence that replaces it
+    # when the shelf cannot open. It is declared in XAML with a DynamicResource foreground and no
+    # background of its own, so the scan above cannot pair it: the surface it sits on is painted
+    # by OsdContent's NotchSurface, two files away. That sentence is the only thing on the page
+    # that a person has to READ rather than recognise, and the reason it needs the check is the
+    # one the tiles already proved - NotchInkMuted measured 1.5:1 on a track tile, and nothing in
+    # a render showed it.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfWidget.xaml:the open hint and the unavailable sentence' }
 )
 foreach ($cb in $codeBehindPairs) {
     $pairs.Add([pscustomobject]@{ Bg = $cb.Bg; Fg = $cb.Fg; Where = $cb.Where; File = 'ShelfWidget.cs' })

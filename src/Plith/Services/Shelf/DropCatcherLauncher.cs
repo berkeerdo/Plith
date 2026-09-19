@@ -28,30 +28,56 @@ public static class DropCatcherLauncher
         => Path.Combine(plithDirectory, ExecutableName);
 
     /// <summary>
-    /// Returns false when nothing was started — either one is already running, or the exe is not
-    /// beside Plith. Neither is an error worth a dialog: the shelf simply does not work, and the
-    /// log says which of the two it was.
+    /// The catcher's process id, or null when none is running.
+    ///
+    /// Exists for one caller: <see cref="ShelfSession"/> has to name the catcher to
+    /// AllowSetForegroundWindow, and the answer has to be found the same way EnsureRunning finds
+    /// it or the two could disagree about which process is the catcher. The first match, because
+    /// the catcher takes a per-user mutex and a second instance exits immediately; a stale second
+    /// entry here would only ever be a process on its way out.
     /// </summary>
-    public static bool EnsureRunning(DiagnosticLog? log = null)
+    public static int? FindProcessId()
+    {
+        var processes = Process.GetProcessesByName(ProcessName);
+        try
+        {
+            return processes.Length == 0 ? null : processes[0].Id;
+        }
+        finally
+        {
+            foreach (var p in processes) p.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Start the catcher if it is not already up, and say which of the four things happened.
+    ///
+    /// It used to return a bool, which collapsed "one is already running" and "it is not
+    /// installed" into the same answer. That was enough while the only consumer was the log,
+    /// and stopped being enough the moment the shelf had to tell a person why a click did
+    /// nothing: those two need opposite sentences, and a click that says nothing at all is
+    /// indistinguishable from the product being broken.
+    /// </summary>
+    public static CatcherStart EnsureRunning(DiagnosticLog? log = null)
     {
         if (Process.GetProcessesByName(ProcessName).Length > 0)
         {
             log?.Info("Shelf", "Drop catcher is already running.");
-            return false;
+            return CatcherStart.AlreadyRunning;
         }
 
         var directory = Path.GetDirectoryName(Environment.ProcessPath);
         if (directory is null)
         {
             log?.Warn("Shelf", "Cannot locate Plith's own directory; drop catcher not started.");
-            return false;
+            return CatcherStart.NotFound;
         }
 
         var exe = ResolveExecutablePath(directory);
         if (!File.Exists(exe))
         {
             log?.Warn("Shelf", $"Drop catcher not found at {exe}; the shelf will not receive drops.");
-            return false;
+            return CatcherStart.NotFound;
         }
 
         try
@@ -74,12 +100,39 @@ public static class DropCatcherLauncher
             });
 
             log?.Info("Shelf", $"Asked Explorer to start the drop catcher: {exe}");
-            return true;
+            return CatcherStart.Started;
         }
         catch (System.ComponentModel.Win32Exception ex)
         {
             log?.Warn("Shelf", $"Could not start the drop catcher: {ExceptionText.Describe(ex)}");
-            return false;
+            return CatcherStart.Failed;
         }
     }
+}
+
+/// <summary>
+/// Why a start attempt ended the way it did.
+///
+/// A bool could not tell "one is already running" from "it is not installed", and the shelf has
+/// to say something different for each: one means wait a moment, the other means this install is
+/// missing a file and waiting will never help.
+///
+/// <see cref="Started"/> is NOT the same as ready. Explorer was asked to launch the catcher and
+/// answered without throwing; the catcher then has to come up and connect to the pipe, which
+/// takes long enough that the click which triggered the start will not be the click that gets a
+/// shelf.
+/// </summary>
+public enum CatcherStart
+{
+    /// <summary>Explorer was asked to launch it, and it will connect when it is ready.</summary>
+    Started,
+
+    /// <summary>A catcher process was already running before this call.</summary>
+    AlreadyRunning,
+
+    /// <summary>The executable is not beside Plith, or Plith cannot find its own directory.</summary>
+    NotFound,
+
+    /// <summary>The launch was attempted and Windows refused it.</summary>
+    Failed,
 }
