@@ -495,9 +495,12 @@ built on top of and the next person should not have to take it on trust:
   UIAccess, in which case every result in this section is about a different process than the one
   that ships and none of it counts.
 
-A `Refused a drag whose press did not land on this window.` or `Refused a drag: one is already in
-flight.` line means `StartDrag`'s guard turned the gesture away. Neither should ever appear during
-an ordinary drag from a tile; if one does, that is the finding, not the drag that failed.
+Any of `Refused a drag whose press did not land on this window.`, `Refused a drag with no live
+press behind it.` or `Refused a drag: one is already in flight.` means `StartDrag`'s guard turned
+the gesture away. None of the three should ever appear during an ordinary drag from a tile; if one
+does, that is the finding, not the drag that failed. The middle one is the guard that answers the
+measurement this task exists because of, so it is the one to look for first: it refuses a call that
+arrives with no live button press behind it, which is the shape that hung for seventeen seconds.
 
 ### 4.1 One tile into a file manager
 

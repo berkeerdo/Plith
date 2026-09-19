@@ -536,6 +536,32 @@ public partial class ShelfWindow : Window
             return;
         }
 
+        // A LIVE press, and this is the guard the measurement actually argues for. It is NOT
+        // redundant with the element check above and must not be removed as such: the two answer
+        // different questions. That one says the element belongs to this window. This one says a
+        // button is down right now. What was measured on 18.09.2026 was neither a wrong element
+        // nor merely a failed drag: it was a drag whose BUTTON went down in another process, and
+        // the call did not return, still blocked seventeen seconds after the release, on the
+        // thread the whole shelf runs on. An element can be ours while the press about to be
+        // dragged was never ours at all, and that is exactly the case that hangs.
+        //
+        // Mouse.LeftButton, NOT the mouse-move event's own e.LeftButton, and the difference is
+        // the point rather than a style choice. An event argument carries the state as of the
+        // event that created it, and keeps reporting it for as long as anything holds the
+        // reference: posted to the dispatcher, queued behind a pipe message, or replayed a second
+        // later, it would still say Pressed about a press that ended long ago. Mouse.LeftButton
+        // reads the mouse device's state as of the last input WPF processed, which is as live as
+        // a WPF caller can be asked to be, so a caller arriving here with no gesture behind it is
+        // refused instead of believed. (GetAsyncKeyState would read the physical key instead,
+        // which is a third thing again: it can say Pressed for a button this window never
+        // received, which is the wrong question here.) A guard a stale snapshot can satisfy is
+        // decoration.
+        if (Mouse.LeftButton != MouseButtonState.Pressed)
+        {
+            _log.Info("Refused a drag with no live press behind it.");
+            return;
+        }
+
         // ONE call carrying BOTH formats, rather than a branch that decides in advance which kind
         // of drag this is. There is nothing to branch on: the destination is unknown until the
         // release, and the same press has to be able to end on another stack of this shelf or in
@@ -558,11 +584,20 @@ public partial class ShelfWindow : Window
         }
         catch (Exception ex)
         {
-            // Logged and swallowed rather than allowed to escape. This runs inside a WPF input
-            // event handler, where an escaping exception ends the process, and the process it
-            // would end is the catcher: the shelf, the notch's stand-in and the pipe all go with
-            // it, so a failed drag would cost the person the ability to catch anything at all.
-            // OLE reports its own failures here as COMException, and none of them is worth that.
+            // Logged and swallowed rather than allowed to escape, and the blanket catch is
+            // deliberate. What it protects is not a known list of OLE failures, it is the
+            // process: this runs inside a WPF input event handler, and ANY exception that
+            // reaches one ends the application. The application it would end is the catcher, so
+            // the shelf, the notch's stand-in and the pipe all go with it, and the person is
+            // left with a notch that no longer catches anything because a drag failed.
+            //
+            // Narrowing this to COMException is the obvious tightening and it would be wrong
+            // here. DoDragDrop runs a drop target in ANOTHER process inside this call, and that
+            // target can raise whatever it likes; the set of types that can arrive here is not
+            // ours to enumerate, and the first one left out of a narrowed list would take the
+            // catcher down with it. Nothing is hidden by catching broadly: the type and the
+            // message both go into the log, so a failure is as visible as it would have been in
+            // a crash, and only the process survives it.
             _log.Info($"Drag out failed: {ex.GetType().Name}: {ex.Message}");
         }
         finally
