@@ -1171,6 +1171,62 @@ same six known gaps (now six findings rather than four files) reported as notice
   way `FindProcessId` next door already did.
 - **One em dash in `ShelfStore.Add`'s doc comment**, in a sentence this branch re-wrapped. Gone.
 
+### 6.6 The stale press, found by the scoped re-review
+
+The press fix in 6.1 was right about the render and wrong about the release. **No mouse capture is
+taken**, so a release outside the window raises nothing on `ShelfSurface` at all, and only its
+button-up cleared the press. A drag out **ends outside the window by definition**, which is what it
+is for, so a press was left recorded after every successful one. The next button-down on anything
+that does not run `BeginPress` (the header, the Clear or new-stack button, the gap between two
+tiles) followed by a move onto a tile would then start a drag from a press that never landed on a
+tile, measured against an origin from the gesture before it. That is the exact failure family this
+whole branch exists because of, arriving from the other side.
+
+Settled by one line, clearing on button-DOWN at the root, which tunnels ahead of the tile's own
+`BeginPress` so a real tile press re-records immediately and loses nothing.
+
+**The harness check covers it**, as a controlled comparison rather than an assertion on its own:
+the same far point, on the same surface, through the same method, raises a drag on a live press and
+does NOT raise after a down that landed on no tile. Removing the root clear and rebuilding makes
+the second half fail with its own message; the first half is the control that keeps it from passing
+quietly.
+
+### 6.7 Known limits, recorded rather than fixed
+
+Three things the fixes above do not cover. Each is real, each is going to the user as a known
+limit, and each is written here so it is not rediscovered as a surprise.
+
+**1. `Deactivated` still closes without asking where the pointer is.** 6.2 put the pointer question
+in the leave timer's tick, which is the only place the shelf closes *for* the pointer having left.
+The other route, `Deactivated` to `Dismiss` to `CloseNow`, does not consult the pointer at all: it
+is guarded only by `_dragInFlight` and `_menuOpen` **already being set when `Deactivated`
+arrives**. For a context menu that depends on the menu's `Opened` firing before the `Deactivated`
+its own appearance causes. **That ordering was inferred from the observed bug sequence and has
+never been measured.** If it is ever the other way round, `_menuOpen` is still false when `Dismiss`
+runs and the shelf closes under the menu outright, which is a fourth instance of the
+close-under-the-pointer defect by the one route 6.2 does not cover. A console item would open a
+tile's context menu and look at whether the shelf is still there, and `dropcatcher.log` would
+distinguish the two: a `Shelf dismissal deferred` line means the flag was set in time, a `Shelf
+closing: another window took focus` means it was not.
+
+**2. A dismissal deferred by a menu can no longer complete while the pointer rests on the shelf.**
+This is the price of 6.2 and it is the better of the two outcomes, but it has a visible shape.
+Right-click a tile, then Alt+Tab away with the pointer left sitting on the shelf: the deferred
+dismissal is now refused by every tick, `Esc` cannot reach a window that no longer has activation,
+and no second `Deactivated` will come, so **the shelf stays topmost over the new foreground
+application until the mouse moves off it.** Moving the pointer away takes it down within the grace
+period. Needs a console item: do exactly that, and record how long it takes to look wrong.
+
+**3. A message queued while the pipe is DOWN is still dropped.** The chain in 6.3 fixes overlapping
+sends, not a disconnected one: `CatcherClient.WriteAsync` returns silently when there is no live
+writer, so a `ShelfClosed` that arrives after the pipe has gone is lost exactly as before. **The
+outcome is nonetheless handled, from the other end**, which is why this is a limit rather than a
+defect: `DropChannelServer` raises `Disconnected`, `ShelfSession` answers it by ending the `Shelf`
+stand-aside and putting the notch back, and that path is tested
+(`ShelfSessionTests.ChannelLost_WithAShelfOpen_PutsTheNotchBack`, against a real connected pipe)
+and has its own console item at section 2.7. So the case where a `ShelfClosed` cannot be delivered
+is the case where Plith already knows the catcher is gone.
+
 ### What HAS been measured, on 2026-09-19, after these fixes
 
 | Measured | Result |
@@ -1187,5 +1243,13 @@ same six known gaps (now six findings rather than four files) reported as notice
 
 Every NOT YET RUN in sections 1 to 5 is still NOT YET RUN. Three of the four defects above lived
 in code that a green build, a green suite and a green lint had all passed over, which is this
-document's recurring finding rather than a new one: 6.1 is the only one of the four that now has a
-gate standing over it.
+document's recurring finding rather than a new one: 6.1 and 6.6 are the only ones that now have a
+gate standing over them.
+
+**Both of those gates were falsified rather than trusted**, which is the part worth keeping. The
+press fix: inserting `_press = null` into `Render` and rebuilding makes the check fail with its own
+message, and HEAD passes. The stale-press fix: removing the root button-down clear and rebuilding
+makes the second half fail with its own message. The stack cap: removing the clamp makes the test
+fail with `Assert.Single() Failure: The collection contained 2 items`, a clean assertion rather
+than the `OutOfMemoryException` an `int.MaxValue` total would have produced, which is why the test
+uses 100,000 and says so. A check nobody has seen fail is a check nobody has seen.

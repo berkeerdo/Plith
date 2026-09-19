@@ -81,8 +81,12 @@ $failures = [System.Collections.Generic.List[string]]::new()
 # accessibility pass, and its gaps are real rather than absent.
 $nameCheckRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatcher')) |
                    Where-Object { Test-Path $_ } | Select-Object -Unique
+# [\\/] rather than the [\/] the icon-font filter further down uses: a Windows path separator
+# is a backslash, and that one matches only a forward slash. Inert on both today, since no
+# generated .xaml under obj/ carries an interactive control, but this list is new and there is no
+# reason to copy a wrong character into it. The old line is left alone rather than swept up here.
 $nameCheckXaml = @($nameCheckRoots | ForEach-Object { Get-ChildItem -Path $_ -Filter '*.xaml' -Recurse }) |
-                  Where-Object { $_.FullName -notmatch '[\/](obj|bin)[\/]' }
+                  Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }
 
 foreach ($file in $nameCheckXaml) {
     $lines = Get-Content -LiteralPath $file.FullName
@@ -194,6 +198,14 @@ $codeBehindRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatch
 # of them tomorrow would pass green - including in ShelfWidget.cs, which this branch rewrote. A
 # whole-branch review found that. The known gap is a named element in a named file; anything else
 # in the same file is a new finding and fails.
+#
+# THE LIMIT OF THIS KEY, stated rather than left to be discovered: the key is a NAME, not an
+# occurrence. A second inert element in the same file that happens to be called `tile` inherits
+# the suppression written for the first. That is a much smaller hole than the file key it
+# replaced (which covered every name in the file, whatever it was called), and closing it would
+# mean keying by line number, which every unrelated edit above it would invalidate. Left as is,
+# deliberately: when one of these files is fixed, delete its lines here rather than adding to
+# them.
 #
 # The first run of the code-behind check found four files, not one. Task 9 was asked to check only
 # ShelfWidget.cs; running the scan for real also caught MediaWidget.cs, NotchHud.cs and

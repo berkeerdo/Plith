@@ -139,10 +139,28 @@ public partial class ShelfSurface : UserControl
     {
         InitializeComponent();
 
+        // A button-DOWN anywhere on this control ends the previous press before the new one is
+        // recorded. Tunnelling reaches this root first, so a down that goes on to run BeginPress
+        // re-records immediately afterwards and loses nothing; a down that does not (the header,
+        // the Clear or new-stack buttons, the gap between two tiles) leaves nothing behind.
+        //
+        // THIS IS THE ORDINARY PATH, NOT A CORNER, and that is the whole reason it is here. No
+        // mouse capture is taken, so a release outside this window raises no event on it at all
+        // and the button-up below never runs - and a drag OUT ends outside this window BY
+        // DEFINITION, since landing a file somewhere else is what it is for. So every successful
+        // drag out leaves a press recorded. Without this line the next down on anything that is
+        // not a tile, followed by a move onto one, would start a drag from a press that never
+        // landed on a tile, measured against an origin from the gesture before it. A drag from a
+        // press that did not land is the exact failure family this whole branch exists because
+        // of: see ShelfWindow.StartDrag, whose guard was written after DoDragDrop was measured
+        // failing, and once hanging for seventeen seconds, for a press it did not receive.
+        PreviewMouseLeftButtonDown += (_, _) => EndPress();
+
         // A button-up ANYWHERE on this control ends the press, not only one on the tile that
         // took it. A preview event tunnels through this root whatever the pointer is over, so a
         // release in the gap between two tiles, or on the header, is caught here rather than
-        // leaving a press outstanding with no gesture behind it.
+        // leaving a press outstanding with no gesture behind it. It cannot catch a release
+        // OUTSIDE the window, which is why the button-down above exists as well.
         PreviewMouseLeftButtonUp += (_, _) => EndPress();
     }
 

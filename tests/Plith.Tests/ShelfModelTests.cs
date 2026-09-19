@@ -152,20 +152,29 @@ public sealed class ShelfModelTests
     /// `total` taken at face value is one short line that allocates until the catcher dies, and
     /// the catcher is the process holding the shelf, the notch's stand-in and the pipe.
     ///
-    /// Two assertions, because the cap alone would not be enough: the oversized message must
-    /// also fail to ASSEMBLE. Truncating it leaves _expected disagreeing with the total every
-    /// sibling message carries, so the siblings are refused and a hostile set builds nothing,
-    /// rather than building something plausible and wrong.
+    /// What is asserted is that the clamp TOOK, observed from outside: a sibling message
+    /// declaring the same oversized total no longer matches the clamped _expected, so it is
+    /// refused and the set assembles nothing. That matters as much as the cap itself. A hostile
+    /// set that assembled something plausible and wrong would be worse than one that looks
+    /// incomplete, because nothing about it invites a second look.
+    ///
+    /// 100_000 rather than int.MaxValue, and the reason belongs here rather than being tidied
+    /// away: this number is large enough that no honest sender would ever produce it, and small
+    /// enough to allocate. Against the unfixed code int.MaxValue did not fail an assertion at
+    /// all, it threw OutOfMemoryException out of the list growth, which is a rough way for a
+    /// test host to die and a poor way to describe a defect. The pre-fix failure here is a clean
+    /// Assert.Single instead: unclamped, the sibling is accepted and there are two stacks.
     /// </summary>
     [Fact]
     public void SetStack_WithAHostileStackCountIsClampedAndAssemblesNothing()
     {
+        const int hostileTotal = 100_000;
         var model = new ShelfModel();
 
-        model.SetStack(0, int.MaxValue, ["C:\a.txt"]);
+        model.SetStack(0, hostileTotal, ["C:\\a.txt"]);
+        model.SetStack(1, hostileTotal, ["C:\\b.txt"]);
 
-        Assert.True(model.Stacks.Count <= 20);
-        model.SetStack(1, int.MaxValue, ["C:\b.txt"]);
+        Assert.Single(model.Stacks);
         Assert.False(model.IsComplete);
     }
 

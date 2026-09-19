@@ -621,8 +621,57 @@ if ($dragEvents[0].Paths -notcontains $pressedPath) {
     throw "press-to-drag check FAILED: the drag carries $($dragEvents[0].Paths -join ', '), not the pressed path $pressedPath."
 }
 
+# --- and a press nothing on this control ever saw released must NOT become a drag ----------
+#
+# No mouse capture is taken, so a release OUTSIDE the window raises no event here at all, and a
+# drag out ends outside the window by definition. So a press survives every successful drag out
+# unless something else clears it, and the next down on anything that is not a tile, followed by
+# a move onto one, would start a drag from a press that never landed on a tile. ShelfSurface's
+# constructor clears on button-DOWN at the root for exactly this; what follows drives it.
+#
+# The control for this half is the half above: the SAME far point, on the same surface, through
+# the same method, raised a drag a moment ago. The only difference below is the non-tile down
+# between the press and the move. So a false here is the guard working rather than the check
+# having gone quiet - if the root clear were removed, this would raise and the assertion would
+# fail, and if the press mechanism itself broke, the half above would fail first.
+$pressedTile2 = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $pressedTile2) { throw "press-to-drag check: no tile to press a second time." }
+
+$down2 = [Windows.Input.MouseButtonEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice, 0, [Windows.Input.MouseButton]::Left)
+$down2.RoutedEvent = [Windows.UIElement]::PreviewMouseLeftButtonDownEvent
+$pressedTile2.RaiseEvent($down2)
+if ($pressRenders -ne 2) {
+    throw "press-to-drag check: the second press did not reach EntryPressed (renders: $pressRenders), " +
+          "so there is no live press for the non-tile down below to clear."
+}
+$rebuiltTile2 = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
+if (-not $rebuiltTile2) { throw "press-to-drag check: the tile is gone after the second render." }
+
+# A down that lands on this control but on no tile: the header, the Clear or new-stack button,
+# or the gap between two tiles. Raised on the root itself, which is the one element guaranteed
+# to be in the tunnelling route of every one of those and to run no BeginPress of its own.
+$nonTileDown = [Windows.Input.MouseButtonEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice, 0, [Windows.Input.MouseButton]::Left)
+$nonTileDown.RoutedEvent = [Windows.UIElement]::PreviewMouseLeftButtonDownEvent
+$shelfSurface.RaiseEvent($nonTileDown)
+if ($pressRenders -ne 2) {
+    throw "press-to-drag check: a down on the surface root reached EntryPressed, which it must " +
+          "not - it is the stand-in for a press that lands on no tile at all."
+}
+
+if ($shelfSurface.ContinuePress($rebuiltTile2, $pressedPath, $far)) {
+    throw "press-to-drag check FAILED: a move started a drag from a press this control never " +
+          "saw released. A drag out ends outside this window by definition, so that stale press " +
+          "is the ordinary aftermath of every successful one, and a drag from a press that did " +
+          "not land is the exact failure this branch exists because of."
+}
+if ($dragEvents.Count -ne 1) {
+    throw "press-to-drag check FAILED: DragOutRequested fired for a press that had been cleared " +
+          "(events: $($dragEvents.Count), expected 1)."
+}
+
 "  press-to-drag check passed: a press that re-rendered the shelf under itself still became a " +
-"drag on the rebuilt tile (threshold $hMin x $vMin honoured on both sides), carrying the pressed path."
+"drag on the rebuilt tile (threshold $hMin x $vMin honoured on both sides), carrying the pressed " +
+"path; and a press cleared by a down on no tile did NOT, at the same far point."
 
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------
