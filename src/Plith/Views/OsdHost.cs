@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -591,20 +591,37 @@ public sealed class OsdHost : BandWindow
         _log?.Warn("Shelf", $"Shelf unavailable: {why}");
     }
 
+    /// <summary>
+    /// Take the notch off screen for the catcher, WITHOUT moving or resizing it.
+    ///
+    /// SWP_NOMOVE and SWP_NOSIZE are load-bearing, not decoration. The four zeros are the
+    /// conventional filler for "I am not touching position or size", but that meaning lives in
+    /// the flags; without them the zeros are a real instruction and the window goes to 0,0.
+    /// Measured at the physical console on 2026-09-19: the shelf opened centred at 1088,0 and
+    /// the notch came back at 0,0, in the top-left corner, 1088 px from where it belongs, and
+    /// stayed there until the next Reposition happened to run. scripts/check-win32-flags.ps1
+    /// fails the build if either flag is dropped again.
+    /// </summary>
     private void HideForCatcher()
     {
-        if (Handle != 0) _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        if (Handle != 0)
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
     }
 
     /// <summary>
     /// Only back up if the notch has somewhere to be. While a window covers the monitor the
     /// resting state IS hidden, and re-showing here would put a permanently composited strip
     /// back over a game, the one thing the covered state exists to prevent.
+    ///
+    /// SWP_NOMOVE and SWP_NOSIZE for the same reason as HideForCatcher above: this call shows a
+    /// window, it does not place one. Without them it showed the notch in the top-left corner.
     /// </summary>
     private void RestoreNotch()
     {
         if (Handle != 0 && !_coversMonitor)
-            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOACTIVATE | SWP_SHOWWINDOW);
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
     }
 
     /// <summary>
