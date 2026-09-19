@@ -759,6 +759,78 @@ foreach ($dropProbe in $probes) {
 "reads as a new stack."
 
 
+# --- a tile answers a pointer ANYWHERE inside it ---------------------------------------------
+#
+# Why this exists, and why nothing above could have caught it. Every other check in this file
+# hands an event straight to the element it means: the press-to-drag check calls
+# $pressedTile.RaiseEvent($down), which is a press the tile receives BY CONSTRUCTION. Real input
+# arrives at a POINT, and the window decides which element that point belongs to. Those are
+# different questions, and the second one had never been asked here.
+#
+# Measured on hardware before this check was written (docs/SHELF-VERIFICATION.md 3.10): a click
+# at a tile's exact centre did nothing at all - no hover affordance, no selection, no press and
+# therefore no drag - while the same click on the tile's icon did all three. The tile Border
+# carried no Background, and WPF hit-tests a Transparent brush but NOT a null one, so only the
+# painted icon and label answered the pointer and the gaps between them fell through to whatever
+# was behind. ShelfWindow.xaml's own comment states that exact rule for the window's background;
+# the tile did not follow it.
+#
+# So this check asks the tree the question real input asks: given a point, which element is it?
+$findAnyTile = { param($n) $n -is [Windows.Controls.Border] -and
+    $n.Width -eq 64 -and $n.Height -eq 64 -and $null -ne $n.Child }
+$hitTiles = @(Find-VisualDescendants -Root $shelfSurface -Predicate $findAnyTile)
+if ($hitTiles.Count -eq 0) { throw "tile-hit check: no 64x64 tile Borders in the rendered surface." }
+
+function Test-HitReaches {
+    param([Windows.DependencyObject]$Hit, [Windows.DependencyObject]$Target)
+    $node = $Hit
+    while ($node) {
+        if ([object]::ReferenceEquals($node, $Target)) { return $true }
+        $node = try { [Windows.Media.VisualTreeHelper]::GetParent($node) } catch { $null }
+    }
+    $false
+}
+
+$hitFailures = @()
+foreach ($hitTile in $hitTiles) {
+    $w = $hitTile.ActualWidth; $h = $hitTile.ActualHeight
+    if ($w -le 0 -or $h -le 0) { throw "tile-hit check: a tile was never arranged ($w x $h)." }
+
+    # The centre, and the four points a quarter of the way in from each corner. The centre is the
+    # one a person aims at and was the measured failure; the quarter points cover the padding and
+    # the space either side of the label, which fail the same way for the same reason.
+    $hitPoints = @(
+        @{ Name = 'centre';       P = [Windows.Point]::new($w / 2, $h / 2) }
+        @{ Name = 'upper left';   P = [Windows.Point]::new($w / 4, $h / 4) }
+        @{ Name = 'upper right';  P = [Windows.Point]::new($w * 3 / 4, $h / 4) }
+        @{ Name = 'lower left';   P = [Windows.Point]::new($w / 4, $h * 3 / 4) }
+        @{ Name = 'lower right';  P = [Windows.Point]::new($w * 3 / 4, $h * 3 / 4) }
+    )
+    foreach ($hitPoint in $hitPoints) {
+        $inSurface = $hitTile.TranslatePoint($hitPoint.P, $shelfSurface)
+        $result = [Windows.Media.VisualTreeHelper]::HitTest($shelfSurface, $inSurface)
+        $name = [Windows.Automation.AutomationProperties]::GetName($hitTile)
+        if (-not $result) {
+            $hitFailures += "      '$name' $($hitPoint.Name): the point hit NOTHING at all."
+            continue
+        }
+        if (-not (Test-HitReaches -Hit $result.VisualHit -Target $hitTile)) {
+            $hitFailures += ("      '$name' $($hitPoint.Name): resolved to " +
+                "$($result.VisualHit.GetType().Name), which is not inside this tile.")
+        }
+    }
+}
+if ($hitFailures.Count -gt 0) {
+    throw ("tile-hit check FAILED: a pointer inside a tile does not reach that tile, so a hover, " +
+           "a click and the press a drag starts from are all dead there.`n" +
+           ($hitFailures -join "`n"))
+}
+
+"  tile-hit check passed: all five probe points inside each of the $($hitTiles.Count) tiles " +
+"resolve to that tile, so a hover, a press and a drag can start anywhere on one rather than only " +
+"where its icon or label happens to paint."
+
+
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a
 # clipped dots lane went unnoticed: the pages looked fine on their own.

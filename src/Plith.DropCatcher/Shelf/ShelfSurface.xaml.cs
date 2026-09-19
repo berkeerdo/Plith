@@ -860,6 +860,17 @@ public partial class ShelfSurface : UserControl
             // that reads as a ring rather than a coincidental extra pixel.
             BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
             BorderThickness = new Thickness(selected ? 1.5 : 0),
+            // TRANSPARENT, NOT NULL, and it is the difference between a tile that answers a
+            // pointer and one that does not. WPF hit-tests a Transparent brush but not a null
+            // one, so with no Background only the painted icon and label answered: a hover, a
+            // click and the press a drag starts from were all dead in the gaps between them,
+            // including the tile's exact centre, which is where a person aims. Measured on
+            // hardware (docs/SHELF-VERIFICATION.md 3.10) as a click at the centre doing nothing
+            // while the same click on the icon selected, showed the remove control and armed the
+            // press. ShelfWindow.xaml states this same rule for the window's own background; the
+            // tile did not follow it. render-widgets.ps1's tile-hit check now fails the build if
+            // this is removed, because no other check here asks which element a POINT belongs to.
+            Background = Brushes.Transparent,
             Padding = new Thickness(4),
             Cursor = Cursors.Hand,
             Child = overlay,
