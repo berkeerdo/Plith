@@ -66,7 +66,7 @@ public sealed class ShelfStore
     /// <summary>
     /// Stage everything in <paramref name="paths"/> that resolves to something on disk, newest
     /// first, joining the front stack. Raises <see cref="Changed"/> once for the batch, and not
-    /// at all when nothing was kept — a drop of three paths is one event, and a drop of nothing
+    /// at all when nothing was kept. A drop of three paths is one event, and a drop of nothing
     /// is none.
     /// </summary>
     public void Add(IEnumerable<string> paths)

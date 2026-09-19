@@ -23,6 +23,10 @@ public sealed class ShelfModel
     // of a set declares, rather than growing it by appending as messages happen to arrive, is
     // what makes SetStack place a stack at the index it was given instead of wherever it landed
     // in arrival order. See SetStack for why arrival order cannot be trusted at all.
+    /// <summary>The most stacks a single delivery may declare. See <see cref="SetStack"/> for
+    /// why a cap is needed at all and why this is the number.</summary>
+    private const int MaxStacks = 20;
+
     private readonly List<List<ShelfEntry>?> _slots = [];
     private readonly HashSet<string> _selection = new(StringComparer.OrdinalIgnoreCase);
     private int _expected = -1;
@@ -73,6 +77,22 @@ public sealed class ShelfModel
     {
         if (index <= 0)
         {
+            // CLAMPED, because this number arrives over a pipe whose name is deterministic and
+            // whose ACL is open to Everyone by necessity, so any local process can write to it -
+            // and can squat the name outright before Plith starts. Allocating `total` slots on a
+            // stranger's say-so turns one 24-byte line into an out-of-memory kill of the catcher,
+            // which is the process holding the shelf, the notch's stand-in and the pipe.
+            //
+            // 20 is not a taste: ShelfStore.MaxItems is 20 across the whole shelf and a stack
+            // that has never held an item is discarded when the surface closes, so 20 stacks is
+            // the most Plith can ever legitimately send. The surface draws five
+            // (ShelfSurface.VisibleColumns), so anything past the cap was invisible anyway.
+            // A message over the cap is TRUNCATED rather than rejected: _expected then disagrees
+            // with the `total` every sibling message carries, so the else-branch below refuses
+            // all of them and a hostile set assembles nothing instead of assembling something
+            // plausible and wrong.
+            total = Math.Min(total, MaxStacks);
+
             _expected = total;
             _slots.Clear();
             for (var i = 0; i < total; i++) _slots.Add(null);

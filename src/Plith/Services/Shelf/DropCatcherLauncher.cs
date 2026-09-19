@@ -101,10 +101,21 @@ public static class DropCatcherLauncher
     /// </summary>
     public static CatcherStart EnsureRunning(DiagnosticLog? log = null)
     {
-        if (Process.GetProcessesByName(ProcessName).Length > 0)
+        // Disposed, as FindProcessId already does with its own array: every Process handed back
+        // by GetProcessesByName holds a native handle, and the shelf opens this often enough for
+        // "one handle per open" to be a leak rather than a tidiness point.
+        var running = Process.GetProcessesByName(ProcessName);
+        try
         {
-            log?.Info("Shelf", "Drop catcher is already running.");
-            return CatcherStart.AlreadyRunning;
+            if (running.Length > 0)
+            {
+                log?.Info("Shelf", "Drop catcher is already running.");
+                return CatcherStart.AlreadyRunning;
+            }
+        }
+        finally
+        {
+            foreach (var process in running) process.Dispose();
         }
 
         var directory = Path.GetDirectoryName(Environment.ProcessPath);

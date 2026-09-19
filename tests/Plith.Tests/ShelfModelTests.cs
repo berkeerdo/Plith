@@ -146,6 +146,29 @@ public sealed class ShelfModelTests
         Assert.Equal("C:\\c.txt", Assert.Single(model.Stacks)[0].Path);
     }
 
+    /// <summary>
+    /// The pipe's name is deterministic and its ACL is open to Everyone by necessity, so any
+    /// local process can write an Items line, and can squat the name before Plith starts. A
+    /// `total` taken at face value is one short line that allocates until the catcher dies, and
+    /// the catcher is the process holding the shelf, the notch's stand-in and the pipe.
+    ///
+    /// Two assertions, because the cap alone would not be enough: the oversized message must
+    /// also fail to ASSEMBLE. Truncating it leaves _expected disagreeing with the total every
+    /// sibling message carries, so the siblings are refused and a hostile set builds nothing,
+    /// rather than building something plausible and wrong.
+    /// </summary>
+    [Fact]
+    public void SetStack_WithAHostileStackCountIsClampedAndAssemblesNothing()
+    {
+        var model = new ShelfModel();
+
+        model.SetStack(0, int.MaxValue, ["C:\a.txt"]);
+
+        Assert.True(model.Stacks.Count <= 20);
+        model.SetStack(1, int.MaxValue, ["C:\b.txt"]);
+        Assert.False(model.IsComplete);
+    }
+
     private static ShelfModel Loaded()
     {
         var model = new ShelfModel();
