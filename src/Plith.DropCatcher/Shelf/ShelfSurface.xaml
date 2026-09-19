@@ -115,13 +115,30 @@
                  drop past the last stack has to land somewhere too (it means "start a new
                  stack"), and there is no column there to carry the flag. OnColumnsDrop works
                  out which column, if any, the drop point actually fell inside. -->
-            <StackPanel x:Name="Columns"
-                        Grid.Row="1"
-                        Orientation="Horizontal"
-                        VerticalAlignment="Top"
-                        AllowDrop="True"
-                        DragOver="OnColumnsDragOver"
-                        Drop="OnColumnsDrop" />
+            <!-- The host is what catches the drop; Columns is what the eye sees.
+
+                 They are two elements because they want opposite widths. Columns is centred, so
+                 a shelf holding two stacks sits in the middle of the panel instead of hugging
+                 the left edge with the rest of the card empty beside it. But the drop target has
+                 to stay the FULL width: releasing a tile in the empty area past the last stack is
+                 how a new stack is made, and a panel shrunk to its content would stop receiving
+                 exactly the release that gesture needs.
+
+                 So the handlers live out here and report positions in the host's coordinates.
+                 TargetStackIndex translates each column into the same space, which is the only
+                 reason it can still decide which column, if any, a point fell inside. -->
+            <Grid x:Name="ColumnsHost"
+                  Grid.Row="1"
+                  VerticalAlignment="Top"
+                  Background="Transparent"
+                  AllowDrop="True"
+                  DragOver="OnColumnsDragOver"
+                  Drop="OnColumnsDrop">
+                <StackPanel x:Name="Columns"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top" />
+            </Grid>
         </Grid>
     </Border>
 </UserControl>

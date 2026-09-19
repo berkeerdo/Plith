@@ -185,21 +185,52 @@ public partial class ShelfWidget : UserControl
             // The page is present even when empty, so the empty state has to earn the space. A
             // sentence rather than a blank: this is the only place the product ever says that a
             // file can be dropped on the notch, and nobody discovers that on their own.
-            Tiles.Children.Add(new TextBlock
+            //
+            // And a SHAPE around the sentence, not the sentence alone. Told on hardware that the
+            // empty page reads as bare, and the reason it does is that it instructs without
+            // showing: "drop files here" with no "here" drawn anywhere. A dashed outline is the
+            // here. It is not a drop target of its own and does not need to be, since the drop
+            // lands on the notch itself and never on this page.
+            var message = new TextBlock
             {
                 Text = "Drop files on the notch to keep them here",
                 FontSize = 12,
-                Width = 300,
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                Foreground = (Brush)FindResource("NotchInk"),
+                Foreground = (Brush)FindResource("NotchInkMuted"),
+                HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 250,
+            };
+
+            var outline = new System.Windows.Shapes.Rectangle
+            {
+                RadiusX = 10,
+                RadiusY = 10,
+                Stroke = (Brush)FindResource("NotchTrack"),
+                StrokeThickness = 1,
+                StrokeDashArray = [4, 4],
+                Fill = Brushes.Transparent,
+            };
+
+            var empty = new Grid
+            {
+                Width = 300,
+                // The row's own height, so an empty page occupies exactly what a full one does
+                // and the frame does not resize between the two.
                 Height = TileHeight,
-                // The top padding is what centres two wrapped lines in a fixed-height block;
-                // TextBlock has no vertical alignment of its own content. It tracks TileHeight
-                // because it is the tile row's height that this stands in for.
-                Padding = new Thickness(0, 22, 0, 0),
-            });
+                HorizontalAlignment = HorizontalAlignment.Center,
+                // Centred in the taller box an empty page gets. The hint line under the row is
+                // collapsed while the shelf is empty (see above), so this row's star track is the
+                // whole 82 DIP content box rather than the 68 a full row leaves it, and Tiles is
+                // top-aligned. Half of that 14 DIP difference, so the outline sits in the middle
+                // of the page instead of hanging from its top edge.
+                Margin = new Thickness(0, 7, 0, 0),
+            };
+            empty.Children.Add(outline);
+            empty.Children.Add(message);
+
+            Tiles.Children.Add(empty);
             AutomationProperties.SetName(Tiles, "Shelf, empty. Drop files on the notch to keep them here.");
             return;
         }
@@ -223,7 +254,7 @@ public partial class ShelfWidget : UserControl
 
     private Border BuildTile(ShelfItem item, bool last)
     {
-        var icon = new System.Windows.Shapes.Path
+        var glyph = new System.Windows.Shapes.Path
         {
             Data = (Geometry)FindResource(item.IsDirectory ? "IconFolder" : "IconDocument"),
             Stroke = (Brush)FindResource("NotchInk"),
@@ -234,6 +265,56 @@ public partial class ShelfWidget : UserControl
             Height = 22,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
+
+        // The icon host, so the extension can sit inside the page of the document glyph.
+        //
+        // Why this page does not simply show the shell's own icon, the way the catcher's surface
+        // does: extracting one loads the icon handler the extension is registered to, which is
+        // third-party code chosen by the shell. Plith runs UIAccess-signed at High integrity and
+        // is precisely the process that must not load an arbitrary shell extension. ShellIcons'
+        // own header states this, and it is the reason the two surfaces differ at all.
+        //
+        // So the difference is closed the other way. Four identical document outlines told a
+        // person nothing about which file was which, and the names beside them are trimmed
+        // ("invoice-2...") exactly when the extension would have been most useful. Drawing the
+        // extension inside the glyph recovers the information the trim took away, and it does it
+        // with the real type rather than a category guessed from it.
+        var icon = new Grid { Width = 22, Height = 22, HorizontalAlignment = HorizontalAlignment.Center };
+        icon.Children.Add(glyph);
+
+        if (!item.IsDirectory && ExtensionTag(item.Name) is { } tag)
+        {
+            var text = new TextBlock
+            {
+                Text = tag,
+                // Muted, so the tag reads as a property of the icon rather than as a second
+                // label competing with the file name under it.
+                FontSize = 6.5,
+                FontWeight = FontWeights.SemiBold,
+                Foreground = (Brush)FindResource("NotchInkMuted"),
+            };
+
+            // A Viewbox rather than a font size chosen per tag length, because the first attempt
+            // WAS a fixed size and the render showed "XLSX" hanging outside the document outline
+            // on both sides. DownOnly means a three-character tag keeps its natural 6.5 and only
+            // a tag too wide for the page shrinks; the alternative was a table of sizes by length,
+            // which is the same magic number written four times.
+            icon.Children.Add(new Viewbox
+            {
+                Child = text,
+                // 10.5, and the number is measured rather than chosen. The document glyph is
+                // drawn Uniform into 22 x 22 and a document is taller than it is wide, so its
+                // body comes out about 15 DIP across; two 1.4 DIP strokes leave about 12 inside,
+                // and a tag wants a little air on each side of that. 13 was the first value and a
+                // magnified crop of the render showed "XLSX" cut by the outline on both edges.
+                Width = 10.5,
+                Stretch = Stretch.Uniform,
+                StretchDirection = StretchDirection.DownOnly,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Bottom,
+                Margin = new Thickness(0, 0, 0, 3.5),
+            });
+        }
 
         var label = new TextBlock
         {
@@ -282,31 +363,55 @@ public partial class ShelfWidget : UserControl
     /// the one place the shelf's cap becomes visible: the store keeps twenty and this is what
     /// admits to the other fifteen.
     /// </summary>
+    /// <summary>
+    /// The count of what the row is not showing, weighted as a count rather than as a file.
+    ///
+    /// It was "+4" at 20 point over the word "more", both in full ink, inside a tile the same
+    /// size as the ones holding real files. Looked at on hardware for the first time, the eye
+    /// takes that for a fifth file. It is the opposite: the statement that files exist which this
+    /// row does NOT draw.
+    ///
+    /// One muted line now, and the SLOT keeps its full width so the four tiles beside it do not
+    /// move. The full sentence stays in the tooltip and in the automation name, so nothing is
+    /// lost to a screen reader by the word "more" leaving the screen.
+    ///
+    /// The old comment here argued for full ink because the muted brush was the faintest thing on
+    /// a lighter TRACK tile. That tile is gone (see Tile, which no longer fills a chip), so the
+    /// muted brush now sits on the panel it was calibrated against.
+    /// </summary>
     private Border BuildOverflowTile(int hidden)
     {
         var count = new TextBlock
         {
             Text = string.Create(CultureInfo.CurrentCulture, $"+{hidden}"),
-            FontSize = 20,
+            FontSize = 13,
             FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("NotchInk"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-
-        var label = new TextBlock
-        {
-            Text = "more",
-            FontSize = 10,
-            Margin = new Thickness(0, 4, 0, 0),
-            // Full ink, like the file names beside it and for the same reason: the muted brush is
-            // calibrated against the panel, and on the lighter track tile it was the faintest
-            // thing on the page in both themes.
-            Foreground = (Brush)FindResource("NotchInk"),
+            Foreground = (Brush)FindResource("NotchInkMuted"),
             HorizontalAlignment = HorizontalAlignment.Center,
         };
 
         var announced = string.Create(CultureInfo.CurrentCulture, $"{hidden} more item{(hidden == 1 ? "" : "s")}");
-        return Tile([count, label], last: true, tooltip: announced, announced: announced);
+        return Tile([count], last: true, tooltip: announced, announced: announced);
+    }
+
+    /// <summary>
+    /// The extension to draw inside a document glyph, or null when there is nothing worth
+    /// drawing.
+    ///
+    /// Null rather than an empty string for three cases that all mean "no useful tag": a name
+    /// with no dot at all, a dotfile whose whole name is its suffix (".gitignore" has no
+    /// extension, it has a name), and anything longer than four characters, which would not fit
+    /// inside the glyph and would be trimmed into a lie.
+    /// </summary>
+    private static string? ExtensionTag(string name)
+    {
+        // Fully qualified: this file draws with System.Windows.Shapes.Path, so a bare `Path`
+        // here would mean the shape, not the path helper.
+        var extension = System.IO.Path.GetExtension(name);
+        if (extension.Length is < 2 or > 5) return null;                 // ".a" is 2, ".webp" is 5
+        if (System.IO.Path.GetFileNameWithoutExtension(name).Length == 0) return null;
+
+        return extension[1..].ToUpperInvariant();
     }
 
     /// <summary>

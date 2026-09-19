@@ -399,16 +399,44 @@ public partial class ShelfSurface : UserControl
         {
             // The page is reachable even when nothing has ever been dropped, so the empty state
             // has to earn its space rather than leave a blank card behind the header.
-            Columns.Children.Add(new TextBlock
+            //
+            // The sentence inside a dashed outline, matching ShelfWidget's empty page on the
+            // notch: the two are the same product and a person meets them minutes apart. A
+            // sentence with no shape around it instructs without showing where, which is what
+            // both of these did and what made the empty shelf read as unfinished.
+            var message = new TextBlock
             {
                 Text = "Drop files on the notch to keep them here",
                 FontSize = 12,
-                Width = VisibleColumns * TileSize + (VisibleColumns - 1) * Gap,
                 TextWrapping = TextWrapping.Wrap,
                 TextAlignment = TextAlignment.Center,
-                Foreground = (Brush)FindResource("NotchInk"),
-                Margin = new Thickness(0, 36, 0, 0),
-            });
+                Foreground = (Brush)FindResource("NotchInkMuted"),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+                MaxWidth = 240,
+            };
+
+            var outline = new Rectangle
+            {
+                RadiusX = 10,
+                RadiusY = 10,
+                Stroke = (Brush)FindResource("NotchTrack"),
+                StrokeThickness = 1,
+                StrokeDashArray = [4, 4],
+                Fill = Brushes.Transparent,
+            };
+
+            var empty = new Grid
+            {
+                Width = VisibleColumns * TileSize + (VisibleColumns - 1) * Gap,
+                // The tile grid's own height, caption band included, so the empty card is the
+                // same size as a full one and the shape does not jump when the first file lands.
+                Height = CaptionHeight + VisibleRows * TileSize + (VisibleRows - 1) * Gap,
+            };
+            empty.Children.Add(outline);
+            empty.Children.Add(message);
+
+            Columns.Children.Add(empty);
             // Named on THIS control, not on Columns: Columns is a StackPanel, and WPF gives a
             // StackPanel no automation peer at all, so a name set on one reaches nothing (see
             // NamedBorder's own header comment for the review that caught this same defect on
@@ -432,8 +460,23 @@ public partial class ShelfSurface : UserControl
         for (var i = 0; i < shown; i++)
         {
             if (i > 0) Columns.Children.Add(BuildSeparator());
-            Columns.Children.Add(BuildColumn(i, stacks[i], model.Selection));
+
+            // The caption names WHICH stack, so it has nothing to say when there is only one.
+            // "Stack 1" over a lone column is a label for a distinction the person cannot see.
+            Columns.Children.Add(BuildColumn(i, stacks[i], model.Selection, captioned: shown > 1));
         }
+
+        // The room past the last stack, drawn rather than left blank.
+        //
+        // Two stacks used about 45 % of a 384 DIP panel and the rest was void, which reads as a
+        // page that failed to finish rendering. It is not spare room: TargetStackIndex already
+        // resolves a drop anywhere past the last column to Stacks.Count, which ShelfStore.Restack
+        // treats as "make a new stack". So the gesture was there and nothing on screen said so.
+        //
+        // Drawing it costs no logic. The zone carries no int Tag, and TargetStackIndex skips
+        // every child whose Tag is not an int, so a drop on it still falls through to the same
+        // default it always did.
+        if (shown < VisibleColumns) Columns.Children.Add(BuildNewStackZone());
 
         // On THIS control, not on Columns - see the empty branch above for why.
         AutomationProperties.SetName(this, string.Create(CultureInfo.CurrentCulture,
@@ -536,7 +579,10 @@ public partial class ShelfSurface : UserControl
     {
         if (e.Data.GetData(ShelfDragFormat) is not IReadOnlyList<string> paths) return;
 
-        RestackRequested?.Invoke(TargetStackIndex(e.GetPosition(Columns)), paths);
+        // ColumnsHost, not Columns: Columns is centred and therefore narrower than the area a
+        // release can land in. The host is the full-width element the handler is attached to, and
+        // TargetStackIndex translates the columns into the same space.
+        RestackRequested?.Invoke(TargetStackIndex(e.GetPosition(ColumnsHost)), paths);
         e.Handled = true;
     }
 
@@ -557,12 +603,96 @@ public partial class ShelfSurface : UserControl
         {
             if (column.Tag is not int index) continue;
 
-            var topLeft = column.TranslatePoint(new Point(0, 0), Columns);
+            // Into ColumnsHost's space, which is where the drop handler reports its positions.
+            // Columns itself is centred inside the host, so translating into Columns would put
+            // the column bounds in one coordinate system and the point in another, and every
+            // drop would resolve to a column shifted left by half the leftover width.
+            var topLeft = column.TranslatePoint(new Point(0, 0), ColumnsHost);
             var bounds = new Rect(topLeft, column.RenderSize);
             if (position.X >= bounds.Left && position.X < bounds.Right) return index;
         }
 
         return _lastModel?.Stacks.Count ?? 0;
+    }
+
+    /// <summary>
+    /// Where a tile dropped past the last stack lands, drawn so the gesture can be found.
+    ///
+    /// Deliberately NOT a drop target of its own: it carries no int Tag, so
+    /// <see cref="TargetStackIndex"/> skips it exactly like the separators, and a release over it
+    /// falls through to that method's default of Stacks.Count. The zone is a picture of an
+    /// existing behaviour, not a second implementation of it, which is why adding it could not
+    /// change what a drop does.
+    ///
+    /// Dashed and muted on purpose. It has to read as an outline waiting to be filled rather than
+    /// as an empty stack that already exists, and the difference between those two readings is
+    /// the whole reason it is drawn rather than filled.
+    /// </summary>
+    private Grid BuildNewStackZone()
+    {
+        // One column wide, the same as any stack.
+        //
+        // The first version stretched it across everything the stacks left over, so that no part
+        // of the card was blank. Looked at on screen, a 208 DIP dashed box beside two 64 DIP
+        // columns does not read as a balanced card; it reads as one enormous empty box with some
+        // files parked to its left. Reported exactly that way.
+        //
+        // Filling the leftover and centring the row are also mutually exclusive: a row that
+        // always spans the full width has nothing left to centre. Centred, with the zone as just
+        // another column, the leftover space falls symmetrically on both sides, and symmetric
+        // space reads as composition where one-sided space reads as a rendering that gave up.
+        // The area past the zone is still a drop target - see ColumnsHost in the XAML.
+        var width = TileSize;
+        var height = VisibleRows * TileSize + (VisibleRows - 1) * Gap;
+
+        // A Rectangle rather than the Border's own BorderThickness, for one reason: a Border
+        // cannot draw a dashed edge, and solid is the wrong word here. A solid outline reads as
+        // an empty stack that already exists; dashed reads as an outline waiting to be filled,
+        // which is what this is. The first version of this used a Border and looked like the
+        // former on the very first render.
+        var outline = new Rectangle
+        {
+            RadiusX = 8,
+            RadiusY = 8,
+            Stroke = (Brush)FindResource("NotchTrack"),
+            StrokeThickness = 1,
+            StrokeDashArray = [4, 4],
+            Fill = Brushes.Transparent,
+        };
+
+        var plus = new Path
+        {
+            // The same coordinates the header's own plus button draws in XAML. Duplicated for the
+            // reason that file's header comment already gives for duplicating IconPlus at all:
+            // this project does not link Plith's icon dictionary.
+            Data = CreateIcon("M12,5.5 L12,18.5 M5.5,12 L18.5,12"),
+            Stroke = (Brush)FindResource("NotchInkMuted"),
+            StrokeThickness = 1.4,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+            Stretch = Stretch.Uniform,
+            Width = 14,
+            Height = 14,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var zone = new Grid
+        {
+            Width = width,
+            Height = height,
+            // Pushed down past the caption band so its box lines up with the TILES beside it
+            // rather than with the captions, which is what makes it read as a column-shaped slot.
+            // The band is present whether or not a caption speaks in it (see BuildColumn), so
+            // this offset is the same on a one-stack shelf as on a four-stack one.
+            Margin = new Thickness(Gap, CaptionHeight, 0, 0),
+            VerticalAlignment = VerticalAlignment.Top,
+            ToolTip = "Drop here to start a new stack",
+        };
+        zone.Children.Add(outline);
+        zone.Children.Add(plus);
+
+        return zone;
     }
 
     /// <summary>
@@ -606,13 +736,17 @@ public partial class ShelfSurface : UserControl
     /// OsdSurfaceBrush/NotchInkMuted pair for this file a real measurement of shipped code rather
     /// than a check written against a colour nothing draws.
     /// </summary>
-    private NamedBorder BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
+    private NamedBorder BuildColumn(int index, IReadOnlyList<ShelfEntry> stack,
+        IReadOnlyCollection<string> selection, bool captioned)
     {
         var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top };
 
+        // The band is kept whether or not the caption speaks, so the tiles sit at the same height
+        // on a one-stack shelf as on a five-stack one, and BuildSeparator's height (which is
+        // CaptionHeight plus the tile grid) keeps describing the column it is drawn beside.
         var caption = new TextBlock
         {
-            Text = string.Create(CultureInfo.CurrentCulture, $"Stack {index + 1}"),
+            Text = captioned ? string.Create(CultureInfo.CurrentCulture, $"Stack {index + 1}") : string.Empty,
             FontSize = 9,
             Height = CaptionHeight - 2,
             Foreground = (Brush)FindResource("NotchInkMuted"),
@@ -940,45 +1074,58 @@ public partial class ShelfSurface : UserControl
     /// once, and ShelfModel has no such operation. Same reason ShelfWidget's own overflow
     /// tile carries no press handler either.
     /// </summary>
+    /// <summary>
+    /// The count of what this column is not showing, as a chip rather than a tile.
+    ///
+    /// It used to be a full 64 x 64 tile carrying "+4" at 18 point over the word "more", in the
+    /// same ink as a file name. At that weight the eye reads it as a fourth FILE, which is the
+    /// one thing it must not be: it is the statement that files exist which are not drawn here.
+    /// Reported from the first look at this surface on real hardware.
+    ///
+    /// A chip instead: the column's width, a quarter of its height, muted ink on the track
+    /// colour. Shrinking it does not disturb keyboard navigation, which counts rows through
+    /// <see cref="VisibleRowsShown"/> rather than measuring them, and the count tile was never
+    /// reachable by an arrow key in the first place.
+    ///
+    /// "+4" alone on screen, with the whole sentence in the tooltip and in the automation name.
+    /// The word "more" earns nothing beside a number that is already prefixed with a plus, and
+    /// dropping it is what lets the chip be one line.
+    /// </summary>
     private NamedBorder BuildOverflowTile(int hidden)
     {
         var count = new TextBlock
         {
             Text = string.Create(CultureInfo.CurrentCulture, $"+{hidden}"),
-            FontSize = 18,
+            FontSize = 11,
             FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("NotchInk"),
+            Foreground = (Brush)FindResource("NotchInkMuted"),
             HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
         };
-
-        var label = new TextBlock
-        {
-            Text = "more",
-            FontSize = 10,
-            Margin = new Thickness(0, 2, 0, 0),
-            Foreground = (Brush)FindResource("NotchInk"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-        };
-
-        var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(count);
-        content.Children.Add(label);
 
         var announced = string.Create(CultureInfo.CurrentCulture,
             $"{hidden} more item{(hidden == 1 ? "" : "s")} in this stack");
 
-        var tile = new NamedBorder
+        // No fill behind it, for the reason ShelfWidget.Tile already records for its own tiles:
+        // NotchTrack is built by ContrastInk.TrackOn and targets 3:1, which is a NON-TEXT
+        // threshold, while NotchInk and NotchInkMuted are derived against the PANEL. Text on the
+        // track is text measured against the wrong surface.
+        //
+        // It also settles a mismatch between this window and the notch page, which a person meets
+        // minutes apart: the page states its own count as muted text on the panel, and a filled
+        // lozenge here said the same thing in a different language. Rendered in the light theme,
+        // the fill read as a grey slug on a pale panel, which is what made the difference obvious.
+        var chip = new NamedBorder
         {
             Width = TileSize,
-            Height = TileSize,
-            CornerRadius = new CornerRadius(8),
-            Padding = new Thickness(4),
-            Child = content,
+            Height = 20,
+            Margin = new Thickness(0, 4, 0, 0),
+            Child = count,
             ToolTip = announced,
         };
-        AutomationProperties.SetName(tile, announced);
+        AutomationProperties.SetName(chip, announced);
 
-        return tile;
+        return chip;
     }
 
     private static SolidColorBrush Solid(Color color)

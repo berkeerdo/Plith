@@ -673,6 +673,88 @@ if ($dragEvents.Count -ne 1) {
 "drag on the rebuilt tile (threshold $hMin x $vMin honoured on both sides), carrying the pressed " +
 "path; and a press cleared by a down on no tile did NOT, at the same far point."
 
+# --- the drop target still resolves, after the row was centred -------------------------------
+#
+# Why this exists: Columns used to span the full width of the card and catch its own drops. It is
+# now centred inside a full-width ColumnsHost, which catches them instead, and TargetStackIndex
+# translates each column into the HOST's space rather than the panel's. Those are two coordinate
+# systems that agreed exactly while the panel was full width, and stopped agreeing the moment it
+# was not: translating into the centred panel while the point came from the host would have
+# shifted every column left by half the leftover width, quietly restacking onto the wrong one.
+#
+# Nothing else can see that. It compiles, the control renders correctly in every saved image, and
+# the press-to-drag check above passes because it never asks WHERE a release landed. This branch
+# has already lost the drag gesture once to a change that looked purely visual.
+$targetStackIndex = [Plith.DropCatcher.Shelf.ShelfSurface].GetMethod(
+    'TargetStackIndex', [Reflection.BindingFlags]'NonPublic, Instance')
+if (-not $targetStackIndex) { throw "drop-target check: TargetStackIndex is not where this check expects it." }
+
+$columnsHost = $shelfSurface.FindName('ColumnsHost')
+$columnsPanel = $shelfSurface.FindName('Columns')
+if (-not $columnsHost -or -not $columnsPanel) { throw "drop-target check: ColumnsHost or Columns is missing." }
+
+# A REAL layout pass, in a host, because the press-to-drag check above ended with a Render and
+# nothing has arranged the tree since. TargetStackIndex reads each column's RenderSize, and a
+# Border that was built but never arranged reports 0 x 0, so every probe falls past every column
+# and resolves to "new stack". That is what the first run of this check reported, and the dump it
+# printed said so precisely: every child at left=71, size=0x0.
+#
+# Measure/Arrange/UpdateLayout called directly on the surface do NOT fix it. Save-Visual detaches
+# the element when it is done (see its own comment for why), and a detached element with no
+# PresentationSource does not run a layout pass on request. Parenting it the same way Save-Visual
+# does is what actually arranges the children - the second thing tried, after the first was
+# measured and found not to work rather than assumed to.
+$layoutHost = [Windows.Controls.Border]::new()
+$layoutHost.Width = $shelfSurfaceW
+$layoutHost.Height = $shelfSurfaceH
+$layoutHost.Child = $shelfSurface
+$layoutHost.Measure([Windows.Size]::new($shelfSurfaceW, $shelfSurfaceH))
+$layoutHost.Arrange([Windows.Rect]::new(0, 0, $shelfSurfaceW, $shelfSurfaceH))
+$layoutHost.UpdateLayout()
+
+# PRECONDITION: the row really is narrower than the area that catches drops. Without this the
+# check below would pass just as happily on a layout that never got centred at all.
+$hostWidth = $columnsHost.ActualWidth
+$rowWidth = $columnsPanel.ActualWidth
+if ($hostWidth -le 0 -or $rowWidth -le 0) { throw "drop-target check: nothing was laid out (host $hostWidth, row $rowWidth)." }
+if ($rowWidth -ge $hostWidth) {
+    throw "drop-target check: the row is not centred - it is $rowWidth wide inside a $hostWidth host, so there is no leftover space and this check proves nothing."
+}
+
+$rowLeft = $columnsPanel.TranslatePoint([Windows.Point]::new(0, 0), $columnsHost).X
+$stackCount = $surfaceModel.Stacks.Count
+
+# Middle of the first column, middle of the second, and both margins. The columns are TileSize
+# wide with a Gap-wide separator between them, which is the same arithmetic BuildColumn uses.
+$tile = 64.0; $gap = 8.0
+$probes = @(
+    @{ Name = 'inside the first column';  X = $rowLeft + ($tile / 2);                 Expect = 0 }
+    @{ Name = 'inside the second column'; X = $rowLeft + $tile + $gap + ($tile / 2);  Expect = 1 }
+    @{ Name = 'the margin left of the row';  X = [Math]::Max(1.0, $rowLeft / 2);      Expect = $stackCount }
+    @{ Name = 'the margin right of the row'; X = $hostWidth - 2;                      Expect = $stackCount }
+)
+
+foreach ($probe in $probes) {
+    $point = [Windows.Point]::new($probe.X, 40)
+    $got = $targetStackIndex.Invoke($shelfSurface, @([object]$point))
+    if ($got -ne $probe.Expect) {
+        $dump = @()
+        foreach ($child in $columnsPanel.Children) {
+            $tagText = if ($null -eq $child.Tag) { '<none>' } else { "$($child.Tag) [$($child.Tag.GetType().Name)]" }
+            $left = try { $child.TranslatePoint([Windows.Point]::new(0,0), $columnsHost).X } catch { 'n/a' }
+            $dump += "      $($child.GetType().Name) tag=$tagText left=$left size=$($child.RenderSize.Width)x$($child.RenderSize.Height)"
+        }
+        throw ("drop-target check: a release at $($probe.Name) (x=$([Math]::Round($probe.X,1))) resolved to stack $got, expected $($probe.Expect).`n" +
+               "    row left=$rowLeft rowWidth=$rowWidth hostWidth=$hostWidth`n" +
+               "    children:`n" + ($dump -join "`n"))
+    }
+}
+
+"  drop-target check passed: the row is $([Math]::Round($rowWidth)) DIP centred in a " +
+"$([Math]::Round($hostWidth)) DIP drop area, a release over each column resolves to that column, " +
+"and a release in either margin resolves to $stackCount, which is the index ShelfStore.Restack " +
+"reads as a new stack."
+
 
 # --- the whole frame, so the page dots are actually in shot --------------------------------
 # Rendering a page alone shows the page and nothing of the chrome around it, which is how a
