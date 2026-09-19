@@ -124,7 +124,7 @@ The surface is built against this model, so it goes first. Built afterwards, the
 - Consumes: nothing.
 - Produces: `ShelfStore.Stacks -> IReadOnlyList<IReadOnlyList<ShelfItem>>` (front stack first, newest item first within a stack); `ShelfStore.Items -> IReadOnlyList<ShelfItem>` (unchanged shape, now the flattening of `Stacks` in order); `ShelfStore.Add(IEnumerable<string>)` (unchanged signature, now joins the front stack); `ShelfStore.RemoveMany(IEnumerable<string>)`; `ShelfStore.NewStack()`; `ShelfStore.Restack(int targetStackIndex, IEnumerable<string> paths)`; `ShelfStore.PruneEmptyStacks()`. `Remove(string)` and `Clear()` keep their signatures.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/Plith.Tests/ShelfStoreTests.cs`:
 
@@ -284,12 +284,12 @@ public void Load_ReadsAPreStacksFileAsASingleStack()
 }
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfStoreTests -v q -m:1`
 Expected: FAIL to compile, `Stacks`, `NewStack`, `Restack`, `RemoveMany` and `PruneEmptyStacks` do not exist.
 
-- [ ] **Step 3: Rework `ShelfStore` around a list of stacks**
+- [x] **Step 3: Rework `ShelfStore` around a list of stacks**
 
 Replace the `private readonly List<ShelfItem> _items = [];` field and the members that use it. Keep `TryResolve`, `MaxItems`, `DefaultStorePath` and the constructors exactly as they are.
 
@@ -436,7 +436,7 @@ Replace the `private readonly List<ShelfItem> _items = [];` field and the member
     }
 ```
 
-- [ ] **Step 4: Rework `Save` and `Load` for the blank-line format**
+- [x] **Step 4: Rework `Save` and `Load` for the blank-line format**
 
 ```csharp
     /// <summary>
@@ -508,17 +508,17 @@ Replace the `private readonly List<ShelfItem> _items = [];` field and the member
 
 Add `using System.Linq;` if the file does not already have it through implicit usings.
 
-- [ ] **Step 5: Run the tests and watch them pass**
+- [x] **Step 5: Run the tests and watch them pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfStoreTests -v q -m:1`
 Expected: PASS, including the tests that existed before this task.
 
-- [ ] **Step 6: Run the whole suite**
+- [x] **Step 6: Run the whole suite**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: PASS. `ShelfWidget` reads `Items`, whose shape did not change.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf/ShelfStore.cs tests/Plith.Tests/ShelfStoreTests.cs
@@ -540,7 +540,7 @@ git commit -m "feat(shelf): keep stacks that do not mix, and a file still readab
 - Consumes: `DropMessage`, `DropChannel.Encode`, `DropChannel.TryDecode` as they exist.
 - Produces: `DropVerb` gains `OpenShelf, Items, Palette, RemoveItems, ClearShelf, NewStack, Restack, ShelfClosed`; `ShelfPalette(Color SurfaceStart, Color SurfaceEnd, Color Ink, Color InkMuted, Color Track, Color Accent, bool IsDark)`; `ShelfPaletteWire.ToPaths(ShelfPalette) -> IReadOnlyList<string>`; `ShelfPaletteWire.TryFromPaths(IReadOnlyList<string>, out ShelfPalette) -> bool`.
 
-- [ ] **Step 1: Write the failing tests for the verbs**
+- [x] **Step 1: Write the failing tests for the verbs**
 
 Add to `tests/Plith.Tests/DropChannelTests.cs`:
 
@@ -602,12 +602,12 @@ public void TryDecode_RejectsAVerbThatIsNotOneOfOurs(string line)
     => Assert.False(DropChannel.TryDecode(line, out _));
 ```
 
-- [ ] **Step 2: Run them and watch them fail**
+- [x] **Step 2: Run them and watch them fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: FAIL to compile on the new verb names, and the numeric-verb theory fails once it does compile.
 
-- [ ] **Step 3: Add the verbs, and reject the ones that are not ours**
+- [x] **Step 3: Add the verbs, and reject the ones that are not ours**
 
 In `src/Plith/Services/Shelf/DropChannel.cs`, extend the enum. Keep the existing four first so their numeric values do not move, which matters only for a mixed-version pair during development but costs nothing to preserve.
 
@@ -674,12 +674,12 @@ In `TryDecode`, replace the verb parse:
         if (!string.Equals(verb.ToString(), parts[0], StringComparison.Ordinal)) return false;
 ```
 
-- [ ] **Step 4: Run the verb tests and watch them pass**
+- [x] **Step 4: Run the verb tests and watch them pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing palette test**
+- [x] **Step 5: Write the failing palette test**
 
 Create `tests/Plith.Tests/ShelfPaletteWireTests.cs`:
 
@@ -734,12 +734,12 @@ public sealed class ShelfPaletteWireTests
 }
 ```
 
-- [ ] **Step 6: Run it and watch it fail**
+- [x] **Step 6: Run it and watch it fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfPaletteWireTests -v q -m:1`
 Expected: FAIL, `ShelfPaletteWire` does not exist.
 
-- [ ] **Step 7: Write `ShelfPaletteWire`**
+- [x] **Step 7: Write `ShelfPaletteWire`**
 
 Create `src/Plith/Services/Shelf/ShelfPaletteWire.cs`:
 
@@ -825,7 +825,7 @@ public static class ShelfPaletteWire
 }
 ```
 
-- [ ] **Step 8: Link the new file into the catcher**
+- [x] **Step 8: Link the new file into the catcher**
 
 In `src/Plith.DropCatcher/Plith.DropCatcher.csproj`, beside the existing linked items:
 
@@ -838,7 +838,7 @@ In `src/Plith.DropCatcher/Plith.DropCatcher.csproj`, beside the existing linked 
     </Compile>
 ```
 
-- [ ] **Step 9: Run the palette tests and the build**
+- [x] **Step 9: Run the palette tests and the build**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfPaletteWireTests -v q -m:1`
 Expected: PASS.
@@ -846,7 +846,7 @@ Expected: PASS.
 Run: `dotnet build Plith.slnx -m:1`
 Expected: build succeeds, including `Plith.DropCatcher` with the new linked file.
 
-- [ ] **Step 10: Commit**
+- [x] **Step 10: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf/DropChannel.cs src/Plith/Services/Shelf/ShelfPaletteWire.cs \
@@ -872,7 +872,7 @@ The shelf's visuals go in a `UserControl`, not in the `Window`. That is the whol
 - Consumes: `ShelfPalette` from Task 2.
 - Produces: `ShelfEntry(string Path, string Name, bool IsDirectory)`; `ShelfModel` with `IReadOnlyList<IReadOnlyList<ShelfEntry>> Stacks`, `void SetStack(int index, int total, IReadOnlyList<string> paths)`, `bool IsComplete`, `IReadOnlyCollection<string> Selection`, `void Select(string path, bool additive)`, `void ClearSelection()`, `IReadOnlyList<string> DragPaths(string pressedPath)`; `ShelfSurface` with `void Apply(ShelfPalette palette)`, `void Render(ShelfModel model)`, and the events `event Action<string, bool>? EntryPressed`, `event Action? ClearRequested`, `event Action? NewStackRequested`.
 
-- [ ] **Step 1: Make `ShelfModel` reachable from the test project**
+- [x] **Step 1: Make `ShelfModel` reachable from the test project**
 
 `tests/Plith.Tests` references `Plith`, not `Plith.DropCatcher`, and it must not start referencing an executable that has to stay small. Add `ShelfModel.cs` to the test project as a linked compile item, in `tests/Plith.Tests/Plith.Tests.csproj`:
 
@@ -888,7 +888,7 @@ The shelf's visuals go in a `UserControl`, not in the `Window`. That is the whol
   </ItemGroup>
 ```
 
-- [ ] **Step 2: Write the failing model tests**
+- [x] **Step 2: Write the failing model tests**
 
 Create `tests/Plith.Tests/ShelfModelTests.cs`:
 
@@ -1002,12 +1002,12 @@ public sealed class ShelfModelTests
 }
 ```
 
-- [ ] **Step 3: Run them and watch them fail**
+- [x] **Step 3: Run them and watch them fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfModelTests -v q -m:1`
 Expected: FAIL, `ShelfModel` does not exist.
 
-- [ ] **Step 4: Write `ShelfModel`**
+- [x] **Step 4: Write `ShelfModel`**
 
 Create `src/Plith.DropCatcher/Shelf/ShelfModel.cs`:
 
@@ -1100,12 +1100,12 @@ public sealed class ShelfModel
 }
 ```
 
-- [ ] **Step 5: Run the model tests and watch them pass**
+- [x] **Step 5: Run the model tests and watch them pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter ShelfModelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 6: Build `ShelfSurface` against the render harness**
+- [x] **Step 6: Build `ShelfSurface` against the render harness**
 
 Create `ShelfSurface.xaml` and its code-behind. Constraints that are not negotiable while building it:
 
@@ -1124,11 +1124,11 @@ Extend `scripts/render-widgets.ps1` to load `Plith.DropCatcher.dll` alongside `P
 
 Expected: the surface fits its own frame on both axes in all three renders, every label is readable, and no row is clipped.
 
-- [ ] **Step 7: Correct the provisional numbers from what the render shows**
+- [x] **Step 7: Correct the provisional numbers from what the render shows**
 
 Change the four constants to what the render needs, and replace the "provisional" comment with what was measured. If they were right, say that instead. A constant whose comment still says "provisional" after a render has been looked at is a lie that the next reader will act on.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShelfModel.cs src/Plith.DropCatcher/Shelf/ShelfSurface.xaml \
@@ -1149,7 +1149,7 @@ git commit -m "feat(shelf): draw the shelf where a render harness can see it"
 - Consumes: `ShelfSurface`, `ShelfModel`, `ShelfPalette`, `NotchGeometry`, `CatcherLog`.
 - Produces: `ShelfWindow` with `void OpenAt(int x, int y, int width, int height)`, `void Apply(ShelfPalette palette)`, `void SetStack(int index, int total, IReadOnlyList<string> paths)`, `void CloseNow()`, and `event Action? Closed`.
 
-- [ ] **Step 1: Write the window**
+- [x] **Step 1: Write the window**
 
 It is a sibling of `CatcherWindow`, not an extension of it. Copy the parts that are the same and say why in the file, because two windows in one process with different activation rules is the kind of thing that gets "simplified" into one by a later reader.
 
@@ -1198,7 +1198,7 @@ Declare both suspending fields here, defaulting false, even though nothing sets 
 
 Wire `PreviewKeyDown` for `Key.Escape`, `Deactivated`, and a `MouseLeave` that starts a short `DispatcherTimer` rather than closing immediately, cancelled by `MouseEnter`. The grace period exists because the pointer crosses outside the surface on the way to a tile at its edge.
 
-- [ ] **Step 2: Route the new verbs in the catcher's `App`**
+- [x] **Step 2: Route the new verbs in the catcher's `App`**
 
 In `src/Plith.DropCatcher/App.xaml.cs`, extend `OnReceived`:
 
@@ -1222,12 +1222,12 @@ Construct `_shelf` beside `_window`, and send `ShelfClosed` from its `Closed` ev
         _shelf.Closed += () => _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
 ```
 
-- [ ] **Step 3: Build**
+- [x] **Step 3: Build**
 
 Run: `dotnet build Plith.slnx -m:1`
 Expected: succeeds.
 
-- [ ] **Step 4: Drive it by hand, before anything depends on it**
+- [ ] **Step 4: Drive it by hand, before anything depends on it** PARTLY RUN. The probe was driven and its log read, including three runs with a real cursor, but nobody has LOOKED at the window: this session is over Remote Desktop and a layered window cannot be captured there. The visual half is docs/SHELF-VERIFICATION.md section 1.
 
 The catcher already has hand-run probe modes ahead of the single-instance guard, and this is the same kind of thing. Add `--shelfprobe x y w h` beside them: it opens `ShelfWindow` at that rectangle with three invented entries in two stacks and a built-in palette, and logs what it did.
 
@@ -1239,11 +1239,11 @@ Run from a console session (not over Remote Desktop, where a layered window cann
 
 Expected, and every one of these is a thing to look at rather than to infer from a log: the surface grows rather than appearing; it is readable; `Esc` closes it; clicking another application closes it; the pointer leaving and coming back does not.
 
-- [ ] **Step 5: Write down what the probe showed**
+- [x] **Step 5: Write down what the probe showed**
 
 In `docs/SHELF-VERIFICATION.md` (created here, extended by later tasks), with the date and the session type from `qwinsta` rather than from `$env:SESSIONNAME`, which is stamped at process start and was wrong on this machine once already.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShelfWindow.xaml src/Plith.DropCatcher/Shelf/ShelfWindow.xaml.cs \
@@ -1265,7 +1265,7 @@ This belongs at Medium integrity, and the reason is worth stating where it is do
 - Consumes: nothing.
 - Produces: `ShellIcons.TryGet(string path, out ImageSource icon) -> bool`.
 
-- [ ] **Step 1: Write `ShellIcons`**
+- [x] **Step 1: Write `ShellIcons`**
 
 `SHGetFileInfo` with `SHGFI_ICON | SHGFI_LARGEICON | SHGFI_USEFILEATTRIBUTES` when the path is gone, and without it when the file is there. Convert with `Imaging.CreateBitmapSourceFromHIcon`, then `DestroyIcon`, then `Freeze()`.
 
@@ -1286,21 +1286,21 @@ Three things that are defects if they are missed, each of which needs a comment 
 
 Fall back to the drawn document and folder geometry already in the product when `TryGet` returns false, rather than showing a blank. A network path that does not answer is the case that makes this matter.
 
-- [ ] **Step 2: Keep the accessibility lint honest**
+- [x] **Step 2: Keep the accessibility lint honest**
 
 `scripts/check-a11y.ps1` fails the build on Segoe MDL2 glyphs, in code-behind as well as XAML. A shell thumbnail is not a glyph, but the lint should not have to be argued with either. Run it and see what it says:
 
 Run: `pwsh -File scripts/check-a11y.ps1`
 Expected: PASS. If it flags the new code, the fix is in the lint's pattern, and the change must be narrow enough that a real Segoe MDL2 glyph in the same file would still fail. Widening the rule to accommodate this one file would remove the check that caught the product's last four glyph regressions.
 
-- [ ] **Step 3: Render, in both themes**
+- [x] **Step 3: Render, in both themes**
 
 Run: `pwsh -STA -File scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'`
 Run: `pwsh -STA -File scripts/render-widgets.ps1 -Theme Light -Accent '#A3E635'`
 
 The harness renders with invented paths, so it exercises the fallback rather than the shell. Point at least one entry in the harness at a file that really exists (`$PSHOME\powershell.exe` or the built `Plith.exe`) so a real icon is in the picture too. A render that only ever shows the fallback proves nothing about the thing this task adds.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShellIcons.cs src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs \
@@ -1425,7 +1425,7 @@ git commit -m "feat(shelf): open the shelf from the notch, and say so when it ca
 - Consumes: `ShelfModel`, `ShelfSurface` events from Task 3, `DropVerb` from Task 2.
 - Produces: `ShelfActions.Open(string path)`, `ShelfActions.ShowInFileManager(string path)`; `ShelfSurface` gains `event Action<IReadOnlyList<string>>? RemoveRequested`, `event Action<int, IReadOnlyList<string>>? RestackRequested`, `event Action<string>? OpenRequested`, `event Action<string>? RevealRequested`.
 
-- [ ] **Step 1: Write `ShelfActions`**
+- [x] **Step 1: Write `ShelfActions`**
 
 ```csharp
 /// <summary>
@@ -1469,7 +1469,7 @@ public static class ShelfActions
 }
 ```
 
-- [ ] **Step 2: Wire the surface's controls**
+- [x] **Step 2: Wire the surface's controls**
 
 - A clear control in the header, which raises `ClearRequested`. It asks nothing first: the shelf holds references, clearing deletes no file, and a confirmation for a reversible action on a surface this small is friction rather than safety. Say that in a comment, because the next reader will want to add a dialog.
 - A new-stack control, which raises `NewStackRequested`.
@@ -1477,21 +1477,21 @@ public static class ShelfActions
 - A context menu per tile: open, show in file manager, remove. Set `_menuOpen` on the window while it is up, or the menu taking activation dismisses the surface underneath it.
 - Dragging a tile onto another stack raises `RestackRequested` with that stack's index; onto the empty area past the last stack, with `Stacks.Count`.
 
-- [ ] **Step 3: Send them**
+- [x] **Step 3: Send them**
 
 In `ShelfWindow`, forward each event to the client as `RemoveItems`, `ClearShelf`, `NewStack` or `Restack`. Nothing is applied locally: the model is a view, Plith answers with a fresh `Items` set, and a surface that also updated itself would show a shelf that disagreed with the file the moment anything failed.
 
-- [ ] **Step 4: Run it**
+- [ ] **Step 4: Run it** NOT RUN. Needs a physical console session; see docs/SHELF-VERIFICATION.md section 3.
 
 Console session. Drop three files on the notch, open the shelf, and: remove one, clear all, make a new stack and drop into it, move a tile between stacks, open a file, show one in the file manager.
 
 Expected: every one of them is reflected in `shelf.txt` as well as on screen. Open the file in Notepad and look, because that file being readable is a feature this slice deliberately preserved and this is the one moment it gets checked.
 
-- [ ] **Step 5: Write down what happened, including anything that did not work**
+- [x] **Step 5: Write down what happened, including anything that did not work**
 
 `docs/SHELF-VERIFICATION.md`.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShelfActions.cs src/Plith.DropCatcher/Shelf/ShelfSurface.xaml \
@@ -1514,7 +1514,7 @@ Last, because it is the only step whose failure mode is a hung UI thread, and it
 - Consumes: `ShelfModel.DragPaths`, `ShelfSurface.EntryPressed`.
 - Produces: nothing new. The drag is started inside the window.
 
-- [ ] **Step 1: Start the drag, with the guard**
+- [x] **Step 1: Start the drag, with the guard**
 
 ```csharp
     /// <summary>
@@ -1563,13 +1563,13 @@ Last, because it is the only step whose failure mode is a hung UI thread, and it
     }
 ```
 
-- [ ] **Step 2: Only past the system threshold**
+- [x] **Step 2: Only past the system threshold**
 
 Track the press point on `PreviewMouseLeftButtonDown` over a tile, and call `StartDrag` from `MouseMove` once the pointer has moved further than `SystemParameters.MinimumHorizontalDragDistance` or `MinimumVerticalDragDistance`. Below the threshold it is a click, and a click selects.
 
 The system values rather than a number of our own: a person who has tuned their threshold has done so for every application, and this one has no reason to be the exception.
 
-- [ ] **Step 3: Drive it, on a console session**
+- [ ] **Step 3: Drive it, on a console session** NOT RUN. This is the step that would find a hang. See docs/SHELF-VERIFICATION.md section 4, and 4.4 in particular.
 
 Not over Remote Desktop, where this is meaningless.
 
@@ -1579,11 +1579,11 @@ Not over Remote Desktop, where this is meaningless.
 4. Press a tile, move two pixels, release. Expected: it selects and no drag starts.
 5. Drag out and release over empty desktop. Expected: whatever the shell does, and the catcher is still alive and answering afterwards. This is the step that would find a hang.
 
-- [ ] **Step 4: Write the result into `docs/SHELF-VERIFICATION.md`**
+- [x] **Step 4: Write the result into `docs/SHELF-VERIFICATION.md`**
 
 Including the `DoDragDrop` return value for each run, and the integrity level from the log. Both go in the document, because this is the measurement the whole slice was built on top of and the next person should not have to take it on trust.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShelfWindow.xaml.cs src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs \
