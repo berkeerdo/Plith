@@ -104,6 +104,12 @@ public partial class ShelfWindow : Window
     /// be left set.</summary>
     private bool _menuOpen;
 
+    /// <summary>Set when a <see cref="CloseNow"/> arrived while a drag was in flight and was
+    /// refused, so the close can be honoured the moment that drag returns rather than lost.
+    /// Cleared at the one place that honours it, before the close it asks for, so it cannot
+    /// recur. See CloseNow's own refusal for why the order is refused rather than obeyed.</summary>
+    private bool _closeOrderedDuringDrag;
+
     /// <summary>Set for the whole of a tile drag, and cleared by that drag's own finally so no
     /// exit from it - a drop, a cancel, or an exception out of OLE - can leave it stuck true. A
     /// stuck true is not a cosmetic bug: Dismiss DEFERS while this is set, so a shelf that never
@@ -280,6 +286,24 @@ public partial class ShelfWindow : Window
     /// </summary>
     public void OpenAt(int x, int y, int width, int height)
     {
+        // Refused outright while a drag is in flight, and this is a guard rather than a comment
+        // for the same reason StartDrag's own guards are. DoDragDrop pumps a modal message loop,
+        // so the pipe reader keeps running and an OpenShelf CAN arrive in the middle of a drag.
+        // Obeying it would call SetWindowPos and Activate() on the window that is at that moment
+        // the live drag SOURCE, and Activate() is one of the documented ways to cancel a drag
+        // outright: the person would watch the file they are carrying evaporate because Plith
+        // restated a rectangle.
+        //
+        // Nothing is lost by refusing. A drag can only start from a tile on a visible shelf, so
+        // _dragInFlight true means the shelf is already up, which means every OpenShelf refused
+        // here is a RE-ASSERTION (see the comment below) and never a first open. The cost is at
+        // most a stale rectangle until the next one, against a cancelled gesture.
+        if (_dragInFlight)
+        {
+            _log.Info($"Shelf re-assertion refused at {x},{y} {width}x{height}: a drag is in flight.");
+            return;
+        }
+
         // A second OpenShelf while the shelf is already up is a RE-ASSERTION, not a re-open: the
         // monitor changed, the DPI changed, or Plith simply restated where the shelf belongs. It
         // moves and resizes, and it does NOT grow again. Growing again would snap the shape back
@@ -397,6 +421,25 @@ public partial class ShelfWindow : Window
     /// </summary>
     public void CloseNow()
     {
+        // Refused while a drag is in flight, for the reason OpenAt refuses: DoDragDrop pumps a
+        // modal message loop, so a CloseShelf can arrive from the pipe mid-drag, and Hide() on
+        // the window that is the live drag SOURCE takes the gesture down with it.
+        //
+        // REMEMBERED rather than dropped, which is the difference between a refusal and a lost
+        // order. A dismissal is a condition that can stop being true, which is why Dismiss defers
+        // one into _pendingDismissal and lets the leave clock re-evaluate it; a CloseShelf from
+        // Plith is not a condition, it is an instruction, and the settlement at the end of
+        // StartDrag would clear _pendingDismissal the moment the pointer happened to be over the
+        // shelf. So it gets its own flag, honoured by that same settlement the moment the drag
+        // returns. _dragInFlight is cleared on every returning exit including exceptions, so this
+        // can only postpone the close, never cancel it.
+        if (_dragInFlight)
+        {
+            _closeOrderedDuringDrag = true;
+            _log.Info("Shelf close refused: a drag is in flight. It will be taken down when the drag ends.");
+            return;
+        }
+
         _leave.Stop();
         if (!_open) return;
         _open = false;
@@ -556,6 +599,14 @@ public partial class ShelfWindow : Window
         // which is a third thing again: it can say Pressed for a button this window never
         // received, which is the wrong question here.) A guard a stale snapshot can satisfy is
         // decoration.
+        //
+        // Its limit, written down so it is not rediscovered: Mouse.LeftButton is THREAD-wide, not
+        // per-window. A press on CatcherWindow, which lives in this process on this thread, would
+        // satisfy it while the element handed in belongs to ShelfWindow, which is the
+        // same-process form of the very hazard this task exists because of. That combination is
+        // unreachable today (one call site, and the stand-in is not up while the shelf is), so it
+        // is recorded rather than guarded. Anyone who makes it reachable owes this check a
+        // per-window answer, and the element guard above is not one: it would pass too.
         if (Mouse.LeftButton != MouseButtonState.Pressed)
         {
             _log.Info("Refused a drag with no live press behind it.");
@@ -568,9 +619,19 @@ public partial class ShelfWindow : Window
         // an Explorer window. Each target's own DragOver picks the format it understands -
         // ShelfSurface's Columns takes the private one, everything else takes FileDrop - so the
         // decision is made by the place that actually knows the answer.
+        //
+        // A string[] under BOTH names, one array serving both. The private format used to carry
+        // the IReadOnlyList it was handed, which reads fine in process (WPF hands our own drop
+        // target the original managed DataObject back) but left a real edge on the way out: a
+        // foreign target that asked for the private format by name would send WPF to serialize
+        // an arbitrary object, which .NET 10 no longer supports, and the only thing keeping the
+        // catcher alive would be the blanket catch below. A string[] is the one shape WPF writes
+        // out without serializing anything, so the edge stops existing rather than being
+        // survived.
+        var items = paths.ToArray();
         var data = new DataObject();
-        data.SetData(ShelfSurface.ShelfDragFormat, paths);
-        data.SetData(DataFormats.FileDrop, paths.ToArray());
+        data.SetData(ShelfSurface.ShelfDragFormat, items);
+        data.SetData(DataFormats.FileDrop, items);
 
         _dragInFlight = true;
         try
@@ -619,8 +680,28 @@ public partial class ShelfWindow : Window
         // applies) or re-arm it (the pointer is elsewhere, and the shelf should go). Re-arming
         // rather than closing immediately keeps the one grace period the rest of this window
         // uses, instead of inventing a second, harsher one for drags alone.
+        // A close that arrived over the pipe mid-drag is honoured FIRST, ahead of every question
+        // about pointers and clocks, because it is an order rather than a condition. The flag is
+        // cleared before the call, and _dragInFlight is already false by here, so CloseNow takes
+        // its ordinary path and cannot come back round.
+        if (_closeOrderedDuringDrag)
+        {
+            _closeOrderedDuringDrag = false;
+            CloseNow();
+            return;
+        }
+
         _leave.Stop();
-        if (PointerIsOverShelf()) _pendingDismissal = null;
+
+        // _menuOpen counts as the pointer being over the shelf, and it is not a courtesy. A
+        // context menu is its own top-level HWND, so WindowFromPoint answers about the POPUP when
+        // the pointer is over one, and the shelf underneath would read as "not ours" and be
+        // dismissed about half a second later. Treating an open menu as the pointer being here is
+        // also the answer Dismiss already gives: a menu suspends dismissal, because it takes
+        // activation exactly the way losing focus to another window does. Nothing is stranded by
+        // stopping the clock in that case, since Esc, the pointer leaving and Deactivated all
+        // still work once the menu is gone.
+        if (_menuOpen || PointerIsOverShelf()) _pendingDismissal = null;
         else _leave.Start();
     }
 

@@ -502,6 +502,12 @@ does, that is the finding, not the drag that failed. The middle one is the guard
 measurement this task exists because of, so it is the one to look for first: it refuses a call that
 arrives with no live button press behind it, which is the shape that hung for seventeen seconds.
 
+Two further refusal lines belong to the window rather than to the drag, and both are EXPECTED in
+the one situation they describe rather than being faults: `Shelf close refused: a drag is in
+flight. It will be taken down when the drag ends.` and `Shelf re-assertion refused at X,Y WxH: a
+drag is in flight.` They mean a message arrived over the pipe during a drag and was held off the
+live drag source. See §4.10.
+
 ### 4.1 One tile into a file manager
 
 Open the shelf with three items in one stack. Press one tile and drag it into an Explorer or Files
@@ -604,6 +610,58 @@ Expected: the drag cancels, the log records a return value (`None`), nothing lan
 the shelf is in the same state as §4.6's second half afterwards. This exercises the same exit path
 as a successful drop, which is the point: `_dragInFlight` is cleared by a `finally`, so a cancel
 has to be as safe as a drop.
+
+### 4.9 `Esc` still closes the shelf after an internal restack
+
+Drag a tile onto another stack, release, do not move the mouse (this is §4.6's setup), and then
+press `Esc`.
+
+Expected: the shelf closes and the notch comes back.
+
+Why this is its own item rather than part of §4.6: when the drag ends with the pointer over the
+shelf, `StartDrag` clears `_pendingDismissal` and stops the leave clock. If the window was
+deactivated at some point during the drag and never activated again, `Deactivated` cannot fire a
+second time, so the closers left are `Esc` and the pointer leaving. This item checks the first one
+and §4.6's second half checks the other. A shelf that answers neither is stranded, which is the
+failure mode the whole deferral machinery exists to prevent, arriving by yet another route.
+
+### 4.10 A pipe message arriving in the middle of a drag
+
+`DoDragDrop` pumps a modal message loop, so the catcher's pipe reader keeps running and a message
+from Plith CAN be dispatched while a drag is in flight. Both messages that would touch this window
+are now refused while `_dragInFlight` is true, and the close is remembered and honoured the moment
+the drag returns.
+
+Driving this needs Plith to send something mid-drag. The simplest reliable trigger is a monitor or
+DPI change (`OpenShelf` is re-sent), so: start a drag from a tile, keep the button held, and change
+the display scale or the primary monitor from Windows Settings with the other hand, then release
+over a file manager.
+
+Expected: the drag SURVIVES. The file lands, the log has an ordinary `Drag out returned` line, and
+somewhere before it a `Shelf re-assertion refused at ...: a drag is in flight.` line. A drag that
+dies the instant the display changes means the refusal is not working and `Activate()` cancelled
+it, which is exactly what the guard exists to prevent.
+
+For the close half, `CloseShelf` has no external sender today, so there is nothing to drive. If one
+is ever added, the expected shape is: `Shelf close refused: a drag is in flight.` during the drag,
+then the shelf goes down as soon as the drag returns, with no second gesture needed, and the drag
+itself completes normally.
+
+### 4.11 The stand-in must not be visible while the shelf is open
+
+The internal tile drag now carries `DataFormats.FileDrop`, and `CatcherWindow` (the notch's
+stand-in, in this same process) accepts `FileDrop` as `Copy`. So if the stand-in were ever on
+screen at the same time as the shelf, dragging a tile across it would drop the same files back onto
+the shelf they came from, silently re-adding them.
+
+Open the shelf and look at the top of the screen where the notch was: it must be gone, replaced by
+the shelf itself, with no catcher window visible anywhere. Then drag a tile slowly across the whole
+top edge of the shelf and release back inside it. Expected: nothing is re-added, and
+`%LOCALAPPDATA%\Plith\shelf.txt` holds the same number of entries afterwards as before.
+
+This item is here because the invariant it checks ("the stand-in and the shelf are never up
+together") is currently held by the hand-over sequence in §2 rather than by anything in this
+window, and Task 8 gave it a consequence it did not have before.
 
 ### What HAS been measured, on 2026-09-19
 
