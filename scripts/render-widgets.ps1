@@ -1,4 +1,4 @@
-# scripts/render-widgets.ps1 — renders each notch widget and the classic card to PNG, offscreen.
+﻿# scripts/render-widgets.ps1 — renders each notch widget and the classic card to PNG, offscreen.
 #
 # Why this exists: every design defect on this branch was found by a person looking at a
 # screenshot and reporting it, one per round. The OSD renders in a layered window that ordinary
@@ -734,17 +734,20 @@ $probes = @(
     @{ Name = 'the margin right of the row'; X = $hostWidth - 2;                      Expect = $stackCount }
 )
 
-foreach ($probe in $probes) {
-    $point = [Windows.Point]::new($probe.X, 40)
+# $dropProbe, not $probe: $probe is the palette-bearing Border this script does its resource
+# lookups through, and a foreach variable outlives its loop in PowerShell. Reusing the name here
+# left a Hashtable in it and killed the cloud-shape render 80 lines further down.
+foreach ($dropProbe in $probes) {
+    $point = [Windows.Point]::new($dropProbe.X, 40)
     $got = $targetStackIndex.Invoke($shelfSurface, @([object]$point))
-    if ($got -ne $probe.Expect) {
+    if ($got -ne $dropProbe.Expect) {
         $dump = @()
         foreach ($child in $columnsPanel.Children) {
             $tagText = if ($null -eq $child.Tag) { '<none>' } else { "$($child.Tag) [$($child.Tag.GetType().Name)]" }
             $left = try { $child.TranslatePoint([Windows.Point]::new(0,0), $columnsHost).X } catch { 'n/a' }
             $dump += "      $($child.GetType().Name) tag=$tagText left=$left size=$($child.RenderSize.Width)x$($child.RenderSize.Height)"
         }
-        throw ("drop-target check: a release at $($probe.Name) (x=$([Math]::Round($probe.X,1))) resolved to stack $got, expected $($probe.Expect).`n" +
+        throw ("drop-target check: a release at $($dropProbe.Name) (x=$([Math]::Round($dropProbe.X,1))) resolved to stack $got, expected $($dropProbe.Expect).`n" +
                "    row left=$rowLeft rowWidth=$rowWidth hostWidth=$hostWidth`n" +
                "    children:`n" + ($dump -join "`n"))
     }
