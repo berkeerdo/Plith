@@ -59,11 +59,17 @@ public partial class App : Application, IDisposable
         {
             // The shelf, driven by hand, before anything on Plith's side depends on it.
             //
-            // It is a probe rather than a test for the reason every other probe in this file is
-            // one: the shelf is a layered window, and a layered window cannot be captured over
-            // Remote Desktop by any means. Nothing automated can look at it, so the only honest
-            // check is a person at the physical console looking at it. docs/SHELF-VERIFICATION.md
-            // says what to look at.
+            // It is a probe rather than a test because nothing in the headless suite can host a
+            // window, not because nothing can look at one. THE CLAIM THAT USED TO STAND HERE -
+            // that a layered window cannot be captured over Remote Desktop by any means, so only
+            // a person at the physical console could check this - WAS WRONG, and was never
+            // measured against this window: it was inherited from the OSD's notes, and the OSD is
+            // a different process at a different integrity level. Two instruments drive this mode
+            // now. scripts/capture-shelf.ps1 captures the shelf from the screen, over RDP, and
+            // scripts/drive-shelf.ps1 presses it: this window is MEDIUM integrity (the log line
+            // below says so on every run), so UIPI does not stand between it and synthetic input
+            // or UI Automation the way it does for Plith's own UIAccess window.
+            // docs/SHELF-VERIFICATION.md section 3.10 carries the measurements and the limits.
             _log.Info($"SHELF PROBE. Integrity: {IntegrityLevel.Describe()}. Log: {_log.LogPath}");
             _shelf = new ShelfWindow(_log);
             WireShelf(_shelf);
