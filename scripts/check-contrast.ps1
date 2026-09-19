@@ -74,8 +74,12 @@ if ($null -eq [Windows.Application]::Current) { $null = [Windows.Application]::n
 
 # --- the pairs, read from the XAML ---------------------------------------------------------
 $pairs = [System.Collections.Generic.List[object]]::new()
-$xamlFiles = Get-ChildItem -Path (Join-Path $root 'src\Plith') -Filter '*.xaml' -Recurse |
-    Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }
+# The catcher paints the shelf, in the same palette keys, and until this slice nothing scanned
+# it. Its window carried hard-coded colours that no check ever measured.
+$xamlFiles = @(
+    Get-ChildItem -Path (Join-Path $root 'src\Plith') -Filter '*.xaml' -Recurse
+    Get-ChildItem -Path (Join-Path $root 'src\Plith.DropCatcher') -Filter '*.xaml' -Recurse
+) | Where-Object { $_.FullName -notmatch '[\\/](obj|bin)[\\/]' }
 
 # A file that defines a brush key for itself wins over the theme for anything inside it.
 #
@@ -138,10 +142,24 @@ $codeBehindPairs = @(
     # that a person has to READ rather than recognise, and the reason it needs the check is the
     # one the tiles already proved - NotchInkMuted measured 1.5:1 on a track tile, and nothing in
     # a render showed it.
-    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfWidget.xaml:the open hint and the unavailable sentence' }
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfWidget.xaml:the open hint and the unavailable sentence' },
+    # The catcher's own tiles, added in Task 9: it paints the shelf in the same palette keys as
+    # ShelfWidget above and until this slice nothing scanned it at all. The pairs work only
+    # because Task 3 resolved the catcher's brushes onto ITS OWN Resources under these same key
+    # names, so a lookup against Plith's own theme dictionaries below still means the same thing.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfSurface.xaml.cs:tile label and count' },
+    # The "Stack N" caption above each column (see BuildColumn): a sighted match for the
+    # per-stack AutomationProperties.Name set on the same column's wrapping Border, and the
+    # reason this pair measures shipped code rather than a colour nothing draws.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfSurface.xaml.cs:stack caption' }
 )
 foreach ($cb in $codeBehindPairs) {
-    $pairs.Add([pscustomobject]@{ Bg = $cb.Bg; Fg = $cb.Fg; Where = $cb.Where; File = 'ShelfWidget.cs' })
+    # The file each pair's own local-brush override (if any) would be declared under, read back
+    # out of Where rather than hard-coded: every entry above named a real source file, and a
+    # constant here would have quietly pointed the catcher's own pairs at ShelfWidget.cs's local
+    # brushes instead of at their own (harmless today only because neither file declares one).
+    $file = ($cb.Where -split ':')[0]
+    $pairs.Add([pscustomobject]@{ Bg = $cb.Bg; Fg = $cb.Fg; Where = $cb.Where; File = $file })
 }
 
 $pairs = $pairs | Sort-Object Bg, Fg, Where, File -Unique
@@ -213,6 +231,37 @@ foreach ($theme in @('Dark', 'Light')) {
                 $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
                     $p.Where, $p.Fg, $p.Bg, $accentHex, $theme.PadRight(5), $ratio, $limit, $kind))
             }
+        }
+
+        # The selection ring: not a declared resource pair, so it cannot join the sweep above.
+        #
+        # SelectionRing has no static entry in any theme dictionary for TryFindResource to find -
+        # Plith computes it at runtime with ContrastInk.RingOn(accent, surfaceEnd) and sends the
+        # ANSWER over the wire (ShelfSession.DerivePalette, ShelfPaletteWire), specifically so the
+        # ring cannot drift from the rest of the product's contrast-derived colours. An earlier
+        # reviewer correctly flagged that as invisible to a resource-key sweep: it is a colour
+        # applied conditionally from code, and the honest fix is to make it reachable rather than
+        # to leave it exempt.
+        #
+        # So this calls the real function on the real derived inputs, for the same accent/theme
+        # matrix as everything above, using the exact two calls DerivePalette makes rather than a
+        # second, looser derivation of "the accent" and "the surface" that could quietly disagree
+        # with production: AccentTheme.Derive(...).Accent, not the raw parsed accent, and
+        # AccentTheme.DeriveOsdSurfaces(...).SurfaceEnd, not a resource lookup against the probe
+        # scope. RingOn's own logic (does the walk terminate, does it preserve hue) is
+        # ContrastInkTests' job on hand-picked colours; this is the integration RingOn's unit
+        # tests cannot be: whether it actually clears 3:1 for every accent this script already
+        # sweeps, on the surface colour the product actually derives for that accent and theme.
+        $derivedAccent = [Plith.Services.AccentTheme]::Derive($base, ($theme -eq 'Dark')).Accent
+        $surfaceEnd = [Plith.Services.AccentTheme]::DeriveOsdSurfaces($base, ($theme -eq 'Dark')).SurfaceEnd
+        $ring = [Plith.Services.ContrastInk]::RingOn($derivedAccent, $surfaceEnd)
+
+        $measured++
+        $ringRatio = [Plith.Services.ContrastInk]::ContrastRatio($surfaceEnd, $ring)
+        if ($ringRatio -lt $NonTextThreshold) {
+            $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
+                'ShelfSession.cs:SelectionRing (ContrastInk.RingOn)', 'ring', 'OsdSurfaceBrush', `
+                $accentHex, $theme.PadRight(5), $ringRatio, $NonTextThreshold, 'non-text'))
         }
     }
 }

@@ -1,5 +1,13 @@
 # Shelf Slice 2 Implementation Plan
 
+> **A tick below means the step was taken, NOT that nothing was deviated from.** Every task in
+> this plan carries a real deviation somewhere: a placeholder replaced with a measured value, a
+> guard added that the step text did not ask for, a file touched that the task's own file list did
+> not name. None of that is hidden by a checked box. Deviations, what was measured versus reasoned
+> about, and what still has not been driven on hardware all live in `docs/SHELF-VERIFICATION.md`
+> and in the code that carries them, not in this checklist. Read a checked box as "this step was
+> executed", never as "this step's plan text turned out to be exactly right."
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** A person opens the shelf from the notch, sees what is on it with real file icons, selects one or several items, drags them out to any ordinary application, removes rows, clears the shelf, and keeps items in stacks that do not mix.
@@ -45,6 +53,22 @@ Recorded here rather than by rewriting a task that has already shipped and been 
 2. **The verb check needs both `Enum.IsDefined` and a name round trip.** My pre-flight ruling said
    the round trip alone was enough. It is not: `ToString` on a value with no name prints the
    number, so `"99"` round trips. Task 2's text was corrected before it shipped.
+3. **Task 9 also touched `ShelfWindow.xaml.cs`, which its own file list did not name.**
+   `ShelfWindow`'s own header comment already says the window holds keyboard focus rather than
+   the page inside it; `OnPreviewKeyDown` was already there for Escape. A key cannot reach
+   `ShelfSurface` without the window forwarding it, so the plan's file list for that task could
+   not be honoured literally. `OnPreviewKeyDown` now forwards every key that is not Escape to
+   `ShelfSurface.HandleKey`. See `docs/SHELF-VERIFICATION.md` §5.1.
+4. **Task 9's "stack caption" contrast pair needed real code behind it, not just the script
+   entry.** The pair the task handed over named `NotchInkMuted` for something `ShelfSurface.cs`
+   did not draw yet. Rather than add a measurement of a colour nothing used, `BuildColumn` now
+   draws a small "Stack N" caption in that colour, verified by render at 384 x 224 in both themes
+   and a white accent before it shipped. See `docs/SHELF-VERIFICATION.md` §5.3.
+5. **The selection ring is now measured, not left exempt.** `check-contrast.ps1` calls
+   `AccentTheme.Derive`, `AccentTheme.DeriveOsdSurfaces` and `ContrastInk.RingOn` directly (the
+   same calls `ShelfSession.DerivePalette` makes) for the same accent/theme matrix as everything
+   else it checks, rather than leaving the ring as a colour the sweep cannot see. See
+   `docs/SHELF-VERIFICATION.md` §5.2.
 
 ## Threat note, to be repeated in code
 
@@ -1577,7 +1601,7 @@ git commit -m "feat(shelf): drag items out, from the only window that can"
 - Modify: `docs/SHELF-VERIFICATION.md`
 - Modify: `docs/ROADMAP.md`, `CLAUDE.md`, `docs/superpowers/plans/2026-09-18-shelf-slice-2.md`
 
-- [ ] **Step 1: Names on everything a screen reader reaches**
+- [x] **Step 1: Names on everything a screen reader reaches**
 
 `AutomationProperties.SetName` on every tile, on each stack, and on the clear and new-stack controls. Announce the count before the names, as `ShelfWidget` already does: a screen reader user needs to know how much is there before hearing a list of file names.
 
@@ -1585,7 +1609,7 @@ A `StackPanel` carries no automation peer of its own, so a name set on one reach
 
 Keyboard: arrow keys move the selection, `Space` toggles it, `Enter` opens, `Delete` removes. A surface that takes focus and then answers no key is worse than one that never took focus.
 
-- [ ] **Step 2: Extend `check-contrast.ps1` to the catcher**
+- [x] **Step 2: Extend `check-contrast.ps1` to the catcher**
 
 Two changes:
 
@@ -1607,7 +1631,7 @@ and, in `$codeBehindPairs`:
 
 The pairs work only because Task 3 resolved the catcher's brushes under Plith's own key names. If a colour in the catcher is not reachable by one of those keys, it is not measured, and the honest fix is to make it reachable rather than to add an exception.
 
-- [ ] **Step 3: Run all three lints and the suite**
+- [x] **Step 3: Run all three lints and the suite**
 
 Run: `pwsh -File scripts/check-a11y.ps1`
 Run: `pwsh -File scripts/check-shared-xaml.ps1`
@@ -1615,13 +1639,13 @@ Run: `pwsh -File scripts/check-contrast.ps1`
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: all pass. Fix what they find in the code, not in the scripts.
 
-- [ ] **Step 4: Finish `docs/SHELF-VERIFICATION.md`**
+- [x] **Step 4: Finish `docs/SHELF-VERIFICATION.md`**
 
 It must say, in its own words rather than by implication: what was driven on hardware and on what date; what was not; and that a green build, green tests and a green lint prove nothing about this surface, because the suite is not STA and a layered window cannot be captured over Remote Desktop.
 
 Carry the harness lessons from the slice 1 plan's Task 8 into it, so they are somewhere a person will open: ask `qwinsta` and never `$env:SESSIONNAME`; stage and aim in one process and re-verify the aim in the same breath as the press; use windows the harness created; minimise the competing maximised window and restore it in a `finally`; `WindowFromPoint` returns the child, so compare owning process ids.
 
-- [ ] **Step 5: Tick this plan's boxes honestly, and band it**
+- [x] **Step 5: Tick this plan's boxes honestly, and band it**
 
 Put a band at the top of this file saying what a tick means:
 
@@ -1631,7 +1655,7 @@ Update `docs/ROADMAP.md` Phase 7 and `CLAUDE.md`'s shelf paragraph with what thi
 
 `CLAUDE.md`'s Status section is split across this branch and `feature/brightness`, and this branch's copy still describes Phases 5 and 6 as unmerged, which is wrong. Do not fix that here. The existing note says whichever branch merges second merges the section by hand, and quietly half-fixing it on one side is what makes a hand merge impossible to do correctly.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs scripts/check-contrast.ps1 \

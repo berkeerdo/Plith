@@ -713,3 +713,144 @@ render harness constructs `ShelfSurface` but not the window that owns the drag, 
 not executed by anything in this list. The guard inside it, the `finally` that clears
 `_dragInFlight`, the two formats in the `DataObject` and the effect that comes back are all
 unexecuted code as far as every green line above is concerned.
+
+---
+
+## 5. Accessibility and keyboard (Task 9)
+
+Every tile, every stack, and the header's clear and new-stack controls now carry an
+`AutomationProperties.Name`; arrow keys move the selection, `Space` toggles it, `Enter` opens the
+current tile, and `Delete` removes the current selection (or just the current tile, if nothing is
+selected). `scripts/check-contrast.ps1` now scans `src\Plith.DropCatcher` as well as `src\Plith`,
+and measures two more code-behind pairs plus the selection ring, which had never been measured at
+all before this task.
+
+### What a green build, a green test run and a green lint prove about this section: nothing
+
+Say it plainly rather than by implication, because it is the one fact this whole document exists
+to keep in front of a reader: **the test suite is not STA and never constructs `ShelfWindow`, and
+the shelf is a layered window with per-pixel alpha that cannot be captured over Remote Desktop by
+any means.** Every measurement below that is a build, a test, a lint or a render is real and is
+listed because it is real, but not one of them presses a key. A screen reader announcing a tile's
+name, an arrow key visibly moving the selection ring, `Space` adding a second tile to a selection,
+`Enter` opening a file, `Delete` removing a row - none of that is answered by anything in this
+document. All five need a person, a keyboard and a screen reader, at the physical console, and
+none of that has happened yet.
+
+### 5.1 The keyboard path itself, and why it lives in `ShelfWindow` rather than `ShelfSurface`
+
+`ShelfWindow`'s own header comment already said why the window, not the page, takes keyboard
+focus: "Esc, arrow keys and a visible selection have nothing to arrive at in a window that never
+takes focus." `OnPreviewKeyDown` already existed there for exactly that reason, handling only
+Escape. This task's plan named only `ShelfSurface.xaml.cs` as the file its keyboard work would
+touch, and that turned out not to be possible to honour literally: a key reaches the element that
+holds keyboard focus, `ShelfSurface` is never that element, and no amount of code inside it changes
+that. `ShelfWindow.OnPreviewKeyDown` now forwards every key that is not Escape to
+`ShelfSurface.HandleKey`, which is the smallest change that could make the surface answer a key at
+all. This is a deviation from the plan's stated file list, recorded here and in
+`docs/superpowers/plans/2026-09-18-shelf-slice-2.md` rather than left unmentioned, and it is a
+one-method, two-branch change: Escape still dismisses the shelf exactly as it did before, and
+`HandleKey` is free to decline anything it does not use.
+
+### 5.2 The selection ring, made measurable rather than left exempt
+
+`SelectionRing` has no static entry in any theme dictionary: Plith computes it at runtime with
+`ContrastInk.RingOn(accent, surfaceEnd)` and sends the answer over the wire, precisely so the ring
+cannot drift from the rest of the product's contrast-derived colours. A reviewer of an earlier task
+correctly flagged that as invisible to `check-contrast.ps1`'s resource-key sweep: there is nothing
+for `TryFindResource` to find.
+
+It is measurable, and now is: `check-contrast.ps1` calls `AccentTheme.Derive(...).Accent` and
+`AccentTheme.DeriveOsdSurfaces(...).SurfaceEnd` (the same two calls `ShelfSession.DerivePalette`
+makes, not a second, looser derivation that could quietly disagree with production) and then
+`ContrastInk.RingOn` itself, for the same 9-accent, 2-theme matrix as everything else the script
+checks. `ContrastInkTests` already covers `RingOn`'s own logic on hand-picked colours; what it
+cannot cover is whether the real function clears 3:1 for the accents this script actually sweeps,
+on the surface colour the product actually derives for each one. Measured on 2026-09-19: all 18
+combinations (9 accents x 2 themes) clear the 3:1 non-text threshold, folded into
+`check-contrast.ps1`'s existing 288-measurement total. The white-accent render below shows the
+walked case on screen: a lime accent needs no walk at all, and a near-white one visibly does.
+
+### 5.3 The stack caption, added because the alternative was a fake measurement
+
+Task 9's brief handed over two `check-contrast.ps1` entries to add verbatim, one of them labelled
+`ShelfSurface.xaml.cs:stack caption` with `NotchInkMuted` as the foreground. Nothing in
+`ShelfSurface.xaml.cs` used `NotchInkMuted` before this task - the pair would have measured a
+colour nothing drew, which is exactly the failure mode this script's own header comment warns
+against ("a gate that reports pairs the product does not have is a gate people learn to argue
+with"). Rather than add the check and leave it hollow, `BuildColumn` now draws a small "Stack N"
+caption above each column in `NotchInkMuted`, which is also the sighted match for the per-stack
+`AutomationProperties.Name` §Step 1 below required, and which needed a wrapping `Border` around
+each column regardless (a `StackPanel` has no automation peer of its own - see §5.4).
+
+This added height to a control whose frame size (`NotchGeometry.ShelfFrameDip`, 384 x 224) is a
+measured constant from an earlier task, fixed elsewhere, and out of this task's file list to
+change. Rather than trust arithmetic about whether 13 more DIP of caption would fit inside
+whatever slack was left, it was rendered: `scripts/render-widgets.ps1 -Theme Dark -Accent
+'#A3E635'`, `-Theme Light -Accent '#A3E635'` and `-Theme Dark -Accent '#FFFFFF'` all produced
+`shelf-surface.png` with the caption, the tiles and the selection ring all inside the frame, no
+clipping against the rounded bottom corners in any of the three. That is a real measurement (the
+control was actually laid out at 384 x 224 and the pixels actually inspected), and it is also the
+limit of what a render proves: it says the OFFSCREEN control fits at this size, not that the
+on-screen shelf window does, since the render harness does not construct `ShelfWindow` and cannot
+reach the layered window at all.
+
+### 5.4 Automation names, and the defect class they were built to dodge
+
+A `StackPanel` carries no automation peer of its own, so a name set directly on one reaches
+nothing - the exact defect that shipped green through Phase 5's accessibility pass four times, per
+this project's `CLAUDE.md`. `BuildColumn`'s stack wrapper is a `Border` for that reason (it adds no
+visible chrome; no `Background`, no `BorderBrush`), and carries
+`AutomationProperties.Name` = `"Stack N, K items"`, count before the list the same way
+`ShelfWidget` already announces its row. Every tile `Border`, the overflow tile, the empty-shelf
+message, the whole `Columns` panel's aggregate name, and the header's clear and new-stack buttons
+all carry peers already (`Border` and `Button` both have one) and already had names before this
+task; this task's own addition is the per-stack name and caption. None of this - whether a screen
+reader actually reaches any of it, whether the announced text reads sensibly in sequence, whether
+Narrator's own quirks change any of it - has been checked with a screen reader. `check-a11y.ps1`
+catches a name on a peerless element and a missing name on an interactive control; it does not,
+and cannot, catch whether the resulting announcement makes sense to a person listening to it.
+
+### 5.5 Harness lessons, carried forward for whoever drives this section at the console
+
+Five of eight attempts at Task 8's drag measurement (slice 1) were lost to the harness rather than
+to the question, and every one of them failed silently: a run that aims at the wrong window still
+produces a plausible log line. Recorded there, and repeated here because this document is where a
+person preparing to test §5.1-§5.4 by hand will actually be looking:
+
+- **Ask `qwinsta`, never `$env:SESSIONNAME`.** The environment variable is stamped when a process
+  starts and never updated; it has been caught wrong on this machine before.
+- **Stage and aim in one process, and re-verify the aim in the same breath as the press.** Across
+  two separate scripts another window came forward in the gap, twice, and took the input meant for
+  the staged one. A check that finds the wrong target must abort, not warn.
+- **Use windows the harness itself created.** Matching a generic title (`Notepad`, `Explorer`) can
+  find and act on the person's own open work instead of the harness's fixture.
+- **Topmost is not enough; minimise the competing window.** Pinning a staged window
+  `HWND_TOPMOST` still lost to a maximised terminal on two runs. Minimising the competitor for the
+  duration of the gesture, and restoring it in a `finally`, is what made runs repeatable.
+- **`WindowFromPoint` returns the CHILD under the cursor**, never the top-level handle a window was
+  found by. Compare owning process ids, not raw handles.
+
+None of these is specific to a drag; every one of them applies just as much to a script that drives
+a keyboard gesture against `ShelfWindow` and then reads `dropcatcher.log` or a screen reader's
+output afterwards.
+
+### What HAS been measured, on 2026-09-19
+
+| Measured | Result |
+|---|---|
+| Build | `dotnet build Plith.slnx -m:1`: succeeded, 0 errors, 0 warnings |
+| Tests | `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`: 472 passed, 0 failed |
+| `scripts/check-a11y.ps1` | passed |
+| `scripts/check-shared-xaml.ps1` | passed |
+| `scripts/check-contrast.ps1 -STA` | passed: 288 measurements across 9 accents and both themes (was 234 before this task: +36 from the two new `ShelfSurface.xaml.cs` pairs, +18 from the selection ring) |
+| `scripts/render-widgets.ps1 -Theme Dark -Accent '#A3E635'` | passed, including the Task 5 second-pass check and the Task 7 menu-survives-render check; `shelf-surface.png` shows both stack captions, no clipping |
+| `scripts/render-widgets.ps1 -Theme Light -Accent '#A3E635'` | passed; same layout, legible in light theme |
+| `scripts/render-widgets.ps1 -Theme Dark -Accent '#FFFFFF'` | passed; selection ring visibly walked off the raw (illegible) white accent |
+| Session type | `qwinsta`: `rdp-tcp#0`, active. Not the console, so no key could be pressed and no screen reader could be run |
+
+As with every section before it, none of the row above reaches a single item in §5.1-§5.4. A test
+suite that is not STA and a render harness that never constructs `ShelfWindow` can prove that
+`ShelfSurface` lays out correctly and that its colours clear their thresholds; neither can prove
+that a key press reaches it, that the announced names make sense read aloud, or that the shelf is
+usable by someone who cannot see it. That is the console's job, and it is still undone.

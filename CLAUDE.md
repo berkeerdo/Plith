@@ -71,6 +71,22 @@ the tile has to BE the catcher's window, not Plith's — a different shape for t
 Full ledger: `docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md` (Tasks 1-6 done, Tasks 7
 and 8 measured), and `docs/ROADMAP.md` Phase 7 for every measurement behind it.
 
+**Phase 7 slice 2 (stacks, actions, drag-out, accessibility) code-complete on the same branch,
+not yet merged.** Task 8's finding above turned into a design rather than a dead end: the shelf's
+whole interactive page moved into `Plith.DropCatcher` as a `UserControl`, `ShelfWindow` presses
+its OWN tile so `DoDragDrop` gets a press it can actually use, and a tile now drags out to any
+application or restacks onto another column through that one call. Files land in named stacks,
+each carries a real shell icon with a drawn fallback, and every tile, stack, and the clear/new-stack
+controls carry an accessible name plus arrow-key/Space/Enter/Delete navigation — forwarded from
+`ShelfWindow`, which is what actually holds keyboard focus, not the page itself.
+`check-contrast.ps1` now scans the catcher's XAML too and measures the selection ring, which is
+computed at runtime and had been invisible to it. Full record, including the file-list deviation
+this needed: `docs/SHELF-VERIFICATION.md` §5.
+
+**Verified on hardware for slice 1's plumbing only.** Slice 2 builds clean, passes every lint, and
+renders correctly offscreen in both themes and three accents — none of which presses a key, drags
+a tile, or runs a screen reader. That needs a physical console session, undone as of this slice.
+
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
 > unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected

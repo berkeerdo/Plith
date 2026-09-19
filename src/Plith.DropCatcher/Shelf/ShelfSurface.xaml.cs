@@ -49,6 +49,12 @@ public partial class ShelfSurface : UserControl
     /// sparse, the same value ShelfWidget settled on for the same purpose.</summary>
     private const double Gap = 8;
 
+    /// <summary>The stack caption's own reserved height (its FontSize plus the margin under it),
+    /// FIXED rather than left to measure its own content: BuildSeparator needs the exact same
+    /// number to draw a line that spans the caption as well as the tiles under it, and a value
+    /// only WPF's layout pass knows would leave the two free to disagree.</summary>
+    private const double CaptionHeight = 13;
+
     /// <summary>Icon geometry duplicated from Resources/PlithIcons.xaml's IconDocument, not
     /// shared with it: see the header comment in ShelfSurface.xaml for why this project cannot
     /// reach that dictionary.</summary>
@@ -104,6 +110,20 @@ public partial class ShelfSurface : UserControl
     /// this control could hear at all, which is exactly the bug this field exists to prevent -
     /// see Render's own comment for the other half of the fix.</summary>
     private ContextMenu? _openMenu;
+
+    /// <summary>
+    /// The column and row keyboard navigation is currently on, or null before the first arrow
+    /// key press (and before any mouse press, which sets these too - see BuildTile). Indices
+    /// rather than a remembered path, because what is at a given position can change under a
+    /// live shelf (a remove closes a gap, a fresh SetStack can reorder entries) in a way an
+    /// index survives and a captured path would not: every use re-resolves these against the
+    /// CURRENT model through <see cref="ResolveFocus"/> rather than trusting what was true when
+    /// they were set.
+    /// </summary>
+    private int? _focusColumn;
+
+    /// <inheritdoc cref="_focusColumn"/>
+    private int? _focusRow;
 
     public ShelfSurface()
     {
@@ -197,6 +217,121 @@ public partial class ShelfSurface : UserControl
     /// yet throws rather than silently drawing in WPF's black-on-black defaults, which is the
     /// failure mode this control exists to make loud instead of invisible.
     /// </summary>
+    /// <summary>
+    /// A key that reached the shelf, forwarded here by <see cref="ShelfWindow"/> because the
+    /// window, not this control, is what holds keyboard focus - see that class's own header
+    /// comment on why the shelf must take activation at all. Returns whether the key meant
+    /// something here, so a key this surface does not use is left for the window's own handling
+    /// (today, only Escape) rather than silently swallowed.
+    ///
+    /// Arrow keys move the selection one tile at a time (the visible grid only: an entry folded
+    /// into an overflow tile has no key that reaches it, the same limit the mouse has on it).
+    /// Space adds or removes the current tile from the selection without moving it. Enter opens
+    /// it. Delete removes the current selection, or just the current tile if nothing is
+    /// selected. A surface that takes focus and then answers no key is worse than one that never
+    /// took focus, which is the whole reason this exists.
+    /// </summary>
+    public bool HandleKey(Key key)
+    {
+        if (_lastModel is not { } model) return false;
+        var stacks = model.Stacks;
+        if (stacks.Count == 0) return false;
+
+        return key switch
+        {
+            Key.Left => Move(model, stacks, columnDelta: -1, rowDelta: 0),
+            Key.Right => Move(model, stacks, columnDelta: 1, rowDelta: 0),
+            Key.Up => Move(model, stacks, columnDelta: 0, rowDelta: -1),
+            Key.Down => Move(model, stacks, columnDelta: 0, rowDelta: 1),
+            Key.Space => ToggleFocused(model, stacks),
+            Key.Enter => OpenFocused(stacks),
+            Key.Delete => RemoveFocused(model, stacks),
+            _ => false,
+        };
+    }
+
+    /// <summary>
+    /// The tile keyboard input currently acts on: the last one an arrow key landed on (or a
+    /// mouse press set - see BuildTile), clamped against what the shelf holds now, or the
+    /// shelf's very first tile before anything has set a position at all. The clamped result is
+    /// committed back to the fields, so a Space, Enter or Delete pressed before the first arrow
+    /// key acts on the first tile AND leaves the next arrow key moving on from there, rather than
+    /// from a position nothing was ever actually on.
+    /// </summary>
+    private (int Column, int Row, string Path)? ResolveFocus(IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    {
+        var columns = Math.Min(VisibleColumns, stacks.Count);
+        if (columns == 0) return null;
+
+        var column = Math.Clamp(_focusColumn ?? 0, 0, columns - 1);
+        var rows = VisibleRowsShown(stacks[column].Count);
+        if (rows == 0) return null;
+        var row = Math.Clamp(_focusRow ?? 0, 0, rows - 1);
+
+        _focusColumn = column;
+        _focusRow = row;
+        return (column, row, stacks[column][row].Path);
+    }
+
+    private bool Move(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks, int columnDelta, int rowDelta)
+    {
+        // Whether anything has been on this grid before matters here and only here: the very
+        // first arrow key press has to land ON the resolved default rather than move AWAY from
+        // it, the same first-press behaviour any keyboard list gives a shelf nobody has
+        // navigated yet. ResolveFocus itself cannot tell the two cases apart once it returns,
+        // because it commits the default the moment it resolves one.
+        var firstPress = _focusColumn is null;
+        if (ResolveFocus(stacks) is not { } current) return false;
+
+        if (!firstPress)
+        {
+            var columns = Math.Min(VisibleColumns, stacks.Count);
+            var column = Math.Clamp(current.Column + columnDelta, 0, columns - 1);
+            var rows = VisibleRowsShown(stacks[column].Count);
+            var row = rows == 0 ? 0 : Math.Clamp(current.Row + rowDelta, 0, rows - 1);
+            _focusColumn = column;
+            _focusRow = row;
+            current = (column, row, stacks[column][row].Path);
+        }
+
+        model.Select(current.Path, additive: false);
+        Render(model);
+        return true;
+    }
+
+    private bool ToggleFocused(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    {
+        if (ResolveFocus(stacks) is not { } current) return false;
+
+        model.Select(current.Path, additive: true);
+        Render(model);
+        return true;
+    }
+
+    private bool OpenFocused(IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    {
+        if (ResolveFocus(stacks) is not { } current) return false;
+
+        OpenRequested?.Invoke(current.Path);
+        return true;
+    }
+
+    private bool RemoveFocused(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    {
+        if (ResolveFocus(stacks) is not { } current) return false;
+
+        IReadOnlyList<string> toRemove = model.Selection.Count > 0 ? [.. model.Selection] : [current.Path];
+        RemoveRequested?.Invoke(toRemove);
+        return true;
+    }
+
+    /// <summary>Entries a column actually shows as tiles, before the rest fold into a count
+    /// tile - the same arithmetic BuildColumn uses to build them, factored out so keyboard
+    /// navigation and construction cannot silently disagree about which rows are reachable.
+    /// </summary>
+    private static int VisibleRowsShown(int stackCount) =>
+        stackCount > VisibleRows ? VisibleRows - 1 : Math.Min(stackCount, VisibleRows);
+
     public void Render(ShelfModel model)
     {
         // Recorded before anything else: a tile built below captures this in its own press and
@@ -241,6 +376,14 @@ public partial class ShelfSurface : UserControl
                 Margin = new Thickness(0, 36, 0, 0),
             });
             AutomationProperties.SetName(Columns, "Shelf, empty. Drop files on the notch to keep them here.");
+
+            // Nothing left for keyboard navigation to be on. Left set, the next non-empty
+            // Render would resolve a stale index against an entirely unrelated delivery -
+            // ResolveFocus clamps the NUMBERS back into range, but a clamped index still points
+            // at whatever now happens to occupy that slot, not at anything the person actually
+            // navigated to.
+            _focusColumn = null;
+            _focusRow = null;
             return;
         }
 
@@ -299,7 +442,11 @@ public partial class ShelfSurface : UserControl
     /// </summary>
     private int TargetStackIndex(Point position)
     {
-        foreach (var column in Columns.Children.OfType<StackPanel>())
+        // Border, not StackPanel: BuildColumn wraps its StackPanel in a Border so the whole
+        // column has an automation peer to announce its name on (see that method's own comment),
+        // and the Tag that used to live on the StackPanel now lives on the Border that replaced
+        // it as this method's unit of "a column".
+        foreach (var column in Columns.Children.OfType<Border>())
         {
             if (column.Tag is not int index) continue;
 
@@ -318,7 +465,11 @@ public partial class ShelfSurface : UserControl
     /// </summary>
     private Path BuildSeparator()
     {
-        var height = VisibleRows * TileSize + (VisibleRows - 1) * Gap;
+        // Starts at the top of the CAPTION, not the top of the tiles, and is therefore taller by
+        // CaptionHeight than the tile grid alone: BuildColumn's caption sits above the tiles, and
+        // a separator that only spanned the tiles would visibly stop short of the column's own
+        // top edge.
+        var height = CaptionHeight + VisibleRows * TileSize + (VisibleRows - 1) * Gap;
         return new Path
         {
             Data = new LineGeometry(new Point(0, 0), new Point(0, height)),
@@ -331,30 +482,65 @@ public partial class ShelfSurface : UserControl
         };
     }
 
-    private StackPanel BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
+    /// <summary>
+    /// One stack, as a column of tiles under a small caption naming it, wrapped in a Border.
+    ///
+    /// The Border, not the StackPanel inside it, is what carries both the drop-target Tag
+    /// TargetStackIndex reads back and the stack's own AutomationProperties.Name: a StackPanel
+    /// gets no automation peer of its own, so a name set directly on one reaches nothing at all -
+    /// the same defect class this slice's brief calls out, and this control's own version of the
+    /// bug ShelfWidget's row already had to be fixed once. The Border adds no visible chrome of
+    /// its own (no Background, no BorderBrush), so it changes nothing on screen; it exists only
+    /// to have a peer.
+    ///
+    /// The caption text is new, in NotchInkMuted rather than NotchInk: it names the stack rather
+    /// than being its content, the same distinction ShelfWidget's own hint line draws against its
+    /// tile row. It is also what makes check-contrast.ps1's new
+    /// OsdSurfaceBrush/NotchInkMuted pair for this file a real measurement of shipped code rather
+    /// than a check written against a colour nothing draws.
+    /// </summary>
+    private Border BuildColumn(int index, IReadOnlyList<ShelfEntry> stack, IReadOnlyCollection<string> selection)
     {
-        // Tag carries the index for TargetStackIndex to read back: the column itself is the only
-        // thing that knows where it sits once separators are mixed in between the children.
-        var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top, Tag = index };
+        var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top };
+
+        var caption = new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture, $"Stack {index + 1}"),
+            FontSize = 9,
+            Height = CaptionHeight - 2,
+            Foreground = (Brush)FindResource("NotchInkMuted"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Margin = new Thickness(0, 0, 0, 2),
+        };
+        column.Children.Add(caption);
 
         // One slot is spent on the count whenever a stack holds more than the column can show,
         // the same rule ShelfWidget uses for the row as a whole: a stack of four shows one file
         // and a "+3" rather than two files and a lie about how many are really there.
         var overflow = Math.Max(0, stack.Count - VisibleRows);
-        var shown = overflow > 0 ? VisibleRows - 1 : Math.Min(stack.Count, VisibleRows);
+        var shown = VisibleRowsShown(stack.Count);
 
         for (var i = 0; i < shown; i++)
         {
             var last = overflow == 0 && i == shown - 1;
-            column.Children.Add(BuildTile(stack[i], selection.Contains(stack[i].Path), last));
+            column.Children.Add(BuildTile(stack[i], selection.Contains(stack[i].Path), last, index, i));
         }
 
         if (overflow > 0) column.Children.Add(BuildOverflowTile(stack.Count - shown));
 
-        return column;
+        var wrapper = new Border { Tag = index, Child = column };
+        AutomationProperties.SetName(wrapper, string.Create(CultureInfo.CurrentCulture,
+            $"Stack {index + 1}, {stack.Count} item{(stack.Count == 1 ? "" : "s")}"));
+
+        return wrapper;
     }
 
-    private Border BuildTile(ShelfEntry entry, bool selected, bool last)
+    /// <param name="stackIndex">Which column this tile sits in, and <paramref name="rowIndex"/>
+    /// its row within it - carried only so a mouse press on this tile can set keyboard
+    /// navigation's position to match (see the press handler below), so an arrow key pressed
+    /// right after a click moves on from the tile that was actually clicked rather than from
+    /// wherever a previous arrow key last left it.</param>
+    private Border BuildTile(ShelfEntry entry, bool selected, bool last, int stackIndex, int rowIndex)
     {
         // A fixed-size host rather than the icon itself, so the later swap from the drawn
         // fallback to a real shell icon changes what fills this box without changing the box:
@@ -457,6 +643,14 @@ public partial class ShelfSurface : UserControl
             if (IsDescendantOf(e.OriginalSource as DependencyObject, removeButton)) return;
 
             pressStart = e.GetPosition(tile);
+
+            // Keyboard navigation's position follows the mouse, not just the other way round:
+            // without this, clicking a tile and then pressing an arrow key would move relative to
+            // wherever the LAST arrow key left off, which could be a tile nowhere near the one
+            // just clicked.
+            _focusColumn = stackIndex;
+            _focusRow = rowIndex;
+
             EntryPressed?.Invoke(entry.Path, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
         };
 

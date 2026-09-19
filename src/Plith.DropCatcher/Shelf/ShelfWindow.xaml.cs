@@ -762,12 +762,36 @@ public partial class ShelfWindow : Window
         return handle != 0 && WindowFromPoint(point) == handle;
     }
 
+    /// <summary>
+    /// Every key this window answers, which is every key at all: this class's own header comment
+    /// explains why the WINDOW holds keyboard focus rather than the page inside it ("Esc, arrow
+    /// keys and a visible selection have nothing to arrive at in a window that never takes
+    /// focus"), so a key the page's tiles need to answer has to be forwarded here rather than
+    /// reaching them on its own.
+    ///
+    /// Escape stays this window's own affair: it dismisses the SHELF, not a tile, and Dismiss's
+    /// deferral logic belongs to this class, not to ShelfSurface. Everything else is
+    /// <see cref="ShelfSurface.HandleKey"/>'s to accept or decline; declining it (an unused key,
+    /// or nothing on the shelf to act on) leaves <c>e.Handled</c> false rather than swallowing a
+    /// key this window has no other use for either.
+    ///
+    /// TASK 9 DEVIATION FROM THE PLAN'S OWN FILE LIST, recorded here rather than left to be
+    /// noticed: the plan named only ShelfSurface.xaml.cs for this task's keyboard work. That file
+    /// alone cannot receive a key at all, because it is never the focused element - only this
+    /// method sees a key press, which is the whole reason this window exists as OnPreviewKeyDown
+    /// already did for Escape before this task touched it. See docs/SHELF-VERIFICATION.md and
+    /// docs/superpowers/plans/2026-09-18-shelf-slice-2.md for the same note.
+    /// </summary>
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
-        if (e.Key != Key.Escape) return;
+        if (e.Key == Key.Escape)
+        {
+            e.Handled = true;
+            Dismiss("Esc");
+            return;
+        }
 
-        e.Handled = true;
-        Dismiss("Esc");
+        if (Page.HandleKey(e.Key)) e.Handled = true;
     }
 
     /// <summary>
