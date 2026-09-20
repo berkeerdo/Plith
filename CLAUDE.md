@@ -185,6 +185,22 @@ widget frame between paging and clicking, which Plith is designed to allow, and 
 reported "the shelf never appeared" and pointed at the catcher and the pipe. Filed as the
 driver's instrument defect 6 and fixed by re-checking the page immediately before the press.
 
+**An event you did not cause no longer takes the open notch away (2026-09-20).** A track
+advancing because the song ended used to replace the open widget frame with a HUD, taking away a
+place the person had deliberately navigated to. The rule now asks who caused the event: a volume
+key, a transport command or the summon hotkey still takes the frame, because that is feedback for
+something just pressed; a track change on its own does not. `AudioChange` is deliberately not in
+the caused set, since "the volume changed" says nothing about who changed it and the person's own
+press arrives separately as `VolumeKey`. The older rule survives whole inside the new one: an
+event the open page already displays never takes the frame.
+
+It lives in `NotchEventPolicy`, free of WPF, because `OsdHost` is a `BandWindow` the test project
+cannot construct, which is how the two previous versions of this rule reached a running build
+with no test between them. Ten unit tests, plus a hardware run with both witnesses outside the
+behaviour: Plith naming the track on its own media page, and Spotify's window title changing.
+Getting that probe honest took three attempts, because the first two asked Plith's log whether
+the event arrived, and a kept frame writes nothing to the log.
+
 **Unrelated, and more serious than anything above: Plith used to leave the Windows volume OSD
 broken behind it.** It hides the shell's own flyout with `ShowWindow(SW_HIDE)` and never put it
 back. Nothing is persisted, so uninstalling leaves no setting and a crash takes the hooks with it,

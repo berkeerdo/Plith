@@ -27,6 +27,18 @@ namespace Plith.Views.Presentation;
 /// A script is not a person, but what it lost is exactly what a person loses: the thing they had
 /// just navigated to, taken away by something they did not do.
 ///
+/// VERIFIED ON HARDWARE, 2026-09-20, with both witnesses outside the behaviour under test. Plith
+/// was shown to be subscribed by reading a track name off its own media page
+/// ("playing C'EST LA VIE - Demeter"); the track was then changed with the hardware next-track
+/// key and Spotify's window title moved to "MRK - Hello", proving an uncaused event really
+/// happened; and the open frame was still on the shelf page afterwards.
+///
+/// The witnesses matter as much as the result. Two earlier probes asked Plith's own LOG whether
+/// the event had arrived, and that question is entangled with this rule: when the frame is kept
+/// there is no Reposition and no log line, so "nothing in the log" is both the success signature
+/// and the nothing-happened signature. Both probes reported INCONCLUSIVE on what was probably a
+/// pass, and the first reported PASS while nothing was playing at all.
+///
 /// Free of every WPF type so it can be tested on the headless suite, the same split as
 /// <see cref="NotchGeometry"/> and FullscreenVideoDetector. OsdHost is a BandWindow and cannot
 /// be constructed by the test project at all, which is how the previous two versions of this
