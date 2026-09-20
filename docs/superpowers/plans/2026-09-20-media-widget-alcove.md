@@ -58,7 +58,7 @@ part of the feature a unit test can reach.
   - `static TimeSpan MediaProgress.Elapsed(TimeSpan position, DateTimeOffset lastUpdated, TimeSpan duration, bool isPlaying, DateTimeOffset now)`
   - `static string MediaProgress.Clock(TimeSpan span)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/Plith.Tests/MediaProgressTests.cs`:
 
@@ -147,12 +147,12 @@ public class MediaProgressTests
 }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/Plith.Tests --filter MediaProgressTests`
 Expected: FAIL to compile, `The name 'MediaProgress' does not exist`.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 Create `src/Plith/Services/MediaProgress.cs`:
 
@@ -215,17 +215,17 @@ public static class MediaProgress
 }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test tests/Plith.Tests --filter MediaProgressTests`
 Expected: PASS, 9 tests.
 
-- [ ] **Step 5: Run the whole suite**
+- [x] **Step 5: Run the whole suite**
 
 Run: `dotnet test`
 Expected: 513 passing (504 baseline plus 9), 0 failed.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Services/MediaProgress.cs tests/Plith.Tests/MediaProgressTests.cs
