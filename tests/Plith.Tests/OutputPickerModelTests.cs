@@ -4,16 +4,32 @@ namespace Plith.Tests;
 
 public class OutputPickerModelTests
 {
-    private static WindowsAudioEndpointInfo Ep(string id, string name) => new(id, name);
+    // Both names, because the cell's label comes from the description where that is unique. The
+    // values are the ones measured on this machine on 2026-09-21.
+    private static WindowsAudioEndpointInfo Ep(string id, string name, string device = "")
+        => new(id, name, device);
 
     private static readonly IReadOnlyList<WindowsAudioEndpointInfo> Five =
     [
-        Ep("steam-speakers", "Hoparlor (Steam Streaming Speakers)"),
-        Ep("realtek", "Hoparlor (Realtek(R) Audio)"),
-        Ep("steam-mic", "Hoparlor (Steam Streaming Microphone)"),
-        Ep("nvidia", "PG27AQDM (NVIDIA High)"),
-        Ep("g733", "Hoparlor (Logitech G733)"),
+        Ep("steam-speakers", "Hoparlor (Steam Streaming Speakers)", "Steam Streaming Speakers"),
+        Ep("realtek", "Hoparlor (Realtek(R) Audio)", "Realtek(R) Audio"),
+        Ep("steam-mic", "Hoparlor (Steam Streaming Microphone)", "Steam Streaming Microphone"),
+        Ep("nvidia", "PG27AQDM (NVIDIA High)", "NVIDIA High Definition Audio"),
+        Ep("g733", "Hoparlor (Logitech G733)", "Logitech G733 Gaming Headset"),
     ];
+
+    [Fact]
+    public void ACellIsLabelledWithTheDeviceDescription()
+    {
+        // The endpoint name repeats "Hoparlor (" on four of the five rows here and pushes the
+        // distinguishing words past the end of a 155 DIP cell. Found in widget-media-picker.png:
+        // both Steam devices trimmed to the same visible string.
+        var cells = OutputPickerModel.Cells(Five, "g733", capacity: 6);
+
+        Assert.Equal("Logitech G733 Gaming Headset", cells[0].Label);
+        Assert.Contains(cells, c => c.Label == "Steam Streaming Speakers");
+        Assert.Contains(cells, c => c.Label == "Steam Streaming Microphone");
+    }
 
     [Fact]
     public void TheCurrentOutputComesFirst()

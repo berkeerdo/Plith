@@ -11,6 +11,11 @@
          to stay readable at 13 px - the transport marks, which turn to mud as outlines at that
          size. Stroked icons in this set carry their own stroke width at the call site. -->
 
+    <!-- A back chevron, stroked rather than filled like the speaker marks: it is a line, and a
+         filled triangle would read as a transport control, which is exactly what it sits beside
+         on the media page. Two segments in the same 24 box every other icon uses. -->
+    <Geometry x:Key="IconChevronLeft">M15,5 L8,12 L15,19</Geometry>
+
     <Geometry x:Key="IconPrevious">M18,5.5 L18,18.5 L8.5,12 Z M5,5.5 L7,5.5 L7,18.5 L5,18.5 Z</Geometry>
     <Geometry x:Key="IconNext">M6,5.5 L6,18.5 L15.5,12 Z M17,5.5 L19,5.5 L19,18.5 L17,18.5 Z</Geometry>
     <Geometry x:Key="IconPlay">M7.5,5.2 L7.5,18.8 L18.6,12 Z</Geometry>

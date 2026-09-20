@@ -173,6 +173,65 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- The picker's back control and its cells.
+
+                 Background="Transparent" on both templates is load-bearing, not decoration: WPF
+                 hit-tests a Transparent brush and does NOT hit-test a null one, so a cell with no
+                 background would answer a pointer only where its own text painted and be dead
+                 everywhere else, including its exact centre. That is a measured defect from this
+                 branch, recorded in docs/SHELF-VERIFICATION.md section 3.10 and stated in
+                 ShelfWindow.xaml's own comment. -->
+            <Style x:Key="PickerBackStyle" TargetType="Button">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Padding" Value="4,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Chrome" CornerRadius="7" Background="Transparent"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background"
+                                            Value="{DynamicResource OsdHighlight}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="PickerCellStyle" TargetType="Button">
+                <Setter Property="Height" Value="16" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Margin" Value="0,0,4,4" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Chrome" CornerRadius="5" Background="Transparent"
+                                    Padding="6,0">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#14FFFFFF" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background"
+                                            Value="{DynamicResource OsdHighlight}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -185,6 +244,11 @@
          rejected). So the transport stays on a rail to the right, which is also where it already
          sits on the classic card, and the vertical stack keeps only what it can afford. -->
     <Grid x:Name="Root" Margin="18,14,18,29">
+        <!-- Two modes, siblings, exactly one visible: what is playing, and the output list. The
+             picker replaces both media rows rather than sitting beside them, because the page
+             becomes the list. A mode rather than a page of its own: a widget page would join the
+             pager's rotation, and a swipe would land on a device picker nobody was going to. -->
+        <Grid x:Name="MediaMode">
         <Grid.RowDefinitions>
             <RowDefinition Height="56" />
             <RowDefinition Height="3" />
@@ -321,6 +385,39 @@
             <TextBlock x:Name="Remaining" Grid.Column="2"
                        FontSize="10.5" TextAlignment="Right" VerticalAlignment="Center"
                        Foreground="{DynamicResource NotchInkMuted}" />
+        </Grid>
+        </Grid>
+
+        <!-- 14 + 3 + 56 = 73, the content band. The 56 is three 16 DIP cells and two 4 DIP gaps,
+             and all four numbers come from NotchGeometry rather than from here. -->
+        <Grid x:Name="PickerMode" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="14" />
+                <RowDefinition Height="3" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Button x:Name="PickerBack" Grid.Row="0" HorizontalAlignment="Left"
+                    Style="{StaticResource PickerBackStyle}"
+                    AutomationProperties.Name="Back to now playing">
+                <StackPanel Orientation="Horizontal">
+                    <Viewbox Width="9" Height="9" VerticalAlignment="Center">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="{StaticResource IconChevronLeft}"
+                                  Stroke="{DynamicResource NotchInkMuted}" StrokeThickness="2.2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" />
+                        </Canvas>
+                    </Viewbox>
+                    <!-- The header doubles as the failure line: a switch that does not happen
+                         says so here rather than leaving a press with no answer. -->
+                    <TextBlock x:Name="PickerHeader" Margin="6,0,0,0"
+                               FontSize="10.5" VerticalAlignment="Center"
+                               Foreground="{DynamicResource NotchInkMuted}" />
+                </StackPanel>
+            </Button>
+
+            <UniformGrid x:Name="PickerCells" Grid.Row="2" />
         </Grid>
     </Grid>
 </UserControl>

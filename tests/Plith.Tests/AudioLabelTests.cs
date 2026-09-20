@@ -194,4 +194,72 @@ public class AudioLabelTests
 
         Assert.Equal("PG27AQDM (NVIDIA High)", shortened[0]);
     }
+
+    // --- DistinctLabels: the short name, unless it stops telling two devices apart ------------
+
+    [Fact]
+    public void DistinctLabels_PrefersTheShorterNameWhenItIsUnique()
+    {
+        var labels = AudioLabel.DistinctLabels(
+            ["Logitech G733 Gaming Headset", "Realtek(R) Audio"],
+            ["Hoparlor (Logitech G733 Gaming Headset)", "Hoparlor (Realtek(R) Audio)"]);
+
+        Assert.Equal(["Logitech G733 Gaming Headset", "Realtek(R) Audio"], labels);
+    }
+
+    [Fact]
+    public void DistinctLabels_FallsBackOnlyForTheItemsThatCollide()
+    {
+        // Two identical headsets: their descriptions cannot tell them apart, so those two rows
+        // get the endpoint names, which can. Nothing else pays for it.
+        var labels = AudioLabel.DistinctLabels(
+            ["Realtek(R) Audio", "Realtek(R) Audio", "Steam Streaming Speakers"],
+            ["Hoparlor (Realtek(R) Audio)", "Line In (Realtek(R) Audio)", "Hoparlor (Steam)"]);
+
+        Assert.Equal([
+            "Hoparlor (Realtek(R) Audio)",
+            "Line In (Realtek(R) Audio)",
+            "Steam Streaming Speakers",
+        ], labels);
+    }
+
+    [Fact]
+    public void DistinctLabels_FallsBackWhenThereIsNoShorterName()
+    {
+        // A device can report an id and an endpoint name and no description at all.
+        var labels = AudioLabel.DistinctLabels(
+            ["", "Realtek(R) Audio"],
+            ["Hoparlor (Some Device)", "Hoparlor (Realtek(R) Audio)"]);
+
+        Assert.Equal(["Hoparlor (Some Device)", "Realtek(R) Audio"], labels);
+    }
+
+    [Fact]
+    public void DistinctLabels_TwoMissingShorterNamesAreNotACollisionWithEachOther()
+    {
+        // Both fall back on their own account rather than because they matched: an empty name is
+        // not a name two devices share.
+        var labels = AudioLabel.DistinctLabels(
+            ["", ""],
+            ["Hoparlor (First)", "Hoparlor (Second)"]);
+
+        Assert.Equal(["Hoparlor (First)", "Hoparlor (Second)"], labels);
+    }
+
+    [Fact]
+    public void DistinctLabels_RefusesListsOfDifferentLengths()
+    {
+        // A guard rather than a Math.Min: these are paired by index, and a shorter list would
+        // put one device's label on another device, which is the worst outcome available here.
+        var ex = Assert.Throws<ArgumentException>(() =>
+            AudioLabel.DistinctLabels(["a", "b"], ["only one"]));
+
+        Assert.Contains("paired by index", ex.Message);
+    }
+
+    [Fact]
+    public void DistinctLabels_OfEmptyListsIsEmpty()
+    {
+        Assert.Empty(AudioLabel.DistinctLabels([], []));
+    }
 }

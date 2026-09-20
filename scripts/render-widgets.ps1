@@ -321,6 +321,29 @@ $emptyVm = [Plith.ViewModels.MediaViewModel]::new()
 $mediaEmpty = [Plith.Views.Widgets.MediaWidget]::new($emptyVm, $null)
 Save-Visual -Element $mediaEmpty -W $frameW -H $frameH -Name 'widget-media-empty'
 
+# The output picker, in the mode the page turns into. Two fixtures: this machine's own five-device
+# shape, and a seven-device one so the overflow door is in shot. Injected rather than read from the
+# machine, because a harness that draws whatever is plugged in today draws something different
+# tomorrow. The device names are the ones measured here on 2026-09-21, including the two Steam
+# entries that AudioLabel.Shorten used to collapse into one string.
+$five = [System.Collections.Generic.List[Plith.Services.WindowsAudioEndpointInfo]]::new()
+$five.Add([Plith.Services.WindowsAudioEndpointInfo]::new('g733', 'Hoparlor (Logitech G733 Gaming Headset)', 'Logitech G733 Gaming Headset'))
+$five.Add([Plith.Services.WindowsAudioEndpointInfo]::new('realtek', 'Hoparlor (Realtek(R) Audio)', 'Realtek(R) Audio'))
+$five.Add([Plith.Services.WindowsAudioEndpointInfo]::new('nvidia', 'PG27AQDM (NVIDIA High Definition Audio)', 'NVIDIA High Definition Audio'))
+$five.Add([Plith.Services.WindowsAudioEndpointInfo]::new('steam-spk', 'Hoparlor (Steam Streaming Speakers)', 'Steam Streaming Speakers'))
+$five.Add([Plith.Services.WindowsAudioEndpointInfo]::new('steam-mic', 'Hoparlor (Steam Streaming Microphone)', 'Steam Streaming Microphone'))
+
+$pickerFive = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null, $five, 'g733')
+$pickerFive.OpenPicker()
+Save-Visual -Element $pickerFive -W $frameW -H $frameH -Name 'widget-media-picker'
+
+$seven = [System.Collections.Generic.List[Plith.Services.WindowsAudioEndpointInfo]]::new($five)
+$seven.Add([Plith.Services.WindowsAudioEndpointInfo]::new('sixth', 'Speakers (Sixth Device)', 'Sixth Device'))
+$seven.Add([Plith.Services.WindowsAudioEndpointInfo]::new('seventh', 'Speakers (Seventh Device)', 'Seventh Device'))
+$pickerSeven = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null, $seven, 'g733')
+$pickerSeven.OpenPicker()
+Save-Visual -Element $pickerSeven -W $frameW -H $frameH -Name 'widget-media-picker-overflow'
+
 $writer = [Func[double, bool]] { param($v) $true }
 $audio = [Plith.Views.Widgets.AudioWidget]::new($audioVm, $writer)
 Save-Visual -Element $audio -W $frameW -H $frameH -Name 'widget-audio'

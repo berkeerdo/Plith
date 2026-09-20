@@ -6,8 +6,17 @@ namespace Plith.Services;
 
 public sealed record WindowsAudioSnapshot(string DeviceLabel, float ScalarVolume, bool Muted);
 
-/// <summary>A single active render endpoint the user can pick in Settings.</summary>
-public sealed record WindowsAudioEndpointInfo(string Id, string FriendlyName);
+/// <summary>
+/// A single active render endpoint the user can pick, in Settings or in the notch.
+///
+/// Two names, because Core Audio reports two and they are useful in different places.
+/// FriendlyName is the endpoint ("Hoparlor (Logitech G733 Gaming Headset)"), which suits a wide
+/// combo box. DeviceName is the device description ("Logitech G733 Gaming Headset"), which is
+/// what a narrow list needs: the endpoint name repeats the same parenthesised shape on every row
+/// and pushes the distinguishing words past the end of the cell. Defaulted so existing
+/// two-argument constructions keep compiling and keep meaning "no description read".
+/// </summary>
+public sealed record WindowsAudioEndpointInfo(string Id, string FriendlyName, string DeviceName = "");
 
 /// <summary>
 /// Wraps the Core Audio API default render endpoint via NAudio.
@@ -222,6 +231,7 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         // them. See AudioLabel.ShortenAll.
         var ids = new List<string>();
         var names = new List<string>();
+        var devices = new List<string>();
         try
         {
             using var en = new MMDeviceEnumerator();
@@ -230,13 +240,15 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
             {
                 try
                 {
-                    // BOTH read before EITHER is added. The two lists are paired by index
-                    // downstream, so a device whose id reads and whose name throws would shift
-                    // every label after it by one and put a plausible name on the wrong output.
+                    // ALL read before ANY is added. The lists are paired by index downstream, so
+                    // a device whose id reads and whose name throws would shift every label
+                    // after it by one and put a plausible name on the wrong output.
                     var id = d.ID;
                     var name = d.FriendlyName;
+                    var device = TryDeviceName(d);
                     ids.Add(id);
                     names.Add(name);
+                    devices.Add(device);
                 }
                 finally { d.Dispose(); }
             }
@@ -248,8 +260,22 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
 
         var labels = AudioLabel.ShortenAll(names);
         var list = new List<WindowsAudioEndpointInfo>(ids.Count);
-        for (var i = 0; i < ids.Count; i++) list.Add(new WindowsAudioEndpointInfo(ids[i], labels[i]));
+        for (var i = 0; i < ids.Count; i++)
+            list.Add(new WindowsAudioEndpointInfo(ids[i], labels[i], devices[i]));
         return list;
+    }
+
+    /// <summary>
+    /// The device description, or empty when it cannot be read.
+    ///
+    /// Its own try because it is the optional half: a device that reports an id and an endpoint
+    /// name but no description is still worth listing, and a throw here would otherwise take the
+    /// whole device out of the list.
+    /// </summary>
+    private static string TryDeviceName(MMDevice device)
+    {
+        try { return device.DeviceFriendlyName ?? string.Empty; }
+        catch { return string.Empty; }
     }
 
     /// <summary>

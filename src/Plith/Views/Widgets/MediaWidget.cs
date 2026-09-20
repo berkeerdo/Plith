@@ -2,12 +2,14 @@ using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
 using Plith.Cards;
 using Plith.Services;
 using Plith.ViewModels;
+using Plith.Views.Presentation;
 
 namespace Plith.Views.Widgets;
 
@@ -24,11 +26,21 @@ public partial class MediaWidget : UserControl
 
     /// <param name="openSource">Brings the app that owns the session to the front. Null leaves
     /// the art and title inert rather than looking pressable and doing nothing.</param>
-    public MediaWidget(MediaViewModel vm, Action? openSource = null)
+    /// <param name="outputs">The outputs the picker should offer, or null to read the machine's
+    /// own. Injected for the render harness: a harness that draws whatever is plugged in today
+    /// draws something different tomorrow, and this page's grid is one of the things worth
+    /// looking at.</param>
+    /// <param name="currentOutputId">Which of <paramref name="outputs"/> is the default. Ignored
+    /// when outputs is null.</param>
+    public MediaWidget(MediaViewModel vm, Action? openSource = null,
+                       IReadOnlyList<WindowsAudioEndpointInfo>? outputs = null,
+                       string? currentOutputId = null)
     {
         ArgumentNullException.ThrowIfNull(vm);
         InitializeComponent();
         _vm = vm;
+        _injectedOutputs = outputs;
+        _injectedCurrentOutputId = currentOutputId;
 
         if (openSource is not null)
         {
@@ -54,7 +66,19 @@ public partial class MediaWidget : UserControl
         // Windows' own sound page, not a device list of ours. Changing the default
         // endpoint has no documented API, only the undocumented IPolicyConfig, so an
         // in-notch picker is its own slice. See SystemSoundPanel.
-        Output.Click += (_, _) => SystemSoundPanel.TryOpen();
+        Output.Click += (_, _) => OpenPicker();
+        PickerBack.Click += (_, _) => ClosePicker();
+
+        // Escape leaves the picker. Handled here rather than on the grid, because focus can be
+        // on any cell or on the back control and the key means the same thing from all of them.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && PickerMode.Visibility == Visibility.Visible)
+            {
+                ClosePicker();
+                e.Handled = true;
+            }
+        };
 
         // The track writes on RELEASE, not on every sample of the drag. Writing continuously
         // would send SMTC a position write per mouse move, which makes the source scrub and
@@ -104,6 +128,9 @@ public partial class MediaWidget : UserControl
     /// so a timer left running would tick for the whole session to paint nothing.
     /// </summary>
     private readonly DispatcherTimer _tick;
+
+    private readonly IReadOnlyList<WindowsAudioEndpointInfo>? _injectedOutputs;
+    private readonly string? _injectedCurrentOutputId;
 
     /// <summary>True between the thumb being grabbed and released.</summary>
     private bool _dragging;
@@ -331,5 +358,108 @@ public partial class MediaWidget : UserControl
         Bar.Foreground = ink;
         Bar.Background = new SolidColorBrush(
             Color.FromArgb(GrooveAlpha, ink.Color.R, ink.Color.G, ink.Color.B));
+    }
+
+    /// <summary>
+    /// Show the outputs, in place of what is playing.
+    ///
+    /// The list is read ONCE, when the picker opens, and not refreshed while it is up. A device
+    /// can sleep or be unplugged mid-gesture, and a grid that rearranged itself under a pointer
+    /// already moving toward a cell would route audio somewhere nobody chose. A press on a device
+    /// that has since gone returns false and lands in the header instead. This is the shelf
+    /// frame's own rule, for the same reason.
+    /// </summary>
+    public void OpenPicker()
+    {
+        var endpoints = _injectedOutputs ?? WindowsAudioClient.EnumerateRenderEndpoints();
+        var current = _injectedOutputs is not null
+            ? _injectedCurrentOutputId ?? string.Empty
+            : WindowsAudioClient.TryGetDefaultRenderEndpointId() ?? string.Empty;
+
+        var cells = OutputPickerModel.Cells(endpoints, current, NotchGeometry.OutputPickerCapacity);
+
+        PickerHeader.Text = cells.Count == 0 ? "No outputs available" : "Output";
+        PickerCells.Columns = NotchGeometry.OutputPickerColumns;
+        PickerCells.Rows = NotchGeometry.OutputPickerRows;
+        PickerCells.Children.Clear();
+        foreach (var cell in cells) PickerCells.Children.Add(BuildCell(cell));
+
+        MediaMode.Visibility = Visibility.Collapsed;
+        PickerMode.Visibility = Visibility.Visible;
+
+        // Focus goes to the back control rather than the first cell: arriving with focus on a
+        // device means one stray Space or Enter changes where the machine's audio comes out.
+        PickerBack.Focus();
+    }
+
+    private void ClosePicker()
+    {
+        PickerMode.Visibility = Visibility.Collapsed;
+        MediaMode.Visibility = Visibility.Visible;
+    }
+
+    private Button BuildCell(OutputChoice choice)
+    {
+        var row = new StackPanel { Orientation = Orientation.Horizontal };
+
+        // The dot sits in the layout whether or not it is drawn, so a non-current label starts
+        // where a current one does and the column does not look ragged.
+        row.Children.Add(new System.Windows.Shapes.Ellipse
+        {
+            Width = 5,
+            Height = 5,
+            Margin = new Thickness(0, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = (Brush)FindResource("NotchInk"),
+            Visibility = choice.IsCurrent ? Visibility.Visible : Visibility.Hidden,
+        });
+
+        row.Children.Add(new TextBlock
+        {
+            Text = choice.Label,
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource(choice.IsCurrent ? "NotchInk" : "NotchInkMuted"),
+        });
+
+        var button = new Button
+        {
+            Style = (Style)FindResource("PickerCellStyle"),
+            Content = row,
+            // The FULL name, on both. The label above is trimmed to its cell, and a hover or a
+            // screen reader must not inherit that trimming: this is why the design refuses a
+            // "distinguishing token" heuristic, since the truth can simply be carried here.
+            ToolTip = choice.Label,
+        };
+
+        AutomationProperties.SetName(button,
+            choice.IsCurrent ? $"{choice.Label}, current output" : choice.Label);
+
+        button.Click += (_, _) => Choose(choice);
+        return button;
+    }
+
+    private void Choose(OutputChoice choice)
+    {
+        if (choice.IsOverflow)
+        {
+            SystemSoundPanel.TryOpen();
+            ClosePicker();
+            return;
+        }
+
+        if (OutputDeviceSwitcher.TrySetDefault(choice.Id))
+        {
+            // Back to what is playing. The level the notch shows follows on its own:
+            // WindowsAudioClient implements IMMNotificationClient and re-attaches on a default
+            // change, a path hardened in 9de0664 so it can no longer fail silently.
+            ClosePicker();
+            return;
+        }
+
+        // Stays open and says so. Silently doing nothing is what every other control on this
+        // page is written not to do.
+        PickerHeader.Text = "Could not switch output";
     }
 }

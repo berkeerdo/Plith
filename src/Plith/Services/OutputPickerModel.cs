@@ -41,6 +41,16 @@ public static class OutputPickerModel
 
         if (endpoints.Count == 0) return [];
 
+        // The device description where it is unique, the endpoint name where it is not. See
+        // AudioLabel.DistinctLabels: in a 155 DIP cell the endpoint name's shared parenthesised
+        // shape pushes the distinguishing words off the end, so two different devices read
+        // identically even with their full names behind them.
+        var labels = AudioLabel.DistinctLabels(
+            endpoints.Select(e => e.DeviceName).ToList(),
+            endpoints.Select(e => e.FriendlyName).ToList());
+        var labelById = new Dictionary<string, string>(StringComparer.Ordinal);
+        for (var i = 0; i < endpoints.Count; i++) labelById[endpoints[i].Id] = labels[i];
+
         var ordered = endpoints
             .Where(e => IsCurrent(e, currentId))
             .Concat(endpoints.Where(e => !IsCurrent(e, currentId)))
@@ -51,7 +61,7 @@ public static class OutputPickerModel
 
         var cells = ordered
             .Take(room)
-            .Select(e => new OutputChoice(e.Id, e.FriendlyName, IsCurrent(e, currentId)))
+            .Select(e => new OutputChoice(e.Id, labelById[e.Id], IsCurrent(e, currentId)))
             .ToList();
 
         if (overflowing)

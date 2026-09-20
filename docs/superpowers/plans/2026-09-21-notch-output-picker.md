@@ -725,7 +725,7 @@ No unit test is possible: the suite is not STA. The test cycle is the render har
 themes plus both lints, which is where every layout defect on this branch has actually been
 found.
 
-- [ ] **Step 1: Add the picker's markup**
+- [x] **Step 1: Add the picker's markup**
 
 In `MediaWidget.xaml`, inside `Root`, add a second child that spans all three rows and is
 collapsed by default. The media content (the tile row and the progress row) and this are the two
@@ -785,7 +785,7 @@ And a `PickerCellStyle` for the cells: `Height="16"`, `Margin="0,0,0,4"` on the 
 `{DynamicResource OsdHighlight}`, and a `ContentPresenter` centred vertically with 8 DIP of left
 padding. Cell content is built in code.
 
-- [ ] **Step 2: Build the cells in code**
+- [x] **Step 2: Build the cells in code**
 
 In `MediaWidget.cs`:
 
@@ -911,7 +911,7 @@ cell's label starts where the dot would have been and the column does not look r
 it must not touch either mode's visibility. Check that when wiring: the only writers of
 `PickerMode.Visibility` are `OpenPicker`, `ClosePicker` and the initial XAML.
 
-- [ ] **Step 3: Give the harness both fixtures**
+- [x] **Step 3: Give the harness both fixtures**
 
 In `scripts/render-widgets.ps1`, after the existing media renders, add two more. The picker needs
 no SMTC session, but it does read the real endpoint list, so the fixture has to come in from
@@ -946,7 +946,7 @@ Save-Visual -Element $pickerSeven -W $frameW -H $frameH -Name 'widget-media-pick
 harness cannot click a button, and it is named for what it is rather than hidden behind an
 `internal` the harness would have to reach around.
 
-- [ ] **Step 4: Build, render both themes, and look**
+- [x] **Step 4: Build, render both themes, and look**
 
 Run:
 ```
@@ -961,7 +961,7 @@ pwsh -STA -File scripts/render-widgets.ps1 -Theme Light -OutDir "$env:TEMP\plith
 overflow cell reads as a door and not as a device, and NOTHING is a cold blue rectangle on the
 tinted panel, which is the defect that killed the System Controls page.
 
-- [ ] **Step 5: Run the lints**
+- [x] **Step 5: Run the lints**
 
 Run:
 ```
@@ -972,7 +972,7 @@ Expected: both pass. The cells' `Foreground` and `Background` come from the pale
 contrast script will measure them; a failure is a real finding and the ratio belongs in the
 report before any colour changes.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Views/Widgets/MediaWidget.xaml src/Plith/Views/Widgets/MediaWidget.cs \
