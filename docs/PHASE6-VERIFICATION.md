@@ -1245,3 +1245,112 @@ and noise is how a log stops being read.
 the wrong place. The three previous ones were fixed by recomputing where used. This one could not
 be, because the value was not stale; it was circular. The difference was only visible from a
 measurement.
+
+---
+
+## 20. The media page's Alcove redesign, driven on hardware (2026-09-20)
+
+Spec: `docs/superpowers/specs/2026-09-20-media-widget-alcove-design.md`.
+Plan: `docs/superpowers/plans/2026-09-20-media-widget-alcove.md`.
+
+Build green, 526 tests green, `check-a11y.ps1` and `check-contrast.ps1` green, renders in both
+themes. **None of that presses anything**, which is section 15's own lesson, so
+`scripts/drive-media-page.ps1` was written to click the real notch and read the real UI
+Automation tree.
+
+### What the run said
+
+Run at 22:40 on 2026-09-20, Debug build, console session Active, presentation AmbientNotch.
+Spotify held a session (`SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify`, "Three" by Mahmut Orhan)
+and it was **paused**, with a timeline of `00:00:00 of 00:02:59`.
+
+```
+[PASS] a click while NOT playing opens the clock page, not the media page
+       names in the tree: 22:40, 20 Eylül, playing Three - Mahmut Orhan | 20 Eylül |
+                          Partly cloudy | 21° | Three - Mahmut Orhan
+[PASS] the notch pages to the media widget
+       names after paging: Now playing | Three | Mahmut Orhan | Previous track | Play |
+                           Next track | Change output device | 0:00 | Playback position | -2:59
+[PASS] the progress bar reports a value to UI Automation   value=0 of 100
+[PASS] the elapsed and remaining clocks are drawn          clock-shaped names: 0:00, -2:59
+```
+
+The second line is the whole page read back from the live tree: every accessible name the
+redesign declares is really there, including the new output control, and the bar is a real
+`ProgressBar` whose position reaches a screen reader as a value rather than as a length of
+pixels. The notch window measured `384x130` for the `356x116` frame, matching the shelf's own
+numbers for the same shell.
+
+### Still open: the playing direction
+
+**The half of the rule that needs playback has not been measured.** Nothing was playing at the
+time, so what passed is "not playing opens the clock", and the run says so in its own output
+rather than reporting a pass for the other direction. Also unmeasured: whether the bar actually
+advances, which only a playing source can show.
+
+### Instrument defects, both this script's own
+
+**1. A PowerShell scriptblock cannot collect the snapshot.** `MediaSessionClient` raises
+`Changed` on a threadpool thread, and a scriptblock converted to an `Action<T>` has no runspace
+there: it never runs, and nothing throws. The script reported "SMTC never delivered a snapshot"
+while the client had read the session perfectly, which a separate probe proved by printing the
+AUMID beside `changedFired=0`. The handler is now compiled with `Add-Type`.
+
+That message was deliberately written to distinguish three answers rather than two (playing,
+nothing playing, and unreadable), and that is the only reason the failure was diagnosed rather
+than reported as "nothing is playing". An instrument that blames the machine for its own failure
+would have cost a whole round here.
+
+**2. Refusing to run while paused left half the rule unmeasurable.** The first version threw
+unless something was playing, on the argument that a silent machine produces a vacuous pass. The
+paused case is not vacuous: it is the other direction of the same rule. The script now measures
+whichever direction the machine is in and names it in its output.
+
+### Findings outside the change
+
+**`ClockWidget` says "playing" for a paused session.** Visible in the first verdict's own
+evidence: the clock page announced `playing Three - Mahmut Orhan` while SMTC reported the session
+paused. `ClockWidget.Refresh` appends `", playing {NowTitle.Text}"` whenever its now-playing line
+is visible, without consulting `IsPlaying`. Filed, not fixed: it is a different widget and
+outside this change.
+
+**`AutomationProperties.SetName(OpenSourceArea, ...)` still reaches nothing.**
+`check-a11y.ps1` reports it as a known gap on every run: `OpenSourceArea` is a `Border`, which
+WPF gives no automation peer, so "Open the app that is playing" is in no tree. It predates this
+branch and the redesign kept the element as it was. The right fix is a `Button` with a
+transparent template, which changes focus and keyboard behaviour and so is its own task.
+
+### What the renders found that the lints could not
+
+Recorded here because three of the four defects in this change were found by looking at a PNG.
+
+**The progress fill went through four versions.** The contrast lint measured this page for the
+first time, because removing the page's private ink is what made its pairs visible to it:
+
+| Fill on groove | Worst measured | Where |
+|---|---|---|
+| `OsdAccent` on `NotchTrack` | **1,0:1** | lime accent, light theme |
+| `NotchInk` on `NotchBezelBrush` | 1,1:1 | several accents |
+| `NotchInk` on `OsdHighlight` | 1,1:1 | several accents |
+| `NotchInk` on `NotchTrack` | 2,6:1 | near-white accent, dark theme |
+
+No static pair clears the bar on every accent, because `ContrastInk.TrackOn` walks from the
+surface only until it clears 3:1 **against the surface** and stops, leaving the ink an
+unpredictable distance further along the same ramp.
+
+An ink derived from the groove with `ContrastInk.PairOn` then cleared every ratio **and drew the
+bar inverted**: on a dark-theme surface `TrackOn` returns a light grey, so the derived ink came
+back near-black and the played part read as a hole punched in the groove. A contrast ratio has no
+notion of which side should be stronger, so no lint could have caught it. Found in
+`widget-media.png`. Both colours now come from `NotchInk`, the groove being the same ink at 24
+percent, which is the one arrangement that cannot come out backwards.
+
+**The disabled transport looked exactly like the live transport.** A replaced `ControlTemplate`
+loses WPF's default dimming, so `Render`'s own comment about controls that do nothing when
+pressed was only half true. Found in `widget-media-empty.png`.
+
+**A long title clips hard against the rail.** `MarqueeText` clips its viewport with no edge
+fade, anywhere in the product, so a still frame shows a title cut mid-glyph. It scrolls at
+runtime, so this is a still-frame artefact rather than lost information, but the text column is
+now 116 DIP rather than 148 and it will scroll more often. Filed, not fixed: an edge fade belongs
+to `MarqueeText` and would change every surface that uses it. See `widget-media-long-title.png`.
