@@ -167,4 +167,32 @@ public class MediaCardTests
 
         Assert.Empty(shows);
     }
+
+    [Fact]
+    public void Seek_ReachesTheCardAsAPosition()
+    {
+        var card = new MediaCard(NewSettings());
+        TimeSpan? seen = null;
+        card.SeekInvoked += (_, p) => seen = p;
+
+        card.Vm.RequestSeek(TimeSpan.FromSeconds(42));
+
+        Assert.Equal(TimeSpan.FromSeconds(42), seen);
+    }
+
+    [Fact]
+    public void Seek_RaisesNoShowRequest()
+    {
+        // A transport command asks for a show; a seek must not. It happens on a surface the
+        // person is already looking at and already holding open, so a show would replace the
+        // page under their own hand with a HUD about it.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        card.Apply(Playing());
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Vm.RequestSeek(TimeSpan.FromSeconds(42));
+
+        Assert.Empty(shows);
+    }
 }

@@ -22,7 +22,12 @@ public sealed record MediaSnapshot(
     bool HasSession,
     // Defaulted so the five-argument construction in the no-session path and in the tests keeps
     // compiling and keeps meaning "no timeline".
-    MediaTimeline? Timeline = null);
+    MediaTimeline? Timeline = null,
+    // Whether this source accepts a position write. Asked of SMTC rather than assumed: it WAS
+    // assumed once, in the spec that deferred seek, on the belief that Spotify does not support
+    // it. Measured on 2026-09-20: Spotify's own session reports IsPlaybackPositionEnabled true,
+    // with a seek range covering the whole track.
+    bool CanSeek = false);
 
 /// <summary>
 /// Wraps Windows.Media.Control (SMTC) — the system-wide media session manager that
@@ -97,6 +102,29 @@ public sealed class MediaSessionClient : IDisposable
 
     /// <summary>True while the current session reports Playing.</summary>
     public bool IsCurrentSessionPlaying { get; private set; }
+
+    /// <summary>
+    /// Ask the current session to move to <paramref name="position"/>.
+    ///
+    /// Returns false rather than throwing when there is no session, the source refuses, or it
+    /// died mid-call: the caller is a drag on a 4 DIP bar, and the page is worth more than the
+    /// gesture. The view only offers the gesture when the snapshot said CanSeek, so a false here
+    /// means the source changed its mind between the two.
+    /// </summary>
+    public async Task<bool> TrySeekAsync(TimeSpan position)
+    {
+        var session = _currentSession;
+        if (session is null) return false;
+
+        try
+        {
+            return await session.TryChangePlaybackPositionAsync(position.Ticks);
+        }
+        catch
+        {
+            return false;
+        }
+    }
 
     public async Task StartAsync()
     {
@@ -224,11 +252,13 @@ public sealed class MediaSessionClient : IDisposable
         }
         if (ct.IsCancellationRequested) return;
 
-        bool playing = false;
+        bool playing = false, canSeek = false;
         try
         {
-            playing = session.GetPlaybackInfo()?.PlaybackStatus
+            var info = session.GetPlaybackInfo();
+            playing = info?.PlaybackStatus
                 == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing;
+            canSeek = info?.Controls.IsPlaybackPositionEnabled == true;
         }
         catch { }
 
@@ -243,7 +273,7 @@ public sealed class MediaSessionClient : IDisposable
         // The timeline rides on the full snapshot too, so a subscriber that only listens to
         // Changed is never left without one.
         Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true,
-                                          ReadTimeline(session)));
+                                          ReadTimeline(session), canSeek));
     }
 
     private static async Task<byte[]?> ReadThumbnailAsync(IRandomAccessStreamReference thumbRef, CancellationToken ct)

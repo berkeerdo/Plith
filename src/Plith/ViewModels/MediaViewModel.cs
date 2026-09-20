@@ -73,6 +73,21 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         set => Set(ref _timeline, value);
     }
 
+    private bool _canSeek;
+
+    /// <summary>
+    /// Whether this source accepts a position write.
+    ///
+    /// The media page disables its track when false, rather than offering a drag that silently
+    /// does nothing: a control that ignores a gesture teaches people not to trust the ones that
+    /// answer it.
+    /// </summary>
+    public bool CanSeek
+    {
+        get => _canSeek;
+        set => Set(ref _canSeek, value);
+    }
+
     private bool _hasSession;
     public bool HasSession
     {
@@ -115,6 +130,13 @@ public sealed class MediaViewModel : INotifyPropertyChanged
 
     public void RequestCommand(MediaCommand command) => CommandRequested?.Invoke(command);
 
+    /// <summary>Raised when the user has finished dragging the track. Carries a position rather
+    /// than a command, which is why it is its own event and not a <see cref="MediaCommand"/>:
+    /// the enum has nowhere to put a value.</summary>
+    public event Action<TimeSpan>? SeekRequested;
+
+    public void RequestSeek(TimeSpan position) => SeekRequested?.Invoke(position);
+
     /// <summary>
     /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher
     /// thread — the orchestrator marshals SMTC threadpool callbacks before invoking this,
@@ -128,6 +150,7 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         HasSession = snapshot.HasSession;   // setter raises HasSessionChanged on actual change
         AlbumArt = DecodeThumbnail(snapshot.ThumbnailBytes);
         Timeline = snapshot.Timeline;
+        CanSeek = snapshot.CanSeek;
     }
 
     private static BitmapImage? DecodeThumbnail(byte[]? bytes)

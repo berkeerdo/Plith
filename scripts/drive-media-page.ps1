@@ -119,6 +119,21 @@ public static class MediaInput {
         System.Threading.Thread.Sleep(70);
         Send(new INPUT[] { Mouse(LEFTUP) }, "LEFTUP");
     }
+    public static void Glide(int x0, int y0, int x1, int y1, int steps) {
+        for (int i = 1; i <= steps; i++) {
+            Move(x0 + (x1 - x0) * i / steps, y0 + (y1 - y0) * i / steps);
+            System.Threading.Thread.Sleep(16);
+        }
+    }
+    public static void Drag(int x0, int y0, int x1, int y1) {
+        Move(x0, y0);
+        System.Threading.Thread.Sleep(120);
+        Send(new INPUT[] { Mouse(LEFTDOWN) }, "LEFTDOWN");
+        System.Threading.Thread.Sleep(140);
+        Glide(x0, y0, x1, y1, 24);
+        System.Threading.Thread.Sleep(200);
+        Send(new INPUT[] { Mouse(LEFTUP) }, "LEFTUP");
+    }
     public static string Where() {
         POINT p; GetCursorPos(out p);
         IntPtr h = WindowFromPoint(p);
@@ -268,9 +283,12 @@ using System;
 using Plith.Services;
 public static class SnapshotCollector {
     public static MediaSnapshot Latest;
+    public static MediaTimeline LatestTimeline;
     public static int Count;
+    public static int TimelineCount;
     public static void Attach(MediaSessionClient client) {
-        client.Changed += s => { Latest = s; Count++; };
+        client.Changed += s => { Latest = s; Count++; if (s.Timeline != null) LatestTimeline = s.Timeline; };
+        client.TimelineChanged += t => { if (t != null) { LatestTimeline = t; TimelineCount++; } };
     }
 }
 '@
@@ -292,7 +310,8 @@ while ($null -eq [SnapshotCollector]::Latest -and $deadline.Elapsed.TotalSeconds
 
 $snapshot = [SnapshotCollector]::Latest
 $aumid = $probe.CurrentSourceAppUserModelId
-$probe.Dispose()
+# NOT disposed here: the seek check below reads the position back through this same probe, which
+# is the only way to see whether the source actually moved. Disposed at the end of the run.
 
 if ($null -eq $snapshot) {
     throw ("SMTC never delivered a snapshot to this process within four seconds. This is the " +
@@ -439,6 +458,44 @@ if ($onMedia) {
     $clocks = @($names | Where-Object { $_ -match '^-?\d{1,2}:\d{2}$' })
     Add-Verdict 'the elapsed and remaining clocks are drawn' ($clocks.Count -ge 2) `
         "clock-shaped names: $($clocks -join ', ')"
+
+    # --- and does dragging it actually move the source? ---------------------------------------
+    #
+    # The only honest evidence is the position coming back from SMTC, so this reads the timeline
+    # before and after through the same probe. Skipped rather than failed when the source refuses
+    # position writes: then there is nothing to measure and the bar is disabled by design.
+    if (-not $snapshot.CanSeek) {
+        "  (skipped: this source reports IsPlaybackPositionEnabled false, so the track is read-only)"
+    } elseif (-not $bar) {
+        "  (skipped: the bar is not in the tree, so there is nothing to drag)"
+    } else {
+        $before = [SnapshotCollector]::LatestTimeline
+        $r = $bar.Current.BoundingRectangle
+        $y = [int]($r.Y + $r.Height / 2)
+        $from = [int]($r.X + $r.Width * 0.10)
+        $to = [int]($r.X + $r.Width * 0.75)
+
+        [MediaInput]::Drag($from, $y, $to, $y)
+
+        # The source applies the write and reports a new timeline back; that round trip is not
+        # instant, and reading immediately would measure the old position and call it a failure.
+        $deadline = [Diagnostics.Stopwatch]::StartNew()
+        while ($deadline.Elapsed.TotalSeconds -lt 4 -and
+               [SnapshotCollector]::LatestTimeline.Position -eq $before.Position) {
+            Start-Sleep -Milliseconds 200
+        }
+        $after = [SnapshotCollector]::LatestTimeline
+
+        # 75 per cent of the track, within a tolerance the gesture itself cannot beat: the bar is
+        # about 232 DIP wide, so one DIP is nearly a second on a three minute track, and the
+        # pointer lands on a whole pixel.
+        $want = $after.Duration.TotalSeconds * 0.75
+        $got = $after.Position.TotalSeconds
+        $ok = [Math]::Abs($got - $want) -le 6
+        Add-Verdict 'dragging the track seeks the source' $ok `
+            ("before $([int]$before.Position.TotalSeconds)s, after $([int]$got)s, " +
+             "wanted about $([int]$want)s of $([int]$after.Duration.TotalSeconds)s")
+    }
 }
 
 # What this run started, it stops. A running Plith.exe holds its own binary open, so the next
@@ -446,9 +503,14 @@ if ($onMedia) {
 # leftover process: measured on 2026-09-20, where two build errors read as a code defect for a
 # minute. An instance that was ALREADY up belongs to the person at the machine, so it is left
 # exactly as it was found.
+$probe.Dispose()
+
 if ($script:startedPlith) {
-    Get-Process Plith -ErrorAction SilentlyContinue | Stop-Process
-    "plith: stopped (this run started it)"
+    # The catcher too: Plith launches it, and stopping only Plith leaves it orphaned holding its
+    # OWN binary open, which fails the next build with the same two errors one process further
+    # along. Measured on 2026-09-20, after killing Plith by hand and building again.
+    Get-Process Plith, Plith.DropCatcher -ErrorAction SilentlyContinue | Stop-Process
+    "plith: stopped, with the catcher it launched (this run started them)"
 } else {
     "plith: left running (it was up before this run; `dotnet build` will fail while it is)"
 }

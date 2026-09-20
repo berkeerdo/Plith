@@ -39,6 +39,26 @@ public static class MediaProgress
     }
 
     /// <summary>
+    /// A fraction of the track, back into a position to seek to.
+    ///
+    /// The inverse of what the bar draws, and total for the same reason <see cref="Elapsed"/> is:
+    /// a Slider whose Maximum is momentarily zero divides to NaN, and NaN reaching
+    /// TimeSpan.FromTicks throws inside a mouse handler. Seeking to the start is wrong in a way a
+    /// person can see and undo; a crash in a media page is not.
+    ///
+    /// Rounded to whole seconds, because that is the resolution the two clocks beside the bar
+    /// show: a write a person can repeat exactly is worth more here than sub-second precision
+    /// nobody can aim at on a 232 DIP bar.
+    /// </summary>
+    public static TimeSpan PositionFor(double fraction, TimeSpan duration)
+    {
+        if (duration <= TimeSpan.Zero || double.IsNaN(fraction)) return TimeSpan.Zero;
+
+        var clamped = Math.Clamp(fraction, 0, 1);
+        return TimeSpan.FromSeconds(Math.Round(duration.TotalSeconds * clamped));
+    }
+
+    /// <summary>
     /// A track clock: minutes and padded seconds, with hours only when there are any.
     ///
     /// Not a format string on the call site, because the remaining time is written as the

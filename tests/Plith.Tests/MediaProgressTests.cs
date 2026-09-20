@@ -79,4 +79,50 @@ public class MediaProgressTests
         // position past its own duration would otherwise render "-0:-5".
         Assert.Equal("0:00", MediaProgress.Clock(TimeSpan.FromSeconds(-5)));
     }
+
+    // --- PositionFor: a fraction of the track back into a position -----------------------------
+
+    [Fact]
+    public void PositionFor_MapsAFractionOntoTheDuration()
+    {
+        Assert.Equal(TimeSpan.FromSeconds(100),
+                     MediaProgress.PositionFor(0.5, TimeSpan.FromSeconds(200)));
+    }
+
+    [Fact]
+    public void PositionFor_ClampsBothEnds()
+    {
+        var duration = TimeSpan.FromSeconds(200);
+
+        Assert.Equal(TimeSpan.Zero, MediaProgress.PositionFor(-0.2, duration));
+        Assert.Equal(duration, MediaProgress.PositionFor(1.4, duration));
+    }
+
+    [Fact]
+    public void PositionFor_WithNoDurationIsZero()
+    {
+        // The bar is not drawn without a duration, so this cannot be reached through the UI. It
+        // is defined anyway, because a seek computed from a zero-length track is the kind of
+        // thing that arrives from a source that changed underneath the gesture.
+        Assert.Equal(TimeSpan.Zero, MediaProgress.PositionFor(0.5, TimeSpan.Zero));
+    }
+
+    [Fact]
+    public void PositionFor_OfSomethingThatIsNotANumberIsZero()
+    {
+        // A Slider whose Maximum is momentarily zero divides to NaN, and NaN passed to
+        // TimeSpan.FromTicks throws. Seeking to the start is wrong in a way a person can see and
+        // undo; a crash in a media page is not.
+        Assert.Equal(TimeSpan.Zero, MediaProgress.PositionFor(double.NaN, TimeSpan.FromSeconds(200)));
+    }
+
+    [Fact]
+    public void PositionFor_RoundsToWholeSeconds()
+    {
+        // Whole seconds because that is the resolution the two clocks beside the bar show. A
+        // seek to 100,4 s reads back as 1:40 either way, and a rounded write is one a person can
+        // repeat exactly.
+        Assert.Equal(TimeSpan.FromSeconds(100),
+                     MediaProgress.PositionFor(0.5012, TimeSpan.FromSeconds(200)));
+    }
 }

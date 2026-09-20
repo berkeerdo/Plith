@@ -93,4 +93,45 @@ public class MediaViewModelTests
 
         Assert.Null(vm.Timeline);
     }
+
+    [Fact]
+    public void Apply_CarriesCanSeek()
+    {
+        var vm = new MediaViewModel();
+
+        vm.Apply(new MediaSnapshot("t", "a", null, IsPlaying: true, HasSession: true,
+                                   Timeline: null, CanSeek: true));
+
+        Assert.True(vm.CanSeek);
+    }
+
+    [Fact]
+    public void Apply_WithASourceThatRefusesSeek_LeavesCanSeekFalse()
+    {
+        // The default, and it matters which way round the default falls: a bar that offers a
+        // drag the source ignores is worse than one that offers none.
+        var vm = new MediaViewModel();
+
+        vm.Apply(new MediaSnapshot("t", "a", null, IsPlaying: true, HasSession: true));
+
+        Assert.False(vm.CanSeek);
+    }
+
+    [Fact]
+    public void RequestSeek_RaisesSeekRequestedWithThePosition()
+    {
+        var vm = new MediaViewModel();
+        TimeSpan? seen = null;
+        vm.SeekRequested += p => seen = p;
+
+        vm.RequestSeek(TimeSpan.FromSeconds(97));
+
+        Assert.Equal(TimeSpan.FromSeconds(97), seen);
+    }
+
+    [Fact]
+    public void RequestSeek_WithNoSubscriber_DoesNotThrow()
+    {
+        new MediaViewModel().RequestSeek(TimeSpan.FromSeconds(1));
+    }
 }

@@ -57,6 +57,7 @@ public sealed class OsdOrchestrator : IDisposable
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _mediaCard.CommandInvoked += OnMediaCommandInvoked;
+        _mediaCard.SeekInvoked += OnMediaSeekInvoked;
         _settings.Changed += OnSettingsChanged;
         _windowsAudio.Changed += OnWindowsAudioChanged;
     }
@@ -352,6 +353,14 @@ public sealed class OsdOrchestrator : IDisposable
         _mediaCard.ApplyTimeline(timeline);
     }
 
+    private void OnMediaSeekInvoked(object? sender, TimeSpan position)
+    {
+        // Fire and forget, like the transport commands beside it: the answer comes back as a
+        // TimelinePropertiesChanged from the source rather than as a return value worth waiting
+        // for, and awaiting here would block the gesture that produced it.
+        _ = _media.TrySeekAsync(position);
+    }
+
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
     {
         _ = command switch
@@ -372,6 +381,7 @@ public sealed class OsdOrchestrator : IDisposable
         _audioWatchdogTimer?.Stop();
         _settings.Changed -= OnSettingsChanged;
         _mediaCard.CommandInvoked -= OnMediaCommandInvoked;
+        _mediaCard.SeekInvoked -= OnMediaSeekInvoked;
         _media.Changed -= OnMediaChanged;
         _media.TimelineChanged -= OnTimelineChanged;
         _windowsAudio.Changed -= OnWindowsAudioChanged;

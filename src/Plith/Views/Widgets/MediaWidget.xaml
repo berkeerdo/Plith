@@ -66,13 +66,14 @@
                 </Setter>
             </Style>
 
-            <!-- A real ProgressBar, not two Borders, and not for looks: ProgressBar has an
-                 automation peer with a value, so where the track has got to reaches a screen
-                 reader. NotchHud's level bar is two Borders and stays that way, because it is on
-                 screen for two seconds.
+            <!-- A Slider, not a ProgressBar, and not a drawn rectangle with mouse handlers.
 
-                 PART_Track and PART_Indicator are the names ProgressBar's own code looks up when
-                 it sizes the fill. Renaming either leaves a bar that never moves.
+                 It was a ProgressBar until seek existed, for its automation peer: where the track
+                 has got to reaches a screen reader as a VALUE rather than as a length of pixels.
+                 A Slider keeps that and adds what a seekable bar needs anyway, which is the same
+                 argument AudioWidget's own track records: keyboard arrows, Home and End, and the
+                 drag behaviour people already expect. A hand-rolled track would have had to
+                 reimplement all of it, and would have reimplemented it worse.
 
                  NEITHER COLOUR IS DECLARED HERE. PaintBar computes both from NotchInk, and the
                  four candidates behind that are recorded there with their measured ratios: an
@@ -83,21 +84,91 @@
 
                  Alcove's bar is white rather than accent-coloured for the same reason: only its
                  waveform carries the accent. -->
-            <Style x:Key="TrackBarStyle" TargetType="ProgressBar">
-                <Setter Property="Height" Value="4" />
-                <Setter Property="Minimum" Value="0" />
-                <Setter Property="Maximum" Value="100" />
+            <Style x:Key="SeekThumbStyle" TargetType="Thumb">
                 <Setter Property="Focusable" Value="False" />
+                <Setter Property="Width" Value="10" />
+                <Setter Property="Height" Value="10" />
+                <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Template">
                     <Setter.Value>
-                        <ControlTemplate TargetType="ProgressBar">
-                            <Border CornerRadius="2" ClipToBounds="True"
-                                    Background="{TemplateBinding Background}">
-                                <Grid x:Name="PART_Track">
-                                    <Rectangle x:Name="PART_Indicator" HorizontalAlignment="Left"
-                                               Fill="{TemplateBinding Foreground}" />
-                                </Grid>
-                            </Border>
+                        <ControlTemplate TargetType="Thumb">
+                            <!-- The Slider's own Foreground, so the thumb is the same ink as the
+                                 played part it sits at the end of. -->
+                            <Ellipse Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Slider}}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="TrackBarStyle" TargetType="Slider">
+                <!-- Taller than the 4 DIP it draws, because the whole control is the grab target
+                     and a 4 DIP one is missed between two mouse samples. AudioWidget's track
+                     records the same rule at 6 DIP; this bar is thinner, so it needs it more. -->
+                <Setter Property="MinHeight" Value="20" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="SmallChange" Value="2" />
+                <Setter Property="LargeChange" Value="10" />
+                <Setter Property="IsMoveToPointEnabled" Value="True" />
+                <Setter Property="Focusable" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid Background="Transparent">
+                                <Border Height="4" CornerRadius="2"
+                                        VerticalAlignment="Center"
+                                        Background="{TemplateBinding Background}" />
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="Slider.DecreaseLarge"
+                                                      Focusable="False" Cursor="Hand">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Grid Background="Transparent">
+                                                        <Border Height="4" CornerRadius="2"
+                                                                VerticalAlignment="Center"
+                                                                Background="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Slider}}" />
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="Slider.IncreaseLarge"
+                                                      Focusable="False" Cursor="Hand">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Background="Transparent" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <!-- Hidden until the pointer is on the bar or the bar has
+                                             keyboard focus. A permanent dot would make a page
+                                             that mostly reports a position look like a control
+                                             being offered, and Alcove's bar has no thumb at rest
+                                             either. -->
+                                        <Thumb x:Name="SeekThumb" Opacity="0"
+                                               Style="{StaticResource SeekThumbStyle}" />
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="1" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="1" />
+                                </Trigger>
+                                <!-- A source that refuses a position write gets a bar that still
+                                     reports where the track is and offers no gesture at all: no
+                                     thumb, no hand cursor. A control that ignores a drag teaches
+                                     people not to trust the ones that answer it. -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="0" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
                         </ControlTemplate>
                     </Setter.Value>
                 </Setter>
@@ -243,9 +314,10 @@
             <TextBlock x:Name="Elapsed" Grid.Column="0"
                        FontSize="10.5" VerticalAlignment="Center"
                        Foreground="{DynamicResource NotchInkMuted}" />
-            <ProgressBar x:Name="Bar" Grid.Column="1" Margin="8,0"
-                         Style="{StaticResource TrackBarStyle}"
-                         AutomationProperties.Name="Playback position" />
+            <Slider x:Name="Bar" Grid.Column="1" Margin="8,0"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource TrackBarStyle}"
+                    AutomationProperties.Name="Playback position" />
             <TextBlock x:Name="Remaining" Grid.Column="2"
                        FontSize="10.5" TextAlignment="Right" VerticalAlignment="Center"
                        Foreground="{DynamicResource NotchInkMuted}" />

@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Threading;
@@ -55,6 +56,17 @@ public partial class MediaWidget : UserControl
         // in-notch picker is its own slice. See SystemSoundPanel.
         Output.Click += (_, _) => SystemSoundPanel.TryOpen();
 
+        // The track writes on RELEASE, not on every sample of the drag. Writing continuously
+        // would send SMTC a position write per mouse move, which makes the source scrub and
+        // stutter; Spotify's own bar behaves the same way. DragStarted and DragCompleted cover a
+        // click as well as a drag, because IsMoveToPointEnabled turns a click into a drag of the
+        // thumb it just moved.
+        Bar.AddHandler(Thumb.DragStartedEvent,
+            new DragStartedEventHandler((_, _) => _dragging = true));
+        Bar.AddHandler(Thumb.DragCompletedEvent,
+            new DragCompletedEventHandler((_, _) => { _dragging = false; CommitSeek(); }));
+        Bar.ValueChanged += OnBarValueChanged;
+
         // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
         // the one a person reaches for without looking.
         // Play/pause is the one a hand goes to without looking, so it is filled rather than
@@ -92,6 +104,37 @@ public partial class MediaWidget : UserControl
     /// so a timer left running would tick for the whole session to paint nothing.
     /// </summary>
     private readonly DispatcherTimer _tick;
+
+    /// <summary>True between the thumb being grabbed and released.</summary>
+    private bool _dragging;
+
+    /// <summary>
+    /// When the user last drove the track, so the tick does not pull the thumb out from under
+    /// their hand.
+    ///
+    /// A flag beside a timestamp rather than a sentinel timestamp alone, and that is AudioWidget's
+    /// recorded lesson rather than a preference: initialising the stamp to long.MinValue and
+    /// asking whether TickCount64 minus it is small OVERFLOWS to a negative number, which is
+    /// smaller than the window, so the widget believes the user is driving from the moment it is
+    /// built and never paints the position at all. That defect was found by rendering the widget
+    /// offscreen, with the track at zero beside a readout that said 62 per cent.
+    /// </summary>
+    private long _lastUserChangeMs;
+
+    private bool _hasUserChanged;
+
+    /// <summary>
+    /// How long after a user-driven change the tick stays out of the way.
+    ///
+    /// Long enough to cover the round trip: the seek is written on release, the source applies it
+    /// and reports a new timeline back, and until that arrives the interpolation is still running
+    /// from the OLD reading. Writing the bar from it in that gap is what would snap the thumb back
+    /// to where the track was before the gesture.
+    /// </summary>
+    private const long UserDrivingWindowMs = 900;
+
+    private bool UserIsDriving
+        => _hasUserChanged && Environment.TickCount64 - _lastUserChangeMs < UserDrivingWindowMs;
 
     /// <summary>What the page last showed, so a repaint that changes nothing does not animate.
     /// Every property change on the view model lands here — play/pause alone must not make the
@@ -184,14 +227,74 @@ public partial class MediaWidget : UserControl
 
         PaintBar();
 
+        // Only a source that accepts a position write gets a draggable track. The bar still
+        // reports where the track is either way.
+        Bar.IsEnabled = _vm.CanSeek;
+
+        // The hand wins. While the thumb is held, or inside the window after a write, the bar is
+        // the user's and the interpolation is still running from a reading that predates their
+        // gesture: writing it here is what would snap the thumb back.
+        if (_dragging || UserIsDriving)
+        {
+            ShowTimesFor(TargetPosition());
+            return;
+        }
+
         var elapsed = MediaProgress.Elapsed(timeline.Position, timeline.LastUpdated,
                                             timeline.Duration, _vm.IsPlaying, DateTimeOffset.Now);
 
+        // Detached around the write, so this repaint cannot come back through OnBarValueChanged
+        // and turn a report into a seek.
+        Bar.ValueChanged -= OnBarValueChanged;
         // Duration is positive by construction: ReadTimeline returns null otherwise, which is
         // what makes this division safe without a guard here.
         Bar.Value = elapsed / timeline.Duration * 100;
+        Bar.ValueChanged += OnBarValueChanged;
+
+        ShowTimesFor(elapsed);
+    }
+
+    private void ShowTimesFor(TimeSpan elapsed)
+    {
+        var duration = _vm.Timeline?.Duration ?? TimeSpan.Zero;
         Elapsed.Text = MediaProgress.Clock(elapsed);
-        Remaining.Text = "-" + MediaProgress.Clock(timeline.Duration - elapsed);
+        Remaining.Text = "-" + MediaProgress.Clock(duration - elapsed);
+    }
+
+    /// <summary>
+    /// The track moved, and this only ever runs for a change the USER made.
+    ///
+    /// RenderProgress detaches this handler around its own write, which is the same shape
+    /// AudioWidget uses and for the same reason: otherwise a repaint reads as a gesture and the
+    /// page seeks the source to wherever it had just finished drawing.
+    /// </summary>
+    private void OnBarValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        _hasUserChanged = true;
+        _lastUserChangeMs = Environment.TickCount64;
+
+        // Labels follow the thumb while it is held, so the gesture has a readout. The position
+        // itself is not written until release.
+        ShowTimesFor(TargetPosition());
+
+        // Keyboard: arrows, Home and End raise this with no drag around it, so there is no
+        // DragCompleted coming to commit it.
+        if (!_dragging) CommitSeek();
+    }
+
+    /// <summary>Where the thumb currently points, in the track's own time.</summary>
+    private TimeSpan TargetPosition()
+    {
+        var duration = _vm.Timeline?.Duration ?? TimeSpan.Zero;
+        return MediaProgress.PositionFor(Bar.Value / Bar.Maximum, duration);
+    }
+
+    private void CommitSeek()
+    {
+        if (!_vm.CanSeek || _vm.Timeline is null) return;
+
+        _lastUserChangeMs = Environment.TickCount64;   // the round trip starts now, not at the grab
+        _vm.RequestSeek(TargetPosition());
     }
 
     /// <summary>How much of the ink the unplayed groove keeps.</summary>

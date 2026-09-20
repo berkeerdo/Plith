@@ -266,6 +266,12 @@ $mediaVm.AlbumArt = $cover
 $mediaVm.Timeline = [Plith.Services.MediaTimeline]::new(
     [TimeSpan]::FromSeconds(147), [TimeSpan]::FromSeconds(267), [DateTimeOffset]::Now)
 
+# A source that accepts a position write, which is what Spotify reports here. The paused and
+# long-title states below leave it false on purpose, so both halves are drawn: an enabled track
+# and one that reports a position while offering no gesture. The thumb only appears under the
+# pointer, so no still frame can show it either way.
+$mediaVm.CanSeek = $true
+
 $reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
     [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now)
 }
