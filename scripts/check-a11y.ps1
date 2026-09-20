@@ -217,8 +217,6 @@ $knownCodeBehindGaps = @{
     'ShelfWidget.cs:tile' = 'predates Task 9: every Border built by Tile(...) was already named ' +
         'before this scan existed to see it. Filed, not fixed, in docs/SHELF-VERIFICATION.md ' +
         'section 5.4.'
-    'ShelfWidget.cs:Tiles' = 'predates Task 9: Tiles is a StackPanel, x:Name-d in ShelfWidget.xaml. ' +
-        'Filed, not fixed, in docs/SHELF-VERIFICATION.md section 5.4.'
     'MediaWidget.cs:OpenSourceArea' = 'found by this same scan, unrelated to the shelf: ' +
         'OpenSourceArea is a Border. Predates this branch. Filed, not fixed.'
     'NotchHud.cs:VolumeRow' = 'found by this same scan, unrelated to the shelf: VolumeRow is a ' +

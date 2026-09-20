@@ -231,7 +231,9 @@ public partial class ShelfWidget : UserControl
             empty.Children.Add(message);
 
             Tiles.Children.Add(empty);
-            AutomationProperties.SetName(Tiles, "Shelf, empty. Drop files on the notch to keep them here.");
+
+            // On THIS control, not on Tiles. See the populated branch below for the whole of it.
+            AutomationProperties.SetName(this, "Shelf, empty. Drop files on the notch to keep them here.");
             return;
         }
 
@@ -245,10 +247,23 @@ public partial class ShelfWidget : UserControl
 
         if (overflow > 0) Tiles.Children.Add(BuildOverflowTile(items.Count - shown));
 
-        // Announced on the row, because a StackPanel carries no automation peer of its own and a
-        // name set on one would reach nothing. The count first: a screen reader user needs to
-        // know how much is here before hearing a list of file names.
-        AutomationProperties.SetName(Tiles, string.Create(CultureInfo.CurrentCulture,
+        // ON THIS CONTROL, NOT ON Tiles, and the comment this replaces is the best evidence of
+        // why that matters: it read "announced on the row, because a StackPanel carries no
+        // automation peer of its own and a name set on one would reach nothing", and then set the
+        // name on Tiles, which IS a StackPanel. The reason was written down correctly and then
+        // contradicted by the line under it.
+        //
+        // Confirmed against the LIVE UIA tree on 2026-09-19, not inferred: with five files on the
+        // shelf page the names present were the five file names, their type chips and the open
+        // hint. "Shelf, 5 items" appeared nowhere, so no screen reader had ever heard the count.
+        // Filed then as a known gap in docs/SHELF-VERIFICATION.md section 5.4; fixed here.
+        //
+        // The UserControl root has a peer, which is the same one-level-up fix ShelfSurface,
+        // AmbientCardView, AudioCardView and MediaCardView all use for the same reason.
+        //
+        // The count first: a screen reader user needs to know how much is here before hearing a
+        // list of file names.
+        AutomationProperties.SetName(this, string.Create(CultureInfo.CurrentCulture,
             $"Shelf, {items.Count} item{(items.Count == 1 ? "" : "s")}"));
     }
 
