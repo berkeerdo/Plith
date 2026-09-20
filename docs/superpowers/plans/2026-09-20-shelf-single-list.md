@@ -23,6 +23,29 @@
 
 ---
 
+
+## Status, and two defects this plan had (2026-09-20)
+
+**Task 1 done** (`310ef19`). **Task 2 done** (`29ca8df`), having absorbed work this plan had
+put in Task 3. Build 0 errors 0 warnings, 471 + 17 tests passing, all three lints exit 0.
+
+Executing the plan found two things wrong with it, both about where the task boundaries fall.
+
+1. **Task 2 could not compile on its own.** `ShelfSession` uses the store in five places (the
+   log line, `SendStacks`, and the `NewStack`, `Restack` and `PruneEmptyStacks` cases). This plan
+   put them in Task 3, which would have made Task 2 a commit that does not build. They moved into
+   Task 2.
+
+2. **Tasks 3 and 4 cannot be separated, and are now one task.** Flattening `ShelfModel` drags the
+   surface with it: `ShelfSurface.Render` reads `model.Stacks`, `App.xaml.cs` raises the two
+   verbs, and `ShelfWindow` bridges `SetStack`. There is no ordering of the two that leaves the
+   branch compiling and running in between. They are merged below as Task 3.
+
+**Carried deliberately, and both say so in the code:** `DropVerb.NewStack` and `DropVerb.Restack`
+are still declared, marked inert, because the catcher still raises them; and `SendItems` declares
+a stack total of 1 rather than 0, because the current `ShelfModel` discards a delivery that
+declares 0. Both disappear in Task 3.
+
 ### Task 1: Shared shelf geometry
 
 Put the cap and the grid in one place that both processes compile, and make the frame height an expression over the row count instead of a second literal.
@@ -35,7 +58,7 @@ Put the cap and the grid in one place that both processes compile, and make the 
 - Consumes: nothing from earlier tasks.
 - Produces: `NotchGeometry.ShelfTilesPerRow` (int, 5), `NotchGeometry.ShelfRowCount` (int, 3), `NotchGeometry.ShelfCapacity` (int, 15), `NotchGeometry.ShelfTileSize` (double, 64), `NotchGeometry.ShelfGap` (double, 8), `NotchGeometry.ShelfFrameDip` (Size, unchanged name, height now computed).
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 Append to `tests/Plith.Tests/NotchGeometryTests.cs` (create the file with `using Plith.Views.Presentation; namespace Plith.Tests;` and a `public sealed class NotchGeometryTests` if it does not exist):
 
@@ -83,12 +106,12 @@ public void ShelfFrameIsWideEnoughForARow()
 }
 ```
 
-- [ ] **Step 2: Run the test and verify it fails**
+- [x] **Step 2: Run the test and verify it fails**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~NotchGeometryTests"`
 Expected: FAIL, compile error, `ShelfTilesPerRow` and the other members do not exist.
 
-- [ ] **Step 3: Add the constants and derive the height**
+- [x] **Step 3: Add the constants and derive the height**
 
 In `src/Plith/Views/Presentation/NotchGeometry.cs`, replace the `ShelfFrameDip` declaration with:
 
@@ -119,12 +142,12 @@ public const double ShelfGap = 8;
 /// Everything in the shelf frame that is not the tile grid: the header with its clear control,
 /// the window padding and the border.
 ///
-/// DERIVED, not measured. The shelf frame was 384 x 224 with a content block of 149 (a 13 DIP
-/// stack caption, two 64 DIP rows and one 8 DIP gap), which leaves 75. It is named rather than
-/// folded into a literal height so that changing ShelfRowCount moves the frame with it, and so
-/// that the one number here that nobody has measured says so out loud.
+/// DERIVED, but from two measured parts rather than from a guess. The frame was 384 x 224, and
+/// the comment that number carried decomposed it: the surface wants 210 DIP of content plus 14
+/// DIP of margin. Of that 210, the tile columns were 149 (a 13 DIP stack caption, two 64 DIP rows
+/// and one 8 DIP gap), which leaves 61 for the header and padding. So 61 + 14.
 /// </summary>
-private const double ShelfChromeDip = 75;
+private const double ShelfChromeDip = 61 + 14;
 
 /// <summary>
 /// The shelf frame, in DIP.
@@ -143,12 +166,12 @@ public static readonly Size ShelfFrameDip = new(
     ShelfRowCount * ShelfTileSize + (ShelfRowCount - 1) * ShelfGap + ShelfChromeDip);
 ```
 
-- [ ] **Step 4: Run the test and verify it passes**
+- [x] **Step 4: Run the test and verify it passes**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~NotchGeometryTests"`
 Expected: PASS. `ShelfFrameDip.Height` is now `3*64 + 2*8 + 75 = 283`.
 
-- [ ] **Step 5: Match the window's design size**
+- [x] **Step 5: Match the window's design size**
 
 `ShelfWindow.xaml` declares the same numbers as its design size (see the comment quoted above). Find them and update the height to `283`:
 
@@ -156,7 +179,7 @@ Run: `grep -n "224\|384" src/Plith.DropCatcher/Shelf/ShelfWindow.xaml`
 
 Change the height literal from `224` to `283`. Leave the width at `384`.
 
-- [ ] **Step 6: Build and commit**
+- [x] **Step 6: Build and commit**
 
 ```bash
 dotnet build Plith.slnx -m:1
@@ -168,15 +191,20 @@ git commit -m "feat(shelf): define the cap as what the grid draws"
 
 ### Task 2: ShelfStore becomes one flat list
 
+> **Absorbed `ShelfSession` while being executed.** The store has five consumers in that file and
+> the task could not compile without them. See the status section above.
+
 **Files:**
 - Modify: `src/Plith/Services/Shelf/ShelfStore.cs`
-- Test: `tests/Plith.Tests/ShelfStoreTests.cs`
+- Modify: `src/Plith/Services/Shelf/ShelfSession.cs` (the log line, `SendStacks`, and the `NewStack`, `Restack` and `PruneEmptyStacks` cases)
+- Modify: `src/Plith/Services/Shelf/DropChannel.cs` (mark the two verbs inert)
+- Test: `tests/Plith.Tests/ShelfStoreTests.cs`, `tests/Plith.Tests/ShelfSessionTests.cs`
 
 **Interfaces:**
 - Consumes: `NotchGeometry.ShelfCapacity` from Task 1.
 - Produces: `ShelfStore.Items` (`IReadOnlyList<ShelfItem>`, newest first), `ShelfStore.MaxItems` (int, now `NotchGeometry.ShelfCapacity`), `Add(IEnumerable<string>)`, `Remove(string)`, `RemoveMany(IEnumerable<string>)`, `Clear()`. **Removed:** `Stacks`, `NewStack()`, `Restack(int, IEnumerable<string>)`, `PruneEmptyStacks()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Add to `tests/Plith.Tests/ShelfStoreTests.cs`:
 
@@ -252,12 +280,12 @@ public void Save_WritesOnePathPerLineWithNoBlankLines()
 }
 ```
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~ShelfStoreTests"`
 Expected: FAIL. The new tests fail and the existing stack tests still compile against `Stacks`.
 
-- [ ] **Step 3: Flatten the store**
+- [x] **Step 3: Flatten the store**
 
 In `src/Plith/Services/Shelf/ShelfStore.cs`:
 
@@ -391,7 +419,7 @@ private void Load()
 }
 ```
 
-- [ ] **Step 4: Delete the stack tests**
+- [x] **Step 4: Delete the stack tests**
 
 In `tests/Plith.Tests/ShelfStoreTests.cs`, delete every test that calls `NewStack`, `Restack`, `PruneEmptyStacks` or reads `Stacks`. Find them with:
 
@@ -399,12 +427,12 @@ Run: `grep -n "NewStack\|Restack\|PruneEmptyStacks\|\.Stacks" tests/Plith.Tests/
 
 Keep every test that exercises `Add`, `Remove`, `RemoveMany`, `Clear`, `Items`, `TryResolve` behaviour and persistence, adjusting any that assert through `Stacks` to assert through `Items`.
 
-- [ ] **Step 5: Run the tests and verify they pass**
+- [x] **Step 5: Run the tests and verify they pass**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~ShelfStoreTests"`
 Expected: PASS.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf/ShelfStore.cs tests/Plith.Tests/ShelfStoreTests.cs
@@ -413,7 +441,77 @@ git commit -m "feat(shelf): make the store one flat list"
 
 ---
 
-### Task 3: One Items message, on both ends of the wire
+### Task 3: The catcher goes flat, in one step
+
+The model, the wiring and the surface move together. This is Tasks 3 and 4 of the original plan,
+merged for the reason in the status section above: no ordering of them leaves the branch working
+in between.
+
+**Files:**
+- Modify: `src/Plith.DropCatcher/Shelf/ShelfModel.cs`
+- Modify: `src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs` (constants around lines 35 to 57, `VisibleRowsShown` around 366, `Render` around 271 and 397, `BuildColumn` around 742, `BuildOverflowTile` around 1105, `BuildNewStackZone` around 631, `TargetStackIndex` around 593, `OnColumnsDrop` around 585)
+- Modify: `src/Plith.DropCatcher/Shelf/ShelfSurface.xaml` (the new-stack button around line 68)
+- Modify: `src/Plith.DropCatcher/Shelf/ShelfWindow.xaml.cs` (`SetStack` around 486, the two event bridges around 276)
+- Modify: `src/Plith.DropCatcher/Shelf/ShelfActions.cs`
+- Modify: `src/Plith.DropCatcher/App.xaml.cs` (the probe fixture around 88, the `Items` handler around 151, the two wire bridges around 183)
+- Modify: `src/Plith/Services/Shelf/DropChannel.cs` (delete the two inert verbs)
+- Modify: `src/Plith/Services/Shelf/ShelfSession.cs` (the stack total in `SendItems`)
+- Test: `tests/Plith.Tests/ShelfModelTests.cs`, `tests/Plith.Tests/DropChannelTests.cs`
+
+**Interfaces:**
+- Consumes: `NotchGeometry.ShelfCapacity` / `ShelfTilesPerRow` / `ShelfRowCount` / `ShelfTileSize` / `ShelfGap` (Task 1), `ShelfStore.Items` (Task 2).
+- Produces: `ShelfModel.SetItems(IReadOnlyList<string>)`, `ShelfModel.Items`, a surface with one named element per file and no count chip, and a `DropVerb` of ten members.
+
+- [ ] **Step 1: Write the failing model tests**
+
+Use the three tests written out in the original Task 3 Step 1 below, unchanged: `SetItems_ReplacesTheListOutright`, `SetItems_TruncatesToTheShelfCapacity`, `SetItems_DropsASelectionThatIsNoLongerPresent`.
+
+- [ ] **Step 2: Run them and verify they fail**
+
+Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~ShelfModelTests"`
+Expected: FAIL, compile error, `SetItems` does not exist.
+
+- [ ] **Step 3: Flatten the model**
+
+Use the `SetItems` implementation written out in the original Task 3 Step 3 below, deleting `MaxStacks`, `_slots`, `_expected`, `Stacks`, `IsComplete` and `SetStack`.
+
+- [ ] **Step 4: Follow the compiler through the catcher**
+
+Run: `dotnet build Plith.slnx -m:1`
+
+Fix each error in turn. `ShelfWindow.SetStack` becomes `SetItems`; `App.xaml.cs`'s `Items` handler calls it with `message.Paths` alone; the probe fixture becomes one flat list; the `NewStackRequested` and `RestackRequested` bridges and their `ShelfActions` members go.
+
+- [ ] **Step 5: Replace the columns with a wrapping grid**
+
+Use the original Task 4, Steps 1, 2, 3, 5 below, which are written out in full: delete the column machinery, build the `WrapPanel`, make keyboard navigation linear, and remove the within-surface drop handling. **Keep `Background = Brushes.Transparent` on the tile** for the reason §3.10 records.
+
+- [ ] **Step 6: Remove the new-stack control**
+
+Use the original Task 4 Step 4 below.
+
+- [ ] **Step 7: Delete the two inert verbs and fix the stack total**
+
+In `DropChannel.cs` delete `NewStack` and `Restack`. In `ShelfSession.SendItems`, change `y: 1` to `y: 0` and delete the comment explaining why it was 1.
+
+- [ ] **Step 8: Run everything and commit**
+
+```bash
+dotnet build Plith.slnx -m:1
+dotnet test Plith.slnx -m:1
+pwsh -NoProfile -File scripts/render-widgets.ps1
+pwsh -NoProfile -File scripts/check-contrast.ps1
+git add -A
+git commit -m "feat(shelf): draw one wrapping grid, not columns"
+```
+
+Expected: build 0 errors, all tests pass, `render-widgets.ps1` green including its `tile-hit` check.
+
+---
+
+#### Reference: the original Task 3 and Task 4, for the code the steps above point at
+
+
+##### Original Task 3: One Items message, on both ends of the wire
 
 The protocol change and the model that reads it ship together, because a one-message sender against a multi-message reader compiles and fails only at runtime.
 
@@ -576,7 +674,7 @@ git commit -m "feat(shelf): send the whole shelf in one message"
 
 ---
 
-### Task 4: The surface draws a wrapping grid
+##### Original Task 4: The surface draws a wrapping grid
 
 **Files:**
 - Modify: `src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs` (constants around lines 35 to 57, `VisibleRowsShown` around 366, `BuildColumn` around 742, `BuildOverflowTile` around 1105)
@@ -584,7 +682,7 @@ git commit -m "feat(shelf): send the whole shelf in one message"
 - Modify: `src/Plith.DropCatcher/Shelf/ShelfWindow.xaml` (header)
 
 **Interfaces:**
-- Consumes: `ShelfModel.Items` (Task 3), `NotchGeometry.ShelfTilesPerRow` / `ShelfRowCount` / `ShelfTileSize` / `ShelfGap` (Task 1).
+- Consumes: `ShelfModel.Items`, `NotchGeometry.ShelfTilesPerRow` / `ShelfRowCount` / `ShelfTileSize` / `ShelfGap` (Task 1).
 - Produces: a surface whose UIA tree contains one named element per file and no count chip.
 
 - [ ] **Step 1: Delete the column machinery**
@@ -654,7 +752,10 @@ Expected: build 0 errors, `render-widgets.ps1` green including its `tile-hit` ch
 
 ---
 
-### Task 5: The notch page, and the count that reached nobody
+
+---
+
+### Task 4: The notch page, and the count that reached nobody
 
 **Files:**
 - Modify: `src/Plith/Views/Widgets/ShelfWidget.cs` (`BuildOverflowTile` around line 382, the `Tiles` automation name)
@@ -711,7 +812,7 @@ Expected: `check-a11y.ps1` exit 0, and the `SetName(Tiles, ...)` line is gone fr
 
 ---
 
-### Task 6: The driver, and the documents
+### Task 5: The driver, and the documents
 
 **Files:**
 - Modify: `scripts/drive-shelf-pair.ps1`
@@ -795,10 +896,10 @@ git commit -m "docs(shelf): retire the stack items, record the flat list"
 
 ## Self-Review
 
-**Spec coverage.** Store and persistence: Task 2. Shared constants and the derived frame height: Task 1. Wire protocol and the one-message `Items` collapse: Task 3. The shelf surface: Task 4. The notch page and its automation-name defect: Task 5. Geometry: Task 1 defines it, Task 6 Step 7 confirms it. What gets deleted: Tasks 2, 3, 4 and 6. Testing: the unit tests live in Tasks 1 to 3, the runtime guarantee check in Task 6 Step 3.
+**Spec coverage.** Store and persistence: Task 2. Shared constants and the derived frame height: Task 1. Wire protocol, the one-message `Items` collapse and the shelf surface: Task 3, which the two originally separate tasks were merged into. The notch page and its automation-name defect: Task 4. Geometry: Task 1 defines it, Task 5 Step 7 confirms it. What gets deleted: Tasks 2, 3 and 5. Testing: the unit tests live in Tasks 1 to 3, the runtime guarantee check in Task 5 Step 3.
 
-**Risk 4 from the spec** (`render-widgets.ps1` has structural assumptions about tile nesting) is covered by Task 4 Step 6, which runs it and expects green; the `.Children[0]` path may need adjusting when the tile loses its column parent.
+**Risk 4 from the spec** (`render-widgets.ps1` has structural assumptions about tile nesting) is covered by Task 3 Step 8, which runs it and expects green; the `.Children[0]` path may need adjusting when the tile loses its column parent.
 
-**Type consistency.** `SetItems(IReadOnlyList<string>)` and `Items` are named identically in Task 3's test, implementation and Task 4's consumer. `NotchGeometry.ShelfCapacity`, `ShelfTilesPerRow`, `ShelfRowCount`, `ShelfTileSize` and `ShelfGap` are spelled the same in Tasks 1, 2, 3 and 4. `ShelfStore.MaxItems` keeps its name and changes only its value source.
+**Type consistency.** `SetItems(IReadOnlyList<string>)` and `Items` are named identically in Task 3's test, implementation and consumers, which now sit in the same task. `NotchGeometry.ShelfCapacity`, `ShelfTilesPerRow`, `ShelfRowCount`, `ShelfTileSize` and `ShelfGap` are spelled the same in Tasks 1, 2 and 3. `ShelfStore.MaxItems` keeps its name and changes only its value source.
 
 **Open and deliberately not decided here:** whether 15 proves too few in use. Raising it means adding a row and letting the frame height follow, not adding scrolling.
