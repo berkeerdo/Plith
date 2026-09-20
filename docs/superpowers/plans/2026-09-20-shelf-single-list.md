@@ -44,10 +44,16 @@ sized for fifteen. The spec's decision 5 said the shelf hugs its contents and de
 quietly made the height constant. `NotchGeometry.ShelfFrameFor` derives the frame from the item
 count, still decided once at open.
 
-**STILL NOT RUN: Task 5 Steps 6 and 7**, which need the machine. The driver has never been run
-against the flat shelf, and the frame height has never been looked at on screen. Everything above
-is a green build, green tests and green lints, which is exactly the combination this branch has
-watched miss a defect five separate times.
+**RUN ON HARDWARE, 2026-09-20, and every verdict passed.** Seven checks green against the real
+pair, including the one the whole change exists for: with the shelf seeded to capacity, all 15
+files were present in the UIA tree, none missing. `Shelf requested at 1088,0 384x283 with 15
+item(s)` confirms the derived frame on the real window, and the capture shows five per row, three
+rows, nothing folded.
+
+It took two runs. The first reported "the shelf never appeared", which was not the product: a
+track change replaced the open widget frame between paging and clicking, and Plith is designed to
+let it. That is instrument defect 6, now handled by re-checking the page immediately before the
+press.
 
 Executing the plan found two things wrong with it, both about where the task boundaries fall.
 
@@ -889,7 +895,7 @@ pwsh -NoProfile -File scripts/render-widgets.ps1
 
 Expected: build 0 errors 0 warnings, all tests pass, every lint exit 0.
 
-- [ ] **Step 6: Drive it on hardware**
+- [x] **Step 6: Drive it on hardware**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pair.ps1`
 
@@ -897,7 +903,7 @@ Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pa
 
 Expected: §3.1, §3.2, §3.3 and the new tree check all PASS.
 
-- [ ] **Step 7: Confirm the height, which nobody has measured**
+- [x] **Step 7: Confirm the height, which nobody has measured**
 
 `ShelfChromeDip = 75` is derived from the old frame, so the 283 is arithmetic rather than observation. Capture the shelf and look at it:
 

@@ -616,10 +616,19 @@ public partial class ShelfSurface : UserControl
             Width = TileSize,
             Height = TileSize,
             CornerRadius = new CornerRadius(8),
-            // A uniform right and bottom margin, which is what the WrapPanel uses as its
-            // spacing in both directions. The column build varied the bottom margin by whether
-            // the tile was last in its column; a wrapping row has no last.
-            Margin = new Thickness(0, 0, Gap, Gap),
+            // HALF THE GAP ON EACH SIDE, not a whole one on the right.
+            //
+            // A whole gap on the right only is what a WrapPanel needs to space tiles, and it
+            // leaves the last tile of every row trailing 8 DIP of margin off the end. Measured
+            // on 2026-09-20: the row sat 12 DIP from the card's left edge and 20 from its right,
+            // so the grid was 4 DIP left of centre and the leftmost tile's selection ring sat
+            // hard against the edge. Reported from the running build as the ring on the end
+            // tiles "going outside the area".
+            //
+            // Split evenly, each tile still occupies tile + gap, the spacing between tiles is
+            // unchanged, and both outer edges get the same half-gap. Symmetric by construction
+            // rather than by a correction somewhere else.
+            Margin = new Thickness(Gap / 2, 0, Gap / 2, Gap),
             // SelectionRing, not the raw accent: see Apply's own comment. Drawn at a thickness
             // that reads as a ring rather than a coincidental extra pixel.
             BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,

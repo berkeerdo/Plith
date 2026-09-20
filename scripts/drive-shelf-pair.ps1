@@ -22,9 +22,8 @@
 # window the person had open.
 #
 # ------------------------------------------------------------------------------------------
-# THE FIVE INSTRUMENT DEFECTS. The first three are drive-shelf.ps1's and are repeated because
-# they are properties of this machine rather than of that file. The fourth and fifth were found
-# here.
+# THE SIX INSTRUMENT DEFECTS. The first three are drive-shelf.ps1's and are repeated because
+# they are properties of this machine rather than of that file. The last three were found here.
 #
 #   1. PowerShell assigns to a COPY when the target is a field of a nested value type. Every
 #      `$i.u.mi.dwFlags = ...` is silently discarded and SendInput receives an all-zero
@@ -67,6 +66,14 @@
 #      the precise centre of the screen. A round-numbered resting position is the tell. That
 #      case fails precondition 3 at the same time and has a different remedy (close the game,
 #      not let go of the mouse), so the message names the foreground window and says which.
+#
+#   6. AN EVENT TAKES THE OPEN FRAME AWAY, AND THE PRODUCT IS RIGHT TO LET IT. A volume key or a
+#      track change gets its own short HUD shape, and that shape replaces an open widget frame.
+#      A run that pages to the shelf and then clicks can lose the frame in between: measured on
+#      2026-09-20 with music playing, and the run reported "the shelf never appeared", which
+#      points at the catcher and the pipe rather than at Spotify. The page is now re-checked
+#      immediately before the press, and a frame that has gone is re-opened rather than blamed.
+#      See the click step for the log lines.
 #      It also cost this file a misdiagnosis worth keeping: the old check slept 200 ms and then
 #      read the cursor once, so it blamed "the pointer did not move" - pointing at defect 1,
 #      which has nothing to do with it - for a pointer that had moved perfectly and then been
@@ -634,14 +641,50 @@ try {
     if (-not $onShelf) { throw 'Never reached the shelf page; nothing below can run.' }
 
     # 3. Click the page, which is what ShelfWidget turns into OpenRequested.
-    $frame = Find-LayeredWindow -ProcessLike 'Plith'
-    Move-Pointer -X ($frame.X + [int]($frame.W / 2)) -Y ($frame.Y + [int]($frame.H / 2)) -Settle 500
-    [PairInput]::LeftClick()
-    Start-Sleep -Seconds 2
+    #
+    # INSTRUMENT DEFECT 6: AN EVENT CAN TAKE THE FRAME AWAY BETWEEN PAGING AND CLICKING, and the
+    # product is right to let it. A volume key or a track change does not open the widget frame
+    # any more, it gets its own short HUD shape - and that shape REPLACES an open frame. Measured
+    # on 2026-09-20, from Plith's own log, with the click landing in the gap:
+    #
+    #     12:57:35.489  Widget page committed: index=3/4     <- the shelf page, reached
+    #     12:57:36.451  Reposition: content=400x130          <- the HUD took the frame
+    #     12:57:36.684  Reposition: content=400x68           <- back to the parked notch
+    #
+    # The click then hit nothing, and the run reported "the shelf never appeared", which points
+    # at the catcher and the pipe. Neither was involved. Spotify was.
+    #
+    # So the page is re-checked IMMEDIATELY before the press, and a frame that has gone is
+    # re-opened and re-paged rather than reported as a product failure. The press is still one
+    # press: this retries reaching the page, never the verdict.
+    $shelf = $null
+    for ($attempt = 1; $attempt -le 3 -and -not $shelf; $attempt++) {
+        $frame = Find-LayeredWindow -ProcessLike 'Plith'
+        $stillThere = $frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')
 
-    $shelf = Find-ShelfWindow
+        if (-not $stillThere) {
+            "  attempt ${attempt}: an event replaced the frame before the click; re-opening"
+            Move-Pointer -X ($notch.X + [int]($notch.W / 2)) -Y 4 -Settle 900
+            [PairInput]::LeftClick()
+            Start-Sleep -Milliseconds 1500
+            for ($i = 1; $i -le 6; $i++) {
+                $frame = Find-LayeredWindow -ProcessLike 'Plith'
+                if ($frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')) { break }
+                [PairInput]::Wheel(-1)
+                Start-Sleep -Milliseconds 700
+            }
+            $stillThere = $frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')
+            if (-not $stillThere) { continue }
+        }
+
+        Move-Pointer -X ($frame.X + [int]($frame.W / 2)) -Y ($frame.Y + [int]($frame.H / 2)) -Settle 500
+        [PairInput]::LeftClick()
+        Start-Sleep -Seconds 2
+        $shelf = Find-ShelfWindow
+    }
+
     Add-Verdict '2.2 a click on the shelf page opens the shelf' ([bool]$shelf) `
-        "$(if ($shelf) { "$($shelf.X),$($shelf.Y) $($shelf.W)x$($shelf.H)" } else { 'no catcher window' })"
+        "$(if ($shelf) { "$($shelf.X),$($shelf.Y) $($shelf.W)x$($shelf.H)" } else { 'no catcher window after 3 attempts' })"
     if (-not $shelf) { throw 'The shelf never appeared; nothing below can run.' }
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '3-shelf.png' | Out-Null
 

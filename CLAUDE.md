@@ -173,10 +173,17 @@ which WPF gives no automation peer, and the comment above that line said so corr
 contradicted itself. Confirmed absent from the live UIA tree on 2026-09-19, fixed on the control
 root, and `check-a11y.ps1` drops the suppression that recorded it.
 
-**NOT YET RUN on hardware:** the flat driver. `scripts/drive-shelf-pair.ps1` now seeds the shelf to
-capacity and requires every file to be in the UIA tree, which is the one check the stack build
-could never have passed. §3.1, §3.2 and §3.3 survive; §3.4, §3.5 and §3.6 are deleted along with
-§4.5, §4.6 and §4.9.
+**RUN ON HARDWARE and passing (2026-09-20), which is unusual for this repo and was the point.**
+`scripts/drive-shelf-pair.ps1` seeds the shelf to capacity and requires every file to be in the
+UIA tree: 15 seeded, none missing. That is the check the stack build could never have passed, and
+it passed here. The frame came back `384x283` for a full shelf, confirming the derived height on
+the real window rather than in a render. §3.1, §3.2 and §3.3 pass; §3.4, §3.5 and §3.6 are deleted
+along with §4.5, §4.6 and §4.9.
+
+It took two runs, and the first failure was not the product. A track change replaced the open
+widget frame between paging and clicking, which Plith is designed to allow, and the driver
+reported "the shelf never appeared" and pointed at the catcher and the pipe. Filed as the
+driver's instrument defect 6 and fixed by re-checking the page immediately before the press.
 
 **Unrelated, and more serious than anything above: Plith used to leave the Windows volume OSD
 broken behind it.** It hides the shell's own flyout with `ShowWindow(SW_HIDE)` and never put it

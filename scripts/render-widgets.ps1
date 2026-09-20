@@ -428,6 +428,23 @@ $shelfSurface.Render($surfaceModel)
 Wait-ForDispatcher
 Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
 
+# --- the EMPTY shelf, which nobody had ever rendered -----------------------------------------
+#
+# The notch page's empty state was rendered from the first day (widget-shelf-empty above); the
+# shelf surface's own was not, and it showed. Reported from the running build on 2026-09-20 as
+# simply bad. A state nobody looks at is a state nobody designs, so it gets its own render here
+# at the size the real window gives it: an empty shelf opens ONE row tall, not three.
+$emptyModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
+$emptyModel.SetItems([string[]]@())
+$emptySurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+$emptySurface.Apply($shelfPalette)
+$emptySurface.Render($emptyModel)
+Wait-ForDispatcher
+$emptyFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor(0)
+$emptySurface.Measure([Windows.Size]::new($emptyFrame.Width, [double]::PositiveInfinity))
+"  empty shelf wants $([Math]::Round($emptySurface.DesiredSize.Height,1)) DIP at $($emptyFrame.Width) wide; the frame gives $($emptyFrame.Height)"
+Save-Visual -Element $emptySurface -W $emptyFrame.Width -H $emptyFrame.Height -Name 'shelf-surface-empty'
+
 # --- second pass, same instance, proving the cache-hit fast path rather than reading it ------
 #
 # Review found that BuildTile now probes ShellIcons' cache synchronously and, on a hit, builds
@@ -727,6 +744,22 @@ $findAnyTile = { param($n) $n -is [Windows.Controls.Border] -and
     $n.Width -eq 64 -and $n.Height -eq 64 -and $null -ne $n.Child }
 $hitTiles = @(Find-VisualDescendants -Root $shelfSurface -Predicate $findAnyTile)
 if ($hitTiles.Count -eq 0) { throw "tile-hit check: no 64x64 tile Borders in the rendered surface." }
+
+# --- the selection ring must have room at BOTH edges of a row --------------------------------
+#
+# Reported from the running build on 2026-09-20: the ring on the leftmost and rightmost tiles
+# "goes outside the area and is not visible". The ring is a Border thickness drawn INSIDE the
+# tile, so it cannot leave the tile; what it can do is sit hard against the card's own edge with
+# nothing between the two. This measures the gap rather than squinting at it.
+$rowTop = ($hitTiles | ForEach-Object { $_.TranslatePoint([Windows.Point]::new(0,0), $layoutHost).Y } |
+           Sort-Object | Select-Object -First 1)
+$firstRow = @($hitTiles | Where-Object {
+    [Math]::Abs($_.TranslatePoint([Windows.Point]::new(0,0), $layoutHost).Y - $rowTop) -lt 1 })
+$lefts  = @($firstRow | ForEach-Object { $_.TranslatePoint([Windows.Point]::new(0,0), $layoutHost).X })
+$rights = @($firstRow | ForEach-Object { $_.TranslatePoint([Windows.Point]::new(0,0), $layoutHost).X + $_.ActualWidth })
+$leftGap  = ($lefts | Sort-Object | Select-Object -First 1)
+$rightGap = $shelfSurfaceW - ($rights | Sort-Object -Descending | Select-Object -First 1)
+"  edge check: first row has $($firstRow.Count) tile(s); left gap $([Math]::Round($leftGap,1)) DIP, right gap $([Math]::Round($rightGap,1)) DIP"
 
 function Test-HitReaches {
     param([Windows.DependencyObject]$Hit, [Windows.DependencyObject]$Target)
