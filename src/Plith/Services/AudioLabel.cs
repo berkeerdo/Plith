@@ -83,6 +83,40 @@ public static class AudioLabel
     }
 
     /// <summary>
+    /// Shorten a whole list, keeping every entry distinct.
+    ///
+    /// <see cref="Shorten"/> cannot do this on its own, and that is why both exist: uniqueness is
+    /// a property of the SET, and a function handed one name cannot see the name it is about to
+    /// collide with. Measured on 2026-09-21, on the machine this is developed on:
+    /// "Hoparlor (Steam Streaming Speakers)" and "Hoparlor (Steam Streaming Microphone)" both
+    /// keep the adapter's first two words, so both come back as "Hoparlor (Steam Streaming)" and
+    /// the settings endpoint dropdown has been showing two identical rows since it was written.
+    ///
+    /// A colliding group gets its FULL names back rather than a longer truncation: three words
+    /// would collide on the next machine, and a device name is not worth guessing at when the
+    /// cost of guessing wrong is routing audio to the wrong output.
+    ///
+    /// Order is preserved, because callers pair the result back up with endpoint ids by index.
+    /// </summary>
+    public static IReadOnlyList<string> ShortenAll(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+
+        var shortened = new string[names.Count];
+        for (var i = 0; i < names.Count; i++) shortened[i] = Shorten(names[i]);
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in shortened) counts[s] = counts.GetValueOrDefault(s) + 1;
+
+        for (var i = 0; i < shortened.Length; i++)
+        {
+            if (counts[shortened[i]] > 1) shortened[i] = (names[i] ?? string.Empty).Trim();
+        }
+
+        return shortened;
+    }
+
+    /// <summary>
     /// Which rail this level is, in words.
     ///
     /// On a machine running Voicemeeter alongside Sonar alongside a headset, a number with no

@@ -113,4 +113,85 @@ public class AudioLabelTests
         // When the sound is off, which bus it is off on is the second question.
         Assert.Equal("Muted", AudioLabel.BusLine(rail, 0, muted: true));
     }
+
+    // --- ShortenAll: uniqueness is a property of the SET ---------------------------------------
+
+    [Fact]
+    public void ShortenAll_LeavesDistinctNamesShortened()
+    {
+        var shortened = AudioLabel.ShortenAll([
+            "Hoparlor (Realtek(R) Audio)",
+            "PG27AQDM (NVIDIA High Definition Audio)",
+        ]);
+
+        Assert.Equal(["Hoparlor (Realtek(R) Audio)", "PG27AQDM (NVIDIA High)"], shortened);
+    }
+
+    [Fact]
+    public void ShortenAll_GivesCollidingNamesTheirFullNamesBack()
+    {
+        // Measured on this machine on 2026-09-21, and the reason this method exists: both of
+        // these keep the adapter's first two words, so Shorten reduces them to the same string
+        // and the settings endpoint combo has been showing two identical rows.
+        var shortened = AudioLabel.ShortenAll([
+            "Hoparlor (Steam Streaming Speakers)",
+            "Hoparlor (Steam Streaming Microphone)",
+        ]);
+
+        Assert.Equal([
+            "Hoparlor (Steam Streaming Speakers)",
+            "Hoparlor (Steam Streaming Microphone)",
+        ], shortened);
+    }
+
+    [Fact]
+    public void ShortenAll_ExpandsOnlyTheCollidingGroup()
+    {
+        var shortened = AudioLabel.ShortenAll([
+            "Hoparlor (Steam Streaming Speakers)",
+            "PG27AQDM (NVIDIA High Definition Audio)",
+            "Hoparlor (Steam Streaming Microphone)",
+        ]);
+
+        Assert.Equal([
+            "Hoparlor (Steam Streaming Speakers)",
+            "PG27AQDM (NVIDIA High)",
+            "Hoparlor (Steam Streaming Microphone)",
+        ], shortened);
+    }
+
+    [Fact]
+    public void ShortenAll_WithAThreeWayCollisionExpandsAllThree()
+    {
+        var shortened = AudioLabel.ShortenAll([
+            "Speakers (Virtual Audio Cable A)",
+            "Speakers (Virtual Audio Cable B)",
+            "Speakers (Virtual Audio Cable C)",
+        ]);
+
+        Assert.Equal([
+            "Speakers (Virtual Audio Cable A)",
+            "Speakers (Virtual Audio Cable B)",
+            "Speakers (Virtual Audio Cable C)",
+        ], shortened);
+    }
+
+    [Fact]
+    public void ShortenAll_OfAnEmptyListIsEmpty()
+    {
+        Assert.Empty(AudioLabel.ShortenAll([]));
+    }
+
+    [Fact]
+    public void ShortenAll_KeepsTheOrderItWasGiven()
+    {
+        // The caller pairs these back up with endpoint ids BY INDEX, so a reordering here would
+        // route audio to the wrong device under a perfectly plausible label.
+        var shortened = AudioLabel.ShortenAll([
+            "PG27AQDM (NVIDIA High Definition Audio)",
+            "Hoparlor (Realtek(R) Audio)",
+        ]);
+
+        Assert.Equal("PG27AQDM (NVIDIA High)", shortened[0]);
+    }
 }

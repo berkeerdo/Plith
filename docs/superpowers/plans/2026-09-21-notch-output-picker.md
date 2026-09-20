@@ -53,7 +53,7 @@ set is built.
 - Consumes: the existing `AudioLabel.Shorten(string?)`.
 - Produces: `static IReadOnlyList<string> AudioLabel.ShortenAll(IReadOnlyList<string> names)`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/Plith.Tests/AudioLabelTests.cs`:
 
@@ -138,12 +138,12 @@ Append to `tests/Plith.Tests/AudioLabelTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/Plith.Tests --filter AudioLabelTests`
 Expected: FAIL to compile, `ShortenAll` does not exist.
 
-- [ ] **Step 3: Write the implementation**
+- [x] **Step 3: Write the implementation**
 
 In `src/Plith/Services/AudioLabel.cs`, after `Shorten`:
 
@@ -183,12 +183,12 @@ In `src/Plith/Services/AudioLabel.cs`, after `Shorten`:
     }
 ```
 
-- [ ] **Step 4: Run the tests to verify they pass**
+- [x] **Step 4: Run the tests to verify they pass**
 
 Run: `dotnet test tests/Plith.Tests --filter AudioLabelTests`
 Expected: PASS.
 
-- [ ] **Step 5: Use it where the list is built**
+- [x] **Step 5: Use it where the list is built**
 
 In `src/Plith/Services/WindowsAudioClient.cs`, `EnumerateRenderEndpoints` currently shortens each
 name as it adds it. Collect the raw names and ids first, then shorten the whole list:
@@ -224,7 +224,7 @@ name as it adds it. Collect the raw names and ids first, then shorten the whole 
 Read the existing method before replacing it and keep whatever else it does (the outer `try` and
 the per-device `try` are both already there for reasons its own comments state).
 
-- [ ] **Step 6: Build, test and commit**
+- [x] **Step 6: Build, test and commit**
 
 Run: `dotnet build` (0 warnings for Plith) and `dotnet test` (543 passing: 537 plus 6).
 

@@ -216,14 +216,28 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
     /// to populate the endpoint picker. Static because it does not need an attached client.</summary>
     public static IReadOnlyList<WindowsAudioEndpointInfo> EnumerateRenderEndpoints()
     {
-        var list = new List<WindowsAudioEndpointInfo>();
+        // Ids and names are collected first and shortened as a SET afterwards. Shortening each
+        // name as it arrived produced two identical labels on this machine, because
+        // AudioLabel.Shorten keeps the adapter's first two words and two Steam devices share
+        // them. See AudioLabel.ShortenAll.
+        var ids = new List<string>();
+        var names = new List<string>();
         try
         {
             using var en = new MMDeviceEnumerator();
             var devs = en.EnumerateAudioEndPoints(DataFlow.Render, DeviceState.Active);
             foreach (var d in devs)
             {
-                try { list.Add(new WindowsAudioEndpointInfo(d.ID, AudioLabel.Shorten(d.FriendlyName))); }
+                try
+                {
+                    // BOTH read before EITHER is added. The two lists are paired by index
+                    // downstream, so a device whose id reads and whose name throws would shift
+                    // every label after it by one and put a plausible name on the wrong output.
+                    var id = d.ID;
+                    var name = d.FriendlyName;
+                    ids.Add(id);
+                    names.Add(name);
+                }
                 finally { d.Dispose(); }
             }
         }
@@ -231,7 +245,32 @@ public sealed class WindowsAudioClient : IDisposable, IMMNotificationClient
         {
             // Headless / broken audio stack — return whatever we managed to collect.
         }
+
+        var labels = AudioLabel.ShortenAll(names);
+        var list = new List<WindowsAudioEndpointInfo>(ids.Count);
+        for (var i = 0; i < ids.Count; i++) list.Add(new WindowsAudioEndpointInfo(ids[i], labels[i]));
         return list;
+    }
+
+    /// <summary>
+    /// The id of the current default render endpoint, or null when it cannot be read.
+    ///
+    /// Beside the enumeration because the output picker needs both and nothing else exposes the
+    /// default's id. Same contract as its neighbour: a broken audio stack costs the caller a
+    /// null rather than an exception.
+    /// </summary>
+    public static string? TryGetDefaultRenderEndpointId()
+    {
+        try
+        {
+            using var en = new MMDeviceEnumerator();
+            using var def = en.GetDefaultAudioEndpoint(DataFlow.Render, Role.Multimedia);
+            return def.ID;
+        }
+        catch
+        {
+            return null;
+        }
     }
 
 
