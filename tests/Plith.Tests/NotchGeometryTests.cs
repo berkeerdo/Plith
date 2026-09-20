@@ -240,4 +240,48 @@ public class NotchGeometryTests
         var r = NotchGeometry.HoverRect(740, 0, 440, 20);
         Assert.False(NotchGeometry.IsInsideNotch(r, new Point(r.Left - 1, 2)));
     }
+
+    /// <summary>
+    /// The guarantee the flat shelf rests on: the cap is exactly what the surface can draw, so no
+    /// file can be on the shelf and off the screen. Written as a test rather than left to the
+    /// definition because a later edit could reintroduce a free-standing number.
+    /// </summary>
+    [Fact]
+    public void ShelfCapacityIsExactlyWhatTheGridDraws()
+    {
+        Assert.Equal(NotchGeometry.ShelfTilesPerRow * NotchGeometry.ShelfRowCount,
+                     NotchGeometry.ShelfCapacity);
+        Assert.Equal(15, NotchGeometry.ShelfCapacity);
+    }
+
+    /// <summary>
+    /// The frame must be tall enough for every row it promises. A height typed as a literal is
+    /// free to stop matching the row count above it, which is the failure this derivation exists
+    /// to make impossible.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameIsTallEnoughForEveryRow()
+    {
+        var rows = NotchGeometry.ShelfRowCount * NotchGeometry.ShelfTileSize
+                 + (NotchGeometry.ShelfRowCount - 1) * NotchGeometry.ShelfGap;
+
+        Assert.True(NotchGeometry.ShelfFrameDip.Height >= rows,
+            $"frame {NotchGeometry.ShelfFrameDip.Height} is shorter than its " +
+            $"{NotchGeometry.ShelfRowCount} rows ({rows})");
+    }
+
+    /// <summary>
+    /// A row of tiles plus the gaps between them must fit the frame's width, which is unchanged
+    /// at 384. Five 64 DIP tiles with four 8 DIP gaps is 352, leaving 32 for the horizontal
+    /// chrome.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameIsWideEnoughForARow()
+    {
+        var row = NotchGeometry.ShelfTilesPerRow * NotchGeometry.ShelfTileSize
+                + (NotchGeometry.ShelfTilesPerRow - 1) * NotchGeometry.ShelfGap;
+
+        Assert.True(NotchGeometry.ShelfFrameDip.Width >= row,
+            $"frame {NotchGeometry.ShelfFrameDip.Width} is narrower than one row ({row})");
+    }
 }

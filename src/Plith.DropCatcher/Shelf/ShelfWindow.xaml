@@ -9,7 +9,7 @@
         ShowInTaskbar="False"
         ShowActivated="True"
         ResizeMode="NoResize"
-        Width="384" Height="224"
+        Width="384" Height="283"
         Left="-32000" Top="-32000"
         Title="Plith shelf">
 

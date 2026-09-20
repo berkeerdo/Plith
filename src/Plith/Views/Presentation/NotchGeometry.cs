@@ -83,19 +83,60 @@ public static class NotchGeometry
     /// </summary>
     public static readonly Size OpenFrameDip = new(356, 116);
 
+    /// <summary>Tiles in one row of the shelf grid.</summary>
+    public const int ShelfTilesPerRow = 5;
+
+    /// <summary>Rows the shelf draws. Every row is drawn; nothing folds and nothing scrolls.
+    /// </summary>
+    public const int ShelfRowCount = 3;
+
+    /// <summary>
+    /// The most files the shelf holds, defined as exactly what the grid can draw.
+    ///
+    /// This is the whole guarantee of the flat shelf: a file that is on the shelf is on the
+    /// screen, in the UIA tree, and reachable by a key. The stack model had a cap of 20 against a
+    /// surface that could draw 10, and the other ten sat behind count chips that no screen reader
+    /// could see. Defining the cap as the product rather than typing 15 is what keeps the two
+    /// from drifting apart across the process boundary between ShelfStore and ShelfSurface.
+    /// </summary>
+    public const int ShelfCapacity = ShelfTilesPerRow * ShelfRowCount;
+
+    /// <summary>One tile, square, in DIP.</summary>
+    public const double ShelfTileSize = 64;
+
+    /// <summary>The gap between tiles, in DIP, horizontally and vertically.</summary>
+    public const double ShelfGap = 8;
+
+    /// <summary>
+    /// Everything in the shelf frame that is not the tile grid: the header with its clear
+    /// control, the surface's own padding, and the window margin.
+    ///
+    /// DERIVED, but from two measured parts rather than from a guess. The frame was 384 x 224,
+    /// and the comment that number carried decomposed it: the surface wants 210 DIP of content
+    /// plus 14 DIP of margin. Of that 210, the tile columns were 149 (a 13 DIP stack caption, two
+    /// 64 DIP rows and one 8 DIP gap), which leaves 61 for the header and padding. So 61 + 14.
+    ///
+    /// It is named rather than folded into a literal height so that changing ShelfRowCount moves
+    /// the frame with it.
+    /// </summary>
+    private const double ShelfChromeDip = 61 + 14;
+
     /// <summary>
     /// The shelf surface, which is a second process's window and still belongs here.
-    ///
-    /// MEASURED rather than chosen: ShelfSurface wants 210 DIP of content at 384 wide, plus 14
-    /// DIP of margin. See scripts/render-widgets.ps1, the shelf-surface section, which renders it
-    /// at exactly this size.
     ///
     /// It lives in NotchGeometry because both ends of the wire need it and this file is already
     /// linked into the catcher: Plith computes the rectangle it hands over, the catcher's
     /// ShelfWindow.xaml declares the same numbers as its design size, and a third copy in a
     /// service on Plith's side would be the one free to drift.
+    ///
+    /// The height is an EXPRESSION over the grid above, not a literal. A literal is free to stop
+    /// matching the number of rows beside it, silently, and the result is a row drawn outside the
+    /// window. See scripts/render-widgets.ps1, the shelf-surface section, which renders the
+    /// surface at exactly this size.
     /// </summary>
-    public static readonly Size ShelfFrameDip = new(384, 224);
+    public static readonly Size ShelfFrameDip = new(
+        384,
+        ShelfRowCount * ShelfTileSize + (ShelfRowCount - 1) * ShelfGap + ShelfChromeDip);
 
     /// <summary>
     /// Height of the page-dot lane, and it is FIXED rather than sized to its content.
