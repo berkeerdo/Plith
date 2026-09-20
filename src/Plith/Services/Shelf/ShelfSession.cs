@@ -210,11 +210,7 @@ public sealed class ShelfSession
     /// what it had.
     /// </summary>
     private void SendItems()
-        // y is the stack TOTAL, and it is 1 rather than 0 on purpose: the shelf is now one flat
-        // list, but ShelfModel still reassembles per-stack messages and discards a delivery that
-        // declares a total of 0. One stack containing everything is the shape both the old reader
-        // and the flat one accept. The field goes away with ShelfModel's reassembly.
-        => Send(DropVerb.Items, [.. _store.Items.Select(item => item.Path)], x: 0, y: 1);
+        => Send(DropVerb.Items, [.. _store.Items.Select(item => item.Path)], x: 0, y: 0);
 
     /// <summary>
     /// Fire and forget, and safe to do so only because DropChannelServer serializes its sends.

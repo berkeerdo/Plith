@@ -1,4 +1,5 @@
 using System.IO;
+using Plith.Views.Presentation;
 
 namespace Plith.DropCatcher.Shelf;
 
@@ -18,95 +19,42 @@ public readonly record struct ShelfEntry(string Path, string Name, bool IsDirect
 /// </summary>
 public sealed class ShelfModel
 {
-    // A null slot means "no message for this index has arrived yet", which is a different thing
-    // from an arrived-and-empty stack. Sizing this list up front to the total the FIRST message
-    // of a set declares, rather than growing it by appending as messages happen to arrive, is
-    // what makes SetStack place a stack at the index it was given instead of wherever it landed
-    // in arrival order. See SetStack for why arrival order cannot be trusted at all.
-    /// <summary>The most stacks a single delivery may declare. See <see cref="SetStack"/> for
-    /// why a cap is needed at all and why this is the number.</summary>
-    private const int MaxStacks = 20;
-
-    private readonly List<List<ShelfEntry>?> _slots = [];
+    private readonly List<ShelfEntry> _items = [];
     private readonly HashSet<string> _selection = new(StringComparer.OrdinalIgnoreCase);
-    private int _expected = -1;
 
-    public IReadOnlyList<IReadOnlyList<ShelfEntry>> Stacks =>
-        [.. _slots.Where(s => s is not null).Select(s => (IReadOnlyList<ShelfEntry>)s!)];
-
-    /// <summary>True once every slot in the set has a message in it. Checking every slot,
-    /// not just counting how many messages have arrived, matters exactly because SetStack no
-    /// longer trusts arrival order: a duplicate or misplaced message must not be able to count
-    /// twice toward completion the way a simple counter would let it.</summary>
-    public bool IsComplete => _expected >= 0 && _slots.TrueForAll(s => s is not null);
+    /// <summary>What the catcher believes is on the shelf, newest first.</summary>
+    public IReadOnlyList<ShelfEntry> Items => _items;
 
     public IReadOnlyCollection<string> Selection => _selection;
 
     /// <summary>
-    /// Places <paramref name="paths"/> at stack <paramref name="index"/> of a set of
-    /// <paramref name="total"/> stacks.
+    /// Replace the shelf with what Plith just sent.
     ///
-    /// This does NOT simply trust that messages arrive in the order they were sent, even though
-    /// the sender now guarantees it. DropChannelServer.SendAsync opens a fresh StreamWriter per
-    /// call and every call site fires it without awaiting the result, so two overlapping sends
-    /// (two shelf changes close enough together to both be in flight) could interleave on the one
-    /// pipe the catcher reads; Task 6 chained the sends so they cannot, which is the send-side
-    /// fix the last paragraph below asks for. The checks here stay all the same: this process
-    /// reads a pipe ANY process on the machine may write, so "the sender is well behaved" is a
-    /// statement about one sender rather than about the input. A model that appended each message
-    /// to wherever the list currently ends, as this one used to,
-    /// would then assemble a shelf out of two different deliveries and call it complete: the
-    /// result LOOKS like an ordinary shelf and is quietly wrong, which is worse than looking
-    /// incomplete, because nothing about it invites a second look.
+    /// One message carries the whole shelf, which is why this is a replace and not an assembly.
+    /// The stack build sent one message PER STACK and had to defend against two deliveries
+    /// interleaving on a pipe any local process may write: position came from a declared index
+    /// rather than from arrival order, a message was accepted only into the delivery currently
+    /// being assembled, and the declared stack total was clamped so a stranger could not make
+    /// this process allocate slots on its say-so. That was the most intricate code in the shelf,
+    /// and none of it has anything left to defend: there is one message, so there is no
+    /// assembly to corrupt and nothing for a second delivery to interleave with.
     ///
-    /// So position always comes from `index`, never from arrival order, and a message is only
-    /// accepted into the delivery currently being assembled. Index 0 always starts a NEW
-    /// delivery (the shelf is re-sent whole on every change, so a delivery that never finished is
-    /// superseded rather than merged with whatever follows). A message for index > 0 is folded in
-    /// only if the `total` it carries matches `_expected`: an index-0 message not yet seen for
-    /// this delivery leaves `_expected` describing the PREVIOUS delivery or nothing at all, and a
-    /// newer delivery already under way leaves it describing THAT one instead. Comparing the
-    /// declared total catches both an EARLY message (its own index-0 sibling has not arrived) and
-    /// a LATE, stale one (a new delivery has already started) without needing a session id the
-    /// wire format does not carry. What it cannot catch is two deliveries of the exact same size
-    /// racing each other byte-for-byte; closing that gap means the sends must stop interleaving
-    /// in the first place, which is the send-side fix this model's own limits push toward rather
-    /// than paper over.
+    /// The hostile input does not go away, it gets SMALLER. The list is truncated to what the
+    /// surface can draw, which bounds a list that has already arrived rather than an allocation
+    /// made ahead of it on a number a stranger chose.
     /// </summary>
-    public void SetStack(int index, int total, IReadOnlyList<string> paths)
+    public void SetItems(IReadOnlyList<string> paths)
     {
-        if (index <= 0)
+        _items.Clear();
+        foreach (var path in paths)
         {
-            // CLAMPED, because this number arrives over a pipe whose name is deterministic and
-            // whose ACL is open to Everyone by necessity, so any local process can write to it -
-            // and can squat the name outright before Plith starts. Allocating `total` slots on a
-            // stranger's say-so turns one 24-byte line into an out-of-memory kill of the catcher,
-            // which is the process holding the shelf, the notch's stand-in and the pipe.
-            //
-            // 20 is not a taste: ShelfStore.MaxItems is 20 across the whole shelf and a stack
-            // that has never held an item is discarded when the surface closes, so 20 stacks is
-            // the most Plith can ever legitimately send. The surface draws five
-            // (ShelfSurface.VisibleColumns), so anything past the cap was invisible anyway.
-            // A message over the cap is TRUNCATED rather than rejected: _expected then disagrees
-            // with the `total` every sibling message carries, so the else-branch below refuses
-            // all of them and a hostile set assembles nothing instead of assembling something
-            // plausible and wrong.
-            total = Math.Min(total, MaxStacks);
-
-            _expected = total;
-            _slots.Clear();
-            for (var i = 0; i < total; i++) _slots.Add(null);
-            if (total > 0) _slots[0] = [.. paths.Select(Describe)];
-        }
-        else
-        {
-            if (total != _expected || index >= _slots.Count) return;
-            _slots[index] = [.. paths.Select(Describe)];
+            if (_items.Count >= NotchGeometry.ShelfCapacity) break;
+            _items.Add(Describe(path));
         }
 
         // A path that has gone away since Plith sent it stays selected otherwise, and a drag
         // would then carry a file that is not on the shelf any more.
-        _selection.RemoveWhere(p => !_slots.Any(s => s is not null && s.Any(e => PathEquals(e.Path, p))));
+        _selection.RemoveWhere(p => !_items.Any(e => PathEquals(e.Path, p)));
     }
 
     public void Select(string path, bool additive)

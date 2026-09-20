@@ -85,8 +85,8 @@ public partial class App : Application, IDisposable
             // The paths are invented and need not exist. ShelfModel stats them only to choose
             // between the folder icon and the document icon, and a path that is neither is drawn
             // as a document, which is what these three are meant to be.
-            _shelf.SetStack(0, 2, ["C:\\Probe\\quarterly-report.pdf", "C:\\Probe\\screenshot.png"]);
-            _shelf.SetStack(1, 2, ["C:\\Probe\\invoice-2026-09.xlsx"]);
+            _shelf.SetItems(["C:\\Probe\\quarterly-report.pdf", "C:\\Probe\\screenshot.png",
+                             "C:\\Probe\\invoice-2026-09.xlsx"]);
             _shelf.OpenAt(shelfRect.x, shelfRect.y, shelfRect.w, shelfRect.h);
             return;
         }
@@ -145,10 +145,8 @@ public partial class App : Application, IDisposable
                 _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
                 break;
             case DropVerb.Items:
-                // X is the stack's index and Y is how many stacks the delivery declares. Passed
-                // through untouched: ShelfModel is the side that decides whether the message
-                // belongs to the delivery being assembled, and it needs both numbers to do it.
-                _shelf.SetStack((int)message.X, (int)message.Y, message.Paths);
+                // One message is the whole shelf now, so X and Y carry nothing and are ignored.
+                _shelf.SetItems(message.Paths);
                 break;
             case DropVerb.Palette:
                 if (ShelfPaletteWire.TryFromPaths(message.Paths, out var palette)) _shelf.Apply(palette);
@@ -180,12 +178,8 @@ public partial class App : Application, IDisposable
     {
         shelf.ClearShelfRequested += () =>
             _ = _client?.SendAsync(new DropMessage(DropVerb.ClearShelf, 0, 0, 0, 0, []));
-        shelf.NewStackRequested += () =>
-            _ = _client?.SendAsync(new DropMessage(DropVerb.NewStack, 0, 0, 0, 0, []));
         shelf.RemoveItemsRequested += paths =>
             _ = _client?.SendAsync(new DropMessage(DropVerb.RemoveItems, 0, 0, 0, 0, paths));
-        shelf.RestackRequested += (index, paths) =>
-            _ = _client?.SendAsync(new DropMessage(DropVerb.Restack, index, 0, 0, 0, paths));
     }
 
     private static bool TryReadProbeRect(string[] args, out (int x, int y, int w, int h) rect)

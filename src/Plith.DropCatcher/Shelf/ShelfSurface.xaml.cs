@@ -9,6 +9,7 @@ using System.Windows.Media;
 using System.Windows.Media.Media3D;
 using System.Windows.Shapes;
 using Plith.Services.Shelf;
+using Plith.Views.Presentation;
 
 namespace Plith.DropCatcher.Shelf;
 
@@ -28,33 +29,20 @@ namespace Plith.DropCatcher.Shelf;
 /// </summary>
 public partial class ShelfSurface : UserControl
 {
-    /// <summary>Stacks shown side by side before the row would need to scroll or page. The
-    /// arithmetic guess was right: rendered at a no-overflow, five-stack model (ten tiles, two
-    /// per column) the last column's icon and full file name still clear the rounded corner at
-    /// 384 DIP wide, with none of the four constants changed from the guess.</summary>
-    private const int VisibleColumns = 5;
+    /// <summary>
+    /// The grid, read from the one place both processes compile.
+    ///
+    /// These were four private constants here, and the cap on how many files the shelf held was
+    /// a fifth number in ShelfStore, on the other side of a process boundary. The two disagreed:
+    /// the store kept 20 and this surface could draw 10, so half a full shelf sat behind count
+    /// chips that are in no UIA tree. NotchGeometry.ShelfCapacity is now defined as the product
+    /// of these two, which is what makes "every file on the shelf is on the screen" a fact about
+    /// the code rather than a thing to remember.
+    /// </summary>
+    private const double TileSize = NotchGeometry.ShelfTileSize;
 
-    /// <summary>Entries shown per stack before the rest collapse into a count tile. Confirmed by
-    /// the same five-stack render as <see cref="VisibleColumns"/>: two full rows of 64 DIP tiles
-    /// sit comfortably under the header with room to spare before the frame's true measured need
-    /// (210 DIP, see render-widgets.ps1's shelf-surface section) rather than the 264 DIP the
-    /// original arithmetic guessed for the page.</summary>
-    private const int VisibleRows = 2;
-
-    /// <summary>Confirmed by the render: a two-line file name and a 22 DIP icon both sit inside
-    /// the tile with room to spare, in the seven-entry/two-stack render and in the five-stack,
-    /// no-overflow render used to check the column count.</summary>
-    private const double TileSize = 64;
-
-    /// <summary>Confirmed by the render: 8 DIP reads as a stack boundary without the row looking
-    /// sparse, the same value ShelfWidget settled on for the same purpose.</summary>
-    private const double Gap = 8;
-
-    /// <summary>The stack caption's own reserved height (its FontSize plus the margin under it),
-    /// FIXED rather than left to measure its own content: BuildSeparator needs the exact same
-    /// number to draw a line that spans the caption as well as the tiles under it, and a value
-    /// only WPF's layout pass knows would leave the two free to disagree.</summary>
-    private const double CaptionHeight = 13;
+    /// <inheritdoc cref="TileSize"/>
+    private const double Gap = NotchGeometry.ShelfGap;
 
     /// <summary>Icon geometry duplicated from Resources/PlithIcons.xaml's IconDocument, not
     /// shared with it: see the header comment in ShelfSurface.xaml for why this project cannot
@@ -116,15 +104,12 @@ public partial class ShelfSurface : UserControl
     /// The column and row keyboard navigation is currently on, or null before the first arrow
     /// key press (and before any mouse press, which sets these too - see BuildTile). Indices
     /// rather than a remembered path, because what is at a given position can change under a
-    /// live shelf (a remove closes a gap, a fresh SetStack can reorder entries) in a way an
-    /// index survives and a captured path would not: every use re-resolves these against the
+    /// live shelf (a remove closes a gap, a fresh delivery can reorder entries) in a way an
+    /// index survives and a captured path would not: every use re-resolves it against the
     /// CURRENT model through <see cref="ResolveFocus"/> rather than trusting what was true when
-    /// they were set.
+    /// it was set.
     /// </summary>
-    private int? _focusColumn;
-
-    /// <inheritdoc cref="_focusColumn"/>
-    private int? _focusRow;
+    private int? _focusIndex;
 
     /// <summary>
     /// The press a drag could still grow out of: which PATH was pressed, and where the pointer
@@ -172,18 +157,10 @@ public partial class ShelfSurface : UserControl
     /// <summary>The "clear the shelf" control was pressed.</summary>
     public event Action? ClearRequested;
 
-    /// <summary>The "start a new stack" control was pressed.</summary>
-    public event Action? NewStackRequested;
-
     /// <summary>Take these paths off the shelf: the tile's own selection, or the whole current
     /// selection if the tile removed belongs to it. Raised by the hover affordance and by the
     /// tile's context menu, both computing the same set from ShelfModel.DragPaths.</summary>
     public event Action<IReadOnlyList<string>>? RemoveRequested;
-
-    /// <summary>A tile drag landed on stack <c>index</c>, carrying <c>paths</c>. An index equal
-    /// to the current stack count means the drop missed every column, which is how landing past
-    /// the last stack (or on an empty shelf) asks for a new one instead.</summary>
-    public event Action<int, IReadOnlyList<string>>? RestackRequested;
 
     /// <summary>Open this file, from its context menu.</summary>
     public event Action<string>? OpenRequested;
@@ -268,64 +245,61 @@ public partial class ShelfSurface : UserControl
     public bool HandleKey(Key key)
     {
         if (_lastModel is not { } model) return false;
-        var stacks = model.Stacks;
-        if (stacks.Count == 0) return false;
+        var items = model.Items;
+        if (items.Count == 0) return false;
 
+        // A flat grid, so Left and Right are one step and Up and Down are one ROW. The stack
+        // build moved by column and row separately and had to ask how many rows the column under
+        // the cursor happened to draw, which is the arithmetic VisibleRowsShown existed to keep
+        // in step with construction. A wrapping row of a known width needs neither.
         return key switch
         {
-            Key.Left => Move(model, stacks, columnDelta: -1, rowDelta: 0),
-            Key.Right => Move(model, stacks, columnDelta: 1, rowDelta: 0),
-            Key.Up => Move(model, stacks, columnDelta: 0, rowDelta: -1),
-            Key.Down => Move(model, stacks, columnDelta: 0, rowDelta: 1),
-            Key.Space => ToggleFocused(model, stacks),
-            Key.Enter => OpenFocused(stacks),
-            Key.Delete => RemoveFocused(model, stacks),
+            Key.Left => Move(model, items, -1),
+            Key.Right => Move(model, items, 1),
+            Key.Up => Move(model, items, -NotchGeometry.ShelfTilesPerRow),
+            Key.Down => Move(model, items, NotchGeometry.ShelfTilesPerRow),
+            Key.Space => ToggleFocused(model, items),
+            Key.Enter => OpenFocused(items),
+            Key.Delete => RemoveFocused(model, items),
             _ => false,
         };
     }
 
     /// <summary>
     /// The tile keyboard input currently acts on: the last one an arrow key landed on (or a
-    /// mouse press set - see BuildTile), clamped against what the shelf holds now, or the
-    /// shelf's very first tile before anything has set a position at all. The clamped result is
-    /// committed back to the fields, so a Space, Enter or Delete pressed before the first arrow
-    /// key acts on the first tile AND leaves the next arrow key moving on from there, rather than
-    /// from a position nothing was ever actually on.
+    /// mouse press set, see BuildTile), clamped against what the shelf holds now, or the shelf's
+    /// very first tile before anything has set a position at all. The clamped result is committed
+    /// back to the field, so a Space, Enter or Delete pressed before the first arrow key acts on
+    /// the first tile AND leaves the next arrow key moving on from there, rather than from a
+    /// position nothing was ever actually on.
     /// </summary>
-    private (int Column, int Row, string Path)? ResolveFocus(IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    private (int Index, string Path)? ResolveFocus(IReadOnlyList<ShelfEntry> items)
     {
-        var columns = Math.Min(VisibleColumns, stacks.Count);
-        if (columns == 0) return null;
+        if (items.Count == 0) return null;
 
-        var column = Math.Clamp(_focusColumn ?? 0, 0, columns - 1);
-        var rows = VisibleRowsShown(stacks[column].Count);
-        if (rows == 0) return null;
-        var row = Math.Clamp(_focusRow ?? 0, 0, rows - 1);
-
-        _focusColumn = column;
-        _focusRow = row;
-        return (column, row, stacks[column][row].Path);
+        var index = Math.Clamp(_focusIndex ?? 0, 0, items.Count - 1);
+        _focusIndex = index;
+        return (index, items[index].Path);
     }
 
-    private bool Move(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks, int columnDelta, int rowDelta)
+    private bool Move(ShelfModel model, IReadOnlyList<ShelfEntry> items, int delta)
     {
         // Whether anything has been on this grid before matters here and only here: the very
         // first arrow key press has to land ON the resolved default rather than move AWAY from
         // it, the same first-press behaviour any keyboard list gives a shelf nobody has
         // navigated yet. ResolveFocus itself cannot tell the two cases apart once it returns,
         // because it commits the default the moment it resolves one.
-        var firstPress = _focusColumn is null;
-        if (ResolveFocus(stacks) is not { } current) return false;
+        var firstPress = _focusIndex is null;
+        if (ResolveFocus(items) is not { } current) return false;
 
         if (!firstPress)
         {
-            var columns = Math.Min(VisibleColumns, stacks.Count);
-            var column = Math.Clamp(current.Column + columnDelta, 0, columns - 1);
-            var rows = VisibleRowsShown(stacks[column].Count);
-            var row = rows == 0 ? 0 : Math.Clamp(current.Row + rowDelta, 0, rows - 1);
-            _focusColumn = column;
-            _focusRow = row;
-            current = (column, row, stacks[column][row].Path);
+            // CLAMPED rather than wrapped. A Right on the last tile staying put is what a grid
+            // does; jumping to the first tile of the first row is a different gesture and one
+            // nobody asked for here.
+            var index = Math.Clamp(current.Index + delta, 0, items.Count - 1);
+            _focusIndex = index;
+            current = (index, items[index].Path);
         }
 
         model.Select(current.Path, additive: false);
@@ -333,38 +307,31 @@ public partial class ShelfSurface : UserControl
         return true;
     }
 
-    private bool ToggleFocused(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    private bool ToggleFocused(ShelfModel model, IReadOnlyList<ShelfEntry> items)
     {
-        if (ResolveFocus(stacks) is not { } current) return false;
+        if (ResolveFocus(items) is not { } current) return false;
 
         model.Select(current.Path, additive: true);
         Render(model);
         return true;
     }
 
-    private bool OpenFocused(IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    private bool OpenFocused(IReadOnlyList<ShelfEntry> items)
     {
-        if (ResolveFocus(stacks) is not { } current) return false;
+        if (ResolveFocus(items) is not { } current) return false;
 
         OpenRequested?.Invoke(current.Path);
         return true;
     }
 
-    private bool RemoveFocused(ShelfModel model, IReadOnlyList<IReadOnlyList<ShelfEntry>> stacks)
+    private bool RemoveFocused(ShelfModel model, IReadOnlyList<ShelfEntry> items)
     {
-        if (ResolveFocus(stacks) is not { } current) return false;
+        if (ResolveFocus(items) is not { } current) return false;
 
         IReadOnlyList<string> toRemove = model.Selection.Count > 0 ? [.. model.Selection] : [current.Path];
         RemoveRequested?.Invoke(toRemove);
         return true;
     }
-
-    /// <summary>Entries a column actually shows as tiles, before the rest fold into a count
-    /// tile - the same arithmetic BuildColumn uses to build them, factored out so keyboard
-    /// navigation and construction cannot silently disagree about which rows are reachable.
-    /// </summary>
-    private static int VisibleRowsShown(int stackCount) =>
-        stackCount > VisibleRows ? VisibleRows - 1 : Math.Min(stackCount, VisibleRows);
 
     public void Render(ShelfModel model)
     {
@@ -394,8 +361,8 @@ public partial class ShelfSurface : UserControl
 
         Columns.Children.Clear();
 
-        var stacks = model.Stacks;
-        if (stacks.Count == 0)
+        var items = model.Items;
+        if (items.Count == 0)
         {
             // The page is reachable even when nothing has ever been dropped, so the empty state
             // has to earn its space rather than leave a blank card behind the header.
@@ -428,10 +395,12 @@ public partial class ShelfSurface : UserControl
 
             var empty = new Grid
             {
-                Width = VisibleColumns * TileSize + (VisibleColumns - 1) * Gap,
-                // The tile grid's own height, caption band included, so the empty card is the
-                // same size as a full one and the shape does not jump when the first file lands.
-                Height = CaptionHeight + VisibleRows * TileSize + (VisibleRows - 1) * Gap,
+                Width = NotchGeometry.ShelfTilesPerRow * TileSize
+                      + (NotchGeometry.ShelfTilesPerRow - 1) * Gap,
+                // The tile grid's own height, so the empty card is the same size as a full one
+                // and the shape does not jump when the first file lands.
+                Height = NotchGeometry.ShelfRowCount * TileSize
+                       + (NotchGeometry.ShelfRowCount - 1) * Gap,
             };
             empty.Children.Add(outline);
             empty.Children.Add(message);
@@ -451,36 +420,47 @@ public partial class ShelfSurface : UserControl
             // ResolveFocus clamps the NUMBERS back into range, but a clamped index still points
             // at whatever now happens to occupy that slot, not at anything the person actually
             // navigated to.
-            _focusColumn = null;
-            _focusRow = null;
+            _focusIndex = null;
             return;
         }
 
-        var shown = Math.Min(VisibleColumns, stacks.Count);
-        for (var i = 0; i < shown; i++)
+        // ONE WRAPPING ROW, and the panel decides where a row ends.
+        //
+        // The stack build had that decision in two places: BuildColumn computed how many tiles a
+        // column drew, and keyboard navigation asked VisibleRowsShown the same question
+        // separately. The rule itself was also written down wrong in the verification document
+        // ("a column draws at most two tiles" when a stack of three draws exactly one, because
+        // the count chip costs a slot), and the fixture built on that wrong rule made two
+        // verification items report the product broken. A WrapPanel of a known width has one
+        // definition of where a row ends and no chip to make room for.
+        var grid = new WrapPanel
         {
-            if (i > 0) Columns.Children.Add(BuildSeparator());
+            // N * (tile + gap), NOT N * tile + (N - 1) * gap.
+            //
+            // Every tile carries a uniform right margin so the WrapPanel spaces rows and columns
+            // alike, which means a tile OCCUPIES tile + gap. Sizing the panel to the narrower
+            // "gaps only between tiles" figure leaves the fifth tile of each row 8 DIP short of
+            // fitting, so it wraps: four per row instead of five, twelve tiles instead of
+            // fifteen, and the last three arranged nowhere at all. The capacity guarantee would
+            // have been quietly false. Caught by render-widgets.ps1's tile-hit check reporting a
+            // tile that was never arranged.
+            //
+            // The last tile's trailing gap hangs off the right edge, which costs nothing: 360
+            // still sits inside the 384 frame.
+            Width = NotchGeometry.ShelfTilesPerRow
+                  * (NotchGeometry.ShelfTileSize + NotchGeometry.ShelfGap),
+            Orientation = Orientation.Horizontal,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
 
-            // The caption names WHICH stack, so it has nothing to say when there is only one.
-            // "Stack 1" over a lone column is a label for a distinction the person cannot see.
-            Columns.Children.Add(BuildColumn(i, stacks[i], model.Selection, captioned: shown > 1));
-        }
+        for (var i = 0; i < items.Count; i++)
+            grid.Children.Add(BuildTile(items[i], model.Selection.Contains(items[i].Path), i));
 
-        // The room past the last stack, drawn rather than left blank.
-        //
-        // Two stacks used about 45 % of a 384 DIP panel and the rest was void, which reads as a
-        // page that failed to finish rendering. It is not spare room: TargetStackIndex already
-        // resolves a drop anywhere past the last column to Stacks.Count, which ShelfStore.Restack
-        // treats as "make a new stack". So the gesture was there and nothing on screen said so.
-        //
-        // Drawing it costs no logic. The zone carries no int Tag, and TargetStackIndex skips
-        // every child whose Tag is not an int, so a drop on it still falls through to the same
-        // default it always did.
-        if (shown < VisibleColumns) Columns.Children.Add(BuildNewStackZone());
+        Columns.Children.Add(grid);
 
-        // On THIS control, not on Columns - see the empty branch above for why.
+        // On THIS control, not on the panel - see the empty branch above for why.
         AutomationProperties.SetName(this, string.Create(CultureInfo.CurrentCulture,
-            $"Shelf, {stacks.Count} stack{(stacks.Count == 1 ? "" : "s")}"));
+            $"Shelf, {items.Count} item{(items.Count == 1 ? "" : "s")}"));
     }
 
     /// <summary>
@@ -548,240 +528,17 @@ public partial class ShelfSurface : UserControl
     private static bool PathEquals(string a, string b) =>
         string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
 
-    private void OnNewStackClick(object sender, RoutedEventArgs e) => NewStackRequested?.Invoke();
-
     // Asks nothing first, on purpose: the shelf holds references, not the files themselves, so
     // clearing it deletes nothing on disk, and a confirmation dialog for a reversible action on
     // a surface this small is friction rather than safety. If a future change makes Clear do
     // something that is NOT trivially reversible, this is the line that stops being true.
     private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
 
-    /// <summary>
-    /// Copy, not Move, and the reason is at the source rather than here. The one
-    /// <c>DoDragDrop</c> behind every tile drag offers <c>Copy | Link</c> and deliberately never
-    /// Move, because the same gesture can end over Explorer, where Move means "delete the
-    /// original once you have it". A target cannot ask for an effect the source never offered,
-    /// so Move is not available to this drop target either, whatever it would have preferred.
-    ///
-    /// Copy rather than Link of the two that remain, so that the cursor does not change meaning
-    /// when the pointer crosses the shelf's own edge in the middle of a drag: one gesture, one
-    /// badge, wherever it happens to be hovering. Nothing about a restack reads the effect
-    /// anyway - <see cref="OnColumnsDrop"/> raises <see cref="RestackRequested"/> on the paths,
-    /// and the files on disk are not touched by either side of it.
-    /// </summary>
-    private void OnColumnsDragOver(object sender, DragEventArgs e)
-    {
-        e.Effects = e.Data.GetDataPresent(ShelfDragFormat) ? DragDropEffects.Copy : DragDropEffects.None;
-        e.Handled = true;
-    }
-
-    private void OnColumnsDrop(object sender, DragEventArgs e)
-    {
-        if (e.Data.GetData(ShelfDragFormat) is not IReadOnlyList<string> paths) return;
-
-        // ColumnsHost, not Columns: Columns is centred and therefore narrower than the area a
-        // release can land in. The host is the full-width element the handler is attached to, and
-        // TargetStackIndex translates the columns into the same space.
-        RestackRequested?.Invoke(TargetStackIndex(e.GetPosition(ColumnsHost)), paths);
-        e.Handled = true;
-    }
-
-    /// <summary>
-    /// Which stack a drop at <paramref name="position"/> belongs to, found by which built
-    /// column's own bounds the point falls inside. A point that matches no column, including
-    /// one past the last one or on a shelf with none at all, resolves to the current stack
-    /// count: exactly the index Restack (and ShelfStore.Restack behind it) treats as "make a new
-    /// one", which is what the brief calls dropping on the empty area past the last stack.
-    /// </summary>
-    private int TargetStackIndex(Point position)
-    {
-        // Border, not StackPanel: BuildColumn wraps its StackPanel in a Border so the whole
-        // column has an automation peer to announce its name on (see that method's own comment),
-        // and the Tag that used to live on the StackPanel now lives on the Border that replaced
-        // it as this method's unit of "a column".
-        foreach (var column in Columns.Children.OfType<Border>())
-        {
-            if (column.Tag is not int index) continue;
-
-            // Into ColumnsHost's space, which is where the drop handler reports its positions.
-            // Columns itself is centred inside the host, so translating into Columns would put
-            // the column bounds in one coordinate system and the point in another, and every
-            // drop would resolve to a column shifted left by half the leftover width.
-            var topLeft = column.TranslatePoint(new Point(0, 0), ColumnsHost);
-            var bounds = new Rect(topLeft, column.RenderSize);
-            if (position.X >= bounds.Left && position.X < bounds.Right) return index;
-        }
-
-        return _lastModel?.Stacks.Count ?? 0;
-    }
-
-    /// <summary>
-    /// Where a tile dropped past the last stack lands, drawn so the gesture can be found.
-    ///
-    /// Deliberately NOT a drop target of its own: it carries no int Tag, so
-    /// <see cref="TargetStackIndex"/> skips it exactly like the separators, and a release over it
-    /// falls through to that method's default of Stacks.Count. The zone is a picture of an
-    /// existing behaviour, not a second implementation of it, which is why adding it could not
-    /// change what a drop does.
-    ///
-    /// Dashed and muted on purpose. It has to read as an outline waiting to be filled rather than
-    /// as an empty stack that already exists, and the difference between those two readings is
-    /// the whole reason it is drawn rather than filled.
-    /// </summary>
-    private Grid BuildNewStackZone()
-    {
-        // One column wide, the same as any stack.
-        //
-        // The first version stretched it across everything the stacks left over, so that no part
-        // of the card was blank. Looked at on screen, a 208 DIP dashed box beside two 64 DIP
-        // columns does not read as a balanced card; it reads as one enormous empty box with some
-        // files parked to its left. Reported exactly that way.
-        //
-        // Filling the leftover and centring the row are also mutually exclusive: a row that
-        // always spans the full width has nothing left to centre. Centred, with the zone as just
-        // another column, the leftover space falls symmetrically on both sides, and symmetric
-        // space reads as composition where one-sided space reads as a rendering that gave up.
-        // The area past the zone is still a drop target - see ColumnsHost in the XAML.
-        var width = TileSize;
-        var height = VisibleRows * TileSize + (VisibleRows - 1) * Gap;
-
-        // A Rectangle rather than the Border's own BorderThickness, for one reason: a Border
-        // cannot draw a dashed edge, and solid is the wrong word here. A solid outline reads as
-        // an empty stack that already exists; dashed reads as an outline waiting to be filled,
-        // which is what this is. The first version of this used a Border and looked like the
-        // former on the very first render.
-        var outline = new Rectangle
-        {
-            RadiusX = 8,
-            RadiusY = 8,
-            Stroke = (Brush)FindResource("NotchTrack"),
-            StrokeThickness = 1,
-            StrokeDashArray = [4, 4],
-            Fill = Brushes.Transparent,
-        };
-
-        var plus = new Path
-        {
-            // The same coordinates the header's own plus button draws in XAML. Duplicated for the
-            // reason that file's header comment already gives for duplicating IconPlus at all:
-            // this project does not link Plith's icon dictionary.
-            Data = CreateIcon("M12,5.5 L12,18.5 M5.5,12 L18.5,12"),
-            Stroke = (Brush)FindResource("NotchInkMuted"),
-            StrokeThickness = 1.4,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-            Stretch = Stretch.Uniform,
-            Width = 14,
-            Height = 14,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var zone = new Grid
-        {
-            Width = width,
-            Height = height,
-            // Pushed down past the caption band so its box lines up with the TILES beside it
-            // rather than with the captions, which is what makes it read as a column-shaped slot.
-            // The band is present whether or not a caption speaks in it (see BuildColumn), so
-            // this offset is the same on a one-stack shelf as on a four-stack one.
-            Margin = new Thickness(Gap, CaptionHeight, 0, 0),
-            VerticalAlignment = VerticalAlignment.Top,
-            ToolTip = "Drop here to start a new stack",
-        };
-        zone.Children.Add(outline);
-        zone.Children.Add(plus);
-
-        return zone;
-    }
-
-    /// <summary>
-    /// A drawn line between stacks, not a Border edge: the brief for this surface calls for the
-    /// stack boundary to be drawn geometry the same as the two buttons above it, so a filled
-    /// panel is not the only way this product marks a division.
-    /// </summary>
-    private Path BuildSeparator()
-    {
-        // Starts at the top of the CAPTION, not the top of the tiles, and is therefore taller by
-        // CaptionHeight than the tile grid alone: BuildColumn's caption sits above the tiles, and
-        // a separator that only spanned the tiles would visibly stop short of the column's own
-        // top edge.
-        var height = CaptionHeight + VisibleRows * TileSize + (VisibleRows - 1) * Gap;
-        return new Path
-        {
-            Data = new LineGeometry(new Point(0, 0), new Point(0, height)),
-            Stroke = (Brush)FindResource("NotchTrack"),
-            StrokeThickness = 1,
-            Width = Gap,
-            Height = height,
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Top,
-        };
-    }
-
-    /// <summary>
-    /// One stack, as a column of tiles under a small caption naming it, wrapped in a Border.
-    ///
-    /// The Border, not the StackPanel inside it, is what carries both the drop-target Tag
-    /// TargetStackIndex reads back and the stack's own AutomationProperties.Name: a StackPanel
-    /// gets no automation peer of its own, so a name set directly on one reaches nothing at all -
-    /// the same defect class this slice's brief calls out, and this control's own version of the
-    /// bug ShelfWidget's row already had to be fixed once. The Border adds no visible chrome of
-    /// its own (no Background, no BorderBrush), so it changes nothing on screen; it exists only
-    /// to have a peer.
-    ///
-    /// The caption text is new, in NotchInkMuted rather than NotchInk: it names the stack rather
-    /// than being its content, the same distinction ShelfWidget's own hint line draws against its
-    /// tile row. It is also what makes check-contrast.ps1's new
-    /// OsdSurfaceBrush/NotchInkMuted pair for this file a real measurement of shipped code rather
-    /// than a check written against a colour nothing draws.
-    /// </summary>
-    private NamedBorder BuildColumn(int index, IReadOnlyList<ShelfEntry> stack,
-        IReadOnlyCollection<string> selection, bool captioned)
-    {
-        var column = new StackPanel { Width = TileSize, VerticalAlignment = VerticalAlignment.Top };
-
-        // The band is kept whether or not the caption speaks, so the tiles sit at the same height
-        // on a one-stack shelf as on a five-stack one, and BuildSeparator's height (which is
-        // CaptionHeight plus the tile grid) keeps describing the column it is drawn beside.
-        var caption = new TextBlock
-        {
-            Text = captioned ? string.Create(CultureInfo.CurrentCulture, $"Stack {index + 1}") : string.Empty,
-            FontSize = 9,
-            Height = CaptionHeight - 2,
-            Foreground = (Brush)FindResource("NotchInkMuted"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            Margin = new Thickness(0, 0, 0, 2),
-        };
-        column.Children.Add(caption);
-
-        // One slot is spent on the count whenever a stack holds more than the column can show,
-        // the same rule ShelfWidget uses for the row as a whole: a stack of four shows one file
-        // and a "+3" rather than two files and a lie about how many are really there.
-        var overflow = Math.Max(0, stack.Count - VisibleRows);
-        var shown = VisibleRowsShown(stack.Count);
-
-        for (var i = 0; i < shown; i++)
-        {
-            var last = overflow == 0 && i == shown - 1;
-            column.Children.Add(BuildTile(stack[i], selection.Contains(stack[i].Path), last, index, i));
-        }
-
-        if (overflow > 0) column.Children.Add(BuildOverflowTile(stack.Count - shown));
-
-        var wrapper = new NamedBorder { Tag = index, Child = column };
-        AutomationProperties.SetName(wrapper, string.Create(CultureInfo.CurrentCulture,
-            $"Stack {index + 1}, {stack.Count} item{(stack.Count == 1 ? "" : "s")}"));
-
-        return wrapper;
-    }
-
-    /// <param name="stackIndex">Which column this tile sits in, and <paramref name="rowIndex"/>
-    /// its row within it - carried only so a mouse press on this tile can set keyboard
-    /// navigation's position to match (see the press handler below), so an arrow key pressed
-    /// right after a click moves on from the tile that was actually clicked rather than from
-    /// wherever a previous arrow key last left it.</param>
-    private NamedBorder BuildTile(ShelfEntry entry, bool selected, bool last, int stackIndex, int rowIndex)
+    /// <param name="index">Where this tile sits in the flat list, carried only so a mouse press
+    /// on it can set keyboard navigation's position to match (see the press handler below), so an
+    /// arrow key pressed right after a click moves on from the tile that was actually clicked
+    /// rather than from wherever a previous arrow key last left it.</param>
+    private NamedBorder BuildTile(ShelfEntry entry, bool selected, int index)
     {
         // A fixed-size host rather than the icon itself, so the later swap from the drawn
         // fallback to a real shell icon changes what fills this box without changing the box:
@@ -855,7 +612,10 @@ public partial class ShelfSurface : UserControl
             Width = TileSize,
             Height = TileSize,
             CornerRadius = new CornerRadius(8),
-            Margin = new Thickness(0, 0, 0, last ? 0 : Gap),
+            // A uniform right and bottom margin, which is what the WrapPanel uses as its
+            // spacing in both directions. The column build varied the bottom margin by whether
+            // the tile was last in its column; a wrapping row has no last.
+            Margin = new Thickness(0, 0, Gap, Gap),
             // SelectionRing, not the raw accent: see Apply's own comment. Drawn at a thickness
             // that reads as a ring rather than a coincidental extra pixel.
             BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
@@ -898,8 +658,7 @@ public partial class ShelfSurface : UserControl
             // without this, clicking a tile and then pressing an arrow key would move relative to
             // wherever the LAST arrow key left off, which could be a tile nowhere near the one
             // just clicked.
-            _focusColumn = stackIndex;
-            _focusRow = rowIndex;
+            _focusIndex = index;
 
             EntryPressed?.Invoke(entry.Path, Keyboard.Modifiers.HasFlag(ModifierKeys.Control));
         };
@@ -1078,66 +837,6 @@ public partial class ShelfSurface : UserControl
         Height = 22,
         Stretch = Stretch.Uniform,
     };
-
-    /// <summary>
-    /// The last slot in a column, when its stack holds more than the column can show. Not
-    /// interactive: pressing it would need to mean something for the whole rest of the stack at
-    /// once, and ShelfModel has no such operation. Same reason ShelfWidget's own overflow
-    /// tile carries no press handler either.
-    /// </summary>
-    /// <summary>
-    /// The count of what this column is not showing, as a chip rather than a tile.
-    ///
-    /// It used to be a full 64 x 64 tile carrying "+4" at 18 point over the word "more", in the
-    /// same ink as a file name. At that weight the eye reads it as a fourth FILE, which is the
-    /// one thing it must not be: it is the statement that files exist which are not drawn here.
-    /// Reported from the first look at this surface on real hardware.
-    ///
-    /// A chip instead: the column's width, a quarter of its height, muted ink on the track
-    /// colour. Shrinking it does not disturb keyboard navigation, which counts rows through
-    /// <see cref="VisibleRowsShown"/> rather than measuring them, and the count tile was never
-    /// reachable by an arrow key in the first place.
-    ///
-    /// "+4" alone on screen, with the whole sentence in the tooltip and in the automation name.
-    /// The word "more" earns nothing beside a number that is already prefixed with a plus, and
-    /// dropping it is what lets the chip be one line.
-    /// </summary>
-    private NamedBorder BuildOverflowTile(int hidden)
-    {
-        var count = new TextBlock
-        {
-            Text = string.Create(CultureInfo.CurrentCulture, $"+{hidden}"),
-            FontSize = 11,
-            FontWeight = FontWeights.SemiBold,
-            Foreground = (Brush)FindResource("NotchInkMuted"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            VerticalAlignment = VerticalAlignment.Center,
-        };
-
-        var announced = string.Create(CultureInfo.CurrentCulture,
-            $"{hidden} more item{(hidden == 1 ? "" : "s")} in this stack");
-
-        // No fill behind it, for the reason ShelfWidget.Tile already records for its own tiles:
-        // NotchTrack is built by ContrastInk.TrackOn and targets 3:1, which is a NON-TEXT
-        // threshold, while NotchInk and NotchInkMuted are derived against the PANEL. Text on the
-        // track is text measured against the wrong surface.
-        //
-        // It also settles a mismatch between this window and the notch page, which a person meets
-        // minutes apart: the page states its own count as muted text on the panel, and a filled
-        // lozenge here said the same thing in a different language. Rendered in the light theme,
-        // the fill read as a grey slug on a pale panel, which is what made the difference obvious.
-        var chip = new NamedBorder
-        {
-            Width = TileSize,
-            Height = 20,
-            Margin = new Thickness(0, 4, 0, 0),
-            Child = count,
-            ToolTip = announced,
-        };
-        AutomationProperties.SetName(chip, announced);
-
-        return chip;
-    }
 
     private static SolidColorBrush Solid(Color color)
     {

@@ -36,20 +36,6 @@ public enum DropVerb
     /// <summary>Catcher to Plith: empty the shelf.</summary>
     ClearShelf,
 
-    /// <summary>Catcher to Plith: put an empty stack at the front for the next drop.
-    ///
-    /// INERT as of the flat-shelf change: ShelfStore has no stacks any more and ShelfSession no
-    /// longer answers this. The member survives only until the catcher stops raising it, in the
-    /// commit that flattens ShelfModel and the surface. Do not build anything new on it.
-    /// </summary>
-    NewStack,
-
-    /// <summary>Catcher to Plith: move these paths into the stack at index X.
-    ///
-    /// INERT as of the flat-shelf change, for the same reason as NewStack above.
-    /// </summary>
-    Restack,
-
     /// <summary>Catcher to Plith: the shelf surface is gone, put the notch back.</summary>
     ShelfClosed,
 }

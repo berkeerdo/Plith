@@ -13,7 +13,7 @@ namespace Plith.DropCatcher.Shelf;
 ///
 /// Neither method here touches the wire: Open and ShowInFileManager are actions this process
 /// carries out on its own account, never requests Plith answers. See ShelfWindow for the split
-/// between the four verbs that do cross the wire (RemoveItems, ClearShelf, NewStack, Restack) and
+/// between the two verbs that do cross the wire (RemoveItems, ClearShelf) and
 /// these two, which do not.
 /// </summary>
 public static class ShelfActions

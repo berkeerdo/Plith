@@ -46,15 +46,14 @@
                 <RowDefinition Height="*" />
             </Grid.RowDefinitions>
 
-            <!-- Header: a title, and the two shelf-wide actions. Both are real Buttons rather
-                 than pressable Borders, so Tab and a screen reader reach them the same way any
-                 other control in the product is reached. The tiles below cannot be, because a
+            <!-- Header: a title, and the one shelf-wide action left. Clear is a real Button
+                 rather than a pressable Border, so Tab and a screen reader reach it the same way
+                 any other control in the product is reached. The tiles below cannot be, because a
                  tile's action (select, then drag) has no equivalent gesture on a keyboard, which
                  is the same reason ShelfWidget's tiles are Borders and not Buttons. -->
             <Grid Grid.Row="0" Margin="0,0,0,12">
                 <Grid.ColumnDefinitions>
                     <ColumnDefinition Width="*" />
-                    <ColumnDefinition Width="Auto" />
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
@@ -65,29 +64,8 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource NotchInk}" />
 
-                <Button x:Name="NewStackButton"
-                        Grid.Column="1"
-                        Width="28" Height="28"
-                        Margin="0,0,8,0"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="0"
-                        Cursor="Hand"
-                        AutomationProperties.Name="Start a new stack"
-                        Click="OnNewStackClick">
-                    <!-- A plus, drawn rather than a glyph. Same coordinates as PlithIcons'
-                         IconPlus, duplicated rather than shared: see the header comment. -->
-                    <Path Data="M12,5.5 L12,18.5 M5.5,12 L18.5,12"
-                          Width="16" Height="16"
-                          Stretch="Uniform"
-                          Stroke="{DynamicResource NotchInk}"
-                          StrokeThickness="1.6"
-                          StrokeStartLineCap="Round"
-                          StrokeEndLineCap="Round" />
-                </Button>
-
                 <Button x:Name="ClearButton"
-                        Grid.Column="2"
+                        Grid.Column="1"
                         Width="28" Height="28"
                         Background="Transparent"
                         BorderThickness="0"
@@ -131,9 +109,7 @@
                   Grid.Row="1"
                   VerticalAlignment="Top"
                   Background="Transparent"
-                  AllowDrop="True"
-                  DragOver="OnColumnsDragOver"
-                  Drop="OnColumnsDrop">
+                  AllowDrop="False">
                 <StackPanel x:Name="Columns"
                             Orientation="Horizontal"
                             HorizontalAlignment="Center"

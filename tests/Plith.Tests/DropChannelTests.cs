@@ -91,8 +91,6 @@ public class DropChannelTests
     [InlineData(DropVerb.Palette)]
     [InlineData(DropVerb.RemoveItems)]
     [InlineData(DropVerb.ClearShelf)]
-    [InlineData(DropVerb.NewStack)]
-    [InlineData(DropVerb.Restack)]
     [InlineData(DropVerb.ShelfClosed)]
     public void Encode_ThenDecode_RoundTripsEveryShelfVerb(DropVerb verb)
     {
@@ -109,13 +107,12 @@ public class DropChannelTests
     /// The hostile-path test, pointed at the verbs that now DO something.
     ///
     /// Before this slice the only verb carrying paths was Dropped, which adds files that ShelfStore
-    /// then stats. RemoveItems and Restack change the shelf, so a path able to forge a second
-    /// message on those lines is a path able to rearrange someone's shelf. The escaping is the same
-    /// escaping; this test is what keeps it pointed at the verb list as the list grows.
+    /// then stats. RemoveItems changes the shelf, so a path able to forge a second message on its
+    /// lines is a path able to rearrange someone's shelf. The escaping is the same escaping; this
+    /// test is what keeps it pointed at the verb list as the list grows.
     /// </summary>
     [Theory]
     [InlineData(DropVerb.RemoveItems)]
-    [InlineData(DropVerb.Restack)]
     [InlineData(DropVerb.Items)]
     public void Encode_NeutralisesSeparatorsOnEveryVerbThatCarriesPaths(DropVerb verb)
     {

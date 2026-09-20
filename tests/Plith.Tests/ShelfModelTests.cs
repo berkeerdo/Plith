@@ -1,49 +1,10 @@
 using Plith.DropCatcher.Shelf;
+using Plith.Views.Presentation;
 
 namespace Plith.Tests;
 
 public sealed class ShelfModelTests
 {
-    /// <summary>Stacks arrive one message at a time, so the model has to know when it has them
-    /// all. Painting a half-delivered shelf would show a person a shelf that is missing rows.
-    /// </summary>
-    [Fact]
-    public void SetStack_IsNotCompleteUntilEveryStackHasArrived()
-    {
-        var model = new ShelfModel();
-
-        model.SetStack(0, 2, ["C:\\a.txt"]);
-        Assert.False(model.IsComplete);
-
-        model.SetStack(1, 2, ["C:\\b.txt"]);
-        Assert.True(model.IsComplete);
-        Assert.Equal(2, model.Stacks.Count);
-    }
-
-    [Fact]
-    public void SetStack_WithZeroStacksIsAnEmptyShelfAndIsComplete()
-    {
-        var model = new ShelfModel();
-
-        model.SetStack(0, 0, []);
-
-        Assert.True(model.IsComplete);
-        Assert.Empty(model.Stacks);
-    }
-
-    /// <summary>A second delivery replaces the first rather than adding to it. The shelf is
-    /// re-sent whole on every change, so an appending model would double every row.</summary>
-    [Fact]
-    public void SetStack_StartingOverReplacesWhatWasThere()
-    {
-        var model = new ShelfModel();
-        model.SetStack(0, 1, ["C:\\a.txt"]);
-
-        model.SetStack(0, 1, ["C:\\b.txt"]);
-
-        Assert.Equal("C:\\b.txt", Assert.Single(Assert.Single(model.Stacks)).Path);
-    }
-
     [Fact]
     public void Select_WithoutAdditiveReplacesTheSelection()
     {
@@ -98,90 +59,57 @@ public sealed class ShelfModelTests
         Assert.Equal("C:\\b.txt", Assert.Single(model.Selection));
     }
 
-    /// <summary>
-    /// Index 1 arriving before index 0 is exactly the reordering DropChannelServer's
-    /// fire-and-forget sends can produce (see SetStack's own comment). The model has no way yet
-    /// to know the set's shape when this happens, so it must not guess a position for it; it
-    /// waits rather than placing the message somewhere it might not belong.
-    /// </summary>
-    [Fact]
-    public void SetStack_ArrivingOutOfOrderDoesNotProduceAMisplacedStack()
-    {
-        var model = new ShelfModel();
-
-        model.SetStack(1, 2, ["C:\\b.txt"]);
-        Assert.False(model.IsComplete);
-        Assert.Empty(model.Stacks);
-
-        model.SetStack(0, 2, ["C:\\a.txt"]);
-        Assert.False(model.IsComplete);
-
-        model.SetStack(1, 2, ["C:\\b.txt"]);
-        Assert.True(model.IsComplete);
-        Assert.Equal("C:\\a.txt", model.Stacks[0][0].Path);
-        Assert.Equal("C:\\b.txt", model.Stacks[1][0].Path);
-    }
-
-    /// <summary>
-    /// A message from a delivery that has already been superseded by a new one must not be
-    /// folded into the new, smaller delivery just because it happens to arrive after that
-    /// delivery's own index-0 message. Its stale `total` (2, from the old delivery) no longer
-    /// matches what the model now expects (1, from the new one), which is what lets this be
-    /// recognised as not belonging here rather than accepted as if it still applied.
-    /// </summary>
-    [Fact]
-    public void SetStack_StaleMessageFromAPreviousSetIsIgnored()
-    {
-        var model = new ShelfModel();
-        model.SetStack(0, 2, ["C:\\a.txt"]);
-        model.SetStack(1, 2, ["C:\\b.txt"]);
-        Assert.True(model.IsComplete);
-
-        model.SetStack(0, 1, ["C:\\c.txt"]);
-        Assert.True(model.IsComplete);
-
-        model.SetStack(1, 2, ["C:\\b.txt"]);
-
-        Assert.True(model.IsComplete);
-        Assert.Equal("C:\\c.txt", Assert.Single(model.Stacks)[0].Path);
-    }
-
-    /// <summary>
-    /// The pipe's name is deterministic and its ACL is open to Everyone by necessity, so any
-    /// local process can write an Items line, and can squat the name before Plith starts. A
-    /// `total` taken at face value is one short line that allocates until the catcher dies, and
-    /// the catcher is the process holding the shelf, the notch's stand-in and the pipe.
-    ///
-    /// What is asserted is that the clamp TOOK, observed from outside: a sibling message
-    /// declaring the same oversized total no longer matches the clamped _expected, so it is
-    /// refused and the set assembles nothing. That matters as much as the cap itself. A hostile
-    /// set that assembled something plausible and wrong would be worse than one that looks
-    /// incomplete, because nothing about it invites a second look.
-    ///
-    /// 100_000 rather than int.MaxValue, and the reason belongs here rather than being tidied
-    /// away: this number is large enough that no honest sender would ever produce it, and small
-    /// enough to allocate. Against the unfixed code int.MaxValue did not fail an assertion at
-    /// all, it threw OutOfMemoryException out of the list growth, which is a rough way for a
-    /// test host to die and a poor way to describe a defect. The pre-fix failure here is a clean
-    /// Assert.Single instead: unclamped, the sibling is accepted and there are two stacks.
-    /// </summary>
-    [Fact]
-    public void SetStack_WithAHostileStackCountIsClampedAndAssemblesNothing()
-    {
-        const int hostileTotal = 100_000;
-        var model = new ShelfModel();
-
-        model.SetStack(0, hostileTotal, ["C:\\a.txt"]);
-        model.SetStack(1, hostileTotal, ["C:\\b.txt"]);
-
-        Assert.Single(model.Stacks);
-        Assert.False(model.IsComplete);
-    }
-
     private static ShelfModel Loaded()
     {
         var model = new ShelfModel();
-        model.SetStack(0, 1, ["C:\\a.txt", "C:\\b.txt"]);
+        model.SetItems(["C:\\a.txt", "C:\\b.txt"]);
         return model;
+    }
+
+    /// <summary>One message carries the whole shelf, so there is no assembly to get wrong.
+    /// </summary>
+    [Fact]
+    public void SetItems_ReplacesTheListOutright()
+    {
+        var model = new ShelfModel();
+
+        model.SetItems(["C:\\a.txt", "C:\\b.txt"]);
+        model.SetItems([@"C:\c.txt"]);
+
+        Assert.Equal([@"C:\c.txt"], model.Items.Select(e => e.Path));
+    }
+
+    /// <summary>
+    /// The pipe's ACL is open to every process on the machine, so the path list is a claim. It is
+    /// truncated to what the surface can draw rather than trusted: a message declaring thousands
+    /// of paths must not become thousands of tiles.
+    /// </summary>
+    [Fact]
+    public void SetItems_TruncatesToTheShelfCapacity()
+    {
+        var model = new ShelfModel();
+        var many = Enumerable.Range(0, NotchGeometry.ShelfCapacity + 50)
+                             .Select(i => $"C:\\f{i}.txt")
+                             .ToList();
+
+        model.SetItems(many);
+
+        Assert.Equal(NotchGeometry.ShelfCapacity, model.Items.Count);
+    }
+
+    /// <summary>
+    /// A path that has gone away since Plith sent it must not stay selected, or a drag would
+    /// carry a file that is not on the shelf.
+    /// </summary>
+    [Fact]
+    public void SetItems_DropsASelectionThatIsNoLongerPresent()
+    {
+        var model = new ShelfModel();
+        model.SetItems(["C:\\a.txt", "C:\\b.txt"]);
+        model.Select("C:\\a.txt", additive: false);
+
+        model.SetItems(["C:\\b.txt"]);
+
+        Assert.Empty(model.Selection);
     }
 }

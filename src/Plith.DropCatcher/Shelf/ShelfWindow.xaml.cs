@@ -267,15 +267,13 @@ public partial class ShelfWindow : Window
         // StartDrag for what that guard is and why it is a control rather than a formality.
         Page.DragOutRequested += StartDrag;
 
-        // ClearRequested, NewStackRequested, RemoveRequested and RestackRequested all cross the
-        // wire, and this window does not send them itself: App owns the one CatcherClient this
-        // process has, the same reason CatcherWindow's FilesDropped and Withdrew are plain events
-        // rather than direct sends. Bubbled through unchanged rather than translated to a
-        // DropMessage here, so this file does not have to know the wire format to raise them.
+        // ClearRequested and RemoveRequested both cross the wire, and this window does not send
+        // them itself: App owns the one CatcherClient this process has, the same reason
+        // CatcherWindow's FilesDropped and Withdrew are plain events rather than direct sends.
+        // Bubbled through unchanged rather than translated to a DropMessage here, so this file
+        // does not have to know the wire format to raise them.
         Page.ClearRequested += () => ClearShelfRequested?.Invoke();
-        Page.NewStackRequested += () => NewStackRequested?.Invoke();
         Page.RemoveRequested += paths => RemoveItemsRequested?.Invoke(paths);
-        Page.RestackRequested += (index, paths) => RestackRequested?.Invoke(index, paths);
 
         // OpenRequested and RevealRequested are the opposite: they never touch the wire at all,
         // because opening a file or showing it in the file manager is something THIS process
@@ -315,18 +313,12 @@ public partial class ShelfWindow : Window
     /// <summary>The shelf's own controls asked to change what is on the shelf, and none of them
     /// are applied here: the model is a view of Plith's shelf, so every one of these is a
     /// REQUEST, and the answer is a fresh set of Items messages, not this window updating
-    /// itself. App bridges these onto the wire as RemoveItems, ClearShelf, NewStack and Restack,
-    /// since it is the one place that holds the client connection.</summary>
+    /// itself. App bridges these onto the wire as RemoveItems and ClearShelf, since it is the one
+    /// place that holds the client connection.</summary>
     public event Action? ClearShelfRequested;
 
     /// <inheritdoc cref="ClearShelfRequested"/>
-    public event Action? NewStackRequested;
-
-    /// <inheritdoc cref="ClearShelfRequested"/>
     public event Action<IReadOnlyList<string>>? RemoveItemsRequested;
-
-    /// <inheritdoc cref="ClearShelfRequested"/>
-    public event Action<int, IReadOnlyList<string>>? RestackRequested;
 
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
@@ -480,12 +472,10 @@ public partial class ShelfWindow : Window
         Page.Render(_model);
     }
 
-    /// <summary>One stack of the shelf, placed at the index the message carries. The model, not
-    /// this window, decides whether the message belongs to the delivery currently being
-    /// assembled: see ShelfModel.SetStack for why arrival order cannot be trusted.</summary>
-    public void SetStack(int index, int total, IReadOnlyList<string> paths)
+    /// <summary>The whole shelf, as one message. See ShelfModel.SetItems.</summary>
+    public void SetItems(IReadOnlyList<string> paths)
     {
-        _model.SetStack(index, total, paths);
+        _model.SetItems(paths);
         Page.Render(_model);
     }
 

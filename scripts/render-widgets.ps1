@@ -1,4 +1,4 @@
-﻿# scripts/render-widgets.ps1 — renders each notch widget and the classic card to PNG, offscreen.
+# scripts/render-widgets.ps1 — renders each notch widget and the classic card to PNG, offscreen.
 #
 # Why this exists: every design defect on this branch was found by a person looking at a
 # screenshot and reporting it, one per round. The OSD renders in a layered window that ordinary
@@ -394,10 +394,10 @@ $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
 # the current drive (something like "C:\nosuchhost\share\ghost.txt"), and that specific
 # malformed shape is what the fallback in this render actually exercises.
 $surfaceModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
-$stack0 = [string[]](@($shelfFolder) + ($fixtures[0..3] | ForEach-Object { Join-Path $shelfDir $_ }))
-$stack1 = [string[]]('\nosuchhost\share\ghost.txt', (Join-Path $bin 'Plith.exe'))
-$surfaceModel.SetStack(0, 2, $stack0)
-$surfaceModel.SetStack(1, 2, $stack1)
+$shelfItems = [string[]](@($shelfFolder) +
+    ($fixtures[0..3] | ForEach-Object { Join-Path $shelfDir $_ }) +
+    @('\nosuchhost\share\ghost.txt', (Join-Path $bin 'Plith.exe')))
+$surfaceModel.SetItems($shelfItems)
 
 # One tile selected, so the accent ring (AccentBrush, the one place this control paints the
 # accent) is actually in the saved renders. Without this none of the three showed it at all, and
@@ -406,17 +406,21 @@ $surfaceModel.SetStack(1, 2, $stack1)
 # overflow count, so the ring is visible next to that tile in the same picture.
 $surfaceModel.Select($shelfFolder, $false)
 
-# 384 x 224. Width was the arithmetic guess (five 64 DIP tiles, four 8 DIP gaps, two 16 DIP
-# margins) and the render confirmed it exactly - a five-stack, no-overflow model fits with the
-# last tile's icon and full file name clear of the rounded corner. Height was NOT: the arithmetic
-# guess of 264 left roughly a quarter of the page blank below the second tile row in every render.
-# Measured instead, with ShelfSurface.Measure(new Size(384, PositiveInfinity)): the control wants
-# 210 DIP at this width. 224 is that measurement plus 14 DIP of margin, not a second guess - the
-# same shape kept in sync here by hand as frameW/frameH are with WidgetFrame, since the harness
-# and the control it renders are deliberately two separate assemblies (see the DropCatcher DLL
-# load above).
-$shelfSurfaceW = 384.0
-$shelfSurfaceH = 224.0
+# READ from NotchGeometry rather than kept in sync here by hand.
+#
+# It used to be two literals, 384 x 224, with a comment explaining that they were "kept in sync
+# here by hand" because the harness and the control are two separate assemblies. The hand-sync
+# broke the moment the shelf went from two rows to three: the frame grew to 283 and this file
+# still arranged the control in 224, which does not fail loudly. It renders a picture of a
+# surface with its last row cut off, and a cropped render is indistinguishable from a layout
+# defect.
+#
+# The harness already loads Plith.dll, so it can just ask. NotchGeometry.ShelfFrameDip is the
+# one place the frame is defined, and its height is now an expression over the row count, so
+# this follows a row being added without anyone remembering to come here.
+$shelfFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameDip
+$shelfSurfaceW = $shelfFrame.Width
+$shelfSurfaceH = $shelfFrame.Height
 
 $shelfSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
 $shelfSurface.Apply($shelfPalette)
@@ -483,7 +487,7 @@ if (-not [object]::ReferenceEquals($pass2Image.Source, $pass1Icon)) {
 
 # --- a menu open on a tile must not survive that tile's own destruction --------------------
 #
-# Review of Task 7 found this the hard way: SetStack calls Render on every Items message, and
+# Review of Task 7 found this the hard way: SetItems calls Render on every Items message, and
 # Plith re-sends the whole Items set after every one of the four mutating verbs, so a right-click
 # on tile A followed by ANY refresh (even one triggered by a totally different tile) tears tile A
 # out of the tree while its menu is still open. The first version derived ShelfWindow's _menuOpen
@@ -507,7 +511,7 @@ if ($menuEvents.Count -ne 1 -or -not $menuEvents[0]) {
 }
 
 # The render this whole check exists for: something else on the shelf changed, Plith answered
-# with a fresh Items set, and SetStack calls this while tile A's menu is still open.
+# with a fresh Items set, and SetItems calls this while tile A's menu is still open.
 $shelfSurface.Render($surfaceModel)
 
 # Closed is measured NOT to fire synchronously with Render's IsOpen = $false (the default
@@ -673,37 +677,27 @@ if ($dragEvents.Count -ne 1) {
 "drag on the rebuilt tile (threshold $hMin x $vMin honoured on both sides), carrying the pressed " +
 "path; and a press cleared by a down on no tile did NOT, at the same far point."
 
-# --- the drop target still resolves, after the row was centred -------------------------------
+# --- the within-surface drop target is GONE, deliberately ------------------------------------
 #
-# Why this exists: Columns used to span the full width of the card and catch its own drops. It is
-# now centred inside a full-width ColumnsHost, which catches them instead, and TargetStackIndex
-# translates each column into the HOST's space rather than the panel's. Those are two coordinate
-# systems that agreed exactly while the panel was full width, and stopped agreeing the moment it
-# was not: translating into the centred panel while the point came from the host would have
-# shifted every column left by half the leftover width, quietly restacking onto the wrong one.
+# There used to be a drop-target check here, proving that TargetStackIndex resolved a release
+# to the right column after the row was centred. The flat shelf has no columns to resolve to
+# and no within-surface drop at all: a tile drags OUT and nothing else, so TargetStackIndex,
+# OnColumnsDrop and the new-stack zone were deleted rather than adapted. A check kept here
+# would be testing a gesture the product no longer offers.
 #
-# Nothing else can see that. It compiles, the control renders correctly in every saved image, and
-# the press-to-drag check above passes because it never asks WHERE a release landed. This branch
-# has already lost the drag gesture once to a change that looked purely visual.
-$targetStackIndex = [Plith.DropCatcher.Shelf.ShelfSurface].GetMethod(
-    'TargetStackIndex', [Reflection.BindingFlags]'NonPublic, Instance')
-if (-not $targetStackIndex) { throw "drop-target check: TargetStackIndex is not where this check expects it." }
-
-$columnsHost = $shelfSurface.FindName('ColumnsHost')
-$columnsPanel = $shelfSurface.FindName('Columns')
-if (-not $columnsHost -or -not $columnsPanel) { throw "drop-target check: ColumnsHost or Columns is missing." }
+# THE LAYOUT PASS BELOW CAME FROM THAT DELETED SECTION AND HAD TO COME BACK. It reads like part
+# of the drop-target check and is not: the tile-hit check below depends on it just as much, and
+# removing it made that check report "a tile was never arranged (0 x 0)" for a surface whose
+# tiles were perfectly fine.
 
 # A REAL layout pass, in a host, because the press-to-drag check above ended with a Render and
-# nothing has arranged the tree since. TargetStackIndex reads each column's RenderSize, and a
-# Border that was built but never arranged reports 0 x 0, so every probe falls past every column
-# and resolves to "new stack". That is what the first run of this check reported, and the dump it
-# printed said so precisely: every child at left=71, size=0x0.
+# nothing has arranged the tree since. A Border that was built but never arranged reports 0 x 0,
+# and the tile-hit check below asks each tile for its ActualWidth to know where to aim.
 #
 # Measure/Arrange/UpdateLayout called directly on the surface do NOT fix it. Save-Visual detaches
 # the element when it is done (see its own comment for why), and a detached element with no
 # PresentationSource does not run a layout pass on request. Parenting it the same way Save-Visual
-# does is what actually arranges the children - the second thing tried, after the first was
-# measured and found not to work rather than assumed to.
+# does is what actually arranges the children.
 $layoutHost = [Windows.Controls.Border]::new()
 $layoutHost.Width = $shelfSurfaceW
 $layoutHost.Height = $shelfSurfaceH
@@ -711,53 +705,6 @@ $layoutHost.Child = $shelfSurface
 $layoutHost.Measure([Windows.Size]::new($shelfSurfaceW, $shelfSurfaceH))
 $layoutHost.Arrange([Windows.Rect]::new(0, 0, $shelfSurfaceW, $shelfSurfaceH))
 $layoutHost.UpdateLayout()
-
-# PRECONDITION: the row really is narrower than the area that catches drops. Without this the
-# check below would pass just as happily on a layout that never got centred at all.
-$hostWidth = $columnsHost.ActualWidth
-$rowWidth = $columnsPanel.ActualWidth
-if ($hostWidth -le 0 -or $rowWidth -le 0) { throw "drop-target check: nothing was laid out (host $hostWidth, row $rowWidth)." }
-if ($rowWidth -ge $hostWidth) {
-    throw "drop-target check: the row is not centred - it is $rowWidth wide inside a $hostWidth host, so there is no leftover space and this check proves nothing."
-}
-
-$rowLeft = $columnsPanel.TranslatePoint([Windows.Point]::new(0, 0), $columnsHost).X
-$stackCount = $surfaceModel.Stacks.Count
-
-# Middle of the first column, middle of the second, and both margins. The columns are TileSize
-# wide with a Gap-wide separator between them, which is the same arithmetic BuildColumn uses.
-$tile = 64.0; $gap = 8.0
-$probes = @(
-    @{ Name = 'inside the first column';  X = $rowLeft + ($tile / 2);                 Expect = 0 }
-    @{ Name = 'inside the second column'; X = $rowLeft + $tile + $gap + ($tile / 2);  Expect = 1 }
-    @{ Name = 'the margin left of the row';  X = [Math]::Max(1.0, $rowLeft / 2);      Expect = $stackCount }
-    @{ Name = 'the margin right of the row'; X = $hostWidth - 2;                      Expect = $stackCount }
-)
-
-# $dropProbe, not $probe: $probe is the palette-bearing Border this script does its resource
-# lookups through, and a foreach variable outlives its loop in PowerShell. Reusing the name here
-# left a Hashtable in it and killed the cloud-shape render 80 lines further down.
-foreach ($dropProbe in $probes) {
-    $point = [Windows.Point]::new($dropProbe.X, 40)
-    $got = $targetStackIndex.Invoke($shelfSurface, @([object]$point))
-    if ($got -ne $dropProbe.Expect) {
-        $dump = @()
-        foreach ($child in $columnsPanel.Children) {
-            $tagText = if ($null -eq $child.Tag) { '<none>' } else { "$($child.Tag) [$($child.Tag.GetType().Name)]" }
-            $left = try { $child.TranslatePoint([Windows.Point]::new(0,0), $columnsHost).X } catch { 'n/a' }
-            $dump += "      $($child.GetType().Name) tag=$tagText left=$left size=$($child.RenderSize.Width)x$($child.RenderSize.Height)"
-        }
-        throw ("drop-target check: a release at $($dropProbe.Name) (x=$([Math]::Round($dropProbe.X,1))) resolved to stack $got, expected $($dropProbe.Expect).`n" +
-               "    row left=$rowLeft rowWidth=$rowWidth hostWidth=$hostWidth`n" +
-               "    children:`n" + ($dump -join "`n"))
-    }
-}
-
-"  drop-target check passed: the row is $([Math]::Round($rowWidth)) DIP centred in a " +
-"$([Math]::Round($hostWidth)) DIP drop area, a release over each column resolves to that column, " +
-"and a release in either margin resolves to $stackCount, which is the index ShelfStore.Restack " +
-"reads as a new stack."
-
 
 # --- a tile answers a pointer ANYWHERE inside it ---------------------------------------------
 #
