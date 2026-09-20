@@ -580,7 +580,7 @@ controls. The progress row's space is reserved here and filled in Task 4.
 No unit test exists for this task and cannot: the suite is not STA. The test cycle is the render
 harness plus two lints, which is what has actually found the layout defects on this branch.
 
-- [ ] **Step 1: Write the sound panel launcher**
+- [x] **Step 1: Write the sound panel launcher**
 
 Create `src/Plith/Services/SystemSoundPanel.cs`:
 
@@ -620,7 +620,7 @@ public static class SystemSoundPanel
 }
 ```
 
-- [ ] **Step 2: Rewrite the page's XAML**
+- [x] **Step 2: Rewrite the page's XAML**
 
 Replace the whole of `src/Plith/Views/Widgets/MediaWidget.xaml`:
 
@@ -854,7 +854,7 @@ Replace the whole of `src/Plith/Views/Widgets/MediaWidget.xaml`:
 </UserControl>
 ```
 
-- [ ] **Step 3: Strip the ground out of the code-behind**
+- [x] **Step 3: Strip the ground out of the code-behind**
 
 In `src/Plith/Views/Widgets/MediaWidget.cs`, delete:
 
@@ -872,7 +872,7 @@ Wire the output control in the constructor, beside the transport handlers:
         Output.Click += (_, _) => Plith.Services.SystemSoundPanel.TryOpen();
 ```
 
-- [ ] **Step 4: Raise the thumbnail decode**
+- [x] **Step 4: Raise the thumbnail decode**
 
 In `src/Plith/ViewModels/MediaViewModel.cs`, replace the `DecodePixelWidth` line and its comment:
 
@@ -884,7 +884,7 @@ In `src/Plith/ViewModels/MediaViewModel.cs`, replace the `DecodePixelWidth` line
             bitmap.DecodePixelWidth = 192;
 ```
 
-- [ ] **Step 5: Give the render harness the states that matter**
+- [x] **Step 5: Give the render harness the states that matter**
 
 In `scripts/render-widgets.ps1`, the stand-in cover's comment says it exists "so the backdrop has
 something to blur". Correct it to say the tile has something to draw, and leave the drawing as
@@ -920,7 +920,7 @@ $mediaEmpty = [Plith.Views.Widgets.MediaWidget]::new($emptyVm, $null)
 Save-Visual -Element $mediaEmpty -W $frameW -H $frameH -Name 'widget-media-empty'
 ```
 
-- [ ] **Step 6: Build, render both themes, and look at the result**
+- [x] **Step 6: Build, render both themes, and look at the result**
 
 Run:
 ```
@@ -937,7 +937,7 @@ is the case the old ink override existed to fake), the rail's four controls fit 
 the text, the output control reads as separate from the transport, and the bottom 14 DIP is empty
 rather than clipped.
 
-- [ ] **Step 7: Run the lints**
+- [x] **Step 7: Run the lints**
 
 Run:
 ```
@@ -949,7 +949,7 @@ override is gone, so a failure here is a real finding about the themed surface r
 regression this task introduced. If a pair fails, report the measured ratio and the pair before
 changing any colour.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/Plith/Views/Widgets/MediaWidget.xaml src/Plith/Views/Widgets/MediaWidget.cs \

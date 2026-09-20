@@ -50,7 +50,9 @@ param(
 # that is made to pass by writing a fake colour into the product has been turned into decoration.
 $unresolvable = @{
     'MediaWidget.xaml:TransportButtonStyle' =
-        'both layers are painted by the page, not declared: a translucent chip over a near-black scrim over album artwork. Nothing static knows what is underneath. Checked instead in the render harness, light and dark - see widget-media.png.'
+        'the chip is translucent (#0DFFFFFF over the panel), so nothing static knows what is underneath. It used to be a chip over a near-black scrim over album artwork; that scrim is gone with the page redesign, and the chip now sits on the notch panel. Checked instead in the render harness, light and dark - see widget-media.png.'
+    'MediaWidget.xaml:TrackBarStyle' =
+        'the FILL is not declared at all: RenderProgress derives it from the groove colour with ContrastInk.PairOn, which is this script''s own advice, so there is no static pair to measure and the result is >= 4.5:1 against the groove by that method''s contract. The groove is NotchTrack. Every declared alternative was measured and every one failed: OsdAccent on NotchTrack 1,0:1, NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, NotchInk on NotchTrack 2,6:1 - because TrackOn stops as soon as it clears 3:1 against the SURFACE, leaving the ink an unpredictable distance further along the same ramp.'
 }
 
 $nonText = @{

@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
 using Plith.Cards;
+using Plith.Services;
 using Plith.ViewModels;
 
 namespace Plith.Views.Widgets;
@@ -42,6 +43,11 @@ public partial class MediaWidget : UserControl
         Next.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipNext);
         PlayPause.Click += (_, _) => _vm.RequestCommand(MediaCommand.TogglePlayPause);
 
+        // Windows' own sound page, not a device list of ours. Changing the default
+        // endpoint has no documented API, only the undocumented IPolicyConfig, so an
+        // in-notch picker is its own slice. See SystemSoundPanel.
+        Output.Click += (_, _) => SystemSoundPanel.TryOpen();
+
         // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
         // the one a person reaches for without looking.
         // Play/pause is the one a hand goes to without looking, so it is filled rather than
@@ -49,14 +55,6 @@ public partial class MediaWidget : UserControl
         // different" and "a control, with two beside it".
         PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
         PlayPause.Margin = new Thickness(6, 0, 6, 0);
-
-        // Re-rendered on the way in as well as on change: a page that has been away misses every
-        // notification while it is off the tree, so arriving without this would show whatever
-        // was playing when it last left.
-        // The backdrop reaches the frame's edges, so the page takes the notch's outline the way
-        // the weather page does - otherwise the artwork draws square corners inside a rounded
-        // shape and overhangs into nothing.
-        SizeChanged += (_, e) => Clip = Presentation.NotchGeometry.BottomRoundedClip(e.NewSize);
 
         IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Render(); };
         Render();
@@ -78,48 +76,6 @@ public partial class MediaWidget : UserControl
     /// things: the art is the album, which simply becomes another album, and the text is the
     /// thing you are reading, which is replaced.
     /// </summary>
-    /// <summary>
-    /// The album-coloured backdrop.
-    ///
-    /// Its own method because it wants an early return, and the one it had was inside Render -
-    /// so whenever the backdrop was already correct, Render stopped there and never reached the
-    /// play/pause shape or the transport's enabled state. The pause mark simply vanished. An
-    /// early return is only safe in a method that does one thing.
-    /// </summary>
-    private void RenderBackdrop()
-    {
-        Backdrop.Source = _vm.AlbumArt;
-        var wantBackdrop = _vm.AlbumArt is not null ? BackdropOpacity : 0.0;
-        if (Math.Abs(Backdrop.Opacity - wantBackdrop) <= 0.01) return;
-
-        // Animated only when there is a clock to animate against. Off screen — and in any host
-        // that lays the control out without presenting it — a DoubleAnimation never ticks, so
-        // the backdrop would sit at its starting value forever and the page would render without
-        // the artwork it is built around. Assigning covers that; the fade is the nicety.
-        if (!IsVisible || !SystemParameters.ClientAreaAnimation)
-        {
-            Backdrop.BeginAnimation(OpacityProperty, null);
-            Backdrop.Opacity = wantBackdrop;
-            return;
-        }
-
-        Backdrop.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(wantBackdrop, TimeSpan.FromMilliseconds(320))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
-
-    }
-
-    /// <summary>
-    /// How strongly the artwork shows through.
-    ///
-    /// Low on purpose. The backdrop is there to give the page the album's colour, not to be
-    /// looked at: past about a third the scrim stops winning and the title starts competing with
-    /// whatever happens to be in the picture behind it.
-    /// </summary>
-    private const double BackdropOpacity = 0.32;
-
     private void AnimateTrackChange()
     {
         if (!SystemParameters.ClientAreaAnimation) return;
@@ -147,8 +103,6 @@ public partial class MediaWidget : UserControl
         Title.Text = title;
         Artist.Text = _vm.HasSession ? _vm.Artist : string.Empty;
         Art.Source = _vm.AlbumArt;
-
-        RenderBackdrop();
 
         if (trackChanged) AnimateTrackChange();
 

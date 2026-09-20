@@ -244,8 +244,9 @@ $mediaVm.Artist = 'Denis Phenomen'
 $mediaVm.IsPlaying = $true
 $mediaVm.HasSession = $true
 
-# A stand-in cover, so the backdrop has something to blur. Drawn rather than loaded: the harness
-# must not depend on a file that happens to be on this machine.
+# A stand-in cover, so the tile has something to draw. Drawn rather than loaded: the harness must
+# not depend on a file that happens to be on this machine. It was described as something for the
+# backdrop to blur, and that backdrop is gone: the page no longer paints its own ground.
 $coverVisual = [Windows.Media.DrawingVisual]::new()
 $dc = $coverVisual.RenderOpen()
 $cg = [Windows.Media.LinearGradientBrush]::new()
@@ -259,6 +260,11 @@ $dc.Close()
 $cover = [Windows.Media.Imaging.RenderTargetBitmap]::new(300,300,96,96,[Windows.Media.PixelFormats]::Pbgra32)
 $cover.Render($coverVisual)
 $mediaVm.AlbumArt = $cover
+
+# 2:27 into 4:27, stamped now, so the bar and both clocks are in shot. Seeded on the view model
+# rather than through a snapshot: the harness has no SMTC session and does not need one.
+$mediaVm.Timeline = [Plith.Services.MediaTimeline]::new(
+    [TimeSpan]::FromSeconds(147), [TimeSpan]::FromSeconds(267), [DateTimeOffset]::Now)
 
 $reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
     [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now)
@@ -279,6 +285,35 @@ Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 
 $media = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null)
 Save-Visual -Element $media -W $frameW -H $frameH -Name 'widget-media'
+
+# Three more states, because the happy case is not where this layout's risk is. A title long
+# enough to scroll against the 116 DIP text column, a paused track, and the page with no session
+# at all: the last is the one nobody looks at until it is wrong.
+$longVm = [Plith.ViewModels.MediaViewModel]::new()
+$longVm.Title = 'Everything In Its Right Place (Remastered 2026 Edition)'
+$longVm.Artist = 'A Band With A Fairly Long Name Too'
+$longVm.IsPlaying = $true
+$longVm.HasSession = $true
+$longVm.AlbumArt = $cover
+# No timeline on purpose: this is the live-stream case, where the progress row collapses and the
+# title has the full band to scroll in.
+$mediaLong = [Plith.Views.Widgets.MediaWidget]::new($longVm, $null)
+Save-Visual -Element $mediaLong -W $frameW -H $frameH -Name 'widget-media-long-title'
+
+$pausedVm = [Plith.ViewModels.MediaViewModel]::new()
+$pausedVm.Title = 'You Feel Be Love'
+$pausedVm.Artist = 'Denis Phenomen'
+$pausedVm.IsPlaying = $false
+$pausedVm.HasSession = $true
+$pausedVm.AlbumArt = $cover
+$pausedVm.Timeline = [Plith.Services.MediaTimeline]::new(
+    [TimeSpan]::FromSeconds(12), [TimeSpan]::FromSeconds(267), [DateTimeOffset]::Now)
+$mediaPaused = [Plith.Views.Widgets.MediaWidget]::new($pausedVm, $null)
+Save-Visual -Element $mediaPaused -W $frameW -H $frameH -Name 'widget-media-paused'
+
+$emptyVm = [Plith.ViewModels.MediaViewModel]::new()
+$mediaEmpty = [Plith.Views.Widgets.MediaWidget]::new($emptyVm, $null)
+Save-Visual -Element $mediaEmpty -W $frameW -H $frameH -Name 'widget-media-empty'
 
 $writer = [Func[double, bool]] { param($v) $true }
 $audio = [Plith.Views.Widgets.AudioWidget]::new($audioVm, $writer)

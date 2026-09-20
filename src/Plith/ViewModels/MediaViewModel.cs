@@ -142,7 +142,11 @@ public sealed class MediaViewModel : INotifyPropertyChanged
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = ms;
-            bitmap.DecodePixelWidth = 96; // capped — we only display 48 dip ≤ ~96 px at 200% DPI
+            // 192, for the notch page's 56 DIP tile: 112 px at 200% DPI and 168 at 300%. It was
+            // 96, chosen for the classic card's 48 DIP row, and the notch page drew its tile from
+            // the same bitmap. A cap is still wanted, so this is a bigger cap rather than none:
+            // the point is to bound what one track change costs.
+            bitmap.DecodePixelWidth = 192;
             bitmap.EndInit();
             bitmap.Freeze(); // cross-thread safe
             return bitmap;
