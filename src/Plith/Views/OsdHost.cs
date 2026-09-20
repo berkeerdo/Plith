@@ -1181,28 +1181,24 @@ public sealed class OsdHost : BandWindow
         // view models) showing something rather than an empty panel.
         if (!fromHover)
         {
-            // An event keeps the widget frame ONLY when the frame is already showing the thing
-            // the event is about.
-            //
-            // The first version of this rule was "an event never takes the frame away", which
-            // fixed pressing play on the media page answering itself with a media HUD - but it
-            // was too wide: turning the volume up with the frame open then showed nothing at
-            // all, because no page carries the volume since the audio page was removed. The
-            // narrow rule covers both. An event about the page you are standing on updates that
-            // page; an event about anything else is news, and news gets the HUD.
+            // WHO CAUSED IT decides whether the open frame survives. The rule itself lives in
+            // NotchEventPolicy, free of WPF, because this class is a BandWindow that the test
+            // project cannot construct - and two earlier versions of this rule reached a running
+            // build with no test between them. See that file for both, and for the log lines
+            // from the run where the third case was measured doing harm.
             var frameIsOpen = _content.PanelContent == NotchPanelContent.Widgets
                               && _presentation is AmbientNotchPresentation open
                               && open.IsOpenEnoughToShowContent;
 
-            // An event may take the open frame away only when the page being looked at does not
-            // already show that thing: a track change while the media page is up is an answer you
-            // can already see, and replacing the frame with a HUD would take away the place you
-            // deliberately went to in order to show you what is already there.
+            // Whether the page being looked at already displays this event: a track change while
+            // the media page is up is an answer you can already see, and replacing the frame with
+            // a HUD would take away the place you deliberately went to in order to show you what
+            // is already there.
             var pageAlreadyShowsIt = frameIsOpen
                                      && PickHudKind(reason) == NotchHudKind.Media
                                      && ReferenceEquals(_widgets.CurrentPage, _mediaPage);
 
-            var keepFrame = frameIsOpen && pageAlreadyShowsIt;
+            var keepFrame = NotchEventPolicy.KeepsOpenFrame(reason, frameIsOpen, pageAlreadyShowsIt);
             var wantsHud = !keepFrame && _presentation is AmbientNotchPresentation && _hud is not null;
             if (wantsHud) _hud!.Show(PickHudKind(reason));
             if (!keepFrame)
