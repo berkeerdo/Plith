@@ -259,7 +259,7 @@ The position reaches the view model, on its own event. Nothing on screen changes
   - `void MediaCard.ApplyTimeline(MediaTimeline? timeline)`
   - `MediaTimeline? MediaViewModel.Timeline { get; set; }`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Append to `tests/Plith.Tests/MediaViewModelTests.cs`:
 
@@ -358,12 +358,12 @@ Append to `tests/Plith.Tests/MediaCardTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/Plith.Tests --filter "MediaViewModelTests|MediaCardTests"`
 Expected: FAIL to compile, `MediaTimeline` and `ApplyTimeline` do not exist.
 
-- [ ] **Step 3: Add the record and the snapshot member**
+- [x] **Step 3: Add the record and the snapshot member**
 
 In `src/Plith/Services/MediaSessionClient.cs`, replace the record declarations at the top:
 
@@ -388,7 +388,7 @@ public sealed record MediaSnapshot(
     MediaTimeline? Timeline = null);
 ```
 
-- [ ] **Step 4: Read and publish the timeline in the client**
+- [x] **Step 4: Read and publish the timeline in the client**
 
 In the same file, add the event beside `Changed`:
 
@@ -461,7 +461,7 @@ listens to `Changed` is never left without one:
                                          ReadTimeline(session)));
 ```
 
-- [ ] **Step 5: Carry it through the card and the view model**
+- [x] **Step 5: Carry it through the card and the view model**
 
 In `src/Plith/ViewModels/MediaViewModel.cs`, add the property beside `IsPlaying`:
 
@@ -504,7 +504,7 @@ In `src/Plith/Cards/MediaCard.cs`, add after `Apply`:
     public void ApplyTimeline(MediaTimeline? timeline) => Vm.Timeline = timeline;
 ```
 
-- [ ] **Step 6: Marshal it in the orchestrator**
+- [x] **Step 6: Marshal it in the orchestrator**
 
 In `src/Plith/Services/OsdOrchestrator.cs`, beside `_media.Changed += OnMediaChanged;` add:
 
@@ -536,12 +536,12 @@ In `Dispose`, beside `_media.Changed -= OnMediaChanged;`:
         _media.TimelineChanged -= OnTimelineChanged;
 ```
 
-- [ ] **Step 7: Run the tests to verify they pass**
+- [x] **Step 7: Run the tests to verify they pass**
 
 Run: `dotnet test`
 Expected: 519 passing (513 plus 6), 0 failed, and `dotnet build` reporting 0 warnings.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add src/Plith/Services/MediaSessionClient.cs src/Plith/Services/OsdOrchestrator.cs \

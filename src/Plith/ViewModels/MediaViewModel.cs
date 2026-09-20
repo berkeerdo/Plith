@@ -58,6 +58,21 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         }
     }
 
+    private MediaTimeline? _timeline;
+
+    /// <summary>
+    /// Where the track is, or null when the source reports no usable duration.
+    ///
+    /// Its own property rather than three, so a position arriving once a second raises one
+    /// notification. The media page routes on the name of this one and repaints only its
+    /// progress row.
+    /// </summary>
+    public MediaTimeline? Timeline
+    {
+        get => _timeline;
+        set => Set(ref _timeline, value);
+    }
+
     private bool _hasSession;
     public bool HasSession
     {
@@ -112,6 +127,7 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         IsPlaying = snapshot.IsPlaying;
         HasSession = snapshot.HasSession;   // setter raises HasSessionChanged on actual change
         AlbumArt = DecodeThumbnail(snapshot.ThumbnailBytes);
+        Timeline = snapshot.Timeline;
     }
 
     private static BitmapImage? DecodeThumbnail(byte[]? bytes)

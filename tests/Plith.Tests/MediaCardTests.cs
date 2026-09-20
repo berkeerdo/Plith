@@ -138,4 +138,33 @@ public class MediaCardTests
         Assert.Equal(card.AccessibleName, card.ToString());
         Assert.DoesNotContain("Plith.Cards", card.ToString());
     }
+
+    [Fact]
+    public void ApplyTimeline_ReachesTheViewModel()
+    {
+        var card = new MediaCard(NewSettings());
+        var timeline = new MediaTimeline(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(200),
+                                         DateTimeOffset.UnixEpoch);
+
+        card.ApplyTimeline(timeline);
+
+        Assert.Equal(timeline, card.Vm.Timeline);
+    }
+
+    [Fact]
+    public void ApplyTimeline_RaisesNoShowRequest()
+    {
+        // This test is the reason ApplyTimeline exists at all. Apply() raises ShowRequested when
+        // AutoShowOnMedia is on, and TimelinePropertiesChanged fires about once a second on some
+        // sources: routing the position through Apply would summon the OSD every second.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        card.Apply(Playing());
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.ApplyTimeline(new MediaTimeline(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(200),
+                                             DateTimeOffset.UnixEpoch));
+
+        Assert.Empty(shows);
+    }
 }

@@ -54,6 +54,16 @@ public sealed class MediaCard : ICard
             ShowRequested?.Invoke(new ShowRequest(ShowReason.MediaChange, Id));
     }
 
+    /// <summary>
+    /// A new position for the track already showing.
+    ///
+    /// Deliberately not routed through <see cref="Apply"/>: Apply raises ShowRequested when
+    /// AutoShowOnMedia is on, and this arrives about once a second, so the OSD would be summoned
+    /// every second by a bar moving. It also cannot change IsVisible, so there is nothing to
+    /// reconcile.
+    /// </summary>
+    public void ApplyTimeline(MediaTimeline? timeline) => Vm.Timeline = timeline;
+
     private void OnSettingsChanged(SettingsModel m) => RaiseVisibilityIfChanged();
 
     private void OnHasSessionChanged() => RaiseVisibilityIfChanged();

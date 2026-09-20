@@ -4,12 +4,25 @@ using Windows.Storage.Streams;
 
 namespace Plith.Services;
 
+/// <summary>
+/// Where the current track is, and when that was last true.
+///
+/// A stamped reading rather than a live position, because that is what SMTC reports. Only ever
+/// constructed with a positive <paramref name="Duration"/>: see
+/// <see cref="MediaSessionClient.ReadTimeline"/>, which returns null otherwise, so no consumer
+/// has to guard a division.
+/// </summary>
+public sealed record MediaTimeline(TimeSpan Position, TimeSpan Duration, DateTimeOffset LastUpdated);
+
 public sealed record MediaSnapshot(
     string Title,
     string Artist,
     byte[]? ThumbnailBytes,
     bool IsPlaying,
-    bool HasSession);
+    bool HasSession,
+    // Defaulted so the five-argument construction in the no-session path and in the tests keeps
+    // compiling and keeps meaning "no timeline".
+    MediaTimeline? Timeline = null);
 
 /// <summary>
 /// Wraps Windows.Media.Control (SMTC) — the system-wide media session manager that
@@ -27,6 +40,16 @@ public sealed class MediaSessionClient : IDisposable
 
     /// <summary>Raised after any change: track change, play/pause. Always carries a fresh snapshot.</summary>
     public event Action<MediaSnapshot>? Changed;
+
+    /// <summary>
+    /// Raised when the position moves, carrying only the timeline.
+    ///
+    /// Separate from <see cref="Changed"/> on purpose. Changed comes from ScheduleEmit, which
+    /// re-reads the media properties AND re-downloads the album thumbnail, and
+    /// TimelinePropertiesChanged fires about once a second on some sources. Subscribing the
+    /// position to that path would download the artwork once per second.
+    /// </summary>
+    public event Action<MediaTimeline?>? TimelineChanged;
 
     /// <summary>Raised when the current session is swapped (e.g. user switches from Spotify to a browser tab).
     /// Subscribers may want to suppress the next <see cref="Changed"/> snapshot since it's just the new
@@ -106,6 +129,7 @@ public sealed class MediaSessionClient : IDisposable
         if (_currentSession is null) return;
         _currentSession.MediaPropertiesChanged += OnSessionChanged;
         _currentSession.PlaybackInfoChanged += OnSessionChanged;
+        _currentSession.TimelinePropertiesChanged += OnTimelineChanged;
     }
 
     private void DetachCurrent()
@@ -113,10 +137,47 @@ public sealed class MediaSessionClient : IDisposable
         if (_currentSession is null) return;
         _currentSession.MediaPropertiesChanged -= OnSessionChanged;
         _currentSession.PlaybackInfoChanged -= OnSessionChanged;
+        _currentSession.TimelinePropertiesChanged -= OnTimelineChanged;
         _currentSession = null;
     }
 
     private void OnSessionChanged(GlobalSystemMediaTransportControlsSession sender, object args) => ScheduleEmit();
+
+    private void OnTimelineChanged(GlobalSystemMediaTransportControlsSession sender,
+                                   TimelinePropertiesChangedEventArgs args)
+        => TimelineChanged?.Invoke(ReadTimeline(sender));
+
+    /// <summary>
+    /// The session's timeline, or null when there is nothing usable to draw.
+    ///
+    /// Null rather than a zero-length timeline for a live stream or a source that reports no end
+    /// time: a bar of unknown length is a lie, and the page draws no bar for null.
+    ///
+    /// StartTime is subtracted rather than assumed to be zero, because it is not always zero for
+    /// chaptered content. A missing LastUpdatedTime becomes now: left at default it is year 1,
+    /// and the interpolation would then pin every bar to the end of its track.
+    /// </summary>
+    internal static MediaTimeline? ReadTimeline(GlobalSystemMediaTransportControlsSession session)
+    {
+        try
+        {
+            var t = session.GetTimelineProperties();
+            if (t is null) return null;
+
+            var duration = t.EndTime - t.StartTime;
+            if (duration <= TimeSpan.Zero) return null;
+
+            var position = t.Position - t.StartTime;
+            var stamp = t.LastUpdatedTime == default ? DateTimeOffset.Now : t.LastUpdatedTime;
+            return new MediaTimeline(position, duration, stamp);
+        }
+        catch
+        {
+            // Same contract as every other read in this class: a session that died mid-read costs
+            // the caller a null, not an exception on a threadpool thread.
+            return null;
+        }
+    }
 
     /// <summary>Cancels any in-flight <see cref="EmitSnapshotAsync"/> and fires a fresh one,
     /// so a stale read can never overwrite a newer one when events arrive in bursts.</summary>
@@ -179,7 +240,10 @@ public sealed class MediaSessionClient : IDisposable
         CurrentSourceAppUserModelId = aumid;
         IsCurrentSessionPlaying = playing;
 
-        Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true));
+        // The timeline rides on the full snapshot too, so a subscriber that only listens to
+        // Changed is never left without one.
+        Changed?.Invoke(new MediaSnapshot(title, artist, thumb, playing, HasSession: true,
+                                          ReadTimeline(session)));
     }
 
     private static async Task<byte[]?> ReadThumbnailAsync(IRandomAccessStreamReference thumbRef, CancellationToken ct)

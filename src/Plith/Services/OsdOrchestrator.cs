@@ -70,6 +70,7 @@ public sealed class OsdOrchestrator : IDisposable
         ReconcileActiveSource();
 
         _media.Changed += OnMediaChanged;
+        _media.TimelineChanged += OnTimelineChanged;
         _ = _media.StartAsync();
     }
 
@@ -337,6 +338,20 @@ public sealed class OsdOrchestrator : IDisposable
         _mediaCard.Apply(snapshot);
     }
 
+    private void OnTimelineChanged(MediaTimeline? timeline)
+    {
+        // Same marshalling as OnMediaChanged: SMTC raises on threadpool threads and the view
+        // model is read by the UI.
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => { if (!_disposed) OnTimelineChanged(timeline); });
+            return;
+        }
+        if (_disposed) return;
+
+        _mediaCard.ApplyTimeline(timeline);
+    }
+
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
     {
         _ = command switch
@@ -358,6 +373,7 @@ public sealed class OsdOrchestrator : IDisposable
         _settings.Changed -= OnSettingsChanged;
         _mediaCard.CommandInvoked -= OnMediaCommandInvoked;
         _media.Changed -= OnMediaChanged;
+        _media.TimelineChanged -= OnTimelineChanged;
         _windowsAudio.Changed -= OnWindowsAudioChanged;
         // _media is owned by App (shared with the fullscreen watcher) — not disposed here.
         _windowsAudio.Dispose();
