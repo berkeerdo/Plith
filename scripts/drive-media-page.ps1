@@ -323,12 +323,14 @@ Assert-InputWorks
 # drop catcher look guilty for a failure that was not its, recorded as instrument defect 5 in
 # docs/SHELF-VERIFICATION.md.
 $already = Get-Process Plith -ErrorAction SilentlyContinue
+$script:startedPlith = $false
 if ($already) {
-    "plith: already running (pid $($already.Id -join ', ')), using it"
+    "plith: already running (pid $($already.Id -join ', ')), using it and leaving it running"
 } else {
     Start-Process $plithExe
     Start-Sleep -Seconds 5
-    "plith: started"
+    $script:startedPlith = $true
+    "plith: started by this run, and it will be stopped at the end"
 }
 
 $windows = Find-LayeredWindows -ProcessLike 'Plith'
@@ -437,6 +439,18 @@ if ($onMedia) {
     $clocks = @($names | Where-Object { $_ -match '^-?\d{1,2}:\d{2}$' })
     Add-Verdict 'the elapsed and remaining clocks are drawn' ($clocks.Count -ge 2) `
         "clock-shaped names: $($clocks -join ', ')"
+}
+
+# What this run started, it stops. A running Plith.exe holds its own binary open, so the next
+# `dotnet build` fails with MSB3021/MSB3027 and the message names a file copy rather than a
+# leftover process: measured on 2026-09-20, where two build errors read as a code defect for a
+# minute. An instance that was ALREADY up belongs to the person at the machine, so it is left
+# exactly as it was found.
+if ($script:startedPlith) {
+    Get-Process Plith -ErrorAction SilentlyContinue | Stop-Process
+    "plith: stopped (this run started it)"
+} else {
+    "plith: left running (it was up before this run; `dotnet build` will fail while it is)"
 }
 
 "`nverdicts:"
