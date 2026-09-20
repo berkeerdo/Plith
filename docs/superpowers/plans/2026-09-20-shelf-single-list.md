@@ -889,7 +889,7 @@ pwsh -NoProfile -File scripts/render-widgets.ps1
 
 Expected: build 0 errors 0 warnings, all tests pass, every lint exit 0.
 
-- [x] **Step 6: Drive it on hardware**
+- [ ] **Step 6: Drive it on hardware**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pair.ps1`
 
@@ -897,7 +897,7 @@ Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pa
 
 Expected: §3.1, §3.2, §3.3 and the new tree check all PASS.
 
-- [x] **Step 7: Confirm the height, which nobody has measured**
+- [ ] **Step 7: Confirm the height, which nobody has measured**
 
 `ShelfChromeDip = 75` is derived from the old frame, so the 283 is arithmetic rather than observation. Capture the shelf and look at it:
 
@@ -905,7 +905,7 @@ Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/capture-shelf.
 
 Check that the third row is fully inside the window and that the header is not crowded. If the chrome is not 75, correct `ShelfChromeDip` and note the measured value in its comment.
 
-- [x] **Step 8: Commit**
+- [x] **Step 8: Commit** (done as `2ceedcf`, ahead of Steps 6 and 7, which need the machine)
 
 ```bash
 git add scripts/drive-shelf-pair.ps1 docs/ CLAUDE.md
