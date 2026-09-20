@@ -514,13 +514,13 @@ records:
 | Item | State | Record |
 |---|---|---|
 | §3.1 hover reveals the remove control, at the tile centre | RUN, passing | §3.10 |
-| §3.1 remove takes the row out of `shelf.txt` | NOT RUN | §3.11 |
+| §3.1 remove takes the row out of `shelf.txt` | **RUN, passing** | §3.12 |
 | §3.2 a click at the tile centre selects | RUN, passing | §3.10 |
-| §3.2 remove acts on the whole selection | NOT RUN | §3.11 |
+| §3.2 remove acts on the whole selection | **RUN, passing** (partial, see §3.12) | §3.12 |
 | §3.3 clear empties the shelf without asking | **RUN, passing** | §3.11 |
-| §3.4 new stack by the plus control, then a drag into it | NOT RUN | §3.11 |
+| §3.4 new stack by the plus control, then a drag into it | **RUN, passing** | §3.12 |
 | §3.5 dragging a tile onto another stack restacks it | **RUN, passing** | §3.11 |
-| §3.6 dragging past the last stack starts a new one | NOT RUN | §3.11 |
+| §3.6 dragging past the last stack starts a new one | **RUN, passing** | §3.12 |
 | §3.7 open, §3.8 show in the file manager | NOT RUN (menu items exist and are named) | §3.10 |
 | §3.9 the menu does not let the shelf close under itself | RUN, passing | §3.10 |
 
@@ -531,9 +531,18 @@ centre.** Fixed on this branch, with an automated check that fails the build if 
 §3.11 carries what the second set needed: `scripts/drive-shelf.ps1` drives the catcher alone, and
 everything whose expectation is "the tile disappears" or "`shelf.txt` no longer lists it" needs
 the REAL pair of processes, which `scripts/drive-shelf-pair.ps1` now drives — notch click, page,
-shelf, and `shelf.txt` read back as the oracle. The four items still NOT RUN are blocked by an
-anti-cheat driver filtering injected input on this machine rather than by anything in the product;
-§3.11 has the measurement and what it takes to clear it.
+shelf, and `shelf.txt` read back as the oracle.
+
+~~The four items still NOT RUN are blocked by an anti-cheat driver filtering injected input on
+this machine rather than by anything in the product; §3.11 has the measurement and what it takes
+to clear it.~~ **All four have since been run and pass (§3.12), and the stated blocker was not
+the one that mattered.** Vanguard's driver was loaded for every run on 2026-09-20 and refused
+`SendInput` on ONE attempt; every other attempt that reached the check accepted a full click
+round trip. (The exact denominator is not known: three early attempts recorded that a
+precondition had failed without recording which, which is itself one of the defects below.)
+What actually stood between these items and a verdict was a fullscreen game holding the pointer,
+three defects in the driving script, and a stale Plith instance, none of them in the product,
+and none of them the thing this paragraph named.
 
 **And §3.5 and §3.6 could not have passed before 2026-09-19 regardless of who ran them.** The
 whole-branch review found the tile drag could never start at all (see §6.1), so the two items that
@@ -898,12 +907,28 @@ seeds its own fixture, restores the shelf it replaced, and stops everything it s
 
 #### Two things the run found that are not defects, and one that is
 
-**The two-tile rule.** A stack column draws at most two tiles and folds the rest into one chip
-named `N more items in this stack`. A third item is therefore in no UIA tree, and asking for it
-by name reports "not found" — which reads exactly like a page that has lost its accessible names.
-The first fixture put three files in a stack and produced four such false alarms in one run. The
-fixture is now four files in two stacks of two, and the steps are ordered so that every tile a
-later step needs is still drawn.
+**The two-tile rule.** A stack column folds what it cannot show into one chip named
+`N more items in this stack`. A folded item is in no UIA tree, and asking for it by name reports
+"not found", which reads exactly like a page that has lost its accessible names. The first
+fixture put three files in a stack and produced four such false alarms in one run. The fixture is
+now four files in two stacks of two, and the steps are ordered so that every tile a later step
+needs is still drawn.
+
+> **The sentence above used to read "draws at most two tiles", and that is wrong. It was corrected
+> 2026-09-20 after it cost a second run.** The chip costs a SLOT. `ShelfSurface.VisibleRowsShown`
+> is `stackCount > 2 ? 1 : stackCount`, so a stack of two draws both tiles and a stack of **three
+> draws exactly one**, not two, plus a `+2` chip. "At most two" is true only in the vacuous sense;
+> the row that actually disappears is the second one, as soon as a stack passes two.
+>
+> This mattered because the rule as written was used to design the fixture. `drive-shelf-pair.ps1`
+> carried the comment *"Stack 1 is now [charlie alpha bravo]; alpha is its second tile and still
+> drawn"* directly above a three-item stack, and §3.6 and §3.4 then reported `alpha.txt not in the
+> UIA tree` and `bravo.txt found: False`, both reading as product defects and both being the
+> fixture. The safe targets are any tile in a stack of one or two, and the FIRST tile of any stack
+> whatever its size.
+>
+> It is the same failure this document keeps recording, one level up: a claim written from
+> reasoning rather than from the arithmetic, then trusted by the thing built on top of it.
 
 **Half of §3.4 is already answered, and the half that is answered is the one a reader would
 doubt.** The plus control does produce an empty column, and that column does announce itself:
@@ -944,6 +969,89 @@ One wheel notch is one page, at 700 ms spacing, with no accumulation carried acr
 `CommitThreshold = 120` and `IdleRearmMs = 150` behaving exactly as designed **for a wheel**. It
 says nothing about a touchpad's two-finger swipe, which delivers many small deltas rather than
 one of 120 and is the case those constants were actually chosen for.
+
+### 3.12 The last four items, and five defects that were all in the instrument (2026-09-20)
+
+**§3.1's second half, §3.2, §3.4 and §3.6 are RUN and passing.** Every item in section 3 that a
+script can reach has now been driven against the real pair, judged by reading `shelf.txt` before
+and after rather than by looking at pixels.
+
+| Item | Measured |
+|---|---|
+| **§3.1** remove takes the tile off the page AND out of `shelf.txt` | `[bravo][alpha][delta][charlie]` → `[bravo][alpha][delta]`, and the name is gone from the UIA tree (`still drawn: False`) |
+| **§3.2** remove acts on the whole selection | `[bravo][alpha][delta]` → `[bravo]`: two tiles selected, ONE remove control clicked, both left |
+| **§3.4** the plus control makes a stack, and a drag lands in it | empty column announced as `Stack 1, 0 items`, then `[alpha bravo][delta][charlie]` → `[bravo][alpha][delta][charlie]` |
+| **§3.6** dragging past the last stack starts a new one | `[charlie alpha bravo][delta]` → `[alpha bravo][delta][charlie]` |
+
+**Not one of the obstacles was in the product.** That is the finding, and it is the same one
+§3.10 and §3.11 recorded, so it is now a property of this work rather than an anecdote.
+
+1. **A fullscreen game owned the pointer, and the check blamed the wrong thing.** The opening
+   check slept 200 ms, sampled the cursor once, and reported "the pointer did not move", which
+   was false. `SetCursorPos` landed on its target exactly, six times out of six, read back
+   immediately. Something moved it away again afterwards: `WardogsClient-Win64-Shipping`, whose
+   mouse capture re-centred the cursor, which is why the pointer kept coming to rest on exactly
+   `1280,720`, the precise centre of a 2560x1440 screen. A round-numbered resting position is
+   the tell. The game also covered the monitor, so it failed precondition 3 at the same time,
+   and that case has the opposite remedy (close it, rather than let go of the mouse). The check
+   now answers "did the call take effect" and "is anything else driving the pointer" separately,
+   and names the foreground window. Filed as defect 5 in the script's own header.
+
+2. **A hand arriving mid-run broke nothing and ruined everything.** `Move-Pointer` glided to a
+   tile and the caller pressed, with nothing verifying that the pointer had arrived. A pointer
+   nudged aside between the two produced a press on whatever happened to be underneath, reported
+   as a verdict about the shelf, silently, with every call returning success. Defect 4 at least
+   shouts. This one could not, until `Move-Pointer` was made to check arrival before each press.
+
+3. **The overflow rule was written down wrong, and the fixture was built on it.** See the banner
+   in §3.11: the chip costs a SLOT, so a stack of three draws ONE tile, not two. §3.6 and §3.4
+   were asking the UIA tree for tiles the surface had folded away, and both reported the product
+   broken. Corrected in the document and in the script, which now drags the FIRST tile, drawn at
+   any stack size, and thereby un-overflows the column for the steps that follow.
+
+4. **An assertion that could not return True on any input.** `@($after | Select-Object -Last 1)`
+   does not reach into the last stack: `Read-Shelf` returns an array OF ARRAYS, and
+   `Select-Object` emits the inner array as one object without enumerating it, so the result is a
+   one-element array whose element is an `Object[]`, and `-contains 'charlie.txt'` compares a
+   string against an array. §3.6 failed while printing its own correct end state next to the word
+   FAIL. Reproduced in isolation before being fixed to `$after[-1]`. The `Where-Object` forms in
+   §3.1, §3.2, §3.4 and §3.5 were never affected: there `$_` is bound to each inner array.
+
+5. **A stale Plith made the catcher look guilty.** `Program.cs` takes a per-user single-instance
+   mutex, and the pre-run kill silenced its own errors. An instance from three hours earlier
+   survived, so the Plith the script started exited at once and logged nothing. The script,
+   waiting on a log line from a process that was already gone, reported
+   `The drop catcher never connected within 30 s`, sending the reader to the pipe, the catcher
+   and the ACL, none of which was at fault. The kill is now verified rather than assumed, and the
+   wait asks `$proc.HasExited` instead of only watching the log.
+
+**What the report did with all of this, before it was fixed: threw it away.** The verdict block,
+both process logs and the shot paths sat AFTER the `try/finally`, so any exception propagated
+past them and printed none. A run that got most of the way through reported one line about an
+`IntPtr` cast and was indistinguishable from a run that never started. The report now prints on
+every path and the exception surfaces after it. Three attempts earlier in the night recorded only
+"died on a precondition" without recording which, and are the reason the Vanguard denominator in
+this section's opening is unknown. It is the same mistake one level out, in the wrapper rather than
+the script.
+
+#### Two honest gaps in §3.2, which is marked passing
+
+The written item asks for `Ctrl`+click on two tiles **in the same stack**. The driver selected
+two tiles in DIFFERENT stacks. That is arguably a stronger test of "remove acts on the selection"
+(the rule is `ShelfModel.DragPaths`'s and has nothing to do with columns), but it is not the
+item as written. The item's second half, *hover and remove a tile that is NOT part of any
+selection, expecting only that one to go*, is **not driven at all**. §3.2 is marked passing for
+the half that ran.
+
+#### What this section is likely to outlive
+
+On 2026-09-20 the decision was taken to replace stacks with a single flat shelf, on the grounds
+that Alcove and Dropover have no such concept and the surface is simpler without it. If that
+lands, **§3.4, §3.5 and §3.6 describe behaviour that no longer exists** and should be deleted
+rather than migrated, and the `+N` chip goes with them, which also retires defect 3 above, and
+the accessibility gap where a folded tile is in no UIA tree and reachable by no key. §3.1, §3.2
+and §3.3 survive unchanged. The measurements above are kept because they are what the code did on
+the day, not because the code will keep doing it.
 
 ### What HAS been measured, on 2026-09-19
 

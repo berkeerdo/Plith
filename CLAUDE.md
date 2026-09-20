@@ -128,10 +128,25 @@ The same run answered §1's open foreground question (the real click path reache
 constants (one wheel notch, one page, three times).
 
 So most of the open items in `docs/PHASE5-VERIFICATION.md` and `docs/PHASE6-VERIFICATION.md` are
-reachable by script, and were reachable the whole time. Four shelf items (§3.1's second half,
-§3.2, §3.4, §3.6) are still NOT RUN for an unrelated reason: Riot Vanguard's driver filters
-injected mouse input on this machine, always for `MOUSEEVENTF_MOVE` and intermittently for
-`LEFTDOWN`. Record: `docs/SHELF-VERIFICATION.md` §3.11.
+reachable by script, and were reachable the whole time.
+
+**The last four shelf items (§3.1's second half, §3.2, §3.4, §3.6) are now RUN and passing too
+(2026-09-20), and Vanguard was never what stood in the way.** Its driver was loaded throughout
+and refused `SendInput` on a single attempt; every other attempt accepted a full click round
+trip. What actually blocked them was a fullscreen game holding the pointer, and four defects in
+the driving script: an opening check that blamed "the pointer did not move" when the call had
+worked perfectly, a mid-run press that could land anywhere without saying so, an overflow rule
+written down wrong so the fixture aimed at tiles the surface had folded away, and an assertion
+that compared a string against an array and so could not return True on any input. A fifth, a
+stale Plith holding the single-instance mutex, made the drop catcher look guilty for a failure
+that was not its. **Every gate was green through all of it.** Record:
+`docs/SHELF-VERIFICATION.md` §3.12.
+
+**Stacks are slated for removal (decided 2026-09-20, not yet designed).** Alcove and Dropover
+have no such concept and the surface is markedly simpler without it, so the shelf becomes one
+flat list. §3.4, §3.5 and §3.6 describe behaviour that would no longer exist; §3.1, §3.2 and
+§3.3 survive. The `+N` overflow chip goes with the stacks, which also closes the accessibility
+gap where a folded tile is in no UIA tree and reachable by no key.
 
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
