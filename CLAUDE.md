@@ -142,29 +142,50 @@ stale Plith holding the single-instance mutex, made the drop catcher look guilty
 that was not its. **Every gate was green through all of it.** Record:
 `docs/SHELF-VERIFICATION.md` §3.12.
 
-**Stacks are slated for removal (decided 2026-09-20, not yet designed).** Alcove and Dropover
-have no such concept and the surface is markedly simpler without it, so the shelf becomes one
-flat list. §3.4, §3.5 and §3.6 describe behaviour that would no longer exist; §3.1, §3.2 and
-§3.3 survive. The `+N` overflow chip goes with the stacks, which also closes the accessibility
-gap where a folded tile is in no UIA tree and reachable by no key.
+**Phase 7 slice 3 (one flat list) is code-complete on the same branch.** Stacks are gone. Alcove
+and Dropover, the two applications this feature is modelled on, have one storage area, and the
+stack model cost a list-of-lists in the store, two of the six catcher-to-Plith verbs, a grouped
+file format, and per-column building with its own fold rule.
 
-Two decisions taken with it, recorded here because nothing else has them yet and the next
-session would otherwise re-derive or contradict them:
+**The decisive number was that `MaxItems` was 20 while the surface could draw 10.** Five columns
+of two, with the other half behind `+N` chips, and a folded tile is in no UIA tree at all: it is
+invisible to a screen reader and reachable by no key. The cap is now `NotchGeometry.ShelfCapacity`,
+defined as the product of the grid it must match, in the one file both projects already compile.
 
-1. **Nothing is ever hidden behind a count.** Tiles wrap into rows and the surface scrolls past
-   what fits. No file is unreachable by key or absent from the UIA tree, which is what the `+N`
-   chip cost.
-2. **The height is chosen once, when the shelf opens, and does not change while it is open**
-   (ceiling of three rows, scroll beyond). The shelf hugs its contents, so two files do not sit
-   in a large empty pane, but the geometry is negotiated once. That matters because the window
-   is sized over the pipe by Plith while it stands the notch aside, so resizing per item would
-   spread an animation across two processes, and every cross-process coordination on this branch
-   has cost several runs to get right. Removing a file reflows the content and leaves the window
-   alone.
+The shelf is one wrapping grid of at most 15 files, newest first, with no hand reordering, so the
+within-surface drag is deleted rather than repurposed and a tile drags OUT only. The `Items` wire
+message collapsed from one-per-stack to one, which took `ShelfModel`'s whole reassembly with it:
+that was the most intricate code in the shelf and existed entirely to survive two deliveries
+interleaving on a pipe any local process may write. The frame hugs its contents, one to three
+rows, chosen once when the shelf opens and never while it is up.
 
-Open, and NOT yet decided: the item cap (`MaxItems` is 20 today), whether the order is
-newest-first only or hand-reorderable now that the drag gesture is free, and whether the notch
-page (`ShelfWidget`, which has its own overflow tile) changes with it.
+Spec: `docs/superpowers/specs/2026-09-20-shelf-single-list-design.md`. Plan and its two corrected
+task boundaries: `docs/superpowers/plans/2026-09-20-shelf-single-list.md`.
+
+**Two defects were found by the render harness rather than the compiler**, and both were mine:
+each tile carries a uniform right margin so it occupies tile + gap, and sizing the panel without
+that left the fifth tile of every row short of fitting, which made the capacity guarantee quietly
+false; and deleting the dead drop-target check took a layout pass with it that the tile-hit check
+also depended on.
+
+**`ShelfWidget`'s item count now reaches a screen reader.** It was set on `Tiles`, a `StackPanel`,
+which WPF gives no automation peer, and the comment above that line said so correctly and then
+contradicted itself. Confirmed absent from the live UIA tree on 2026-09-19, fixed on the control
+root, and `check-a11y.ps1` drops the suppression that recorded it.
+
+**NOT YET RUN on hardware:** the flat driver. `scripts/drive-shelf-pair.ps1` now seeds the shelf to
+capacity and requires every file to be in the UIA tree, which is the one check the stack build
+could never have passed. §3.1, §3.2 and §3.3 survive; §3.4, §3.5 and §3.6 are deleted along with
+§4.5, §4.6 and §4.9.
+
+**Unrelated, and more serious than anything above: Plith used to leave the Windows volume OSD
+broken behind it.** It hides the shell's own flyout with `ShowWindow(SW_HIDE)` and never put it
+back. Nothing is persisted, so uninstalling leaves no setting and a crash takes the hooks with it,
+but on the builds where the shell creates that window once and merely moves it, the shell never
+hid it and so believes it is visible: a window Plith hid behind its back is one the shell keeps
+positioning and never shows again. `HiddenWindowRegistry` records what was hidden and `Stop`
+restores it, recording only a real visible-to-hidden transition so it never reveals a window it
+did not take. A killed process still restores nothing; that case needs the shell to recreate it.
 
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as

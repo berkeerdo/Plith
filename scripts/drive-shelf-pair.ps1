@@ -2,18 +2,19 @@
 # happened by reading the file Plith writes.
 #
 # WHY THIS EXISTS, AND WHY drive-shelf.ps1 IS NOT ENOUGH. That script drives the catcher in
-# --shelfprobe mode, where App's CatcherClient is null: RemoveItems, ClearShelf, NewStack and
-# Restack are raised and go nowhere, so the page never changes in response to them. Plith owns
+# --shelfprobe mode, where App's CatcherClient is null: RemoveItems and ClearShelf are raised
+# and go nowhere, so the page never changes in response to them. Plith owns
 # the shelf model. Every item in docs/SHELF-VERIFICATION.md section 3 whose expectation is "the
 # tile disappears" or "shelf.txt no longer lists it" therefore needs both processes, connected,
 # with the shelf opened the way a person opens it: a click on the notch.
 #
 # THE ORACLE IS shelf.txt, NOT THE PICTURE. Plith writes %LOCALAPPDATA%\Plith\shelf.txt on every
-# change - one path per line, newest first, a blank line between stacks (ShelfStore.Save). A
+# change - one path per line, newest first, with no grouping of any kind (ShelfStore.Save). A
 # pixel count says something changed and never says the right thing changed; the file says which
-# paths are on the shelf and how they are grouped, which is exactly what sections 3.1 to 3.6 ask
-# about. Every check below is written against it, and the screenshots are kept so a person can
-# see what the file is describing.
+# paths are on the shelf, which is what sections 3.1 to 3.3 ask about. Every check below is
+# written against it, and the screenshots are kept so a person can see what the file describes.
+#
+# Sections 3.4, 3.5 and 3.6 were about stacks and are gone with them.
 #
 # WHAT THIS SCRIPT TOUCHES, AND PUTS BACK. It replaces shelf.txt with a known fixture set and
 # restores the original afterwards; it starts Plith from the build output and stops it; and it
@@ -346,25 +347,19 @@ function Save-Shot {
     $path
 }
 
-# Stacks as the file records them: one path per line, a blank line between stacks.
+# One flat list, newest first. The file was blank-line separated groups while the shelf had
+# stacks; it is one path per line now, and a blank line is skipped rather than meaningful.
 function Read-Shelf {
     if (-not (Test-Path $storePath)) { return @() }
-    $stacks = @(); $current = @()
-    foreach ($line in @(Get-Content $storePath)) {
-        if ([string]::IsNullOrWhiteSpace($line)) {
-            if ($current.Count -gt 0) { $stacks += ,$current; $current = @() }
-            continue
-        }
-        $current += [System.IO.Path]::GetFileName($line)
-    }
-    if ($current.Count -gt 0) { $stacks += ,$current }
-    ,$stacks
+    @(Get-Content $storePath |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { [System.IO.Path]::GetFileName($_) })
 }
 
 function Format-Shelf {
-    param($Stacks)
-    if (-not $Stacks -or $Stacks.Count -eq 0) { return '(empty)' }
-    (($Stacks | ForEach-Object { '[' + ($_ -join ' ') + ']' }) -join ' ')
+    param($Items)
+    if (-not $Items -or @($Items).Count -eq 0) { return '(empty)' }
+    '[' + (@($Items) -join ' ') + ']'
 }
 
 $script:verdicts = @()
@@ -557,18 +552,20 @@ $savedShelf = if (Test-Path $storePath) { Get-Content $storePath -Raw } else { $
 
 Remove-Item $fixtureDir -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
-$names = @('alpha.txt','bravo.txt','charlie.txt','delta.txt')
-foreach ($n in $names) { Set-Content -Path (Join-Path $fixtureDir $n) -Value "fixture $n" -Encoding UTF8 }
-# Two stacks of TWO. Two because 3.5 restacks between them and 3.6 needs a last one to drag
-# past; two each because a column draws at most two tiles before folding the rest into a "+N"
-# chip, and a tile inside that chip is in no UIA tree and cannot be pressed.
-Set-Content -Path $storePath -Encoding UTF8 -Value @(
-    (Join-Path $fixtureDir 'alpha.txt'),
-    (Join-Path $fixtureDir 'bravo.txt'),
-    '',
-    (Join-Path $fixtureDir 'charlie.txt'),
-    (Join-Path $fixtureDir 'delta.txt')
-)
+# A FULL shelf, on purpose, and that is a change the flat design earned.
+#
+# The stack fixture was four files in two stacks of two, shaped entirely around what the surface
+# would fold away: a column drew at most two tiles and anything past that was in no UIA tree, so
+# a bigger fixture produced false alarms rather than more coverage. There is no fold now, so the
+# fixture is the one case worth testing: the shelf at exactly its capacity, where every file must
+# still be reachable. See the tree check below, which is the whole point of the change.
+# NOT $names: the paging loop below reassigns that for the notch page's UIA names, and
+# the capacity check further down would then measure the wrong list.
+$fixtureNames = @('alpha.txt','bravo.txt','charlie.txt','delta.txt','echo.txt',
+                  'foxtrot.txt','golf.txt','hotel.txt','india.txt','juliett.txt',
+                  'kilo.txt','lima.txt','mike.txt','november.txt','oscar.txt')
+foreach ($n in $fixtureNames) { Set-Content -Path (Join-Path $fixtureDir $n) -Value "fixture $n" -Encoding UTF8 }
+Set-Content -Path $storePath -Encoding UTF8 -Value @($fixtureNames | ForEach-Object { Join-Path $fixtureDir $_ })
 "seeded: $(Format-Shelf (Read-Shelf))"
 
 $plithMark = @(Get-Content $plithLog -ErrorAction SilentlyContinue).Count
@@ -619,10 +616,11 @@ try {
     #    The shelf page is installed last, so at most one full lap is needed.
     #
     #    The page is recognised by ShelfWidget's own OpenHint text, "Click to open the shelf",
-    #    and NOT by the row's announcement. Measured on 2026-09-19: ShelfWidget sets
-    #    "Shelf, N items" on `Tiles`, which is a StackPanel, and a StackPanel has no automation
-    #    peer - so that name is in no UIA tree and nothing can key off it. See
-    #    docs/SHELF-VERIFICATION.md section 3.11.
+    #    and not by the row's announcement. That announcement used to reach nothing at all -
+    #    "Shelf, N items" was set on `Tiles`, a StackPanel, which WPF gives no automation peer -
+    #    and it has since been moved onto the control root, so it IS in the tree now. The hint is
+    #    still the better key: it names the page's purpose rather than its contents, so it does
+    #    not change as files come and go. See docs/SHELF-VERIFICATION.md section 5.4.
     $onShelf = $false
     for ($i = 1; $i -le 6; $i++) {
         $names = Get-Names -Hwnd $notch.Hwnd
@@ -650,122 +648,34 @@ try {
     # Onto the shelf AT ONCE, so LeaveGrace is never armed for the rest of the run.
     Move-Pointer -X ($shelf.X + 20) -Y ($shelf.Y + 8) -Settle 400
 
-    $stacks = Read-Shelf
-    Add-Verdict 'the shelf arrives holding the seeded stacks' `
-        ($stacks.Count -eq 2 -and $stacks[0].Count -eq 2 -and $stacks[1].Count -eq 2) (Format-Shelf $stacks)
+    $items = Read-Shelf
+    Add-Verdict 'the shelf arrives holding everything that was seeded' `
+        (@($items).Count -eq $fixtureNames.Count) (Format-Shelf $items)
 
-    # THE OVERFLOW RULE, which shapes every step below and has now cost two runs to state
-    # correctly. A stack that overflows folds the remainder into one "+N" chip named "N more
-    # items in this stack", and a folded item is not in the UIA tree at all - asking for it by
-    # name reports "not found", which reads exactly like a page that has lost its accessible
-    # names.
-    #
-    # "AT MOST TWO TILES" IS THE WRONG RULE AND IS WHY THE SECOND RUN FAILED. The chip costs a
-    # SLOT, so the arithmetic in ShelfSurface.VisibleRowsShown is
-    #
-    #     stackCount > 2 ? 1 : stackCount        (VisibleRows = 2)
-    #
-    # A stack of two draws both tiles. A stack of THREE draws exactly ONE - not two - plus a
-    # "+2" chip. So the second row stops existing the moment a stack grows past two, and a step
-    # that aims at "the second tile of a three-item stack" is aiming at nothing. The previous
-    # version of this file said "alpha is its second tile and still drawn" directly above a
-    # three-item stack, and 3.6 and 3.4 both reported the product broken when the fixture was.
-    #
-    # The safe targets, then, are: any tile in a stack of one or two, and the FIRST tile of any
-    # stack whatever its size. The fixture is four files in two stacks of two, and the steps are
-    # ordered so every tile a later step needs is one of those.
-    #
-    # The steps also run in an order where each one's outcome is the next one's input, so the
-    # expected shelf is computable at every point rather than re-seeded - which is not possible
-    # mid-run anyway, since Plith loads the store once at startup.
+    # NO FOLD, so no rule about one. A stack column used to draw at most two tiles and hide the
+    # rest behind a count chip, and the arithmetic for that shaped every step in this file. It
+    # also cost two runs to state correctly: "at most two" was wrong, because the chip cost a
+    # SLOT, so a stack of three drew exactly ONE. The flat shelf draws everything it holds, so
+    # any tile the steps below need is drawn by construction.
 
-    # --- 3.5 restack: drag a tile onto another existing stack -----------------------------------
-    # charlie is the first tile of stack 2, so it is drawn. Restacking prepends, measured.
-    $charlie = Get-Element -Hwnd $shelf.Hwnd -Name 'charlie.txt'
-    $stack1 = Get-Element -Hwnd $shelf.Hwnd -Name 'Stack 1, 2 items'
-    if ($charlie -and $stack1) {
-        Invoke-Drag -FromX $charlie.CX -FromY $charlie.CY -ToX $stack1.CX -ToY $stack1.CY
-        $after = Read-Shelf
-        $moved = ($after.Count -ge 1) -and ($after[0] -contains 'charlie.txt') -and
-                 -not (@($after | Select-Object -Skip 1) | Where-Object { $_ -contains 'charlie.txt' })
-        Add-Verdict '3.5 dragging a tile onto another stack restacks it' $moved (Format-Shelf $after)
-    } else {
-        Add-Verdict '3.5 dragging a tile onto another stack restacks it' $false `
-            "could not locate charlie.txt ($([bool]$charlie)) or Stack 1 ($([bool]$stack1)) in the UIA tree"
-    }
-    Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '4-restacked.png' | Out-Null
-
-    # --- 3.6 drag past the last stack starts a new one -------------------------------------------
-    # Stack 1 is now [charlie alpha bravo], which overflows: charlie is drawn, alpha and bravo
-    # are folded into a "+2" chip and are in no UIA tree. So the tile to drag is CHARLIE, the
-    # first one - see the overflow rule above. Dragging it out also un-overflows the column,
-    # which is what puts alpha and bravo back in the tree for 3.4 and 3.2 below.
+    # --- THE GUARANTEE THE FLAT SHELF EXISTS FOR ---------------------------------------------
     #
-    # ShelfStore.Restack APPENDS when the target index equals the stack count, so a drag past
-    # the last column lands at the END - unlike NewStack(), which Insert(0)s and is why 3.4
-    # below sees its empty column announced as "Stack 1". The two orderings are deliberate and
-    # opposite; the assertions here and in 3.4 each match their own path.
+    # Every file on the shelf is on the screen, in the UIA tree, and reachable by a key.
+    #
+    # This is the one check that would have FAILED on the stack build, and it is why that build
+    # is gone. ShelfStore capped the shelf at 20 while the surface could draw 10: five columns of
+    # two, with everything past that folded into a "+N" chip. A folded tile is in no UIA tree, so
+    # it is invisible to a screen reader and reachable by no key. Half of a full shelf was
+    # unreachable, and nothing in the build, the tests or the lints could see it.
+    #
+    # The cap is now defined as exactly what the grid draws (NotchGeometry.ShelfCapacity), so the
+    # two cannot drift apart. This check is what would notice if a fold ever came back.
     $shelf = Find-ShelfWindow
-    $before = Read-Shelf
-    $dragged = Get-Element -Hwnd $shelf.Hwnd -Name 'charlie.txt'
-    if ($dragged) {
-        # The empty area to the RIGHT of the last column, still inside the window so the pointer
-        # never leaves the shelf and arms the leave timer.
-        Invoke-Drag -FromX $dragged.CX -FromY $dragged.CY `
-                    -ToX ($shelf.X + $shelf.W - 26) -ToY ($shelf.Y + [int]($shelf.H / 2))
-        $after = Read-Shelf
-        # INDEXED, not piped. Read-Shelf returns an array OF ARRAYS, and
-        # `@($after | Select-Object -Last 1)` does not reach into the last stack: Select-Object
-        # emits that inner array as a single object without enumerating it, so the result is a
-        # one-element array whose element IS an Object[], and `-contains 'charlie.txt'` compares
-        # a string against an array and is False for every possible shelf. Measured 2026-09-20:
-        # this assertion could never return True, so 3.6 failed while the product was doing
-        # exactly the right thing - the verdict line even printed the correct end state next to
-        # the word FAIL. $after[-1] hands back the inner array itself.
-        #
-        # The Where-Object forms in 3.1, 3.2, 3.4 and 3.5 are NOT affected: there $_ is bound to
-        # each inner array in turn, which is what -contains needs. Only this one was piped.
-        $grew = $after.Count -gt $before.Count -and ($after[-1] -contains 'charlie.txt')
-        Add-Verdict '3.6 dragging past the last stack starts a new one' $grew `
-            "before $(Format-Shelf $before) -> after $(Format-Shelf $after)"
-    } else {
-        Add-Verdict '3.6 dragging past the last stack starts a new one' $false 'charlie.txt not in the UIA tree'
-    }
-    Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '5-new-stack-by-drag.png' | Out-Null
-
-    # --- 3.4 the plus control makes a stack, and a drag lands in it -------------------------------
-    # 3.6 took charlie out of stack 1, so the shelf is [alpha bravo] [delta] [charlie] and every
-    # tile is drawn again: no stack holds more than two. bravo is the second tile of a two-item
-    # stack, so its source stack survives the move and the stack count genuinely grows.
-    $shelf = Find-ShelfWindow
-    $plus = Get-Element -Hwnd $shelf.Hwnd -Name 'Start a new stack' -Type Button
-    if ($plus) {
-        $before = Read-Shelf
-        Move-Pointer -X $plus.CX -Y $plus.CY -Settle 350
-        [PairInput]::LeftClick()
-        Start-Sleep -Milliseconds 900
-
-        # An empty stack writes NOTHING to the file - ShelfStore.Save skips empty stacks - so the
-        # only honest evidence for the click on its own is the page announcing one.
-        $shelf = Find-ShelfWindow
-        $emptyName = @(Get-Names -Hwnd $shelf.Hwnd) | Where-Object { $_ -match '^Stack \d+, 0 items' } | Select-Object -First 1
-        $slot = if ($emptyName) { Get-Element -Hwnd $shelf.Hwnd -Name $emptyName } else { $null }
-        $bravo = Get-Element -Hwnd $shelf.Hwnd -Name 'bravo.txt'
-        if ($bravo -and $slot) {
-            Invoke-Drag -FromX $bravo.CX -FromY $bravo.CY -ToX $slot.CX -ToY $slot.CY
-            $after = Read-Shelf
-            $landed = ($after.Count -gt $before.Count) -and
-                      ((@($after | Where-Object { $_ -contains 'bravo.txt' })).Count -eq 1)
-            Add-Verdict '3.4 a new stack, then a drag lands in it' $landed `
-                "empty stack announced as '$emptyName'; before $(Format-Shelf $before) -> after $(Format-Shelf $after)"
-        } else {
-            Add-Verdict '3.4 a new stack, then a drag lands in it' $false `
-                "empty stack announced as '$emptyName'; bravo.txt found: $([bool]$bravo); empty column found: $([bool]$slot)"
-        }
-    } else {
-        Add-Verdict '3.4 a new stack, then a drag lands in it' $false "'Start a new stack' is not in the UIA tree"
-    }
-    Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '6-new-stack-by-button.png' | Out-Null
+    $drawn = @(Get-Names -Hwnd $shelf.Hwnd)
+    $missing = @($fixtureNames | Where-Object { $drawn -notcontains $_ })
+    Add-Verdict 'every file on a FULL shelf is in the UIA tree' ($missing.Count -eq 0) `
+        "$($fixtureNames.Count) seeded, missing: $(if ($missing.Count) { $missing -join ', ' } else { 'none' })"
+    Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '4-full-shelf.png' | Out-Null
 
     # --- 3.1 second half: the hover remove control takes the row out of shelf.txt -----------------
     $shelf = Find-ShelfWindow
@@ -780,7 +690,7 @@ try {
             [PairInput]::LeftClick()
             Start-Sleep -Milliseconds 1400
             $after = Read-Shelf
-            $gone = -not (@($after | Where-Object { $_ -contains 'charlie.txt' }))
+            $gone = @($after) -notcontains 'charlie.txt'
             $stillDrawn = @(Get-Names -Hwnd (Find-ShelfWindow).Hwnd) -contains 'charlie.txt'
             Add-Verdict '3.1 remove takes the tile off the page AND out of shelf.txt' `
                 ($gone -and -not $stillDrawn) `
@@ -795,7 +705,10 @@ try {
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '7-removed.png' | Out-Null
 
     # --- 3.2 remove acts on the SELECTION, not on the one tile the control sits on -----------------
-    # Three single-item stacks are left, so both tiles are drawn and neither is in an overflow.
+    # Two tiles in one flat list. The written item asks for two in the SAME stack; there are no
+    # stacks, so "the same stack" has no meaning and the rule under test (ShelfModel.DragPaths)
+    # never depended on columns anyway. The item's second half, removing a tile that is NOT part
+    # of any selection, is still not driven here.
     $shelf = Find-ShelfWindow
     $first = Get-Element -Hwnd $shelf.Hwnd -Name 'delta.txt'
     $second = Get-Element -Hwnd $shelf.Hwnd -Name 'alpha.txt'
@@ -817,8 +730,7 @@ try {
             [PairInput]::LeftClick()
             Start-Sleep -Milliseconds 1400
             $after = Read-Shelf
-            $bothGone = -not (@($after | Where-Object { $_ -contains 'delta.txt' })) -and
-                        -not (@($after | Where-Object { $_ -contains 'alpha.txt' }))
+            $bothGone = (@($after) -notcontains 'delta.txt') -and (@($after) -notcontains 'alpha.txt')
             Add-Verdict '3.2 remove acts on the whole selection' $bothGone `
                 "before $(Format-Shelf $before) -> after $(Format-Shelf $after)"
         } else {

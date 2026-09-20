@@ -448,6 +448,26 @@ The two features that Windows has no good answer for.
   including the selection ring, which is computed at runtime and had been invisible to that check
   until this slice.
 
+  **Slice 3, code-complete on the same branch: the stacks are gone and the shelf is one flat
+  list.** Alcove and Dropover have no such concept, and the stack model cost a list-of-lists in
+  the store, two of the six catcher-to-Plith verbs, a grouped file format, and per-column
+  building with its own fold rule. The decisive number was that `ShelfStore.MaxItems` was 20
+  while the surface could draw 10: five columns of two, with the other half behind `+N` chips,
+  and a folded tile is in no UIA tree at all, so it is invisible to a screen reader and reachable
+  by no key. Half of a full shelf was unreachable and no gate could see it.
+
+  The cap is now `NotchGeometry.ShelfCapacity`, defined as the product of the grid that has to
+  draw it, in the one file both projects already compile. At most 15 files, newest first, no hand
+  reordering, so the within-surface drag is deleted and a tile drags OUT only. The `Items` message
+  collapsed from one-per-stack to one, taking `ShelfModel`'s whole delivery-reassembly with it.
+  The frame hugs its contents, one to three rows, chosen once at open. Spec and plan:
+  `docs/superpowers/specs/2026-09-20-shelf-single-list-design.md` and the plan beside it.
+
+  This retires `docs/SHELF-VERIFICATION.md` §3.4, §3.5 and §3.6, and §4.5, §4.6 and §4.9 with
+  them. §3.4 and §3.6 had been run and were passing hours earlier; what they measured is kept in
+  §3.12. What replaced them is one check the stack build could never have passed: seed the shelf
+  to capacity and require every file to be in the UIA tree.
+
   **Verified on hardware for slice 1's plumbing, not yet for slice 2's interactive surface.** The
   drop, the round trip, the shelf page and persistence were driven on a running build and found
   three real defects that a green build had missed. Slice 2's stacks, actions, drag-out and

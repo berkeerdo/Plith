@@ -518,9 +518,10 @@ records:
 | §3.2 a click at the tile centre selects | RUN, passing | §3.10 |
 | §3.2 remove acts on the whole selection | **RUN, passing** (partial, see §3.12) | §3.12 |
 | §3.3 clear empties the shelf without asking | **RUN, passing** | §3.11 |
-| §3.4 new stack by the plus control, then a drag into it | **RUN, passing** | §3.12 |
-| §3.5 dragging a tile onto another stack restacks it | **RUN, passing** | §3.11 |
-| §3.6 dragging past the last stack starts a new one | **RUN, passing** | §3.12 |
+| ~~§3.4 new stack by the plus control, then a drag into it~~ | RUN and passing, then **DELETED with the stacks** | §3.12, §3.4 banner |
+| ~~§3.5 dragging a tile onto another stack restacks it~~ | RUN and passing, then **DELETED with the stacks** | §3.11, §3.4 banner |
+| ~~§3.6 dragging past the last stack starts a new one~~ | RUN and passing, then **DELETED with the stacks** | §3.12, §3.4 banner |
+| every file on a FULL shelf is in the UIA tree | **the check that replaced them**, NOT YET RUN | §3.4 banner |
 | §3.7 open, §3.8 show in the file manager | NOT RUN (menu items exist and are named) | §3.10 |
 | §3.9 the menu does not let the shelf close under itself | RUN, passing | §3.10 |
 
@@ -590,25 +591,24 @@ confirmation dialog, and `shelf.txt` is left with nothing in it (or absent, depe
 comment beside `ClearRequested`'s handling explains why this action was built to ask nothing
 first.
 
-### 3.4 New stack, then a drag lands in it
+### 3.4, 3.5 and 3.6 are GONE with the stacks they described (2026-09-20)
 
-Click the header's plus control. Expected: an additional, empty stack appears. Drag a tile from
-another stack onto the new one. Expected: the tile moves, `shelf.txt` reflects the new grouping,
-and the tile's origin stack no longer lists it.
+These three items asked about making a stack, restacking a tile into another stack, and
+dragging past the last stack to start a new one. The shelf is one flat list now, so none of
+those gestures exists: `NewStack`, `Restack`, `PruneEmptyStacks`, the column drop target and the
+`+N` chip are all deleted, and `DropVerb` lost two of its members with them.
 
-### 3.5 Dragging a tile onto another existing stack restacks it
+**3.4 and 3.6 were RUN and passing hours before they were deleted**, which is not waste. What
+they measured is recorded in 3.12, where it belongs: a record of what the code did on the day.
+Four of the five instrument defects that run uncovered had nothing to do with stacks, so those
+fixes outlive the items entirely.
 
-With at least two non-empty stacks, press a tile, drag it onto a different stack, release.
-Expected: the tile joins the target stack and leaves its old one, on screen and in `shelf.txt`.
-Try this once with a single tile and once with a multi-selection (Ctrl+click two tiles first,
-then drag one of the selected ones): the whole selection should move together, again by
-`ShelfModel.DragPaths`.
-
-### 3.6 Dragging past the last stack starts a new one
-
-Drag a tile into the empty area to the right of the last visible stack (not onto any column).
-Expected: the same result as making a new stack by hand and dragging into it (§3.4), reached by
-one gesture instead of two.
+What replaced them is one check that the stack build could never have passed, in
+`scripts/drive-shelf-pair.ps1`: seed the shelf to exactly its capacity and require every file to
+be present in the UIA tree. The stack build capped at 20 against a surface that drew 10, and a
+folded tile is in no UIA tree at all, so half a full shelf was unreachable by key and invisible
+to a screen reader. The cap is now defined as what the grid draws, and that check is what would
+notice if a fold ever came back.
 
 ### 3.7 Open, from the right process
 
@@ -1196,32 +1196,12 @@ responding, `DoDragDrop` did not return: that is the seventeen-second failure fr
 arriving in the shipped path, and it is a stop-everything finding rather than a bug to file.
 Record the elapsed time before killing `Plith.DropCatcher.exe`.
 
-### 4.5 The restack still works, through the same call
+### 4.5 and 4.6 are GONE: there is no restack (2026-09-20)
 
-Task 7's internal drag is now the same `DoDragDrop` with an extra format on it, so §3.4, §3.5 and
-§3.6 have to be re-run rather than assumed to still hold.
-
-Expected, unchanged from those items: a tile dragged onto another stack joins it, a tile dragged
-past the last stack starts a new one, and `shelf.txt` reflects both. The cursor now shows a COPY
-badge during a restack rather than a move badge, which is deliberate (Move is not offered at all,
-by anyone, for the reason in §4.1) and is worth a line in the result either way: whether it reads
-as confusing on screen is a judgement only a person at the console can make.
-
-### 4.6 The shelf does not close under a restack
-
-Drag a tile onto another stack, release, and then **do not move the mouse**.
-
-Expected: the shelf stays up. This is the one behaviour in this task that is reasoned rather than
-measured. Any drag can take the pointer off the window as far as WPF is concerned, which arms the
-leave timer, which fires during the drag and defers a dismissal; `StartDrag` therefore settles
-that deferral when the drag ends, asking `WindowFromPoint` where the pointer actually is rather
-than asking WPF, whose answer can be stale until the next mouse message arrives. If the shelf
-closes about half a second after a restack with the pointer sitting on it, that re-evaluation is
-wrong and this item is what found it.
-
-Then the opposite: drag a tile OUT to another application and release there, again without moving
-the mouse afterwards. Expected: the shelf goes away within the leave grace period (500 ms), and
-the notch comes back.
+Both were about dragging a tile onto another stack through the same `DoDragDrop` call that
+carries a drag out. With one flat list there is nothing to restack onto: the within-surface drop
+target is deleted and a tile drags out of the shelf only. The drag-out half of that call is
+unchanged and is still covered by 4.1 to 4.4.
 
 ### 4.7 A drag does not strand the shelf
 
@@ -1244,27 +1224,10 @@ the shelf is in the same state as §4.6's second half afterwards. This exercises
 as a successful drop, which is the point: `_dragInFlight` is cleared by a `finally`, so a cancel
 has to be as safe as a drop.
 
-### 4.9 Did the shelf keep its activation across a restack
+### 4.9 is GONE with the restack it asked about (2026-09-20)
 
-Drag a tile onto another stack, release, do not move the mouse (this is §4.6's setup), and then
-press `Esc`. **Both outcomes are results. Record which one happened rather than looking for a
-pass.**
-
-- **The shelf closes and the notch comes back.** The window still had activation when the drag
-  ended, so `Esc` reached it. Nothing further to check.
-- **`Esc` does nothing.** The window lost activation during the drag and never got it back, which
-  is a real and expected possibility: `Esc` needs keyboard focus, and a window that is not
-  foreground has none. That is not a bug by itself. What matters next is whether anything is left
-  that CAN close it, so move the pointer off the shelf and leave it off. Expected: the shelf goes
-  down within the leave grace period (500 ms) and the notch comes back.
-
-Why this is its own item rather than part of §4.6: when a drag ends with the pointer over the
-shelf, `StartDrag` clears `_pendingDismissal` and stops the leave clock. `Deactivated` cannot fire
-a second time on a window that is already deactivated, so after that the ONLY closer guaranteed to
-still exist is the pointer leaving. This item finds out whether `Esc` is a second one, which
-depends on something the log does not record: whether the drag left the window foreground. A shelf
-that answers neither `Esc` nor the pointer leaving is stranded, and that is the failure the whole
-deferral machinery exists to prevent, arriving by yet another route.
+See 4.5 and 4.6 above. The question it asked, whether the shelf kept its activation across a
+restack, has no gesture left to ask it of.
 
 ### 4.10 A pipe message arriving in the middle of a drag: NOT TESTABLE TODAY
 
