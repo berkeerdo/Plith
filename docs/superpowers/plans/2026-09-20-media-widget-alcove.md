@@ -984,7 +984,7 @@ The bar and the two clocks, moving once a second while the page is on screen.
   and `MediaTimeline` (Task 2); `ProgressRow`, `Bar`, `Elapsed`, `Remaining` (Task 3).
 - Produces: nothing further.
 
-- [ ] **Step 1: Route the view model's notifications by name**
+- [x] **Step 1: Route the view model's notifications by name**
 
 In the constructor of `src/Plith/Views/Widgets/MediaWidget.cs`, replace
 
@@ -1004,7 +1004,7 @@ with
         };
 ```
 
-- [ ] **Step 2: Add the tick, and start it only while the page is on screen**
+- [x] **Step 2: Add the tick, and start it only while the page is on screen**
 
 Add the field beside `_shownTitle`:
 
@@ -1043,7 +1043,7 @@ In the constructor, replace the existing `IsVisibleChanged` line:
         };
 ```
 
-- [ ] **Step 3: Write the progress row's render**
+- [x] **Step 3: Write the progress row's render**
 
 Add after `Render()`:
 
@@ -1089,7 +1089,7 @@ Call it from `Render()`, at the end, where `RenderBackdrop()` used to be called:
         RenderProgress();
 ```
 
-- [ ] **Step 4: Build and render**
+- [x] **Step 4: Build and render**
 
 Run:
 ```
@@ -1099,7 +1099,7 @@ pwsh -STA -File scripts/render-widgets.ps1 -Theme Dark
 Expected: 0 warnings. The three seeded states still have no timeline, so their progress rows are
 still collapsed. That is correct and is why the next step seeds one.
 
-- [ ] **Step 5: Give the harness a state with a timeline, and look at it**
+- [x] **Step 5: Give the harness a state with a timeline, and look at it**
 
 In `scripts/render-widgets.ps1`, after `$mediaVm.AlbumArt = $cover`, add:
 
@@ -1124,7 +1124,7 @@ the fill is the accent colour in both themes, and the paused state shows `0:12` 
 its start. The accent fill against `NotchTrack` must be visible in the LIGHT theme, which is
 where an accent chosen for a dark panel goes pale.
 
-- [ ] **Step 6: Run the lints and the suite**
+- [x] **Step 6: Run the lints and the suite**
 
 Run:
 ```
@@ -1134,7 +1134,7 @@ dotnet test
 ```
 Expected: lints pass, 519 passing.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Views/Widgets/MediaWidget.cs scripts/render-widgets.ps1

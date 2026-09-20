@@ -74,24 +74,12 @@
                  PART_Track and PART_Indicator are the names ProgressBar's own code looks up when
                  it sizes the fill. Renaming either leaves a bar that never moves.
 
-                 THE FILL IS NOT DECLARED HERE. RenderProgress derives it from the groove's own
-                 colour with ContrastInk, and that is a measurement rather than a preference.
-                 Every candidate was measured with check-contrast.ps1, across nine accents and
-                 both themes:
-
-                   OsdAccent on NotchTrack       worst 1,0:1  (lime, light: the bar is exactly as
-                                                 visible as its own background)
-                   NotchInk on NotchBezelBrush   worst 1,1:1
-                   NotchInk on OsdHighlight      worst 1,1:1
-                   NotchInk on NotchTrack        worst 2,6:1  (near-white accent, dark theme)
-
-                 NotchTrack is the right groove and no static fill clears the bar on every accent,
-                 because ContrastInk.TrackOn walks from the surface only until it clears 3:1
-                 against the SURFACE, which leaves the ink an unpredictable distance further along
-                 the same ramp. So the fill is derived from the groove where it is used, which is
-                 also this script's own closing advice, and recomputed on every repaint rather
-                 than cached: a brush written once in a constructor is the staleness this branch
-                 has produced five times.
+                 NEITHER COLOUR IS DECLARED HERE. PaintBar computes both from NotchInk, and the
+                 four candidates behind that are recorded there with their measured ratios: an
+                 accent fill fails the contrast lint outright, a static ink-on-track pair falls to
+                 2,6:1 on one accent, and an ink derived from the groove passes the lint while
+                 drawing the bar inverted. Colours in a style cannot express "stronger than the
+                 groove", which is the property this bar actually needs.
 
                  Alcove's bar is white rather than accent-coloured for the same reason: only its
                  waveform carries the accent. -->
@@ -99,7 +87,6 @@
                 <Setter Property="Height" Value="4" />
                 <Setter Property="Minimum" Value="0" />
                 <Setter Property="Maximum" Value="100" />
-                <Setter Property="Background" Value="{DynamicResource NotchTrack}" />
                 <Setter Property="Focusable" Value="False" />
                 <Setter Property="Template">
                     <Setter.Value>

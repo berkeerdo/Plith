@@ -3,6 +3,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Plith.Cards;
 using Plith.Services;
 using Plith.ViewModels;
@@ -37,7 +38,13 @@ public partial class MediaWidget : UserControl
             System.Windows.Automation.AutomationProperties.SetName(OpenSourceArea, "Open the app that is playing");
         }
 
-        _vm.PropertyChanged += (_, _) => Render();
+        _vm.PropertyChanged += (_, e) =>
+        {
+            // The position arrives about once a second on some sources. A full Render reassigns
+            // the artwork and both marquees, so it goes straight to the progress row instead.
+            if (e.PropertyName == nameof(MediaViewModel.Timeline)) RenderProgress();
+            else Render();
+        };
 
         Previous.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipPrevious);
         Next.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipNext);
@@ -56,9 +63,35 @@ public partial class MediaWidget : UserControl
         PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
         PlayPause.Margin = new Thickness(6, 0, 6, 0);
 
-        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Render(); };
+        _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _tick.Tick += (_, _) => RenderProgress();
+
+        // Re-rendered on the way in as well as on change: a page that has been away misses every
+        // notification while it is off the tree, so arriving without this would show whatever was
+        // playing when it last left.
+        IsVisibleChanged += (_, e) =>
+        {
+            if ((bool)e.NewValue) { Render(); _tick.Start(); }
+            else _tick.Stop();
+        };
+
         Render();
     }
+
+    /// <summary>
+    /// Moves the bar between readings.
+    ///
+    /// 1 Hz is enough for both halves of the row: the seconds text changes at 1 Hz, and a 232 DIP
+    /// bar over a four minute track advances about one DIP per second.
+    ///
+    /// Started and stopped with visibility rather than left running. A page that is off the tree
+    /// is not being looked at, and this widget is built once and kept for the life of the window,
+    /// so a timer left running would tick for the whole session to paint nothing.
+    /// </summary>
+    private readonly DispatcherTimer _tick;
 
     /// <summary>What the page last showed, so a repaint that changes nothing does not animate.
     /// Every property change on the view model lands here — play/pause alone must not make the
@@ -123,5 +156,77 @@ public partial class MediaWidget : UserControl
         Previous.IsEnabled = enabled;
         Next.IsEnabled = enabled;
         PlayPause.IsEnabled = enabled;
+
+        RenderProgress();
+    }
+
+    /// <summary>
+    /// Where the track is, in the bar and in the two clocks.
+    ///
+    /// Its own method, and the one early return in this file lives here rather than in Render.
+    /// That is not a style choice: Render's early return used to sit in the middle of it, so
+    /// whenever the backdrop was already correct it stopped there and never reached the
+    /// play/pause shape. An early return is only safe in a method that does one thing.
+    ///
+    /// A null timeline collapses the row rather than drawing an empty bar. A source with no end
+    /// time (a live stream) reports null, and a bar of unknown length is a lie.
+    /// </summary>
+    private void RenderProgress()
+    {
+        var timeline = _vm.Timeline;
+        if (timeline is null || !_vm.HasSession)
+        {
+            ProgressRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ProgressRow.Visibility = Visibility.Visible;
+
+        PaintBar();
+
+        var elapsed = MediaProgress.Elapsed(timeline.Position, timeline.LastUpdated,
+                                            timeline.Duration, _vm.IsPlaying, DateTimeOffset.Now);
+
+        // Duration is positive by construction: ReadTimeline returns null otherwise, which is
+        // what makes this division safe without a guard here.
+        Bar.Value = elapsed / timeline.Duration * 100;
+        Elapsed.Text = MediaProgress.Clock(elapsed);
+        Remaining.Text = "-" + MediaProgress.Clock(timeline.Duration - elapsed);
+    }
+
+    /// <summary>How much of the ink the unplayed groove keeps.</summary>
+    private const byte GrooveAlpha = 0x3D;
+
+    /// <summary>
+    /// The bar's two colours, computed from the page's ink.
+    ///
+    /// The played part is the ink itself and the groove is the same ink at
+    /// <see cref="GrooveAlpha"/>, which is the one arrangement that cannot come out backwards.
+    /// Three others were tried and measured first:
+    ///
+    /// The accent on NotchTrack failed check-contrast.ps1 at 1,0:1 with a lime accent on the
+    /// light theme, because the user's accent can land anywhere including on the track.
+    ///
+    /// NotchInk on NotchTrack reached only 2,6:1 with a near-white accent, because
+    /// ContrastInk.TrackOn walks from the surface just far enough to clear 3:1 AGAINST THE
+    /// SURFACE and stops, leaving the ink an unpredictable distance further along the same ramp.
+    ///
+    /// An ink derived from the groove with ContrastInk.PairOn cleared the ratio and drew the bar
+    /// INVERTED: on a dark-theme surface TrackOn returns a light grey, so the derived ink is
+    /// near-black and the played part read as a hole punched in the groove. Found in
+    /// widget-media.png, and not visible to the contrast lint, which measures ratios and has no
+    /// notion of which side should be stronger.
+    ///
+    /// Computed on every repaint rather than in the constructor: a brush written once cannot
+    /// follow a theme or accent change, which is the staleness this branch has produced five
+    /// times over.
+    /// </summary>
+    private void PaintBar()
+    {
+        if (FindResource("NotchInk") is not SolidColorBrush ink) return;
+
+        Bar.Foreground = ink;
+        Bar.Background = new SolidColorBrush(
+            Color.FromArgb(GrooveAlpha, ink.Color.R, ink.Color.G, ink.Color.B));
     }
 }
