@@ -1405,7 +1405,7 @@ one that presses a key.
 - Consumes: everything above.
 - Produces: a recorded measurement, not code anything calls.
 
-- [ ] **Step 1: Write the driving script**
+- [x] **Step 1: Write the driving script**
 
 Create `scripts/drive-media-page.ps1`. It follows `scripts/drive-shelf-pair.ps1`: same session
 precondition, same `Add-Verdict` shape, same UI Automation client. The reason it can drive Plith
@@ -1538,7 +1538,7 @@ if ($script:failed -gt 0) { exit 1 }
 window. Narrow the copy to Plith's own process id, so a catcher window left over from a shelf run
 cannot be mistaken for the notch.
 
-- [ ] **Step 2: Run it, with something actually playing**
+- [ ] **Step 2: Run it, with something actually playing**  <-- NOT DONE: nothing was playing on either run (22:40 and 23:51 on 2026-09-20), and the script reports which direction it measured rather than claiming this one
 
 Start a track and leave it playing, then run:
 ```
@@ -1551,14 +1551,14 @@ If the first fails with the clock page's names in the tree, the likely causes in
 guard, `_media` still null because `AttachAudioSource` had not run, or the click landing on a HUD
 rather than the resting notch. Report which, with the names the tree returned.
 
-- [ ] **Step 3: Take the paused half too**
+- [x] **Step 3: Take the paused half too**  <-- done, and the step's own instruction was wrong: it said the script would refuse to run while paused and told you to invert the guard. That refusal was the script's second instrument defect. It now measures whichever direction the machine is in, so the paused half needed no guard surgery
 
 Pause the track, then run the script again. It will now refuse to run, by design, and that
 refusal is itself the second half of the measurement: re-run it with the guard temporarily
 inverted, or click the notch by hand and confirm the clock page comes first. Record which you
 did. A verdict from a run that skipped its own precondition is not a verdict.
 
-- [ ] **Step 4: Record it in the verification ledger**
+- [x] **Step 4: Record it in the verification ledger**
 
 Add a section 20 to `docs/PHASE6-VERIFICATION.md`, following the shape of section 19. It must
 carry: the date, what was run, the AUMID SMTC reported, both verdicts with their evidence
@@ -1566,7 +1566,7 @@ strings, whether the paused half was measured or reasoned, and anything the rend
 the design did not predict. Findings, not a summary: if the title column at 116 DIP reads badly,
 that belongs here as a measurement with the render's filename.
 
-- [ ] **Step 5: Update the roadmap and the status**
+- [x] **Step 5: Update the roadmap and the status**
 
 In `docs/ROADMAP.md`, record the media page's redesign under Phase 6 with its measured state.
 
@@ -1575,7 +1575,7 @@ were not, in this file's own idiom, and it must not claim more than step 2 and s
 returned. **Read the banner at the top of that Status section first:** it is split across two
 branches and says whichever merges second must merge it by hand.
 
-- [ ] **Step 6: Tick this plan's boxes and commit**
+- [x] **Step 6: Tick this plan's boxes and commit**
 
 Tick every box in this plan that was completed. Boxes are ticked as work proceeds, not at the
 end: a plan file whose boxes are all empty reads as "never started", which is how 199 boxes came

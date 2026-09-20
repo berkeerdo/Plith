@@ -339,6 +339,37 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
   removed once the volume HUD already answered a volume key. If a laptop-specific reading
   ever needs more room than a line (time remaining, health, per-app drain), that is a
   different feature and deserves its own entry rather than this one reopened.
+- **The media widget page, redesigned after Alcove. Code-complete on
+  `feature/shelf-drop-catcher`, and unusually for this repo, part of it is measured on
+  hardware.**
+
+  Alcove's expanded now-playing panel was measured from its own press screenshot rather than
+  described from memory: a 64 px tile with the title beside it and an accent waveform at the
+  right of that row, then elapsed / bar / remaining, then five centred controls, all on a plain
+  black ground with no artwork tint at all. Its panel is about 2.16:1 and the widget frame is
+  3.07:1, so the layout was opened out horizontally rather than copied: a 56 DIP tile, the text,
+  a four-control rail, and a full-width progress row underneath.
+
+  The frame did NOT move, and that was decided rather than assumed: `NotchGeometry.OpenFrameDip`
+  records that letting a page drive the size was tried twice and rejected on the mockup.
+
+  Also here: the notch now opens on the media page while something is playing, computed at open
+  time by `NotchOpeningPolicy` and never stored. Playing rather than merely having a session, so
+  a paused Spotify cannot lock the notch onto one page for days.
+
+  **Deliberately not built, with reasons:** the live waveform (Alcove's four bars decorate a
+  physical camera notch, which Windows does not have, and there is no level metering anywhere in
+  this codebase), seek (the notch closes in about 2.6 s and SMTC position writes are not
+  universal), and an in-notch output device list. The output control opens `ms-settings:sound`
+  instead. Note that the `IPolicyConfig` finding above means the device list is *possible* here;
+  it is deferred because it needs a popup surface the notch does not have, not because the
+  mechanism is unproven.
+
+  Measured on hardware and recorded in `docs/PHASE6-VERIFICATION.md` section 20: with a paused
+  session a click opens the clock page, the notch pages to the media widget, and the live UIA
+  tree reads back `Now playing | Three | Mahmut Orhan | Previous track | Play | Next track |
+  Change output device | 0:00 | Playback position | -2:59`. **The playing direction is still
+  unmeasured**, because nothing was playing during either run.
 - Preset migration: existing installs default to Classic OSD; a
   one-shot "meet the new Plith" nudge lets them try Ambient / Full. **Not started.**
 - Success metric: install-to-second-launch retention crosses 60 %

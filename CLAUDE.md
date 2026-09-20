@@ -210,6 +210,40 @@ positioning and never shows again. `HiddenWindowRegistry` records what was hidde
 restores it, recording only a real visible-to-hidden transition so it never reveals a window it
 did not take. A killed process still restores nothing; that case needs the shell to recreate it.
 
+**The notch's media page is rebuilt after Alcove, and the notch now opens on it while something
+is playing (2026-09-20).** Alcove's own layout was measured from its press screenshot rather than
+recalled: a large tile, title and artist beside it, elapsed / bar / remaining, and five centred
+controls, on a plain black ground with **no artwork tint at all**. Plith's page had been doing the
+opposite, compensating for a 46 DIP thumbnail with a blurred copy of the album behind a scrim, and
+paying for it by declaring its own ink so that the light theme did not put dark text on a dark
+scrim. The tile is 56 DIP and crisp (the decode went from 96 px to 192), the ground is the themed
+surface like every other page, the rail gained an output control that opens Windows' sound
+settings, and a full-width progress row carries the position, ticked at 1 Hz while the page is on
+screen from a stamped SMTC reading rather than polled.
+
+Alcove's panel is 2.16:1 and the frame is 3.07:1, so the layout was opened out horizontally
+instead of copied. **The frame did not move**, and that was a decision rather than an oversight:
+`NotchGeometry.OpenFrameDip` records that letting a page drive the size was tried twice and
+rejected on the mockup.
+
+Deliberately not built, each with its reason in the spec: the live waveform (its four bars
+decorate a physical camera notch, and Windows has none), seek, and an in-notch device list.
+
+**Four verdicts passed on real hardware, and the instrument names which half it measured.**
+`scripts/drive-media-page.ps1` clicks the real notch and reads the live UIA tree: with a paused
+Spotify a click opens the clock page, the notch pages to the media widget, the bar reports
+`value=0 of 100` to UI Automation, and both clocks are drawn. **The playing direction is still
+unmeasured** because nothing was playing during either run, and the script says so rather than
+reporting the other direction as passed.
+
+**Three of the four defects in this change were found by looking, not by a gate.** The contrast
+lint measured this page for the first time (removing the private ink is what made it visible) and
+the progress fill failed on every accent, worst 1,0:1. Four fill-and-groove pairs were measured;
+the one that finally cleared every ratio **drew the bar inverted**, because a contrast ratio has
+no notion of which side should be stronger. That one was caught in a render. So was a disabled
+transport that looked exactly like a live one, which a replaced `ControlTemplate` causes by losing
+WPF's own dimming. Full ledger: `docs/PHASE6-VERIFICATION.md` section 20.
+
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
 > unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected
