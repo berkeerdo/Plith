@@ -105,7 +105,7 @@ public sealed class ShelfSession
         var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfRect(notchRectDip), dpiScale);
 
         Send(DropVerb.Palette, ShelfPaletteWire.ToPaths(_palette()));
-        SendStacks();
+        SendItems();
         Send(DropVerb.OpenShelf, [], x, y, w, h);
 
         // Asked AGAIN, after the sends. The first check can be stale by the time it matters: the
@@ -123,7 +123,7 @@ public sealed class ShelfSession
         }
 
         _shelfOpen = true;
-        _log?.Info("Shelf", $"Shelf requested at {x},{y} {w}x{h} with {_store.Stacks.Count} stack(s).");
+        _log?.Info("Shelf", $"Shelf requested at {x},{y} {w}x{h} with {_store.Items.Count} item(s).");
         Opened?.Invoke();
     }
 
@@ -164,35 +164,16 @@ public sealed class ShelfSession
         {
             case DropVerb.RemoveItems:
                 _store.RemoveMany(message.Paths);
-                SendStacks();
+                SendItems();
                 break;
 
             case DropVerb.ClearShelf:
                 _store.Clear();
-                SendStacks();
-                break;
-
-            case DropVerb.NewStack:
-                _store.NewStack();
-                SendStacks();
-                break;
-
-            case DropVerb.Restack:
-                // X is the target index, carried as a double like every other number on the wire.
-                // Out of range is ShelfStore's decision, not this one: it is a claim from another
-                // process like the paths beside it.
-                _store.Restack((int)message.X, message.Paths);
-                SendStacks();
+                SendItems();
                 break;
 
             case DropVerb.ShelfClosed:
-                // Pruned HERE rather than when a stack empties, because an empty stack is a live
-                // thing while the shelf is up: NewStack makes one on purpose so the next drop has
-                // somewhere of its own to go, and removing the last item from a stack must not
-                // make the stack vanish under the pointer. Once the surface is gone there is
-                // nothing to hold a place for.
                 _shelfOpen = false;
-                _store.PruneEmptyStacks();
                 Closed?.Invoke();
                 break;
 
@@ -216,21 +197,24 @@ public sealed class ShelfSession
     /// delivery with no stacks in it, so one message saying (0, 0, no paths) is how "there is
     /// nothing here now" is spelled.
     /// </summary>
-    private void SendStacks()
-    {
-        var stacks = _store.Stacks;
-        if (stacks.Count == 0)
-        {
-            Send(DropVerb.Items, [], x: 0, y: 0);
-            return;
-        }
-
-        for (var i = 0; i < stacks.Count; i++)
-        {
-            Send(DropVerb.Items, stacks[i].Select(item => item.Path).ToList(),
-                 x: i, y: stacks.Count);
-        }
-    }
+    /// <summary>
+    /// The whole shelf in one message.
+    ///
+    /// It used to be one message PER STACK, carrying the stack's index and the total so the
+    /// catcher could reassemble them. That reassembly was the most intricate code in the shelf,
+    /// and all of it existed to survive two deliveries interleaving on a pipe any local process
+    /// may write. One flat list is one message, so there is nothing to assemble and nothing to
+    /// interleave with itself.
+    ///
+    /// An empty shelf is a message too: the surface must be TOLD it is empty, not left holding
+    /// what it had.
+    /// </summary>
+    private void SendItems()
+        // y is the stack TOTAL, and it is 1 rather than 0 on purpose: the shelf is now one flat
+        // list, but ShelfModel still reassembles per-stack messages and discards a delivery that
+        // declares a total of 0. One stack containing everything is the shape both the old reader
+        // and the flat one accept. The field goes away with ShelfModel's reassembly.
+        => Send(DropVerb.Items, [.. _store.Items.Select(item => item.Path)], x: 0, y: 1);
 
     /// <summary>
     /// Fire and forget, and safe to do so only because DropChannelServer serializes its sends.

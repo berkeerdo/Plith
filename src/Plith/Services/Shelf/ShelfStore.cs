@@ -1,4 +1,5 @@
 using System.IO;
+using Plith.Views.Presentation;
 
 namespace Plith.Services.Shelf;
 
@@ -25,13 +26,16 @@ public readonly record struct ShelfItem(string Path, string Name, bool IsDirecto
 public sealed class ShelfStore
 {
     /// <summary>
-    /// The shelf is a staging area, not an archive. Past this many rows the oldest falls off,
-    /// because the alternative is a list nobody prunes and a notch page that cannot show it.
+    /// The shelf is a staging area, not an archive. Past this many rows the oldest falls off.
+    ///
+    /// The number is the SURFACE'S CAPACITY, not a taste: see NotchGeometry.ShelfCapacity. A cap
+    /// larger than what the grid draws puts a file on the shelf and off the screen, which is what
+    /// the stack model did with 20 against a surface that could draw 10.
     /// </summary>
-    public const int MaxItems = 20;
+    public const int MaxItems = NotchGeometry.ShelfCapacity;
 
     private readonly string _storePath;
-    private readonly List<List<ShelfItem>> _stacks = [];
+    private readonly List<ShelfItem> _items = [];
 
     public ShelfStore() : this(DefaultStorePath()) { }
 
@@ -43,31 +47,16 @@ public sealed class ShelfStore
 
     public event Action? Changed;
 
-    /// <summary>
-    /// Front stack first, newest item first inside a stack.
-    ///
-    /// A list of lists rather than a ShelfStack type: a stack has no property other than the
-    /// items in it, and a wrapper carrying nothing would be a type to keep in step for no
-    /// information.
-    /// </summary>
-    public IReadOnlyList<IReadOnlyList<ShelfItem>> Stacks => _stacks;
-
-    /// <summary>
-    /// Every item, flattened in stack order. Kept because the notch's glance page and the
-    /// existing tests are written against it, and because the flat view is genuinely what a
-    /// five-slot row wants: five slots cannot show grouping, and half-drawn grouping is worse
-    /// than none.
-    /// </summary>
-    public IReadOnlyList<ShelfItem> Items => _stacks.SelectMany(s => s).ToList();
+    /// <summary>Everything on the shelf, newest first.</summary>
+    public IReadOnlyList<ShelfItem> Items => _items;
 
     public static string DefaultStorePath() => Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Plith", "shelf.txt");
 
     /// <summary>
     /// Stage everything in <paramref name="paths"/> that resolves to something on disk, newest
-    /// first, joining the front stack. Raises <see cref="Changed"/> once for the batch, and not
-    /// at all when nothing was kept. A drop of three paths is one event, and a drop of nothing
-    /// is none.
+    /// first. Raises <see cref="Changed"/> once for the batch, and not at all when nothing was
+    /// kept. A drop of three paths is one event, and a drop of nothing is none.
     /// </summary>
     public void Add(IEnumerable<string> paths)
     {
@@ -77,19 +66,10 @@ public sealed class ShelfStore
         {
             if (!TryResolve(path, out var item)) continue;
 
-            // The front stack is created LAZILY, on the first path that resolves. Created up
-            // front, a drop of nothing but dead paths leaves an empty stack behind that nobody
-            // asked for.
-            if (_stacks.Count == 0) _stacks.Add([]);
-            var front = _stacks[0];
-
-            // Removed from EVERY stack before inserting, not just the front one. A repeat drop
-            // moves the row to the front rather than leaving a second copy in another stack,
-            // which is the same rule as before stacks existed, applied across all of them.
-            foreach (var stack in _stacks)
-                stack.RemoveAll(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
-
-            front.Insert(0, item);
+            // Removed before inserting, so a repeat drop moves the row to the front rather than
+            // leaving a second copy behind.
+            _items.RemoveAll(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
+            _items.Insert(0, item);
             kept = true;
         }
 
@@ -106,10 +86,7 @@ public sealed class ShelfStore
     {
         var removed = 0;
         foreach (var path in paths)
-        {
-            foreach (var stack in _stacks)
-                removed += stack.RemoveAll(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
-        }
+            removed += _items.RemoveAll(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
 
         if (removed == 0) return;
 
@@ -117,78 +94,21 @@ public sealed class ShelfStore
         Changed?.Invoke();
     }
 
-    /// <summary>An empty stack at the front, so the next drop joins it rather than the one
-    /// before it. Nothing is persisted for it: an empty stack has no lines to write.</summary>
-    public void NewStack()
-    {
-        if (_stacks.Count > 0 && _stacks[0].Count == 0) return;   // one empty front stack is enough
-
-        _stacks.Insert(0, []);
-        Changed?.Invoke();
-    }
-
-    /// <summary>
-    /// Move items into <paramref name="targetStackIndex"/>. A target equal to the stack count
-    /// appends a new stack; anything else out of range is ignored, because the index arrives
-    /// from the catcher and is a claim like everything else that does.
-    /// </summary>
-    public void Restack(int targetStackIndex, IEnumerable<string> paths)
-    {
-        if (targetStackIndex < 0 || targetStackIndex > _stacks.Count) return;
-
-        var moving = new List<ShelfItem>();
-        foreach (var path in paths)
-        {
-            foreach (var stack in _stacks)
-            {
-                var found = stack.FindIndex(i => string.Equals(i.Path, path, StringComparison.OrdinalIgnoreCase));
-                if (found < 0) continue;
-
-                moving.Add(stack[found]);
-                stack.RemoveAt(found);
-                break;
-            }
-        }
-
-        if (moving.Count == 0) return;
-
-        if (targetStackIndex == _stacks.Count) _stacks.Add([]);
-        _stacks[targetStackIndex].InsertRange(0, moving);
-
-        Save();
-        Changed?.Invoke();
-    }
-
-    public void PruneEmptyStacks()
-    {
-        if (_stacks.RemoveAll(s => s.Count == 0) == 0) return;
-
-        Save();
-        Changed?.Invoke();
-    }
-
     public void Clear()
     {
-        if (_stacks.Count == 0) return;
+        if (_items.Count == 0) return;
 
-        _stacks.Clear();
+        _items.Clear();
         Save();
         Changed?.Invoke();
     }
 
-    /// <summary>The cap is on the shelf as a whole. Oldest first, which means from the back of
-    /// the last non-empty stack.</summary>
+    /// <summary>Oldest first off, which is the end of a newest-first list.</summary>
     private void TrimToCap()
     {
-        var total = _stacks.Sum(s => s.Count);
-        for (var i = _stacks.Count - 1; i >= 0 && total > MaxItems; i--)
-        {
-            while (_stacks[i].Count > 0 && total > MaxItems)
-            {
-                _stacks[i].RemoveAt(_stacks[i].Count - 1);
-                total--;
-            }
-        }
+        if (_items.Count <= MaxItems) return;
+
+        _items.RemoveRange(MaxItems, _items.Count - MaxItems);
     }
 
     private static bool TryResolve(string path, out ShelfItem item)
@@ -225,12 +145,8 @@ public sealed class ShelfStore
     }
 
     /// <summary>
-    /// One path per line, newest first, with a blank line between stacks. Still a text file a
-    /// person can read and edit in Notepad, which was a deliberate property before stacks and is
-    /// not given up for them: a blank line is the one separator that needs no explaining.
-    ///
-    /// Empty stacks write nothing, so a stack created and never filled leaves no trace in the
-    /// file even if PruneEmptyStacks has not run yet.
+    /// One path per line, newest first. Still a text file a person can read and edit in Notepad,
+    /// which was a deliberate property before stacks existed and survives their removal.
     /// </summary>
     private void Save()
     {
@@ -239,14 +155,7 @@ public sealed class ShelfStore
             var directory = Path.GetDirectoryName(_storePath);
             if (directory is not null) Directory.CreateDirectory(directory);
 
-            var lines = new List<string>();
-            foreach (var stack in _stacks.Where(s => s.Count > 0))
-            {
-                if (lines.Count > 0) lines.Add(string.Empty);
-                lines.AddRange(stack.Select(i => i.Path));
-            }
-
-            File.WriteAllLines(_storePath, lines);
+            File.WriteAllLines(_storePath, _items.Select(i => i.Path));
         }
         catch (IOException) { /* a shelf that cannot persist still works for this session */ }
         catch (UnauthorizedAccessException) { }
@@ -263,30 +172,19 @@ public sealed class ShelfStore
         catch (IOException) { return; }
         catch (UnauthorizedAccessException) { return; }
 
-        var current = new List<ShelfItem>();
-        var total = 0;
-
         foreach (var line in lines)
         {
-            if (string.IsNullOrWhiteSpace(line))
-            {
-                // A blank line ends a stack. Consecutive blanks, or a leading one, produce no
-                // empty stack: a file edited by hand should not be able to make litter.
-                if (current.Count > 0) _stacks.Add(current);
-                current = [];
-                continue;
-            }
-
-            if (total >= MaxItems) break;
+            // A blank line was the stack separator in the previous format. Skipping it is the
+            // whole of the migration: a shelf written by the stack build loads as one flat list
+            // in the order it already had, with no version marker anywhere.
+            if (string.IsNullOrWhiteSpace(line)) continue;
+            if (_items.Count >= MaxItems) break;
 
             // The same check as on the way in, because a staged file can be deleted or moved
             // between sessions and a row that opens nothing is worse than no row.
             if (!TryResolve(line, out var item)) continue;
 
-            current.Add(item);
-            total++;
+            _items.Add(item);
         }
-
-        if (current.Count > 0) _stacks.Add(current);
     }
 }

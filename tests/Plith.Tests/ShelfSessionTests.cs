@@ -150,36 +150,8 @@ public sealed class ShelfSessionTests : IDisposable
         session.HandleMessage(new DropMessage(DropVerb.RemoveItems, 0, 0, 0, 0, [a]));
         Assert.Equal([b], store.Items.Select(i => i.Path));
 
-        session.HandleMessage(new DropMessage(DropVerb.NewStack, 0, 0, 0, 0, []));
-        Assert.Equal(2, store.Stacks.Count);
-
-        // Index 0 is the empty stack NewStack just put at the front, so this moves b into it.
-        session.HandleMessage(new DropMessage(DropVerb.Restack, 0, 0, 0, 0, [b]));
-        Assert.Equal([b], store.Stacks[0].Select(i => i.Path));
-
         session.HandleMessage(new DropMessage(DropVerb.ClearShelf, 0, 0, 0, 0, []));
         Assert.Empty(store.Items);
-    }
-
-    /// <summary>
-    /// ShelfClosed prunes and then reports. The order matters: the notch comes back on the
-    /// Closed event, and an empty stack surviving into the next open would be a column nobody
-    /// asked for in a surface that was just rebuilt from scratch.
-    /// </summary>
-    [Fact]
-    public void HandleMessage_ShelfClosed_PrunesThenReports()
-    {
-        var (session, store) = Build();
-        store.Add([MakeFile("a.txt")]);
-        store.NewStack();
-        Assert.Equal(2, store.Stacks.Count);
-
-        var stacksWhenClosed = -1;
-        session.Closed += () => stacksWhenClosed = store.Stacks.Count;
-
-        session.HandleMessage(new DropMessage(DropVerb.ShelfClosed, 0, 0, 0, 0, []));
-
-        Assert.Equal(1, stacksWhenClosed);
     }
 
     /// <summary>
