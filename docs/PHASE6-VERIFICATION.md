@@ -1354,3 +1354,41 @@ fade, anywhere in the product, so a still frame shows a title cut mid-glyph. It 
 runtime, so this is a still-frame artefact rather than lost information, but the text column is
 now 116 DIP rather than 148 and it will scroll more often. Filed, not fixed: an edge fade belongs
 to `MarqueeText` and would change every surface that uses it. See `widget-media-long-title.png`.
+
+### Seek, added afterwards, on a measurement that overturned the spec
+
+The spec deferred seek with two reasons. One was real (the notch closes in about 2.6 s, so a
+drag can be cut off) and one was **wrong**: "SMTC position writes are not supported by every
+source" was applied to Spotify from memory rather than from a reading. Asked directly on
+2026-09-20:
+
+```
+source: SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
+  IsPlaybackPosition  : True
+  IsFastForwardEnabled: True
+  min/max seek        : 00:00:00 / 00:03:02.903
+```
+
+The user's own main source accepts it. The other reason answered itself: `HoverKeepAlive`
+already stops the hide timer while the pointer is on the open panel, which it is throughout a
+drag.
+
+The bar is a templated `Slider` now rather than a `ProgressBar`. That keeps the automation value
+and adds keyboard arrows, Home and End for nothing, and it is 20 DIP tall to grab while drawing
+4: `AudioWidget`'s own track records that rule at 6 DIP, and this bar is thinner.
+`MediaSnapshot` carries `CanSeek` from `GetPlaybackInfo().Controls.IsPlaybackPositionEnabled`,
+and a source that refuses gets a bar that still reports its position with no thumb and no hand
+cursor.
+
+The write happens on RELEASE rather than per mouse sample, because a write per sample makes the
+source scrub. The 1 Hz tick is kept off the thumb by `AudioWidget`'s driving window, carried
+over with the overflow defect its own comment records: a flag beside the timestamp, because a
+sentinel timestamp of `long.MinValue` overflows and leaves the widget believing the user is
+driving from the moment it is built.
+
+**Not measured on hardware.** The driver gained a drag and a before/after position read through
+the same SMTC probe, and it has not run: on the attempt at 00:25 on 2026-09-21 it refused,
+correctly, because a game (`WardogsClient-Win64-Shipping`) held the pointer and produced 2726 px
+of drift in one second. That is the precondition the shelf branch measured and this script
+inherited, doing exactly its job. Two measurements are therefore still owed, and one run takes
+both: the playing direction of the opening rule, and whether a drag moves the source.
