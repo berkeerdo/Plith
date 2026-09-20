@@ -263,10 +263,11 @@ which was the rule's own blind spot on the day it was written. The classic card 
 its fullest row (300 DIP, 224 compact), titles scroll rather than ellipse, and Settings has
 a grouped left rail and a preview that finally knows the notch exists.
 
-**None of it is verified on a running build.** Build, 344 tests and the lint are green, and
-none of that reaches any of it: the suite is not STA, and the OSD renders in a layered
-window nothing can capture over RDP. Slice 2 shipped equally green and then crashed on the
-first hover. Full ledgers in `docs/PHASE6-VERIFICATION.md` §15 and §16; the highest-risk
+**None of it is verified on a running build.** Build, the tests and the lint are green (504
+passing, measured 2026-09-20; the 344 in `docs/PHASE6-VERIFICATION.md` is that run's own
+number and stays there), and none of that reaches any of it: the suite is not STA, and the
+OSD renders in a layered window nothing can capture over RDP. Slice 2 shipped equally green
+and then crashed on the first hover. Full ledgers in `docs/PHASE6-VERIFICATION.md` §15 and §16; the highest-risk
 items are the three provisional paging constants, which were chosen without hardware and can
 only be corrected from the log line each commit writes.
 
