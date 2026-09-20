@@ -1001,7 +1001,7 @@ draws."
 - Modify: `CLAUDE.md`
 - Modify: `docs/superpowers/plans/2026-09-21-notch-output-picker.md` (tick the boxes)
 
-- [ ] **Step 1: Add the stage**
+- [x] **Step 1: Add the stage**
 
 In `scripts/drive-media-page.ps1`, after the existing media-page verdicts, add a stage that opens
 the picker and presses the second cell. It must record the default before, and put it back after,
@@ -1065,7 +1065,7 @@ finally {
 }
 ```
 
-- [ ] **Step 2: Run it**
+- [x] **Step 2: Run it**  <-- run, and seven verdicts pass, but the SWITCH itself was not measured: over Remote Desktop there is one output and IPolicyConfig refuses it with E_NOINTERFACE. That half needs a console session and is still owed
 
 Run: `pwsh -File scripts/drive-media-page.ps1`
 
@@ -1074,7 +1074,7 @@ started at. The preconditions still apply: an Active session, no game holding th
 the notch presentation. If `Assert-InputWorks` throws because something owns the pointer, that is
 the instrument doing its job and not a product failure.
 
-- [ ] **Step 3: Record it**
+- [x] **Step 3: Record it**
 
 Add a section 21 to `docs/PHASE6-VERIFICATION.md`, in the shape of section 20: the date, the
 probe's `TrySetDefault` result, every verdict with its evidence string, the endpoint list as
@@ -1086,7 +1086,7 @@ should now say the interop is committed rather than measured-and-discarded.
 
 Update `CLAUDE.md`'s Status section, reading its banner about the split section first.
 
-- [ ] **Step 4: Tick this plan's boxes and commit**
+- [x] **Step 4: Tick this plan's boxes and commit**
 
 Boxes are ticked as work proceeds, not at the end: a plan whose boxes are all empty reads as
 "never started", which is how 199 boxes came to sit unticked across three finished phases here.

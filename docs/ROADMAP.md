@@ -357,13 +357,37 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
   time by `NotchOpeningPolicy` and never stored. Playing rather than merely having a session, so
   a paused Spotify cannot lock the notch onto one page for days.
 
-  **Deliberately not built, with reasons:** the live waveform (Alcove's four bars decorate a
-  physical camera notch, which Windows does not have, and there is no level metering anywhere in
-  this codebase), seek (the notch closes in about 2.6 s and SMTC position writes are not
-  universal), and an in-notch output device list. The output control opens `ms-settings:sound`
-  instead. Note that the `IPolicyConfig` finding above means the device list is *possible* here;
-  it is deferred because it needs a popup surface the notch does not have, not because the
-  mechanism is unproven.
+  **Seek was deferred and then built**, because one of the two reasons for deferring it was
+  wrong. "SMTC position writes are not universal" is true in general and false for this machine's
+  main source: Spotify reports `IsPlaybackPositionEnabled` true with a seek range covering the
+  whole track. The other reason answered itself, since `HoverKeepAlive` already holds the panel
+  open while the pointer is on it. The bar is a templated `Slider` now, so it also gained keyboard
+  arrows, Home and End. **Measured on hardware: a drag moved Spotify from 15s to 139s against a
+  137s target.**
+
+  **The output picker was deferred and then built too**, on the user's own counter-proposal: the
+  page becomes the list, so there is no popup and therefore no second window outside the notch's
+  layered surface. `OutputDeviceSwitcher` writes the default through `IPolicyConfig` for the
+  Console and Multimedia roles, leaving Communications alone exactly as Windows' own
+  "Set as Default Device" does.
+
+  **Two measurements worth keeping from that work.** The vtable has TEN methods ahead of
+  `SetDefaultEndpoint`, not nine: declaring nine compiled and returned `0x800706F4`,
+  RPC_X_NULL_REF_POINTER, because the call landed on `SetPropertyValue`. And over Remote Desktop
+  the interface refuses the "Remote Audio" endpoint with `0x80004002`, E_NOINTERFACE, while the
+  same call returns `S_OK` in a console session against a local device.
+
+  **The device-name finding above is superseded in part.** "Trimming to fit produces the same
+  useless string for all five" is right about the endpoint names, and the cause turned out to be
+  Plith's own shortener keeping the adapter's first two words: two Steam devices collided, and the
+  Settings combo box had been showing two identical rows since it was written. The picker labels
+  its cells with Core Audio's device DESCRIPTION instead, which is shorter and distinct here, and
+  falls back to the endpoint name for any description that is not unique. No model-token heuristic
+  was needed after all.
+
+  **Deliberately still not built:** the live waveform (Alcove's four bars decorate a physical
+  camera notch, which Windows does not have, and there is no level metering anywhere in this
+  codebase), and input-device switching.
 
   Measured on hardware and recorded in `docs/PHASE6-VERIFICATION.md` section 20: with a paused
   session a click opens the clock page, the notch pages to the media widget, and the live UIA

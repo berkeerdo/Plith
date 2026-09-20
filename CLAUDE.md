@@ -244,6 +244,37 @@ no notion of which side should be stronger. That one was caught in a render. So 
 transport that looked exactly like a live one, which a replaced `ControlTemplate` causes by losing
 WPF's own dimming. Full ledger: `docs/PHASE6-VERIFICATION.md` section 20.
 
+**The media page can seek, and its output control now turns the page into the device list
+(2026-09-21).** Both were deferred in the spec and both were un-deferred by a measurement rather
+than by a change of mind. Seek was refused partly because "SMTC position writes are not universal",
+applied to Spotify from memory; asked directly, Spotify reports `IsPlaybackPositionEnabled` true
+with a seek range covering the whole track. The picker was refused because it "needs a popup
+surface the notch does not have", and the user's own counter-proposal removed that reason: the
+page becomes the list, so no second window exists to fall outside the notch's layered surface.
+
+The bar is a templated `Slider` now, which keeps the automation value and adds keyboard arrows,
+Home and End. `OutputDeviceSwitcher` writes the default through the undocumented `IPolicyConfig`
+for the Console and Multimedia roles, leaving Communications alone as Windows' own
+"Set as Default Device" does.
+
+**Seven verdicts passed on hardware, and two things are still owed.** A drag moved Spotify from
+15s to 139s against a 137s target; the picker opens, names itself in the UIA tree and returns.
+Unmeasured: the switch itself, because over Remote Desktop there is exactly ONE output and
+`IPolicyConfig` refuses it with `E_NOINTERFACE` (the same call returns `S_OK` in a console session
+against a local device), and the playing direction of the opening rule, paused at the click for
+three runs running.
+
+**Three defects came out of this that no gate could have caught, and one of them was already
+shipping.** `AudioLabel.Shorten` keeps the adapter's first two words, so two Steam endpoints
+collapsed to the same string and **Settings' endpoint combo box had been showing two identical
+rows since it was written**; uniqueness is a property of the set, so it is fixed where the list is
+built. The `IPolicyConfig` vtable needs TEN reserved slots and nine compiled perfectly, returning
+`RPC_X_NULL_REF_POINTER` because the call landed on `SetPropertyValue`. And a drag wrote TWO
+seeks, because `IsMoveToPointEnabled` jumps the thumb on press before the drag starts: a drag from
+10 to 75 per cent moved the source to 8 per cent and then moved it again. Build, 559 tests, both
+lints and the renders were green through all three. Full ledger:
+`docs/PHASE6-VERIFICATION.md` section 21.
+
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
 > unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected
