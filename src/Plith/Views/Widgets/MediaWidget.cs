@@ -304,9 +304,18 @@ public partial class MediaWidget : UserControl
         // itself is not written until release.
         ShowTimesFor(TargetPosition());
 
-        // Keyboard: arrows, Home and End raise this with no drag around it, so there is no
-        // DragCompleted coming to commit it.
-        if (!_dragging) CommitSeek();
+        // Keyboard only: arrows, Home and End raise this with no drag around it, so nothing else
+        // will commit it.
+        //
+        // The button state is checked as well as _dragging, and that is a MEASURED correction
+        // rather than belt and braces. IsMoveToPointEnabled makes a press jump the thumb to the
+        // pointer and only then begin dragging it, so the press raises this with _dragging still
+        // false: the page committed a seek to the press point, and then a second one to the
+        // release point when the drag finished. Driven on hardware on 2026-09-21, a drag from 10
+        // per cent to 75 per cent left the source at 8 per cent and then moved it again, which is
+        // exactly the scrubbing this design says it avoids. With the left button down the commit
+        // belongs to DragCompleted and to nothing else.
+        if (!_dragging && Mouse.LeftButton != MouseButtonState.Pressed) CommitSeek();
     }
 
     /// <summary>Where the thumb currently points, in the track's own time.</summary>

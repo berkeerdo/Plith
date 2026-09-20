@@ -183,6 +183,35 @@ function Get-Names {
     @($all | ForEach-Object { $_.Current.Name } | Where-Object { $_ })
 }
 
+function Get-Element {
+    # BOTH name and control type. A label, its tooltip and the control itself can all carry the
+    # same name, and a name-only search returned a text run in place of a control once already on
+    # this branch.
+    param($Hwnd, [string]$Name, [string]$Type = 'Custom')
+    if ($null -eq $Hwnd) {
+        throw "Get-Element was asked for '$Name' with a NULL window handle."
+    }
+    $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
+    $byName = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::NameProperty, $Name)
+    $ct = switch ($Type) {
+        'Custom' { [System.Windows.Automation.ControlType]::Custom }
+        'Button' { [System.Windows.Automation.ControlType]::Button }
+        'Text'   { [System.Windows.Automation.ControlType]::Text }
+        default  { $null }
+    }
+    $cond = if ($ct) {
+        New-Object System.Windows.Automation.AndCondition($byName,
+            (New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::ControlTypeProperty, $ct)))
+    } else { $byName }
+    $e = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    if (-not $e) { return $null }
+    $r = $e.Current.BoundingRectangle
+    [pscustomobject]@{ X=[int]$r.X; Y=[int]$r.Y; W=[int]$r.Width; H=[int]$r.Height
+                       CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
+}
+
 function Move-Pointer {
     param([int]$X, [int]$Y, [int]$Settle = 300)
     [MediaInput]::Move($X, $Y)
@@ -371,6 +400,21 @@ Move-Pointer -X $x -Y $y -Settle 500
 [MediaInput]::LeftClick()
 Start-Sleep -Milliseconds 900      # the expansion animates
 
+# The playing state is re-read HERE, immediately after the click, not taken from the snapshot
+# that was read before Plith was even started.
+#
+# INSTRUMENT DEFECT 3. The first version decided the expectation from that earlier snapshot, and
+# on the run at 02:53 on 2026-09-21 the track was paused when it was read and playing by the time
+# the notch was clicked, because a person pressed play in between. The product opened the media
+# page, which is correct, and the script called it a failure. It is the same shape as defect 6 in
+# drive-shelf-pair.ps1: state read long before the press it is used to judge.
+$playingNow = [SnapshotCollector]::Latest.IsPlaying
+if ($playingNow -ne $expectMedia) {
+    "  NOTE: playback changed during the run (was $(if ($expectMedia) { 'playing' } else { 'not playing' }), " +
+    "now $(if ($playingNow) { 'playing' } else { 'not playing' })). Judging against the state at the click."
+    $expectMedia = $playingNow
+}
+
 $names = Get-Names -Hwnd $notch.Hwnd
 $onMedia = $names -contains 'Now playing'
 
@@ -477,11 +521,19 @@ if ($onMedia) {
 
         [MediaInput]::Drag($from, $y, $to, $y)
 
-        # The source applies the write and reports a new timeline back; that round trip is not
-        # instant, and reading immediately would measure the old position and call it a failure.
+        # Wait for the position to SETTLE near the target, not for it to merely change.
+        #
+        # INSTRUMENT DEFECT 4. Waiting for "any change" read the intermediate value: the press
+        # seeked to where the drag started and the release seeked to where it ended, so the first
+        # change to arrive was the wrong one. The run at 02:53 on 2026-09-21 reported 15s against
+        # a target of 137s for that reason, next to a real product defect with the same symptom.
+        # Fixed on both sides: the product now writes once per gesture, and this waits for the
+        # value it is actually asserting on.
+        $want = $before.Duration.TotalSeconds * 0.75
         $deadline = [Diagnostics.Stopwatch]::StartNew()
-        while ($deadline.Elapsed.TotalSeconds -lt 4 -and
-               [SnapshotCollector]::LatestTimeline.Position -eq $before.Position) {
+        while ($deadline.Elapsed.TotalSeconds -lt 5) {
+            $seen = [SnapshotCollector]::LatestTimeline
+            if ([Math]::Abs($seen.Position.TotalSeconds - $want) -le 6) { break }
             Start-Sleep -Milliseconds 200
         }
         $after = [SnapshotCollector]::LatestTimeline
@@ -489,7 +541,6 @@ if ($onMedia) {
         # 75 per cent of the track, within a tolerance the gesture itself cannot beat: the bar is
         # about 232 DIP wide, so one DIP is nearly a second on a three minute track, and the
         # pointer lands on a whole pixel.
-        $want = $after.Duration.TotalSeconds * 0.75
         $got = $after.Position.TotalSeconds
         $ok = [Math]::Abs($got - $want) -le 6
         Add-Verdict 'dragging the track seeks the source' $ok `
@@ -503,6 +554,129 @@ if ($onMedia) {
 # leftover process: measured on 2026-09-20, where two build errors read as a code defect for a
 # minute. An instance that was ALREADY up belongs to the person at the machine, so it is left
 # exactly as it was found.
+# --- the output picker --------------------------------------------------------------------------
+#
+# This stage CHANGES A SYSTEM SETTING, so it restores it in a finally. A check that leaves
+# someone's audio coming out of a different device is a rude check, and one that only leaks when
+# it fails is worse: the failure is exactly when nobody is watching the cleanup.
+$null = [Reflection.Assembly]::LoadFrom((Join-Path $bin 'NAudio.Wasapi.dll'))
+$audio = New-Object NAudio.CoreAudioApi.MMDeviceEnumerator
+$originalId = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').ID
+$originalName = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').FriendlyName
+"output before : $originalName"
+
+# How many outputs there are to choose between, which decides what this stage can measure at all.
+#
+# MEASURED 2026-09-21: over Remote Desktop there is exactly ONE active render endpoint, "Remote
+# Audio", and IPolicyConfig refuses it with 0x80004002 (E_NOINTERFACE). So in an RDP session the
+# switch cannot be measured and the failure is the environment's, not the product's. Saying so is
+# the whole job here: a verdict that failed for this reason would send someone looking for a bug
+# that is not there.
+$endpoints = [Plith.Services.WindowsAudioClient]::EnumerateRenderEndpoints()
+"outputs found : $($endpoints.Count) ($(($endpoints | ForEach-Object { $_.FriendlyName }) -join ', '))"
+$canSwitch = $endpoints.Count -ge 2
+if (-not $canSwitch) {
+    "  NOTE: fewer than two outputs, so the switch itself cannot be measured in this session."
+    if ($session -match 'rdp-tcp') {
+        "        This is a Remote Desktop session: the local devices are not active in it. Run"
+        "        this from the physical console to measure the switch."
+    }
+}
+
+try {
+    if (-not $onMedia) {
+        "  (skipped: the media page was never reached, so its output control cannot be pressed)"
+    } else {
+        $outputBtn = Get-Element -Hwnd $notch.Hwnd -Name 'Change output device' -Type 'Button'
+        if (-not $outputBtn) {
+            Add-Verdict 'the output control is in the tree' $false 'not found by name'
+        } else {
+            Move-Pointer -X $outputBtn.CX -Y $outputBtn.CY -Settle 250
+            [MediaInput]::LeftClick()
+            Start-Sleep -Milliseconds 700
+
+            $names = Get-Names -Hwnd $notch.Hwnd
+            $onPicker = $names -contains 'Back to now playing'
+            Add-Verdict 'the output control opens the picker' $onPicker `
+                "names in the tree: $($names -join ' | ')"
+
+            # The way back, which is measurable however many devices there are.
+            if ($onPicker) {
+                $backBtn = Get-Element -Hwnd $notch.Hwnd -Name 'Back to now playing' -Type 'Button'
+                if ($backBtn) {
+                    Move-Pointer -X $backBtn.CX -Y $backBtn.CY -Settle 200
+                    [MediaInput]::LeftClick()
+                    Start-Sleep -Milliseconds 500
+                    $afterBack = Get-Names -Hwnd $notch.Hwnd
+                    Add-Verdict 'the back control returns to now playing' `
+                        ($afterBack -contains 'Now playing') "names: $($afterBack -join ' | ')"
+
+                    # Open it again for whatever follows.
+                    Move-Pointer -X $outputBtn.CX -Y $outputBtn.CY -Settle 200
+                    [MediaInput]::LeftClick()
+                    Start-Sleep -Milliseconds 600
+                    $names = Get-Names -Hwnd $notch.Hwnd
+                } else {
+                    Add-Verdict 'the back control is pressable' $false `
+                        "'Back to now playing' is in the tree but not as a Button"
+                }
+            }
+
+            # A device that is NOT the current one, found by its own accessible name: the current
+            # one carries ", current output" and pressing it would prove nothing at all.
+            $target = $names | Where-Object {
+                $_ -ne 'Back to now playing' -and $_ -ne 'Output' -and
+                $_ -notmatch 'current output' -and $_ -ne 'More in Windows settings' -and
+                $_ -ne 'Now playing'
+            } | Select-Object -First 1
+
+            if (-not $canSwitch) {
+                "  (skipped: one output in this session, so there is nothing to switch TO)"
+            } elseif (-not $target) {
+                Add-Verdict 'a second output is offered' $false "names: $($names -join ' | ')"
+            } else {
+                $cell = Get-Element -Hwnd $notch.Hwnd -Name $target -Type 'Button'
+                if (-not $cell) {
+                    Add-Verdict 'the offered output is pressable' $false `
+                        "'$target' is in the tree but not as a Button"
+                } else {
+                    Move-Pointer -X $cell.CX -Y $cell.CY -Settle 250
+                    [MediaInput]::LeftClick()
+                    Start-Sleep -Milliseconds 1200
+
+                    $nowId = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').ID
+                    Add-Verdict 'pressing a cell changes the system default output' `
+                        ($nowId -ne $originalId) `
+                        ("pressed '$target'; default was $originalId, now $nowId")
+
+                    $back = Get-Names -Hwnd $notch.Hwnd
+                    Add-Verdict 'the page returns to now playing after a switch' `
+                        ($back -contains 'Now playing') "names after: $($back -join ' | ')"
+                }
+            }
+        }
+    }
+}
+finally {
+    # Through the product's own switcher, so the restore exercises the same path it is undoing.
+    # Only when something actually moved. Calling the switcher unconditionally made the closing
+    # line read "restore returned False" on a run where nothing had been switched at all, which
+    # is an alarm about the wrong thing: over RDP the one endpoint there is cannot be set as
+    # default, and it was already default anyway.
+    $endId = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').ID
+    if ($endId -ne $originalId) {
+        $restored = [Plith.Services.OutputDeviceSwitcher]::TrySetDefault($originalId, $null)
+        $endId = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').ID
+        $endName = $audio.GetDefaultAudioEndpoint('Render', 'Multimedia').FriendlyName
+        "output after  : $endName (restore returned $restored)"
+        if ($endId -ne $originalId) {
+            Write-Host "WARNING: the default output was NOT restored. Set it back by hand." -ForegroundColor Red
+        }
+    } else {
+        "output after  : $originalName (unchanged, so nothing to restore)"
+    }
+}
+
 $probe.Dispose()
 
 if ($script:startedPlith) {
