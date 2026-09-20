@@ -1165,7 +1165,7 @@ whose length nobody knows."
   - `static int NotchOpeningPolicy.OpeningPage(bool isPlaying, int mediaPageIndex)`
   - `void NotchPager.ResetTo(int index)`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/Plith.Tests/NotchOpeningPolicyTests.cs`:
 
@@ -1249,12 +1249,12 @@ Append to `tests/Plith.Tests/NotchPagerTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/Plith.Tests --filter "NotchOpeningPolicyTests|NotchPagerTests"`
 Expected: FAIL to compile, `NotchOpeningPolicy` and `ResetTo` do not exist.
 
-- [ ] **Step 3: Write the policy**
+- [x] **Step 3: Write the policy**
 
 Create `src/Plith/Views/Presentation/NotchOpeningPolicy.cs`:
 
@@ -1288,7 +1288,7 @@ public static class NotchOpeningPolicy
 }
 ```
 
-- [ ] **Step 4: Add `ResetTo` to the pager**
+- [x] **Step 4: Add `ResetTo` to the pager**
 
 In `src/Plith/Services/NotchPager.cs`, replace `Reset()` with:
 
@@ -1313,7 +1313,7 @@ In `src/Plith/Services/NotchPager.cs`, replace `Reset()` with:
     }
 ```
 
-- [ ] **Step 5: Track where the media page sits, and open on it**
+- [x] **Step 5: Track where the media page sits, and open on it**
 
 In `src/Plith/Views/OsdHost.cs`, beside `private int _shelfPageIndex = -1;` add:
 
@@ -1363,12 +1363,12 @@ field: add one beside `_toggleMute` and assign it in `AttachAudioSource`:
 `SyncToPager(0)` keeps its zero: that argument is the slide DIRECTION, not a page, and an opening
 frame does not slide.
 
-- [ ] **Step 6: Run the tests to verify they pass**
+- [x] **Step 6: Run the tests to verify they pass**
 
 Run: `dotnet test`
 Expected: 526 passing (519 plus 7), 0 failed. `dotnet build` with 0 warnings.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Views/Presentation/NotchOpeningPolicy.cs src/Plith/Services/NotchPager.cs \

@@ -800,6 +800,7 @@ public sealed class OsdHost : BandWindow
         // level the instant it changes, so a widget page showing the same number is a second
         // place for one fact - and the one you reach by swiping, long after the moment it
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
+        _media = media;
         _clockPage = new Widgets.ClockWidget(media, weather, microphone);
         _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
@@ -826,6 +827,16 @@ public sealed class OsdHost : BandWindow
 
     private Widgets.ShelfWidget? _shelfPage;
     private int _shelfPageIndex = -1;
+
+    /// <summary>Where the media page sits in the current list, so the opening rule can name it.
+    /// Read from the same list that installs the pages, so the two cannot disagree about an order
+    /// they both take from one place.</summary>
+    private int _mediaPageIndex = -1;
+
+    /// <summary>The media view model, held so the opening-page rule can ask what is playing.
+    /// Null until AttachAudioSource runs, which is why NotchOpeningPolicy takes a bool rather
+    /// than the view model.</summary>
+    private ViewModels.MediaViewModel? _media;
 
     /// <summary>
     /// Open the notch on the shelf page, because a file just landed there.
@@ -935,6 +946,7 @@ public sealed class OsdHost : BandWindow
         List<FrameworkElement> pages = [_clockPage];
         if (wantsWeather) pages.Add(_weatherPage);
         pages.Add(_mediaPage);
+        _mediaPageIndex = pages.Count - 1;
         if (wantsShelf) pages.Add(_shelfPage!);
 
         _shelfPageIndex = wantsShelf ? pages.Count - 1 : -1;
@@ -1046,7 +1058,11 @@ public sealed class OsdHost : BandWindow
         // spec defers remembering the last page across opens, so every open starts at the first
         // one either way - and a value written in a Completed handler is the exact hazard that
         // produced five defects on this branch. Recomputing it where it is used cannot go stale.
-        _pager.Reset();
+        // Computed here, on the way in, rather than remembered. See NotchOpeningPolicy: the page
+        // is a function of what is playing right now, and the carousel spec's deferral of
+        // remembering the last page is kept deliberately. The zero passed to SyncToPager is the
+        // slide DIRECTION, not a page: an opening frame does not slide.
+        _pager.ResetTo(NotchOpeningPolicy.OpeningPage(_media?.IsPlaying == true, _mediaPageIndex));
         _widgets.SyncToPager(0);
 
         // A click opens the widget frame. An event opens the card stack, and ShowOsd's other
