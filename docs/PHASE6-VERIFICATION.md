@@ -1392,3 +1392,97 @@ correctly, because a game (`WardogsClient-Win64-Shipping`) held the pointer and 
 of drift in one second. That is the precondition the shelf branch measured and this script
 inherited, doing exactly its job. Two measurements are therefore still owed, and one run takes
 both: the playing direction of the opening rule, and whether a drag moves the source.
+
+---
+
+## 21. The output picker, and seek, driven on hardware (2026-09-21)
+
+Spec: `docs/superpowers/specs/2026-09-21-notch-output-picker-design.md`.
+Plan: `docs/superpowers/plans/2026-09-21-notch-output-picker.md`.
+
+### What the run said
+
+`pwsh -File scripts/drive-media-page.ps1`, Debug build, over Remote Desktop, session Active.
+Spotify held a session and the track moved between paused and playing during the run, which the
+script now handles rather than blames.
+
+```
+[PASS] a click while NOT playing opens the clock page, not the media page
+[PASS] the notch pages to the media widget
+[PASS] the progress bar reports a value to UI Automation      value=8.20 of 100
+[PASS] the elapsed and remaining clocks are drawn             0:15, -2:47
+[PASS] dragging the track seeks the source                    before 15s, after 139s,
+                                                              wanted about 137s of 183s
+[PASS] the output control opens the picker
+       names: Now playing | Back to now playing | Output | Remote Audio, current output
+[PASS] the back control returns to now playing
+```
+
+**Seek works on real hardware against real Spotify**, landing within two seconds of a target
+computed from where the pointer was released. The picker opens, names itself in the UIA tree, and
+the way back works.
+
+### Still owed, and why
+
+**The switch itself is unmeasured.** Over Remote Desktop there is exactly ONE active render
+endpoint, "Remote Audio", so there is nothing to switch to. The script says so and skips, naming
+the session type, rather than failing a verdict for the environment.
+
+**IPolicyConfig refuses that endpoint: `0x80004002`, E_NOINTERFACE.** Measured directly. The
+same call returned `S_OK` in a console session against a local device, which
+`scripts/probe-output-switch.ps1` confirms by re-selecting the current default. So the feature
+works where there is something to work on, and its failure path is not hypothetical: an RDP
+session exercises it on the first press.
+
+**The playing direction of the opening rule is still unmeasured**, for the third run in a row,
+because the track was paused at the moment of the click each time.
+
+### A product defect the hardware found and no gate could
+
+**A drag wrote TWO seeks.** `IsMoveToPointEnabled` makes a press jump the thumb to the pointer
+and only then begin dragging it, so the press raised `ValueChanged` with `_dragging` still false.
+The page committed a seek to the press point and then a second one to the release point: a drag
+from 10 per cent to 75 per cent moved Spotify to 8 per cent and then moved it again, which is
+exactly the scrubbing the design says it avoids. The commit now requires the left button to be up,
+so a pointer gesture is committed only by `DragCompleted`.
+
+The build, 559 tests, both lints and the renders were all green with that defect in place. It
+needed a drag on a real source.
+
+### Two instrument defects, both this script's own
+
+**3. The opening-page expectation was stale by construction.** It came from the SMTC snapshot read
+before Plith was even started, and on the 02:53 run a person pressed play in between: the product
+opened the media page, correctly, and the script called it a failure. The state is re-read at the
+click now. This is defect 6 of `drive-shelf-pair.ps1` in a new place, which makes it the second
+time on this branch that state read long before a press was used to judge that press.
+
+**4. The seek check waited for the position to change, then read it.** With two writes in flight
+that caught the wrong one, reporting 15s against a target of 137s and pointing at the product
+next to a real product defect with the same symptom. It waits for the value it is asserting on
+now.
+
+**5. `Get-Element` was never copied into this script.** The plan said to copy it from
+`drive-shelf-pair.ps1` and listed it by name; the first picker run died on the missing function
+after doing its work. Copied.
+
+### What the renders found
+
+**The cells were labelled with the endpoint name and two of them read identically.** In a 155 DIP
+cell at 11 px, "Hoparlor (Steam Streaming Speakers)" and "Hoparlor (Steam Streaming Microphone)"
+both trim to "Hoparlor (Steam Streaming". Task 1 had just fixed exactly this collision in the
+strings, and the cell width undid it in the pixels. Core Audio reports a second name per endpoint,
+the device description, which is shorter and distinct here: the cells use it where it is unique
+and fall back to the endpoint name where it is not, which is the same set-property rule
+`AudioLabel.ShortenAll` already applies. See `widget-media-picker.png`.
+
+That is a measured property of the data rather than the "distinguishing token" heuristic the spec
+refused, and it is worth noting that the refusal held: nothing here guesses which words in a
+device name matter.
+
+### The label collision this work started from
+
+`AudioLabel.Shorten` keeps the adapter's first two words, so on this machine two endpoints
+shortened to the same string and **the Settings endpoint combo box had been showing two identical
+rows since it was written**. Fixed where the list is built, because uniqueness is a property of
+the set. Measured before and after on the real machine.
