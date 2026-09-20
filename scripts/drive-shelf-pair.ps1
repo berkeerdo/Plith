@@ -21,8 +21,9 @@
 # window the person had open.
 #
 # ------------------------------------------------------------------------------------------
-# THE FOUR INSTRUMENT DEFECTS. The first three are drive-shelf.ps1's and are repeated because
-# they are properties of this machine rather than of that file. The fourth was found here.
+# THE FIVE INSTRUMENT DEFECTS. The first three are drive-shelf.ps1's and are repeated because
+# they are properties of this machine rather than of that file. The fourth and fifth were found
+# here.
 #
 #   1. PowerShell assigns to a COPY when the target is a field of a nested value type. Every
 #      `$i.u.mi.dwFlags = ...` is silently discarded and SendInput receives an all-zero
@@ -49,9 +50,29 @@
 #      Assert-InputWorks below refuses to measure anything until a full button round trip has
 #      been accepted. It is a precondition and not a guarantee: the block can return mid-run,
 #      and when it does every call throws rather than returning a wrong answer quietly.
+#
+#   5. A PERSON USING THE MOUSE BREAKS NO CALL AND RUINS EVERY MEASUREMENT. Measured on
+#      2026-09-19: SetCursorPos lands exactly, every time, read back immediately - and a hand on
+#      the mouse moves the pointer away again within 200 ms, ~4000 px of drift in six seconds
+#      against 0 px on an idle machine. Nothing fails. No error is returned. The press simply
+#      happens somewhere else, and whatever was under the pointer gets reported as a verdict
+#      about the shelf. This is the one defect here that is silent by nature, which makes it
+#      the worst of the five: defect 4 at least shouts. Assert-InputWorks samples the pointer
+#      for one second before the run and refuses to start if anything else is driving it, and
+#      Move-Pointer re-checks arrival before every press so the mid-run case is loud too.
+#      THE USUAL CULPRIT IS NOT A HAND. Measured twice on 2026-09-19, the thing holding the
+#      pointer was a GAME - an Unreal client covering the monitor at 2560x1440 - whose mouse
+#      capture re-centres the cursor, which is why the pointer kept ending on exactly 1280,720,
+#      the precise centre of the screen. A round-numbered resting position is the tell. That
+#      case fails precondition 3 at the same time and has a different remedy (close the game,
+#      not let go of the mouse), so the message names the foreground window and says which.
+#      It also cost this file a misdiagnosis worth keeping: the old check slept 200 ms and then
+#      read the cursor once, so it blamed "the pointer did not move" - pointing at defect 1,
+#      which has nothing to do with it - for a pointer that had moved perfectly and then been
+#      shoved aside. Two causes, opposite remedies, one message. They are separate now.
 # ------------------------------------------------------------------------------------------
 #
-# THREE PRECONDITIONS, each of which produced a wasted run before it was written down:
+# FOUR PRECONDITIONS, each of which produced a wasted run before it was written down:
 #
 #   1. THE SESSION MUST BE CONNECTED. A disconnected or locked session has no desktop, and
 #      BitBlt fails for any window in it. `qwinsta` must show this session Active.
@@ -65,6 +86,9 @@
 #      the foreground. It does NOT minimise anything belonging to the person: a fullscreen game
 #      that keeps reclaiming the foreground is reported as a precondition failure instead, which
 #      is the honest answer.
+#
+#   4. THE POINTER MUST BE FREE. This script drives the real pointer and cannot share it with a
+#      person. See defect 5. A run takes about a minute; hands off the mouse for that minute.
 
 [CmdletBinding()]
 param(
@@ -223,6 +247,15 @@ function Find-ShelfWindow {
 # name-only search returned a text run in place of a tile once already.
 function Get-Element {
     param($Hwnd, [string]$Name, [string]$Type = 'Custom')
+    # Find-ShelfWindow returns $null when the shelf is not up, and `$shelf.Hwnd` on that $null
+    # arrives here as $null too. [IntPtr]$null then fails with "Cannot convert null to type
+    # System.IntPtr" - a cast error that names no window, no step and no control, and which
+    # cost a whole run on 2026-09-20 before this said so out loud.
+    if ($null -eq $Hwnd) {
+        throw ("Get-Element was asked for '$Name' with a NULL window handle. The window it " +
+               "belongs to was never found - for the shelf that means Find-ShelfWindow " +
+               "returned nothing, so the shelf had closed or never opened.")
+    }
     $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
     $byName = New-Object System.Windows.Automation.PropertyCondition(
         [System.Windows.Automation.AutomationElement]::NameProperty, $Name)
@@ -246,6 +279,9 @@ function Get-Element {
 
 function Get-Names {
     param($Hwnd)
+    if ($null -eq $Hwnd) {
+        throw 'Get-Names was given a NULL window handle: the window it belongs to was never found.'
+    }
     $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
     $all = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants,
                        [System.Windows.Automation.Condition]::TrueCondition)
@@ -259,6 +295,20 @@ function Move-Pointer {
     [PairInput]::Glide($X, $Y, ($X + 1), $Y, 2)
     [PairInput]::Glide(($X + 1), $Y, $X, $Y, 2)
     Start-Sleep -Milliseconds $Settle
+
+    # Defect 5's mid-run half. Assert-InputWorks proves nobody else owned the pointer at the
+    # START of the run; it cannot promise that for the minute that follows. Every caller below
+    # presses immediately after this returns, so a pointer that has been nudged elsewhere turns
+    # into a press on the wrong thing and a verdict about the wrong control - silently, with the
+    # product blameless, which is the one property this file's header says an instrument must
+    # never have. Checking arrival costs one call and makes that case loud instead.
+    $at = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$at)
+    if ([Math]::Abs($at.X - $X) -gt 2 -or [Math]::Abs($at.Y - $Y) -gt 2) {
+        throw ("The pointer was sent to $X,$Y and is at $($at.X),$($at.Y) instead. Something " +
+               "moved it during the $Settle ms settle - almost always a hand on the mouse. " +
+               "Nothing measured after this point would be about the shelf, so the run stops " +
+               "here rather than pressing whatever is under the pointer now.")
+    }
 }
 
 # A press, a glide well past SystemParameters.MinimumHorizontalDragDistance, and a release.
@@ -344,13 +394,70 @@ if ($session -notmatch 'Active') {
 
 function Assert-InputWorks {
     # Movement first, and proven by reading the cursor back rather than by a return value.
+    #
+    # DEFECT 5 LIVES HERE. This check used to sleep 200 ms and then read the cursor once, which
+    # folds two unrelated failures into one message. If the call did not take effect, the remedy
+    # is about DPI virtualization or a driver. If something else moved the pointer afterwards,
+    # the remedy is to stop touching the mouse. The old message said "the pointer did not move"
+    # for both, which is actively false in the second case - the pointer moved exactly where it
+    # was told and then a hand moved it away - and it points the reader at defect 1, which is
+    # not involved at all. Read back IMMEDIATELY to answer the first question; a sleep here
+    # measures the wrong thing, because anything else touching the pointer lands in the gap.
     $before = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$before)
     [PairInput]::Move(400, 400)
-    Start-Sleep -Milliseconds 200
-    $after = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$after)
-    if ([Math]::Abs($after.X - 400) -gt 2 -or [Math]::Abs($after.Y - 400) -gt 2) {
-        throw ("The pointer did not move (it is at $($after.X),$($after.Y), not 400,400). " +
-               "Measure nothing with a broken instrument - see defect 1 in this file's header.")
+    $landed = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$landed)
+    if ([Math]::Abs($landed.X - 400) -gt 2 -or [Math]::Abs($landed.Y - 400) -gt 2) {
+        throw ("SetCursorPos reported success but the pointer read back at " +
+               "$($landed.X),$($landed.Y) instead of 400,400. The call itself is not taking " +
+               "effect - suspect DPI virtualization of a non-aware host, or a driver rejecting " +
+               "it. This is NOT the anti-cheat case (defect 4 refuses SendInput and leaves " +
+               "SetCursorPos alone) and NOT defect 1.")
+    }
+
+    # Then: is anything ELSE driving the pointer? A person with a hand on the mouse does not
+    # break any call here, which is exactly why it has to be measured separately - every press
+    # below aims at a tile by coordinate, so a pointer that will not stay put produces verdicts
+    # about whatever happened to be under it. Measured on 2026-09-19: an idle machine drifts 0 px
+    # across six samples, and a hand on the mouse produced ~4000 px in six seconds.
+    $drift = 0
+    $prev = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$prev)
+    for ($s = 0; $s -lt 10; $s++) {
+        Start-Sleep -Milliseconds 100
+        $now = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$now)
+        $drift += [Math]::Abs($now.X - $prev.X) + [Math]::Abs($now.Y - $prev.Y)
+        $prev = $now
+    }
+    if ($drift -gt 4) {
+        # Name the culprit rather than guessing at it. The first version of this message said
+        # "almost always this is a person using the mouse", and on this machine the measured
+        # cause was twice a GAME holding the pointer - which has a different remedy and also
+        # fails precondition 3 at the same time. A pointer parked on the exact centre of the
+        # screen is the tell: that is mouse capture re-centring it, not a hand.
+        $h = [PairInput]::GetForegroundWindow()
+        $who = [uint32]0; [void][PairWin]::GetWindowThreadProcessId($h, [ref]$who)
+        $name = (Get-Process -Id $who -ErrorAction SilentlyContinue).ProcessName
+        $rect = New-Object 'PairInput+RECT'; [void][PairWin]::GetWindowRect($h, [ref]$rect)
+        $scr = [System.Windows.Forms.Screen]::PrimaryScreen.Bounds
+        $full = ($rect.Right - $rect.Left) -ge $scr.Width -and ($rect.Bottom - $rect.Top) -ge $scr.Height
+        $mid = "$([int]($scr.Width / 2)),$([int]($scr.Height / 2))"
+        throw ("The pointer is being moved by something else: $drift px of drift over one " +
+               "second while this script asked for none, ending at $($prev.X),$($prev.Y).`n" +
+               "    Foreground window: '$name'$(if ($full) { ', and it COVERS THE MONITOR' }).`n" +
+               "    $(if ($full) {
+                        "That is a game or a fullscreen app holding the pointer, and it fails " +
+                        "precondition 3 as well: OsdHost hides the notch outright while the " +
+                        "foreground covers the screen, so there would be nothing to click even " +
+                        "with the pointer free. Close it and re-run. (A pointer ending on or " +
+                        "near $mid, the exact centre of the screen, is mouse capture " +
+                        "re-centring it - that is a game, not a hand.)"
+                    } else {
+                        "That is usually a person with a hand on the mouse. Take your hand off " +
+                        "it for about a minute and re-run."
+                    })`n" +
+               "    Either way: every step below aims at a tile by coordinate and presses, so a " +
+               "run started now would press whatever the pointer had wandered onto and report " +
+               "the result as a verdict about the shelf. This script drives the real pointer " +
+               "and cannot share it.")
     }
 
     # Then a full button round trip, over an empty part of the desktop. Defect 4: LEFTUP and
@@ -402,6 +509,25 @@ function Stop-Stage {
 Get-Process -Name 'Plith*' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 Stop-Stage
 Start-Sleep -Milliseconds 800
+
+# VERIFY THE KILL, do not assume it. The line above silences its own errors, so a Plith that
+# refuses to die leaves no trace - and Plith takes a per-user single-instance Mutex in
+# Program.cs, so the instance this script starts next would exit IMMEDIATELY and silently.
+# What the script then reported was "The drop catcher never connected within 30 s", which sends
+# the reader to the pipe, the catcher and the ACL, none of which is at fault. Measured on
+# 2026-09-20: an instance from three hours earlier was still alive, and produced exactly that.
+$survivors = @(Get-Process -Name 'Plith*' -ErrorAction SilentlyContinue)
+for ($i = 0; $i -lt 10 -and $survivors.Count -gt 0; $i++) {
+    Start-Sleep -Milliseconds 300
+    $survivors = @(Get-Process -Name 'Plith*' -ErrorAction SilentlyContinue)
+}
+if ($survivors.Count -gt 0) {
+    throw ("A Plith process survived being stopped: " +
+           "$(($survivors | ForEach-Object { "$($_.ProcessName) (pid $($_.Id), started $($_.StartTime))" }) -join ', ').`n" +
+           "    Program.cs takes a per-user single-instance mutex, so the Plith this script " +
+           "starts would exit at once and every check below would measure the OLD instance, or " +
+           "nothing at all. Stop it by hand and re-run.")
+}
 
 $origin = New-Object 'PairInput+POINT'; [void][PairInput]::GetCursorPos([ref]$origin)
 $stage = Start-Process -FilePath 'powershell' `
@@ -456,12 +582,23 @@ try {
     # catcher has connected, and nothing below can work before it has.
     $deadline = [datetime]::UtcNow.AddSeconds(30)
     while ([datetime]::UtcNow -lt $deadline) {
+        # Did the Plith we just started die on us? The single-instance mutex makes a second
+        # instance exit at once, and waiting 30 s for a log line from a process that is already
+        # gone reports the CATCHER as the failure. Ask the process, not the log.
+        if ($proc.HasExited) {
+            throw ("The Plith this script started exited immediately (exit code " +
+                   "$($proc.ExitCode)). That is what a second instance does: Program.cs takes " +
+                   "a per-user single-instance mutex. Another Plith is running that the kill " +
+                   "above did not remove. Nothing here is about the drop catcher or the pipe.")
+        }
         $tail = @(Get-Content $plithLog -ErrorAction SilentlyContinue) | Select-Object -Skip $plithMark
         if ($tail -match 'Drop catcher connected') { break }
         Start-Sleep -Milliseconds 250
     }
     if (-not (@(Get-Content $plithLog) | Select-Object -Skip $plithMark | Select-String 'Drop catcher connected')) {
-        throw 'The drop catcher never connected within 30 s; the shelf cannot open. See plith.log.'
+        throw ("The drop catcher never connected within 30 s; the shelf cannot open. " +
+               "Plith itself is $(if ($proc.HasExited) { 'NOT running - it exited' } else { 'still running' }). " +
+               'See plith.log.')
     }
     'the pair is up and connected.'
 
@@ -517,12 +654,26 @@ try {
     Add-Verdict 'the shelf arrives holding the seeded stacks' `
         ($stacks.Count -eq 2 -and $stacks[0].Count -eq 2 -and $stacks[1].Count -eq 2) (Format-Shelf $stacks)
 
-    # THE TWO-TILE RULE, which shapes every step below and cost a run to learn. A stack column
-    # draws at most TWO tiles and folds the rest into one "+N" chip named "N more items in this
-    # stack". A third item in a stack is therefore not in the UIA tree at all, and asking for it
-    # by name reports "not found" - which reads exactly like a page that has lost its accessible
-    # names. The fixture is four files in two stacks of two, and the order of the steps keeps
-    # every tile a later step needs down to at most the second row of its column.
+    # THE OVERFLOW RULE, which shapes every step below and has now cost two runs to state
+    # correctly. A stack that overflows folds the remainder into one "+N" chip named "N more
+    # items in this stack", and a folded item is not in the UIA tree at all - asking for it by
+    # name reports "not found", which reads exactly like a page that has lost its accessible
+    # names.
+    #
+    # "AT MOST TWO TILES" IS THE WRONG RULE AND IS WHY THE SECOND RUN FAILED. The chip costs a
+    # SLOT, so the arithmetic in ShelfSurface.VisibleRowsShown is
+    #
+    #     stackCount > 2 ? 1 : stackCount        (VisibleRows = 2)
+    #
+    # A stack of two draws both tiles. A stack of THREE draws exactly ONE - not two - plus a
+    # "+2" chip. So the second row stops existing the moment a stack grows past two, and a step
+    # that aims at "the second tile of a three-item stack" is aiming at nothing. The previous
+    # version of this file said "alpha is its second tile and still drawn" directly above a
+    # three-item stack, and 3.6 and 3.4 both reported the product broken when the fixture was.
+    #
+    # The safe targets, then, are: any tile in a stack of one or two, and the FIRST tile of any
+    # stack whatever its size. The fixture is four files in two stacks of two, and the steps are
+    # ordered so every tile a later step needs is one of those.
     #
     # The steps also run in an order where each one's outcome is the next one's input, so the
     # expected shelf is computable at every point rather than re-seeded - which is not possible
@@ -545,27 +696,47 @@ try {
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '4-restacked.png' | Out-Null
 
     # --- 3.6 drag past the last stack starts a new one -------------------------------------------
-    # Stack 1 is now [charlie alpha bravo]; alpha is its second tile and still drawn.
+    # Stack 1 is now [charlie alpha bravo], which overflows: charlie is drawn, alpha and bravo
+    # are folded into a "+2" chip and are in no UIA tree. So the tile to drag is CHARLIE, the
+    # first one - see the overflow rule above. Dragging it out also un-overflows the column,
+    # which is what puts alpha and bravo back in the tree for 3.4 and 3.2 below.
+    #
+    # ShelfStore.Restack APPENDS when the target index equals the stack count, so a drag past
+    # the last column lands at the END - unlike NewStack(), which Insert(0)s and is why 3.4
+    # below sees its empty column announced as "Stack 1". The two orderings are deliberate and
+    # opposite; the assertions here and in 3.4 each match their own path.
     $shelf = Find-ShelfWindow
     $before = Read-Shelf
-    $alpha = Get-Element -Hwnd $shelf.Hwnd -Name 'alpha.txt'
-    if ($alpha) {
+    $dragged = Get-Element -Hwnd $shelf.Hwnd -Name 'charlie.txt'
+    if ($dragged) {
         # The empty area to the RIGHT of the last column, still inside the window so the pointer
         # never leaves the shelf and arms the leave timer.
-        Invoke-Drag -FromX $alpha.CX -FromY $alpha.CY `
+        Invoke-Drag -FromX $dragged.CX -FromY $dragged.CY `
                     -ToX ($shelf.X + $shelf.W - 26) -ToY ($shelf.Y + [int]($shelf.H / 2))
         $after = Read-Shelf
-        $grew = $after.Count -gt $before.Count -and (@($after | Select-Object -Last 1) -contains 'alpha.txt')
+        # INDEXED, not piped. Read-Shelf returns an array OF ARRAYS, and
+        # `@($after | Select-Object -Last 1)` does not reach into the last stack: Select-Object
+        # emits that inner array as a single object without enumerating it, so the result is a
+        # one-element array whose element IS an Object[], and `-contains 'charlie.txt'` compares
+        # a string against an array and is False for every possible shelf. Measured 2026-09-20:
+        # this assertion could never return True, so 3.6 failed while the product was doing
+        # exactly the right thing - the verdict line even printed the correct end state next to
+        # the word FAIL. $after[-1] hands back the inner array itself.
+        #
+        # The Where-Object forms in 3.1, 3.2, 3.4 and 3.5 are NOT affected: there $_ is bound to
+        # each inner array in turn, which is what -contains needs. Only this one was piped.
+        $grew = $after.Count -gt $before.Count -and ($after[-1] -contains 'charlie.txt')
         Add-Verdict '3.6 dragging past the last stack starts a new one' $grew `
             "before $(Format-Shelf $before) -> after $(Format-Shelf $after)"
     } else {
-        Add-Verdict '3.6 dragging past the last stack starts a new one' $false 'alpha.txt not in the UIA tree'
+        Add-Verdict '3.6 dragging past the last stack starts a new one' $false 'charlie.txt not in the UIA tree'
     }
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '5-new-stack-by-drag.png' | Out-Null
 
     # --- 3.4 the plus control makes a stack, and a drag lands in it -------------------------------
-    # bravo is now the second tile of stack 1 ([charlie bravo]), so its source stack survives the
-    # move and the stack count genuinely grows.
+    # 3.6 took charlie out of stack 1, so the shelf is [alpha bravo] [delta] [charlie] and every
+    # tile is drawn again: no stack holds more than two. bravo is the second tile of a two-item
+    # stack, so its source stack survives the move and the stack count genuinely grows.
     $shelf = Find-ShelfWindow
     $plus = Get-Element -Hwnd $shelf.Hwnd -Name 'Start a new stack' -Type Button
     if ($plus) {
@@ -686,20 +857,28 @@ finally {
     if ($savedShelf -ne $null) { Set-Content -Path $storePath -Value $savedShelf -NoNewline -Encoding UTF8 }
     else { Remove-Item $storePath -Force -ErrorAction SilentlyContinue }
     [PairInput]::Move($origin.X, $origin.Y)
+
+    # THE REPORT LIVES INSIDE THE FINALLY, and that is the whole point. It used to sit after it,
+    # so any exception raised in the try - one null window handle was enough - propagated
+    # straight past every accumulated verdict, both process logs and the path to the shots, and
+    # printed none of them. A run that got most of the way through reported one line about an
+    # IntPtr cast and nothing about what had already passed, which is indistinguishable from a
+    # run that never started. Measured on 2026-09-20. The evidence existed; the script threw it
+    # away. Now the report prints on every path and the exception surfaces after it.
+    ''
+    '=== verdicts ==='
+    $script:verdicts
+    ''
+    '--- plith log for this run ---'
+    @(Get-Content $plithLog -ErrorAction SilentlyContinue) | Select-Object -Skip $plithMark |
+        Where-Object { $_ -match 'Shelf|Widget page|Notch' } | ForEach-Object { "  $_" }
+    '--- catcher log for this run ---'
+    @(Get-Content $catcherLog -ErrorAction SilentlyContinue) | Select-Object -Skip $catcherMark |
+        ForEach-Object { "  $_" }
+    ''
+    "Shots in $OutDir. LOOK AT THEM: shelf.txt says which paths are where, and never says the " +
+    "surface looked right while saying it."
 }
 
-''
-'=== verdicts ==='
-$script:verdicts
-''
-'--- plith log for this run ---'
-@(Get-Content $plithLog -ErrorAction SilentlyContinue) | Select-Object -Skip $plithMark |
-    Where-Object { $_ -match 'Shelf|Widget page|Notch' } | ForEach-Object { "  $_" }
-'--- catcher log for this run ---'
-@(Get-Content $catcherLog -ErrorAction SilentlyContinue) | Select-Object -Skip $catcherMark |
-    ForEach-Object { "  $_" }
-''
-"Shots in $OutDir. LOOK AT THEM: shelf.txt says which paths are where, and never says the " +
-"surface looked right while saying it."
 if ($script:failed -gt 0) { throw "$($script:failed) shelf check(s) FAILED." }
 'Done.'
