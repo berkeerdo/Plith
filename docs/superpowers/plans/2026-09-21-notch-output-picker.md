@@ -468,7 +468,7 @@ audio moving."
   - `static IReadOnlyList<OutputChoice> OutputPickerModel.Cells(IReadOnlyList<WindowsAudioEndpointInfo> endpoints, string currentId, int capacity)`
   - `NotchGeometry.OutputPickerColumns`, `OutputPickerRows`, `OutputPickerCapacity`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Create `tests/Plith.Tests/OutputPickerModelTests.cs`:
 
@@ -590,12 +590,12 @@ Append to `tests/Plith.Tests/NotchGeometryTests.cs`:
     }
 ```
 
-- [ ] **Step 2: Run the tests to verify they fail**
+- [x] **Step 2: Run the tests to verify they fail**
 
 Run: `dotnet test tests/Plith.Tests --filter "OutputPickerModelTests|NotchGeometryTests"`
 Expected: FAIL to compile.
 
-- [ ] **Step 3: Write the geometry**
+- [x] **Step 3: Write the geometry**
 
 In `src/Plith/Views/Presentation/NotchGeometry.cs`, beside the shelf's grid constants:
 
@@ -618,7 +618,7 @@ In `src/Plith/Views/Presentation/NotchGeometry.cs`, beside the shelf's grid cons
     public const int OutputPickerCapacity = OutputPickerColumns * OutputPickerRows;
 ```
 
-- [ ] **Step 4: Write the model**
+- [x] **Step 4: Write the model**
 
 Create `src/Plith/Services/OutputPickerModel.cs`:
 
@@ -684,12 +684,12 @@ public static class OutputPickerModel
 }
 ```
 
-- [ ] **Step 5: Run the tests to verify they pass**
+- [x] **Step 5: Run the tests to verify they pass**
 
 Run: `dotnet test`
 Expected: 551 passing (543 plus 8).
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Services/OutputPickerModel.cs src/Plith/Views/Presentation/NotchGeometry.cs \

@@ -334,4 +334,14 @@ public class NotchGeometryTests
         Assert.True(NotchGeometry.ShelfFrameDip.Width >= row,
             $"frame {NotchGeometry.ShelfFrameDip.Width} is narrower than one row ({row})");
     }
+
+    [Fact]
+    public void OutputPickerCapacityIsTheProductOfItsGrid()
+    {
+        // Defined as the product for the same reason ShelfCapacity is: a literal beside a grid is
+        // free to stop matching it, and this is the number that decides whether a device is drawn
+        // at all.
+        Assert.Equal(NotchGeometry.OutputPickerColumns * NotchGeometry.OutputPickerRows,
+                     NotchGeometry.OutputPickerCapacity);
+    }
 }

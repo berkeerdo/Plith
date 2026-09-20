@@ -104,6 +104,30 @@ public static class NotchGeometry
     /// <summary>One tile, square, in DIP.</summary>
     public const double ShelfTileSize = 64;
 
+    /// <summary>Columns in the output picker's grid.</summary>
+    public const int OutputPickerColumns = 2;
+
+    /// <summary>Rows in the output picker's grid.</summary>
+    public const int OutputPickerRows = 3;
+
+    /// <summary>
+    /// How many cells the output picker draws, which is also how many outputs it can show.
+    ///
+    /// The product of the grid rather than a literal, exactly like <see cref="ShelfCapacity"/>:
+    /// the number that decides whether a device appears at all must not be free to drift from
+    /// the grid that draws it. With more endpoints than this, the last cell becomes a door to
+    /// Windows' own sound settings rather than a silent fold, because a folded cell is in no UIA
+    /// tree and so is invisible to a screen reader and reachable by no key.
+    /// </summary>
+    public const int OutputPickerCapacity = OutputPickerColumns * OutputPickerRows;
+
+    /// <summary>One output cell's height, in DIP. Three of them plus two gaps and the picker's
+    /// header fill the same 73 DIP content band every other page gets.</summary>
+    public const double OutputPickerCellHeight = 16;
+
+    /// <summary>The gap between output cells, in DIP, horizontally and vertically.</summary>
+    public const double OutputPickerCellGap = 4;
+
     /// <summary>The gap between tiles, in DIP, horizontally and vertically.</summary>
     public const double ShelfGap = 8;
 
