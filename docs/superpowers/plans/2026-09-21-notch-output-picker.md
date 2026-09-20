@@ -258,7 +258,7 @@ undocumented COM interface on the live machine. Its verification is the probe in
 the same trick the roadmap records for the earlier measurement: re-select the endpoint that is
 ALREADY default, so the call path is proved without changing what anyone is listening to.
 
-- [ ] **Step 1: Write the interop**
+- [x] **Step 1: Write the interop**
 
 Create `src/Plith/Services/OutputDeviceSwitcher.cs`:
 
@@ -368,12 +368,12 @@ public static class OutputDeviceSwitcher
 Check `DiagnosticLog`'s actual method names before writing this (`Info` and `Warn` are used
 elsewhere in `Services`; match what is there) and `ExceptionText`'s helper name the same way.
 
-- [ ] **Step 2: Build**
+- [x] **Step 2: Build**
 
 Run: `dotnet build`
 Expected: succeeds, 0 warnings for Plith.
 
-- [ ] **Step 3: Write the probe and run it**
+- [x] **Step 3: Write the probe and run it**
 
 Create `scripts/probe-output-switch.ps1`. It reads the CURRENT default through NAudio, calls
 `TrySetDefault` with that same id, and reports. A no-op switch proves the call path without
@@ -432,7 +432,7 @@ If it returns false, read the `Warn` line the switcher logs. The two likely caus
 not being registered (a stripped SKU) and the interface GUID having changed; both are reportable
 facts, not things to work around by guessing another GUID.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add src/Plith/Services/OutputDeviceSwitcher.cs scripts/probe-output-switch.ps1
