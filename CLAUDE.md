@@ -148,6 +148,24 @@ flat list. §3.4, §3.5 and §3.6 describe behaviour that would no longer exist;
 §3.3 survive. The `+N` overflow chip goes with the stacks, which also closes the accessibility
 gap where a folded tile is in no UIA tree and reachable by no key.
 
+Two decisions taken with it, recorded here because nothing else has them yet and the next
+session would otherwise re-derive or contradict them:
+
+1. **Nothing is ever hidden behind a count.** Tiles wrap into rows and the surface scrolls past
+   what fits. No file is unreachable by key or absent from the UIA tree, which is what the `+N`
+   chip cost.
+2. **The height is chosen once, when the shelf opens, and does not change while it is open**
+   (ceiling of three rows, scroll beyond). The shelf hugs its contents, so two files do not sit
+   in a large empty pane, but the geometry is negotiated once. That matters because the window
+   is sized over the pipe by Plith while it stands the notch aside, so resizing per item would
+   spread an animation across two processes, and every cross-process coordination on this branch
+   has cost several runs to get right. Removing a file reflows the content and leaves the window
+   alone.
+
+Open, and NOT yet decided: the item cap (`MaxItems` is 20 today), whether the order is
+newest-first only or hand-reorderable now that the drag gesture is free, and whether the notch
+page (`ShelfWidget`, which has its own overflow tile) changes with it.
+
 > **This file's Status section is SPLIT across two branches, and neither half is right on its
 > own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
 > unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected
