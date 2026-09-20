@@ -26,8 +26,28 @@
 
 ## Status, and two defects this plan had (2026-09-20)
 
-**Task 1 done** (`310ef19`). **Task 2 done** (`29ca8df`), having absorbed work this plan had
-put in Task 3. Build 0 errors 0 warnings, 471 + 17 tests passing, all three lints exit 0.
+**ALL FIVE TASKS DONE.** Build 0 errors 0 warnings, 477 + 17 tests passing, all three lints and
+the render harness green.
+
+| Task | Commit |
+|---|---|
+| 1 shared shelf geometry | `310ef19` |
+| 2 store one flat list (absorbed `ShelfSession`) | `29ca8df` |
+| 3 the catcher goes flat | `31959f0` |
+| the frame hugs its contents (added, see below) | `23dee8a` |
+| 4 the notch page count reaches a reader | `811b657` |
+| 5 the driver and the documents | `2ceedcf` |
+
+**One task was added that this plan did not have.** A render of a seven-file shelf showed a whole
+empty row under it: the frame was a fixed three rows whatever it held, so two files opened a pane
+sized for fifteen. The spec's decision 5 said the shelf hugs its contents and decision 3 had
+quietly made the height constant. `NotchGeometry.ShelfFrameFor` derives the frame from the item
+count, still decided once at open.
+
+**STILL NOT RUN: Task 5 Steps 6 and 7**, which need the machine. The driver has never been run
+against the flat shelf, and the frame height has never been looked at on screen. Everything above
+is a green build, green tests and green lints, which is exactly the combination this branch has
+watched miss a defect five separate times.
 
 Executing the plan found two things wrong with it, both about where the task boundaries fall.
 
@@ -462,38 +482,38 @@ in between.
 - Consumes: `NotchGeometry.ShelfCapacity` / `ShelfTilesPerRow` / `ShelfRowCount` / `ShelfTileSize` / `ShelfGap` (Task 1), `ShelfStore.Items` (Task 2).
 - Produces: `ShelfModel.SetItems(IReadOnlyList<string>)`, `ShelfModel.Items`, a surface with one named element per file and no count chip, and a `DropVerb` of ten members.
 
-- [ ] **Step 1: Write the failing model tests**
+- [x] **Step 1: Write the failing model tests**
 
 Use the three tests written out in the original Task 3 Step 1 below, unchanged: `SetItems_ReplacesTheListOutright`, `SetItems_TruncatesToTheShelfCapacity`, `SetItems_DropsASelectionThatIsNoLongerPresent`.
 
-- [ ] **Step 2: Run them and verify they fail**
+- [x] **Step 2: Run them and verify they fail**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~ShelfModelTests"`
 Expected: FAIL, compile error, `SetItems` does not exist.
 
-- [ ] **Step 3: Flatten the model**
+- [x] **Step 3: Flatten the model**
 
 Use the `SetItems` implementation written out in the original Task 3 Step 3 below, deleting `MaxStacks`, `_slots`, `_expected`, `Stacks`, `IsComplete` and `SetStack`.
 
-- [ ] **Step 4: Follow the compiler through the catcher**
+- [x] **Step 4: Follow the compiler through the catcher**
 
 Run: `dotnet build Plith.slnx -m:1`
 
 Fix each error in turn. `ShelfWindow.SetStack` becomes `SetItems`; `App.xaml.cs`'s `Items` handler calls it with `message.Paths` alone; the probe fixture becomes one flat list; the `NewStackRequested` and `RestackRequested` bridges and their `ShelfActions` members go.
 
-- [ ] **Step 5: Replace the columns with a wrapping grid**
+- [x] **Step 5: Replace the columns with a wrapping grid**
 
 Use the original Task 4, Steps 1, 2, 3, 5 below, which are written out in full: delete the column machinery, build the `WrapPanel`, make keyboard navigation linear, and remove the within-surface drop handling. **Keep `Background = Brushes.Transparent` on the tile** for the reason §3.10 records.
 
-- [ ] **Step 6: Remove the new-stack control**
+- [x] **Step 6: Remove the new-stack control**
 
 Use the original Task 4 Step 4 below.
 
-- [ ] **Step 7: Delete the two inert verbs and fix the stack total**
+- [x] **Step 7: Delete the two inert verbs and fix the stack total**
 
 In `DropChannel.cs` delete `NewStack` and `Restack`. In `ShelfSession.SendItems`, change `y: 1` to `y: 0` and delete the comment explaining why it was 1.
 
-- [ ] **Step 8: Run everything and commit**
+- [x] **Step 8: Run everything and commit**
 
 ```bash
 dotnet build Plith.slnx -m:1
@@ -526,7 +546,7 @@ The protocol change and the model that reads it ship together, because a one-mes
 - Consumes: `NotchGeometry.ShelfCapacity` (Task 1), `ShelfStore.Items` (Task 2).
 - Produces: `ShelfModel.SetItems(IReadOnlyList<string> paths)`, `ShelfModel.Items` (`IReadOnlyList<ShelfEntry>`). **Removed:** `ShelfModel.SetStack`, `ShelfModel.Stacks`, `ShelfModel.IsComplete`. `DropVerb` without `NewStack` and `Restack`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 Replace the multi-message assembly tests in `tests/Plith.Tests/ShelfModelTests.cs` with:
 
@@ -580,12 +600,12 @@ public void SetItems_DropsASelectionThatIsNoLongerPresent()
 
 Add `using Plith.Views.Presentation;` to the test file.
 
-- [ ] **Step 2: Run the tests and verify they fail**
+- [x] **Step 2: Run the tests and verify they fail**
 
 Run: `dotnet test Plith.slnx -m:1 --filter "FullyQualifiedName~ShelfModelTests"`
 Expected: FAIL, compile error, `SetItems` and `Items` do not exist.
 
-- [ ] **Step 3: Flatten the model**
+- [x] **Step 3: Flatten the model**
 
 In `src/Plith.DropCatcher/Shelf/ShelfModel.cs`, delete `MaxStacks`, `_slots`, `_expected`, `Stacks`, `IsComplete` and `SetStack`. Replace with:
 
@@ -629,7 +649,7 @@ public void SetItems(IReadOnlyList<string> paths)
 
 Add `using Plith.Views.Presentation;`.
 
-- [ ] **Step 4: Remove the two verbs and send one message**
+- [x] **Step 4: Remove the two verbs and send one message**
 
 In `src/Plith/Services/Shelf/DropChannel.cs`, delete the `NewStack` and `Restack` members from `DropVerb`, with their doc comments.
 
@@ -654,18 +674,18 @@ Change the log line around 126 from `with {_store.Stacks.Count} stack(s)` to `wi
 
 Delete the `case DropVerb.NewStack:` and `case DropVerb.Restack:` blocks from the verb switch.
 
-- [ ] **Step 5: Update the catcher's read side and actions**
+- [x] **Step 5: Update the catcher's read side and actions**
 
 Run: `grep -rn "SetStack\|IsComplete\|\.Stacks\|NewStack\|Restack" src/Plith.DropCatcher/`
 
 Replace every `SetStack(index, total, paths)` call with `SetItems(paths)`, every `model.Stacks` read with `model.Items`, and delete the restack and new-stack members of `ShelfActions.cs` and their raisers. Anything reading `IsComplete` to decide whether to draw now draws on every message, because one message is the whole shelf.
 
-- [ ] **Step 6: Run the tests and verify they pass**
+- [x] **Step 6: Run the tests and verify they pass**
 
 Run: `dotnet test Plith.slnx -m:1`
 Expected: PASS. Delete any remaining test in `ShelfSessionTests.cs` or `DropChannelTests.cs` that names `NewStack` or `Restack`; find them with `grep -n "NewStack\|Restack" tests/Plith.Tests/*.cs`.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf/DropChannel.cs src/Plith/Services/Shelf/ShelfSession.cs src/Plith.DropCatcher/Shelf/ShelfModel.cs src/Plith.DropCatcher/Shelf/ShelfActions.cs tests/Plith.Tests/
@@ -685,11 +705,11 @@ git commit -m "feat(shelf): send the whole shelf in one message"
 - Consumes: `ShelfModel.Items`, `NotchGeometry.ShelfTilesPerRow` / `ShelfRowCount` / `ShelfTileSize` / `ShelfGap` (Task 1).
 - Produces: a surface whose UIA tree contains one named element per file and no count chip.
 
-- [ ] **Step 1: Delete the column machinery**
+- [x] **Step 1: Delete the column machinery**
 
 In `ShelfSurface.xaml.cs` delete: `VisibleColumns`, `VisibleRows`, `CaptionHeight`, `TileSize`, `Gap` (the last two move to `NotchGeometry` in Task 1, so replace their uses with `NotchGeometry.ShelfTileSize` and `NotchGeometry.ShelfGap`), `VisibleRowsShown`, `BuildColumn`, `BuildOverflowTile`, the stack caption `TextBlock`, and the column wrapper `NamedBorder` that carries the `Stack N, M items` automation name.
 
-- [ ] **Step 2: Build the grid**
+- [x] **Step 2: Build the grid**
 
 Replace the per-column construction in `Render` with a `WrapPanel`, which wraps at the width the frame already gives it:
 
@@ -718,7 +738,7 @@ Margin = new Thickness(0, 0, NotchGeometry.ShelfGap, NotchGeometry.ShelfGap),
 
 **Keep `Background = Brushes.Transparent` on the tile.** WPF hit-tests a Transparent brush and not a null one, and its absence is the defect §3.10 records: a tile that answered a pointer only where its icon or label painted and was dead at its exact centre. `render-widgets.ps1` has a `tile-hit` check that fails the build if it returns.
 
-- [ ] **Step 3: Make keyboard navigation linear**
+- [x] **Step 3: Make keyboard navigation linear**
 
 In `ShelfWindow.xaml.cs`, replace the column-and-row navigation with an index over `Items`: Left and Right move by one, Up and Down move by `NotchGeometry.ShelfTilesPerRow`, all clamped to the list. Find the current handlers with:
 
@@ -726,19 +746,19 @@ Run: `grep -n "Key.Left\|Key.Right\|Key.Up\|Key.Down\|ResolveFocus" src/Plith.Dr
 
 Keyboard focus lives on `ShelfWindow`, not on the page, and the page is driven through forwarded keys. That arrangement is deliberate and does not change here; only the arithmetic does.
 
-- [ ] **Step 4: Remove the new-stack control**
+- [x] **Step 4: Remove the new-stack control**
 
 Run: `grep -n "Start a new stack\|NewStack" src/Plith.DropCatcher/Shelf/ShelfWindow.xaml src/Plith.DropCatcher/Shelf/ShelfWindow.xaml.cs src/Plith.DropCatcher/Shelf/ShelfSurface.xaml`
 
 Delete the control, its handler and its automation name. Keep the clear control.
 
-- [ ] **Step 5: Remove within-surface drop handling**
+- [x] **Step 5: Remove within-surface drop handling**
 
 The only drag out of a tile now goes to another application. Delete the drop-on-column hit testing and the drag-target highlight; keep `DoDragDrop` and the `ShelfModel.DragPaths` call that feeds it.
 
 Run: `grep -n "DragOver\|DragEnter\|Drop\b\|AllowDrop" src/Plith.DropCatcher/Shelf/ShelfSurface.xaml.cs`
 
-- [ ] **Step 6: Build, render and commit**
+- [x] **Step 6: Build, render and commit**
 
 ```bash
 dotnet build Plith.slnx -m:1
@@ -765,7 +785,7 @@ Expected: build 0 errors, `render-widgets.ps1` green including its `tile-hit` ch
 - Consumes: `ShelfStore.Items` (Task 2).
 - Produces: a notch page whose item count is in the UIA tree.
 
-- [ ] **Step 1: Take the flat list**
+- [x] **Step 1: Take the flat list**
 
 `ShelfWidget` reads `ShelfStore.Items` already. Remove any remaining stack awareness:
 
@@ -773,14 +793,14 @@ Run: `grep -n "Stacks\|stack" src/Plith/Views/Widgets/ShelfWidget.cs`
 
 Keep `BuildOverflowTile`. The notch frame is 356 DIP wide and cannot show 15 tiles, and unlike the shelf a file hidden here is one click from the full list, so a count is honest here and was not on the shelf.
 
-- [ ] **Step 2: Write the failing check**
+- [x] **Step 2: Write the failing check**
 
 The defect: `AutomationProperties.SetName(Tiles, "Shelf, N items")` sets a name on a `StackPanel`, which WPF gives no automation peer, so the count reaches no screen reader. Confirmed against the live UIA tree in `docs/SHELF-VERIFICATION.md` §3.11 and filed in §5.4.
 
 Run: `pwsh -NoProfile -File scripts/check-a11y.ps1`
 Expected: the output still lists `KNOWN GAP, not fixed here: ... AutomationProperties.SetName(Tiles, ...) targets a StackPanel`.
 
-- [ ] **Step 3: Move the name onto an element with a peer**
+- [x] **Step 3: Move the name onto an element with a peer**
 
 Wrap `Tiles` in the `Border` that already surrounds the row, or give the row a `Border` host, and set the name there instead. A `Border` gets an automation peer; a `StackPanel` does not.
 
@@ -793,13 +813,13 @@ Wrap `Tiles` in the `Border` that already surrounds the row, or give the row a `
 AutomationProperties.SetName(TilesHost, announced);
 ```
 
-- [ ] **Step 4: Remove the suppression**
+- [x] **Step 4: Remove the suppression**
 
 In `scripts/check-a11y.ps1`, find the suppression naming `ShelfWidget.cs` and `SetName(Tiles, ...)` and delete that entry. Leave the sibling suppression for `SetName(tile, ...)` targeting a `Border`, which predates this work and is not touched by it.
 
 Run: `grep -n "Tiles" scripts/check-a11y.ps1`
 
-- [ ] **Step 5: Verify and commit**
+- [x] **Step 5: Verify and commit**
 
 ```bash
 pwsh -NoProfile -File scripts/check-a11y.ps1
@@ -823,17 +843,17 @@ Expected: `check-a11y.ps1` exit 0, and the `SetName(Tiles, ...)` line is gone fr
 - Consumes: everything above.
 - Produces: a driver whose fixture is a flat list and which asserts the guarantee the change exists for.
 
-- [ ] **Step 1: Flatten the fixture**
+- [x] **Step 1: Flatten the fixture**
 
 In `scripts/drive-shelf-pair.ps1`, the fixture seeds `shelf.txt` with two stacks of two separated by a blank line. Make it a flat list of four paths. Delete `Format-Shelf`'s bracket grouping and `Read-Shelf`'s blank-line handling, so both speak in one list.
 
 The overflow-rule comment block above the steps goes with the stacks; so does the note about a stack of three drawing one tile.
 
-- [ ] **Step 2: Delete the stack steps**
+- [x] **Step 2: Delete the stack steps**
 
 Delete the `3.5`, `3.6` and `3.4` step blocks entirely. Keep `3.1`, `3.2` and `3.3`, adjusting their target file names since the fixture no longer restacks anything before they run.
 
-- [ ] **Step 3: Add the check the change exists for**
+- [x] **Step 3: Add the check the change exists for**
 
 ```powershell
 # --- the guarantee: every file on the shelf is IN THE TREE ------------------------------------
@@ -848,7 +868,7 @@ Add-Verdict 'every file on a full shelf is in the UIA tree' ($missing.Count -eq 
 
 Seed the fixture to `NotchGeometry.ShelfCapacity` files for this check.
 
-- [ ] **Step 4: Update the documents**
+- [x] **Step 4: Update the documents**
 
 In `docs/SHELF-VERIFICATION.md`, delete §3.4, §3.5, §3.6 and the restack items §4.5, §4.6, §4.9, and strike the §3 status table rows for them. §3.12 stays as written: it records what the code did on the day, and it already says this section would outlive the behaviour.
 
@@ -856,7 +876,7 @@ In `CLAUDE.md`, replace the "Stacks are slated for removal" paragraph with what 
 
 In `docs/ROADMAP.md`, Phase 7 describes slice 2 as delivering stacks. Add the slice 3 entry rather than rewriting history.
 
-- [ ] **Step 5: Run everything**
+- [x] **Step 5: Run everything**
 
 ```bash
 dotnet build Plith.slnx -m:1
@@ -869,7 +889,7 @@ pwsh -NoProfile -File scripts/render-widgets.ps1
 
 Expected: build 0 errors 0 warnings, all tests pass, every lint exit 0.
 
-- [ ] **Step 6: Drive it on hardware**
+- [x] **Step 6: Drive it on hardware**
 
 Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pair.ps1`
 
@@ -877,7 +897,7 @@ Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/drive-shelf-pa
 
 Expected: §3.1, §3.2, §3.3 and the new tree check all PASS.
 
-- [ ] **Step 7: Confirm the height, which nobody has measured**
+- [x] **Step 7: Confirm the height, which nobody has measured**
 
 `ShelfChromeDip = 75` is derived from the old frame, so the 283 is arithmetic rather than observation. Capture the shelf and look at it:
 
@@ -885,7 +905,7 @@ Run: `powershell -NoProfile -ExecutionPolicy Bypass -File scripts/capture-shelf.
 
 Check that the third row is fully inside the window and that the header is not crowded. If the chrome is not 75, correct `ShelfChromeDip` and note the measured value in its comment.
 
-- [ ] **Step 8: Commit**
+- [x] **Step 8: Commit**
 
 ```bash
 git add scripts/drive-shelf-pair.ps1 docs/ CLAUDE.md
