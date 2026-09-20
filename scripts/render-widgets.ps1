@@ -445,6 +445,65 @@ $emptySurface.Measure([Windows.Size]::new($emptyFrame.Width, [double]::PositiveI
 "  empty shelf wants $([Math]::Round($emptySurface.DesiredSize.Height,1)) DIP at $($emptyFrame.Width) wide; the frame gives $($emptyFrame.Height)"
 Save-Visual -Element $emptySurface -W $emptyFrame.Width -H $emptyFrame.Height -Name 'shelf-surface-empty'
 
+# What the empty card's parts actually measure to. A dashed outline that draws its top and bottom
+# but not its sides is a thing pixels can suggest and only the tree can settle.
+$emptyHost = [Windows.Controls.Border]::new()
+$emptyHost.Width = $emptyFrame.Width; $emptyHost.Height = $emptyFrame.Height
+$emptyHost.Child = $emptySurface
+$emptyHost.Measure([Windows.Size]::new($emptyFrame.Width, $emptyFrame.Height))
+$emptyHost.Arrange([Windows.Rect]::new(0, 0, $emptyFrame.Width, $emptyFrame.Height))
+$emptyHost.UpdateLayout()
+$rects = @(Find-VisualDescendants -Root $emptySurface -Predicate { param($n) $n -is [Windows.Shapes.Rectangle] })
+foreach ($r in $rects) {
+    $pt = $r.TranslatePoint([Windows.Point]::new(0,0), $emptyHost)
+    "  empty outline: $([Math]::Round($r.ActualWidth,1)) x $([Math]::Round($r.ActualHeight,1)) at $([Math]::Round($pt.X,1)),$([Math]::Round($pt.Y,1))  dash=$($r.StrokeDashArray -join ',')  thickness=$($r.StrokeThickness)"
+}
+
+# --- the empty card's outline must have ALL FOUR sides -----------------------------------------
+#
+# It had two. A Rectangle whose stroke straddles its own layout bounds loses the halves that fall
+# outside when the parent clips, and on this card the vertical pair went while the horizontal pair
+# survived. The element measured 352 x 136 the whole time, so nothing in the tree was wrong to
+# read; only the pixels were. Found by counting them, after the render was looked at and the
+# missing sides were noticed by eye and then twice mis-measured by probes that landed in the dash
+# gaps. Fixed with a 1 DIP inset so the stroke is wholly inside.
+#
+# This check counts lit pixels in a band over each side, which is the one way the defect is
+# visible at all: no build, no test and no other lint could see it.
+$emptyPng = Join-Path $OutDir 'shelf-surface-empty.png'
+$emptyBmp = [System.Drawing.Bitmap]::FromFile($emptyPng)
+try {
+    $sc = $emptyBmp.Width / $emptyFrame.Width
+    function Measure-Band([double]$x0, [double]$x1, [double]$y0, [double]$y1) {
+        $lit = 0
+        for ($x = [int]($x0 * $sc); $x -le [int]($x1 * $sc); $x++) {
+            for ($y = [int]($y0 * $sc); $y -le [int]($y1 * $sc); $y++) {
+                $c = $emptyBmp.GetPixel([Math]::Min($x, $emptyBmp.Width - 1), [Math]::Min($y, $emptyBmp.Height - 1))
+                if ($c.R + $c.G + $c.B -gt 130) { $lit++ }
+            }
+        }
+        $lit
+    }
+    $sides = [ordered]@{
+        left   = Measure-Band 14 22 70 180
+        right  = Measure-Band 362 370 70 180
+        top    = Measure-Band 20 360 55 62
+        bottom = Measure-Band 20 360 188 196
+    }
+    $dark = @($sides.Keys | Where-Object { $sides[$_] -lt 40 })
+    if ($dark.Count -gt 0) {
+        throw ("empty-outline check FAILED: the dashed box is missing its $($dark -join ' and ') " +
+               "side(s). Lit pixels per side: " +
+               (($sides.Keys | ForEach-Object { "$_=$($sides[$_])" }) -join ', ') +
+               ". A Rectangle stroke that straddles its own bounds loses the clipped halves; " +
+               "inset it so the stroke is wholly inside.")
+    }
+    "  empty-outline check passed: all four sides drawn (" +
+        (($sides.Keys | ForEach-Object { "$_=$($sides[$_])" }) -join ', ') + ")"
+}
+finally { $emptyBmp.Dispose() }
+
+
 # --- second pass, same instance, proving the cache-hit fast path rather than reading it ------
 #
 # Review found that BuildTile now probes ShellIcons' cache synchronously and, on a hit, builds

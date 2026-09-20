@@ -137,15 +137,24 @@ public static class NotchGeometry
     public static readonly Size ShelfFrameDip = ShelfFrameFor(ShelfCapacity);
 
     /// <summary>
-    /// Rows a shelf of <paramref name="itemCount"/> files needs, between one and the ceiling.
+    /// Rows a shelf of <paramref name="itemCount"/> files needs.
     ///
-    /// One at the bottom because an empty shelf still draws its empty-state card and needs
-    /// somewhere to draw it. The ceiling at the top because the count arrives from a caller:
-    /// ShelfStore enforces the cap, but this is the arithmetic that keeps the frame inside the
-    /// design even if it did not.
+    /// AN EMPTY SHELF GETS TWO, which is more than any single row of files needs and is the one
+    /// deliberate asymmetry here. The empty state is the only thing the shelf draws that is not a
+    /// tile: it carries an icon over a line of text, and in a single row the box around it is 352
+    /// by 64. That is the aspect ratio of a text input, and it read as a field to type in rather
+    /// than a place to drop onto, reported that way from the running build.
+    ///
+    /// Nobody watches it shrink, because the shelf cannot gain items while it is open (see
+    /// <see cref="ShelfFrameFor"/>); the next open is simply the right size for what is on it.
+    ///
+    /// The ceiling at the top because the count arrives from a caller: ShelfStore enforces the
+    /// cap, but this is the arithmetic that keeps the frame inside the design even if it did not.
     /// </summary>
     public static int ShelfRowsFor(int itemCount)
-        => Math.Clamp((int)Math.Ceiling(itemCount / (double)ShelfTilesPerRow), 1, ShelfRowCount);
+        => itemCount <= 0
+            ? Math.Min(2, ShelfRowCount)
+            : Math.Clamp((int)Math.Ceiling(itemCount / (double)ShelfTilesPerRow), 1, ShelfRowCount);
 
     /// <summary>
     /// The frame a shelf of <paramref name="itemCount"/> files opens at.

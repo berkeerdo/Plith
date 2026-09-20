@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using Plith.Views.Presentation;
 
 namespace Plith.Tests;
@@ -277,8 +277,18 @@ public class NotchGeometryTests
     [Fact]
     public void ShelfRowsFollowTheItemCount()
     {
-        // An empty shelf still needs a row: the empty-state card is drawn in it.
-        Assert.Equal(1, NotchGeometry.ShelfRowsFor(0));
+        // An empty shelf gets TWO rows, which is more than anything it holds needs.
+        //
+        // Not an oversight and not symmetry for its own sake: the empty state is the only thing
+        // the shelf ever draws that is not a tile. It carries an icon over a line of text, and at
+        // one row the box around it is 352 by 64, which is the aspect ratio of a text input. It
+        // read as a field to type in rather than a place to drop onto, reported exactly that way
+        // from the running build.
+        //
+        // The shelf cannot gain items while it is open (see ShelfFrameFor), so nobody ever
+        // watches it shrink from two rows to one; the next open is simply the right size for what
+        // is on it.
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(0));
         Assert.Equal(1, NotchGeometry.ShelfRowsFor(1));
         Assert.Equal(1, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow));
         Assert.Equal(2, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow + 1));
@@ -293,7 +303,7 @@ public class NotchGeometryTests
     public void ShelfRowsAreClampedToTheCeiling()
     {
         Assert.Equal(NotchGeometry.ShelfRowCount, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfCapacity + 40));
-        Assert.Equal(1, NotchGeometry.ShelfRowsFor(-3));
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(-3));
     }
 
     /// <summary>

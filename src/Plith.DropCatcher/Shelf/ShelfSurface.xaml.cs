@@ -62,6 +62,17 @@ public partial class ShelfSurface : UserControl
     private static readonly Geometry RemoveIcon = CreateIcon("M6,6 L18,18 M18,6 L6,18");
 
     /// <summary>
+    /// The empty shelf's glyph: an arrow coming down onto a line.
+    ///
+    /// Drawn geometry like every other icon in the product, which check-a11y.ps1 enforces. It
+    /// exists because a dashed box with only a sentence in it says "type here": the outline is
+    /// the same shape a text field has, and nothing inside it contradicted that. An arrow
+    /// landing on a surface says the one thing the sentence has to spell out.
+    /// </summary>
+    private static readonly Geometry DropHereIcon =
+        CreateIcon("M12,4 L12,14 M8,10.5 L12,14.5 L16,10.5 M5,18.5 L19,18.5");
+
+    /// <summary>
     /// The private clipboard format a tile drag carries its paths under, ALONGSIDE the ordinary
     /// <see cref="DataFormats.FileDrop"/> the same drag now also offers.
     ///
@@ -379,9 +390,30 @@ public partial class ShelfSurface : UserControl
                 TextAlignment = TextAlignment.Center,
                 Foreground = (Brush)FindResource("NotchInkMuted"),
                 HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
                 MaxWidth = 240,
             };
+
+            var glyph = new Path
+            {
+                Data = DropHereIcon,
+                Width = 26,
+                Height = 26,
+                Stretch = Stretch.Uniform,
+                Stroke = (Brush)FindResource("NotchInkMuted"),
+                StrokeThickness = 1.5,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                Margin = new Thickness(0, 0, 0, 10),
+            };
+
+            // The glyph ABOVE the line, not beside it. Beside it, the pair reads as one long
+            // horizontal run and keeps the text-field shape the outline already suggests;
+            // stacked, the block has a centre and the box has a reason to be tall.
+            var stack = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+            stack.Children.Add(glyph);
+            stack.Children.Add(message);
 
             var outline = new Rectangle
             {
@@ -391,23 +423,29 @@ public partial class ShelfSurface : UserControl
                 StrokeThickness = 1,
                 StrokeDashArray = [4, 4],
                 Fill = Brushes.Transparent,
+
+                // INSET BY ONE, and the box has only two sides without it.
+                //
+                // A Shape's stroke is centred on its geometry, so a Rectangle stretched to its
+                // layout bounds puts half the stroke outside them. Here the vertical halves were
+                // clipped away and the horizontal pair survived, leaving a dashed box with a top
+                // and a bottom and no sides. The element measured 352 x 136 throughout, so
+                // nothing in the tree read as wrong; only the pixels were, and render-widgets.ps1
+                // now counts them (see its empty-outline check, which fails without this line).
+                Margin = new Thickness(1),
             };
 
             var empty = new Grid
             {
                 Width = NotchGeometry.ShelfTilesPerRow * TileSize
                       + (NotchGeometry.ShelfTilesPerRow - 1) * Gap,
-                // ONE ROW tall, which is what an empty shelf's window is given.
-                //
-                // It used to be the full grid height, on the reasoning that the card should be
-                // the same size as a full one so the shape does not jump when the first file
-                // lands. That reasoning belonged to a fixed frame. The frame now hugs its
-                // contents (NotchGeometry.ShelfFrameFor), so an empty shelf opens one row tall
-                // and a card built for three rows would simply be clipped by it.
-                Height = TileSize,
+                // TWO rows, which is what NotchGeometry.ShelfRowsFor gives an empty shelf and why
+                // it gives it. At one row this box was 352 by 64, the aspect ratio of a text
+                // input, and it read as a field to type in.
+                Height = 2 * TileSize + Gap,
             };
             empty.Children.Add(outline);
-            empty.Children.Add(message);
+            empty.Children.Add(stack);
 
             Columns.Children.Add(empty);
             // Named on THIS control, not on Columns: Columns is a StackPanel, and WPF gives a

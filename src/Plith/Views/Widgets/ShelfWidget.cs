@@ -49,6 +49,20 @@ public partial class ShelfWidget : UserControl
     private const double TileHeight = 68;
 
     /// <summary>
+    /// The empty page's glyph: an arrow coming down onto a line, the same one the shelf surface
+    /// uses. A dashed box with only a sentence in it reads as a field to type in; an arrow
+    /// landing on a surface says the one thing the sentence has to spell out.
+    ///
+    /// INLINE here, beside the text, where the shelf surface stacks it above. The arrangement
+    /// differs because the proportions do: this box is 300 by 68 and its height is fixed on
+    /// purpose, so that an empty page occupies exactly what a full one does and the frame does
+    /// not resize between them. A stacked glyph does not fit in 68 and buying the room would
+    /// mean moving a frame shared by every widget page.
+    /// </summary>
+    private static readonly Geometry DropHereIcon =
+        Geometry.Parse("M12,4 L12,14 M8,10.5 L12,14.5 L16,10.5 M5,18.5 L19,18.5");
+
+    /// <summary>
     /// How long a "the shelf cannot open" sentence stays on the page.
     ///
     /// It has to go away on its own: the notch closes itself and comes back showing whatever was
@@ -227,8 +241,33 @@ public partial class ShelfWidget : UserControl
                 // of the page instead of hanging from its top edge.
                 Margin = new Thickness(0, 7, 0, 0),
             };
+            // The glyph and the line as one centred row.
+            var glyph = new System.Windows.Shapes.Path
+            {
+                Data = DropHereIcon,
+                Width = 20,
+                Height = 20,
+                Stretch = Stretch.Uniform,
+                Stroke = (Brush)FindResource("NotchInkMuted"),
+                StrokeThickness = 1.4,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                StrokeLineJoin = PenLineJoin.Round,
+                VerticalAlignment = VerticalAlignment.Center,
+                Margin = new Thickness(0, 0, 10, 0),
+            };
+
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+            row.Children.Add(glyph);
+            row.Children.Add(message);
+
             empty.Children.Add(outline);
-            empty.Children.Add(message);
+            empty.Children.Add(row);
 
             Tiles.Children.Add(empty);
 
