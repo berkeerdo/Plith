@@ -93,11 +93,19 @@ the cap is `ShelfStore`'s, in Plith, and the grid is `ShelfSurface`'s, in `Plith
 A constant copied into both is a constant that will disagree eventually, and the disagreement
 would be silent, showing up as a file that is on the shelf and not on the screen.
 
-The repository already has the mechanism. `Plith.DropCatcher.csproj` compiles three files
-straight out of Plith's tree with `<Compile Include="..\Plith\...">`: `DropChannel.cs`,
-`ShelfPaletteWire.cs` and `NotchGeometry.cs`. A small `ShelfGeometry.cs` joins them, holding
-`TilesPerRow = 5`, `RowCount = 3` and `Capacity = TilesPerRow * RowCount`. `ShelfStore.MaxItems`
-becomes `ShelfGeometry.Capacity`, and the surface builds its grid from the same two numbers.
+The repository already has the mechanism, and it already has the right file. `NotchGeometry.cs`
+is compiled into both projects with `<Compile Include="..\Plith\...">`, and it already holds
+`ShelfFrameDip = new(384, 224)` for exactly this reason. Its own comment says so: "both ends of
+the wire need it ... a third copy in a service on Plith's side would be the one free to drift."
+
+So the grid constants join it rather than starting a new file: `ShelfTilesPerRow = 5`,
+`ShelfRowCount = 3`, `ShelfCapacity = ShelfTilesPerRow * ShelfRowCount`, and `TileSize` and `Gap`
+move there from `ShelfSurface`. `ShelfStore.MaxItems` becomes `NotchGeometry.ShelfCapacity`.
+
+This also makes `ShelfFrameDip.Height` **derivable instead of typed**: the frame is the rows plus
+the gaps between them plus the chrome, so the height cannot silently stop matching the number of
+rows above it. That is the Geometry section's open risk, closed by construction rather than by
+remembering to re-measure.
 
 The invariant then holds **by construction, not by assertion**, and a unit test for it would
 be comparing a value to itself. What is worth testing is the store honouring the cap at all
@@ -127,6 +135,24 @@ a new run is a thing that actually happened on this branch (§3.12, defect 5).
 
 `ShelfSession` stops reporting stack counts in its log line.
 
+**The `Items` message collapses from many to one, and this is the largest simplification in the
+change.** Today `ShelfSession.SendStacks` sends one `Items` message per stack, carrying the
+stack's index in `X` and the total in `Y`, and `ShelfModel.SetStack` reassembles them. That
+reassembly carries the most intricate reasoning in the shelf: a delivery must not be built out of
+two interleaved sets, position must come from the declared index rather than arrival order, a
+message is accepted only into the delivery currently being assembled, and `total` is clamped to
+`MaxStacks = 20` because the pipe's ACL is open to every process on the machine and allocating
+slots on a stranger's say-so is an out-of-memory kill of the catcher.
+
+With one flat list there is one message, so there is no assembly to corrupt. `SetStack`,
+`_slots`, `_expected`, `IsComplete` and `MaxStacks` all go, replaced by a single `SetItems(paths)`
+that replaces the list outright. The hostile-input concern does not disappear, it gets smaller:
+the incoming paths are truncated to `NotchGeometry.ShelfCapacity`, which is a bound on a list that
+already arrived rather than on an allocation made ahead of it.
+
+`ShelfSession.SendStacks` becomes `SendItems`, one `Send(DropVerb.Items, paths)` with no index
+or total.
+
 ### The shelf surface
 
 Deleted from `ShelfSurface`: `BuildColumn`, `BuildOverflowTile`, `VisibleRowsShown`, the
@@ -138,9 +164,9 @@ Content width is unchanged at 5 times 64 plus 4 times 8, which is 352.
 **`VisibleColumns` changes meaning and must be renamed rather than reused.** Today it is the
 number of STACKS a surface draws; in the new design the same number, 5, is the count of TILES
 in a row. Keeping the old name for a new meaning is how a constant quietly stops matching what
-it is called. It is replaced by `ShelfGeometry.TilesPerRow` and `ShelfGeometry.RowCount`, the
-shared file described under Store and persistence, so the surface and the cap read the same
-two numbers.
+it is called. It is replaced by `NotchGeometry.ShelfTilesPerRow` and
+`NotchGeometry.ShelfRowCount`, described under Store and persistence, so the surface and the cap
+read the same two numbers.
 
 Keyboard navigation becomes linear over the grid rather than counting rows inside columns.
 This removes the constraint that construction and navigation must independently agree on how
@@ -170,17 +196,23 @@ inside a window measured at 384 by 224.
 
 New content height is 3 rows of 64 plus two 8 gaps, which is 208, with no caption row.
 
-That puts the window near 283 tall at unchanged width. **The 283 is derived, not measured**:
-it assumes the chrome around the content is the 75 left over from today's numbers. The plan
-must confirm it against the real window rather than adopt it, since a derived constant trusted
-without measurement is the exact failure this branch keeps recording.
+That puts the window near 283 tall at unchanged width. The frame size lives in
+`NotchGeometry.ShelfFrameDip`, today the literal `new(384, 224)`, and `ShelfWindow.xaml` declares
+the same numbers as its design size.
+
+**The 283 is derived, not measured**: it assumes the chrome around the content is the 75 left
+over from today's numbers. Rather than typing a second literal and hoping, the height becomes an
+expression over the same constants the grid uses, with the chrome as a named term, so the frame
+and the row count cannot disagree. The plan still confirms the result against the real window
+once, because a derived constant that nobody ever looked at is how this branch keeps getting
+surprised.
 
 ## What gets deleted
 
 | Where | What |
 |---|---|
 | `tests/Plith.Tests/ShelfStoreTests.cs` | 37 references to stacks |
-| `tests/Plith.Tests/ShelfModelTests.cs` | 10 |
+| `tests/Plith.Tests/ShelfModelTests.cs` | 10, including the whole multi-message assembly suite |
 | `tests/Plith.Tests/ShelfSessionTests.cs` | 8 |
 | `tests/Plith.Tests/DropChannelTests.cs` | 4 |
 | `scripts/drive-shelf-pair.ps1` | the §3.4, §3.5 and §3.6 steps, and the two-stack fixture |
@@ -207,7 +239,9 @@ stay green, with the one suppression removed as described.
 
 ## Risks and open items
 
-1. **The window height is derived.** See Geometry. Confirm before adopting.
+1. **The window height is derived.** See Geometry. It is an expression over the grid constants
+   rather than a second literal, but the result has still never been looked at. Confirm once on
+   hardware.
 2. **A taller shelf sits lower on the screen.** At roughly 283 against today's 224, the
    surface reaches further down from the notch. Nothing measured says this is wrong, and
    nothing measured says it is right either. It should be looked at on hardware once, since
