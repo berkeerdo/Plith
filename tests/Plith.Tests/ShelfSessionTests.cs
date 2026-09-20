@@ -212,11 +212,33 @@ public sealed class ShelfSessionTests : IDisposable
         var hover = new Rect(865, 0, 190, 6);
 
         var frame = NotchGeometry.DropTargetRect(hover);
-        var shelf = NotchGeometry.ShelfRect(hover);
+        var shelf = NotchGeometry.ShelfRect(hover, NotchGeometry.ShelfCapacity);
 
         Assert.Equal(frame.Left + (frame.Width / 2), shelf.Left + (shelf.Width / 2), 6);
         Assert.Equal(frame.Top, shelf.Top);
         Assert.Equal(NotchGeometry.ShelfFrameDip.Width, shelf.Width);
         Assert.Equal(NotchGeometry.ShelfFrameDip.Height, shelf.Height);
+    }
+
+    /// <summary>
+    /// And the centre holds at every size, which is what makes a shelf that hugs its contents
+    /// still read as the notch continuing rather than as a shape that drifts sideways when it
+    /// happens to be shorter.
+    /// </summary>
+    [Theory]
+    [InlineData(0)]
+    [InlineData(1)]
+    [InlineData(7)]
+    [InlineData(15)]
+    public void ShelfRect_KeepsItsCentreAtEverySize(int itemCount)
+    {
+        var hover = new Rect(865, 0, 190, 6);
+
+        var frame = NotchGeometry.DropTargetRect(hover);
+        var shelf = NotchGeometry.ShelfRect(hover, itemCount);
+
+        Assert.Equal(frame.Left + (frame.Width / 2), shelf.Left + (shelf.Width / 2), 6);
+        Assert.Equal(frame.Top, shelf.Top);
+        Assert.Equal(NotchGeometry.ShelfFrameFor(itemCount).Height, shelf.Height);
     }
 }

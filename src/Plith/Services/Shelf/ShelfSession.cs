@@ -102,7 +102,7 @@ public sealed class ShelfSession
 
         GrantForeground();
 
-        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfRect(notchRectDip), dpiScale);
+        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfRect(notchRectDip, _store.Items.Count), dpiScale);
 
         Send(DropVerb.Palette, ShelfPaletteWire.ToPaths(_palette()));
         SendItems();

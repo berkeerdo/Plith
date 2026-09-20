@@ -397,10 +397,14 @@ public partial class ShelfSurface : UserControl
             {
                 Width = NotchGeometry.ShelfTilesPerRow * TileSize
                       + (NotchGeometry.ShelfTilesPerRow - 1) * Gap,
-                // The tile grid's own height, so the empty card is the same size as a full one
-                // and the shape does not jump when the first file lands.
-                Height = NotchGeometry.ShelfRowCount * TileSize
-                       + (NotchGeometry.ShelfRowCount - 1) * Gap,
+                // ONE ROW tall, which is what an empty shelf's window is given.
+                //
+                // It used to be the full grid height, on the reasoning that the card should be
+                // the same size as a full one so the shape does not jump when the first file
+                // lands. That reasoning belonged to a fixed frame. The frame now hugs its
+                // contents (NotchGeometry.ShelfFrameFor), so an empty shelf opens one row tall
+                // and a card built for three rows would simply be clipped by it.
+                Height = TileSize,
             };
             empty.Children.Add(outline);
             empty.Children.Add(message);

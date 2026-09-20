@@ -271,6 +271,46 @@ public class NotchGeometryTests
     }
 
     /// <summary>
+    /// The shelf hugs what it holds. Two files must not open a pane sized for fifteen, and the
+    /// row count is what the frame height is built from.
+    /// </summary>
+    [Fact]
+    public void ShelfRowsFollowTheItemCount()
+    {
+        // An empty shelf still needs a row: the empty-state card is drawn in it.
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(0));
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(1));
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow));
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow + 1));
+        Assert.Equal(NotchGeometry.ShelfRowCount, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfCapacity));
+    }
+
+    /// <summary>
+    /// A count past the cap cannot ask for a fourth row. The store enforces the cap, but this
+    /// number arrives from a caller and the ceiling is what keeps the frame inside the design.
+    /// </summary>
+    [Fact]
+    public void ShelfRowsAreClampedToTheCeiling()
+    {
+        Assert.Equal(NotchGeometry.ShelfRowCount, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfCapacity + 40));
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(-3));
+    }
+
+    /// <summary>
+    /// A full shelf is exactly the frame the ceiling describes, and a smaller one is genuinely
+    /// smaller. The first half is what stops the two definitions drifting; the second is the
+    /// whole point of sizing to the contents.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameForAFullShelfIsTheCeilingFrame()
+    {
+        Assert.Equal(NotchGeometry.ShelfFrameDip.Height,
+                     NotchGeometry.ShelfFrameFor(NotchGeometry.ShelfCapacity).Height);
+        Assert.True(NotchGeometry.ShelfFrameFor(2).Height < NotchGeometry.ShelfFrameDip.Height,
+            "a two-file shelf should not open a pane sized for a full one");
+    }
+
+    /// <summary>
     /// A row of tiles plus the gaps between them must fit the frame's width, which is unchanged
     /// at 384. Five 64 DIP tiles with four 8 DIP gaps is 352, leaving 32 for the horizontal
     /// chrome.

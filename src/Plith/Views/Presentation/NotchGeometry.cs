@@ -134,9 +134,39 @@ public static class NotchGeometry
     /// window. See scripts/render-widgets.ps1, the shelf-surface section, which renders the
     /// surface at exactly this size.
     /// </summary>
-    public static readonly Size ShelfFrameDip = new(
-        384,
-        ShelfRowCount * ShelfTileSize + (ShelfRowCount - 1) * ShelfGap + ShelfChromeDip);
+    public static readonly Size ShelfFrameDip = ShelfFrameFor(ShelfCapacity);
+
+    /// <summary>
+    /// Rows a shelf of <paramref name="itemCount"/> files needs, between one and the ceiling.
+    ///
+    /// One at the bottom because an empty shelf still draws its empty-state card and needs
+    /// somewhere to draw it. The ceiling at the top because the count arrives from a caller:
+    /// ShelfStore enforces the cap, but this is the arithmetic that keeps the frame inside the
+    /// design even if it did not.
+    /// </summary>
+    public static int ShelfRowsFor(int itemCount)
+        => Math.Clamp((int)Math.Ceiling(itemCount / (double)ShelfTilesPerRow), 1, ShelfRowCount);
+
+    /// <summary>
+    /// The frame a shelf of <paramref name="itemCount"/> files opens at.
+    ///
+    /// THE SHELF HUGS WHAT IT HOLDS, and it decides once. Two files do not open a pane sized for
+    /// fifteen, which is what a fixed three-row frame gave: a render of a seven-file shelf had a
+    /// whole empty row under it.
+    ///
+    /// Chosen at OPEN and never changed while the shelf is up. The window is sized by Plith and
+    /// applied by the catcher over the pipe, so a resize per item would spread an animation
+    /// across two processes, and every cross-process coordination on this branch has cost
+    /// several runs to get right. It is safe to decide once because while the shelf is open the
+    /// only verbs that touch the store are RemoveItems and ClearShelf, which can only make it
+    /// smaller, and the shelf window accepts no drops of its own. Removing a file reflows the
+    /// content and leaves the window alone.
+    /// </summary>
+    public static Size ShelfFrameFor(int itemCount)
+    {
+        var rows = ShelfRowsFor(itemCount);
+        return new Size(384, rows * ShelfTileSize + (rows - 1) * ShelfGap + ShelfChromeDip);
+    }
 
     /// <summary>
     /// Height of the page-dot lane, and it is FIXED rather than sized to its content.
@@ -287,9 +317,12 @@ public static class NotchGeometry
     /// that moved by even a few DIP would read as the shape sliding sideways while it opened
     /// rather than as the notch continuing into something larger.
     /// </summary>
-    public static Rect ShelfRect(Rect hoverRect)
-        => new(hoverRect.Left + (hoverRect.Width - ShelfFrameDip.Width) / 2, hoverRect.Top,
-               ShelfFrameDip.Width, ShelfFrameDip.Height);
+    public static Rect ShelfRect(Rect hoverRect, int itemCount)
+    {
+        var frame = ShelfFrameFor(itemCount);
+        return new Rect(hoverRect.Left + (hoverRect.Width - frame.Width) / 2, hoverRect.Top,
+                        frame.Width, frame.Height);
+    }
 
     /// <summary>
     /// The one conversion back out of DIP, mirroring <see cref="PhysicalToDip"/>.
