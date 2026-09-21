@@ -800,9 +800,19 @@ try {
     # produced no page turns at all. The verdict then blamed the flick for carrying past a shelf
     # it had never reached.
     #
-    # Eighty messages of six is 480 of delta, four times the commit threshold: enough to reach the
-    # shelf at the third commit and to have kept going twice over. If the settle window after the
-    # handover works, it stops there.
+    # THREE FLICKS, one per page, which is what the pager promises now.
+    #
+    # The first version of this stage sent ONE flick of 480 delta and required it to stop on the
+    # shelf, because at the time a flick could carry several pages and the question was whether it
+    # would carry past. Deleting RearmFloor answered that differently: silence is the only rearm,
+    # so one gesture is one page, and a single flick now stops on page 1 and never reaches the
+    # shelf at all. The stage then reported "the flick carried past the shelf", which was the
+    # opposite of what happened. A verdict that names the wrong cause is this file's own recurring
+    # defect, and this is its fourth appearance.
+    #
+    # So the check is the rule itself: three flicks, three pages, landing on the shelf and staying
+    # there. Each flick is 40 messages of six, which is 240 of delta, TWICE the commit threshold:
+    # if one gesture could still page twice, the first flick alone would overshoot.
     Stop-Process -Name 'Plith*' -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 800
     $flickMark = @(Get-Content $plithLog -ErrorAction SilentlyContinue).Count
@@ -814,18 +824,26 @@ try {
         Move-Pointer -X ($notch.X + [int]($notch.W / 2)) -Y 4 -Settle 900
         [PairInput]::LeftClick()
         Start-Sleep -Milliseconds 1600
-        [PairInput]::Flick(80, -6)
-        Start-Sleep -Milliseconds 1800
+
+        for ($f = 1; $f -le 3; $f++) {
+            [PairInput]::Flick(40, -6)
+            Start-Sleep -Milliseconds 900
+        }
+        Start-Sleep -Milliseconds 1200
 
         $afterFlick = Find-ShelfWindow
         $commits = @(@(Get-Content $plithLog -ErrorAction SilentlyContinue) |
             Select-Object -Skip $flickMark | Select-String 'Widget page committed').Count
         $ignored = @(@(Get-Content $plithLog -ErrorAction SilentlyContinue) |
             Select-Object -Skip $flickMark | Select-String 'Ignored a forwarded wheel delta').Count
-        Add-Verdict '2.3b a touchpad flick can stop on the shelf page' ([bool]$afterFlick) `
-            "$(if ($afterFlick) { "the shelf is up at $($afterFlick.X),$($afterFlick.Y)" } else { 'the flick carried past the shelf' }); $commits page commit(s), $ignored forwarded delta(s) ignored"
+
+        # THREE commits for three flicks. More than three would mean a single gesture paged twice,
+        # which is the defect that made the shelf impossible to land on.
+        Add-Verdict '2.3b three touchpad flicks page three times and stop on the shelf' `
+            ([bool]$afterFlick -and $commits -eq 3) `
+            "$(if ($afterFlick) { "the shelf is up at $($afterFlick.X),$($afterFlick.Y)" } else { 'the shelf is not up' }); $commits page commit(s) for 3 flicks of 240 delta each, $ignored forwarded delta(s) ignored"
     } else {
-        Add-Verdict '2.3b a touchpad flick can stop on the shelf page' $false `
+        Add-Verdict '2.3b three touchpad flicks page three times and stop on the shelf' $false `
             'no notch to flick at after the restart'
     }
 
@@ -1132,8 +1150,18 @@ try {
         Start-Sleep -Milliseconds 1200
         $after = Find-ShelfWindow
         $plithBack = Find-LayeredWindow -ProcessLike 'Plith'
-        Add-Verdict '2.6 paging off the shelf gives the frame back to Plith' `
-            ((-not $after) -and [bool]$plithBack) `
+        # AND THE FRAME IS STILL OPEN, which this check never asked and which is how a real
+        # defect survived it: paging past the shelf closed the shelf and PARKED the notch, so the
+        # page the person had just asked for was thrown away. Reported as "when I try to scroll to
+        # the other widgets the notch closes".
+        #
+        # Measured by the window's height rather than by eye. The open frame is 164 DIP plus the
+        # shadow margin the window carries; a parked notch is a couple of DIP of content in the
+        # same window, so the two differ by more than a hundred. A UIA name would not do: the
+        # parked notch and the open frame are the same window.
+        $openEnough = $plithBack -and $plithBack.H -ge 120
+        Add-Verdict '2.6 paging off the shelf gives the frame back to Plith, still OPEN' `
+            ((-not $after) -and $openEnough) `
             "catcher after the wheel: $(if ($after) { 'still up' } else { 'gone' }); Plith window: $(if ($plithBack) { "$($plithBack.W)x$($plithBack.H)" } else { 'none' })"
     } else {
         Add-Verdict '2.6 paging off the shelf gives the frame back to Plith' $false `

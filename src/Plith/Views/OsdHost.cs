@@ -12,6 +12,8 @@ using Plith.Views.Presentation;
 using Plith.Views.Widgets;
 using WpfScreenHelper;
 
+using Plith.Services.Shelf;
+
 namespace Plith.Views;
 
 /// <summary>
@@ -439,7 +441,7 @@ public sealed class OsdHost : BandWindow
     {
         _shelfSession = session;
         session.Opened += OnShelfOpened;
-        session.Closed += OnShelfClosed;
+        session.Closed += OnShelfClosed;   // carries WHY, which decides whether the notch parks
         session.Unavailable += OnShelfUnavailable;
         // Paging while the catcher holds the frame. It arrives here because the pager is here.
         session.PageRequested += OnShelfPageRequested;
@@ -821,11 +823,11 @@ public sealed class OsdHost : BandWindow
         HideForCatcher();
     }
 
-    private void OnShelfClosed()
+    private void OnShelfClosed(ShelfCloseCause cause)
     {
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(new Action(OnShelfClosed));
+            Dispatcher.BeginInvoke(new Action(() => OnShelfClosed(cause)));
             return;
         }
 
@@ -852,7 +854,19 @@ public sealed class OsdHost : BandWindow
         // the window is still hidden at this point, so there is no collapse for anyone to watch,
         // and animating one only delays the window coming back by its duration. The three things
         // that path's completion does and that matter here are done below.
-        if (_presentation is AmbientNotchPresentation notch)
+        // ONLY WHEN THE SURFACE ENDED, never when the person paged past the shelf. The two
+        // causes want opposite things and treating them alike is what a person reported as "when
+        // I try to scroll to the other widgets the notch closes":
+        //
+        //     25.045  Widget page committed: delta=120, index=0/4
+        //     25.045  Shelf closed by Plith: the page turned away from it
+        //     25.050  Shelf closed; notch back      <- and the notch was parked here
+        //
+        // The shelf is the last page, so one notch past it wraps to the clock. Plith closes the
+        // shelf, which is right, and then parked the whole notch, which threw away the page the
+        // person had just asked for. Paging through the shelf now leaves the frame open on
+        // whatever page they landed on: SyncToPager has already moved it.
+        if (cause == ShelfCloseCause.Surface && _presentation is AmbientNotchPresentation notch)
         {
             _hideTimer?.Stop();
             notch.Park();

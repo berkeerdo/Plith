@@ -21,6 +21,34 @@ namespace Plith.Services.Shelf;
 /// event are WPF controls. The pipe's read loop runs off the UI thread, so whoever forwards a
 /// message to <see cref="HandleMessage"/> is the one that has to marshal.
 /// </summary>
+/// <summary>
+/// Why the shelf went away, which decides what the notch does next.
+///
+/// THE TWO CAUSES WANT OPPOSITE THINGS, and treating them alike is a defect a person reported
+/// twice: "when I try to scroll to the other widgets the notch closes".
+/// </summary>
+public enum ShelfCloseCause
+{
+    /// <summary>
+    /// The person paged to another widget, so Plith asked for the shelf to go.
+    ///
+    /// The frame stays OPEN: they are still reading the notch and the next page is what they
+    /// asked for. Parking here collapses the whole notch on the way past the shelf, which is what
+    /// it did.
+    /// </summary>
+    PageTurn,
+
+    /// <summary>
+    /// The surface itself ended: the pointer left it, Esc, another window took focus, or the
+    /// catcher died.
+    ///
+    /// The frame goes to REST, because the person is done with the notch rather than moving
+    /// through it. Without this the catcher's shelf disappears and Plith's own page takes its
+    /// place for whatever the hide timer has left.
+    /// </summary>
+    Surface,
+}
+
 public sealed class ShelfSession
 {
     /// <summary>
@@ -84,7 +112,7 @@ public sealed class ShelfSession
     /// result is not a missing notch, it is a missing OSD, with volume keys showing nothing until
     /// Plith restarts. <see cref="OnChannelLost"/> is that second cause.
     /// </summary>
-    public event Action? Closed;
+    public event Action<ShelfCloseCause>? Closed;
 
     /// <summary>The shelf cannot be shown, with a sentence saying why. A click that does nothing
     /// is indistinguishable from the product being broken, so this always carries something a
@@ -177,7 +205,7 @@ public sealed class ShelfSession
         _shelfOpen = false;
         Send(DropVerb.CloseShelf, []);
         _log?.Info("Shelf", "Shelf closed by Plith: the page turned away from it.");
-        Closed?.Invoke();
+        Closed?.Invoke(ShelfCloseCause.PageTurn);
     }
 
     /// <summary>
@@ -194,7 +222,7 @@ public sealed class ShelfSession
 
         _shelfOpen = false;
         _log?.Warn("Shelf", "The catcher went away while the shelf was open; putting the notch back.");
-        Closed?.Invoke();
+        Closed?.Invoke(ShelfCloseCause.Surface);
     }
 
     /// <summary>Whether a shelf is believed to be on screen. Believed rather than known: the only
@@ -237,7 +265,7 @@ public sealed class ShelfSession
 
             case DropVerb.ShelfClosed:
                 _shelfOpen = false;
-                Closed?.Invoke();
+                Closed?.Invoke(ShelfCloseCause.Surface);
                 break;
 
             case DropVerb.ShelfShown:

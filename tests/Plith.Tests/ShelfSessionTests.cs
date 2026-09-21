@@ -107,16 +107,20 @@ public sealed class ShelfSessionTests : IDisposable
 
         var session = new ShelfSession(server, new ShelfStore(_storePath), () => AnyPalette);
         var opened = false;
-        var closed = false;
+        ShelfCloseCause? closed = null;
         session.Opened += () => opened = true;
-        session.Closed += () => closed = true;
+        session.Closed += cause => closed = cause;
 
         session.Open(new Rect(0, 0, 190, 6), dpiScale: 1.0);
         Assert.True(opened);
-        Assert.False(closed);
+        Assert.Null(closed);
 
         session.OnChannelLost();
-        Assert.True(closed);
+
+        // SURFACE, not PageTurn, and the distinction decides what the notch does next: a catcher
+        // that died is the surface ending, so the notch goes to rest rather than staying open on
+        // a page the person never asked for.
+        Assert.Equal(ShelfCloseCause.Surface, closed);
     }
 
     /// <summary>A channel loss with no shelf on screen reports nothing. The notch is already up,
@@ -127,12 +131,12 @@ public sealed class ShelfSessionTests : IDisposable
     {
         var (session, _) = Build();
 
-        var closed = false;
-        session.Closed += () => closed = true;
+        ShelfCloseCause? closed = null;
+        session.Closed += cause => closed = cause;
 
         session.OnChannelLost();
 
-        Assert.False(closed);
+        Assert.Null(closed);
     }
 
     /// <summary>

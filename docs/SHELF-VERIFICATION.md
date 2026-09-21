@@ -2972,3 +2972,79 @@ anything reads or writes a coordinate. The precondition passes now.
 second with `steamwebhelper` in the foreground, which is a person using their machine. The driver
 drives the real pointer and cannot share it. Stage 2.3b, the flick check that would confirm
 10.19's pager fix on hardware, is written and has not run since that fix.
+
+### 10.21 Paging PAST the shelf must not park the notch (2026-09-21)
+
+Reported, twice, and the second time as a request to stop patching and read the code: moving onto
+the shelf page flickers, and then scrolling on to the other widgets closes the notch. The log:
+
+```
+23.387  Widget page committed: delta=-120, index=3/4    <- the shelf, handover
+25.045  Widget page committed: delta=120,  index=0/4    <- one notch on: the shelf is the last
+25.045  Shelf closed by Plith: the page turned away from it       page, so it wraps to the clock
+25.050  Shelf closed; notch back                        <- and the notch was PARKED here
+```
+
+**`OnShelfClosed` parked the notch without asking why the shelf had closed**, and the two causes
+want opposite things:
+
+- **The person paged past it.** They are still reading the notch and the next page is the thing
+  they asked for, so the frame must stay OPEN. Parking throws that page away, which is what they
+  saw, and the flicker is the hover keep-alive re-opening what the park had just collapsed.
+- **The surface ended** (the pointer left it, Esc, focus, the catcher died). They are done, so the
+  frame goes to rest. That is 10.13's fix and it is still right.
+
+`ShelfCloseCause` carries the distinction from `ShelfSession` to `OsdHost`: `PageTurn` from
+`Close()`, `Surface` from the `ShelfClosed` verb and from `OnChannelLost`. The park now happens on
+`Surface` alone.
+
+**The driver never asked.** `2.6` checked that the catcher's window was gone and that a Plith
+window existed, which is true of a parked notch as well: the parked notch and the open frame are
+the same window. It measures the height now (an open frame is 178 with its shadow margin, a parked
+notch is a couple of DIP of content) and the verdict is named for what it asserts:
+`paging off the shelf gives the frame back to Plith, still OPEN`.
+
+### 10.22 And the flick stage tested a rule that no longer exists (2026-09-21)
+
+With `RearmFloor` gone, one gesture is one page, so the stage from 10.18 stopped making sense: it
+sent ONE flick of 480 delta and required it to stop on the shelf, and a single flick now stops on
+page 1 and never reaches the shelf at all. It reported "the flick carried past the shelf", which is
+the opposite of what happened. **A verdict that names the wrong cause is this file's own recurring
+defect, and that was its fourth appearance.**
+
+The stage is the rule now: three flicks of 240 delta each, which is twice the threshold per flick,
+and it asserts BOTH that the shelf is up and that exactly three commits happened. Four would mean a
+single gesture had paged twice.
+
+```
+[PASS] 2.3b three touchpad flicks page three times and stop on the shelf
+       the shelf is up at 1102,0; 3 page commit(s) for 3 flicks of 240 delta each, 6 ignored
+[PASS] 2.6  paging off the shelf gives the frame back to Plith, still OPEN
+       catcher after the wheel: gone; Plith window: 384x178
+```
+
+**14 of 14 on hardware**, on the physical console this time rather than over Remote Desktop.
+
+### 10.23 The afternoon's most expensive mistake was not in the product (2026-09-21)
+
+Two reports in a row ("still closes", "dropping a file does not work") were about **the installed
+0.2.0**, not about any of the day's fixes. The evidence was in the log the whole time and read
+straight past:
+
+```
+Asked Explorer to start the drop catcher: C:\Program Files\Plith\Plith.DropCatcher.exe
+Shelf opened at 1088,0 384x146        <- the pane sizes that were deleted hours earlier
+Shelf closing: close button           <- a control that no longer exists
+```
+
+The installer was run earlier in the session to prove it worked, and the copy it installed stayed
+alive. **Plith takes a per-user single-instance mutex, and the installed build runs at HIGH
+integrity** because Release swaps in the UIAccess manifest, so an ordinary `taskkill` cannot end
+it: every `Debug` build launched afterwards hit the mutex and exited silently, and the pair under
+test was 0.2.0 for over half an hour.
+
+`sudo taskkill` ends it. The rule that follows, and the reason this is written down: **after
+starting Plith, verify WHICH pair is running** rather than assuming the launch took. The cheapest
+proof is in Plith's own log, one line after startup, naming the catcher it asked Explorer for.
+The driver's own preconditions have carried a version of this lesson since 2026-09-20 ("VERIFY THE
+KILL, do not assume it"); the lesson did not transfer to launching by hand.
