@@ -1195,8 +1195,11 @@ public sealed class OsdHost : BandWindow
     {
         if (_shelf is null || _shelfPage is not null) return;
 
+        // No click to subscribe to any more. The page had one while it was the only way in, and
+        // the handover happens on the page turn now: landing on the shelf page IS the shelf. A
+        // click as a second route would be a second way to start a cross-process window swap,
+        // which is the kind of thing that ends up racing itself.
         _shelfPage = new Widgets.ShelfWidget(_shelf);
-        _shelfPage.OpenRequested += OpenShelf;
         ApplyWidgetPages();
     }
 

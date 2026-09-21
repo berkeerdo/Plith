@@ -589,24 +589,12 @@ $store = [Plith.Services.Shelf.ShelfStore]::new($storeFile)
 $paths = [string[]](@($shelfFolder) + ($fixtures | ForEach-Object { Join-Path $shelfDir $_ }))
 $store.Add($paths)
 $shelf = [Plith.Views.Widgets.ShelfWidget]::new($store)
-Save-Visual -Element $shelf -W $frameW -H $frameH -Name 'widget-shelf'
-
-# The EMPTY state, which nothing had ever rendered.
+# widget-shelf and widget-shelf-empty are GONE, because the page they rendered is gone.
 #
-# It is not the same page with fewer tiles: it swaps the row for a sentence and hides the hint
-# line under it, so it has its own layout and its own way of overflowing an 82 DIP content box.
-# A second store on a path with no file behind it, because ShelfStore loads from disk in its
-# constructor and reusing the one above would come back full.
-$emptyStore = [Plith.Services.Shelf.ShelfStore]::new((Join-Path $OutDir 'shelf-store-empty.txt'))
-$shelfEmpty = [Plith.Views.Widgets.ShelfWidget]::new($emptyStore)
-Save-Visual -Element $shelfEmpty -W $frameW -H $frameH -Name 'widget-shelf-empty'
-
-# And the sentence the page shows when the shelf will not open, which replaces the hint rather
-# than the row. Rendered against the FULL store, because that is the only case where the line is
-# showing at all, and because a sentence longer than the hint it replaces is exactly the thing
-# that would push the page out of shape without anyone noticing.
-$shelfUnavailable = [Plith.Views.Widgets.ShelfWidget]::new($store)
-$shelfUnavailable.ShowUnavailable('The shelf helper is missing from this install.')
+# The notch's shelf page drew five tiles, a "+N" chip and an empty state: a second shelf, in a
+# second design, visible for the 25 ms before the catcher's window covered it. It draws nothing
+# now (see ShelfWidget's own header), so the only state it has worth a picture is the one below:
+# the sentence it shows when the shelf cannot open at all.
 Save-Visual -Element $shelfUnavailable -W $frameW -H $frameH -Name 'widget-shelf-unavailable'
 
 
@@ -1060,32 +1048,9 @@ if ($openedTip.IsOpen) {
 "  tooltip-survives-render check passed: a tooltip open on a tile is closed by the render that " +
 "destroys the tile, on the catcher's shelf surface."
 
-# The notch's own shelf page carries the same tiles with the same tooltips and clears them the
-# same way, so it gets the same check rather than the benefit of the doubt.
-$widgetTiles = @(Find-VisualDescendants -Root $shelf -Predicate {
-    param($n) $n -is [Windows.Controls.Border] -and $n.ToolTip
-})
-if ($widgetTiles.Count -eq 0) { throw 'tooltip check: no tile with a tooltip on the notch shelf page.' }
-$widgetTip = $widgetTiles[0].ToolTip
-if ($widgetTip -isnot [Windows.Controls.ToolTip]) {
-    throw ("tooltip-survives-render check FAILED on the notch shelf page: the tooltip is a " +
-           "$($widgetTip.GetType().Name), so nothing can close it once its tile is gone.")
-}
-$widgetTip.IsOpen = $true
-# Rendered by emptying the STORE this page is built on, which is the real trigger: the page
-# repaints from ShelfStore.Changed, and a remove or a drop is enough to reach it.
-$store.Clear()
-Wait-ForDispatcher
-if ($widgetTip.IsOpen) {
-    throw ("tooltip-survives-render check FAILED on the notch shelf page: the tooltip survived " +
-           "the repaint that removed its tile.")
-}
-"  tooltip-survives-render check passed on the notch's shelf page too."
-
-# Both surfaces are put back the way the checks below expect to find them.
-$store.Add([string[]]$paths)
-$shelfSurface.Render($surfaceModel)
-Wait-ForDispatcher
+# The notch's shelf page had this same check, and it is deleted with the tiles it was about: that
+# page has no tiles and no tooltips now. What it checked still matters and still runs, once, above:
+# the catcher's surface is the only shelf there is.
 
 # --- a menu open on a tile must not survive that tile's own destruction --------------------
 #

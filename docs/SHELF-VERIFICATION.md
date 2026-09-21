@@ -2802,3 +2802,54 @@ wheel. The run immediately after showed `2.6` working in the log (`page committe
 `Shelf closed by Plith`, `notch back`), so the product path is sound and the instrument's timing is
 not. The removal loop re-finds its target between the hover and the click, which is where that
 flake most likely lives.
+
+### 10.16 There is one shelf now (2026-09-21)
+
+Asked, after three reports that all turned out to be the same thing: why are there two shelves, and
+why is there an "open" at all?
+
+There were two. `ShelfWidget`, Plith's own shelf page, drew five tiles, a "+N" overflow chip, an
+empty state and a line about how to open the surface: **552 lines of a second shelf, in a second
+design.** Since the handover happens on the page turn, the catcher's window covers that page about
+25 ms after it arrives, so everything it drew was an imitation of the page about to replace it,
+visible for a moment and gone. Every "double shelf" report traces back to it.
+
+It is deleted. What is left is 90 lines that draw **nothing** except the one thing the catcher
+cannot say: when the catcher cannot be reached the handover never happens, nothing covers this
+page, and a blank panel tells a person nothing at all, so `ShowUnavailable` puts the reason there.
+The page also stopped watching `ShelfStore`, because it has nothing to repaint.
+
+The click path went with it. `OpenRequested` existed while a click was the only way in; a second
+route into a cross-process window swap is a second thing to race.
+
+**A filed accessibility gap disappeared with the tiles.** `check-a11y.ps1` had
+`ShelfWidget.cs:tile` on its known-gaps list, filed and not fixed for a whole slice: every tile
+`Border` was given an accessible name it could not surface. There are no tiles. The suppression is
+gone from the list, and the note in its place says why a suppression must not outlive its subject.
+
+### 10.17 A page that draws nothing must still claim its space (2026-09-21)
+
+The deletion broke the handover outright, and the driver caught it on the first run after:
+`2.2 paging onto the shelf page hands the frame to the catcher` failed twice in a row with no
+catcher window after six wheel notches, and the log showed **no page commits at all** while the
+screenshot showed the frame open on the clock.
+
+A blank page measures `0 x 0`, and `OsdHost.Reposition` early-returns when the content measures
+zero on either axis. So landing on the shelf page left the frame unable to reposition and the
+wheel with nothing to page.
+
+`ShelfWidget`'s root grid now claims `NotchGeometry.PageContentWidthDip` by
+`PageContentHeightDip`, derived from the open frame less the page inset, so the page occupies
+exactly what the other four do. **Every other page in this frame is sized by what it draws. A page
+that draws nothing has to say its size instead.**
+
+Verified by hand first, because the driver was the thing in doubt: a click on the notch and three
+wheel notches produce `Widget page committed: index=3/4`, `Shelf requested at 722,0 356x164`,
+`Standing aside for the shelf`, and a fourth notch produces `Shelf closed by Plith: the page turned
+away from it`. One notch, one page, which is also the first hardware evidence for the accumulator
+rest from 10.14.
+
+Then the driver: **13 verdicts, all passing.** Two of its own races were fixed on the way, both of
+which had been reporting product failures: a restart now waits 2.5 seconds after the pipe connects
+before clicking, because a connected pipe is not a notch ready to take a click, and the removal
+loop retries a round that misses rather than abandoning the shelf half empty.

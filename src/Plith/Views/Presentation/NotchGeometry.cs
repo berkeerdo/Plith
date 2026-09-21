@@ -178,6 +178,21 @@ public static class NotchGeometry
     public const double OutputPickerCellGap = 4;
 
     /// <summary>
+    /// The page's content box: the open frame less the inset that positions content inside it.
+    ///
+    /// Derived rather than typed, and it exists because a page that draws NOTHING still has to
+    /// claim its space: ShelfWidget became a blank page when the shelf moved into the catcher's
+    /// window, and a page measuring zero makes Reposition early-return and leaves WidgetFrame
+    /// sizing its track from nothing.
+    /// </summary>
+    public static readonly double PageContentWidthDip =
+        OpenFrameDip.Width - PageInsetDip.Left - PageInsetDip.Right;
+
+    /// <inheritdoc cref="PageContentWidthDip"/>
+    public static readonly double PageContentHeightDip =
+        OpenFrameDip.Height - PageInsetDip.Top - PageInsetDip.Bottom;
+
+    /// <summary>
     /// The band along the top of the shelf page where the hovered file's name is drawn.
     ///
     /// It is the page inset's own top margin, which is 14 and is otherwise empty, so the name

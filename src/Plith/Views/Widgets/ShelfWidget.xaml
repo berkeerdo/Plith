@@ -5,80 +5,45 @@
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
-             Focusable="False"
-             Background="Transparent">
-    <UserControl.Resources>
-        <ResourceDictionary>
-            <ResourceDictionary.MergedDictionaries>
-                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
-            </ResourceDictionary.MergedDictionaries>
-        </ResourceDictionary>
-    </UserControl.Resources>
+             Focusable="False">
 
-    <!-- What is on the shelf.
+    <!-- THE SHELF PAGE, WHICH DRAWS NOTHING, and that is the whole of it.
 
-         A row of tiles rather than a list of lines, because the shelf answers "what did I put
-         here" at a glance, and a name is a slower way to recognise your own file than its shape
-         and position.
+         This page used to draw the shelf: five tiles, a "+N" chip, an empty state and a line
+         saying how to open it. It was the second of two shelves. The shelf itself lives in
+         Plith.DropCatcher, because a file can only be dragged out of that process's window, and
+         since the handover happens on the page turn the catcher's window covers this page about
+         25 ms after it arrives. So everything this page drew was a different-looking imitation of
+         the page about to replace it, visible for a moment and gone. Reported three times over,
+         finally as "why are there two shelves".
 
-         No heading. The first pass had one, with a "+3 more" label in the opposite corner, and
-         rendering it showed why neither survives: the heading cost 25 of the 76 DIP the page
-         has, which clipped every tile label through the middle. The page dots already say which
-         page this is, and no other page in the frame introduces itself. What the row cannot show
-         is now the last tile instead - a count in a corner is something to read, a tile is
-         something that looks like the rest of the row and is understood without being read.
+         It still has to EXIST. The pager needs an element for its slot, the frame needs something
+         to slide in, and the accent-tinted panel behind it is drawn by the frame rather than by
+         this control, so a blank page is a blank page of the notch rather than a hole.
 
-         A Grid now rather than the row alone, because the row gained a line under it. The row's
-         track is star-sized and the line's is Auto, so the line cannot be pushed off the page by
-         a row that measures taller than it was meant to: the row clips inside its own track
-         instead, which is the same rule WidgetFrame applies to the page as a whole.
-
-         The bottom margin is 22, not 24, and the row is 68 tall rather than 76. Those two DIP
-         plus the eight are what the line under the row is made of: 116 less 12 and 22 leaves an
-         82 DIP content box, the line measures about 13.3, and 68 is what is left.
-
-         Where that has to end is the part worth stating precisely, because the first version of
-         this comment got it wrong. WidgetFrame's bottom row is 23 DIP, so its rail LANE begins at
-         y=93, not 96 - the page's content ends at about that line. The rail's own 16 DIP target
-         is centred in the lane and starts at 96.5, and its visible 3 DIP mark sits at about 101.
-         The rail is invisible most of the time and fades in on every page turn, so anything
-         overlapping it is a collision that only appears while the page is being changed. -->
-    <!-- The row and the line under it are ONE centred block, not a star row with the line
-         pinned to the bottom.
-
-         They were two rows, which was right at 116 DIP and wrong at 164: the tiles ended up in
-         the middle of the band and the line against the bottom edge, with a hole between them
-         that read as a page missing something. Kept together they centre as a pair, and the line
-         also moves away from the page rail's lane, which it used to sit just above. -->
-    <Grid Margin="{x:Static p:NotchGeometry.PageInsetDip}">
-        <!-- The empty state's own host, so its dashed box can STRETCH to the band instead of
-             being a fixed height centred by arithmetic. The box that was there carried a 7 DIP
-             top margin, which was half the difference between a 68 DIP row and the content box
-             of a 116 DIP frame: both of those numbers are gone, and a number derived from one
-             frame size does not survive the next one. A box that fills what it is given needs no
-             such number. -->
-        <Grid x:Name="EmptyHost" Visibility="Collapsed" />
-
-        <StackPanel x:Name="FilledBlock" VerticalAlignment="Center">
-        <StackPanel x:Name="Tiles"
-                    Orientation="Horizontal"
-                    HorizontalAlignment="Center" />
-
-        <!-- The one place the product says the shelf opens.
-
-             The text here is a placeholder for the designer's eye only: Render always replaces
-             it, because the line carries the file count now and the count is not a constant. It
-             is kept in the XAML rather than left blank so that anyone opening this file sees the
-             shape of what goes here. Render also replaces it outright with the reason when the
-             shelf cannot open at all. -->
+         And it has one thing to say. When the catcher cannot be reached the handover never
+         happens, nothing covers this page, and the person is left looking at an empty panel with
+         no idea why: OnShelfUnavailable puts the reason here. That sentence is the only thing
+         this file draws, and it is the reason this file is not simply deleted. -->
+    <!-- IT CLAIMS THE PAGE'S BOX even though it draws nothing in it.
+    
+         A page that measures zero is not merely invisible, it is dangerous: OsdHost.Reposition
+         early-returns when the content measures 0 on either axis, and WidgetFrame sizes its track
+         from the pages in it. Every other page here is sized by what it draws, and this one draws
+         nothing, so it says its size instead. The numbers are the frame's own, less the inset
+         that positions the content inside it, so this page occupies exactly what the other four
+         do. -->
+    <Grid Margin="{x:Static p:NotchGeometry.PageInsetDip}"
+          MinWidth="{x:Static p:NotchGeometry.PageContentWidthDip}"
+          MinHeight="{x:Static p:NotchGeometry.PageContentHeightDip}">
         <TextBlock x:Name="Hint"
-                   Margin="0,10,0,0"
-                   Text="N files on the shelf"
-                   FontSize="10"
+                   HorizontalAlignment="Center"
+                   VerticalAlignment="Center"
+                   MaxWidth="280"
+                   FontSize="12"
                    TextAlignment="Center"
-                   TextTrimming="CharacterEllipsis"
+                   TextWrapping="Wrap"
                    Foreground="{DynamicResource NotchInkMuted}"
                    Visibility="Collapsed" />
-        </StackPanel>
     </Grid>
 </UserControl>

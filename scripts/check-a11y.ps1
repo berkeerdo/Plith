@@ -214,9 +214,10 @@ $codeBehindRoots = @($Root, (Join-Path $PSScriptRoot '..' 'src' 'Plith.DropCatch
 # fixed, for the same reason: fixing widget accessibility is not this task, and a lint that starts
 # quietly rewriting product code to stay green is a worse habit than the gaps it found.
 $knownCodeBehindGaps = @{
-    'ShelfWidget.cs:tile' = 'predates Task 9: every Border built by Tile(...) was already named ' +
-        'before this scan existed to see it. Filed, not fixed, in docs/SHELF-VERIFICATION.md ' +
-        'section 5.4.'
+    # ShelfWidget.cs:tile is GONE from this list, and not because it was fixed: the tiles it was
+    # about are deleted. The notch's shelf page drew a second shelf in a second design, and
+    # deleting it took a filed accessibility gap with it. A suppression that outlives its subject
+    # is a suppression that starts hiding something else.
     'MediaWidget.cs:OpenSourceArea' = 'found by this same scan, unrelated to the shelf: ' +
         'OpenSourceArea is a Border. Predates this branch. Filed, not fixed.'
     'WeatherWidget.cs:Readout' = 'found by this same scan, unrelated to the shelf: Readout is a ' +

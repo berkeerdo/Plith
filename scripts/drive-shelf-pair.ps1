@@ -382,11 +382,17 @@ function Restart-WithShelf {
             Select-Object -Skip $mark | Select-String 'Drop catcher connected')
     }
     if (-not $connected) { return $null }
-    Start-Sleep -Milliseconds 1200
 
-    # Two attempts at the frame, because a track change can take it between the click and the
-    # wheel: the same instrument defect this file records as number 6.
-    for ($attempt = 1; $attempt -le 2; $attempt++) {
+    # Longer than it looks necessary. The pipe connecting is not the same thing as the notch being
+    # ready to take a click: the presentation parks, the pages are built and measured, and the
+    # hover poller starts. A click that lands inside that window opens nothing, which is what made
+    # this the flakiest step in the file.
+    Start-Sleep -Milliseconds 2500
+
+    # THREE attempts at the frame, because a track change can take it between the click and the
+    # wheel (instrument defect 6 in this file's own record) and because a restart is slower than
+    # the first open of a session.
+    for ($attempt = 1; $attempt -le 3; $attempt++) {
         $notch = Find-LayeredWindow -ProcessLike 'Plith'
         if (-not $notch) { Start-Sleep -Milliseconds 800; continue }
 
@@ -866,11 +872,15 @@ try {
         $shelf = Find-ShelfWindow
         if (-not $shelf) { $rounds += "$name -> the shelf window disappeared"; break }
 
+        # A failed round RETRIES rather than abandoning the loop, which is what left a file on the
+        # shelf and reported "one-by-one removal does empty the shelf" as a product failure: a
+        # hover that did not register, or a tile re-found after a re-render, is the instrument
+        # missing once. The guard above still bounds the whole thing.
         $tile = Get-Element -Hwnd $shelf.Hwnd -Name $name
-        if (-not $tile) { $rounds += "$name -> not in the UIA tree"; break }
+        if (-not $tile) { $rounds += "$name -> not in the UIA tree; retrying"; Start-Sleep -Milliseconds 500; continue }
         Move-Pointer -X $tile.CX -Y $tile.CY -Settle 450
         $remove = Get-Element -Hwnd $shelf.Hwnd -Name "Remove $name from the shelf" -Type Button
-        if (-not $remove) { $rounds += "$name -> no remove control on hover"; break }
+        if (-not $remove) { $rounds += "$name -> no remove control on hover; retrying"; Start-Sleep -Milliseconds 500; continue }
 
         Move-Pointer -X $remove.CX -Y $remove.CY -Settle 300
         [PairInput]::LeftClick()
