@@ -48,10 +48,13 @@
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
+        <!-- Centred in its row rather than hugging the top. With the frame at 164 DIP the tiles
+             sat against the top edge and the hint against the bottom one, with a hole between
+             them; centred, the extra room reads as breathing space around the row. -->
         <StackPanel x:Name="Tiles"
                     Grid.Row="0"
                     Orientation="Horizontal"
-                    VerticalAlignment="Top" />
+                    VerticalAlignment="Center" />
 
         <!-- The one place the product says the shelf opens.
 

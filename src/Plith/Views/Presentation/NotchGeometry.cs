@@ -72,16 +72,33 @@ public static class NotchGeometry
     /// The one size every widget page opens to. Content moves through the frame; the frame does
     /// not move.
     ///
-    /// Two earlier passes let the page drive the size and both were rejected on the mockup.
+    /// Two earlier passes let the PAGE drive the size and both were rejected on the mockup.
     /// Varying both dimensions made the notch itself appear to jump around while swiping;
     /// varying only the height still moved the bottom edge on every page turn. A single frame
-    /// that content moves through is the only version that reads as one object.
+    /// that content moves through is the only version that reads as one object, and that rule
+    /// still holds: this is one frame, one size, for every page.
     ///
-    /// The height is set by the FULLEST page rather than chosen: the weather page needs ~73 DIP
-    /// of content, plus 23 of padding and the 20 the dots lane occupies. The clock page carries
-    /// empty space as a result, and centred in a steady frame that reads as deliberate.
+    /// The height is set by the FULLEST page rather than chosen, and on 2026-09-21 the fullest
+    /// page changed. It was 116, sized for the weather page's ~73 DIP of content. The media page
+    /// was then rebuilt after Alcove and asked for more: the user looked at the result, called
+    /// the text cramped, and asked for the whole notch to grow rather than for that one page to
+    /// be squeezed further. So 164, which is 121 DIP of content, 14 of top padding, and the 29
+    /// below that the page rail's lane lives in.
+    ///
+    /// 356 x 164 is 2.17:1. Alcove's own media panel, measured from its press screenshot, is
+    /// about 2.16:1, and matching that is the point: the layout this frame now holds is Alcove's
+    /// stacking rather than a rail squeezed in beside it.
+    ///
+    /// What the extra 48 DIP bought, and why it was not spent on the text column directly: the
+    /// transport moved OUT of a right-hand rail and onto its own centred row, which hands the
+    /// whole width back to the title. The text column went from 116 DIP to 244. Widening the
+    /// frame instead would have solved the same complaint while moving further from Alcove's
+    /// proportion, and it was offered and not taken.
+    ///
+    /// The clock page carries more empty space as a result. Centred in a steady frame, that
+    /// reads as deliberate.
     /// </summary>
-    public static readonly Size OpenFrameDip = new(356, 116);
+    public static readonly Size OpenFrameDip = new(356, 164);
 
     /// <summary>Tiles in one row of the shelf grid.</summary>
     public const int ShelfTilesPerRow = 5;
@@ -121,9 +138,16 @@ public static class NotchGeometry
     /// </summary>
     public const int OutputPickerCapacity = OutputPickerColumns * OutputPickerRows;
 
-    /// <summary>One output cell's height, in DIP. Three of them plus two gaps and the picker's
-    /// header fill the same 73 DIP content band every other page gets.</summary>
-    public const double OutputPickerCellHeight = 16;
+    /// <summary>
+    /// One output cell's height, in DIP. Three of them plus two gaps and the picker's header fill
+    /// the same 121 DIP content band every other page gets: 14 + 3 + (3 * 32) + (2 * 4) = 121.
+    ///
+    /// It was 16, and 16 was recorded in the spec as "the thinnest number in this design and the
+    /// one most likely to need correcting on a render". The frame growing to 164 corrected it
+    /// without anything else changing: the same grid now has 104 DIP to put three rows in
+    /// instead of 56.
+    /// </summary>
+    public const double OutputPickerCellHeight = 32;
 
     /// <summary>The gap between output cells, in DIP, horizontally and vertically.</summary>
     public const double OutputPickerCellGap = 4;
@@ -346,7 +370,7 @@ public static class NotchGeometry
     /// shelf's own larger size.
     ///
     /// The centre has to match <see cref="DropTargetRect"/> exactly, because the shelf grows OUT
-    /// of the open frame: the catcher animates from 356 x 116 to this rectangle, and a centre
+    /// of the open frame: the catcher animates from the open frame to this rectangle, and a centre
     /// that moved by even a few DIP would read as the shape sliding sideways while it opened
     /// rather than as the notch continuing into something larger.
     /// </summary>

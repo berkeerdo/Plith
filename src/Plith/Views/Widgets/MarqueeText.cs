@@ -177,6 +177,13 @@ public sealed class MarqueeText : FrameworkElement
     {
         var plan = MarqueeDecision.Plan(_text.DesiredSize.Width, ActualWidth, !SystemParameters.ClientAreaAnimation);
 
+        // The fade follows OVERFLOW, not the scroll. Tying it to plan.Scroll was wrong in a way a
+        // render showed immediately: that answer is also false when reduced motion is on, so a
+        // clipped title got no fade in exactly the case where it will never scroll and the fade
+        // is the only thing that can say there is more text.
+        var overflows = _text.DesiredSize.Width - ActualWidth > MarqueeDecision.OverflowToleranceDip;
+        ApplyEdgeFade(overflows);
+
         if (!plan.Scroll)
         {
             Stop();
@@ -195,9 +202,64 @@ public sealed class MarqueeText : FrameworkElement
         _shift.BeginAnimation(TranslateTransform.XProperty, travel);
     }
 
-    /// <summary>How long the text sits still before it starts, so the beginning is readable
-    /// before anything moves.</summary>
-    private static readonly TimeSpan StartDelay = TimeSpan.FromMilliseconds(1200);
+    /// <summary>
+    /// How long the text sits still before it starts, so the beginning is readable before
+    /// anything moves.
+    ///
+    /// Was 1200 ms, and MEASURED against the surface on 2026-09-21: an event-opened panel used to
+    /// live about 2.6 s, which left 1.4 s of travel at 28 DIP per second, so a long title moved
+    /// about 39 DIP of the 100-plus it needed. The code's own comment claimed a long title
+    /// "finishes inside the time an open notch is realistically looked at", and that was false
+    /// for the case it described.
+    ///
+    /// It is less false now for a different reason: since an event gets a HUD rather than the
+    /// frame, the frame is only ever opened deliberately and hover keeps it alive, so the window
+    /// is as long as someone looks. The delay still comes down, because movement that starts
+    /// after more than a second reads as no movement at all to someone who glanced.
+    /// </summary>
+    private static readonly TimeSpan StartDelay = TimeSpan.FromMilliseconds(700);
+
+    /// <summary>
+    /// How wide the softened edge is, in DIP.
+    ///
+    /// Wide enough that the last glyph fades rather than being cut through, narrow enough not to
+    /// dim a word that is fully visible.
+    /// </summary>
+    private const double FadeWidthDip = 14;
+
+    /// <summary>
+    /// Soften the right edge while the text is clipped.
+    ///
+    /// The mask goes on THIS control rather than on the viewport inside it, and that is the whole
+    /// subtlety: the viewport is deliberately arranged at the text's full width and then clipped,
+    /// which is what gives the translation something to reveal. An OpacityMask uses its element's
+    /// own bounds, so one on the viewport would fade at the end of the TEXT, somewhere off screen,
+    /// rather than at the edge where the clip actually happens.
+    ///
+    /// Only the right edge. The left one could fade too, but the text parks at X = 0 between
+    /// legs, and a permanent left fade would dim the first letter of every title that is sitting
+    /// still.
+    /// </summary>
+    private void ApplyEdgeFade(bool clipped)
+    {
+        if (!clipped || ActualWidth <= FadeWidthDip * 2)
+        {
+            OpacityMask = null;
+            return;
+        }
+
+        var solidTo = 1.0 - (FadeWidthDip / ActualWidth);
+        var mask = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0.5),
+            EndPoint = new Point(1, 0.5),
+        };
+        mask.GradientStops.Add(new GradientStop(Colors.Black, 0));
+        mask.GradientStops.Add(new GradientStop(Colors.Black, solidTo));
+        mask.GradientStops.Add(new GradientStop(Colors.Transparent, 1));
+        mask.Freeze();
+        OpacityMask = mask;
+    }
 
     private void Stop()
     {

@@ -251,8 +251,13 @@ function Find-VisualDescendants {
 }
 
 # --- the frame's own size, and stand-in data for each page --------------------------------
-$frameW = 356.0
-$frameH = 116.0
+# FROM the product, not typed here. These were literal 356 and 116, and when the frame grew to
+# 164 this harness kept rendering every page inside the old box: the PNGs came back 356x116 and
+# would have had the new layout judged against a frame the product no longer has. The one number
+# a render harness must not own is the size of the thing it is rendering.
+$frameW = [double][Plith.Views.Presentation.NotchGeometry]::OpenFrameDip.Width
+$frameH = [double][Plith.Views.Presentation.NotchGeometry]::OpenFrameDip.Height
+"  frame from the product: $frameW x $frameH"
 
 $audioVm = [Plith.ViewModels.AudioCardViewModel]::new()
 $audioVm.Label = 'Logitech G733'

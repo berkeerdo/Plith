@@ -80,15 +80,46 @@ public partial class MediaWidget : UserControl
             }
         };
 
-        // The track writes on RELEASE, not on every sample of the drag. Writing continuously
-        // would send SMTC a position write per mouse move, which makes the source scrub and
-        // stutter; Spotify's own bar behaves the same way. DragStarted and DragCompleted cover a
-        // click as well as a drag, because IsMoveToPointEnabled turns a click into a drag of the
-        // thumb it just moved.
-        Bar.AddHandler(Thumb.DragStartedEvent,
-            new DragStartedEventHandler((_, _) => _dragging = true));
-        Bar.AddHandler(Thumb.DragCompletedEvent,
-            new DragCompletedEventHandler((_, _) => { _dragging = false; CommitSeek(); }));
+        // The drag is OWNED HERE rather than left to the Slider, and that is a measured
+        // correction, not a preference.
+        //
+        // IsMoveToPointEnabled does not do what its name suggests to a dragging hand: WPF's
+        // Slider handles the press, jumps the thumb to the pointer, and marks the event HANDLED.
+        // No thumb drag begins. So Thumb.DragStarted and DragCompleted never fire unless the
+        // press happens to land on the 10 DIP thumb itself, and dragging the bar anywhere else
+        // moved nothing at all. Driven on hardware on 2026-09-21: a press at 13 per cent read
+        // 11.3 on the control, stayed 11.3 halfway through the drag with the button still down,
+        // and stayed 11.3 after the release. Three runs in a row failed that way while a fourth
+        // passed, and the fourth was the one whose press happened to land on the thumb.
+        //
+        // Capture, track, release. The value comes from the pointer's x within the control, so
+        // the ends map exactly to 0 and 100 rather than to the thumb's inset centre.
+        Bar.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (!Bar.IsEnabled) return;
+            _dragging = true;
+            Bar.CaptureMouse();
+            SetBarFromPointer(e.GetPosition(Bar).X);
+            e.Handled = true;
+        };
+        Bar.MouseMove += (_, e) =>
+        {
+            if (!_dragging) return;
+            SetBarFromPointer(e.GetPosition(Bar).X);
+        };
+        Bar.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (!_dragging) return;
+            _dragging = false;
+            Bar.ReleaseMouseCapture();
+            SetBarFromPointer(e.GetPosition(Bar).X);
+
+            // The write happens HERE, once, and not on every sample of the drag: a position
+            // write per mouse move makes the source scrub and stutter, which is what Spotify's
+            // own bar avoids too.
+            CommitSeek();
+            e.Handled = true;
+        };
         Bar.ValueChanged += OnBarValueChanged;
 
         // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
@@ -318,6 +349,21 @@ public partial class MediaWidget : UserControl
         if (!_dragging && Mouse.LeftButton != MouseButtonState.Pressed) CommitSeek();
     }
 
+    /// <summary>
+    /// Put the thumb under the pointer.
+    ///
+    /// Linear in the control's own width, which is what makes both ends reachable: the Slider's
+    /// own Track insets its range by half a thumb, so its extremes sit 5 DIP inside the bar and a
+    /// drag to the very end lands short of the end.
+    /// </summary>
+    private void SetBarFromPointer(double x)
+    {
+        if (Bar.ActualWidth <= 0) return;
+
+        var fraction = Math.Clamp(x / Bar.ActualWidth, 0, 1);
+        Bar.Value = Bar.Minimum + fraction * (Bar.Maximum - Bar.Minimum);
+    }
+
     /// <summary>Where the thumb currently points, in the track's own time.</summary>
     private TimeSpan TargetPosition()
     {
@@ -409,11 +455,20 @@ public partial class MediaWidget : UserControl
 
     private Button BuildCell(OutputChoice choice)
     {
-        var row = new StackPanel { Orientation = Orientation.Horizontal };
+        // A Grid, not a horizontal StackPanel, and that is what makes the trimming work.
+        //
+        // A StackPanel measures its children with INFINITE width, so TextTrimming never fires:
+        // the label was laid out at its full length and then cut by the Border's clip, which
+        // draws a device name sliced mid-letter with no ellipsis to say it was shortened. Found
+        // in widget-media-picker.png. A star column gives the label a finite width, which is all
+        // CharacterEllipsis needs.
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
         // The dot sits in the layout whether or not it is drawn, so a non-current label starts
         // where a current one does and the column does not look ragged.
-        row.Children.Add(new System.Windows.Shapes.Ellipse
+        var dot = new System.Windows.Shapes.Ellipse
         {
             Width = 5,
             Height = 5,
@@ -421,16 +476,20 @@ public partial class MediaWidget : UserControl
             VerticalAlignment = VerticalAlignment.Center,
             Fill = (Brush)FindResource("NotchInk"),
             Visibility = choice.IsCurrent ? Visibility.Visible : Visibility.Hidden,
-        });
+        };
+        Grid.SetColumn(dot, 0);
+        row.Children.Add(dot);
 
-        row.Children.Add(new TextBlock
+        var label = new TextBlock
         {
             Text = choice.Label,
             FontSize = 11,
             TextTrimming = TextTrimming.CharacterEllipsis,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = (Brush)FindResource(choice.IsCurrent ? "NotchInk" : "NotchInkMuted"),
-        });
+        };
+        Grid.SetColumn(label, 1);
+        row.Children.Add(label);
 
         var button = new Button
         {

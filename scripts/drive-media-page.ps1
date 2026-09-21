@@ -134,6 +134,20 @@ public static class MediaInput {
         System.Threading.Thread.Sleep(200);
         Send(new INPUT[] { Mouse(LEFTUP) }, "LEFTUP");
     }
+    // The same drag, stopped halfway with the button still down, so a caller can read the
+    // control mid-gesture. Press-half-read-half-release, rather than press-release.
+    public static void DragHalf(int x0, int y0, int x1, int y1) {
+        Move(x0, y0);
+        System.Threading.Thread.Sleep(120);
+        Send(new INPUT[] { Mouse(LEFTDOWN) }, "LEFTDOWN");
+        System.Threading.Thread.Sleep(140);
+        Glide(x0, y0, (x0 + x1) / 2, y0, 12);
+    }
+    public static void DragRest(int x0, int y0, int x1, int y1) {
+        Glide((x0 + x1) / 2, y0, x1, y1, 12);
+        System.Threading.Thread.Sleep(200);
+        Send(new INPUT[] { Mouse(LEFTUP) }, "LEFTUP");
+    }
     public static string Where() {
         POINT p; GetCursorPos(out p);
         IntPtr h = WindowFromPoint(p);
@@ -256,19 +270,31 @@ function Assert-InputWorks {
     # stay put produces a verdict about whatever happened to be under it. An idle machine drifts
     # 0 px across these samples; a fullscreen game holding the pointer was the measured cause
     # twice on this machine, and it re-centres the cursor rather than merely moving it.
+    # WAITS for the pointer to go quiet rather than refusing the moment it is not.
+    #
+    # The refusal is right and stays, but the first version made the operator time their hands to
+    # the script: two runs in a row were thrown away at 10:46 on 2026-09-21 because a person had
+    # just pressed play in Spotify and still had a hand on the mouse. The script is the thing that
+    # can wait. Up to thirty seconds, said out loud so the wait is not mistaken for a hang.
     $drift = 0
-    $prev = New-Object 'MediaInput+POINT'; [void][MediaInput]::GetCursorPos([ref]$prev)
-    for ($s = 0; $s -lt 10; $s++) {
-        Start-Sleep -Milliseconds 100
-        $now = New-Object 'MediaInput+POINT'; [void][MediaInput]::GetCursorPos([ref]$now)
-        $drift += [Math]::Abs($now.X - $prev.X) + [Math]::Abs($now.Y - $prev.Y)
-        $prev = $now
+    for ($attempt = 1; $attempt -le 30; $attempt++) {
+        $drift = 0
+        $prev = New-Object 'MediaInput+POINT'; [void][MediaInput]::GetCursorPos([ref]$prev)
+        for ($s = 0; $s -lt 10; $s++) {
+            Start-Sleep -Milliseconds 100
+            $now = New-Object 'MediaInput+POINT'; [void][MediaInput]::GetCursorPos([ref]$now)
+            $drift += [Math]::Abs($now.X - $prev.X) + [Math]::Abs($now.Y - $prev.Y)
+            $prev = $now
+        }
+        if ($drift -le 4) { break }
+        if ($attempt -eq 1) { "  waiting for the pointer to go quiet (let go of the mouse)..." }
     }
     if ($drift -gt 4) {
         $h = [MediaInput]::GetForegroundWindow()
         $who = [uint32]0; [void][MediaWin]::GetWindowThreadProcessId($h, [ref]$who)
         $name = (Get-Process -Id $who -ErrorAction SilentlyContinue).ProcessName
-        throw ("Something else is driving the pointer: $drift px of drift across one second " +
+        throw ("Something else is driving the pointer: $drift px of drift across one second, " +
+               "still, after waiting thirty seconds for it to stop. " +
                "while nothing here touched it. Foreground window belongs to '$name'. A game " +
                "holding the pointer and a hand on the mouse both land here; either way every " +
                "press below would aim at whatever happens to be under the cursor.")
@@ -572,6 +598,15 @@ if ($onMedia) {
     }
     Add-Verdict 'the progress bar reports a value to UI Automation' $ok $detail
 
+    # Whether the control will accept a gesture at all, which is the CanSeek hypothesis stated as
+    # a measurement: MediaWidget sets Bar.IsEnabled from the view model's CanSeek, so a disabled
+    # bar in the tree means the source told Plith it refuses position writes. A drag on it would
+    # do exactly nothing, which is what "IT DID NOT MOVE" looks like from outside.
+    if ($bar) {
+        $barEnabled = $bar.Current.IsEnabled
+        "  bar IsEnabled (so CanSeek) : $barEnabled"
+    }
+
     # And the two clocks, which are the part a sighted person reads. Their presence in the tree
     # is the only evidence available without capturing the window.
     $names = Get-Names -Hwnd $notch.Hwnd
@@ -610,7 +645,37 @@ if ($onMedia) {
         $from = [int]($r.X + $r.Width * $atFraction)
         $to = [int]($r.X + $r.Width * $targetFraction)
 
-        [MediaInput]::Drag($from, $y, $to, $y)
+        Move-Pointer -X $from -Y $y -Settle 200
+        "  drag starts at $from,${y}: $([MediaInput]::Where())"
+        # Halfway, read, then the rest. The mid-drag reading is what separates "the press never
+        # grabbed" from "the gesture worked and the release lost it": three forward drags had left
+        # the bar exactly where it started, which is consistent with either.
+        [MediaInput]::DragHalf($from, $y, $to, $y)
+        $barMid = 'unknown'
+        try {
+            $bMid = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+            if ($bMid) {
+                $pm = $bMid.GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+                $barMid = [Math]::Round($pm.Current.Value, 1)
+            }
+        } catch { $barMid = "could not read: $($_.Exception.Message)" }
+        "  bar value MID-drag (button still down): $barMid"
+        [MediaInput]::DragRest($from, $y, $to, $y)
+
+        # What the CONTROL says, read immediately after the release and before any wait.
+        #
+        # This is what separates "the gesture did not take" from "the gesture took and the write
+        # did not". A value near the target means the drag worked and the seek was refused or
+        # lost; a value back at the live position means something overwrote the thumb.
+        $barAfter = 'unknown'
+        try {
+            $bAgain = $el.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+            if ($bAgain) {
+                $pat = $bAgain.GetCurrentPattern([System.Windows.Automation.RangeValuePattern]::Pattern)
+                $barAfter = [Math]::Round($pat.Current.Value, 1)
+            }
+        } catch { $barAfter = "could not read: $($_.Exception.Message)" }
+        "  bar value right after the release: $barAfter (target fraction $targetFraction)"
 
         # Wait for the position to SETTLE near the target, not for it to merely change.
         #
@@ -687,6 +752,10 @@ try {
             Add-Verdict 'the output control is in the tree' $false 'not found by name'
         } else {
             Move-Pointer -X $outputBtn.CX -Y $outputBtn.CY -Settle 250
+            # Where the press actually lands, reported. This is what turned an earlier paging
+            # mystery into one line: a press aimed by coordinate can miss for reasons that look
+            # exactly like a control ignoring it.
+            "  output press at $($outputBtn.CX),$($outputBtn.CY): $([MediaInput]::Where())"
             [MediaInput]::LeftClick()
             Start-Sleep -Milliseconds 700
 

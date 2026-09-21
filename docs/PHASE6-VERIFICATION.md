@@ -1619,3 +1619,92 @@ style and into `BuildCell`, which was the point of checking.
 The playing direction of the opening rule. Four runs, four paused tracks at the moment of the
 click. Everything needed for it is in place, including the script judging whichever direction is
 live at the press; it needs a track playing when the notch is clicked.
+
+---
+
+## 22. The frame grew, and the drag never worked (2026-09-21)
+
+The user looked at the rebuilt media page and said the text was cramped, which is the risk the
+spec had already filed as its weakest number: a 116 DIP text column. They asked for the notch
+itself to grow rather than for that page to be squeezed further.
+
+**`NotchGeometry.OpenFrameDip` is 356x164.** One frame for every page still, which is the rule
+the two rejected passes established; what changed is the fullest page. 2.17:1, against Alcove's
+measured 2.16:1.
+
+The 48 DIP did not go to the text column directly. The transport moved OFF its right-hand rail
+and onto a centred row, which is where Alcove puts it, and that handed the whole width back to
+the title: **116 DIP to 244**. Title type went from 14.5 to 16, the tile from 56 to 64, and the
+output picker's cells from 16 DIP to 32, which retires risk 1 of that spec without anything else
+changing.
+
+### The harness rendered every page in the OLD box
+
+`render-widgets.ps1` had `$frameW = 356.0` and `$frameH = 116.0` typed into it, so the first
+render after the change came back 356x116 and would have had the new layout judged against a
+frame the product no longer has. It reads the size from `NotchGeometry` now. **The one number a
+render harness must not own is the size of the thing it renders.**
+
+### What the taller frame exposed on the other pages
+
+The clock page kept its content in two Auto rows against the top edge, which left about 60 DIP of
+dead space under the track line, and the shelf page had its tiles against the top and its hint
+against the bottom with a hole between them. Both are centred now. The weather page was already
+centred and needed nothing.
+
+**One addition was considered and refused.** The clock page shows a weather glyph and a
+temperature but not the condition in words, and that is a recorded decision: "a shape is faster
+to read and says nothing at all to a screen reader", with the word carried as the mark's
+accessible name. Filling space by contradicting that would have been worse than the space.
+
+### Two clipping defects, both found by looking
+
+**The picker's device names were being cut, not trimmed.** `TextTrimming.CharacterEllipsis` never
+fired because the label sat in a horizontal `StackPanel`, which measures its children with
+infinite width; the name was laid out at full length and then cut by the cell's own clip, mid
+letter, with no ellipsis to say it had been shortened. A `Grid` with a star column gives the
+label a finite width, which is all the trimming needs.
+
+**`MarqueeText` clips with no edge treatment**, anywhere in the product, so a title too long for
+its column ends mid-glyph and reads as broken rather than as continued. It has a 14 DIP fade on
+the right edge now. The fade follows OVERFLOW rather than the scroll, which was the first
+version and was wrong in the case that matters most: `plan.Scroll` is also false when reduced
+motion is on, so a clipped title got no fade in exactly the case where it will never scroll.
+
+`StartDelay` came down from 1200 ms to 700. The measurement behind it: at 28 DIP per second, an
+event-opened panel living 2.6 s gave a long title 39 DIP of travel against the 100-plus it
+needed, while the code's own comment claimed a long title "finishes inside the time an open notch
+is realistically looked at". That claim is now less wrong for a different reason, since an event
+gets a HUD rather than the frame and the frame is only opened deliberately, but movement that
+starts after more than a second still reads as no movement to someone who glanced.
+
+### The drag never worked, and only a mid-gesture reading could say so
+
+Seek passed on hardware repeatedly while the track was PAUSED and failed three times running
+while it was PLAYING, with the bar left exactly where the drag started. Two hypotheses were
+measured and both were wrong before the right one was found:
+
+- **`CanSeek` flickering** would disable the bar mid-drag and abandon the gesture. Sampled twelve
+  times against a playing Spotify: `IsPlaybackPositionEnabled` was True every time.
+- **Direction** looked like the variable, since the one passing run dragged backwards. It was a
+  coincidence.
+
+The answer came from reading the control's own value half way through the gesture, with the
+button still down:
+
+```
+seeking from 48s (fraction 0.13) to fraction 0.75
+bar value MID-drag (button still down): 11.3
+bar value right after the release:      11.3
+```
+
+The press moved the thumb to the pointer and then nothing tracked it. **`IsMoveToPointEnabled`
+jumps the thumb on press and marks the event handled, so no thumb drag ever begins**, and
+`Thumb.DragStarted`/`DragCompleted` only fire when the press lands on the 10 DIP thumb itself.
+The one passing run was the one whose press happened to hit it. So "drag the bar to seek" worked
+only by luck, in a feature built and shipped for it, and every gate was green.
+
+`MediaWidget` captures the mouse and tracks it itself now, with the value taken linearly from the
+pointer's x within the control so both ends are reachable. Measured after, three runs, forwards
+and backwards: `11s -> 247s` (target 247), `257s -> 65s` (target 66), `77s -> 247s` (target 247),
+with the mid-drag reading tracking the pointer every time.

@@ -26,7 +26,12 @@
          glanceable fact and was sitting on a page of its own that nobody opens to check whether
          it is raining. Along the bottom, what is playing. Each side collapses on its own: no
          weather without a reading, no track line with nothing playing, no battery on a desktop. -->
-    <Grid Margin="20,14,20,26">
+    <!-- Centred, not pinned to the top. The frame grew from 116 DIP to 164 on 2026-09-21 and
+         this page kept its Auto rows at the top edge, which left about 60 DIP of dead space
+         under the track line and made the page read as unfinished. The rows stay Auto: a star
+         row here is a recorded defect, because it let the readings grow until the track line had
+         nowhere to be. -->
+    <Grid Margin="20,14,20,26" VerticalAlignment="Center">
         <!-- Auto over Auto with a gap between, not Auto over star. A star row let the readings
              grow until the track line underneath had nowhere left to be, and the two ran into
              each other. Two Auto rows cannot: each takes what it needs and the gap is real. -->

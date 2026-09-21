@@ -16,7 +16,7 @@ namespace Plith.Views.Presentation;
 /// Entering and staying are two different rectangles, and that is not a refinement. Measured on a
 /// live drag: the notch stood aside, the catcher appeared, DragEnter arrived — and 700 ms later
 /// Plith took the screen back while the file was still in the air. The band that starts the
-/// handoff is 190x28 DIP, the panel it opens is 356x116, and moving down into that panel to aim
+/// handoff is 190x28 DIP, the panel it opens is 356x164, and moving down into that panel to aim
 /// the drop leaves the band. One threshold for both questions cannot answer either well.
 ///
 /// This cannot tell a file drag from a window being dragged to the top of the screen, and nothing
