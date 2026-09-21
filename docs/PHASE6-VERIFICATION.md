@@ -1950,3 +1950,19 @@ ambient row has room for it, and it is what the screen reader is given, because 
 One limit is recorded rather than handled: a culture that puts its designator BEFORE the time
 still gets it after. Such cultures exist, none of them is this product's user, and the
 alternative is laying the page out twice for a case nothing has asked for.
+
+**Rain, third attempt, and the first two were both wrong in opposite directions.** Three strokes
+4.4 units long read as three dots and were reported as looking like snow. Three strokes nearly
+seven units long read as three BARS hanging off the cloud, and were reported as "rain falls in
+pieces, these are three long rods". Both reports were right.
+
+It is five short dashes now, staggered: three in an upper row and two in a lower row between
+them, each about 2.7 units long. **The gaps are the part that reads as rain**, and a continuous
+stroke has none. Confirmed in `weather-marks.png` beside the other four kinds and on the weather
+page's own forecast column.
+
+Worth recording as a pattern rather than as three fixes: every one of these was found by a person
+looking at the running product, and none of them could have been found any other way. A glyph
+that is wrong at 26 DIP passes every test, every lint, and every contrast measurement, because
+none of those can see a shape.
+

@@ -76,14 +76,19 @@
          will Tuesday be" (reported from a real session). Strokes survive the size: they are the
          reason every weather app in the world draws rain this way.
 
-         Slanted, and LONGER than they first were: at 4.4 units with a 1.5 stroke the three read
-         as three dots, which is what a snowflake's arms look like at the same size, and rain was
-         reported as looking like snow. Nearly seven units long at a thinner weight reads as
-         falling water, and nothing else does.
+         FIVE SHORT DASHES, STAGGERED, and both halves of that were arrived at by being wrong
+         first. Three strokes 4.4 units long read as three dots, which is what a flake's arms
+         look like at 26 DIP. Three strokes nearly seven units long then read as three BARS
+         hanging off the cloud, which is how it was reported: "rain falls in pieces, these are
+         three long rods".
 
-         Slanted rather than vertical, because vertical strokes under a cloud read as an
+         Rain is pieces. Three dashes in an upper row and two in a lower row between them, each
+         about 2.7 units long, is the arrangement that says so: the gaps are the part that reads
+         as rain, and a continuous stroke has none.
+
+         Slanted rather than vertical, because vertical marks under a cloud read as an
          exclamation mark. -->
-    <Geometry x:Key="IconWxDrops">M10.2,15.2 L7.6,22 M13.4,15.2 L10.8,22 M16.6,15.2 L14,22</Geometry>
+    <Geometry x:Key="IconWxDrops">M10,15.4 L9.1,18 M13.4,15.4 L12.5,18 M16.8,15.4 L15.9,18 M11.7,19.3 L10.8,21.9 M15.1,19.3 L14.2,21.9</Geometry>
 
     <Geometry x:Key="IconWxDrop">M12,3.6 C15.4,8.2 17.4,11.1 17.4,13.6 A5.4,5.4 0 1 1 6.6,13.6 C6.6,11.1 8.6,8.2 12,3.6 Z</Geometry>
     <Geometry x:Key="IconWxFlake">M12,3 L12,21 M4.2,7.5 L19.8,16.5 M4.2,16.5 L19.8,7.5</Geometry>
