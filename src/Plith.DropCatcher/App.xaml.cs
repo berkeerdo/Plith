@@ -187,13 +187,11 @@ public partial class App : Application, IDisposable
                 HideStandIn();
                 break;
             case DropVerb.OpenShelf:
+                // The acknowledgement is NOT sent here. It rides on the window's own Shown
+                // event (wired in WireShelf), which fires when the arrival fade reaches full
+                // opacity rather than when Show returns: sending it here told Plith the window
+                // was up while it was still transparent, and Plith hid behind it.
                 _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
-
-                // Sent the moment the window is up, so Plith can take its own down without
-                // leaving a gap between the two. OpenAt has already called Show and placed the
-                // window by the time it returns, so this is not a promise about a future frame:
-                // the surface is on screen.
-                _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfShown, 0, 0, 0, 0, []));
 
                 // Opened by a drop, rather than by paging to the shelf: hold it on screen, or the
                 // pointer that is already leaving takes it down within a second.
@@ -315,6 +313,9 @@ public partial class App : Application, IDisposable
         // than acted on, because the pager lives in Plith and there is one of it.
         shelf.PageRequested += (delta, index) =>
             _ = _client?.SendAsync(new DropMessage(DropVerb.Page, delta, index, 0, 0, []));
+        // The window is opaque: Plith may take its own down now.
+        shelf.Shown += () =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfShown, 0, 0, 0, 0, []));
     }
 
     private static bool TryReadProbeRect(string[] args, out (int x, int y, int w, int h) rect)

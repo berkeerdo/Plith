@@ -3217,3 +3217,44 @@ is somewhere else, most likely the first render of Plith's four widget pages ins
 window. That needs an instrument that does not exist yet: the notch's open path is animation-driven
 (`AmbientNotchPresentation.AnimateToVisible`), so timing it means timing a first render rather than
 a method, and nothing in this branch does that.
+
+### 10.28 The gap was not removed, it was moved four frames later (2026-09-22)
+
+REPORTED, for the second time: "when it gets to the shelf the notch closes and reopens for a
+split second, there is something wrong in that rendering logic".
+
+§10.24 closed this gap by making Plith wait for the catcher's `ShelfShown` before taking its own
+window down, and the fix was real. What it did not account for is WHEN the catcher says that.
+`ShelfShown` was sent the moment `OpenAt` returned, and the comment beside it argued the case:
+"OpenAt has already called Show and placed the window by the time it returns, so this is not a
+promise about a future frame: the surface is on screen." Every word of that is true and it is still
+the wrong moment, because the surface being ON SCREEN is not the same as the surface being VISIBLE.
+`OpenAt` starts a 70 ms fade from `Shape.Opacity = 0`, so the acknowledgement went out on the fade's
+FIRST frame, Plith hid within a few milliseconds of receiving it, and for the rest of the fade there
+was a panel at nearly no opacity with nothing behind it. The gap §10.24 removed had been moved four
+frames later.
+
+FIXED by raising a `Shown` event from the arrival animation's `Completed` rather than from `OpenAt`,
+which is full opacity by definition. A re-assertion raises it directly, after `ApplyExpansion(1)`,
+because that path is already opaque and may be carrying a new rectangle.
+
+MEASURED on hardware, `scripts/drive-shelf-pair.ps1`, four page turns onto the shelf. Plith now
+logs its own hide (`Window down`), which it did not before, and that line is why this can be read
+at all:
+
+| catcher: `Shelf opened` (the fade begins) | Plith: `Window down` | gap |
+|---|---|---|
+| 22:39:28.962 | 22:39:29.026 | 64 ms |
+| 22:39:45.684 | 22:39:45.748 | 64 ms |
+| 22:40:44.429 | 22:40:44.495 | 66 ms |
+| 22:40:58.220 | 22:40:58.288 | 68 ms |
+
+Plith takes its window down at the END of the 70 ms fade in every case, never at the start, and
+`The catcher never said its window was up` appears nowhere: the fade completes and the
+acknowledgement arrives well inside the 400 ms fallback.
+
+**The instrument lesson, again.** §10.24 claimed this gap was closed and 14 hardware verdicts
+agreed, because nothing in the driver or the logs could see the difference between "Plith hid after
+the catcher's window existed" and "Plith hid after the catcher's window was visible". Both halves
+were logged; the ORDER between them was not, on either side. A person watching the screen found it
+twice before an instrument could state it once.

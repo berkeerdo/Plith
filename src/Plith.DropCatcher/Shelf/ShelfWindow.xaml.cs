@@ -517,18 +517,41 @@ public partial class ShelfWindow : Window
 
         if (reasserting)
         {
+
             // Re-applied at full expansion rather than animated, because the rectangle may have
             // changed and both the shape and the page are sized from it. The property is already
             // held at 1 by the finished animation, so assigning it would be ignored; calling the
             // handler directly is the one path that re-reads the new ActualWidth/ActualHeight.
             ApplyExpansion(1);
+
+            // Already opaque, so the acknowledgement goes out now: there is no fade to wait for.
+            // After ApplyExpansion rather than before it, because a re-assertion may carry a new
+            // rectangle and Plith should not take its window down until this one has taken it.
+            Shown?.Invoke();
         }
         else
         {
-            BeginAnimation(ExpansionProperty, new DoubleAnimation(0, 1, GrowDuration)
+            var arrival = new DoubleAnimation(0, 1, GrowDuration)
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
+            };
+
+            // Plith is told the window is up when it is actually OPAQUE, not when Show returned.
+            //
+            // REPORTED, twice, as the notch closing and instantly reopening on the way to the
+            // shelf. The acknowledgement used to be sent the moment OpenAt returned, which is the
+            // FIRST frame of this fade, when Shape.Opacity is still near zero. Plith hides its own
+            // window within a few milliseconds of receiving it, so for the length of the fade there
+            // was a panel at nearly no opacity with nothing behind it: a gap, precisely the one
+            // waiting for ShelfShown was built to close, moved four frames later rather than
+            // removed. Completed fires at full opacity, and until then Plith's page stays up
+            // behind this one.
+            //
+            // If the fade never completes, because a close or a re-assertion interrupts it, this
+            // never fires and Plith falls back to its own 400 ms timeout, which is the old
+            // behaviour and merely ugly.
+            arrival.Completed += (_, _) => Shown?.Invoke();
+            BeginAnimation(ExpansionProperty, arrival);
         }
 
         // Logged rather than assumed. A process that is not already the foreground process is not
@@ -541,6 +564,13 @@ public partial class ShelfWindow : Window
         _log.Info($"Shelf {(reasserting ? "re-asserted" : "opened")} at {x},{y} {width}x{height}. " +
                   $"handle=0x{handle:X}, foreground={foreground}");
     }
+
+    /// <summary>
+    /// The shelf's window is on screen AND fully painted, so Plith can take its own window down
+    /// with nothing visible between the two. See the arrival animation in OpenAt for why this is
+    /// not raised when Show returns.
+    /// </summary>
+    public event Action? Shown;
 
     /// <summary>Repaints the shelf in the theme Plith resolved. Safe at any time: the page is
     /// re-rendered afterwards, so brushes already handed to existing tiles are replaced rather

@@ -940,9 +940,16 @@ public sealed class OsdHost : BandWindow
     /// </summary>
     private void HideForCatcher()
     {
-        if (Handle != 0)
-            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
-                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+        if (Handle == 0) return;
+
+        _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+            SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+
+        // Logged because the GAP between this moment and the catcher's window being opaque is
+        // the whole handover, and it has been reported as the notch closing and reopening twice.
+        // Read it against the catcher's own "Shelf opened" line: this should land AFTER it by
+        // about the length of the arrival fade, never before it.
+        _log?.Info("Shelf", "Window down: the catcher's shelf says it is opaque.");
     }
 
     /// <summary>
