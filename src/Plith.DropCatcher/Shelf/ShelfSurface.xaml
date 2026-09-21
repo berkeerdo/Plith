@@ -79,6 +79,58 @@
                 </Setter.Value>
             </Setter>
         </Style>
+
+        <!-- The per-tile remove chip, which is NOT the header buttons with a smaller radius.
+
+             A header button sits on the card's own surface, so a wash is enough to show it has
+             been entered. This one sits ON a tile, on top of a file icon that may be any colour
+             a shell icon can be, and it appeared with no ground at all: a 1.6-thick light stroke
+             over a bright icon, which is the state reported from a real session as the hover
+             "losing things". A wash over an unknown ground cannot be relied on to show anything.
+
+             So the chip carries its own opaque ground from the moment it appears, and hover and
+             press lighten THAT rather than the tile under it. The ring around it separates the
+             circle from a dark icon, the case a dark ground alone would disappear into.
+
+             The colours are literal rather than palette keys because the notch palette has no
+             scrim family, and they are dark in both themes on purpose: NotchInk is #F2F5F8 in
+             Light as well as Dark, so this surface is dark whichever theme is chosen, and a chip
+             that flipped with the theme would carry light ink on a light ground. -->
+        <Style x:Key="TileRemoveButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chip"
+                                CornerRadius="9"
+                                Background="#D91B2027"
+                                BorderBrush="#40FFFFFF"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#FF4C5864" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#A6FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </UserControl.Resources>
 
     <!-- Only the BOTTOM corners are round, the same rule NotchGeometry.BottomRoundedClip states

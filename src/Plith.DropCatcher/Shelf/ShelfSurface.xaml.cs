@@ -102,6 +102,7 @@ public partial class ShelfSurface : UserControl
     /// not in anything the tile or the drop target itself remembers.</summary>
     private ShelfModel? _lastModel;
 
+
     /// <summary>The context menu a tile currently has open, or null. Tracked here rather than
     /// left to be inferred from ContextMenuOpening/Closing bubbling up from whatever tile owns
     /// it: Render tears every tile out of Columns and rebuilds them from scratch, and a bubbling
@@ -374,6 +375,28 @@ public partial class ShelfSurface : UserControl
         // dismissed again.
         if (_openMenu is { IsOpen: true } openMenu) openMenu.IsOpen = false;
 
+        // AND THE TOOLTIP, for exactly the same reason and found the same way: a person emptying
+        // the shelf tile by tile reported the empty state appearing, a file coming back into it,
+        // and the empty state returning. The file was a TOOLTIP.
+        //
+        // The pointer rests on a tile, its tooltip opens, the click under that pointer removes
+        // the tile - and a tooltip is popup content, not a child of the tile, so the tear-out
+        // below leaves it on screen. Measured on 2026-09-21: after a Render that emptied the
+        // shelf entirely, a tooltip opened on a destroyed tile still reported IsOpen true, which
+        // is a box with a file name in it hanging over the dashed empty box. WPF's own
+        // ShowDuration is five seconds, so it lingers and then goes, which is precisely the
+        // "comes back and then leaves again" that was reported.
+        //
+        // The screen burst that photographed the trigger is in scripts/drive-shelf-pair.ps1's
+        // stage 3.13: the frame right after a remove shows the next tile's tooltip already up.
+        //
+        // WALKED rather than tracked from ToolTipOpening, which was the first fix and was worse
+        // in a way the probe caught immediately: a tooltip opened by anything that does not raise
+        // that event is open and untracked, and closing what you were told about is not the same
+        // as closing what is there. This asks the elements about to be destroyed. It cannot miss
+        // one, and the walk is at most ShelfCapacity tiles deep.
+        CloseOpenToolTips(Columns);
+
         Columns.Children.Clear();
 
         // Both hosts reset here, so the empty state cannot outlive the empty shelf. Setting them
@@ -517,7 +540,15 @@ public partial class ShelfSurface : UserControl
             //
             // The last tile's trailing gap hangs off the right edge, which costs nothing: 360
             // still sits inside the 384 frame.
-            Width = NotchGeometry.ShelfTilesPerRow
+            //
+            // And only as wide as the row it actually has to hold, which is what makes the
+            // HorizontalAlignment below do anything. At a fixed five-tile width a shelf of three
+            // files was a 216 DIP row left-aligned inside a 360 DIP panel that was itself
+            // centred, so the tiles sat left of centre with the whole right half of the pane
+            // empty: a centred panel centres nothing when the panel is wider than its contents.
+            // A full first row (six files or more) still measures the same 360 as before, so the
+            // wrap point and the capacity guarantee above are untouched.
+            Width = Math.Min(items.Count, NotchGeometry.ShelfTilesPerRow)
                   * (NotchGeometry.ShelfTileSize + NotchGeometry.ShelfGap),
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Center,
@@ -723,8 +754,9 @@ public partial class ShelfSurface : UserControl
             Padding = new Thickness(4),
             Cursor = Cursors.Hand,
             Child = overlay,
-            ToolTip = entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name,
         };
+
+        AttachToolTip(tile, entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
 
         AutomationProperties.SetName(tile, entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
         tile.ContextMenu = BuildTileMenu(entry);
@@ -791,12 +823,17 @@ public partial class ShelfSurface : UserControl
 
         var button = new Button
         {
-            Width = 16,
-            Height = 16,
+            // 18, not 16, and templated rather than left to WPF's default Button chrome. The
+            // default template paints its own grey ground and its own hover, so a Background of
+            // Transparent set on the button did nothing: the chip read as a stock system button
+            // dropped on a tile and its hover was that template's, not this page's.
+            Width = 18,
+            Height = 18,
             Padding = new Thickness(4),
-            Background = Brushes.Transparent,
-            BorderThickness = new Thickness(0),
-            Cursor = Cursors.Hand,
+            Style = (Style)FindResource("TileRemoveButtonStyle"),
+            // Inset from the tile's corner rather than hard against it. The tile's radius is 8
+            // and the chip's is 9, so in the corner the two curves cut into each other.
+            Margin = new Thickness(0, 3, 3, 0),
             HorizontalAlignment = HorizontalAlignment.Right,
             VerticalAlignment = VerticalAlignment.Top,
             Visibility = Visibility.Collapsed,
@@ -813,6 +850,41 @@ public partial class ShelfSurface : UserControl
         };
 
         return button;
+    }
+
+    /// <summary>
+    /// Give <paramref name="element"/> a tooltip that can still be closed after the element is
+    /// gone.
+    ///
+    /// An explicit ToolTip object rather than the string this used to be, and that IS half the
+    /// fix: WPF wraps a string in a ToolTip it creates internally and hands nobody a reference,
+    /// so a string tooltip left open on a destroyed tile cannot be closed by anyone. There is
+    /// nothing to call.
+    ///
+    /// The tooltip still says what it always said, in the same place, with the same delay. Only
+    /// its lifetime is reachable now.
+    /// </summary>
+    private static void AttachToolTip(FrameworkElement element, string text)
+        => element.ToolTip = new ToolTip { Content = text };
+
+    /// <summary>
+    /// Close any tooltip open on <paramref name="root"/> or anything under it.
+    ///
+    /// Called by <see cref="Render"/> on the tile host it is about to clear. A tooltip is popup
+    /// content rather than a child of the element it belongs to, so clearing the children leaves
+    /// an open one on screen for WPF's five-second ShowDuration: a box with a file name in it,
+    /// over whatever the page drew instead. See Render for the report that found it.
+    ///
+    /// The visual tree rather than the logical one, because a tile's tooltip hangs off the tile
+    /// and the tiles hang off a panel this control built; both are visual children here. Depth
+    /// is a panel, its tiles and their content, so this is a handful of nodes.
+    /// </summary>
+    private static void CloseOpenToolTips(DependencyObject root)
+    {
+        if (root is FrameworkElement { ToolTip: ToolTip { IsOpen: true } open }) open.IsOpen = false;
+
+        var count = VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++) CloseOpenToolTips(VisualTreeHelper.GetChild(root, i));
     }
 
     /// <summary>

@@ -180,6 +180,26 @@ public partial class ShelfWidget : UserControl
 
     private void Render()
     {
+        // The tooltip on the tile this is about to destroy, closed FIRST.
+        //
+        // The same defect as ShelfSurface's, in the same shape, in the other process: a tooltip
+        // is popup content rather than a child of the tile, so clearing the row below leaves an
+        // open one on screen with a file name in it, for WPF's five-second ShowDuration. This
+        // page repaints on every store change, so a drop or a remove is enough to reach it while
+        // the pointer rests on a tile - and this page is hovered by design, since a click on it
+        // is what opens the shelf.
+        //
+        // Fixed here as well as there rather than waiting for a report, because the reported one
+        // cost an afternoon of measurement in the surface that happened to be looked at.
+        //
+        // The tiles are asked directly rather than an open tooltip being tracked as it opens: a
+        // tooltip opened by anything that does not raise ToolTipOpening would be open and
+        // untracked, which a probe caught on the first try in the other surface.
+        foreach (var child in Tiles.Children)
+        {
+            if (child is FrameworkElement { ToolTip: ToolTip { IsOpen: true } open }) open.IsOpen = false;
+        }
+
         Tiles.Children.Clear();
 
         // Both hosts reset on every render, so the empty state cannot outlive the empty shelf.
@@ -504,8 +524,12 @@ public partial class ShelfWidget : UserControl
             // needs. Separation comes from the spacing instead, which is the notch's own idiom.
             Padding = new Thickness(4),
             Child = stack,
-            ToolTip = tooltip,
         };
+
+        // An explicit ToolTip rather than the string this used to be: a string tooltip is wrapped
+        // by WPF in an object it hands nobody, so it cannot be closed once its tile is gone. See
+        // Render.
+        tile.ToolTip = new ToolTip { Content = tooltip };
 
         AutomationProperties.SetName(tile, announced);
         return tile;
