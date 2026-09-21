@@ -1881,3 +1881,41 @@ holding the column does not and a name set there would reach nothing.
 `CultureInfo.CurrentCulture` rather than from a table in the source, so the abbreviations, the
 weekday on the clock page and the condition word in the announcement all follow Windows. That is
 why the renders read "Pazartesi", "Sal" and "Çar" on this machine.
+
+### Every sky kind, drawn side by side, because it was asked (2026-09-21)
+
+"Are all of the weather conditions' icons and animations right?" Nothing in this repo could
+answer that: the only kind any render had ever drawn was Clear. `weather-marks.png` draws all
+five at 26 DIP, the size both pages use, on the notch's own ground.
+
+Answering it found **two** defects, one of them the rain blob already recorded above and one
+nobody had reported:
+
+**Snow was a lump.** `IconWxFlake` is three lines crossing through one centre, and a flake pushed
+into the 5.6 units under the cloud had its arms hidden behind it. Two attempts at it were
+measured and rejected before the cause was clear: making it bigger and thinner did not help,
+because the problem was position, not size.
+
+**The cloud now RISES when something falls from it**, by 3.5 units, which is the structural fix
+both wet kinds needed: `IconWxCloud` occupies y=10 to 18.4 of a 24 box, so there was never room
+below it for anything to fall into. It is done with `Canvas.SetTop` rather than a transform,
+because `CloudDrift` owns the cloud's `RenderTransform` for its horizontal drift and a second
+transform there would fight it.
+
+All five now read as what they are: a sun with rays, a cloud, a cloud with three rain strokes, a
+cloud with a six-armed flake, and a crescent moon.
+
+**What this does NOT verify is the motion.** A still frame cannot show a sun breathing, a cloud
+drifting or a drop falling, and a mark's animations only start when it becomes visible. The
+shapes are measured; the animations are read from the code and unmeasured. Section 19's frame
+counter is the shape a real measurement of them would take.
+
+### Today's range on the clock page
+
+The addition chosen from the four offered. `21° / 14°` beside the current temperature, dimmed,
+because the current number alone cannot answer the question a glance at a clock actually has.
+
+It cost no request: the daily block arrives with the same reading the temperature comes from, and
+its first day is today. Matched BY DATE rather than taken by index, so a reading that survives
+midnight cannot put yesterday's range beside today's temperature. Hidden when there is no daily
+block, like every other optional thing on these pages.

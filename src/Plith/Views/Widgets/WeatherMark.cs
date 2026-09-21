@@ -86,6 +86,18 @@ public partial class WeatherMark : UserControl
         // Cloud under everything wet, and under overcast on its own.
         Cloud.Visibility = clear || night ? Visibility.Collapsed : Visibility.Visible;
 
+        // The cloud RISES when something falls from it, which is what makes room for the fall to
+        // be below it rather than behind it.
+        //
+        // IconWxCloud occupies y=10 to 18.4 of the 24 box, leaving 5.6 units under it: a drop
+        // pattern fits in that and a snowflake does not, and a flake pushed up into the gap ends
+        // up with its arms hidden behind the cloud and reads as a lump. Measured in
+        // weather-marks.png, twice, which is what a strip of every kind is for.
+        //
+        // Canvas.SetTop rather than a transform: CloudDrift owns the cloud's RenderTransform for
+        // the horizontal drift, and a second transform there would fight it.
+        Canvas.SetTop(Cloud, rain || snow ? -3.5 : 0);
+
         Fall.Visibility = rain || snow ? Visibility.Visible : Visibility.Collapsed;
         if (rain || snow)
         {
@@ -109,25 +121,32 @@ public partial class WeatherMark : UserControl
             Fall.RenderTransform = FallDrop;
             if (snow)
             {
-                Canvas.SetLeft(Fall, 7.5);
-                Canvas.SetTop(Fall, 15);
-                Fall.Width = 9;
-                Fall.Height = 9;
+                // Square and clear of the risen cloud, which now ends at 14.9.
+                // Wider and thinner than the drop pattern. IconWxFlake is three crossing lines
+                // through one centre, so at 9 DIP with a 1.5 stroke the three cross in the same
+                // few pixels and the whole thing reads as a lump under the cloud: measured in
+                // weather-marks.png, which draws every kind side by side and is the only reason
+                // this was seen at all. 12 DIP of glyph with a 1.1 stroke keeps the arms apart.
+                Canvas.SetLeft(Fall, 7);
+                Canvas.SetTop(Fall, 14.5);
+                Fall.Width = 10;
+                Fall.Height = 10;
             }
             else
             {
                 // The strokes span the cloud's own width and start at its lower edge, so they
                 // read as coming FROM it rather than as a mark beside it.
                 Canvas.SetLeft(Fall, 6);
-                Canvas.SetTop(Fall, 15.5);
+                Canvas.SetTop(Fall, 14.5);
                 Fall.Width = 12;
-                Fall.Height = 6.5;
+                Fall.Height = 8;
             }
 
             Fall.Stretch = Stretch.Uniform;
             // Stroked for both now. Rain was a filled teardrop with no stroke at all, which is
-            // why it merged into the cloud above it.
-            Fall.StrokeThickness = 1.5;
+            // why it merged into the cloud above it. The flake is thinner than the rain strokes
+            // because it has three lines crossing in one place and they have to stay apart.
+            Fall.StrokeThickness = snow ? 1.1 : 1.5;
         }
 
         ApplyInk(Ink);

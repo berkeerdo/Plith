@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Threading;
@@ -138,10 +139,31 @@ public partial class ClockWidget : UserControl
         var fresh = snapshot is { } w && WeatherCodeMap.IsFresh(w, DateTimeOffset.Now, WeatherMaxAgeMinutes);
 
         WeatherBlock.Visibility = fresh ? Visibility.Visible : Visibility.Collapsed;
-        if (!fresh) return;
+        if (!fresh)
+        {
+            Range.Visibility = Visibility.Collapsed;
+            return;
+        }
 
         var reading = snapshot!.Value;
         Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(reading.TemperatureC):0}°");
+
+        // Today's two ends, from the daily block that arrives with the same reading. Today is the
+        // FIRST day Open-Meteo returns, and it is matched by date rather than taken by index: a
+        // reading that survives midnight would otherwise put yesterday's range beside today's
+        // temperature.
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var range = reading.Days?.FirstOrDefault(d => d.Date == today);
+        if (range is { } day)
+        {
+            Range.Text = string.Create(CultureInfo.CurrentCulture,
+                $"{Math.Round(day.MaxC):0}° / {Math.Round(day.MinC):0}°");
+            Range.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            Range.Visibility = Visibility.Collapsed;
+        }
 
         // The same SkyKind the weather page's gradient is drawn from, so the mark here and the
         // sky there can never describe different weather.

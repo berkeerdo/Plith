@@ -330,6 +330,43 @@ Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 $rainReader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
     [Plith.Services.WeatherSnapshot]::new(14.0, 61, [DateTimeOffset]::Now, $days)
 }
+# EVERY sky kind, side by side, at the size the pages actually draw the mark.
+#
+# Asked directly: are all of the conditions' icons and animations right? Nothing could answer
+# that, because the only kind ever rendered was Clear. Rain turned out to be a blob at this size
+# and had been one for as long as the mark has existed; the others had never been looked at at
+# all. One strip, five marks, 26 DIP each, on the notch's own ground.
+#
+# The ANIMATIONS are not in this: a still frame cannot show motion, and a mark's motion only
+# starts when it is visible. What this proves is the shapes.
+$kindStrip = [Windows.Controls.StackPanel]::new()
+$kindStrip.Orientation = 'Horizontal'
+$kindStrip.HorizontalAlignment = 'Center'
+$kindStrip.VerticalAlignment = 'Center'
+Add-Palette $kindStrip
+foreach ($kindName in 'Clear', 'Overcast', 'Rain', 'Snow', 'Night') {
+    $cell = [Windows.Controls.StackPanel]::new()
+    $cell.Margin = [Windows.Thickness]::new(14, 0, 14, 0)
+
+    $label = [Windows.Controls.TextBlock]::new()
+    $label.Text = $kindName
+    $label.FontSize = 10
+    $label.HorizontalAlignment = 'Center'
+    $label.Foreground = $kindStrip.TryFindResource('NotchInkMuted')
+    $cell.Children.Add($label) | Out-Null
+
+    $m = [Plith.Views.Widgets.WeatherMark]::new()
+    $m.Width = 26; $m.Height = 26
+    $m.Margin = [Windows.Thickness]::new(0, 4, 0, 0)
+    $m.HorizontalAlignment = 'Center'
+    $m.Show([Plith.Services.SkyKind]::$kindName)
+    $cell.Children.Add($m) | Out-Null
+
+    $kindStrip.Children.Add($cell) | Out-Null
+}
+Wait-ForDispatcher
+Save-Visual -Element $kindStrip -W $frameW -H 70 -Name 'weather-marks'
+
 $clockRain = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $rainReader, $micReader)
 Save-Visual -Element $clockRain -W $frameW -H $frameH -Name 'widget-clock-rain'
 

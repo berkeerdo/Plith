@@ -132,6 +132,20 @@
                            Typography.NumeralAlignment="Tabular"
                            LineHeight="36" LineStackingStrategy="BlockLineHeight"
                            Foreground="{DynamicResource NotchInk}" />
+                <!-- Today's two ends, which the current temperature alone cannot answer.
+                
+                     The data arrived with the two-day forecast rather than being fetched for this: the
+                     daily block rides along in the same request and its FIRST day is today. So this costs
+                     nothing, and "do I need a jacket" is the question a glance at a clock actually has.
+                
+                     Hidden when there is no daily block, like every other optional thing on these
+                     pages. -->
+                <TextBlock x:Name="Range"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Bottom"
+                           FontSize="12"
+                           Foreground="{DynamicResource NotchInkMuted}"
+                           Visibility="Collapsed" />
             </StackPanel>
         </StackPanel>
 
