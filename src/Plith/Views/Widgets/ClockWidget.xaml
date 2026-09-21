@@ -46,23 +46,25 @@
 
         <!-- Time and date on ONE line, the date against the time's baseline.
 
-             Stacked, this block came to 56 DIP; with the gap and the track line under it the
-             page needed 86 and the frame has 76, so the track row ran off the bottom edge and
-             was clipped in half. Putting the date beside the time gives back the 18 that
-             overflowed - and it reads correctly here in a way it did not when everything was
-             centred, because there is a left edge for both of them to sit on. -->
-        <StackPanel Grid.Row="0" Grid.Column="0"
-                    Orientation="Horizontal"
-                    VerticalAlignment="Top">
+             The date is UNDER the time now, which is where it belongs and where the old frame
+             had no room for it. The record of why it was beside it is worth keeping, because the
+             reason was arithmetic and the arithmetic changed: stacked, the block came to 56 DIP,
+             and with the gap and the track line under it the page needed 86 where the frame gave
+             76, so the track row ran off the bottom edge and was clipped in half. The frame is
+             164 now and the band is 130. Stacked costs 52 and the whole page comes to 92.
+
+             Everything after the date is still on the date's line: the battery, the charging
+             bolt and the mic mark are all secondary to the two facts above them. -->
+        <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Top">
             <TextBlock x:Name="Time"
-                       FontSize="36" FontWeight="SemiBold"
+                       FontSize="46" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="36" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="46" LineStackingStrategy="BlockLineHeight"
                        Foreground="{DynamicResource NotchInk}" />
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
             <TextBlock x:Name="Date"
-                       Margin="10,0,0,3"
                        VerticalAlignment="Bottom"
-                       FontSize="12"
+                       FontSize="13"
                        Foreground="{DynamicResource NotchInkMuted}" />
             <Path x:Name="ChargingBolt"
                   Data="{StaticResource IconBolt}"
@@ -97,6 +99,7 @@
                           StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
                 </Canvas>
             </Viewbox>
+        </StackPanel>
         </StackPanel>
 
         <!-- Right-aligned and baseline-matched to the time, so the two readings sit on one line

@@ -1708,3 +1708,45 @@ only by luck, in a feature built and shipped for it, and every gate was green.
 pointer's x within the control so both ends are reachable. Measured after, three runs, forwards
 and backwards: `11s -> 247s` (target 247), `257s -> 65s` (target 66), `77s -> 247s` (target 247),
 with the mid-drag reading tracking the pointer every time.
+
+### The other pages at 164, and the shelf that the frame broke (2026-09-21)
+
+The user opened the real notch, looked, and said the shelf was completely broken and that the
+clock and weather pages needed a redesign at the new size. All three were true, and the shelf's
+was a breakage with a cause worth keeping.
+
+**The shelf's empty state carried a number derived from the old frame.** Its dashed box was a
+fixed 68 DIP tall with `Margin(0, 7, 0, 0)`, and the comment beside it explained the 7: half the
+difference between a 68 DIP row and the 82 DIP content box of a 116 DIP frame. Both numbers in
+that arithmetic died with the frame, so the box sat near the top of a 130 DIP band with a dead
+strip under it. It also said "Tiles is top-aligned", which the same day's centring had made
+false.
+
+It is not compensated any more, it STRETCHES: the box lives in its own host and fills the page,
+which is what an empty shelf page is for. A box that fills what it is given needs no number.
+
+**A one-way state found while fixing it.** The empty branch set its own visibility but nothing
+reset it, so a file arriving on an empty shelf would have left the dashed box up with the tiles
+hidden behind it. Both hosts reset on every render now.
+
+**The tile row and its hint were two rows and are now one centred block.** At 116 the row filled
+the band and the hint sat under it; at 164 the row floated in the middle and the hint clung to
+the bottom edge with a hole between them.
+
+**The clock page's date moved under the time**, which is where it belongs and where the old frame
+had no room for it. That constraint was recorded rather than guessed: stacked, the block came to
+56 DIP and the page needed 86 where the frame gave 76, so the track line was clipped in half.
+The band is 130 now, stacked costs 52, and the page comes to 92. The time went from 36 to 46.
+
+**The weather page's readout is anchored to the bottom** instead of centred, with the
+temperature at 42. Centred was right when the readout nearly filled the frame; at 164 it floated
+in the middle of a tall sky. On the bottom edge the sky above it is the picture, which is what
+the painted gradient was for.
+
+**And the media page's transport is centred with the output control aligned right**, rather than
+the four being one centred group. Asked for that way, and better for a reason worth recording:
+the three transport marks are what a hand goes to without looking, so their position should not
+depend on whether a fourth control is beside them.
+
+Driven on hardware after all of it: eight verdicts, all passing, including a seek from 128s to
+41s against a 41s target.

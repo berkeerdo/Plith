@@ -103,11 +103,19 @@
         <!-- Inset on the sides only. The page is vertically centred and the sky behind it wants
              every pixel, so vertical padding here bought nothing and cost the readout the room
              it needed - the temperature clipped at the top and the update line at the bottom. -->
-        <StackPanel x:Name="Readout" VerticalAlignment="Center" Margin="18,0,18,14">
+        <!-- Anchored to the BOTTOM of the page rather than centred in it.
+
+             Centred was right while the frame was 116 and the readout nearly filled it. At 164
+             the block floated in the middle of a tall sky with air above and below, which reads
+             as a page that lost something. On the bottom edge the sky above it is the picture and
+             the numbers sit on it, which is how a weather card is built and what the painted
+             gradient was for in the first place. The 26 DIP of bottom margin clears the page
+             rail's lane. -->
+        <StackPanel x:Name="Readout" VerticalAlignment="Bottom" Margin="18,0,18,26">
             <TextBlock x:Name="Temperature"
-                       FontSize="30" FontWeight="SemiBold"
+                       FontSize="42" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="31" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="43" LineStackingStrategy="BlockLineHeight"
                        Foreground="White">
                 <!-- The design puts a soft shadow under the number for the same reason the scrim
                      is there: over a bright sky, white on pale blue is the one thing on the page

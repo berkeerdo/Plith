@@ -42,19 +42,26 @@
          is centred in the lane and starts at 96.5, and its visible 3 DIP mark sits at about 101.
          The rail is invisible most of the time and fades in on every page turn, so anything
          overlapping it is a collision that only appears while the page is being changed. -->
-    <Grid Margin="20,12,20,22">
-        <Grid.RowDefinitions>
-            <RowDefinition Height="*" />
-            <RowDefinition Height="Auto" />
-        </Grid.RowDefinitions>
+    <!-- The row and the line under it are ONE centred block, not a star row with the line
+         pinned to the bottom.
 
-        <!-- Centred in its row rather than hugging the top. With the frame at 164 DIP the tiles
-             sat against the top edge and the hint against the bottom one, with a hole between
-             them; centred, the extra room reads as breathing space around the row. -->
+         They were two rows, which was right at 116 DIP and wrong at 164: the tiles ended up in
+         the middle of the band and the line against the bottom edge, with a hole between them
+         that read as a page missing something. Kept together they centre as a pair, and the line
+         also moves away from the page rail's lane, which it used to sit just above. -->
+    <Grid Margin="20,12,20,22">
+        <!-- The empty state's own host, so its dashed box can STRETCH to the band instead of
+             being a fixed height centred by arithmetic. The box that was there carried a 7 DIP
+             top margin, which was half the difference between a 68 DIP row and the content box
+             of a 116 DIP frame: both of those numbers are gone, and a number derived from one
+             frame size does not survive the next one. A box that fills what it is given needs no
+             such number. -->
+        <Grid x:Name="EmptyHost" Visibility="Collapsed" />
+
+        <StackPanel x:Name="FilledBlock" VerticalAlignment="Center">
         <StackPanel x:Name="Tiles"
-                    Grid.Row="0"
                     Orientation="Horizontal"
-                    VerticalAlignment="Center" />
+                    HorizontalAlignment="Center" />
 
         <!-- The one place the product says the shelf opens.
 
@@ -63,12 +70,13 @@
              be rebuilt wrongly. Render only chooses whether it is showing and, when the shelf
              cannot open, replaces the text with the reason. -->
         <TextBlock x:Name="Hint"
-                   Grid.Row="1"
+                   Margin="0,10,0,0"
                    Text="Click to open the shelf"
                    FontSize="10"
                    TextAlignment="Center"
                    TextTrimming="CharacterEllipsis"
                    Foreground="{DynamicResource NotchInkMuted}"
                    Visibility="Collapsed" />
+        </StackPanel>
     </Grid>
 </UserControl>

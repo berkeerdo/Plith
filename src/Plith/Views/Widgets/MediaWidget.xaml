@@ -330,14 +330,22 @@
                        Foreground="{DynamicResource NotchInkMuted}" />
         </Grid>
 
-        <!-- The transport, centred on its own row, which is where Alcove puts it and where it
-             stops competing with the title for width.
+        <!-- The transport sits in the MIDDLE of the row and the output control at its RIGHT
+             end, rather than the four of them being one centred group.
+
+             Asked for that way, and it is the better arrangement for a reason worth writing
+             down: the three transport marks are what a hand goes to without looking, so their
+             place should not move when a fourth control is beside them. Centred on the row, they
+             are where they are whether or not the output button exists. A single centred group
+             would have shifted all three left to make room for it.
+
+             The output control is aligned right in the same row rather than following the group,
+             which is also how Alcove ends its control row.
 
              Round, not rounded-square: three circles read as a transport and three squares read
-             as a toolbar, and this is the row a person reaches for without looking. The 12 DIP
-             gap before the output control is what stops it reading as a fourth transport
-             button. -->
-        <StackPanel Grid.Row="4" Orientation="Horizontal" HorizontalAlignment="Center">
+             as a toolbar. -->
+        <Grid Grid.Row="4">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
             <Button x:Name="Previous" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Previous track">
                 <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
@@ -371,12 +379,14 @@
                               Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
                     </Canvas></Viewbox>
             </Button>
+        </StackPanel>
+
             <!-- Stroked, not filled: the speaker geometries are line art, which is why NotchHud
                  strokes the same three paths. Filling them draws a blob. -->
             <Button x:Name="Output" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Change output device"
                     ToolTip="Change output device"
-                    Margin="12,0,0,0">
+                    HorizontalAlignment="Right">
                 <Viewbox Width="15" Height="15">
                     <Canvas Width="24" Height="24">
                         <Path Data="{StaticResource IconSpeakerBody}"
@@ -394,7 +404,7 @@
                     </Canvas>
                 </Viewbox>
             </Button>
-        </StackPanel>
+        </Grid>
         </Grid>
 
         <!-- 14 + 3 + 104 = 121, the content band. The 104 is three 32 DIP cells and two 4 DIP

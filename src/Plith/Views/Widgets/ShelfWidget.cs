@@ -182,6 +182,12 @@ public partial class ShelfWidget : UserControl
     {
         Tiles.Children.Clear();
 
+        // Both hosts reset on every render, so the empty state cannot outlive the empty shelf.
+        // Setting them only inside the empty branch made the transition one-way: a file arriving
+        // on an empty shelf would have left the dashed box up and the tiles hidden behind it.
+        EmptyHost.Visibility = Visibility.Collapsed;
+        FilledBlock.Visibility = Visibility.Visible;
+
         var items = _shelf.Items;
 
         // Restored here rather than only on the timer, so a shelf that changes while a failure
@@ -229,17 +235,13 @@ public partial class ShelfWidget : UserControl
 
             var empty = new Grid
             {
-                Width = 300,
-                // The row's own height, so an empty page occupies exactly what a full one does
-                // and the frame does not resize between the two.
-                Height = TileHeight,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                // Centred in the taller box an empty page gets. The hint line under the row is
-                // collapsed while the shelf is empty (see above), so this row's star track is the
-                // whole 82 DIP content box rather than the 68 a full row leaves it, and Tiles is
-                // top-aligned. Half of that 14 DIP difference, so the outline sits in the middle
-                // of the page instead of hanging from its top edge.
-                Margin = new Thickness(0, 7, 0, 0),
+                // Stretched, not sized. An empty shelf page IS a drop target, so the box that
+                // says so should occupy the page rather than float in the middle of it, and
+                // stretching means it follows the frame instead of carrying a number derived
+                // from one version of it. See EmptyHost in the XAML.
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                VerticalAlignment = VerticalAlignment.Stretch,
+                
             };
             // The glyph and the line as one centred row.
             var glyph = new System.Windows.Shapes.Path
@@ -269,7 +271,13 @@ public partial class ShelfWidget : UserControl
             empty.Children.Add(outline);
             empty.Children.Add(row);
 
-            Tiles.Children.Add(empty);
+            // Into its own host rather than into the tile row: a horizontal StackPanel gives its
+            // children their desired size and never stretches them, so a box added there could
+            // only ever be a fixed height.
+            EmptyHost.Children.Clear();
+            EmptyHost.Children.Add(empty);
+            EmptyHost.Visibility = Visibility.Visible;
+            FilledBlock.Visibility = Visibility.Collapsed;
 
             // On THIS control, not on Tiles. See the populated branch below for the whole of it.
             AutomationProperties.SetName(this, "Shelf, empty. Drop files on the notch to keep them here.");
