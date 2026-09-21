@@ -156,18 +156,28 @@ public static class NotchGeometry
     public const double ShelfGap = 8;
 
     /// <summary>
-    /// Everything in the shelf frame that is not the tile grid: the header with its clear
-    /// control, the surface's own padding, and the window margin.
+    /// Everything in the shelf frame that is not the tile grid, as the SUM OF THE PARTS THAT
+    /// DECLARE IT rather than a number derived from a frame that no longer exists.
     ///
-    /// DERIVED, but from two measured parts rather than from a guess. The frame was 384 x 224,
-    /// and the comment that number carried decomposed it: the surface wants 210 DIP of content
-    /// plus 14 DIP of margin. Of that 210, the tile columns were 149 (a 13 DIP stack caption, two
-    /// 64 DIP rows and one 8 DIP gap), which leaves 61 for the header and padding. So 61 + 14.
+    /// It said 61 + 14, and the comment that carried it decomposed a 384 x 224 frame whose tile
+    /// columns included a 13 DIP stack caption. Stacks are gone, the caption with them, and the
+    /// leftover was 7 DIP short of what the surface measures at EVERY row count, which is the
+    /// second half of the shelf being cut: the growth clamp in GrowthStart stops the page hanging
+    /// outside its window, and this stops the window being smaller than the page in the first
+    /// place. Measured on 2026-09-21, one to fifteen files: the surface wanted 146, 218 and 290
+    /// where the frame gave 139, 211 and 283.
     ///
-    /// It is named rather than folded into a literal height so that changing ShelfRowCount moves
-    /// the frame with it.
+    /// The parts, each traceable to a declaration in ShelfSurface.xaml:
+    ///   2  the surface's own border, BorderThickness="1" top and bottom
+    ///   32 the content grid's Margin="16", top and bottom
+    ///   40 the header row: a 28 DIP close box (the taller of the two controls) plus its 12 DIP
+    ///      bottom margin
+    ///
+    /// scripts/render-widgets.ps1 asserts this against the surface's measured DesiredSize for
+    /// every shelf size, which is the only check that can see the two disagree: the surface lives
+    /// in the other project and this file cannot measure it.
     /// </summary>
-    private const double ShelfChromeDip = 61 + 14;
+    private const double ShelfChromeDip = 2 + 32 + 40;
 
     /// <summary>
     /// The shelf surface, which is a second process's window and still belongs here.
@@ -222,7 +232,13 @@ public static class NotchGeometry
     public static Size ShelfFrameFor(int itemCount)
     {
         var rows = ShelfRowsFor(itemCount);
-        return new Size(384, rows * ShelfTileSize + (rows - 1) * ShelfGap + ShelfChromeDip);
+
+        // TILE PLUS GAP PER ROW, including the last one. A tile carries a uniform bottom margin
+        // of ShelfGap so it occupies tile + gap (see ShelfSurface.BuildTile, which spells out why
+        // the horizontal half-gaps are split and the vertical one is not), so the last row's
+        // margin is inside the grid's measurement as well. The old expression charged the gap
+        // only BETWEEN rows, and was one gap short at every row count.
+        return new Size(384, rows * (ShelfTileSize + ShelfGap) + ShelfChromeDip);
     }
 
     /// <summary>
@@ -311,6 +327,27 @@ public static class NotchGeometry
     public static double Clamp01(double t) => t < 0 ? 0 : t > 1 ? 1 : t;
 
     public static double Lerp(double from, double to, double t) => from + (to - from) * Clamp01(t);
+
+    /// <summary>
+    /// Where a growth into <paramref name="window"/> starts: the open frame, never larger than
+    /// the window it grows into.
+    ///
+    /// <see cref="SurfaceSize"/> only ever GROWS. It clamps at the collapsed size on both axes,
+    /// which is right while the frame is smaller than what it opens into and wrong the moment it
+    /// is not, and the shelf made it not: <see cref="ShelfFrameFor"/> hugs its contents, so a
+    /// shelf of one to five files is 139 DIP tall while the open frame is 164. Measured on
+    /// 2026-09-21: a 139 DIP window was handed a 164 DIP shape and a 164 DIP page, and the bottom
+    /// quarter of the page hung below the window. Reported from a real session as half the shelf
+    /// not being visible.
+    ///
+    /// Taking the smaller value per axis rather than skipping the growth entirely keeps the
+    /// shrinking case animating: a shelf shorter than the frame still opens, it just opens from
+    /// its own size, which is a shape appearing rather than one growing. There is nothing to
+    /// interpolate there and nothing that needs to be.
+    /// </summary>
+    public static Size GrowthStart(Size frame, Size window) => new(
+        Math.Min(frame.Width, window.Width),
+        Math.Min(frame.Height, window.Height));
 
     /// <summary>
     /// Size of the notch surface at progress <paramref name="t"/>.

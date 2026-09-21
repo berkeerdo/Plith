@@ -482,6 +482,13 @@ public partial class ShelfWindow : Window
     {
         _model.SetItems(paths);
         Page.Render(_model);
+
+        // What ARRIVED and what the page now holds, in one line, because the two can disagree:
+        // ShelfStore refuses a path it cannot stat, so a delivery of three can legitimately draw
+        // two, and a flicker report is unanswerable without knowing which of the two moved. The
+        // shelf's open state is on the line as well, since a delivery to a shelf nobody is
+        // looking at is not a flicker whatever it says.
+        _log.Info($"Items received: {paths.Count} path(s); the page now draws {_model.Items.Count}. open={_open}");
     }
 
     /// <summary>
@@ -854,7 +861,12 @@ public partial class ShelfWindow : Window
         // ActualWidth/Height rather than the XAML values: the window has just been sized to the
         // rectangle Plith handed over, which is where the growth has to end up.
         var open = new Size(ActualWidth, ActualHeight);
-        var from = NotchGeometry.OpenFrameDip;
+
+        // The growth starts from the notch's open frame, CLAMPED to the window it grows into.
+        // GrowthStart owns that rule and records what happens without it; the arithmetic lives
+        // there rather than here because this file is a Window the test project cannot construct,
+        // which is how the shelf came to be cut in half with every gate green.
+        var from = NotchGeometry.GrowthStart(NotchGeometry.OpenFrameDip, open);
         var size = NotchGeometry.SurfaceSize(from.Width, from.Height, open, t);
 
         Shape.Width = size.Width;
@@ -865,11 +877,14 @@ public partial class ShelfWindow : Window
         // The page is pinned at the FINAL size for the whole growth and clipped by the shape
         // around it, rather than being laid out into whatever the shape currently measures. Laid
         // out every frame, its tile columns would reflow from a 356 DIP frame to a 384 DIP one
-        // while fading in, which reads as a window being resized rather than a shape opening. The
-        // same Math.Max clamp SurfaceSize applies is repeated here so the page cannot disagree
-        // with the shape about where the growth ends.
-        Page.Width = Math.Max(open.Width, from.Width);
-        Page.Height = Math.Max(open.Height, from.Height);
+        // while fading in, which reads as a window being resized rather than a shape opening.
+        //
+        // The final size is the WINDOW, full stop. This repeated SurfaceSize's Math.Max against
+        // the frame, on the reasoning that the page must not disagree with the shape about where
+        // the growth ends; the shape is clamped to the window now, so the agreement holds, and a
+        // max here would go back to laying a 164 DIP page into a 139 DIP window.
+        Page.Width = open.Width;
+        Page.Height = open.Height;
         Page.Opacity = NotchGeometry.ContentOpacity(t);
     }
 

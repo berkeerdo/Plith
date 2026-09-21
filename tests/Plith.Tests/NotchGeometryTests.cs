@@ -344,4 +344,43 @@ public class NotchGeometryTests
         Assert.Equal(NotchGeometry.OutputPickerColumns * NotchGeometry.OutputPickerRows,
                      NotchGeometry.OutputPickerCapacity);
     }
+
+    [Fact]
+    public void GrowthStartKeepsTheFrameWhenTheWindowIsBigger()
+    {
+        var start = NotchGeometry.GrowthStart(new Size(356, 164), new Size(384, 283));
+
+        Assert.Equal(356, start.Width);
+        Assert.Equal(164, start.Height);
+    }
+
+    [Fact]
+    public void GrowthStartNeverExceedsTheWindowItGrowsInto()
+    {
+        // The defect this function exists for. A shelf of one to five files is 139 DIP tall and
+        // the open frame is 164, so the growth was starting LARGER than the window and
+        // SurfaceSize, which only ever grows, kept it there: a 164 DIP shape in a 139 DIP window,
+        // with its bottom quarter outside. Per axis, because the shelf is wider than the frame
+        // and shorter than it at the same time.
+        var start = NotchGeometry.GrowthStart(new Size(356, 164), new Size(384, 139));
+
+        Assert.Equal(356, start.Width);
+        Assert.Equal(139, start.Height);
+    }
+
+    [Fact]
+    public void GrowthStartClampsTheRealShelfSizesAgainstTheRealFrame()
+    {
+        // Against the product's own numbers rather than fixtures, so this test fails if either
+        // side moves: the open frame grew from 116 to 164 and that is what broke the shelf.
+        foreach (var count in new[] { 0, 1, 3, 5, 6, 10, 15 })
+        {
+            var window = NotchGeometry.ShelfFrameFor(count);
+            var start = NotchGeometry.GrowthStart(NotchGeometry.OpenFrameDip, window);
+
+            Assert.True(start.Height <= window.Height,
+                $"a shelf of {count} would open a {start.Height} DIP shape in a {window.Height} DIP window");
+            Assert.True(start.Width <= window.Width);
+        }
+    }
 }
