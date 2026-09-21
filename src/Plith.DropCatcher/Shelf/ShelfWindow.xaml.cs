@@ -398,10 +398,21 @@ public partial class ShelfWindow : Window
         // both. WheelDecoder is LINKED from Plith rather than copied, so the sign conventions
         // have one definition: a plain vertical wheel is negated, a tilt is not, and getting that
         // wrong would page backwards on this page only.
-        var source = (HwndSource)PresentationSource.FromVisual(this)!;
-        source.AddHook(OnWindowMessage);
-
+        //
+        // Taken from the HANDLE, not from PresentationSource.FromVisual(this). MEASURED: when the
+        // handle is created by Warm rather than by Show, FromVisual returns NULL here, because the
+        // window's root visual is not attached to its source until it is first shown, and the
+        // forgiving-looking `!` on that line turned it into a NullReferenceException that killed
+        // the warm-up outright. HwndSource.FromHwnd returns the same object on both paths.
         var handle = new WindowInteropHelper(this).Handle;
+        var source = HwndSource.FromHwnd(handle);
+        if (source is null)
+        {
+            _log.Info("Shelf window has a handle with no HwndSource: the wheel hook was not installed.");
+            return;
+        }
+
+        source.AddHook(OnWindowMessage);
 
         // TOOLWINDOW keeps the shelf out of Alt+Tab, exactly as it keeps the catcher out.
         //
@@ -585,6 +596,53 @@ public partial class ShelfWindow : Window
     /// <summary>Until when the shelf refuses to be dismissed by the pointer. Default is the past,
     /// which is no hold at all.</summary>
     private DateTime _holdUntil = DateTime.MinValue;
+
+    /// <summary>
+    /// Pay for this window's existence NOW, long before anyone asks to see it.
+    ///
+    /// MEASURED, in the catcher's own log, which is why this exists rather than a skeleton:
+    ///
+    ///     first open   Items received 21:10:59.547 -> Shelf opened 21:10:59.729   182 ms
+    ///     second       21:11:01.474 -> 21:11:01.485                                11 ms
+    ///     third        21:11:03.296 -> 21:11:03.308                                12 ms
+    ///
+    /// The first open of a freshly started catcher costs fifteen times the others, and the cost is
+    /// not the content: the items have already been received and rendered by then. It is WPF
+    /// creating its first window in this process, which means the HWND, the theme dictionaries,
+    /// the font faces and the JIT of every template involved. For those 182 ms the catcher's UI
+    /// thread is not pumping, and since the swap puts its window under the pointer, Windows draws
+    /// the busy cursor: reported as "the mouse goes into loading for a second the first time".
+    ///
+    /// A skeleton would have covered the symptom with something to look at. This removes it: the
+    /// handle is created and a layout pass is run at CONNECT time, while nobody is waiting, so the
+    /// first real open costs what the second one does.
+    ///
+    /// EnsureHandle rather than Show, because showing it would take activation from whatever the
+    /// person is doing: this window is ShowActivated="True" on purpose, since Esc and Deactivated
+    /// are how it closes. A handle with no Show is invisible and steals nothing.
+    /// </summary>
+    public void Warm()
+    {
+        var handle = new WindowInteropHelper(this).EnsureHandle();
+        if (handle == nint.Zero) return;
+
+        // A real layout pass over the real surface, at the size it will actually be asked for.
+        // Measure alone leaves most of the template work undone.
+        var size = NotchGeometry.OpenFrameDip;
+        Page.Measure(size);
+        Page.Arrange(new Rect(0, 0, size.Width, size.Height));
+        Page.UpdateLayout();
+
+        // A DRAWING pass was tried here too, into a RenderTargetBitmap nobody looks at, on the
+        // theory that the rest of the stall was rasterisation. MEASURED and REMOVED: the first
+        // open cost 77, 67 and 72 ms on three freshly started catchers without it and 80, 73, 70
+        // and 67 ms with it, which is no difference at all, and a warm-up that buys nothing is
+        // startup work spent for a comment's sake. What remains is the window's first Show, and
+        // that cannot be paid without showing a window: this one is ShowActivated on purpose, so
+        // showing it at startup would take focus from whatever the person is doing.
+        _log.Info($"Warmed: handle created and the page laid out at {size.Width}x{size.Height} " +
+                  "before anyone asked for the shelf.");
+    }
 
     /// <summary>
     /// Whether the shelf is on screen, so the stand-in knows whether it is being replaced or

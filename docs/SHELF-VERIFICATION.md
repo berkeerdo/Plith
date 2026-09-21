@@ -3144,3 +3144,76 @@ remembering: making two surfaces match is not the same as making two processes a
 second is not always possible.**
 
 14 of 14 on hardware, 641 tests, three lints and the renders green.
+
+### 10.27 The first open cost fifteen times the second, and a skeleton was the wrong answer (2026-09-22)
+
+REPORTED: "the mouse goes into loading, it stutters for about a second the first time it opens,
+then it is smooth", with a request for a skeleton loader and better state handling.
+
+MEASURED FIRST, from the catcher's own log, because the two halves of that sentence do not have the
+same cause and a skeleton only addresses one of them. The gap between `Items received` and
+`Shelf opened`, on one catcher, four opens in a row:
+
+| open | items received | shelf opened | gap |
+|---|---|---|---|
+| first | 21:10:59.547 | 21:10:59.729 | **182 ms** |
+| second | 21:11:01.474 | 21:11:01.485 | 11 ms |
+| third | 21:11:03.296 | 21:11:03.308 | 12 ms |
+| fourth | (same session) | | 12 ms |
+
+A skeleton would have been the wrong answer to this, and the log is what says so: the items are
+already RECEIVED and the page already draws them before the window is shown, so there is nothing
+being waited for and nothing a placeholder could stand in for. What costs 182 ms is WPF creating
+its FIRST window in that process: the HWND, the theme dictionaries, the font faces, and the JIT of
+every template involved. For that time the catcher's UI thread is not pumping, and because the
+swap puts its window under the pointer, Windows draws the busy cursor. A skeleton would have drawn
+a placeholder for content that was ready, and the stall would have happened anyway.
+
+So the cost is paid at CONNECT time instead, when nobody is waiting: `ShelfWindow.Warm()` creates
+the handle with `EnsureHandle` and runs a real `Measure`/`Arrange`/`UpdateLayout` of the page at
+`NotchGeometry.OpenFrameDip`. Deliberately not `Show()`: this window is `ShowActivated` on purpose,
+because `Esc` and `Deactivated` are how it closes, so showing it at startup would take focus from
+whatever the person is doing.
+
+**AFTER, on three freshly started catchers driven by `scripts/drive-shelf-pair.ps1`: 77, 67 and
+72 ms.** Plith's own half of the same handover is 15 ms (`Drop catcher is already running`
+21:24:34.179 to `Standing aside for the shelf` 21:24:34.194), so the first open now costs about
+85 ms end to end against about 200 ms before.
+
+#### What the warm-up did NOT fix, measured and then removed
+
+A drawing pass was added to `Warm` as well, rendering the page into a `RenderTargetBitmap` nobody
+looks at, on the theory that the remaining stall was rasterisation. It bought **nothing**: 80, 73,
+70 and 67 ms with it against 77, 67 and 72 ms without. Removed, with the numbers left in the
+comment, because startup work that buys nothing is still startup work. What remains is the window's
+first `Show`, and that cannot be paid without showing a window.
+
+#### The warm-up found a real defect on its way in
+
+`Warm` logged nothing at all on the first two attempts, and the second attempt is why this section
+records the instrument as well as the result:
+
+1. At `DispatcherPriority.ApplicationIdle` the callback never ran. `Background` runs it.
+2. With the callback wrapped in a `try`/`catch` that logs, it turned out to be throwing:
+   `NullReferenceException` in `OnSourceInitialized`, at
+   `var source = (HwndSource)PresentationSource.FromVisual(this)!;`.
+
+**`PresentationSource.FromVisual` returns null when the handle is created by `EnsureHandle` rather
+than by `Show`**, because the window's root visual is not attached to its source until it is first
+shown, and the forgiving-looking `!` turned that into an exception that killed the warm-up
+outright. `HwndSource.FromHwnd(handle)` returns the same object on both paths and is what the hook
+is installed from now. The wheel hook is the thing that would have been lost, which is the tilt
+wheel and `Shift`+wheel on the shelf page only.
+
+Both of those were invisible to every gate: the build was green, 641 tests were green, all three
+lints were green, and the renders were green, through a warm-up that did not run and then through
+one that threw. The catcher's own log is what said so, twice.
+
+#### Still not measured
+
+Plith's OWN first notch open is not instrumented, and the reported "about a second" is longer than
+anything measured here. The shelf handover is 85 ms end to end; if a stall of a second is real, it
+is somewhere else, most likely the first render of Plith's four widget pages inside its own layered
+window. That needs an instrument that does not exist yet: the notch's open path is animation-driven
+(`AmbientNotchPresentation.AnimateToVisible`), so timing it means timing a first render rather than
+a method, and nothing in this branch does that.

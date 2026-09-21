@@ -129,6 +129,29 @@ public partial class App : Application, IDisposable
         _client = new CatcherClient(sid, _log);
         _client.Received += OnReceived;
         _client.Start();
+
+        // Warmed here, at startup, while nobody is waiting for anything. See ShelfWindow.Warm for
+        // the measurement: without it the FIRST open of the shelf costs about 182 ms of WPF
+        // creating its first window in this process, against 12 ms for every open after it, and
+        // for those 182 ms the busy cursor is what a person sees.
+        //
+        // Deferred one dispatcher turn rather than called straight away, so the pipe's own
+        // startup is not sharing a frame with a layout pass.
+        // Background, not ApplicationIdle. Measured: at ApplicationIdle the callback never ran at
+        // all in this process, and a warm-up that does not happen is worse than none, because the
+        // log then claims a cost has been paid that has not. Background runs after the startup
+        // work and before anything a person can trigger.
+        Dispatcher.BeginInvoke(new Action(() =>
+        {
+            try { _shelf.Warm(); }
+            catch (Exception ex)
+            {
+                // Logged rather than swallowed and rather than allowed to kill the process: the
+                // warm-up is an optimisation, and the shelf works without it at the cost of one
+                // slow first open.
+                _log.Info($"Warm-up failed and was skipped: {ex.GetType().Name}: {ex.Message} at {ex.StackTrace}");
+            }
+        }), DispatcherPriority.Background);
     }
 
     /// <summary>
