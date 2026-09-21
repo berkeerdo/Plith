@@ -2683,3 +2683,31 @@ nine tests rather than a call to `TextTrimming`:
 
 The picture keeps 34 of the tile's 48 DIP, which is still two and a half times the area it had when
 the caption was two lines of 9.5 point.
+
+### 10.12 Clearing flashed its result and vanished (2026-09-21)
+
+Reported: clearing the shelf re-renders for an instant and then it disappears. The log is the whole
+explanation:
+
+```
+51.490  Shelf dismissal deferred (the pointer left and did not come back): a drag or a menu is in flight.
+51.562  Items received: 0 path(s); the page now draws 0. open=True
+52.327  Shelf closing: the pointer left and did not come back.
+```
+
+A context menu is a popup in a window of its own, so moving the pointer onto it **leaves this
+window's rectangle**. The leave clock fires, `Dismiss` defers because a menu is in flight, the
+person clicks Clear, the page re-renders empty, the menu closes, and the deferred dismissal is
+applied 765 ms later. What that looks like is the shelf flashing its result and going.
+
+**Our own menu taking the pointer is not the pointer leaving.** The deferral is dropped when the
+menu closes rather than applied, and the leave clock is re-armed from that moment: the person's
+last act was operating this shelf, so the grace period starts again. If the pointer really is
+elsewhere the next tick dismisses it as usual; if they move back on, `PointerIsOverShelf` refutes
+it. Nothing is stranded, which is the property `Dismiss`'s own comments exist to protect.
+
+**And an action the person took should be visible.** `Page.ClearRequested` and
+`Page.RemoveRequested` now hold the shelf for 900 ms, short because this is a confirmation rather
+than an arrival: a drop's hold is 2.4 seconds because a drop wants reading.
+
+Driven twice after the change: 13 verdicts, no failures.

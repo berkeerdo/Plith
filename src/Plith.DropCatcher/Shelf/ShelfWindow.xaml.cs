@@ -311,7 +311,43 @@ public partial class ShelfWindow : Window
         // a single tile is torn down, so it cannot go missing the same way. Cleared on close, not
         // left set: leaving it set would mean nothing could ever dismiss the shelf again once a
         // single menu had been opened.
-        Page.MenuOpenChanged += open => _menuOpen = open;
+        Page.MenuOpenChanged += open =>
+        {
+            _menuOpen = open;
+            if (open) return;
+
+            // OUR OWN MENU CLOSING IS NOT THE POINTER LEAVING, and honouring the deferral it
+            // collected is what made a clear look broken.
+            //
+            // Measured from a real session: right-click, the pointer moves onto the menu, which
+            // is a popup in a window of its own, so the pointer leaves THIS window's rectangle
+            // and the leave clock fires. Dismiss defers it because a menu is in flight. The
+            // person then clicks Clear, the shelf re-renders empty, the menu closes, and the
+            // deferred dismissal is applied 765 ms later. What that looks like is the shelf
+            // flashing its result and vanishing.
+            //
+            // The deferral is DROPPED rather than applied, and the clock is re-armed from here
+            // instead: the person's last act was operating this shelf, so the grace period starts
+            // again from that moment. If the pointer really is elsewhere, the tick that follows
+            // dismisses it as usual, and if they move back onto the shelf, PointerIsOverShelf
+            // refutes it. Nothing is stranded either way, which is the property Dismiss's own
+            // comments care about.
+            if (_pendingDismissal is not null)
+            {
+                _log.Info($"Shelf dismissal dropped ({_pendingDismissal}): it was this shelf's own menu that took the pointer.");
+                _pendingDismissal = null;
+            }
+
+            _leave.Stop();
+            _leave.Start();
+        };
+
+        // An action the person just took on the shelf keeps it there a beat, so its result can be
+        // SEEN. Clearing used to render the empty state and disappear inside a second; removing
+        // the last tile has the same shape. Short: this is an acknowledgement, not a reason to
+        // keep a surface nobody is pointing at.
+        Page.ClearRequested += () => HoldOpen(ActionHold);
+        Page.RemoveRequested += _ => HoldOpen(ActionHold);
     }
 
     /// <summary>
@@ -506,6 +542,11 @@ public partial class ShelfWindow : Window
 
         Page.Render(_model);
     }
+
+    /// <summary>How long the shelf stays after the person acts on it, so the result is visible.
+    /// Shorter than a drop's hold: a drop is an arrival and wants reading, a remove is a
+    /// confirmation and wants a beat.</summary>
+    private static readonly TimeSpan ActionHold = TimeSpan.FromMilliseconds(900);
 
     /// <summary>
     /// Keep the shelf on screen for <paramref name="duration"/> whatever the pointer does.
