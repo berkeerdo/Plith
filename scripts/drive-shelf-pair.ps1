@@ -285,6 +285,22 @@ function Get-Element {
                        CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
 }
 
+# Is the notch showing its SHELF page?
+#
+# Keyed on "hover to open", the part of that page's line that names the GESTURE, rather than on
+# the whole sentence. This file used to assert equality against "Click to open the shelf" and its
+# own comment argued that the hint was the better key precisely because it "does not change as
+# files come and go". It changed: the line carries the file count now. The paging loop then
+# wheeled six times past a page that was right there, and the run reported that the notch never
+# reached the shelf. The gesture is the part that does not move.
+#
+# The catcher's own pane carries no such line, so this cannot match the wrong window.
+function Test-OnShelfPage {
+    param($Hwnd)
+    if ($null -eq $Hwnd) { return $false }
+    [bool](@(Get-Names -Hwnd $Hwnd) -match 'hover to open')
+}
+
 function Get-Names {
     param($Hwnd)
     if ($null -eq $Hwnd) {
@@ -622,7 +638,9 @@ try {
     #    in between. A plain vertical wheel pages (WheelDecoder negates it) and DOWN is "next".
     #    The shelf page is installed last, so at most one full lap is needed.
     #
-    #    The page is recognised by ShelfWidget's own OpenHint text, "Click to open the shelf",
+    #    The page is recognised by the gesture its own line names (see
+    #    Test-OnShelfPage): the line itself carries the file count now, so an equality
+    #    test against the whole sentence stopped matching the moment the count arrived,
     #    and not by the row's announcement. That announcement used to reach nothing at all -
     #    "Shelf, N items" was set on `Tiles`, a StackPanel, which WPF gives no automation peer -
     #    and it has since been moved onto the control root, so it IS in the tree now. The hint is
@@ -631,7 +649,7 @@ try {
     $onShelf = $false
     for ($i = 1; $i -le 6; $i++) {
         $names = Get-Names -Hwnd $notch.Hwnd
-        if ($names -contains 'Click to open the shelf') { $onShelf = $true; break }
+        if (@($names) -match 'hover to open') { $onShelf = $true; break }
         [PairInput]::Wheel(-1)
         Start-Sleep -Milliseconds 700
     }
@@ -639,6 +657,41 @@ try {
         "names: $((Get-Names -Hwnd $notch.Hwnd) -join ' | ')"
     Save-Shot 0 0 $screen.Width 300 '2-shelf-page.png' | Out-Null
     if (-not $onShelf) { throw 'Never reached the shelf page; nothing below can run.' }
+
+    # 2.5 HOVER opens the shelf, with no click at all.
+    #
+    # The reason the gesture exists, from a real install on someone else's machine: the first
+    # person to meet the shelf tried to drag a tile straight out of the notch page, and the press
+    # that begins a drag opened the shelf instead. It cannot be fixed on Plith's side, because a
+    # file is dragged out of the catcher's window and a drag is never delivered for a press that
+    # happened in another process (section 4). So the shelf has to be open BEFORE the press, and
+    # hovering is what opens it.
+    #
+    # Measured here rather than reasoned about, because the guard around it is timing: a real
+    # pointer movement, then a 320 ms dwell, and this is the only place a real pointer exists.
+    $hoverOpened = $false
+    $frame = Find-LayeredWindow -ProcessLike 'Plith'
+    if (Test-OnShelfPage -Hwnd $frame.Hwnd) {
+        # Onto the page and then STOP. Move-Pointer glides, so the movement the intent requires
+        # happens on the way in; the dwell is what the sleep below waits out.
+        Move-Pointer -X ($frame.X + [int]($frame.W / 2)) -Y ($frame.Y + [int]($frame.H / 2)) -Settle 200
+        Start-Sleep -Milliseconds 1200
+        $hovered = Find-ShelfWindow
+        $hoverOpened = [bool]$hovered
+        Add-Verdict '2.5 hovering the shelf page opens the shelf, with no click' $hoverOpened `
+            "$(if ($hovered) { "$($hovered.X),$($hovered.Y) $($hovered.W)x$($hovered.H)" } else { 'no catcher window after a 1.2 s rest on the page' })"
+    } else {
+        Add-Verdict '2.5 hovering the shelf page opens the shelf, with no click' $false `
+            "the shelf page was not on screen to hover: names were $(if ($frame) { (Get-Names -Hwnd $frame.Hwnd) -join ' | ' } else { 'no layered Plith window' })"
+    }
+
+    # The shelf is taken back down so the click path below measures what it always measured. A
+    # dismissal needs the pointer OFF the shelf, which is also the state step 3 expects.
+    if ($hoverOpened) {
+        Move-Pointer -X ($screen.Width - 40) -Y ($screen.Height - 40) -Settle 400
+        for ($i = 0; $i -lt 12 -and (Find-ShelfWindow); $i++) { Start-Sleep -Milliseconds 300 }
+        "  shelf after moving away: $(if (Find-ShelfWindow) { 'still up' } else { 'dismissed' })"
+    }
 
     # 3. Click the page, which is what ShelfWidget turns into OpenRequested.
     #
@@ -660,7 +713,7 @@ try {
     $shelf = $null
     for ($attempt = 1; $attempt -le 3 -and -not $shelf; $attempt++) {
         $frame = Find-LayeredWindow -ProcessLike 'Plith'
-        $stillThere = $frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')
+        $stillThere = $frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)
 
         if (-not $stillThere) {
             "  attempt ${attempt}: an event replaced the frame before the click; re-opening"
@@ -669,11 +722,11 @@ try {
             Start-Sleep -Milliseconds 1500
             for ($i = 1; $i -le 6; $i++) {
                 $frame = Find-LayeredWindow -ProcessLike 'Plith'
-                if ($frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')) { break }
+                if ($frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)) { break }
                 [PairInput]::Wheel(-1)
                 Start-Sleep -Milliseconds 700
             }
-            $stillThere = $frame -and (@(Get-Names -Hwnd $frame.Hwnd) -contains 'Click to open the shelf')
+            $stillThere = $frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)
             if (-not $stillThere) { continue }
         }
 

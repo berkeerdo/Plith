@@ -161,6 +161,27 @@
             </StackPanel>
         </StackPanel>
 
+        <!-- The SAME band as the track line below, and only one of the two is ever up.
+
+             With nothing playing the page was a clock and a temperature in a 164 DIP frame:
+             measured at 67 DIP of content, so 41 above and 56 below, a third of the page empty.
+             Reported from a real install as the bottom being blank, and it had never been
+             rendered, because every clock fixture in the harness had a session playing.
+
+             The next two days rather than a placeholder sentence, and they cost nothing: the
+             daily block arrives in the same request the current reading does, and the weather
+             page already draws it. The rule for WHICH days is WeatherDays.Next, shared with that
+             page, so the two cannot disagree about what tomorrow is at midnight.
+
+             Collapsed whenever something is playing, because the track is the more immediate
+             fact, and collapsed with no daily block at all, like every other optional thing
+             here. -->
+        <StackPanel x:Name="Forecast" Grid.Row="1" Grid.ColumnSpan="2"
+                    Orientation="Horizontal"
+                    Margin="0,14,0,0"
+                    VerticalAlignment="Bottom"
+                    Visibility="Collapsed" />
+
         <Grid x:Name="NowPlaying" Grid.Row="1" Grid.ColumnSpan="2"
               Margin="0,14,0,0"
               VerticalAlignment="Bottom"

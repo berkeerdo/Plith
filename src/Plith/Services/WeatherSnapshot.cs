@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 
 namespace Plith.Services;
 
@@ -93,6 +94,25 @@ public static class WeatherCodeMap
 /// </summary>
 public static class WeatherDays
 {
+    /// <summary>
+    /// The next <paramref name="count"/> days after <paramref name="today"/>, or null.
+    ///
+    /// TODAY IS DROPPED, and that is the point rather than a detail: Open-Meteo's first day is
+    /// today, and today is already the big number on both pages that draw a forecast. A column
+    /// repeating it would be the same fact twice with different rounding.
+    ///
+    /// Null rather than an empty list, so a caller has one thing to check and collapses its row
+    /// on it. Here rather than in either page because two pages now ask the same question, and
+    /// the clock page asking it its own way is how the two would come to disagree about what
+    /// "tomorrow" means at midnight.
+    /// </summary>
+    public static IReadOnlyList<WeatherDay>? Next(
+        IReadOnlyList<WeatherDay>? days, int count, DateOnly today)
+    {
+        var next = days?.Where(d => d.Date > today).Take(count).ToList();
+        return next is { Count: > 0 } ? next : null;
+    }
+
     /// <summary>
     /// Zip the arrays, stopping at the shortest.
     ///

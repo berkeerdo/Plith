@@ -66,13 +66,14 @@
 
         <!-- The one place the product says the shelf opens.
 
-             Set in XAML rather than built in Render, because it is the same sentence whatever
-             the row above it holds, and a line rebuilt on every shelf change is a line that can
-             be rebuilt wrongly. Render only chooses whether it is showing and, when the shelf
-             cannot open, replaces the text with the reason. -->
+             The text here is a placeholder for the designer's eye only: Render always replaces
+             it, because the line carries the file count now and the count is not a constant. It
+             is kept in the XAML rather than left blank so that anyone opening this file sees the
+             shape of what goes here. Render also replaces it outright with the reason when the
+             shelf cannot open at all. -->
         <TextBlock x:Name="Hint"
                    Margin="0,10,0,0"
-                   Text="Click to open the shelf"
+                   Text="hover to open"
                    FontSize="10"
                    TextAlignment="Center"
                    TextTrimming="CharacterEllipsis"

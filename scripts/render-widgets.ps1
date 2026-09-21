@@ -323,6 +323,40 @@ $micReader = [Func[Plith.Services.MicrophoneSnapshot]] {
 $clock = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader)
 Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 
+# The clock page with NOTHING PLAYING, which no render had ever drawn either, and it is the state
+# a person is in most of the day.
+#
+# Every clock fixture in this file handed the page a session that was playing, so the band along
+# the bottom was always occupied and the page always looked complete. With nothing playing it was
+# measured at 67 DIP of content in a 164 DIP frame: 41 above, 56 below, a third of the page blank.
+# Reported from a real install, by someone else, on the day 0.2.0 shipped.
+#
+# The band now carries the next two days when there is no track, so this render is the check that
+# it does. The assertion is on the CONTENT HEIGHT rather than on eyes: an empty band and a full
+# one differ by the band's own height, and nothing else here can tell them apart.
+$clockQuiet = [Plith.Views.Widgets.ClockWidget]::new([Plith.ViewModels.MediaViewModel]::new(), $reader, $micReader)
+$quietHost = [Windows.Controls.Border]::new()
+$quietHost.Width = $frameW; $quietHost.Height = $frameH; $quietHost.Child = $clockQuiet
+$quietHost.Measure([Windows.Size]::new($frameW, $frameH))
+$quietHost.Arrange([Windows.Rect]::new(0, 0, $frameW, $frameH))
+$quietHost.UpdateLayout()
+Wait-ForDispatcher
+$quietBand = $clockQuiet.FindName('Forecast')
+$quietTrack = $clockQuiet.FindName('NowPlaying')
+if ($quietTrack.Visibility -ne [Windows.Visibility]::Collapsed) {
+    throw 'clock-nomedia check: the track line is up with no session, so the fixture is wrong.'
+}
+if ($quietBand.Visibility -ne [Windows.Visibility]::Visible -or $quietBand.Children.Count -eq 0) {
+    throw ("clock-nomedia check FAILED: nothing playing and no forecast band either, so the " +
+           "page is a clock with a third of the frame empty under it. Band: " +
+           "$($quietBand.Visibility) with $($quietBand.Children.Count) chip(s).")
+}
+$quietBlock = $clockQuiet.Content
+"  clock with nothing playing: $([Math]::Round($quietBlock.ActualHeight,1)) DIP of content, " +
+"band has $($quietBand.Children.Count) day chip(s)"
+$quietHost.Child = $null
+Save-Visual -Element $clockQuiet -W $frameW -H $frameH -Name 'widget-clock-nomedia'
+
 # The clock page with RAIN, which no render ever drew: its fixture has always been a clear sky, so
 # the one case where its 26 DIP mark has to distinguish a cloud from rain was never looked at. It
 # turned out to be the same defect the forecast columns had, found there first only because those

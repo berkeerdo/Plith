@@ -149,6 +149,8 @@ public partial class ClockWidget : UserControl
         if (!fresh)
         {
             Range.Visibility = Visibility.Collapsed;
+            Forecast.Visibility = Visibility.Collapsed;
+            _forecastReady = false;
             return;
         }
 
@@ -159,6 +161,8 @@ public partial class ClockWidget : UserControl
         // FIRST day Open-Meteo returns, and it is matched by date rather than taken by index: a
         // reading that survives midnight would otherwise put yesterday's range beside today's
         // temperature.
+        RenderForecast(reading.Days);
+
         var today = DateOnly.FromDateTime(DateTime.Now);
         var range = reading.Days?.FirstOrDefault(d => d.Date == today);
         if (range is { } day)
@@ -186,6 +190,99 @@ public partial class ClockWidget : UserControl
     /// ambient row used: three refresh cycles, so one failed fetch does not blank it.</summary>
     private const int WeatherMaxAgeMinutes = 45;
 
+    /// <summary>How many days the band has room for. Two chips fit beside each other in 320 DIP
+    /// with room to spare; three start to crowd the page's left edge.</summary>
+    private const int ForecastDays = 2;
+
+    /// <summary>Whether the band has chips to show, so <see cref="RenderNowPlaying"/> can decide
+    /// between the two things that share it without rebuilding either.</summary>
+    private bool _forecastReady;
+
+    /// <summary>
+    /// The next two days, as chips for the band along the bottom.
+    ///
+    /// Horizontal, unlike the weather page's vertical columns, because this band is 20 DIP tall
+    /// and 320 wide: the same three facts turned on their side. The day-selection rule is shared
+    /// (<see cref="WeatherDays.Next"/>); the shape is not, and should not be.
+    ///
+    /// Visibility is NOT decided here. Two things share this row and only one is ever up, so one
+    /// method decides, and it is the one that runs last.
+    /// </summary>
+    private void RenderForecast(IReadOnlyList<WeatherDay>? days)
+    {
+        Forecast.Children.Clear();
+
+        var next = WeatherDays.Next(days, ForecastDays, DateOnly.FromDateTime(DateTime.Now));
+        _forecastReady = next is not null;
+        if (next is null)
+        {
+            Forecast.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        foreach (var day in next) Forecast.Children.Add(BuildChip(day));
+    }
+
+    /// <summary>
+    /// One day: its name, its mark, and its two ends, on one line.
+    ///
+    /// The mark is the same <see cref="WeatherMark"/> the clock's own reading and the weather
+    /// page both use, so one code cannot be drawn three ways. Its ink is bound to the palette
+    /// rather than set, because the theme can change under a page that is already built.
+    ///
+    /// The whole chip is announced on the day name, which is the only element here WPF gives an
+    /// automation peer: a mark says nothing out loud and a StackPanel cannot carry a name.
+    /// </summary>
+    private static FrameworkElement BuildChip(WeatherDay day)
+    {
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Margin = new Thickness(0, 0, 18, 0),
+        };
+
+        var name = new TextBlock
+        {
+            Text = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(day.Date.DayOfWeek),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        name.SetResourceReference(TextBlock.ForegroundProperty, "NotchInk");
+
+        System.Windows.Automation.AutomationProperties.SetName(name, string.Create(
+            CultureInfo.CurrentCulture,
+            $"{CultureInfo.CurrentCulture.DateTimeFormat.GetDayName(day.Date.DayOfWeek)}, " +
+            $"{WeatherCodeMap.Describe(day.WeatherCode)}, " +
+            $"{Math.Round(day.MaxC):0}° / {Math.Round(day.MinC):0}°"));
+        row.Children.Add(name);
+
+        var mark = new WeatherMark
+        {
+            Width = 18,
+            Height = 18,
+            Margin = new Thickness(7, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        mark.SetResourceReference(WeatherMark.InkProperty, "NotchInk");
+        // Noon, deliberately: a forecast for tomorrow has no hour, and asking for the current one
+        // would draw tomorrow's clear sky as a night sky when looked at in the evening.
+        mark.Show(SkyCondition.From(day.WeatherCode, 12));
+        row.Children.Add(mark);
+
+        var ends = new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture,
+                $"{Math.Round(day.MaxC):0}° / {Math.Round(day.MinC):0}°"),
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+        ends.SetResourceReference(TextBlock.ForegroundProperty, "NotchInkMuted");
+        row.Children.Add(ends);
+
+        return row;
+    }
+
     /// <summary>
     /// The track line, present only while something is playing.
     ///
@@ -201,7 +298,14 @@ public partial class ClockWidget : UserControl
 
         // No divider any more: the track line sits on the page's bottom edge with the readings
         // at the top, and space between two blocks says "separate" without a line drawn to say it.
+        //
+        // BOTH occupants of the band are decided here, and here only. The track wins when there
+        // is one, because it is the more immediate fact and it is the reason this row exists; the
+        // forecast takes the row when there is not, which is what keeps the page from being a
+        // clock with a third of a frame under it. Deciding this in two methods is how a page ends
+        // up drawing both at once or neither.
         NowPlaying.Visibility = hasTrack ? Visibility.Visible : Visibility.Collapsed;
+        Forecast.Visibility = !hasTrack && _forecastReady ? Visibility.Visible : Visibility.Collapsed;
         if (!hasTrack) return;
 
         NowTitle.Text = string.IsNullOrWhiteSpace(_media!.Artist)

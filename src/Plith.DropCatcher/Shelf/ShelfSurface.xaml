@@ -159,12 +159,27 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
-                <TextBlock Grid.Column="0"
-                           Text="Shelf"
-                           FontSize="13"
-                           FontWeight="SemiBold"
-                           VerticalAlignment="Center"
-                           Foreground="{DynamicResource NotchInk}" />
+                <!-- The title, and beside it how many files are here.
+
+                     The count is on the surface that can act on them rather than only on the
+                     notch page that previews them, because this is where a person decides
+                     whether to take one, take all of them, or clear the lot. Two elements
+                     instead of one interpolated string: the number is a different weight from
+                     the word, and a screen reader gets the whole reading from the control root
+                     either way (see Render). -->
+                <StackPanel Grid.Column="0" Orientation="Horizontal" VerticalAlignment="Center">
+                    <TextBlock Text="Shelf"
+                               FontSize="13"
+                               FontWeight="SemiBold"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource NotchInk}" />
+                    <TextBlock x:Name="HeaderCount"
+                               Margin="8,0,0,0"
+                               FontSize="12"
+                               VerticalAlignment="Center"
+                               Foreground="{DynamicResource NotchInkMuted}"
+                               Visibility="Collapsed" />
+                </StackPanel>
 
                 <!-- Two controls where there was one, and the one was wrong.
 

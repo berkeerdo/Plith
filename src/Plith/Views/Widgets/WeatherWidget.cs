@@ -207,9 +207,9 @@ public partial class WeatherWidget : UserControl
     {
         Forecast.Children.Clear();
 
-        var today = DateOnly.FromDateTime(DateTime.Now);
-        var next = days?.Where(d => d.Date > today).Take(ForecastDays).ToList();
-        if (next is not { Count: > 0 })
+        // The rule lives in WeatherDays.Next, because the clock page draws a forecast too now.
+        var next = WeatherDays.Next(days, ForecastDays, DateOnly.FromDateTime(DateTime.Now));
+        if (next is null)
         {
             Forecast.Visibility = Visibility.Collapsed;
             return;

@@ -406,6 +406,17 @@ public partial class ShelfSurface : UserControl
         EmptyHost.Visibility = Visibility.Collapsed;
 
         var items = model.Items;
+
+        // The header count, set here rather than in either branch below, so an empty shelf
+        // cannot be left showing the number the last full one had.
+        HeaderCount.Text = items.Count switch
+        {
+            0 => string.Empty,
+            1 => "1 file",
+            _ => string.Create(CultureInfo.CurrentCulture, $"{items.Count} files"),
+        };
+        HeaderCount.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+
         if (items.Count == 0)
         {
             // The page is reachable even when nothing has ever been dropped, so the empty state
