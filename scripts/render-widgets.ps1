@@ -348,6 +348,67 @@ try {
     [Threading.Thread]::CurrentThread.CurrentCulture = $previousCulture
 }
 
+# REAL WEATHER CODES, end to end: the number the API sends, the shape it picks, and the word a
+# screen reader is given for it.
+#
+# The kind strip below proves the five shapes. This proves the CHAIN, which is the other half of
+# "will the other conditions work too": SkyCondition.From decides the shape and
+# WeatherCodeMap.Describe decides the word, and each is tested on its own (26 cases and 20), but
+# nothing showed a code arriving and the right picture and sentence coming out together.
+#
+# Eight codes chosen for the boundaries rather than the middles: clear, overcast, fog (the one
+# dry code that is not a cloud), drizzle, freezing rain (the top of the wet range), snow,
+# thunder (which falls to rain deliberately), and clear AT NIGHT, which is the one case where the
+# hour beats the code.
+$codeCases = @(
+    @{ Code = 0;  Hour = 12; Note = 'clear' },
+    @{ Code = 3;  Hour = 12; Note = 'overcast' },
+    @{ Code = 45; Hour = 12; Note = 'fog' },
+    @{ Code = 51; Hour = 12; Note = 'drizzle' },
+    @{ Code = 67; Hour = 12; Note = 'freezing' },
+    @{ Code = 71; Hour = 12; Note = 'snow' },
+    @{ Code = 95; Hour = 12; Note = 'thunder' },
+    @{ Code = 0;  Hour = 23; Note = 'clear, 23h' }
+)
+
+$codeStrip = [Windows.Controls.StackPanel]::new()
+$codeStrip.Orientation = 'Horizontal'
+$codeStrip.HorizontalAlignment = 'Center'
+$codeStrip.VerticalAlignment = 'Center'
+Add-Palette $codeStrip
+foreach ($case in $codeCases) {
+    $cell = [Windows.Controls.StackPanel]::new()
+    $cell.Margin = [Windows.Thickness]::new(9, 0, 9, 0)
+    $cell.Width = 74
+
+    $head = [Windows.Controls.TextBlock]::new()
+    $head.Text = "$($case.Code) $($case.Note)"
+    $head.FontSize = 9
+    $head.TextAlignment = 'Center'
+    $head.Foreground = $codeStrip.TryFindResource('NotchInkMuted')
+    $cell.Children.Add($head) | Out-Null
+
+    $kind = [Plith.Services.SkyCondition]::From($case.Code, $case.Hour)
+    $m = [Plith.Views.Widgets.WeatherMark]::new()
+    $m.Width = 26; $m.Height = 26
+    $m.Margin = [Windows.Thickness]::new(0, 3, 0, 3)
+    $m.HorizontalAlignment = 'Center'
+    $m.Show($kind)
+    $cell.Children.Add($m) | Out-Null
+
+    $word = [Windows.Controls.TextBlock]::new()
+    $word.Text = [Plith.Services.WeatherCodeMap]::Describe($case.Code)
+    $word.FontSize = 9
+    $word.TextAlignment = 'Center'
+    $word.TextWrapping = 'Wrap'
+    $word.Foreground = $codeStrip.TryFindResource('NotchInk')
+    $cell.Children.Add($word) | Out-Null
+
+    $codeStrip.Children.Add($cell) | Out-Null
+}
+Wait-ForDispatcher
+Save-Visual -Element $codeStrip -W 700 -H 92 -Name 'weather-codes'
+
 # EVERY sky kind, side by side, at the size the pages actually draw the mark.
 #
 # Asked directly: are all of the conditions' icons and animations right? Nothing could answer
@@ -594,6 +655,83 @@ $shelfSurface.Render($surfaceModel)
 Wait-ForDispatcher
 Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
 
+# --- a SMALL shelf, at the size the real window actually opens for it --------------------------
+#
+# Only the three-row frame was ever rendered, and the shelf hugs what it holds: a shelf of one to
+# five files opens 139 DIP tall, which is SHORTER than the notch's 164 DIP open frame. That
+# difference is where the shelf was reported cut in half, and no render existed at the size where
+# it happens. This one is the surface at the frame its own window gives it, so a page that does
+# not fit its window is visible here rather than only in a real session.
+$smallModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
+$smallModel.SetItems([string[]]($fixtures[0..2] | ForEach-Object { Join-Path $shelfDir $_ }))
+$smallSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+$smallSurface.Apply($shelfPalette)
+$smallSurface.Render($smallModel)
+Wait-ForDispatcher
+$smallFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor(3)
+$smallSurface.Measure([Windows.Size]::new($smallFrame.Width, [double]::PositiveInfinity))
+"  shelf of 3 wants $([Math]::Round($smallSurface.DesiredSize.Height,1)) DIP; its window is $($smallFrame.Height); the open frame is $([Plith.Views.Presentation.NotchGeometry]::OpenFrameDip.Height)"
+Save-Visual -Element $smallSurface -W $smallFrame.Width -H $smallFrame.Height -Name 'shelf-surface-small'
+
+# The growth must never START larger than the window it grows into, on either axis, for any shelf
+# the product can open. Unit-tested as well (NotchGeometryTests), and repeated here against the
+# real frame because this is the file that renders these sizes and would otherwise render a
+# picture of the wrong one.
+foreach ($n in 0, 1, 3, 5, 6, 10, 15) {
+    $win = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor($n)
+    $start = [Plith.Views.Presentation.NotchGeometry]::GrowthStart(
+        [Plith.Views.Presentation.NotchGeometry]::OpenFrameDip, $win)
+    if ($start.Height -gt $win.Height -or $start.Width -gt $win.Width) {
+        throw "growth start $($start.Width)x$($start.Height) exceeds the window a shelf of $n opens ($($win.Width)x$($win.Height))"
+    }
+}
+"  growth start fits every shelf size"
+
+# --- the frame must be EXACTLY what the surface measures, at every shelf size ------------------
+#
+# The check that would have caught the shelf being cut, and it did not exist. NotchGeometry
+# computes the frame from parts it cannot see: the surface and its header live in the catcher's
+# project, so the frame is an ARITHMETIC CLAIM about a control in another assembly, and nothing
+# ever compared the claim to the control. It was wrong by one tile gap at every row count, so a
+# one-row shelf opened a 139 DIP window around a 146 DIP page and the bottom of the tile row was
+# outside it. Reported from a real session; invisible to the build, the tests and every lint.
+#
+# This harness is the one place both sides are loaded at once, which is why the check belongs
+# here rather than in the test project.
+foreach ($n in 1, 3, 5, 6, 10, 15) {
+    $m = [Plith.DropCatcher.Shelf.ShelfModel]::new()
+    $m.SetItems([string[]](0..($n - 1) | ForEach-Object { Join-Path $shelfDir $fixtures[$_ % $fixtures.Count] }))
+    $probe = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+    $probe.Apply($shelfPalette)
+    $probe.Render($m)
+    Wait-ForDispatcher
+    $win = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor($n)
+    $probe.Measure([Windows.Size]::new($win.Width, [double]::PositiveInfinity))
+    $wants = [Math]::Round($probe.DesiredSize.Height, 1)
+    if ([Math]::Abs($wants - $win.Height) -gt 0.5) {
+        throw "a shelf of $n files measures $wants DIP and ShelfFrameFor gives it $($win.Height): the window would cut the page"
+    }
+}
+"  frame matches the surface's own measurement at 1, 3, 5, 6, 10 and 15 files"
+
+# --- the per-tile remove chip, at REST ---------------------------------------------------------
+#
+# It appears on hover and a render cannot hover, but the thing reported broken was not the wash:
+# it was that the chip had no ground of its own, so a light stroke sat directly on whatever the
+# file icon painted and vanished into the bright ones. That is a rest-state property and it is
+# visible here. Forced visible on every tile, which is not a state the product shows and is the
+# only way to look at all of them at once.
+$chips = @(Find-VisualDescendants -Root $shelfSurface -Predicate {
+    param($n) $n -is [Windows.Controls.Button] -and
+              [Windows.Automation.AutomationProperties]::GetName($n).StartsWith('Remove ')
+})
+"  remove chips found: $($chips.Count)"
+if ($chips.Count -eq 0) { throw 'no remove chips in the shelf surface tree' }
+foreach ($c in $chips) { $c.Visibility = [Windows.Visibility]::Visible }
+Wait-ForDispatcher
+Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface-remove-chips'
+foreach ($c in $chips) { $c.Visibility = [Windows.Visibility]::Collapsed }
+
 # --- the EMPTY shelf, which nobody had ever rendered -----------------------------------------
 #
 # The notch page's empty state was rendered from the first day (widget-shelf-empty above); the
@@ -662,12 +800,29 @@ try {
         }
         $lit
     }
+    # The bands are derived from where the outline ACTUALLY IS, not written down. They used to be
+    # four pairs of literals taken from a 211 DIP empty frame; the frame became 218 when the
+    # chrome was re-derived, the bottom edge moved down with it, and the band that was looking for
+    # it found 3 lit pixels of empty surface and reported the side as missing. The check was right
+    # about the pixels and wrong about where to look, which is this harness's own recurring defect
+    # class: a number copied out of a layout survives the layout.
+    #
+    # $emptyRect is the outline's own rectangle in the host's coordinates, measured a few lines
+    # above, so the bands follow it wherever it goes.
+    if ($rects.Count -eq 0) { throw 'no outline Rectangle in the empty surface tree' }
+    $outline = $rects[0]
+    $op = $outline.TranslatePoint([Windows.Point]::new(0, 0), $emptyHost)
+    $ox2 = $op.X + $outline.ActualWidth
+    $oy2 = $op.Y + $outline.ActualHeight
+    # A four DIP band centred on each edge, and the spans along each edge pulled in by ten so a
+    # corner cannot lend its lit pixels to two sides at once.
     $sides = [ordered]@{
-        left   = Measure-Band 14 22 70 180
-        right  = Measure-Band 362 370 70 180
-        top    = Measure-Band 20 360 55 62
-        bottom = Measure-Band 20 360 188 196
+        left   = Measure-Band ($op.X - 2) ($op.X + 2) ($op.Y + 10) ($oy2 - 10)
+        right  = Measure-Band ($ox2 - 2) ($ox2 + 2) ($op.Y + 10) ($oy2 - 10)
+        top    = Measure-Band ($op.X + 10) ($ox2 - 10) ($op.Y - 2) ($op.Y + 2)
+        bottom = Measure-Band ($op.X + 10) ($ox2 - 10) ($oy2 - 2) ($oy2 + 2)
     }
+    "  outline measured at $([Math]::Round($op.X,1)),$([Math]::Round($op.Y,1)) to $([Math]::Round($ox2,1)),$([Math]::Round($oy2,1))"
     $dark = @($sides.Keys | Where-Object { $sides[$_] -lt 40 })
     if ($dark.Count -gt 0) {
         throw ("empty-outline check FAILED: the dashed box is missing its $($dark -join ' and ') " +
@@ -738,6 +893,74 @@ if (-not [object]::ReferenceEquals($pass2Image.Source, $pass1Icon)) {
 
 "  second-pass check passed: cache hit on pass two painted the real icon directly (no fallback " +
 "element in the icon host), and it is reference-equal to what pass one actually extracted."
+
+# --- a TOOLTIP open on a tile must not survive that tile's own destruction ------------------
+#
+# The same rule as the menu below, found the same way, and reported from a real session before
+# anyone thought to check it: emptying the shelf tile by tile showed the empty state, then a file
+# coming back into it, then the empty state again. The file was a tooltip.
+#
+# The pointer rests on a tile, WPF opens its tooltip, and the click under that pointer removes the
+# tile. A tooltip is popup content rather than a child of the tile, so the tear-out leaves it on
+# screen for WPF's five-second ShowDuration: a box with a file name in it, over the dashed empty
+# box. Measured on 2026-09-21, before the fix, on both shelf surfaces.
+#
+# A string tooltip cannot be closed at all, because WPF wraps it in a ToolTip it hands nobody.
+# So this check has two halves, and the first is the one that makes the second possible: the
+# tile's tooltip must BE a ToolTip object.
+$tipTile = $pass2Tile
+if (-not $tipTile.ToolTip) { throw "tooltip-survives-render check: the tile has no ToolTip at all." }
+if ($tipTile.ToolTip -isnot [Windows.Controls.ToolTip]) {
+    throw ("tooltip-survives-render check FAILED: the tile's tooltip is a " +
+           "$($tipTile.ToolTip.GetType().Name), not a ToolTip object. WPF wraps a string in a " +
+           "ToolTip it hands nobody, so an open one cannot be closed after its tile is gone.")
+}
+
+$tipTile.ToolTip.IsOpen = $true
+if (-not $tipTile.ToolTip.IsOpen) { throw 'tooltip-survives-render check: the tooltip did not open.' }
+$openedTip = $tipTile.ToolTip
+
+# The render this check exists for, and the harshest version of it: the shelf empties completely,
+# so the tile is not merely rebuilt, it is gone and the empty state is what replaces it.
+$tipModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
+$tipModel.SetItems([string[]]::new(0))
+$shelfSurface.Render($tipModel)
+Wait-ForDispatcher
+
+if ($openedTip.IsOpen) {
+    throw ("tooltip-survives-render check FAILED: a tooltip opened on a tile is still open after " +
+           "the render that destroyed that tile. On screen that is a file name box hanging over " +
+           "the empty shelf, which is what was reported as files coming back.")
+}
+"  tooltip-survives-render check passed: a tooltip open on a tile is closed by the render that " +
+"destroys the tile, on the catcher's shelf surface."
+
+# The notch's own shelf page carries the same tiles with the same tooltips and clears them the
+# same way, so it gets the same check rather than the benefit of the doubt.
+$widgetTiles = @(Find-VisualDescendants -Root $shelf -Predicate {
+    param($n) $n -is [Windows.Controls.Border] -and $n.ToolTip
+})
+if ($widgetTiles.Count -eq 0) { throw 'tooltip check: no tile with a tooltip on the notch shelf page.' }
+$widgetTip = $widgetTiles[0].ToolTip
+if ($widgetTip -isnot [Windows.Controls.ToolTip]) {
+    throw ("tooltip-survives-render check FAILED on the notch shelf page: the tooltip is a " +
+           "$($widgetTip.GetType().Name), so nothing can close it once its tile is gone.")
+}
+$widgetTip.IsOpen = $true
+# Rendered by emptying the STORE this page is built on, which is the real trigger: the page
+# repaints from ShelfStore.Changed, and a remove or a drop is enough to reach it.
+$store.Clear()
+Wait-ForDispatcher
+if ($widgetTip.IsOpen) {
+    throw ("tooltip-survives-render check FAILED on the notch shelf page: the tooltip survived " +
+           "the repaint that removed its tile.")
+}
+"  tooltip-survives-render check passed on the notch's shelf page too."
+
+# Both surfaces are put back the way the checks below expect to find them.
+$store.Add([string[]]$paths)
+$shelfSurface.Render($surfaceModel)
+Wait-ForDispatcher
 
 # --- a menu open on a tile must not survive that tile's own destruction --------------------
 #

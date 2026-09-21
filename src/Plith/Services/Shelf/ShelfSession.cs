@@ -163,14 +163,24 @@ public sealed class ShelfSession
         switch (message.Verb)
         {
             case DropVerb.RemoveItems:
+            {
+                // Counted on BOTH sides of the call, because a remove that kept nothing and a
+                // remove that was never asked for look identical in a log that only says "after".
+                var before = _store.Items.Count;
                 _store.RemoveMany(message.Paths);
+                _log?.Info("Shelf", $"RemoveItems({message.Paths.Count}): {before} -> {_store.Items.Count}.");
                 SendItems();
                 break;
+            }
 
             case DropVerb.ClearShelf:
+            {
+                var before = _store.Items.Count;
                 _store.Clear();
+                _log?.Info("Shelf", $"ClearShelf: {before} -> {_store.Items.Count}.");
                 SendItems();
                 break;
+            }
 
             case DropVerb.ShelfClosed:
                 _shelfOpen = false;
@@ -210,7 +220,11 @@ public sealed class ShelfSession
     /// what it had.
     /// </summary>
     private void SendItems()
-        => Send(DropVerb.Items, [.. _store.Items.Select(item => item.Path)], x: 0, y: 0);
+    {
+        var paths = _store.Items.Select(item => item.Path).ToArray();
+        _log?.Info("Shelf", $"Items -> catcher: {paths.Length} path(s).");
+        Send(DropVerb.Items, paths, x: 0, y: 0);
+    }
 
     /// <summary>
     /// Fire and forget, and safe to do so only because DropChannelServer serializes its sends.

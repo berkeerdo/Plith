@@ -894,11 +894,26 @@ public sealed class OsdHost : BandWindow
         // notch is idle has to be able to install it from here.
         _shelf.Changed += () =>
         {
-            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(ApplyWidgetPages)); return; }
-            ApplyWidgetPages();
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(OnShelfStoreChanged)); return; }
+            OnShelfStoreChanged();
         };
 
         if (_clockPage is not null) BuildShelfPage();
+    }
+
+    /// <summary>
+    /// The store changed. Installs or removes the shelf page if its presence changed, and says
+    /// what the store now holds.
+    ///
+    /// The log line is an instrument rather than diagnostics for their own sake: the notch's own
+    /// shelf page repaints from this same event, so a report of tiles flickering back onto a
+    /// surface is only answerable if the count the repaint was given is on the record next to the
+    /// count Plith sent the catcher. Both are now written, from the two places that know them.
+    /// </summary>
+    private void OnShelfStoreChanged()
+    {
+        _log?.Info("Shelf", $"Store changed: {_shelf?.Items.Count ?? -1} item(s).");
+        ApplyWidgetPages();
     }
 
     private void BuildShelfPage()

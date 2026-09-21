@@ -2144,3 +2144,180 @@ three runs below, with all four in-harness checks still passing.
 
 Still not verified, unchanged: pressing, dragging, and every screen reader behaviour. Those need
 a person, for the reason at the top of this document, and that reason survives everything above.
+
+## 8. The shelf was cut in half, and the window was only half the reason (2026-09-21)
+
+Reported from a real session, twice: "the shelf is cut in half, half of it is not visible when it
+opens". Two independent defects, both of which had to be fixed for the shelf to fit its window,
+and both invisible to the build, the 579 tests and all three lints.
+
+### 8.1 The growth started LARGER than the window
+
+`ShelfWindow.ApplyExpansion` grew the shape from `NotchGeometry.OpenFrameDip` into the window,
+through `SurfaceSize`, which only ever grows: it clamps at the collapsed size on both axes. That is
+right while the frame is smaller than what it opens into, and the media page redesign made it not,
+by taking the open frame from 116 to 164. Measured:
+
+| files | the window `ShelfFrameFor` opens | the frame the growth started from |
+|---|---|---|
+| 0 | 384 x 211 | 356 x 164 |
+| 1, 3, 5 | 384 x **139** | 356 x **164** |
+| 6, 10 | 384 x 211 | 356 x 164 |
+| 15 | 384 x 283 | 356 x 164 |
+
+So for one to five files, the single most common shelf, a 139 DIP window was handed a 164 DIP shape
+AND a 164 DIP page: `ApplyExpansion` set `Page.Height = Math.Max(open.Height, from.Height)`, on the
+reasoning that the page must not disagree with the shape about where the growth ends. The bottom
+quarter of the page hung outside the window. At 116 the arithmetic never fired.
+
+The clamp now lives in `NotchGeometry.GrowthStart(frame, window)`, taking the smaller value per
+axis, with three unit tests including one that walks the product's own shelf sizes against the
+product's own frame. It is a pure function in Plith rather than four lines inside the window
+because `ShelfWindow` is a `Window` the test project cannot construct, which is exactly how this
+reached a running build.
+
+### 8.2 The window was 7 DIP shorter than the page at EVERY size
+
+Found by the fix, not by the report: a render of a small shelf was added, printed what the surface
+measures beside what the frame gives it, and they disagreed everywhere.
+
+| files | rows | the frame gave | the surface wanted |
+|---|---|---|---|
+| 1, 3, 5 | 1 | 139 | **146** |
+| 6, 10 | 2 | 211 | **218** |
+| 15 | 3 | 283 | **290** |
+
+Uniformly one tile gap short, from two causes in the same expression:
+
+- `ShelfChromeDip` was `61 + 14`, and the comment carrying it decomposed a 384 x 224 frame whose
+  tile columns included a 13 DIP stack caption. Slice 3 deleted stacks and the caption with them.
+  It is now the sum of the parts that declare it, each traceable to a line of `ShelfSurface.xaml`:
+  2 (the surface border) + 32 (the content grid's margin) + 40 (the header's 28 DIP close box plus
+  its 12 DIP bottom margin) = 74.
+- The row term was `rows * tile + (rows - 1) * gap`, charging the gap only between rows. Every tile
+  carries a uniform bottom margin of `ShelfGap`, so a tile OCCUPIES tile + gap and the last row's
+  margin is inside the measurement too. It is now `rows * (tile + gap)`.
+
+**The frame was an arithmetic claim about a control in another assembly, and nothing ever compared
+the claim to the control.** `NotchGeometry` lives in Plith and the surface lives in the catcher, so
+neither project can measure the other. `scripts/render-widgets.ps1` is the one place both are
+loaded at once, and it now asserts `ShelfFrameFor(n) == the surface's DesiredSize` for 1, 3, 5, 6,
+10 and 15 files. It throws on a mismatch. That is the check that would have caught this, and it
+did not exist.
+
+Note for anyone reading section 3.11's hardware run: the full shelf measured `384x283` there and
+the number was reported as confirming the derived height. It confirmed that the window Plith asked
+for was the window the catcher opened. It did not confirm that the page fitted inside it, because
+nothing looked.
+
+### 8.3 The harness's own bottom-edge band was written down, so it moved out from under the check
+
+The empty-outline check counts lit pixels in a band over each side of the dashed box. Its four
+bands were literals taken from a 211 DIP empty frame; the frame became 218, the bottom edge moved
+down 7 DIP with it, and the band found 3 lit pixels of empty surface and reported the side missing.
+The check was right about the pixels and wrong about where to look. The bands are now derived from
+the outline rectangle's own measured position, which the same block already computes two lines
+above. Instrument defect, this harness's recurring class: a number copied out of a layout outlives
+the layout.
+
+### 8.4 The per-tile remove chip had no ground of its own
+
+Reported in the same session as the hover states on the tile crosses being bad. The header's Clear
+and close controls had been given a real template the day before; this one had not. It was a 16x16
+`Button` with `Background = Transparent` and **no template**, so WPF's default button chrome drew
+it and its hover, and the 1.6-thick light stroke sat directly on whatever the file icon painted.
+A wash over an unknown ground cannot be relied on to show anything.
+
+It now carries `TileRemoveButtonStyle`: an 18 DIP chip with its own opaque dark ground and a light
+ring from the moment it appears, hover and press lightening that rather than the tile under it. The
+colours are literals rather than palette keys because the notch palette has no scrim family, and
+they are dark in both themes on purpose, since `NotchInk` is `#F2F5F8` in Light as well as Dark.
+Rendered at rest, forced visible on all seven tiles, as `shelf-surface-remove-chips.png`. A render
+cannot hover, and the thing reported broken was a rest-state property.
+
+### 8.5 A short tile row was left-aligned inside a centred panel
+
+Found while looking at the new small-shelf render. The `WrapPanel` was a fixed five-tile 360 DIP
+wide regardless of how many files were on the shelf, so a shelf of three was a 216 DIP row
+left-aligned inside a centred 360 DIP panel, with the right half of the pane empty. A centred panel
+centres nothing when the panel is wider than its contents. Its width is now
+`min(items, tilesPerRow) * (tile + gap)`, so a full first row still measures 360 and the wrap point
+and the capacity guarantee are untouched.
+
+## 9. The file that came back was a TOOLTIP (2026-09-21)
+
+Reported from a real session: emptying the shelf tile by tile flickers. The empty state appears,
+files come back into it, and then it goes empty again.
+
+### 9.1 Everything the report seemed to be about was measured clean first
+
+Four things, in this order, all on the real pair:
+
+- **The wire.** Both processes now log every mutating verb and every `Items` delivery with its
+  count. Twelve one-by-one removals: `15 -> 14 -> 12 -> 11 -> ... -> 0`, one message each, strictly
+  decreasing, and the catcher's own line reports that the page drew exactly what arrived every
+  time. No reordering (`DropChannelServer.SendAsync` chains its writes under a lock, in call
+  order), no duplicate, no stale delivery.
+- **The store.** `ShelfStore` has no watcher and no reload; `RemoveMany` and `Clear` write, raise
+  `Changed`, and nothing re-reads the file.
+- **Both surfaces, on a REUSED instance.** The product renders one `ShelfSurface` over and over;
+  the harness had been building a fresh one per fixture, so the reuse path was untested. Driven
+  15 down to 0 and back up on one instance: `Columns` and `EmptyHost` correct at every count, in
+  both directions. The notch's own `ShelfWidget` driven the same way through a real store.
+- **The screen.** `scripts/drive-shelf-pair.ps1` stage 3.13 now captures twelve frames of the top
+  strip per removal, roughly one every 70 ms, plus twenty UIA polls of the count the surface
+  reports. 144 frames, 240 polls, no file ever came back.
+
+Stage 3.13 remains in the driver, with the non-increasing-count assertion, because it is the
+report written down as a check.
+
+### 9.2 What it actually was
+
+The burst is what found it, in a frame nobody was looking for: the capture taken right after a
+removal shows the next tile with its **tooltip already open**. The pointer rests on a tile, WPF
+opens the tooltip after its delay, and the click under that pointer removes the tile.
+
+**A tooltip is popup content, not a child of the element it belongs to.** So the render that tears
+the tile out leaves the tooltip on screen, and WPF's default `ShowDuration` is five seconds: a box
+with a file name in it, sitting over the dashed empty box, which then disappears on its own. That
+is the reported sequence exactly, in the order it was reported.
+
+`ShelfSurface.Render` already force-closes an open `ContextMenu` for precisely this reason, with a
+comment explaining the tear-out. Nobody applied the same reasoning to the tooltip beside it.
+
+Measured before the fix, with a probe that opens a tile's tooltip and then renders an empty shelf:
+
+```
+tile tooltip: 'f1.txt'  (type String)
+after opening: IsOpen=True
+after the shelf emptied: the tooltip IsOpen=True
+```
+
+### 9.3 A string tooltip cannot be closed by anyone
+
+The first fix tracked the open tooltip from `ToolTipOpening` and closed it in `Render`. The probe
+refuted it on the first run: a tooltip opened by anything that does not raise that event is open
+and untracked, and **closing what you were told about is not the same as closing what is there.**
+
+Both pages now do two things. The tile's tooltip is an explicit `ToolTip` object rather than a
+string, because WPF wraps a string in a `ToolTip` it hands nobody and there is then nothing to
+call. And `Render` asks the elements it is about to destroy, rather than being told: the catcher's
+surface walks the tile host (`CloseOpenToolTips`), the notch's page iterates `Tiles.Children`.
+After the fix the same probe reports `IsOpen=False`.
+
+Fixed in **both** surfaces, not only the one that was reported. The notch's shelf page carries the
+same tiles with the same tooltips, repaints from `ShelfStore.Changed`, and is hovered by design,
+since a click on it is what opens the shelf.
+
+`scripts/render-widgets.ps1` now carries a `tooltip-survives-render` check for each surface, beside
+the `menu-survives-render` check it belongs next to. Each has two halves: the tooltip must be a
+`ToolTip` object, and it must be closed by the render that destroys its tile. The second is
+impossible without the first, which is why the type is asserted rather than assumed.
+
+### 9.4 What this cost, and the lesson that is not new
+
+An afternoon, because the report named the shelf and the shelf's own state machine was the obvious
+suspect. Every instrument pointed at the data path and every one came back clean; the defect was
+in a popup that no state machine owns. **The frame-by-frame capture is what found it**, and it was
+added only after the tree polling had already returned twelve clean rounds. A check that reads the
+tree can only ever see what the page was asked to draw. What was on the screen was something else.

@@ -786,6 +786,95 @@ try {
     }
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '8-selection-removed.png' | Out-Null
 
+    # --- 3.13 emptying the shelf ONE BY ONE never puts a file back on it --------------------------
+    #
+    # Reported from a real session on 2026-09-21: emptying the shelf tile by tile flickers. The
+    # empty state appears, files come back into it, and then it goes empty again.
+    #
+    # The count the surface reports to UI Automation is the count it drew, so polling that name
+    # between the click and the settled state records what was on screen in between. A remove can
+    # only ever make the shelf smaller, so the sequence must be NON-INCREASING: one number going
+    # up is a file that came back, which is the report.
+    #
+    # The polling is corroboration, not the primary evidence. A render is synchronous with the
+    # Items message that causes it, so a flash is two renders close together and a 60 ms poll can
+    # miss one; both processes now log every Items delivery with its count, and that record cannot
+    # miss a message. Read the two together at the bottom of this report.
+    $shelf = Find-ShelfWindow
+    $rounds = @()
+    $wentUp = @()
+    $remaining = @(Read-Shelf)
+    $guard = 0
+    while ($remaining.Count -gt 0 -and $guard -lt 20) {
+        $guard++
+        $name = $remaining[0]
+        $shelf = Find-ShelfWindow
+        if (-not $shelf) { $rounds += "$name -> the shelf window disappeared"; break }
+
+        $tile = Get-Element -Hwnd $shelf.Hwnd -Name $name
+        if (-not $tile) { $rounds += "$name -> not in the UIA tree"; break }
+        Move-Pointer -X $tile.CX -Y $tile.CY -Settle 450
+        $remove = Get-Element -Hwnd $shelf.Hwnd -Name "Remove $name from the shelf" -Type Button
+        if (-not $remove) { $rounds += "$name -> no remove control on hover"; break }
+
+        Move-Pointer -X $remove.CX -Y $remove.CY -Settle 300
+        [PairInput]::LeftClick()
+
+        # A BURST OF CAPTURES, not only a poll of the tree, and the burst is the half that can
+        # answer the report. The tree says what the page was asked to draw; the screen says what
+        # was on it. Those differ exactly when something OTHER than this page is what flickers -
+        # Plith's notch coming back, a HUD taking the frame, the catcher's stand-in - and every
+        # one of those is a window this UIA walk never looks at.
+        #
+        # Taken first and fast, because the flash is reported as instant: twelve frames of the
+        # whole top strip, roughly one every 70 ms, which covers the second after the press.
+        $burstDir = Join-Path $OutDir "burst-$guard-$($name -replace '[^a-zA-Z0-9]', '')"
+        New-Item -ItemType Directory -Force -Path $burstDir | Out-Null
+        for ($f = 0; $f -lt 12; $f++) {
+            $shot = Join-Path $burstDir ("f{0:d2}.png" -f $f)
+            $bmp = New-Object System.Drawing.Bitmap $screen.Width, 340
+            $g = [System.Drawing.Graphics]::FromImage($bmp)
+            $dst = $g.GetHdc()
+            $desk = [PairWin]::GetDesktopWindow(); $src = [PairWin]::GetDC($desk)
+            [void][PairWin]::BitBlt($dst, 0, 0, $screen.Width, 340, $src, 0, 0, (0x00CC0020 -bor 0x40000000))
+            [void][PairWin]::ReleaseDC($desk, $src); $g.ReleaseHdc($dst); $g.Dispose()
+            $bmp.Save($shot, [System.Drawing.Imaging.ImageFormat]::Png); $bmp.Dispose()
+            Start-Sleep -Milliseconds 70
+        }
+
+        # The handle is captured ONCE and reused for every poll. Re-finding the window each time
+        # costs a window enumeration plus a UIA walk, which is far slower than the flash being
+        # looked for, so the search itself would hide it.
+        $hwnd = $shelf.Hwnd
+        $seen = @()
+        for ($t = 0; $t -lt 20; $t++) {
+            $label = try {
+                @(Get-Names -Hwnd $hwnd) | Where-Object { $_ -match '^Shelf, ' } | Select-Object -First 1
+            } catch { $null }
+            if (-not $label) { $label = '(gone)' }
+            if ($seen.Count -eq 0 -or $seen[-1] -ne $label) { $seen += $label }
+            Start-Sleep -Milliseconds 60
+        }
+
+        $counts = @($seen | ForEach-Object {
+            if ($_ -match '^Shelf, (\d+) item') { [int]$matches[1] } else { -1 }
+        })
+        for ($i = 1; $i -lt $counts.Count; $i++) {
+            if ($counts[$i] -ge 0 -and $counts[$i - 1] -ge 0 -and $counts[$i] -gt $counts[$i - 1]) {
+                $wentUp += "removing $name : $($counts[$i - 1]) -> $($counts[$i])"
+            }
+        }
+        $rounds += "$name -> $($seen -join ' | ')"
+        $remaining = @(Read-Shelf)
+    }
+
+    Add-Verdict '3.13 emptying one by one never puts a file back on the shelf' ($wentUp.Count -eq 0) `
+        "$(if ($wentUp.Count) { $wentUp -join ' ; ' } else { "$guard removal(s), every count non-increasing" })"
+    foreach ($r in $rounds) { "    $r" }
+    Add-Verdict '3.13 one-by-one removal does empty the shelf' (@(Read-Shelf).Count -eq 0) `
+        "store now $(Format-Shelf (Read-Shelf))"
+    Save-Shot 0 0 $screen.Width 400 '10-emptied-one-by-one.png' | Out-Null
+
     # --- 3.3 clear empties the shelf, and asks nothing ---------------------------------------------
     $shelf = Find-ShelfWindow
     $clear = Get-Element -Hwnd $shelf.Hwnd -Name 'Clear the shelf' -Type Button
