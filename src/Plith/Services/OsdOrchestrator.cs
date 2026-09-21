@@ -14,7 +14,25 @@ namespace Plith.Services;
 /// </summary>
 public sealed class OsdOrchestrator : IDisposable
 {
-    private static readonly TimeSpan PollInterval = TimeSpan.FromMilliseconds(30);
+    /// <summary>
+    /// How often the poll tick runs while VOICEMEETER is the active source. Voicemeeter's API has
+    /// no callback: VBVMR_IsParametersDirty is an edge-triggered latch that has to be consumed,
+    /// so this is the rate at which a fader move becomes an OSD.
+    /// </summary>
+    private static readonly TimeSpan VoicemeeterPollInterval = TimeSpan.FromMilliseconds(30);
+
+    /// <summary>
+    /// And how often it runs when Voicemeeter is NOT the active source, which is every machine
+    /// that does not have it and every machine that has it closed.
+    ///
+    /// Windows Core Audio is event-driven, so on that source the tick has no volume work to do at
+    /// all: it reconciles which source should be active and checks a clock. Running that 33 times
+    /// a second was pure waste, and a timer that wakes 33 times a second keeps a laptop out of
+    /// its deeper idle states for nothing. The cost of the slower rate is that Voicemeeter
+    /// starting is noticed up to half a second later, against a reconnect attempt that is rate
+    /// limited to every three seconds anyway.
+    /// </summary>
+    private static readonly TimeSpan IdlePollInterval = TimeSpan.FromMilliseconds(500);
     private static readonly TimeSpan ReconnectInterval = TimeSpan.FromSeconds(3);
     // Boot race: if Plith launches before the audio service is fully wired,
     // WindowsAudioClient.Start() reports success but OnVolumeNotification callbacks
@@ -54,7 +72,7 @@ public sealed class OsdOrchestrator : IDisposable
         _media = media;
         _windowsAudio = new WindowsAudioClient(log);
         _windowsAudio.SetTargetEndpoint(_settings.Current.MonitoredWindowsEndpointId);
-        _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
+        _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = IdlePollInterval };
         _pollTimer.Tick += OnPollTick;
         _mediaCard.CommandInvoked += OnMediaCommandInvoked;
         _mediaCard.SeekInvoked += OnMediaSeekInvoked;
@@ -237,9 +255,31 @@ public sealed class OsdOrchestrator : IDisposable
         // fallback on the same tick.
         ReconcileActiveSource();
 
-        if (VoicemeeterClient.IsInstalled
+        // The rate follows the source, and it is set HERE rather than where _activeSource is
+        // assigned, because it also has to follow IsLoggedIn: Voicemeeter's engine can die while
+        // it is still the desired source, and a tick that is polling a latch nobody is holding is
+        // the same waste as a tick on a machine without Voicemeeter at all.
+        var wanted = _activeSource == ActiveSource.Voicemeeter && _voicemeeter.IsLoggedIn
+            ? VoicemeeterPollInterval
+            : IdlePollInterval;
+
+        // Only on a change: assigning Interval restarts the timer, so writing it every tick would
+        // mean the clock never runs out at the rate it claims.
+        if (_pollTimer.Interval != wanted) _pollTimer.Interval = wanted;
+
+        // THE CLOCK IS TESTED FIRST, and the order is the whole point.
+        //
+        // IsInstalled opens two registry keys and stats a directory and a file. It used to be the
+        // FIRST clause, so it ran on every tick of this timer: 33 registry opens and 66 file
+        // system calls a second, for the entire time Plith is running and Voicemeeter is not
+        // logged in, which is the normal state on a machine that has it installed but closed. The
+        // three-second rate limit was already written and could never take effect, because && is
+        // evaluated left to right and the expensive clause was on the left.
+        //
+        // MEASURED before and after: see docs/PERF-VERIFICATION.md.
+        if (DateTime.UtcNow >= _nextReconnect
             && !_voicemeeter.IsLoggedIn
-            && DateTime.UtcNow >= _nextReconnect)
+            && VoicemeeterClient.IsInstalled)
             TryConnectVoicemeeter();
     }
 
