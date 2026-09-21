@@ -81,15 +81,39 @@ public class NotchPagerTests
     }
 
     [Fact]
-    public void ADeltaBelowTheRearmFloorRearmsWithoutCommitting()
+    public void ASTREAMOfSmallDeltasPagesONCE()
     {
+        // The test that replaces ADeltaBelowTheRearmFloorRearmsWithoutCommitting, and it asserts
+        // the opposite of it, because the rule it tested was wrong on real hardware.
+        //
+        // That test fed one small delta after a commit and required it to rearm, on the reasoning
+        // that a small delta is a swipe's decaying tail. Measured on this project's own user: a
+        // precision touchpad sends deltas of one to six for the WHOLE gesture, so every message
+        // rearmed and one flick paged as many times as its total allowed. On the shelf page that
+        // closed a window and read as the shelf refusing to be landed on.
+        //
+        // Sixty messages of six is 360, three times the threshold. One page.
         var g = new Gesture();
-        g.Feed(NotchPager.CommitThreshold);
 
-        // Inertia decaying towards zero. Those small tail deltas are what tell us the swipe is
-        // over, so they must rearm rather than being discarded.
-        Assert.False(g.Feed(NotchPager.RearmFloor - 1));
-        Assert.True(g.Feed(NotchPager.CommitThreshold));
+        var commits = 0;
+        for (var i = 0; i < 60; i++)
+            if (g.Feed(6)) commits++;
+
+        Assert.Equal(1, commits);
+        Assert.Equal(1, g.Index);
+    }
+
+    [Fact]
+    public void ASecondFlickAfterAPausePagesAgain()
+    {
+        // The other half: one gesture, one page, and a deliberate second gesture still works.
+        var g = new Gesture();
+
+        for (var i = 0; i < 30; i++) g.Feed(6);
+        Assert.Equal(1, g.Index);
+
+        g.Pause();
+        for (var i = 0; i < 30; i++) g.Feed(6);
 
         Assert.Equal(2, g.Index);
     }

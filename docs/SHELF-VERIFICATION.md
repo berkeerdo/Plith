@@ -2897,3 +2897,55 @@ and then flicked back, and paging away closes the shelf and parks the notch, so 
 at a collapsed notch, produced no page turns at all, and the verdict blamed the flick for carrying
 past a shelf it had never reached. A verdict that names the wrong cause is the failure mode this
 file keeps finding in itself.
+
+### 10.19 The pager rearmed on every message a touchpad sends (2026-09-21)
+
+Reported, after the settle window: **still the same, it closes, and why does the shelf page not
+just open like the weather page.** The second half is the better question, and the answer is that
+the defect was never in the shelf. It was in `NotchPager`, and it affected every page.
+
+```csharp
+if (!_armed)
+{
+    if (Math.Abs(delta) < RearmFloor) Rest();   // RearmFloor was 40
+    return false;
+}
+```
+
+The rule meant "a small delta is the decaying tail of a swipe, so the swipe is over". It assumes a
+touchpad sends LARGE deltas while the fingers move and small ones after they lift.
+
+**This user's touchpad sends one to six for the whole gesture.** Every message was therefore below
+the floor, every one rearmed the pager, and one flick paged again as soon as its stream summed to
+another 120. Their log, with my 400 ms settle window working perfectly and not helping:
+
+```
+23.199  Widget page committed: delta=-2, index=3/4
+23.223  Shelf requested / Standing aside
+23.343  Ignored a forwarded wheel delta of -1: it arrived 157 ms after the handover
+   ...  (eight of them, through 360 ms)
+24.432  Widget page committed: delta=3, index=0/4     <- 1.2 s later, and POSITIVE
+24.433  Shelf closed by Plith: the page turned away from it
+```
+
+The stream ran for over a second and its sum crossed the threshold again long after any settle
+window could reasonably extend. On Plith's own pages the same rule meant flying past a page or two,
+which reads as a fast carousel; on the shelf page it closes a window, which reads as broken. That
+is exactly why the shelf "does not open like weather": it is the same behaviour, and only the
+shelf's cost made it visible.
+
+`RearmFloor` is deleted. **Silence is the only rearm now**, which is the one signal that survives
+contact with real hardware: a tilt wheel's detents are separated by it, a touchpad's stream ends
+with it. `IdleRearmMs` comes down from 150 to 120 because it is now the only gate, and a
+touchpad's messages are 8 to 30 ms apart, which it clears several times over.
+
+**One gesture, one page**, and that is the intended feel rather than a side effect: the page a
+person aims at is the page they get, and three pages along takes three flicks.
+
+Two unit tests replace the one that asserted the opposite: sixty messages of six is 360, three
+times the threshold, and pages ONCE; and a second flick after a pause still pages. 641 tests green.
+
+**NOT DRIVEN ON HARDWARE YET.** The Remote Desktop session disconnected (`qwinsta` reports `Disc`)
+and the driver refuses to press anything without a desktop, which is correct. Stage 2.3b is written
+and is the check that would confirm this: it flicks 80 messages of six from a closed notch and
+requires the shelf to be up afterwards.

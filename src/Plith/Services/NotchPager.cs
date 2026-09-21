@@ -28,30 +28,43 @@ public sealed class NotchPager
     public const int CommitThreshold = 120;
 
     /// <summary>
-    /// How small an incoming delta has to be before the pager will accept another page turn.
+    /// DELETED, and the note is left in its place because the constant was wrong in a way that
+    /// took a user's report to see.
     ///
-    /// A touchpad does not stop cleanly: after the fingers lift, inertia keeps sending deltas
-    /// that decay towards zero. Those small tail deltas are the only signal that the swipe is
-    /// over, so they rearm rather than being discarded — and anything still large is treated as
-    /// the same swipe continuing.
+    /// It was 40: a delta smaller than that was treated as the decaying tail of a swipe and
+    /// rearmed the pager. The reasoning assumed a touchpad sends LARGE deltas while the fingers
+    /// move and small ones after they lift.
     ///
-    /// Provisional, for the same reason as <see cref="CommitThreshold"/>.
+    /// Measured on this project's own user, 2026-09-21: their touchpad sends deltas of one to
+    /// six for the WHOLE gesture. Every delta was therefore below the floor, every one rearmed
+    /// the pager, and a single flick paged again as soon as its stream summed to another 120. On
+    /// Plith's own pages that showed up as flying past a page or two; on the shelf page it closed
+    /// a window, and what a person saw was "I get to the shelf and it closes by itself". Their
+    /// log, with the arrival at delta=-2 and the departure 1.2 seconds later at delta=+3, is in
+    /// docs/SHELF-VERIFICATION.md section 10.19.
+    ///
+    /// The idle gap below is the signal that survives contact with real hardware: silence means
+    /// the gesture is over, whatever the magnitudes were.
     /// </summary>
-    public const int RearmFloor = 40;
+    private const string RearmFloorRemoved = "see IdleRearmMs";
 
     /// <summary>
     /// How long the wheel has to go quiet before the next delta may page again.
     ///
-    /// The rearm floor alone is not enough, and assuming it was is a real defect this constant
-    /// exists to close: a mouse's tilt wheel sends exactly one WHEEL_DELTA per detent and never
-    /// anything smaller, so a pager rearmed only by small deltas would page once and then stay
-    /// deaf forever. A touchpad rearms either way — its inertia decays through the floor — but
-    /// the tilt wheel only ever rearms on the gap between detents.
+    /// THE ONLY WAY THE PAGER REARMS, since the rearm floor was deleted (see above). Silence is
+    /// the one signal that means "the gesture is over" on every device tested: a tilt wheel's
+    /// detents are separated by it, a touchpad's stream ends with it, and a mouse wheel's notches
+    /// have it whenever a person is not spinning the wheel continuously.
     ///
-    /// 150 ms is short enough that deliberate repeated detents each page, and long enough that
-    /// the deltas inside one swipe do not.
+    /// ONE GESTURE, ONE PAGE is the rule that falls out of it, and that is the intended feel
+    /// rather than a side effect: a flick moves one page and stops, so the page a person aimed at
+    /// is the page they get. Paging three along takes three flicks.
+    ///
+    /// 120 rather than the 150 it was. With the floor gone this is the only rearm, so it decides
+    /// how soon a second deliberate flick counts, and a touchpad's stream has messages 8 to 30 ms
+    /// apart, which 120 clears several times over.
     /// </summary>
-    public const int IdleRearmMs = 150;
+    public const int IdleRearmMs = 120;
 
     private int _accumulated;
     private bool _armed = true;
@@ -91,9 +104,11 @@ public sealed class NotchPager
 
         if (!_armed)
         {
-            // Still inside a swipe that has already paged. Only a delta small enough to be the
-            // decaying tail rearms; anything larger is more of the same gesture.
-            if (Math.Abs(delta) < RearmFloor) Rest();
+            // Still inside a gesture that has already paged, and nothing here can end it: only
+            // silence can, which the gap check above applies. The line that used to sit here
+            // rearmed on any delta below 40, which on a touchpad whose deltas are all below 40
+            // meant every message rearmed and one flick paged over and over. See RearmFloor's
+            // own note for the measurement.
             return false;
         }
 
