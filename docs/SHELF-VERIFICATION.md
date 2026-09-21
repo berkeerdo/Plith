@@ -2745,3 +2745,27 @@ the script threw after the eleventh and the report printed what it had. Written 
 smoothed over: the driver restarts the pair twice for the clear stages, and a restart that does not
 bring the shelf up is the likeliest candidate. The verdicts it does produce have been stable
 across every run.
+
+### 10.14 The swipe that reached the shelf carried straight past it (2026-09-21)
+
+Reported: the notch closes, I move toward the shelf, and the moment I get there something happens
+and it closes by itself. The log names it exactly:
+
+```
+59.029  Widget page committed: delta=8, index=3/4   <- the shelf page, reached
+59.045  Shelf requested at 722,0 356x164 / Standing aside for the shelf
+59.322  Widget page committed: delta=2, index=0/4   <- 275 ms later, past it and wrapped
+59.323  Shelf closed by Plith: the page turned away from it
+```
+
+A precision touchpad sends deltas of two and eight, and `NotchPager` accumulates them to its 120
+threshold, so one continuous swipe legitimately pages more than once. **That is the right rule
+between Plith's own pages and the wrong one at the handover**, which swaps the window between two
+processes and takes about 300 ms: during that swap the accumulated intent belongs to a surface
+that has already gone.
+
+`ReconcileShelfFrame` rests the accumulator in both directions now, so a second page costs a
+second gesture. Nothing else changes: within Plith's four pages a long swipe still pages through
+them as it always did.
+
+Driven on hardware after the change: 13 verdicts, all passing.

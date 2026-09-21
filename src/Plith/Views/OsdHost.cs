@@ -639,6 +639,25 @@ public sealed class OsdHost : BandWindow
 
         if (wantsCatcher == (_standAside == StandAsideReason.Shelf)) return;
 
+        // THE GESTURE ENDS AT THE HANDOVER, in both directions, and without this the swipe that
+        // arrives at the shelf carries straight past it.
+        //
+        // Measured from a real session's log, reported as the notch closing by itself the moment
+        // the shelf appeared:
+        //
+        //     59.029  Widget page committed: delta=8, index=3/4   <- the shelf page, reached
+        //     59.045  Shelf requested ... / Standing aside
+        //     59.322  Widget page committed: delta=2, index=0/4   <- 275 ms later, past it
+        //     59.323  Shelf closed by Plith: the page turned away from it
+        //
+        // A precision touchpad sends deltas of two and eight, and the pager accumulates them to
+        // its 120 threshold, so one continuous swipe legitimately pages more than once. That is
+        // the right rule between Plith's own pages, where the surface never changes. It is the
+        // wrong rule here: the handover swaps the window between two processes, takes about 300
+        // ms, and during that swap the accumulated intent belongs to a surface that has already
+        // gone. Resting the accumulator means a second page costs a second gesture.
+        _pager.Rest();
+
         if (wantsCatcher)
         {
             // The rail's shape travels with the open: only this class knows how many pages there
