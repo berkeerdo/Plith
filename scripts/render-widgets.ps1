@@ -563,6 +563,23 @@ $fixtures = @(
     'and-another.txt'
 )
 foreach ($f in $fixtures) { Set-Content -LiteralPath (Join-Path $shelfDir $f) -Value 'x' }
+
+# A REAL IMAGE among the stubs, and it is the difference between testing the thumbnail path and
+# testing nothing. Every fixture here is a text file with an 'x' in it, including the ones named
+# .png and .jpg, so the shell can make no preview of any of them and falls back to the icon: the
+# tiles looked identical whether or not the preview code existed at all.
+#
+# Written with System.Drawing rather than checked in, so the repo carries no binary and the
+# picture is a known shape: 200 x 120, which is deliberately NOT square, because that is how a
+# thumbnail can be told from an icon by measurement rather than by eye.
+$realImage = Join-Path $shelfDir 'photo.png'
+$realBmp = New-Object System.Drawing.Bitmap 200, 120
+$realGfx = [System.Drawing.Graphics]::FromImage($realBmp)
+$realGfx.Clear([System.Drawing.Color]::FromArgb(255, 32, 96, 160))
+$realGfx.FillEllipse([System.Drawing.Brushes]::Orange, 40, 20, 120, 80)
+$realGfx.Dispose()
+$realBmp.Save($realImage, [System.Drawing.Imaging.ImageFormat]::Png)
+$realBmp.Dispose()
 $shelfFolder = Join-Path $shelfDir 'Project assets'
 New-Item -ItemType Directory -Force -Path $shelfFolder | Out-Null
 
@@ -655,7 +672,10 @@ $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
 # the current drive (something like "C:\nosuchhost\share\ghost.txt"), and that specific
 # malformed shape is what the fallback in this render actually exercises.
 $surfaceModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
-$shelfItems = [string[]](@($shelfFolder) +
+# The real image is ON the shelf, first, so the render actually draws a preview beside the icons.
+# Without this the thumbnail path was measured (above) and never LOOKED at, which is this repo's
+# most expensive habit.
+$shelfItems = [string[]](@($realImage, $shelfFolder) +
     ($fixtures[0..3] | ForEach-Object { Join-Path $shelfDir $_ }) +
     @('\nosuchhost\share\ghost.txt', (Join-Path $bin 'Plith.exe')))
 $surfaceModel.SetItems($shelfItems)
@@ -898,6 +918,48 @@ if (-not [object]::ReferenceEquals($pass2Image.Source, $pass1Icon)) {
 
 "  second-pass check passed: cache hit on pass two painted the real icon directly (no fallback " +
 "element in the icon host), and it is reference-equal to what pass one actually extracted."
+
+# --- an image file gets a REAL PREVIEW, not the generic picture icon --------------------------
+#
+# Reported from a real session: you cannot tell what the shelf page is. Part of that was the page
+# having no name, and part was every tile being a grey document glyph: the commonest thing on a
+# shelf is a screenshot, and a screenshot drawn as the generic picture icon is the same tile as
+# every other screenshot.
+#
+# ShellIcons asks IShellItemImageFactory with THUMBNAILONLY first now, which returns nothing for
+# anything without a preview of its own and so leaves documents and folders on the icon path.
+#
+# Measured by SHAPE rather than by eye: the fixture image is 200 x 120, and a shell icon is always
+# square. A non-square result can only have come from the file's own pixels.
+# TryGet extracts synchronously on a cache miss, which is exactly what a harness wants: no
+# waiting on a background swap, and a failure that is a failure rather than a timeout.
+#
+# Reached by reflection because ShellIcons is INTERNAL, and it should stay internal: it is the
+# catcher's own plumbing and nothing outside that project has any business calling it. A bare type
+# literal cannot see an internal type, which is why this looks heavier than the calls around it.
+$iconsType = $dcAssembly.GetType('Plith.DropCatcher.Shelf.ShellIcons')
+if (-not $iconsType) { throw 'ShellIcons is not in the catcher assembly at all.' }
+$tryGet = $iconsType.GetMethod('TryGet', [Reflection.BindingFlags]'Public,NonPublic,Static')
+$args = [object[]]@([string]$realImage, $null)
+$got = $tryGet.Invoke($null, $args)
+$thumb = if ($got) { $args[1] } else { $null }
+if (-not $thumb) {
+    throw ("thumbnail check FAILED: no image came back for a real 200x120 PNG. Either " +
+           "IShellItemImageFactory refused it or the extraction threw; ShellIcons logs why.")
+}
+if ($thumb.PixelWidth -eq $thumb.PixelHeight) {
+    throw ("thumbnail check FAILED: the image for a 200x120 PNG came back " +
+           "$($thumb.PixelWidth)x$($thumb.PixelHeight), which is square, so it is an ICON and " +
+           "not the file's own preview.")
+}
+"  thumbnail for a real 200x120 image: $($thumb.PixelWidth)x$($thumb.PixelHeight) (not square, so it is the file's own pixels)"
+
+# And a document still gets its ICON, which is the half the THUMBNAILONLY flag protects: without
+# it every file would come back with something and this would be square-shaped proof of nothing.
+$docArgs = [object[]]@([string](Join-Path $shelfDir 'notes.md'), $null)
+$docIcon = if ($tryGet.Invoke($null, $docArgs)) { $docArgs[1] } else { $null }
+if (-not $docIcon) { throw 'thumbnail check: a document got no icon at all.' }
+"  icon for a document: $($docIcon.PixelWidth)x$($docIcon.PixelHeight)"
 
 # --- a TOOLTIP open on a tile must not survive that tile's own destruction ------------------
 #

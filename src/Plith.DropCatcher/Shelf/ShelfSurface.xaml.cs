@@ -47,6 +47,26 @@ public partial class ShelfSurface : UserControl
     /// <inheritdoc cref="TileWidth"/>
     private const double Gap = NotchGeometry.ShelfGap;
 
+    /// <summary>
+    /// The tile's ground, at rest and under the pointer.
+    ///
+    /// White over the panel rather than a palette colour, because this panel is dark in both
+    /// themes (NotchInk is #F2F5F8 in Light as well as Dark, which the remove chip's own note
+    /// spells out) and a wash leaves the ink's contrast where it was. Frozen: every tile on every
+    /// render uses them.
+    /// </summary>
+    private static readonly Brush TileRest = Frozen(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF));
+
+    /// <inheritdoc cref="TileRest"/>
+    private static readonly Brush TileHover = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
+
+    private static Brush Frozen(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
+
     /// <summary>Icon geometry duplicated from Resources/PlithIcons.xaml's IconDocument, not
     /// shared with it: see the header comment in ShelfSurface.xaml for why this project cannot
     /// reach that dictionary.</summary>
@@ -434,6 +454,15 @@ public partial class ShelfSurface : UserControl
 
         var items = model.Items;
 
+        // The page's name carries the count, which is the one fact the tiles cannot state: ten of
+        // ten are drawn, so the number is not about what is hidden but about what is here.
+        PageCount.Text = items.Count switch
+        {
+            0 => string.Empty,
+            1 => "1 file",
+            _ => string.Create(CultureInfo.CurrentCulture, $"{items.Count} files"),
+        };
+
         // The page's own menu, present only when there is something to clear. A menu whose single
         // item would do nothing is worse than no menu: it answers a right-click with a dead word.
         ColumnsHost.ContextMenu = items.Count > 0 ? _pageMenu : null;
@@ -687,8 +716,11 @@ public partial class ShelfSurface : UserControl
         // mixed on the same shelf.
         var iconHost = new Grid
         {
-            Width = 22,
-            Height = 22,
+            // The PREVIEW's box, which is wider than an icon and the same height. Every tile gets
+            // the same host whether it ends up holding a 22 DIP glyph or a 34 by 22 photograph,
+            // so a row of mixed tiles has its labels on one line.
+            Width = PreviewWidth,
+            Height = PreviewHeight,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         // Cache checked synchronously, on the UI thread, before anything is drawn: this is a
@@ -761,7 +793,7 @@ public partial class ShelfSurface : UserControl
         {
             Width = TileWidth,
             Height = TileHeight,
-            CornerRadius = new CornerRadius(8),
+            CornerRadius = new CornerRadius(9),
             // HALF THE GAP ON EACH SIDE, not a whole one on the right.
             //
             // A whole gap on the right only is what a WrapPanel needs to space tiles, and it
@@ -779,17 +811,28 @@ public partial class ShelfSurface : UserControl
             // that reads as a ring rather than a coincidental extra pixel.
             BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
             BorderThickness = new Thickness(selected ? 1.5 : 0),
-            // TRANSPARENT, NOT NULL, and it is the difference between a tile that answers a
-            // pointer and one that does not. WPF hit-tests a Transparent brush but not a null
-            // one, so with no Background only the painted icon and label answered: a hover, a
-            // click and the press a drag starts from were all dead in the gaps between them,
-            // including the tile's exact centre, which is where a person aims. Measured on
-            // hardware (docs/SHELF-VERIFICATION.md 3.10) as a click at the centre doing nothing
-            // while the same click on the icon selected, showed the remove control and armed the
-            // press. ShelfWindow.xaml states this same rule for the window's own background; the
-            // tile did not follow it. render-widgets.ps1's tile-hit check now fails the build if
-            // this is removed, because no other check here asks which element a POINT belongs to.
-            Background = Brushes.Transparent,
+            // A GROUND OF ITS OWN, faint, and it is what makes the grid read as a set of
+            // objects rather than as loose icons scattered on a panel. Reported from a real
+            // session: you cannot tell what this page is.
+            //
+            // Six per cent white over the panel, which is a hint of a surface rather than a
+            // surface. A chip at track strength was tried on the notch's own shelf page and
+            // rejected there for a measured reason, NotchInk on NotchTrack coming to 4.0:1 under
+            // the 4.5 body text needs; that reason is about a chip strong enough to change what
+            // the ink sits on. This is not. Hover doubles it, which is the other half of the same
+            // report: a tile that does not answer a pointer does not look like something you can
+            // pick up.
+            //
+            // A BRUSH AT ALL is also what makes the tile answer a pointer, which is the older
+            // rule this line carried and which has not gone away. WPF hit-tests a Transparent
+            // brush but not a null one, so with no Background only the painted icon and label
+            // answered: a hover, a click and the press a drag starts from were all dead in the
+            // gaps between them, including the tile's exact centre, which is where a person aims.
+            // Measured on hardware (docs/SHELF-VERIFICATION.md 3.10) as a click at the centre
+            // doing nothing while the same click on the icon selected. render-widgets.ps1's
+            // tile-hit check fails the build if this is removed, because no other check here asks
+            // which element a POINT belongs to.
+            Background = TileRest,
             // TWO, for the same arithmetic as the label's margin above: 4 a side left a 44 DIP
             // box for 47 DIP of content and clipped the second line of every long name.
             Padding = new Thickness(2),
@@ -801,8 +844,16 @@ public partial class ShelfSurface : UserControl
 
         AutomationProperties.SetName(tile, entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
         tile.ContextMenu = BuildTileMenu(entry);
-        tile.MouseEnter += (_, _) => removeButton.Visibility = Visibility.Visible;
-        tile.MouseLeave += (_, _) => removeButton.Visibility = Visibility.Collapsed;
+        tile.MouseEnter += (_, _) =>
+        {
+            removeButton.Visibility = Visibility.Visible;
+            tile.Background = TileHover;
+        };
+        tile.MouseLeave += (_, _) =>
+        {
+            removeButton.Visibility = Visibility.Collapsed;
+            tile.Background = TileRest;
+        };
 
         tile.PreviewMouseLeftButtonDown += (_, e) =>
         {
@@ -1190,13 +1241,64 @@ public partial class ShelfSurface : UserControl
     /// <summary>Same 22x22 box as <see cref="BuildFallbackIcon"/>, so a real icon never shifts
     /// the row whether it arrives on the first frame (a cache hit) or a moment later (a swap
     /// after extraction).</summary>
-    private static Image BuildIconImage(ImageSource icon) => new()
+    /// <summary>
+    /// The tile's picture: a shell icon drawn as an icon, or a file's own preview drawn as a
+    /// PICTURE.
+    ///
+    /// The two want opposite treatment and that is the whole reason this is not one line any
+    /// more. An icon is a square glyph with its own padding baked in, and stretching it fills the
+    /// box with something already designed not to; a thumbnail is a photograph, and letterboxing
+    /// it inside a square leaves a 34 by 22 box holding a 14 DIP sliver of the actual image.
+    ///
+    /// Told apart by SHAPE, which is a judgement and is written down as one: ShellIcons asks for
+    /// a thumbnail first and the shell returns the file's own aspect (measured: a 200 x 120 PNG
+    /// comes back 96 x 58), while an icon is always square. A square photograph therefore gets
+    /// icon treatment, which costs it nothing: Uniform inside a square box is the same as
+    /// UniformToFill.
+    ///
+    /// The preview is CROPPED rather than fitted, and rounded, because a thumbnail's job here is
+    /// to make one screenshot distinguishable from another at a glance rather than to reproduce
+    /// it. Cropping keeps the pixels big enough to recognise.
+    /// </summary>
+    private static FrameworkElement BuildIconImage(ImageSource icon)
     {
-        Source = icon,
-        Width = 22,
-        Height = 22,
-        Stretch = Stretch.Uniform,
-    };
+        var isPreview = Math.Abs(icon.Width - icon.Height) > 0.5;
+
+        var image = new Image
+        {
+            Source = icon,
+            Stretch = isPreview ? Stretch.UniformToFill : Stretch.Uniform,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        if (!isPreview)
+        {
+            image.Width = 22;
+            image.Height = 22;
+            return image;
+        }
+
+        // A clip rather than a Border with a CornerRadius: an Image is not a Border's background,
+        // so a radius on a parent does nothing to the pixels inside it. The rectangle is the box
+        // the icon host gives every tile, so previews and icons still occupy the same space and
+        // the rows line up.
+        return new Border
+        {
+            Width = PreviewWidth,
+            Height = PreviewHeight,
+            CornerRadius = new CornerRadius(4),
+            Clip = new RectangleGeometry(new Rect(0, 0, PreviewWidth, PreviewHeight), 4, 4),
+            Child = image,
+        };
+    }
+
+    /// <summary>The preview's box, wider than it is tall because photographs are: 34 by 22 fits
+    /// the icon host without moving the label under it.</summary>
+    private const double PreviewWidth = 34;
+
+    /// <inheritdoc cref="PreviewWidth"/>
+    private const double PreviewHeight = 22;
 
     private static SolidColorBrush Solid(Color color)
     {

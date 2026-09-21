@@ -166,6 +166,39 @@
             <Grid x:Name="EmptyHost" Visibility="Collapsed" />
             </Grid>
 
+            <!-- THE PAGE'S NAME, in the chrome row, where it costs the tiles nothing.
+
+                 Reported from a real session: you cannot tell what this page IS. It was a grid of
+                 small icons in a box, with no word anywhere, while every other page in this frame
+                 says what it is by what it draws (a clock is a clock, artwork and a transport row
+                 is a player). A shelf has no such shape: files are files.
+
+                 The header this replaces was deleted for a measured reason and that reason still
+                 holds. It cost 40 DIP of a 121 DIP band, which is the difference between two rows
+                 of tiles and one. THE RAIL ROW IS FREE, though: it is 23 DIP tall, the inset
+                 already keeps content clear of it, and the rail itself is 76 DIP centred, so both
+                 sides of it are empty. Identity for nothing.
+
+                 Left, against the same edge the tiles start from, so the page reads top-down as
+                 contents then label rather than as two unrelated blocks. -->
+            <StackPanel Orientation="Horizontal"
+                        HorizontalAlignment="Left"
+                        VerticalAlignment="Bottom"
+                        Height="{x:Static p:NotchGeometry.PageRailRowDip}"
+                        Margin="18,0,0,0">
+                <TextBlock Text="Shelf"
+                           VerticalAlignment="Center"
+                           FontSize="10"
+                           FontWeight="SemiBold"
+                           Foreground="{DynamicResource NotchInkMuted}" />
+                <TextBlock x:Name="PageCount"
+                           Margin="6,0,0,0"
+                           VerticalAlignment="Center"
+                           FontSize="10"
+                           Foreground="{DynamicResource NotchInkMuted}"
+                           Opacity="0.75" />
+            </StackPanel>
+
             <!-- THE PAGE RAIL, drawn by this process because this process holds the frame.
 
                  Plith's WidgetFrame draws the rail for its own four pages; while the shelf is on

@@ -2404,3 +2404,48 @@ It is deleted rather than fixed a third time. Plith's shelf page is not what is 
 shelf is, so there is nothing to key on: the driver waits for the CATCHER's window, which
 `Find-ShelfWindow` finds by "Shelf, N items" on the control root. **A name that is an identity
 survives a rename; a sentence does not.**
+
+### 10.5 And then it still did not look like anything (2026-09-21)
+
+Reported immediately after the page moved into the notch: **you cannot tell what this is.** Three
+separate things, and the first one is the one that matters.
+
+**It had no name.** Every other page in this frame says what it is by what it draws: a clock is a
+clock, artwork with a transport row is a player. A shelf has no such shape, because files are
+files. The header that used to carry the word was deleted for a measured reason that still holds
+(40 DIP of a 121 DIP band is the difference between two rows of tiles and one), so the name went
+into the **chrome row instead**, which was free: it is 23 DIP tall, the page inset already keeps
+content clear of it, and the rail is 76 DIP centred, so both sides of it are empty. "Shelf" plus
+the file count, bottom left, for nothing.
+
+**The tiles were loose icons.** They now carry a ground of their own, 6 per cent white over the
+panel, at a 9 DIP radius, which makes the grid read as a set of objects rather than glyphs
+scattered on a surface. Hover doubles the wash, because a tile that does not answer a pointer does
+not look like something you can pick up. Faint on purpose: a chip at track strength was tried on
+the notch's own shelf page and rejected there when NotchInk on NotchTrack measured 4.0:1, under
+the 4.5 body text needs. This is a hint of a surface rather than a surface, so the ink still sits
+on the panel.
+
+**An image looked like every other image.** The commonest thing on a shelf is a screenshot, and a
+screenshot drawn as the generic picture icon is the same tile as every other screenshot.
+`ShellIcons` now asks `IShellItemImageFactory` with `SIIGBF_THUMBNAILONLY` before it asks for an
+icon, which is what Explorer itself asks, so a file previews here exactly as it does in a folder
+window.
+
+Measured, in the harness, by shape rather than by eye:
+
+```
+thumbnail for a real 200x120 image: 96x58 (not square, so it is the file's own pixels)
+icon for a document: 32x32
+```
+
+Both halves matter. `THUMBNAILONLY` is what leaves documents and folders on the icon path, and
+without it every file would come back with something and the square-shaped proof above would be
+proof of nothing. The fixture had to gain a **real** image for any of this to be testable: every
+file in it was a text file with an `x` in it, including the ones named `.png`, so the shell could
+preview none of them and the tiles looked identical whether the preview code existed or not.
+
+An icon and a preview want opposite treatment, which is why `BuildIconImage` is no longer one
+line: an icon is a square glyph with padding baked in, and a preview is a photograph that has to
+be cropped to a 34 by 22 rounded box or it arrives as a sliver. They are told apart by aspect,
+which is a judgement, and a square photograph gets icon treatment at no cost to itself.

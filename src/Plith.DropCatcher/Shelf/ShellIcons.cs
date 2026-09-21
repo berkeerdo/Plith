@@ -104,6 +104,17 @@ internal static class ShellIcons
 
     private static BitmapSource? Extract(string path)
     {
+        // A REAL PREVIEW FIRST, and it is the difference between a shelf that looks like a file
+        // dialog and one that looks like what you put on it. The commonest thing on this shelf is
+        // a screenshot, and a screenshot drawn as the generic picture icon says nothing: two of
+        // them are the same tile. Reported as the page's design not saying what it is.
+        //
+        // THUMBNAILONLY, so this returns null for everything with no preview of its own: a
+        // document, a folder, an exe. Those fall through to the shell icon below, which is the
+        // right answer for them and was the only answer before.
+        var thumbnail = TryThumbnail(path);
+        if (thumbnail is not null) return thumbnail;
+
         // A path that is gone (deleted since Plith stat'd it, or a network share that does not
         // answer) cannot be asked "what icon do you have", only "what icon would a path shaped
         // like this have" - that is what SHGFI_USEFILEATTRIBUTES asks for instead, going by the
@@ -190,4 +201,93 @@ internal static class ShellIcons
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern bool DestroyIcon(nint hIcon);
+
+    /// <summary>
+    /// The file's own thumbnail, or null when it has none.
+    ///
+    /// IShellItemImageFactory is what Explorer itself asks, so a file previews here exactly as it
+    /// does in a folder window, including for anything a codec pack or a shell extension has
+    /// taught Windows to render.
+    ///
+    /// ONE method on the interface, which is why this interop is low risk, and saying so is not
+    /// idle: docs/PHASE6-VERIFICATION.md section 21 records an undocumented interface on this
+    /// branch that needed ten reserved vtable slots, where nine compiled perfectly and landed the
+    /// call on the wrong method. An interface with a single method has no ordering to get wrong.
+    ///
+    /// Asked for at 96 pixels rather than the tile's 22 DIP: this can be on a 200 per cent
+    /// display, WPF scales a bitmap down cleanly and up badly, and the cache holds one image per
+    /// path either way.
+    /// </summary>
+    private static BitmapSource? TryThumbnail(string path)
+    {
+        if (!File.Exists(path)) return null;
+
+        nint bitmap = 0;
+        IShellItemImageFactory? factory = null;
+        try
+        {
+            var factoryId = typeof(IShellItemImageFactory).GUID;
+            factory = (IShellItemImageFactory)SHCreateItemFromParsingName(path, 0, ref factoryId);
+
+            // THUMBNAILONLY means "no icon, thank you". Without it every file comes back with
+            // something and the shell-icon fallback would never run, which would cost documents
+            // and folders the icon they should have. BIGGERSIZEOK lets the shell hand over a size
+            // it already has cached rather than rescaling to order.
+            var size = new SIZE { cx = 96, cy = 96 };
+            if (factory.GetImage(size, SIIGBF_THUMBNAILONLY | SIIGBF_BIGGERSIZEOK, out bitmap) != 0)
+                return null;
+            if (bitmap == 0) return null;
+
+            var source = Imaging.CreateBitmapSourceFromHBitmap(
+                bitmap, 0, Int32Rect.Empty, BitmapSizeOptions.FromEmptyOptions());
+            source.Freeze();
+            return source;
+        }
+        catch (Exception ex) when (ex is COMException or ArgumentException
+            or OutOfMemoryException or InvalidOperationException or FileNotFoundException)
+        {
+            // A file the shell cannot preview, a provider that throws, a path that went away
+            // between the check above and the call. Every one means "no thumbnail", which is a
+            // fallback rather than a failure, so it is logged at the same level the icon path
+            // logs its own refusals and nothing else happens.
+            Log?.Invoke($"ShellIcons: no thumbnail for '{path}' ({ex.GetType().Name})");
+            return null;
+        }
+        finally
+        {
+            // The HBITMAP is ours the moment GetImage succeeds, and
+            // CreateBitmapSourceFromHBitmap copies rather than taking ownership.
+            if (bitmap != 0) DeleteObject(bitmap);
+            if (factory is not null) Marshal.ReleaseComObject(factory);
+        }
+    }
+
+    private const uint SIIGBF_BIGGERSIZEOK = 0x00000001;
+    private const uint SIIGBF_THUMBNAILONLY = 0x00000008;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct SIZE
+    {
+        public int cx;
+        public int cy;
+    }
+
+    /// <summary>The shell's image factory, as Explorer uses it.</summary>
+    [ComImport]
+    [Guid("bcc18b79-ba16-442f-80c4-8a59c30c463b")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IShellItemImageFactory
+    {
+        [PreserveSig]
+        int GetImage(SIZE size, uint flags, out nint bitmap);
+    }
+
+    [DllImport("shell32.dll", CharSet = CharSet.Unicode, PreserveSig = false)]
+    [return: MarshalAs(UnmanagedType.Interface)]
+    private static extern object SHCreateItemFromParsingName(
+        string path, nint bindContext, ref Guid riid);
+
+    [DllImport("gdi32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DeleteObject(nint handle);
 }
