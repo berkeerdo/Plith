@@ -161,7 +161,11 @@ public sealed class ShelfSession
         // The NOTCH'S OWN FRAME, not a rectangle of the shelf's own. ShelfPageRect is
         // DropTargetRect, and the item count is no longer an input: the shelf is a page in the
         // frame rather than a pane that hugs its contents.
-        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfPageRect(notchRectDip), dpiScale);
+        // The WINDOW, not the page: the page plus the shadow margin, which is the rectangle
+        // Plith's own window occupies. Sending the page alone made the catcher's window 14 DIP
+        // narrower and shorter than the one it replaces, so the swap moved every edge and dropped
+        // the shadow. See NotchGeometry.ShelfWindowRect.
+        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfWindowRect(notchRectDip), dpiScale);
 
         Send(DropVerb.Palette, ShelfPaletteWire.ToPaths(_palette()));
         SendItems();

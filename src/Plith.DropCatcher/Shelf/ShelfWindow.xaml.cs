@@ -1037,7 +1037,12 @@ public partial class ShelfWindow : Window
         // The clamp that used to live here (GrowthStart) is deleted with the pane. It existed to
         // stop a 164 DIP page being laid into a 139 DIP window, a case that cannot arise when
         // both are the same rectangle by construction.
-        var size = open;
+        // The window LESS the shadow margin, because the window is the notch's window now and
+        // the shape is the panel inside it. Taking the window's own size here would draw a panel
+        // 14 DIP too wide and too tall and push its own shadow off the screen's edge.
+        var size = new Size(
+            Math.Max(0, open.Width - (NotchGeometry.PanelShadowMarginDip * 2)),
+            Math.Max(0, open.Height - NotchGeometry.PanelShadowMarginDip));
 
         Shape.Width = size.Width;
         Shape.Height = size.Height;
@@ -1068,8 +1073,8 @@ public partial class ShelfWindow : Window
         // the frame, on the reasoning that the page must not disagree with the shape about where
         // the growth ends; the shape is clamped to the window now, so the agreement holds, and a
         // max here would go back to laying a 164 DIP page into a 139 DIP window.
-        Page.Width = open.Width;
-        Page.Height = open.Height;
+        Page.Width = size.Width;
+        Page.Height = size.Height;
         // Fully opaque, always: the fade is the card's, above. See that comment.
         Page.Opacity = 1;
     }

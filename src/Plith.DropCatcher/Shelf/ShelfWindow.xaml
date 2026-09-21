@@ -1,6 +1,7 @@
 <Window x:Class="Plith.DropCatcher.Shelf.ShelfWindow"
         xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
         xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:p="clr-namespace:Plith.Views.Presentation"
         xmlns:shelf="clr-namespace:Plith.DropCatcher.Shelf"
         WindowStyle="None"
         AllowsTransparency="True"
@@ -45,12 +46,35 @@
              ClipToBounds, because the page inside is held at its FULL size for the whole growth
              (see ApplyExpansion): re-laying the page out every frame would squeeze its tiles and
              read as a window being resized rather than a shape opening. -->
+        <!-- INSET BY THE SHADOW MARGIN, and casting the same shadow Plith's panel does.
+
+             This window is the notch's WINDOW now, not its panel: the page rect grown by
+             NotchGeometry.PanelShadowMarginDip on the left, the right and the bottom, which is
+             exactly what Plith's own window measures (384 by 178 around a 356 by 164 panel).
+             Sent that way by ShelfSession.Open.
+
+             Before this, the catcher's window was the panel alone and had no shadow, so the
+             handover moved every edge by 14 DIP and dropped the shadow in the same frame. A
+             person reported it as the notch closing and reopening in a fraction of a second, and
+             it is the last visible seam in a swap that is otherwise covered by the ShelfShown
+             acknowledgement.
+
+             The shadow's numbers are copied from OsdContent.xaml rather than shared, because
+             that is a XAML resource in the other project and this one cannot reach it: depth six
+             straight down, blur twenty. Direction 270 is down in WPF's counter-clockwise-from-east
+             convention, which matters because a surface flush with the top of the screen has
+             nothing above it for a blur to fall on. -->
         <Border x:Name="Shape"
-                HorizontalAlignment="Center"
+                HorizontalAlignment="Left"
                 VerticalAlignment="Top"
+                Margin="{x:Static p:NotchGeometry.ShelfShapeMargin}"
                 Width="356" Height="116"
                 ClipToBounds="True"
                 Background="#F0111111">
+            <Border.Effect>
+                <DropShadowEffect ShadowDepth="6" Direction="270" BlurRadius="20"
+                                  Opacity="0.55" Color="Black" />
+            </Border.Effect>
             <!-- The page fades in only after the shape has mostly settled, which is the whole
                  effect: the surface arrives first and the content arrives into it. Opacity is
                  driven from the same expansion value as the shape around it. -->

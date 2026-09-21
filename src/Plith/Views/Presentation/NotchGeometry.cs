@@ -391,6 +391,45 @@ public static class NotchGeometry
                OpenFrameDip.Width, OpenFrameDip.Height);
 
     /// <summary>
+    /// The room the panel leaves around itself for its shadow.
+    ///
+    /// Plith's own window is the panel plus this on the left, the right and the BOTTOM, and
+    /// nothing at the top: the notch is flush with the screen's top edge, where a shadow has
+    /// nothing to fall on. That is why the notch window measures 384 by 178 for a 356 by 164
+    /// panel.
+    ///
+    /// Named here rather than left as the literal 14 in OsdContent.xaml because the catcher's
+    /// shelf window has to match it. Without the match the handover is visible: the catcher's
+    /// window was exactly the panel, so at the swap the shadow vanished and the panel's edges
+    /// moved by 14 DIP, which a person reported as the notch closing and reopening in a fraction
+    /// of a second.
+    /// </summary>
+    public const double PanelShadowMarginDip = 14;
+
+    /// <summary>The same margin as a Thickness, so ShelfWindow.xaml can inset its shape by it
+    /// rather than repeating the number. Nothing at the top: the notch is flush with the screen's
+    /// edge.</summary>
+    public static readonly Thickness ShelfShapeMargin =
+        new(PanelShadowMarginDip, 0, PanelShadowMarginDip, PanelShadowMarginDip);
+
+    /// <summary>
+    /// The WINDOW the catcher opens for the shelf: the page rect grown by the shadow margin, so
+    /// it is the same rectangle Plith's own window occupies.
+    ///
+    /// <see cref="ShelfPageRect"/> is the panel; this is the window around it. The catcher draws
+    /// its shape inset by the same margin and casts the same shadow, so the two surfaces are
+    /// comparable pixel for pixel and the swap has nothing to show.
+    /// </summary>
+    public static Rect ShelfWindowRect(Rect hoverRect)
+    {
+        var page = ShelfPageRect(hoverRect);
+        return new Rect(page.Left - PanelShadowMarginDip,
+                        page.Top,
+                        page.Width + (PanelShadowMarginDip * 2),
+                        page.Height + PanelShadowMarginDip);
+    }
+
+    /// <summary>
     /// Where the shelf stands: the notch's open frame, exactly.
     ///
     /// It IS <see cref="DropTargetRect"/>, and this method exists anyway, for two reasons. The

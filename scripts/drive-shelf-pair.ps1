@@ -773,11 +773,16 @@ try {
     # AT THE NOTCH'S OWN SIZE, which is what makes it the notch rather than a pane. Measured
     # against the product's own constant rather than a literal: the whole defect this slice fixes
     # was a shelf 384 wide by up to 290 tall where the frame is 356 by 164.
-    $frameDip = [Plith.Views.Presentation.NotchGeometry]::OpenFrameDip
-    $sameSize = [Math]::Abs($shelf.W - $frameDip.Width) -le 2 -and
-                [Math]::Abs($shelf.H - $frameDip.Height) -le 2
-    Add-Verdict '2.3 the shelf is the size of the notch frame, not a pane of its own' $sameSize `
-        "catcher $($shelf.W)x$($shelf.H), frame $($frameDip.Width)x$($frameDip.Height)"
+    # Against the WINDOW rect, not the page rect: the catcher's window is the notch's window now,
+    # page plus the shadow margin on three sides, so that the swap does not move an edge or drop a
+    # shadow. Comparing against the page rect would now fail by exactly that margin, which is the
+    # kind of stale literal this file keeps catching in itself.
+    $windowDip = [Plith.Views.Presentation.NotchGeometry]::ShelfWindowRect(
+        [Windows.Rect]::new(0, 0, 190, 8))
+    $sameSize = [Math]::Abs($shelf.W - $windowDip.Width) -le 2 -and
+                [Math]::Abs($shelf.H - $windowDip.Height) -le 2
+    Add-Verdict '2.3 the shelf is the size of the notch WINDOW, not a pane of its own' $sameSize `
+        "catcher $($shelf.W)x$($shelf.H), notch window $($windowDip.Width)x$($windowDip.Height)"
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '3-shelf.png' | Out-Null
 
     # 2.3b A TOUCHPAD FLICK MUST BE ABLE TO STOP ON THE SHELF.

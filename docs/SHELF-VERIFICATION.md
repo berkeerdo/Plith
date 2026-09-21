@@ -3048,3 +3048,45 @@ starting Plith, verify WHICH pair is running** rather than assuming the launch t
 proof is in Plith's own log, one line after startup, naming the catcher it asked Explorer for.
 The driver's own preconditions have carried a version of this lesson since 2026-09-20 ("VERIFY THE
 KILL, do not assume it"); the lesson did not transfer to launching by hand.
+
+### 10.24 The last seam: the catcher's window was the panel, not the notch's window (2026-09-21)
+
+Reported after the close-on-page-turn fix: it no longer closes, but for a fraction of a second the
+notch closes and opens, as if the shelf had no loading state.
+
+Measured rather than guessed, by comparing the two windows:
+
+| | width x height |
+|---|---|
+| Plith's notch window | 384 x 178 |
+| the catcher's shelf window | **356 x 164** |
+
+**Plith's window is the panel plus 14 DIP on the left, the right and the bottom**, room for the
+shadow its panel casts (`ShadowDepth=6, Direction=270, BlurRadius=20`), with nothing at the top
+because the notch is flush with the screen's edge and a blur there has nothing to fall on. The
+catcher's window was the panel exactly, and it cast no shadow at all.
+
+So the handover moved every edge by 14 DIP and dropped the shadow in the same frame, which is
+precisely what a fraction-of-a-second close-and-reopen looks like. The `ShelfShown`
+acknowledgement had removed the GAP between the two surfaces (10.15); this was the remaining
+difference between them.
+
+`NotchGeometry.PanelShadowMarginDip` is now the one definition of that margin, previously the
+literal 14 in `OsdContent.xaml`, and `ShelfWindowRect` grows the page rect by it.
+`ShelfSession.Open` sends the window rather than the page, `ShelfWindow.xaml` insets its shape by
+`ShelfShapeMargin` and casts the same shadow, and `ApplyExpansion` sizes the shape to the window
+less the margin.
+
+The shadow's numbers are copied rather than shared, and that is recorded here as a deliberate
+duplication: they live in a XAML resource in Plith's project, which the catcher cannot reach, and
+the alternative is a fourth wire field for two constants.
+
+The driver's `2.3` compared the catcher's window against the PAGE rect and would now fail by
+exactly that margin, so it compares against `ShelfWindowRect` and is renamed for what it asserts:
+
+```
+[PASS] 2.3 the shelf is the size of the notch WINDOW, not a pane of its own
+       catcher 384x178, notch window 384x178
+```
+
+**14 of 14 on hardware.**
