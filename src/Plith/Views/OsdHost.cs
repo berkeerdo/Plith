@@ -1,4 +1,4 @@
-﻿using System.Globalization;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -97,8 +97,9 @@ public sealed class OsdHost : BandWindow
         _home = home;
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
-        _hoverPoller = new NotchHoverPoller(Dispatcher);
+        _hoverPoller = new NotchHoverPoller(Dispatcher, _log);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
+        _hoverPoller.DraggingOverChanged += OnDragApproachChanged;
 
         _hoverPoller.Polled += ResyncClickThrough;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
@@ -402,6 +403,268 @@ public sealed class OsdHost : BandWindow
     private const uint SWP_NOSIZE = 0x0001;
     private const uint SWP_NOMOVE = 0x0002;
     private const uint SWP_NOACTIVATE = 0x0010;
+    private const uint SWP_SHOWWINDOW = 0x0040;
+    private const uint SWP_HIDEWINDOW = 0x0080;
+
+    private Plith.Services.Shelf.DropChannelServer? _dropChannel;
+    private Plith.Services.Shelf.ShelfSession? _shelfSession;
+
+    /// <summary>
+    /// Why the notch is down, or None when it is not.
+    ///
+    /// It was a bool, and a bool cannot answer the question EndStandAside has to ask. The two
+    /// reasons have opposite lifetimes: a drag's stand-aside is armed to withdraw after 450 ms,
+    /// because nothing distinguishes a file being carried to the top of the screen from a window
+    /// being dragged there, while the shelf was asked for out loud and stays until it is
+    /// dismissed. The drag detector keeps running under an open shelf and will raise a
+    /// departure, so without the reason the shelf's own notch would come back up underneath it.
+    /// </summary>
+    private enum StandAsideReason { None, Drag, Shelf }
+
+    private StandAsideReason _standAside;
+
+    /// <summary>
+    /// Hand the drop catcher over. Set by App once the channel exists, which is after this
+    /// window is constructed — hence a property rather than a constructor parameter.
+    /// </summary>
+    public void AttachDropChannel(Plith.Services.Shelf.DropChannelServer channel) => _dropChannel = channel;
+
+    /// <summary>
+    /// Hand over the conversation the shelf runs on, and take its three answers.
+    ///
+    /// Opened and Closed drive the notch; Unavailable is the one that reaches the person, so it
+    /// goes to the page they just clicked rather than to the log alone.
+    /// </summary>
+    public void AttachShelfSession(Plith.Services.Shelf.ShelfSession session)
+    {
+        _shelfSession = session;
+        session.Opened += OnShelfOpened;
+        session.Closed += OnShelfClosed;
+        session.Unavailable += OnShelfUnavailable;
+    }
+
+    /// <summary>
+    /// A drag has arrived at the notch, or has left it.
+    ///
+    /// Plith cannot receive the drop and never will: UIAccess puts it at High integrity and UIPI
+    /// refuses Explorer's cross-integrity call. So it steps out of the way instead — the window
+    /// goes down and the catcher, a Medium process, takes the same rectangle for as long as the
+    /// drag lasts.
+    ///
+    /// The window has to go down rather than merely yield z-order. The catcher cannot enter the
+    /// UIAccess band, so while the notch is up the catcher is underneath it and the drop lands
+    /// on a window that cannot take it — which is exactly the state this whole design exists to
+    /// leave behind.
+    /// </summary>
+    private void OnDragApproachChanged(bool approaching)
+    {
+        if (_presentation is not AmbientNotchPresentation)
+        {
+            // Classic has no shelf. Nothing to stand aside for, and standing aside would hide an
+            // OSD the person may be reading.
+            return;
+        }
+
+        if (approaching) BeginStandAside();
+        else EndStandAside();
+    }
+
+    private void BeginStandAside()
+    {
+        if (_standAside != StandAsideReason.None) return;
+
+        if (_dropChannel is not { IsConnected: true })
+        {
+            // No catcher, so hiding would buy nothing and cost the notch. Logged rather than
+            // silent: this is what a catcher that failed to start looks like from Plith's side,
+            // and it is otherwise indistinguishable from no drag having happened.
+            _log?.Info("Shelf", "Drag arrived but no catcher is connected; staying put.");
+            return;
+        }
+
+        var target = NotchGeometry.DropTargetRect(_hoverPoller.HoverRect);
+        var (x, y, w, h) = NotchGeometry.DipToPhysical(target, _hoverPoller.DpiScale);
+
+        _standAside = StandAsideReason.Drag;
+        HideForCatcher();
+        _ = _dropChannel.SendAsync(new Plith.Services.Shelf.DropMessage(
+            Plith.Services.Shelf.DropVerb.Show, x, y, w, h, []));
+
+        _log?.Info("Shelf", $"Standing aside for a drag: {x},{y} {w}x{h}.");
+    }
+
+    /// <summary>
+    /// Stand aside for the shelf rather than for a drop.
+    ///
+    /// The same mechanism as BeginStandAside and deliberately not the same method: that one
+    /// arms a withdrawal after 450 ms, because nothing distinguishes a file being carried to the
+    /// top of the screen from a window being dragged there. The shelf was asked for, so it
+    /// stays until it is dismissed.
+    ///
+    /// The rectangle is read BEFORE anything is hidden, and the ORDER of the two steps after it
+    /// is the other half of the design. The notch does not go down here; it goes down in
+    /// OnShelfOpened, which the session raises only once it has decided the catcher is there to
+    /// send to. Hiding first and restoring on failure would mean a click on a broken install
+    /// blinks the notch out and back, and the sentence explaining why would arrive into a page
+    /// that had just been hidden.
+    /// </summary>
+    public void OpenShelf()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OpenShelf));
+            return;
+        }
+
+        if (_shelfSession is null) return;
+        if (_presentation is not AmbientNotchPresentation) return;
+        if (_standAside != StandAsideReason.None) return;
+
+        _shelfSession.Open(_hoverPoller.HoverRect, _hoverPoller.DpiScale);
+    }
+
+    private void OnShelfOpened()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnShelfOpened));
+            return;
+        }
+
+        _standAside = StandAsideReason.Shelf;
+        HideForCatcher();
+
+        // The hide timer is deliberately LEFT RUNNING, and stopping it was the first version.
+        //
+        // Stopping it means the notch is frozen in whatever shape it had when it went down, and
+        // the shelf closing would then put an open widget frame back on screen with nothing left
+        // to collapse it: the notch would stay open until the next event, which is a panel across
+        // the top of the screen that nothing takes away.
+        //
+        // Left running, both outcomes are right. With hover keep-alive on, the pointer is inside
+        // the panel rectangle for as long as the shelf covers it, so the timer keeps re-arming
+        // and the notch comes back open and collapses once the pointer leaves: the same rule a
+        // panel under the pointer already follows. With it off, the notch collapses while it is
+        // hidden and comes back at rest. The collapse animates on a window nobody can see, which
+        // costs one storyboard and no correctness: its completion only re-parks the presentation
+        // and re-derives click-through, and its HideWindowIfPossible is guarded by the same
+        // covered-monitor condition RestoreNotch is.
+        _log?.Info("Shelf", "Standing aside for the shelf.");
+    }
+
+    private void OnShelfClosed()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnShelfClosed));
+            return;
+        }
+
+        if (_standAside != StandAsideReason.Shelf) return;
+
+        _standAside = StandAsideReason.None;
+        RestoreNotch();
+
+        // No Hide sent back. That verb belongs to the catcher's OTHER window, the one that
+        // stands in during a drag; the shelf has already taken itself down, which is how this
+        // event got here.
+        _log?.Info("Shelf", "Shelf closed; notch back.");
+    }
+
+    /// <summary>
+    /// The shelf could not be shown, with the reason as a sentence.
+    ///
+    /// It goes onto the shelf page, because that is the thing the person just clicked. A click
+    /// that does nothing is indistinguishable from the product being broken, and this is the one
+    /// interaction in the product whose failure mode is entirely invisible: the helper process
+    /// is not something anyone knows exists.
+    /// </summary>
+    private void OnShelfUnavailable(string why)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnShelfUnavailable(why)));
+            return;
+        }
+
+        _shelfPage?.ShowUnavailable(why);
+        _log?.Warn("Shelf", $"Shelf unavailable: {why}");
+    }
+
+    /// <summary>
+    /// Take the notch off screen for the catcher, WITHOUT moving or resizing it.
+    ///
+    /// SWP_NOMOVE and SWP_NOSIZE are load-bearing, not decoration. The four zeros are the
+    /// conventional filler for "I am not touching position or size", but that meaning lives in
+    /// the flags; without them the zeros are a real instruction and the window goes to 0,0.
+    /// Measured at the physical console on 2026-09-19: the shelf opened centred at 1088,0 and
+    /// the notch came back at 0,0, in the top-left corner, 1088 px from where it belongs, and
+    /// stayed there until the next Reposition happened to run. scripts/check-win32-flags.ps1
+    /// fails the build if either flag is dropped again.
+    /// </summary>
+    private void HideForCatcher()
+    {
+        if (Handle != 0)
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_HIDEWINDOW);
+    }
+
+    /// <summary>
+    /// Only back up if the notch has somewhere to be. While a window covers the monitor the
+    /// resting state IS hidden, and re-showing here would put a permanently composited strip
+    /// back over a game, the one thing the covered state exists to prevent.
+    ///
+    /// SWP_NOMOVE and SWP_NOSIZE for the same reason as HideForCatcher above: this call shows a
+    /// window, it does not place one. Without them it showed the notch in the top-left corner.
+    /// </summary>
+    private void RestoreNotch()
+    {
+        if (Handle != 0 && !_coversMonitor)
+            _ = SetWindowPos(Handle, HWND_TOPMOST, 0, 0, 0, 0,
+                SWP_NOMOVE | SWP_NOSIZE | SWP_NOACTIVATE | SWP_SHOWWINDOW);
+    }
+
+    /// <summary>
+    /// The catcher is no longer standing in — it took a drop, or it withdrew because no file
+    /// drag ever materialised. Either way the notch comes back.
+    ///
+    /// Needed as a second route because the poller cannot supply one: the detector is still in
+    /// its approaching state while the button is held, so it raises no transition, and the notch
+    /// would stay down until the person let go of a window they were dragging somewhere else.
+    /// </summary>
+    public void OnCatcherStoodDown()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnCatcherStoodDown));
+            return;
+        }
+
+        EndStandAside();
+    }
+
+    /// <summary>
+    /// The DRAG's stand-aside ends. Called from the approach detector and from the catcher
+    /// standing down, and it must leave an open shelf alone.
+    ///
+    /// The detector keeps polling while the shelf is up, and it will raise a departure the
+    /// moment the pointer leaves the band, which is most of the time, since the shelf is taller
+    /// than the band that opened it. Without this guard the notch would come straight back up
+    /// underneath a shelf the person is still using, and the shelf's own close would then find
+    /// nothing to restore.
+    /// </summary>
+    private void EndStandAside()
+    {
+        if (_standAside != StandAsideReason.Drag) return;
+        _standAside = StandAsideReason.None;
+
+        _ = _dropChannel?.SendAsync(new Plith.Services.Shelf.DropMessage(
+            Plith.Services.Shelf.DropVerb.Hide, 0, 0, 0, 0, []));
+
+        RestoreNotch();
+
+        _log?.Info("Shelf", "Drag over; notch back.");
+    }
 
     /// <summary>Re-assert HWND_TOPMOST so a game / video player that raised itself topmost
     /// after our last ShowOsd doesn't sit above us. Safe to call repeatedly: SetWindowPos
@@ -537,10 +800,16 @@ public sealed class OsdHost : BandWindow
         // level the instant it changes, so a widget page showing the same number is a second
         // place for one fact - and the one you reach by swiping, long after the moment it
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
+        _media = media;
         _clockPage = new Widgets.ClockWidget(media, weather, microphone);
-        _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
+        // The typed city, read through a delegate so the page follows a settings change without
+        // being rebuilt. Empty when the location is resolved from Windows or an IP lookup, and
+        // the page hides the line rather than naming a place it cannot name.
+        _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log,
+                                                 () => _settings.Current.WeatherLocation);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
 
+        BuildShelfPage();
         ApplyWidgetPages();
 
         _hud = new Widgets.NotchHud(audio, media, _toggleMute);
@@ -559,6 +828,102 @@ public sealed class OsdHost : BandWindow
     /// <summary>The microphone's mute changed. The now page reads the state where it draws it,
     /// so it only needs telling that something moved.</summary>
     public void OnMicrophoneChanged() => _clockPage?.Refresh();
+
+    private Widgets.ShelfWidget? _shelfPage;
+    private int _shelfPageIndex = -1;
+
+    /// <summary>Where the media page sits in the current list, so the opening rule can name it.
+    /// Read from the same list that installs the pages, so the two cannot disagree about an order
+    /// they both take from one place.</summary>
+    private int _mediaPageIndex = -1;
+
+    /// <summary>The media view model, held so the opening-page rule can ask what is playing.
+    /// Null until AttachAudioSource runs, which is why NotchOpeningPolicy takes a bool rather
+    /// than the view model.</summary>
+    private ViewModels.MediaViewModel? _media;
+
+    /// <summary>
+    /// Open the notch on the shelf page, because a file just landed there.
+    ///
+    /// Without this the whole gesture ends in silence: the notch steps aside, the catcher takes
+    /// the drop, the notch comes back, and nothing anywhere says the file arrived. Reported from
+    /// a live run as the feature having crashed — which is the right reading of an interaction
+    /// that gives no answer.
+    ///
+    /// The frame rather than a HUD, and that is the exception to this window's own rule. An event
+    /// normally gets the HUD because an answer to something you did must not look like a place
+    /// you went; here the answer IS a place — the shelf now holds something, and the page showing
+    /// what it holds is the acknowledgement.
+    /// </summary>
+    public void ShowShelfLanding()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(ShowShelfLanding));
+            return;
+        }
+
+        if (_presentation is not AmbientNotchPresentation) return;
+
+        ApplyWidgetPages();
+        if (_shelfPageIndex < 0) return;
+
+        var before = _pager.Index;
+        if (_pager.GoTo(_shelfPageIndex)) _widgets.SyncToPager(Math.Sign(_pager.Index - before));
+
+        _content.SetPanelContent(NotchPanelContent.Widgets);
+
+        // fromHover: true is what stops ShowOsd taking the frame straight back off us and
+        // replacing it with a HUD. The flag names the click path rather than a hover, and this
+        // is the same kind of caller — something that has already decided which panel it wants.
+        ShowOsd(TimeSpan.FromMilliseconds(2600), fromHover: true);
+    }
+    private Plith.Services.Shelf.ShelfStore? _shelf;
+    private bool _shelfPageInstalled;
+    private bool _pagesInstalled;
+
+    /// <summary>
+    /// Hand the shelf over. Set by App alongside the drop channel, and it may arrive before or
+    /// after the pages are built — whichever happens second installs the page.
+    /// </summary>
+    public void AttachShelf(Plith.Services.Shelf.ShelfStore shelf)
+    {
+        _shelf = shelf;
+
+        // The page's presence follows the shelf's contents, so a shelf that fills up while the
+        // notch is idle has to be able to install it from here.
+        _shelf.Changed += () =>
+        {
+            if (!Dispatcher.CheckAccess()) { Dispatcher.BeginInvoke(new Action(OnShelfStoreChanged)); return; }
+            OnShelfStoreChanged();
+        };
+
+        if (_clockPage is not null) BuildShelfPage();
+    }
+
+    /// <summary>
+    /// The store changed. Installs or removes the shelf page if its presence changed, and says
+    /// what the store now holds.
+    ///
+    /// The log line is an instrument rather than diagnostics for their own sake: the notch's own
+    /// shelf page repaints from this same event, so a report of tiles flickering back onto a
+    /// surface is only answerable if the count the repaint was given is on the record next to the
+    /// count Plith sent the catcher. Both are now written, from the two places that know them.
+    /// </summary>
+    private void OnShelfStoreChanged()
+    {
+        _log?.Info("Shelf", $"Store changed: {_shelf?.Items.Count ?? -1} item(s).");
+        ApplyWidgetPages();
+    }
+
+    private void BuildShelfPage()
+    {
+        if (_shelf is null || _shelfPage is not null) return;
+
+        _shelfPage = new Widgets.ShelfWidget(_shelf);
+        _shelfPage.OpenRequested += OpenShelf;
+        ApplyWidgetPages();
+    }
 
     private Widgets.ClockWidget? _clockPage;
     private Widgets.WeatherWidget? _weatherPage;
@@ -583,12 +948,32 @@ public sealed class OsdHost : BandWindow
 
         var wantsWeather = _settings.Current.ShowWeather;
 
-        List<FrameworkElement> pages = wantsWeather
-            ? [_clockPage, _weatherPage, _mediaPage]
-            : [_clockPage, _mediaPage];
+        // Always present, which is the opposite of the weather page's rule and deliberately so.
+        // It was conditional first, on the reasoning that an empty page exists to say nothing is
+        // there — and that reasoning is wrong for this page, because a shelf nobody can see is a
+        // feature nobody discovers. Weather absent means there is no reading; a shelf absent
+        // means the person never learns they can drop a file on the notch at all. The empty page
+        // carries that sentence.
+        var wantsShelf = _shelfPage is not null;
+
+        // Nothing to do when neither page's presence changed. The shelf raises Changed on every
+        // drop, and rebuilding the list each time would discard and re-add live pages that own
+        // timers and storyboards — for a list that came out identical.
+        if (_pagesInstalled && wantsWeather == _weatherPageInstalled && wantsShelf == _shelfPageInstalled)
+            return;
+
+        List<FrameworkElement> pages = [_clockPage];
+        if (wantsWeather) pages.Add(_weatherPage);
+        pages.Add(_mediaPage);
+        _mediaPageIndex = pages.Count - 1;
+        if (wantsShelf) pages.Add(_shelfPage!);
+
+        _shelfPageIndex = wantsShelf ? pages.Count - 1 : -1;
 
         _widgets.SetPages(_pager, pages);
         _weatherPageInstalled = wantsWeather;
+        _shelfPageInstalled = wantsShelf;
+        _pagesInstalled = true;
     }
 
     /// <summary>
@@ -692,7 +1077,11 @@ public sealed class OsdHost : BandWindow
         // spec defers remembering the last page across opens, so every open starts at the first
         // one either way - and a value written in a Completed handler is the exact hazard that
         // produced five defects on this branch. Recomputing it where it is used cannot go stale.
-        _pager.Reset();
+        // Computed here, on the way in, rather than remembered. See NotchOpeningPolicy: the page
+        // is a function of what is playing right now, and the carousel spec's deferral of
+        // remembering the last page is kept deliberately. The zero passed to SyncToPager is the
+        // slide DIRECTION, not a page: an opening frame does not slide.
+        _pager.ResetTo(NotchOpeningPolicy.OpeningPage(_media?.IsPlaying == true, _mediaPageIndex));
         _widgets.SyncToPager(0);
 
         // A click opens the widget frame. An event opens the card stack, and ShowOsd's other
@@ -827,28 +1216,24 @@ public sealed class OsdHost : BandWindow
         // view models) showing something rather than an empty panel.
         if (!fromHover)
         {
-            // An event keeps the widget frame ONLY when the frame is already showing the thing
-            // the event is about.
-            //
-            // The first version of this rule was "an event never takes the frame away", which
-            // fixed pressing play on the media page answering itself with a media HUD - but it
-            // was too wide: turning the volume up with the frame open then showed nothing at
-            // all, because no page carries the volume since the audio page was removed. The
-            // narrow rule covers both. An event about the page you are standing on updates that
-            // page; an event about anything else is news, and news gets the HUD.
+            // WHO CAUSED IT decides whether the open frame survives. The rule itself lives in
+            // NotchEventPolicy, free of WPF, because this class is a BandWindow that the test
+            // project cannot construct - and two earlier versions of this rule reached a running
+            // build with no test between them. See that file for both, and for the log lines
+            // from the run where the third case was measured doing harm.
             var frameIsOpen = _content.PanelContent == NotchPanelContent.Widgets
                               && _presentation is AmbientNotchPresentation open
                               && open.IsOpenEnoughToShowContent;
 
-            // An event may take the open frame away only when the page being looked at does not
-            // already show that thing: a track change while the media page is up is an answer you
-            // can already see, and replacing the frame with a HUD would take away the place you
-            // deliberately went to in order to show you what is already there.
+            // Whether the page being looked at already displays this event: a track change while
+            // the media page is up is an answer you can already see, and replacing the frame with
+            // a HUD would take away the place you deliberately went to in order to show you what
+            // is already there.
             var pageAlreadyShowsIt = frameIsOpen
                                      && PickHudKind(reason) == NotchHudKind.Media
                                      && ReferenceEquals(_widgets.CurrentPage, _mediaPage);
 
-            var keepFrame = frameIsOpen && pageAlreadyShowsIt;
+            var keepFrame = NotchEventPolicy.KeepsOpenFrame(reason, frameIsOpen, pageAlreadyShowsIt);
             var wantsHud = !keepFrame && _presentation is AmbientNotchPresentation && _hud is not null;
             if (wantsHud) _hud!.Show(PickHudKind(reason));
             if (!keepFrame)

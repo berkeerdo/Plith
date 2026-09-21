@@ -57,6 +57,7 @@ public sealed class OsdOrchestrator : IDisposable
         _pollTimer = new DispatcherTimer(DispatcherPriority.Input) { Interval = PollInterval };
         _pollTimer.Tick += OnPollTick;
         _mediaCard.CommandInvoked += OnMediaCommandInvoked;
+        _mediaCard.SeekInvoked += OnMediaSeekInvoked;
         _settings.Changed += OnSettingsChanged;
         _windowsAudio.Changed += OnWindowsAudioChanged;
     }
@@ -71,6 +72,7 @@ public sealed class OsdOrchestrator : IDisposable
 
         _media.Changed += OnMediaChanged;
         _media.SessionReplaced += OnMediaSessionReplaced;
+        _media.TimelineChanged += OnTimelineChanged;
         _ = _media.StartAsync();
     }
 
@@ -355,6 +357,28 @@ public sealed class OsdOrchestrator : IDisposable
         _mediaCard.NoteSessionReplaced();
     }
 
+    private void OnTimelineChanged(MediaTimeline? timeline)
+    {
+        // Same marshalling as OnMediaChanged: SMTC raises on threadpool threads and the view
+        // model is read by the UI.
+        if (!_dispatcher.CheckAccess())
+        {
+            _dispatcher.BeginInvoke(() => { if (!_disposed) OnTimelineChanged(timeline); });
+            return;
+        }
+        if (_disposed) return;
+
+        _mediaCard.ApplyTimeline(timeline);
+    }
+
+    private void OnMediaSeekInvoked(object? sender, TimeSpan position)
+    {
+        // Fire and forget, like the transport commands beside it: the answer comes back as a
+        // TimelinePropertiesChanged from the source rather than as a return value worth waiting
+        // for, and awaiting here would block the gesture that produced it.
+        _ = _media.TrySeekAsync(position);
+    }
+
     private void OnMediaCommandInvoked(object? sender, MediaCommand command)
     {
         _ = command switch
@@ -375,8 +399,10 @@ public sealed class OsdOrchestrator : IDisposable
         _audioWatchdogTimer?.Stop();
         _settings.Changed -= OnSettingsChanged;
         _mediaCard.CommandInvoked -= OnMediaCommandInvoked;
+        _mediaCard.SeekInvoked -= OnMediaSeekInvoked;
         _media.Changed -= OnMediaChanged;
         _media.SessionReplaced -= OnMediaSessionReplaced;
+        _media.TimelineChanged -= OnTimelineChanged;
         _windowsAudio.Changed -= OnWindowsAudioChanged;
         // _media is owned by App (shared with the fullscreen watcher) — not disposed here.
         _windowsAudio.Dispose();

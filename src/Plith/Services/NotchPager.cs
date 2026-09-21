@@ -154,9 +154,21 @@ public sealed class NotchPager
 
     /// <summary>Return to the first page. Used when the notch closes, so the next open starts
     /// where the last one did not leave off — remembering the page is deferred, per the spec.</summary>
-    public void Reset()
+    public void Reset() => ResetTo(0);
+
+    /// <summary>
+    /// Open on a given page, clamping into range.
+    ///
+    /// Clamps rather than wrapping, which is what <see cref="GoTo"/> does: a dot clicked past the
+    /// end means the other end, but an opening index past the end is a bug upstream and wrapping
+    /// would hide it by opening somewhere plausible.
+    ///
+    /// Forgets the last gesture's timing as well as its accumulator, so a swipe long after the
+    /// notch reopened is never measured against the one that closed it.
+    /// </summary>
+    public void ResetTo(int index)
     {
-        Index = 0;
+        Index = Math.Clamp(index, 0, PageCount - 1);
         RestAndForgetTiming();
     }
 

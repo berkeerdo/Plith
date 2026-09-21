@@ -40,13 +40,23 @@ public sealed class OpenMeteoClient : IDisposable
         var url = "https://api.open-meteo.com/v1/forecast"
                 + $"?latitude={at.Latitude.ToString("0.####", CultureInfo.InvariantCulture)}"
                 + $"&longitude={at.Longitude.ToString("0.####", CultureInfo.InvariantCulture)}"
-                + "&current=temperature_2m,weather_code";
+                + "&current=temperature_2m,weather_code"
+                // The short forecast rides along in the SAME request, so it costs no extra call
+                // and cannot disagree with the current conditions about where it is.
+                //
+                // forecast_days=3 rather than 2: the first day Open-Meteo returns is TODAY, and
+                // the page wants the two days AFTER today. timezone=auto so that "today" means
+                // the day at the location rather than at UTC, which for this user is three hours
+                // adrift and would name tomorrow as today every evening.
+                + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
+                + "&forecast_days=3&timezone=auto";
         try
         {
             var r = await _http.GetFromJsonAsync<ForecastResponse>(url, ct).ConfigureAwait(false);
             if (r?.Current is not { } c) return null;
             LogRecovery(ref _lastCurrentFailure, "OpenMeteo", "Current-conditions fetch recovered");
-            return new WeatherSnapshot(c.Temperature, c.WeatherCode, DateTimeOffset.UtcNow);
+            return new WeatherSnapshot(c.Temperature, c.WeatherCode, DateTimeOffset.UtcNow,
+                                       ReadDays(r.Daily));
         }
         // OperationCanceledException, not TaskCanceledException: GetFromJsonAsync can cancel
         // after the response headers arrive, while it is reading/deserializing the body, and
@@ -103,9 +113,23 @@ public sealed class OpenMeteoClient : IDisposable
         _log?.Info(source, message);
     }
 
+    /// <summary>The daily block, as parallel arrays, which is how Open-Meteo returns it. The
+    /// zipping rule lives in <see cref="WeatherDays"/>, where a test can reach it.</summary>
+    private static IReadOnlyList<WeatherDay>? ReadDays(DailyBlock? daily)
+        => WeatherDays.From(daily?.Time, daily?.WeatherCode, daily?.Max, daily?.Min);
+
     private sealed class ForecastResponse
     {
         [JsonPropertyName("current")] public CurrentBlock? Current { get; set; }
+        [JsonPropertyName("daily")] public DailyBlock? Daily { get; set; }
+    }
+
+    private sealed class DailyBlock
+    {
+        [JsonPropertyName("time")] public List<string>? Time { get; set; }
+        [JsonPropertyName("weather_code")] public List<int>? WeatherCode { get; set; }
+        [JsonPropertyName("temperature_2m_max")] public List<double>? Max { get; set; }
+        [JsonPropertyName("temperature_2m_min")] public List<double>? Min { get; set; }
     }
 
     private sealed class CurrentBlock

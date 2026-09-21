@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
+using Plith.Services;
 
 namespace Plith.Views.Presentation;
 
@@ -23,11 +24,15 @@ internal sealed class NotchHoverPoller : IDisposable
     private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(60);
 
     private readonly DispatcherTimer _timer;
+    private readonly DragApproachDetector _drag = new();
     private bool _wasInside;
     private bool _wasInsidePanel;
 
-    public NotchHoverPoller(Dispatcher dispatcher)
+    private readonly DiagnosticLog? _log;
+
+    public NotchHoverPoller(Dispatcher dispatcher, DiagnosticLog? log = null)
     {
+        _log = log;
         _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = Interval };
         _timer.Tick += (_, _) => Poll();
     }
@@ -42,6 +47,17 @@ internal sealed class NotchHoverPoller : IDisposable
 
     /// <summary>True on entering the rectangle, false on leaving. Raised on transitions only.</summary>
     public event Action<bool>? HoverChanged;
+
+    /// <summary>
+    /// True when a drag that began elsewhere has reached the notch, false when it leaves or is
+    /// released. Transitions only.
+    ///
+    /// This is readable at all only because GetCursorPos and GetAsyncKeyState are state reads
+    /// rather than messages: the drag source owns the mouse for the duration and the notch
+    /// receives no input of its own, but both calls keep answering. It is the single mechanism
+    /// the shelf is built on — Plith's own window can see a drag coming and can never receive it.
+    /// </summary>
+    public event Action<bool>? DraggingOverChanged;
 
     /// <summary>
     /// The whole OSD window's screen rectangle in DIP — the open panel, not just the resting
@@ -87,12 +103,21 @@ internal sealed class NotchHoverPoller : IDisposable
     {
         _wasInside = false;
         _wasInsidePanel = false;
+        _drag.Reset();
         _timer.Start();
     }
 
     public void Stop()
     {
         _timer.Stop();
+
+        // Before the hover reset below, because a stop mid-drag has to put the notch back: the
+        // OSD is hidden and the catcher is standing in its place, and nothing else would ever
+        // tell either of them the drag is over.
+        var wasApproaching = _drag.IsApproaching;
+        _drag.Reset();
+        if (wasApproaching) DraggingOverChanged?.Invoke(false);
+
         // Leave the world believing the cursor is outside, so a restart cannot open with a
         // stale "still inside" that never produces an enter transition.
         if (_wasInside)
@@ -112,6 +137,49 @@ internal sealed class NotchHoverPoller : IDisposable
 
         Polled?.Invoke();
 
+        var buttonDown = (GetAsyncKeyState(VK_LBUTTON) & 0x8000) != 0;
+
+        // One line per press, which is the only volume at which this is affordable and the only
+        // one that answers the question. A drag that produces no handoff is otherwise completely
+        // silent, and "nothing happened" cannot distinguish a cursor that never entered the band
+        // from a band that is in the wrong place, an empty rectangle, or a press the detector
+        // read as starting on the OSD.
+        if (buttonDown && !_buttonWasDownForLog)
+        {
+            _log?.Info("DragWatch",
+                $"Press at {dip.X:0},{dip.Y:0} dip; hover={Describe(HoverRect)} " +
+                $"band={Describe(NotchGeometry.DragApproachRect(HoverRect))} " +
+                $"panel={Describe(PanelRect)} dpi={DpiScale:0.##}");
+        }
+        _buttonWasDownForLog = buttonDown;
+
+        var inBand = NotchGeometry.IsInsideNotch(NotchGeometry.DragApproachRect(HoverRect), dip);
+
+        // The other half of the question. The press line above says where a gesture began; this
+        // says whether it ever arrived — and if it arrived and still produced no handoff, it
+        // names the clause that rejected it. Without both, a drag that does nothing is the same
+        // silence whether the cursor missed the band by a pixel or the origin test refused it.
+        var heldInBand = buttonDown && inBand;
+        if (heldInBand != _wasHeldInBandForLog)
+        {
+            _wasHeldInBandForLog = heldInBand;
+            if (heldInBand)
+            {
+                _log?.Info("DragWatch",
+                    $"Held cursor entered the band at {dip.X:0},{dip.Y:0}; " +
+                    $"startedOutside={_drag.PressStartedOutside}");
+            }
+        }
+
+        if (_drag.Update(buttonDown,
+                         cursorOverOsd: _wasInsidePanel,
+                         cursorInApproachBand: inBand,
+                         cursorInHoldBand: NotchGeometry.IsInsideNotch(
+                             NotchGeometry.DropTargetRect(HoverRect), dip)))
+        {
+            DraggingOverChanged?.Invoke(_drag.IsApproaching);
+        }
+
         bool inside = NotchGeometry.IsInsideNotch(HoverRect, dip);
 
         if (inside == _wasInside) return;
@@ -120,6 +188,12 @@ internal sealed class NotchHoverPoller : IDisposable
         HoverChanged?.Invoke(inside);
     }
 
+    private bool _buttonWasDownForLog;
+    private bool _wasHeldInBandForLog;
+
+    private static string Describe(Rect r) =>
+        r.IsEmpty || r.Width <= 0 ? "EMPTY" : $"{r.Left:0},{r.Top:0} {r.Width:0}x{r.Height:0}";
+
     public void Dispose() => _timer.Stop();
 
     [StructLayout(LayoutKind.Sequential)]
@@ -127,4 +201,11 @@ internal sealed class NotchHoverPoller : IDisposable
 
     [DllImport("user32.dll")]
     private static extern bool GetCursorPos(out POINT lpPoint);
+
+    private const int VK_LBUTTON = 0x01;
+
+    /// <summary>A state read, not a message. That is why it still answers while a drag source
+    /// owns the mouse and this window receives no input at all.</summary>
+    [DllImport("user32.dll")]
+    private static extern short GetAsyncKeyState(int vKey);
 }

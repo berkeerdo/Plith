@@ -1,6 +1,7 @@
 using System.Windows;
 using Plith.Cards;
 using Plith.Services;
+using Plith.Services.Shelf;
 using Plith.Views;
 
 namespace Plith;
@@ -34,6 +35,9 @@ public partial class App : Application
     private NativeFlyoutSuppressor? _flyoutSuppressor;
     private VolumeKeyHook? _volumeKeyHook;
     private FullscreenVideoWatcher? _fullscreenWatcher;
+    private DropChannelServer? _dropChannel;
+    private ShelfStore? _shelf;
+    private ShelfSession? _shelfSession;
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -172,6 +176,112 @@ public partial class App : Application
 
         _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
         _trayHost.Initialize();
+
+        StartShelf();
+    }
+
+    /// <summary>
+    /// The drop catcher and the pipe it talks over. Started last, because nothing else waits on
+    /// it: the pipe is listening from this point and the catcher connects whenever it comes up,
+    /// which may be seconds later or — if Explorer is being slow — not at all this session.
+    /// </summary>
+    private void StartShelf()
+    {
+        var sid = System.Security.Principal.WindowsIdentity.GetCurrent().User?.Value;
+        if (sid is null)
+        {
+            _diagnosticLog?.Warn("Shelf", "No user SID; the shelf cannot name its pipe.");
+            return;
+        }
+
+        _shelf = new ShelfStore();
+        _osd?.AttachShelf(_shelf);
+        _diagnosticLog?.Info("Shelf", $"Shelf loaded with {_shelf.Items.Count} item(s).");
+
+        _dropChannel = new DropChannelServer(sid, _diagnosticLog);
+        _dropChannel.Received += OnDropChannelMessage;
+        // A catcher that dies while the shelf is up sends no ShelfClosed, and Plith's own window
+        // is hidden for the duration of one. Without this the OSD stays hidden until Plith
+        // restarts, which is a great deal worse than a missing shelf.
+        _dropChannel.Disconnected += OnDropChannelDisconnected;
+        _dropChannel.Start();
+        _osd?.AttachDropChannel(_dropChannel);
+        _diagnosticLog?.Info("Shelf", "Drop channel listening.");
+
+        // The palette is a FUNCTION rather than a value, so the shelf is painted in whatever the
+        // theme is at the moment it opens. A colour captured here would be whatever was true at
+        // startup, and both the accent and light/dark change while the app runs.
+        _shelfSession = new ShelfSession(_dropChannel, _shelf, ResolveShelfPalette, _diagnosticLog);
+        _osd?.AttachShelfSession(_shelfSession);
+
+        _diagnosticLog?.Info("Shelf", $"Drop catcher start: {DropCatcherLauncher.EnsureRunning(_diagnosticLog)}.");
+    }
+
+    private ShelfPalette ResolveShelfPalette()
+    {
+        var settings = _settings?.Current;
+        var baseColor = AccentTheme.ResolveBase(settings?.AccentThemeId, settings?.CustomAccentColor);
+        return ShelfSession.DerivePalette(baseColor, _theme?.IsEffectiveDark ?? true);
+    }
+
+    /// <summary>Raised off the UI thread by the pipe's read loop, like every other signal from
+    /// it, so it takes the same route onto the UI thread.</summary>
+    private void OnDropChannelDisconnected()
+    {
+        _diagnosticLog?.Info("Shelf", "Drop catcher disconnected.");
+        Dispatcher.BeginInvoke(new Action(() => _shelfSession?.OnChannelLost()));
+    }
+
+    private void OnDropChannelMessage(DropMessage message)
+    {
+        // Raised off the UI thread by the pipe's read loop.
+        switch (message.Verb)
+        {
+            case DropVerb.Hello:
+                // The one line that says the design is working end to end: a Medium process
+                // reached a pipe owned by a High one. Without the explicit ACL on that pipe this
+                // never appears, and the catcher logs an access denial instead.
+                _diagnosticLog?.Info("Shelf", "Drop catcher connected.");
+                break;
+            case DropVerb.Dropped:
+                _diagnosticLog?.Info("Shelf", $"Drop reported: {message.Paths.Count} path(s).");
+                _osd?.OnCatcherStoodDown();
+                // Onto the UI thread: ShelfStore is not thread-safe, and whatever ends up
+                // painting these rows will read them from there.
+                Dispatcher.BeginInvoke(new Action(() =>
+                {
+                    var before = _shelf?.Items.Count ?? 0;
+                    _shelf?.Add(message.Paths);
+                    var after = _shelf?.Items.Count ?? 0;
+                    // Both numbers, because they differ whenever a path did not resolve - which
+                    // is the one failure this path has and is otherwise completely silent.
+                    _diagnosticLog?.Info("Shelf", $"Shelf now holds {after} item(s) (was {before}).");
+
+                    // The acknowledgement. A drop that changes nothing on screen reads as the
+                    // app having crashed, which is exactly how the first live run of this
+                    // reported it.
+                    _osd?.ShowShelfLanding();
+                }));
+                break;
+            case DropVerb.Hide:
+                // From the catcher this means "I withdrew" — it stood in, no file drag arrived,
+                // and it has taken itself down. Plith sends the same verb the other way; the
+                // direction is what distinguishes them.
+                _diagnosticLog?.Info("Shelf", "Catcher withdrew; no file drag arrived.");
+                _osd?.OnCatcherStoodDown();
+                break;
+            default:
+                // Everything the SHELF asks for, routed whole to the one object that owns that
+                // conversation. Onto the UI thread first, for the same reason the Dropped case
+                // above does it: ShelfStore is not thread-safe, and the pages that repaint from
+                // its Changed event are WPF controls.
+                //
+                // Verbs Plith sends rather than receives (Show, OpenShelf, Items, Palette) reach
+                // here only if something else on the machine wrote them to the pipe, which it
+                // may: the ACL is open to everyone. ShelfSession ignores them.
+                Dispatcher.BeginInvoke(new Action(() => _shelfSession?.HandleMessage(message)));
+                break;
+        }
     }
 
     private void ApplyHotkeyFromSettings(SettingsModel m)
@@ -216,6 +326,11 @@ public partial class App : Application
         DisposeStep("MediaSessionClient", () => _mediaSession?.Dispose());
         DisposeStep("FlyoutSuppressor",  () => _flyoutSuppressor?.Dispose());
         // BandWindow.Ext.OnAppExit disposes HwndSource on Application.Exit; no manual unblock needed.
+        DisposeStep("DropChannel",       () =>
+        {
+            if (_dropChannel is not null) _dropChannel.Received -= OnDropChannelMessage;
+            _dropChannel?.Dispose();
+        });
         DisposeStep("TrayIconHost",      () => _trayHost?.Dispose());
 
         _diagnosticLog?.Info("App", "OnExit — base.OnExit");

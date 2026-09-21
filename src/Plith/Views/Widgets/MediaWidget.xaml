@@ -1,10 +1,12 @@
 <UserControl x:Class="Plith.Views.Widgets.MediaWidget"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:w="clr-namespace:Plith.Views.Widgets"
              mc:Ignorable="d"
+             AutomationProperties.Name="Now playing"
              Focusable="False">
     <UserControl.Resources>
         <ResourceDictionary>
@@ -12,40 +14,188 @@
                 <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
 
-            <!-- This page carries its own ink, because it carries its own ground.
+            <!-- No NotchInk override here any more, and that is the point of this pass.
 
-                 NotchInk is computed from the themed surface now - dark on the light theme, light
-                 on the dark one - which is right for the pages that sit ON that surface. This one
-                 does not: the artwork below is covered by a near-black scrim in both themes, so
-                 the ground here is dark whatever the theme is. Inheriting the themed ink put dark
-                 text on that scrim the moment the light theme was selected.
-
-                 The weather page has the same shape for the same reason - it paints a sky, so it
-                 sets its own colours too. A page that paints its own background owns its own
-                 foreground. Declared after the merge above so it wins over anything merged. -->
-            <SolidColorBrush x:Key="NotchInk" Color="#F2F5F8" />
-            <SolidColorBrush x:Key="NotchInkMuted" Color="#9AA6B2" />
+                 The page used to blow the album art up behind a near-black scrim, which made its
+                 ground dark in BOTH themes while every other page followed the theme. So it had
+                 to declare its own ink, it was an exception to the light theme, and the pair was
+                 invisible to check-contrast.ps1, which only measures pairs a file states in one
+                 place. The ground is gone, so the exception is gone with it: the ink is inherited
+                 like everywhere else. -->
 
             <Style x:Key="TransportButtonStyle" TargetType="Button">
-                <Setter Property="Width" Value="30" />
-                <Setter Property="Height" Value="30" />
+                <Setter Property="Width" Value="28" />
+                <Setter Property="Height" Value="28" />
                 <Setter Property="Cursor" Value="Hand" />
                 <Setter Property="Background" Value="#0DFFFFFF" />
-                <!-- Dimmer than the title beside them, as the design has it: the controls are
-                     available, not the thing you came to read. -->
+                <!-- Dimmer than the title beside them: the controls are available, not the thing
+                     you came to read. -->
                 <Setter Property="Foreground" Value="{DynamicResource NotchInkMuted}" />
                 <Setter Property="Template">
                     <Setter.Value>
                         <ControlTemplate TargetType="Button">
-                            <!-- A resting ground, not just a hover one. The design gives each
-                                 control a faint pill so the row reads as three controls rather
-                                 than three floating marks; hover only brightens it. -->
-                            <!-- TemplateBinding, not a literal: play/pause overrides this to sit
-                                 a touch brighter than the two beside it, and a hard-coded value
-                                 here would make that override do nothing at all. -->
-                            <Border x:Name="Chrome" CornerRadius="15"
+                            <!-- A resting ground, not just a hover one: the row reads as controls
+                                 rather than as floating marks, and hover only brightens it.
+
+                                 TemplateBinding, not a literal: play/pause overrides this to sit
+                                 brighter than the others, and a hard-coded value here would make
+                                 that override do nothing at all. -->
+                            <Border x:Name="Chrome" CornerRadius="14"
                                     Background="{TemplateBinding Background}">
                                 <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background"
+                                            Value="{DynamicResource OsdHighlight}" />
+                                </Trigger>
+                                <!-- Render() disables the transport with no session, and says in
+                                     its own comment that a control which does nothing when
+                                     pressed teaches people not to trust the ones that do. That
+                                     was only half true: a replaced ControlTemplate loses WPF's
+                                     default dimming, so the disabled buttons looked exactly like
+                                     the live ones. Found in widget-media-empty.png. -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="Chrome" Property="Opacity" Value="0.35" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- A Slider, not a ProgressBar, and not a drawn rectangle with mouse handlers.
+
+                 It was a ProgressBar until seek existed, for its automation peer: where the track
+                 has got to reaches a screen reader as a VALUE rather than as a length of pixels.
+                 A Slider keeps that and adds what a seekable bar needs anyway, which is the same
+                 argument AudioWidget's own track records: keyboard arrows, Home and End, and the
+                 drag behaviour people already expect. A hand-rolled track would have had to
+                 reimplement all of it, and would have reimplemented it worse.
+
+                 NEITHER COLOUR IS DECLARED HERE. PaintBar computes both from NotchInk, and the
+                 four candidates behind that are recorded there with their measured ratios: an
+                 accent fill fails the contrast lint outright, a static ink-on-track pair falls to
+                 2,6:1 on one accent, and an ink derived from the groove passes the lint while
+                 drawing the bar inverted. Colours in a style cannot express "stronger than the
+                 groove", which is the property this bar actually needs.
+
+                 Alcove's bar is white rather than accent-coloured for the same reason: only its
+                 waveform carries the accent. -->
+            <Style x:Key="SeekThumbStyle" TargetType="Thumb">
+                <Setter Property="Focusable" Value="False" />
+                <Setter Property="Width" Value="10" />
+                <Setter Property="Height" Value="10" />
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Thumb">
+                            <!-- The Slider's own Foreground, so the thumb is the same ink as the
+                                 played part it sits at the end of. -->
+                            <Ellipse Fill="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Slider}}" />
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <Style x:Key="TrackBarStyle" TargetType="Slider">
+                <!-- Taller than the 4 DIP it draws, because the whole control is the grab target
+                     and a 4 DIP one is missed between two mouse samples. AudioWidget's track
+                     records the same rule at 6 DIP; this bar is thinner, so it needs it more. -->
+                <Setter Property="MinHeight" Value="20" />
+                <Setter Property="Minimum" Value="0" />
+                <Setter Property="Maximum" Value="100" />
+                <Setter Property="SmallChange" Value="2" />
+                <Setter Property="LargeChange" Value="10" />
+                <!-- NOT IsMoveToPointEnabled. It jumps the thumb on press and marks the event
+                     handled, so no drag ever begins: measured on hardware, a drag that did not
+                     start on the thumb moved nothing. MediaWidget captures the mouse and tracks
+                     it instead, which also makes a plain click seek. -->
+                <Setter Property="Focusable" Value="True" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Slider">
+                            <Grid Background="Transparent">
+                                <Border Height="4" CornerRadius="2"
+                                        VerticalAlignment="Center"
+                                        Background="{TemplateBinding Background}" />
+                                <Track x:Name="PART_Track">
+                                    <Track.DecreaseRepeatButton>
+                                        <RepeatButton Command="Slider.DecreaseLarge"
+                                                      Focusable="False" Cursor="Hand">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Grid Background="Transparent">
+                                                        <Border Height="4" CornerRadius="2"
+                                                                VerticalAlignment="Center"
+                                                                Background="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Slider}}" />
+                                                    </Grid>
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.DecreaseRepeatButton>
+                                    <Track.IncreaseRepeatButton>
+                                        <RepeatButton Command="Slider.IncreaseLarge"
+                                                      Focusable="False" Cursor="Hand">
+                                            <RepeatButton.Template>
+                                                <ControlTemplate TargetType="RepeatButton">
+                                                    <Border Background="Transparent" />
+                                                </ControlTemplate>
+                                            </RepeatButton.Template>
+                                        </RepeatButton>
+                                    </Track.IncreaseRepeatButton>
+                                    <Track.Thumb>
+                                        <!-- Hidden until the pointer is on the bar or the bar has
+                                             keyboard focus. A permanent dot would make a page
+                                             that mostly reports a position look like a control
+                                             being offered, and Alcove's bar has no thumb at rest
+                                             either. -->
+                                        <Thumb x:Name="SeekThumb" Opacity="0"
+                                               Style="{StaticResource SeekThumbStyle}" />
+                                    </Track.Thumb>
+                                </Track>
+                            </Grid>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="1" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="1" />
+                                </Trigger>
+                                <!-- A source that refuses a position write gets a bar that still
+                                     reports where the track is and offers no gesture at all: no
+                                     thumb, no hand cursor. A control that ignores a drag teaches
+                                     people not to trust the ones that answer it. -->
+                                <Trigger Property="IsEnabled" Value="False">
+                                    <Setter TargetName="SeekThumb" Property="Opacity" Value="0" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
+
+            <!-- The picker's back control and its cells.
+
+                 Background="Transparent" on both templates is load-bearing, not decoration: WPF
+                 hit-tests a Transparent brush and does NOT hit-test a null one, so a cell with no
+                 background would answer a pointer only where its own text painted and be dead
+                 everywhere else, including its exact centre. That is a measured defect from this
+                 branch, recorded in docs/SHELF-VERIFICATION.md section 3.10 and stated in
+                 ShelfWindow.xaml's own comment. -->
+            <Style x:Key="PickerBackStyle" TargetType="Button">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="Padding" Value="4,0" />
+                <Setter Property="HorizontalContentAlignment" Value="Left" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Chrome" CornerRadius="7" Background="Transparent"
+                                    Padding="{TemplateBinding Padding}">
+                                <ContentPresenter VerticalAlignment="Center" />
                             </Border>
                             <ControlTemplate.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
@@ -60,93 +210,143 @@
                     </Setter.Value>
                 </Setter>
             </Style>
+
+            <!-- No Height and no Margin here. BuildCell sets both from NotchGeometry's grid
+                 constants, because those are the numbers the capacity is computed from and a
+                 second copy in a style is free to stop matching them. This style DID carry
+                 literal 16 and 4 while the comment below claimed otherwise, which is both of
+                 this repo's recorded failure modes in one place: a duplicated constant and a
+                 comment that lies about it. -->
+            <Style x:Key="PickerCellStyle" TargetType="Button">
+                <Setter Property="Cursor" Value="Hand" />
+                <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+                <Setter Property="Template">
+                    <Setter.Value>
+                        <ControlTemplate TargetType="Button">
+                            <Border x:Name="Chrome" CornerRadius="5" Background="Transparent"
+                                    Padding="6,0">
+                                <ContentPresenter VerticalAlignment="Center" />
+                            </Border>
+                            <ControlTemplate.Triggers>
+                                <Trigger Property="IsMouseOver" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background" Value="#14FFFFFF" />
+                                </Trigger>
+                                <Trigger Property="IsKeyboardFocused" Value="True">
+                                    <Setter TargetName="Chrome" Property="Background"
+                                            Value="{DynamicResource OsdHighlight}" />
+                                </Trigger>
+                            </ControlTemplate.Triggers>
+                        </ControlTemplate>
+                    </Setter.Value>
+                </Setter>
+            </Style>
         </ResourceDictionary>
     </UserControl.Resources>
 
-    <Grid x:Name="Root" ClipToBounds="True">
-        <!-- The artwork is the page, the way the sky is the weather page.
+    <!-- Alcove's own stacking, now that the frame is tall enough to hold it: the tile and the
+         text, then the progress row, then a centred transport row.
 
-             A 46 DIP thumbnail beside two lines of text is a list row, and this is not a list -
-             it is the one thing playing. Blown up, blurred and dropped behind a scrim, the album
-             becomes the surface's colour, which is the same idea the weather page uses and makes
-             the two read as one family rather than two unrelated screens.
+         It was two rows in a 73 DIP band with the transport on a right-hand rail, because the
+         frame was 116 and Alcove's shape does not fit that. The user looked at the result, called
+         the text cramped, and asked for the notch to grow: NotchGeometry.OpenFrameDip is 164 now
+         and records why. The transport moving off the rail is what hands the width back to the
+         title, which went from 116 DIP to 244.
 
-             Blur is affordable HERE and was not on the clouds: this image changes when the track
-             changes and is otherwise static, so the filter pass is paid once rather than every
-             frame. -->
-        <Image x:Name="Backdrop" Stretch="UniformToFill" Opacity="0" IsHitTestVisible="False">
-            <Image.Effect>
-                <BlurEffect Radius="34" KernelType="Gaussian" RenderingBias="Performance" />
-            </Image.Effect>
-        </Image>
+         121 DIP of content: 64 (tile) + 7 + 14 (progress) + 8 + 28 (transport). 14 above and 29
+         below are the frame's, not ours, and 20 of that 29 is the page rail's lane. -->
+    <Grid x:Name="Root" Margin="{x:Static p:NotchGeometry.PageInsetDip}">
+        <Grid x:Name="MediaMode">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="64" />
+            <RowDefinition Height="7" />
+            <RowDefinition Height="14" />
+            <RowDefinition Height="8" />
+            <RowDefinition Height="28" />
+        </Grid.RowDefinitions>
 
-        <!-- Heavier on the left, where the text is, and thinning to the right so the artwork
-             still shows through behind the transport. A flat scrim would hide the thing it is
-             there to make readable. -->
-        <Rectangle IsHitTestVisible="False">
-            <Rectangle.Fill>
-                <LinearGradientBrush StartPoint="0,0" EndPoint="1,0.2">
-                    <GradientStop Offset="0" Color="#E60A0D12" />
-                    <GradientStop Offset="0.55" Color="#B00A0D12" />
-                    <GradientStop Offset="1" Color="#7A0A0D12" />
-                </LinearGradientBrush>
-            </Rectangle.Fill>
-        </Rectangle>
+        <!-- 64 (art) + 12 + 244 (text) = 320, the content width. -->
+        <Grid Grid.Row="0">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="64" />
+                <ColumnDefinition Width="*" />
+            </Grid.ColumnDefinitions>
 
-    <!-- Art, then the text, then the transport on the right.
+            <!-- The whole row is one click target now, which it could not be while the transport
+                 shared it: a page-wide target would have swallowed every press meant for a
+                 control. The transport has its own row, so there is nothing left to swallow. -->
+            <Border x:Name="OpenSourceArea" Grid.Column="0" Grid.ColumnSpan="2"
+                    Background="Transparent" />
 
-         The transport was briefly moved to a centred row underneath, on the argument that the
-         right-hand rail left the title too little width. The rail won: it is where this control
-         already sits on the Classic card and in every media surface a person already uses, and
-         the width objection has its own answer one column to the left - the title scrolls
-         instead of ellipsing. Keeping the rail also let the frame stay 116 tall rather than 128,
-         which would have spent 12 DIP on all five pages to solve one page's problem. -->
-    <Grid Margin="18,14,18,29" VerticalAlignment="Center">
-        <!-- The art and the text are one target; the transport is not part of it. A page-wide
-             click would swallow every press meant for a transport button on the same row. -->
-        <Grid.ColumnDefinitions>
-            <ColumnDefinition Width="46" />
-            <ColumnDefinition Width="*" />
-            <ColumnDefinition Width="Auto" />
-        </Grid.ColumnDefinitions>
+            <!-- The hairline stays. Album art is photographic and often dark at the edges, so
+                 without an inner edge it dissolves into the panel and reads as a smudge rather
+                 than a picture with a boundary. -->
+            <Border x:Name="ArtHost" Grid.Column="0" Width="64" Height="64" CornerRadius="11"
+                    Background="{DynamicResource NotchTrack}">
+                <Border.Clip>
+                    <RectangleGeometry Rect="0,0,64,64" RadiusX="11" RadiusY="11" />
+                </Border.Clip>
+                <Grid>
+                    <Image x:Name="Art" Stretch="UniformToFill" />
+                    <Border CornerRadius="11" BorderThickness="1" BorderBrush="#1FFFFFFF" />
+                </Grid>
+            </Border>
 
-        <Border x:Name="OpenSourceArea" Grid.Column="0" Grid.ColumnSpan="2"
-                Background="Transparent" />
+            <!-- MinWidth 0 is load-bearing: a star column sizes to its content's minimum by
+                 default, so a long title would push its own column wider than the frame instead
+                 of being clipped. -->
+            <StackPanel x:Name="TextColumn" Grid.Column="1" MinWidth="0" Margin="12,0,0,0"
+                        VerticalAlignment="Center">
+                <!-- Bigger than they were, because there is room for them to be: the title was
+                     14.5 in a 116 DIP column and is 16 in a 244 DIP one. -->
+                <w:MarqueeText x:Name="Title"
+                               Height="22"
+                               FontSize="16" FontWeight="SemiBold"
+                               Foreground="{DynamicResource NotchInk}" />
+                <w:MarqueeText x:Name="Artist"
+                               Height="18"
+                               Margin="0,3,0,0"
+                               FontSize="12"
+                               Foreground="{DynamicResource NotchInkMuted}" />
+            </StackPanel>
+        </Grid>
 
-        <!-- Larger, and with a hairline over it. Album art is photographic and often dark at the
-             edges, so without an inner edge it dissolves into the panel and reads as a smudge
-             rather than as a picture with a boundary. -->
-        <Border x:Name="ArtHost" Grid.Column="0" Width="46" Height="46" CornerRadius="8"
-                Background="{DynamicResource NotchTrack}">
-            <Border.Clip>
-                <RectangleGeometry Rect="0,0,46,46" RadiusX="8" RadiusY="8" />
-            </Border.Clip>
-            <Grid>
-                <Image x:Name="Art" Stretch="UniformToFill" />
-                <Border CornerRadius="8" BorderThickness="1" BorderBrush="#1FFFFFFF" />
-            </Grid>
-        </Border>
+        <!-- Elapsed, the bar, and what is left, across the full content width. Collapsed until a
+             timeline arrives: a bar of unknown length is a lie. Filled in by RenderProgress. -->
+        <Grid x:Name="ProgressRow" Grid.Row="2" Visibility="Collapsed">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="34" />
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="38" />
+            </Grid.ColumnDefinitions>
 
-        <!-- MinWidth 0 is load-bearing: a star column sizes to its content's minimum by default,
-             so a long title would push the transport off the frame instead of being clipped. -->
-        <StackPanel x:Name="TextColumn" Grid.Column="1" MinWidth="0" Margin="12,0" VerticalAlignment="Center">
-            <!-- TextElement.* rather than FontSize/Foreground directly: MarqueeText is a
-                 FrameworkElement, which owns neither property. Both are inheritable, so setting
-                 them here reaches the TextBlock inside exactly as it would anywhere else. -->
-            <w:MarqueeText x:Name="Title"
-                           Height="20"
-                           FontSize="14.5" FontWeight="SemiBold"
-                           Foreground="{DynamicResource NotchInk}" />
-            <w:MarqueeText x:Name="Artist"
-                           Height="17"
-                           Margin="0,2,0,0"
-                           FontSize="11.5"
-                           Foreground="{DynamicResource NotchInkMuted}" />
-        </StackPanel>
+            <TextBlock x:Name="Elapsed" Grid.Column="0"
+                       FontSize="10.5" VerticalAlignment="Center"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+            <Slider x:Name="Bar" Grid.Column="1" Margin="8,0"
+                    VerticalAlignment="Center"
+                    Style="{StaticResource TrackBarStyle}"
+                    AutomationProperties.Name="Playback position" />
+            <TextBlock x:Name="Remaining" Grid.Column="2"
+                       FontSize="10.5" TextAlignment="Right" VerticalAlignment="Center"
+                       Foreground="{DynamicResource NotchInkMuted}" />
+        </Grid>
 
-        <!-- Round, not rounded-square. Three circles read as a transport; three squares read as
-             a toolbar, and this is the one row on the page a person reaches for without looking. -->
-        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+        <!-- The transport sits in the MIDDLE of the row and the output control at its RIGHT
+             end, rather than the four of them being one centred group.
+
+             Asked for that way, and it is the better arrangement for a reason worth writing
+             down: the three transport marks are what a hand goes to without looking, so their
+             place should not move when a fourth control is beside them. Centred on the row, they
+             are where they are whether or not the output button exists. A single centred group
+             would have shifted all three left to make room for it.
+
+             The output control is aligned right in the same row rather than following the group,
+             which is also how Alcove ends its control row.
+
+             Round, not rounded-square: three circles read as a transport and three squares read
+             as a toolbar. -->
+        <Grid Grid.Row="4">
+        <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
             <Button x:Name="Previous" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Previous track">
                 <Viewbox Width="14" Height="14"><Canvas Width="24" Height="24">
@@ -157,15 +357,15 @@
             <!-- The name is rewritten by Render() on every state change, because "Play" on a
                  button that pauses is worse than no name at all. The value here is the one it
                  carries before any session exists, and it is declared rather than left to code
-                 so the accessibility lint can see it - a name that only ever exists at runtime
-                 is a name nothing can check. -->
+                 so the accessibility lint can see it: a name that only ever exists at runtime is
+                 a name nothing can check. -->
             <Button x:Name="PlayPause" Style="{StaticResource TransportButtonStyle}"
                     AutomationProperties.Name="Play"
-                    Margin="4,0">
+                    Margin="6,0">
                 <!-- Viewbox over a 24 Canvas, so every transport mark is scaled by the SAME
                      factor. Per-Path Stretch="Uniform" scaled each geometry's own bounds to the
                      box, which made play visibly larger than pause for no reason a person could
-                     name — the geometries differ in extent, not in intended size. -->
+                     name: the geometries differ in extent, not in intended size. -->
                 <Viewbox Width="14" Height="14">
                     <Canvas Width="24" Height="24">
                         <Path x:Name="PlayPauseGlyph"
@@ -181,6 +381,66 @@
                     </Canvas></Viewbox>
             </Button>
         </StackPanel>
+
+            <!-- Stroked, not filled: the speaker geometries are line art, which is why NotchHud
+                 strokes the same three paths. Filling them draws a blob. -->
+            <Button x:Name="Output" Style="{StaticResource TransportButtonStyle}"
+                    AutomationProperties.Name="Change output device"
+                    ToolTip="Change output device"
+                    HorizontalAlignment="Right">
+                <Viewbox Width="15" Height="15">
+                    <Canvas Width="24" Height="24">
+                        <Path Data="{StaticResource IconSpeakerBody}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6" StrokeLineJoin="Round"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        <Path Data="{StaticResource IconSpeakerWaveInner}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                        <Path Data="{StaticResource IconSpeakerWaveOuter}"
+                              Stroke="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round" StrokeEndLineCap="Round" />
+                    </Canvas>
+                </Viewbox>
+            </Button>
+        </Grid>
+        </Grid>
+
+        <!-- 14 + 3 + 104 = 121, the content band. The 104 is three 32 DIP cells and two 4 DIP
+             gaps: the cell height and the gap come from NotchGeometry, applied in BuildCell, and
+             the 14 and the 3 are this page's own. The cells were 16 DIP while the frame was 116,
+             which the spec called the thinnest number in the design; the taller frame fixed it
+             without anything else changing. -->
+        <Grid x:Name="PickerMode" Visibility="Collapsed">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="14" />
+                <RowDefinition Height="3" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <Button x:Name="PickerBack" Grid.Row="0" HorizontalAlignment="Left"
+                    Style="{StaticResource PickerBackStyle}"
+                    AutomationProperties.Name="Back to now playing">
+                <StackPanel Orientation="Horizontal">
+                    <Viewbox Width="9" Height="9" VerticalAlignment="Center">
+                        <Canvas Width="24" Height="24">
+                            <Path Data="{StaticResource IconChevronLeft}"
+                                  Stroke="{DynamicResource NotchInkMuted}" StrokeThickness="2.2"
+                                  StrokeStartLineCap="Round" StrokeEndLineCap="Round"
+                                  StrokeLineJoin="Round" />
+                        </Canvas>
+                    </Viewbox>
+                    <!-- The header doubles as the failure line: a switch that does not happen
+                         says so here rather than leaving a press with no answer. -->
+                    <TextBlock x:Name="PickerHeader" Margin="6,0,0,0"
+                               FontSize="10.5" VerticalAlignment="Center"
+                               Foreground="{DynamicResource NotchInkMuted}" />
+                </StackPanel>
+            </Button>
+
+            <UniformGrid x:Name="PickerCells" Grid.Row="2" />
         </Grid>
     </Grid>
 </UserControl>

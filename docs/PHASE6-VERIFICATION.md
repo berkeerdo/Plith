@@ -1245,3 +1245,724 @@ and noise is how a log stops being read.
 the wrong place. The three previous ones were fixed by recomputing where used. This one could not
 be, because the value was not stale; it was circular. The difference was only visible from a
 measurement.
+
+---
+
+## 20. The media page's Alcove redesign, driven on hardware (2026-09-20)
+
+Spec: `docs/superpowers/specs/2026-09-20-media-widget-alcove-design.md`.
+Plan: `docs/superpowers/plans/2026-09-20-media-widget-alcove.md`.
+
+Build green, 526 tests green, `check-a11y.ps1` and `check-contrast.ps1` green, renders in both
+themes. **None of that presses anything**, which is section 15's own lesson, so
+`scripts/drive-media-page.ps1` was written to click the real notch and read the real UI
+Automation tree.
+
+### What the run said
+
+Run at 22:40 on 2026-09-20, Debug build, console session Active, presentation AmbientNotch.
+Spotify held a session (`SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify`, "Three" by Mahmut Orhan)
+and it was **paused**, with a timeline of `00:00:00 of 00:02:59`.
+
+```
+[PASS] a click while NOT playing opens the clock page, not the media page
+       names in the tree: 22:40, 20 Eylül, playing Three - Mahmut Orhan | 20 Eylül |
+                          Partly cloudy | 21° | Three - Mahmut Orhan
+[PASS] the notch pages to the media widget
+       names after paging: Now playing | Three | Mahmut Orhan | Previous track | Play |
+                           Next track | Change output device | 0:00 | Playback position | -2:59
+[PASS] the progress bar reports a value to UI Automation   value=0 of 100
+[PASS] the elapsed and remaining clocks are drawn          clock-shaped names: 0:00, -2:59
+```
+
+The second line is the whole page read back from the live tree: every accessible name the
+redesign declares is really there, including the new output control, and the bar is a real
+`ProgressBar` whose position reaches a screen reader as a value rather than as a length of
+pixels. The notch window measured `384x130` for the `356x116` frame, matching the shelf's own
+numbers for the same shell.
+
+### Still open: the playing direction
+
+**The half of the rule that needs playback has not been measured.** Nothing was playing at the
+time, so what passed is "not playing opens the clock", and the run says so in its own output
+rather than reporting a pass for the other direction. Also unmeasured: whether the bar actually
+advances, which only a playing source can show.
+
+### Instrument defects, both this script's own
+
+**1. A PowerShell scriptblock cannot collect the snapshot.** `MediaSessionClient` raises
+`Changed` on a threadpool thread, and a scriptblock converted to an `Action<T>` has no runspace
+there: it never runs, and nothing throws. The script reported "SMTC never delivered a snapshot"
+while the client had read the session perfectly, which a separate probe proved by printing the
+AUMID beside `changedFired=0`. The handler is now compiled with `Add-Type`.
+
+That message was deliberately written to distinguish three answers rather than two (playing,
+nothing playing, and unreadable), and that is the only reason the failure was diagnosed rather
+than reported as "nothing is playing". An instrument that blames the machine for its own failure
+would have cost a whole round here.
+
+**2. Refusing to run while paused left half the rule unmeasurable.** The first version threw
+unless something was playing, on the argument that a silent machine produces a vacuous pass. The
+paused case is not vacuous: it is the other direction of the same rule. The script now measures
+whichever direction the machine is in and names it in its output.
+
+### Findings outside the change
+
+**`ClockWidget` says "playing" for a paused session.** Visible in the first verdict's own
+evidence: the clock page announced `playing Three - Mahmut Orhan` while SMTC reported the session
+paused. `ClockWidget.Refresh` appends `", playing {NowTitle.Text}"` whenever its now-playing line
+is visible, without consulting `IsPlaying`. Filed, not fixed: it is a different widget and
+outside this change.
+
+**`AutomationProperties.SetName(OpenSourceArea, ...)` still reaches nothing.**
+`check-a11y.ps1` reports it as a known gap on every run: `OpenSourceArea` is a `Border`, which
+WPF gives no automation peer, so "Open the app that is playing" is in no tree. It predates this
+branch and the redesign kept the element as it was. The right fix is a `Button` with a
+transparent template, which changes focus and keyboard behaviour and so is its own task.
+
+### What the renders found that the lints could not
+
+Recorded here because three of the four defects in this change were found by looking at a PNG.
+
+**The progress fill went through four versions.** The contrast lint measured this page for the
+first time, because removing the page's private ink is what made its pairs visible to it:
+
+| Fill on groove | Worst measured | Where |
+|---|---|---|
+| `OsdAccent` on `NotchTrack` | **1,0:1** | lime accent, light theme |
+| `NotchInk` on `NotchBezelBrush` | 1,1:1 | several accents |
+| `NotchInk` on `OsdHighlight` | 1,1:1 | several accents |
+| `NotchInk` on `NotchTrack` | 2,6:1 | near-white accent, dark theme |
+
+No static pair clears the bar on every accent, because `ContrastInk.TrackOn` walks from the
+surface only until it clears 3:1 **against the surface** and stops, leaving the ink an
+unpredictable distance further along the same ramp.
+
+An ink derived from the groove with `ContrastInk.PairOn` then cleared every ratio **and drew the
+bar inverted**: on a dark-theme surface `TrackOn` returns a light grey, so the derived ink came
+back near-black and the played part read as a hole punched in the groove. A contrast ratio has no
+notion of which side should be stronger, so no lint could have caught it. Found in
+`widget-media.png`. Both colours now come from `NotchInk`, the groove being the same ink at 24
+percent, which is the one arrangement that cannot come out backwards.
+
+**The disabled transport looked exactly like the live transport.** A replaced `ControlTemplate`
+loses WPF's default dimming, so `Render`'s own comment about controls that do nothing when
+pressed was only half true. Found in `widget-media-empty.png`.
+
+**A long title clips hard against the rail.** `MarqueeText` clips its viewport with no edge
+fade, anywhere in the product, so a still frame shows a title cut mid-glyph. It scrolls at
+runtime, so this is a still-frame artefact rather than lost information, but the text column is
+now 116 DIP rather than 148 and it will scroll more often. Filed, not fixed: an edge fade belongs
+to `MarqueeText` and would change every surface that uses it. See `widget-media-long-title.png`.
+
+### Seek, added afterwards, on a measurement that overturned the spec
+
+The spec deferred seek with two reasons. One was real (the notch closes in about 2.6 s, so a
+drag can be cut off) and one was **wrong**: "SMTC position writes are not supported by every
+source" was applied to Spotify from memory rather than from a reading. Asked directly on
+2026-09-20:
+
+```
+source: SpotifyAB.SpotifyMusic_zpdnekdrzrea0!Spotify
+  IsPlaybackPosition  : True
+  IsFastForwardEnabled: True
+  min/max seek        : 00:00:00 / 00:03:02.903
+```
+
+The user's own main source accepts it. The other reason answered itself: `HoverKeepAlive`
+already stops the hide timer while the pointer is on the open panel, which it is throughout a
+drag.
+
+The bar is a templated `Slider` now rather than a `ProgressBar`. That keeps the automation value
+and adds keyboard arrows, Home and End for nothing, and it is 20 DIP tall to grab while drawing
+4: `AudioWidget`'s own track records that rule at 6 DIP, and this bar is thinner.
+`MediaSnapshot` carries `CanSeek` from `GetPlaybackInfo().Controls.IsPlaybackPositionEnabled`,
+and a source that refuses gets a bar that still reports its position with no thumb and no hand
+cursor.
+
+The write happens on RELEASE rather than per mouse sample, because a write per sample makes the
+source scrub. The 1 Hz tick is kept off the thumb by `AudioWidget`'s driving window, carried
+over with the overflow defect its own comment records: a flag beside the timestamp, because a
+sentinel timestamp of `long.MinValue` overflows and leaves the widget believing the user is
+driving from the moment it is built.
+
+**Not measured on hardware.** The driver gained a drag and a before/after position read through
+the same SMTC probe, and it has not run: on the attempt at 00:25 on 2026-09-21 it refused,
+correctly, because a game (`WardogsClient-Win64-Shipping`) held the pointer and produced 2726 px
+of drift in one second. That is the precondition the shelf branch measured and this script
+inherited, doing exactly its job. Two measurements are therefore still owed, and one run takes
+both: the playing direction of the opening rule, and whether a drag moves the source.
+
+---
+
+## 21. The output picker, and seek, driven on hardware (2026-09-21)
+
+Spec: `docs/superpowers/specs/2026-09-21-notch-output-picker-design.md`.
+Plan: `docs/superpowers/plans/2026-09-21-notch-output-picker.md`.
+
+### What the run said
+
+`pwsh -File scripts/drive-media-page.ps1`, Debug build, over Remote Desktop, session Active.
+Spotify held a session and the track moved between paused and playing during the run, which the
+script now handles rather than blames.
+
+```
+[PASS] a click while NOT playing opens the clock page, not the media page
+[PASS] the notch pages to the media widget
+[PASS] the progress bar reports a value to UI Automation      value=8.20 of 100
+[PASS] the elapsed and remaining clocks are drawn             0:15, -2:47
+[PASS] dragging the track seeks the source                    before 15s, after 139s,
+                                                              wanted about 137s of 183s
+[PASS] the output control opens the picker
+       names: Now playing | Back to now playing | Output | Remote Audio, current output
+[PASS] the back control returns to now playing
+```
+
+**Seek works on real hardware against real Spotify**, landing within two seconds of a target
+computed from where the pointer was released. The picker opens, names itself in the UIA tree, and
+the way back works.
+
+### Still owed, and why
+
+**The switch itself is unmeasured.** Over Remote Desktop there is exactly ONE active render
+endpoint, "Remote Audio", so there is nothing to switch to. The script says so and skips, naming
+the session type, rather than failing a verdict for the environment.
+
+**IPolicyConfig refuses that endpoint: `0x80004002`, E_NOINTERFACE.** Measured directly. The
+same call returned `S_OK` in a console session against a local device, which
+`scripts/probe-output-switch.ps1` confirms by re-selecting the current default. So the feature
+works where there is something to work on, and its failure path is not hypothetical: an RDP
+session exercises it on the first press.
+
+**The playing direction of the opening rule is still unmeasured**, for the third run in a row,
+because the track was paused at the moment of the click each time.
+
+### A product defect the hardware found and no gate could
+
+**A drag wrote TWO seeks.** `IsMoveToPointEnabled` makes a press jump the thumb to the pointer
+and only then begin dragging it, so the press raised `ValueChanged` with `_dragging` still false.
+The page committed a seek to the press point and then a second one to the release point: a drag
+from 10 per cent to 75 per cent moved Spotify to 8 per cent and then moved it again, which is
+exactly the scrubbing the design says it avoids. The commit now requires the left button to be up,
+so a pointer gesture is committed only by `DragCompleted`.
+
+The build, 559 tests, both lints and the renders were all green with that defect in place. It
+needed a drag on a real source.
+
+### Two instrument defects, both this script's own
+
+**3. The opening-page expectation was stale by construction.** It came from the SMTC snapshot read
+before Plith was even started, and on the 02:53 run a person pressed play in between: the product
+opened the media page, correctly, and the script called it a failure. The state is re-read at the
+click now. This is defect 6 of `drive-shelf-pair.ps1` in a new place, which makes it the second
+time on this branch that state read long before a press was used to judge that press.
+
+**4. The seek check waited for the position to change, then read it.** With two writes in flight
+that caught the wrong one, reporting 15s against a target of 137s and pointing at the product
+next to a real product defect with the same symptom. It waits for the value it is asserting on
+now.
+
+**5. `Get-Element` was never copied into this script.** The plan said to copy it from
+`drive-shelf-pair.ps1` and listed it by name; the first picker run died on the missing function
+after doing its work. Copied.
+
+### What the renders found
+
+**The cells were labelled with the endpoint name and two of them read identically.** In a 155 DIP
+cell at 11 px, "Hoparlor (Steam Streaming Speakers)" and "Hoparlor (Steam Streaming Microphone)"
+both trim to "Hoparlor (Steam Streaming". Task 1 had just fixed exactly this collision in the
+strings, and the cell width undid it in the pixels. Core Audio reports a second name per endpoint,
+the device description, which is shorter and distinct here: the cells use it where it is unique
+and fall back to the endpoint name where it is not, which is the same set-property rule
+`AudioLabel.ShortenAll` already applies. See `widget-media-picker.png`.
+
+That is a measured property of the data rather than the "distinguishing token" heuristic the spec
+refused, and it is worth noting that the refusal held: nothing here guesses which words in a
+device name matter.
+
+### The label collision this work started from
+
+`AudioLabel.Shorten` keeps the adapter's first two words, so on this machine two endpoints
+shortened to the same string and **the Settings endpoint combo box had been showing two identical
+rows since it was written**. Fixed where the list is built, because uniqueness is a property of
+the set. Measured before and after on the real machine.
+
+### Three more instrument defects, and the clock's own honesty defect (2026-09-21, later)
+
+Four more runs after section 21 was written, chasing the two measurements it says are owed. Every
+one of them found something, and none of the somethings was in the product's behaviour except
+the last.
+
+**6. A HUD between the press and the read.** Plith applies its first media snapshot a moment
+after it starts, and with `AutoShowOnMedia` on that shows the media HUD; any
+`PlaybackInfoChanged` from the source does the same. A click while a HUD is up opens the frame,
+deliberately, but another event arriving in the next second replaces it. One run read a tree
+holding exactly two names, a title and an artist, and reported that the notch had never opened.
+The script clicks until a widget PAGE is in the tree now, up to five times, and says how many it
+took. This is the third defect of one family on this script: something happening between the
+press and the read.
+
+**A paging failure that was the pointer, measured rather than guessed.** One run paged zero times
+where two earlier runs had paged fine. A wheel event goes to the window under the cursor, and the
+pointer had drifted off the frame. The loop puts it back before each notch and REPORTS where it
+is, which is what turned "the pager looks broken" into one line of evidence: `wheel 1 -> cursor
+900,3 over hwnd=1638700`.
+
+**7. A seek check that could not fail.** The target was a fixed 75 per cent of the track, and a
+previous run of the same script leaves the position there: one run reported "before 139s, after
+139s, wanted about 137s" and called it a pass. An assertion that cannot fail is not a
+measurement. The target is now chosen away from wherever the track already is, and the verdict
+requires the position to have MOVED as well as landed. Re-run: `before 139s, after 32s, wanted
+about 37s`, which also exercises seeking backwards.
+
+**`ClockWidget` announced "playing" for a paused session.** Found in the evidence string of a
+passing verdict rather than by a check aimed at it: SMTC reported the session paused and the clock
+page announced `playing Gotta Be Cool`. The cause was a local named `playing` that actually meant
+"there is a session with a title", and the announcement was built from the row's visibility rather
+than from `IsPlaying`. A local whose name is not true is a comment that lies, and this one was
+read as though it were. Both are fixed, and the fix is confirmed by the same evidence string now
+reading `paused Gotta Be Cool`.
+
+### The refused switch, measured in the session that refuses (2026-09-21)
+
+The design says a failed switch keeps the picker open and says so, on the argument that silently
+doing nothing is what every other control on that page is written not to do. That was an
+assertion until this run, and the environment blocking the other measurement turned out to be the
+one place the failure path can be driven: over Remote Desktop `IPolicyConfig` refuses the only
+endpoint there is.
+
+Pressing the current output is a legitimate action that changes nothing when it succeeds, so it
+is safe to drive anywhere; what differs is the answer.
+
+```
+[PASS] a refused switch keeps the picker open and says so
+       pressed 'Remote Audio, current output'; names: Now playing | Back to now playing |
+       Could not switch output | Remote Audio, current output | Remote Audio
+```
+
+Eight verdicts now pass in one run. What is still owed is unchanged and needs a console session:
+a switch that SUCCEEDS, and the playing direction of the opening rule.
+
+### The render harness draws NOTHING in a disconnected session, and says it drew everything
+
+Found while self-reviewing the day's work, by looking at a PNG and finding it blank.
+
+In a session whose state is `Disc` rather than `Active`, `scripts/render-widgets.ps1` runs,
+prints `widget-media.png  (356 x 116)` for every render, and writes files that are **769 bytes of
+pure transparency**. Sampled across the whole image, every pixel is `A=0, R=0, G=0, B=0`. The
+viewer shows that as white, which is why the first reading of it was "the picker renders white".
+
+**That is worse than failing, because the output looks like output.** The only thing that caught
+it was the shelf's own empty-outline check throwing `left=0, right=0, top=0, bottom=0`, which
+reads as a defect in a dashed border rather than as an empty image, and by then fifteen renders
+had been reported as done. Anyone comparing a fresh empty PNG against an older good one would
+conclude the widget had broken, which is exactly the wrong end of the stick and is what the first
+three attempts at diagnosing this did.
+
+Section 7.5 of `docs/SHELF-VERIFICATION.md` records the related fact for screen CAPTURE: what
+breaks it is the session being disconnected or locked, not the window being layered. This adds
+`RenderTargetBitmap` to that list, which is NOT the obvious extension of it: offscreen rendering
+has no window and nothing to capture, and it still produces nothing.
+
+The harness now refuses to run unless the session is Active, with the same check
+`drive-media-page.ps1` already had and a message naming what the PNGs would otherwise contain.
+
+**Two instrument defects of my own on the way to that.** An isolation test meant to decide
+whether the last change caused it was written as
+`git stash && dotnet build | grep -cE " error " && pwsh render`, and `grep -c` exits 1 when it
+finds nothing: the render never ran, so the test sampled the previous run's already-empty files
+and cleared the change wrongly. And the earlier conclusion that "composites render fine while
+standalone widgets are empty" came from comparing files written at 05:59 against files written at
+03:04, because the run had died partway and left the later ones stale. Both are the same mistake:
+reading output without checking that it came from the run being judged.
+
+### The switch itself, measured on the console (2026-09-21, 09:39)
+
+The session that was owed this measurement. `>console sari 1 Active`, five active render
+endpoints, Spotify holding a paused session.
+
+```
+[PASS] pressing a cell changes the system default output
+       pressed 'Steam Streaming Speakers'
+       default was {0.0.0.00000000}.{fef49643-4e0e-4cfb-8305-75fe5c19e950}
+       now         {0.0.0.00000000}.{1742054d-4937-49f0-a7c6-745164bdfa53}
+[PASS] the page returns to now playing after a switch
+output after : Hoparlor (Logitech G733 Gaming Headset) (restore returned True)
+```
+
+Ten verdicts pass in one run. `IPolicyConfig` moved the system default from the headset to a
+Steam virtual device and the `finally` put the headset back, so the machine ends where it
+started. The picker's whole tree is in the evidence of the run above, and every device carries a
+distinct name:
+
+```
+Logitech G733 Gaming Headset, current output | Logitech G733 Gaming Headset |
+Steam Streaming Speakers | Steam Streaming Speakers | Realtek(R) Audio | Realtek(R) Audio |
+Steam Streaming Microphone | Steam Streaming Microphone | NVIDIA High Definition Audio |
+NVIDIA High Definition Audio
+```
+
+Each appears twice, once as the cell Button's accessible name and once as the label inside it.
+That is also how instrument defect 8 happened.
+
+**8. Choosing the device to press by filtering NAMES picked the wrong element.** The current
+device's Button is named "Logitech G733 Gaming Headset, current output" and the TextBlock inside
+it says "Logitech G733 Gaming Headset", so a filter written to exclude the first took the second
+and then failed to find a Button by that name. The script enumerates controls of type Button now,
+which cannot make that mistake.
+
+**The renders were re-taken and are unchanged** after moving the cell height and gap out of the
+style and into `BuildCell`, which was the point of checking.
+
+### Still owed: one
+
+The playing direction of the opening rule. Four runs, four paused tracks at the moment of the
+click. Everything needed for it is in place, including the script judging whichever direction is
+live at the press; it needs a track playing when the notch is clicked.
+
+---
+
+## 22. The frame grew, and the drag never worked (2026-09-21)
+
+The user looked at the rebuilt media page and said the text was cramped, which is the risk the
+spec had already filed as its weakest number: a 116 DIP text column. They asked for the notch
+itself to grow rather than for that page to be squeezed further.
+
+**`NotchGeometry.OpenFrameDip` is 356x164.** One frame for every page still, which is the rule
+the two rejected passes established; what changed is the fullest page. 2.17:1, against Alcove's
+measured 2.16:1.
+
+The 48 DIP did not go to the text column directly. The transport moved OFF its right-hand rail
+and onto a centred row, which is where Alcove puts it, and that handed the whole width back to
+the title: **116 DIP to 244**. Title type went from 14.5 to 16, the tile from 56 to 64, and the
+output picker's cells from 16 DIP to 32, which retires risk 1 of that spec without anything else
+changing.
+
+### The harness rendered every page in the OLD box
+
+`render-widgets.ps1` had `$frameW = 356.0` and `$frameH = 116.0` typed into it, so the first
+render after the change came back 356x116 and would have had the new layout judged against a
+frame the product no longer has. It reads the size from `NotchGeometry` now. **The one number a
+render harness must not own is the size of the thing it renders.**
+
+### What the taller frame exposed on the other pages
+
+The clock page kept its content in two Auto rows against the top edge, which left about 60 DIP of
+dead space under the track line, and the shelf page had its tiles against the top and its hint
+against the bottom with a hole between them. Both are centred now. The weather page was already
+centred and needed nothing.
+
+**One addition was considered and refused.** The clock page shows a weather glyph and a
+temperature but not the condition in words, and that is a recorded decision: "a shape is faster
+to read and says nothing at all to a screen reader", with the word carried as the mark's
+accessible name. Filling space by contradicting that would have been worse than the space.
+
+### Two clipping defects, both found by looking
+
+**The picker's device names were being cut, not trimmed.** `TextTrimming.CharacterEllipsis` never
+fired because the label sat in a horizontal `StackPanel`, which measures its children with
+infinite width; the name was laid out at full length and then cut by the cell's own clip, mid
+letter, with no ellipsis to say it had been shortened. A `Grid` with a star column gives the
+label a finite width, which is all the trimming needs.
+
+**`MarqueeText` clips with no edge treatment**, anywhere in the product, so a title too long for
+its column ends mid-glyph and reads as broken rather than as continued. It has a 14 DIP fade on
+the right edge now. The fade follows OVERFLOW rather than the scroll, which was the first
+version and was wrong in the case that matters most: `plan.Scroll` is also false when reduced
+motion is on, so a clipped title got no fade in exactly the case where it will never scroll.
+
+`StartDelay` came down from 1200 ms to 700. The measurement behind it: at 28 DIP per second, an
+event-opened panel living 2.6 s gave a long title 39 DIP of travel against the 100-plus it
+needed, while the code's own comment claimed a long title "finishes inside the time an open notch
+is realistically looked at". That claim is now less wrong for a different reason, since an event
+gets a HUD rather than the frame and the frame is only opened deliberately, but movement that
+starts after more than a second still reads as no movement to someone who glanced.
+
+### The drag never worked, and only a mid-gesture reading could say so
+
+Seek passed on hardware repeatedly while the track was PAUSED and failed three times running
+while it was PLAYING, with the bar left exactly where the drag started. Two hypotheses were
+measured and both were wrong before the right one was found:
+
+- **`CanSeek` flickering** would disable the bar mid-drag and abandon the gesture. Sampled twelve
+  times against a playing Spotify: `IsPlaybackPositionEnabled` was True every time.
+- **Direction** looked like the variable, since the one passing run dragged backwards. It was a
+  coincidence.
+
+The answer came from reading the control's own value half way through the gesture, with the
+button still down:
+
+```
+seeking from 48s (fraction 0.13) to fraction 0.75
+bar value MID-drag (button still down): 11.3
+bar value right after the release:      11.3
+```
+
+The press moved the thumb to the pointer and then nothing tracked it. **`IsMoveToPointEnabled`
+jumps the thumb on press and marks the event handled, so no thumb drag ever begins**, and
+`Thumb.DragStarted`/`DragCompleted` only fire when the press lands on the 10 DIP thumb itself.
+The one passing run was the one whose press happened to hit it. So "drag the bar to seek" worked
+only by luck, in a feature built and shipped for it, and every gate was green.
+
+`MediaWidget` captures the mouse and tracks it itself now, with the value taken linearly from the
+pointer's x within the control so both ends are reachable. Measured after, three runs, forwards
+and backwards: `11s -> 247s` (target 247), `257s -> 65s` (target 66), `77s -> 247s` (target 247),
+with the mid-drag reading tracking the pointer every time.
+
+### The other pages at 164, and the shelf that the frame broke (2026-09-21)
+
+The user opened the real notch, looked, and said the shelf was completely broken and that the
+clock and weather pages needed a redesign at the new size. All three were true, and the shelf's
+was a breakage with a cause worth keeping.
+
+**The shelf's empty state carried a number derived from the old frame.** Its dashed box was a
+fixed 68 DIP tall with `Margin(0, 7, 0, 0)`, and the comment beside it explained the 7: half the
+difference between a 68 DIP row and the 82 DIP content box of a 116 DIP frame. Both numbers in
+that arithmetic died with the frame, so the box sat near the top of a 130 DIP band with a dead
+strip under it. It also said "Tiles is top-aligned", which the same day's centring had made
+false.
+
+It is not compensated any more, it STRETCHES: the box lives in its own host and fills the page,
+which is what an empty shelf page is for. A box that fills what it is given needs no number.
+
+**A one-way state found while fixing it.** The empty branch set its own visibility but nothing
+reset it, so a file arriving on an empty shelf would have left the dashed box up with the tiles
+hidden behind it. Both hosts reset on every render now.
+
+**The tile row and its hint were two rows and are now one centred block.** At 116 the row filled
+the band and the hint sat under it; at 164 the row floated in the middle and the hint clung to
+the bottom edge with a hole between them.
+
+**The clock page's date moved under the time**, which is where it belongs and where the old frame
+had no room for it. That constraint was recorded rather than guessed: stacked, the block came to
+56 DIP and the page needed 86 where the frame gave 76, so the track line was clipped in half.
+The band is 130 now, stacked costs 52, and the page comes to 92. The time went from 36 to 46.
+
+**The weather page's readout is anchored to the bottom** instead of centred, with the
+temperature at 42. Centred was right when the readout nearly filled the frame; at 164 it floated
+in the middle of a tall sky. On the bottom edge the sky above it is the picture, which is what
+the painted gradient was for.
+
+**And the media page's transport is centred with the output control aligned right**, rather than
+the four being one centred group. Asked for that way, and better for a reason worth recording:
+the three transport marks are what a hand goes to without looking, so their position should not
+depend on whether a fourth control is beside them.
+
+Driven on hardware after all of it: eight verdicts, all passing, including a seek from 128s to
+41s against a 41s target.
+
+### The shelf's close box, its empty state after a clear, and two additions (2026-09-21)
+
+Three more reports from the running build, and the first was worse than it sounded.
+
+**The ✕ did not close the shelf. It CLEARED it.** Reported as "pressing the X does not close it",
+which is the kind half of the problem: the button in the window's top-right corner was
+`ClearButton`, named "Clear the shelf", and a ✕ in that corner means close to anyone who has used
+Windows. So the press meant to put the shelf away emptied it instead.
+
+There are two controls now: **Clear**, which says the word, and a ✕ that closes. The word is the
+right shape for the destructive one, and it cannot be mistaken for a close box. The ✕ goes
+through `Dismiss`, the same entry point Esc uses, so it obeys the deferrals every other
+dismissal does: a drag or a context menu in flight postpones it rather than having the window
+vanish out from under the gesture.
+
+**Clearing a full shelf while it was open broke the empty state**, and the cause is the same
+shape as the notch page's: a box sized for one frame. `ShelfSurface`'s dashed box was a fixed
+`2 * TileSize + Gap`, which is the two-row height an empty shelf OPENS at. The frame is chosen
+once at open by design, so clearing a three-row shelf left a 283 DIP window with a 136 DIP box
+hanging in the top of it. It stretches now, in its own host, because a horizontal `StackPanel`
+never stretches its children.
+
+`shelf-surface-cleared.png` renders exactly that state, at the full frame with an empty model.
+The bug lived in the difference between the two sizes, so both are rendered.
+
+**Two defects while fixing it, both caught by the harness rather than by reading.** The empty
+host was first placed inside `ColumnsHost`, which is top-aligned and therefore only as tall as
+the tiles in it, so stretching inside it stretched to nothing. And the box kept an explicit 352
+DIP width beside its new stretching alignment; the two disagreed enough to push it one DIP right
+and clip its right edge away, which the empty-outline check reported as `left=248, right=0`. That
+check exists because the same class of defect happened once before.
+
+**A one-way state, twice.** Both the notch page and the window set their empty-state visibility
+inside the empty branch and reset it nowhere, so the first file to arrive on an empty shelf would
+have left the dashed box up with the tiles hidden behind it. Both reset on every render now.
+
+### The additions the taller pages earned
+
+Asked for, and both use data the product already has rather than filling space with a label.
+
+**The clock page shows the weekday**, brighter than the date beside it: the day is the fact and
+the date is the qualifier. `AmbientFormatter.FormatWeekday` is a separate method rather than a
+third member of `FormatClock`'s tuple, because only this page has room for it and every existing
+caller would otherwise have to ignore it. Two tests, one of which asserts seven distinct words
+across a week rather than hard-coding a calendar.
+
+**The weather page says WHERE.** It showed a temperature, a condition and when it was read, and
+left the one question a person asks of a page they did not set up unanswered. Only when there is
+a name to show: a typed city has one, while Windows Location and an IP lookup do not hand a city
+back, and the line stays hidden rather than carrying "your location" as though it were a fact.
+Read through a delegate on every render, because a city is a setting and a setting can change
+while the page exists.
+
+### Alignment across the pages, the header's hover, and two days of weather (2026-09-21)
+
+Three more reports, one of which was measurable the moment it was asked: "is everything on the
+same alignment?"
+
+**It was not, and nothing shared a number.** Each page carried its own hand-typed inset: the
+media page `18,14,18,29`, the clock `20,14,20,26`, the shelf `20,12,20,22`, the weather readout
+`18,0,18,26`. Paging between them moved the left edge two DIP sideways and put three different
+floors under the content. The shelf's 22 reached one DIP INTO the rail's row, which its own
+comment had worried about.
+
+There is one `NotchGeometry.PageInsetDip` now and all four pages use that object, so the
+alignment is guaranteed by construction rather than by four people typing the same number.
+
+**Three numbers described the rail and two were wrong.** `NotchGeometry.DotsLaneDip` said 14 and
+was referenced by nothing at all; the media page's comment said the bottom inset cleared a "20
+rail lane"; the frame's actual row, in `WidgetFrame.xaml`, is 23. The dots it was named for were
+replaced by a rail some time ago. It is `PageRailRowDip = 23` now, the frame's row takes its
+height from it through `x:Static`, and the inset's bottom is that row plus six.
+
+**The shelf header's buttons had no template at all**, which is how "hover makes things
+disappear" happens: a `Button` with `Background="Transparent"` and no template still uses WPF's
+default chrome, and that chrome paints a light system fill with a system-coloured border on
+hover. On this panel it swallowed a white glyph and grey text. Both header controls now use a
+local style whose hover and pressed washes are the same values the notch's own controls use. A
+still render cannot show a hover state, so this one is verified by hand.
+
+**The weather page shows the next two days.** Asked for, and they cost no extra request: the
+daily block rides along in the same Open-Meteo call as the current conditions, with
+`forecast_days=3` and `timezone=auto`, because the API's first day is TODAY at the LOCATION and
+today is already the big number on the left of this page. The columns carry the culture's own
+abbreviated day name, the same weather mark the clock page draws for the same code, and a high
+and low with the low dimmed rather than divided off with a slash.
+
+The zipping rule is a pure `WeatherDays.From` rather than a private method on the HTTP client,
+for the reason `WeatherCodeMap` is: it is the part with rules in it, and the client is the part a
+test cannot reach. Seven tests, and the one that matters asserts the arrays are zipped to the
+SHORTEST: four parallel arrays indexed by one counter is exactly how a day ends up carrying
+another day's weather code, and a response with one short array has to be survived rather than
+trusted. Another asserts ISO dates parse under tr-TR, where this project's default user lives
+and where a culture-sensitive parse succeeds only by luck.
+
+### Rain that did not read as rain, on two pages (2026-09-21)
+
+Reported as "you cannot tell what Tuesday will be" of the new forecast columns. The cause was in
+`WeatherMark`, and its own comment had claimed the opposite for as long as it has existed.
+
+The comment said the drop "hangs below the cloud rather than sitting in the middle of it". The
+numbers said `Canvas.SetLeft(3)`, `SetTop(7)`, `18 x 18`, against a cloud occupying y=10 to 18.4
+of a 24 box: the drop started three units ABOVE the cloud's top and covered nearly all of it.
+**It read correctly on the big sky page only because the fall animation pulls it clear and the
+eye follows the motion.** Static, at 26 DIP, it was one white blob.
+
+Two changes, and the second is the one that fixed it:
+
+- The drop hangs where the sentence says, 9 by 9 at Top 15, which still keeps the fall
+  animation's -2 to +6 travel inside the box.
+- **Rain is three short strokes now, not a filled teardrop.** A teardrop is a shape you
+  recognise at 48 DIP and a blob at 26, and strokes survive the size, which is why every weather
+  application in the world draws rain that way. `IconWxDrops`, drawn geometry like every other
+  icon here. `Fall.Fill` is null for both kinds now: filled, the three strokes close into three
+  wedges.
+
+**The clock page had the same defect and nobody had reported it**, because its mark is also 26
+DIP and the harness had only ever rendered it with a clear sky. `widget-clock-rain.png` renders
+that case now. The forecast columns were not a new bug; they were the first surface to show an
+old one.
+
+**Each forecast column also announces itself.** A screen reader read "Sal", then silence where
+the mark is, then two numbers: the shape carried the forecast and said nothing out loud. The
+sentence goes on the day-name `TextBlock`, which has an automation peer, because the `StackPanel`
+holding the column does not and a name set there would reach nothing.
+
+**And on the PC's language, which was asked:** every string in these columns comes from
+`CultureInfo.CurrentCulture` rather than from a table in the source, so the abbreviations, the
+weekday on the clock page and the condition word in the announcement all follow Windows. That is
+why the renders read "Pazartesi", "Sal" and "Çar" on this machine.
+
+### Every sky kind, drawn side by side, because it was asked (2026-09-21)
+
+"Are all of the weather conditions' icons and animations right?" Nothing in this repo could
+answer that: the only kind any render had ever drawn was Clear. `weather-marks.png` draws all
+five at 26 DIP, the size both pages use, on the notch's own ground.
+
+Answering it found **two** defects, one of them the rain blob already recorded above and one
+nobody had reported:
+
+**Snow was a lump.** `IconWxFlake` is three lines crossing through one centre, and a flake pushed
+into the 5.6 units under the cloud had its arms hidden behind it. Two attempts at it were
+measured and rejected before the cause was clear: making it bigger and thinner did not help,
+because the problem was position, not size.
+
+**The cloud now RISES when something falls from it**, by 3.5 units, which is the structural fix
+both wet kinds needed: `IconWxCloud` occupies y=10 to 18.4 of a 24 box, so there was never room
+below it for anything to fall into. It is done with `Canvas.SetTop` rather than a transform,
+because `CloudDrift` owns the cloud's `RenderTransform` for its horizontal drift and a second
+transform there would fight it.
+
+All five now read as what they are: a sun with rays, a cloud, a cloud with three rain strokes, a
+cloud with a six-armed flake, and a crescent moon.
+
+**What this does NOT verify is the motion.** A still frame cannot show a sun breathing, a cloud
+drifting or a drop falling, and a mark's animations only start when it becomes visible. The
+shapes are measured; the animations are read from the code and unmeasured. Section 19's frame
+counter is the shape a real measurement of them would take.
+
+### Today's range on the clock page
+
+The addition chosen from the four offered. `21° / 14°` beside the current temperature, dimmed,
+because the current number alone cannot answer the question a glance at a clock actually has.
+
+It cost no request: the daily block arrives with the same reading the temperature comes from, and
+its first day is today. Matched BY DATE rather than taken by index, so a reading that survives
+midnight cannot put yesterday's range beside today's temperature. Hidden when there is no daily
+block, like every other optional thing on these pages.
+
+### Rain that looked like snow, and the AM/PM machine (2026-09-21)
+
+**Rain and snow were confusable**, reported after the strip was drawn. Three strokes 4.4 units
+long at a 1.5 weight read as three dots, and three dots are what a flake's arms look like at 26
+DIP. They are nearly seven units long at 1.25 now and the fall box is taller than it is wide,
+which is the shape falling water has and a flake does not. Side by side in
+`weather-marks.png`, the five kinds are now five different things.
+
+**"Does it work if the PC is on AM/PM?"** The formatter was already tested for it and the test
+was HALF a test: it asserted the string contained "2:05" and said nothing about the designator,
+so a pattern that dropped the PM entirely would have passed. Three tests now cover the
+designator, both halves of the day, noon and midnight, and a culture whose short pattern carries
+seconds, which is the case the `Replace(":ss", "")` exists for and the one where an over-eager
+edit could take the designator with it.
+
+**And the layout was wrong, which only a render could say.** `widget-clock-12hour.png` did not
+exist until the question was asked; it renders the page with the thread's culture set to en-US.
+At 46 point, "12:49 PM" ran straight into the weather mark beside it with no gap at all. The
+format was right and the page was not.
+
+The page draws the digits at 46 and the designator at 14 now, which is what Windows' own clock
+does and what the space allows. `FormatClockParts` hands the two back separately and returns an
+empty designator on a 24-hour culture, so the page collapses its own element without asking what
+kind of clock the machine has. `FormatClock` is unchanged and still returns one string: the
+ambient row has room for it, and it is what the screen reader is given, because a reader saying
+"12:49" on a 12-hour machine has dropped the half that says which 12:49 it is.
+
+One limit is recorded rather than handled: a culture that puts its designator BEFORE the time
+still gets it after. Such cultures exist, none of them is this product's user, and the
+alternative is laying the page out twice for a case nothing has asked for.
+
+**Rain, third attempt, and the first two were both wrong in opposite directions.** Three strokes
+4.4 units long read as three dots and were reported as looking like snow. Three strokes nearly
+seven units long read as three BARS hanging off the cloud, and were reported as "rain falls in
+pieces, these are three long rods". Both reports were right.
+
+It is five short dashes now, staggered: three in an upper row and two in a lower row between
+them, each about 2.7 units long. **The gaps are the part that reads as rain**, and a continuous
+stroke has none. Confirmed in `weather-marks.png` beside the other four kinds and on the weather
+page's own forecast column.
+
+Worth recording as a pattern rather than as three fixes: every one of these was found by a person
+looking at the running product, and none of them could have been found any other way. A glyph
+that is wrong at 26 DIP passes every test, every lint, and every contrast measurement, because
+none of those can see a shape.
+

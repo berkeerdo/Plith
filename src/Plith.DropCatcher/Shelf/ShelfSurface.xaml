@@ -1,0 +1,255 @@
+<UserControl x:Class="Plith.DropCatcher.Shelf.ShelfSurface"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False"
+             UseLayoutRounding="True"
+             SnapsToDevicePixels="True"
+             TextOptions.TextFormattingMode="Ideal"
+             TextOptions.TextRenderingMode="ClearType">
+
+    <!-- The shelf page, as a UserControl rather than a Window: a render harness can instantiate
+         and photograph this, and it cannot do that with a layered Window. See CatcherWindow for
+         the shape this stands beside: that one is the brief prompt shown mid-drag, this is the
+         page a click into the resting shelf opens.
+
+         No dictionary from Plith is merged here, deliberately. This project does not reference
+         Plith.csproj (see Plith.DropCatcher.csproj's own comment on why: it must stay small and
+         must not share Plith's startup), so pack://application:,,,/Plith;component/... would
+         resolve only inside the render harness, which loads Plith.dll itself, and would fail
+         silently the moment this runs as the real catcher process. The handful of icon shapes
+         below are duplicated literal geometry rather than a shared resource for that reason, the
+         same reason NotchGeometry.cs is LINKED rather than referenced: a real dependency on
+         Plith's assembly is not available to pay for it.
+
+         Every colour brush used below is resolved from THIS control's own Resources, filled in
+         by Apply(ShelfPalette) at runtime, under the same keys Plith uses for the same things
+         (OsdSurfaceBrush, NotchInk, NotchInkMuted, NotchTrack, AccentBrush). Nothing here reaches
+         through Application.Resources: this process has no application-level theme, and the
+         render harness proved once already (ShelfWidget) that anything reaching through
+         Application renders in colours the product never shows. -->
+
+    <UserControl.Resources>
+        <!-- The header buttons' own template.
+
+             They had NONE, which is how "hover makes things disappear" happens: a Button with
+             Background="Transparent" and no template still uses WPF's default chrome, and that
+             chrome paints a light system fill on hover with a system-coloured border. On this
+             panel it swallowed a white glyph and grey text. Reported from a real session.
+
+             Declared here rather than taken from Plith's dictionary for the reason this file's
+             header comment gives: this project does not reference Plith.csproj, so a pack:// URI
+             would resolve in the render harness and fail in the real catcher process. The hover
+             and pressed washes are the same values the notch's own controls use.
+
+             Apply(ShelfPalette) merges the palette into this same Resources collection at
+             runtime, and a merge does not disturb what is declared here. -->
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <!-- Transparent, not null: WPF hit-tests a Transparent brush and does not
+                             hit-test a null one, so a null background here would leave the button
+                             answering only where its glyph paints. -->
+                        <Border x:Name="Chrome"
+                                CornerRadius="7"
+                                Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
+        <!-- The per-tile remove chip, which is NOT the header buttons with a smaller radius.
+
+             A header button sits on the card's own surface, so a wash is enough to show it has
+             been entered. This one sits ON a tile, on top of a file icon that may be any colour
+             a shell icon can be, and it appeared with no ground at all: a 1.6-thick light stroke
+             over a bright icon, which is the state reported from a real session as the hover
+             "losing things". A wash over an unknown ground cannot be relied on to show anything.
+
+             So the chip carries its own opaque ground from the moment it appears, and hover and
+             press lighten THAT rather than the tile under it. The ring around it separates the
+             circle from a dark icon, the case a dark ground alone would disappear into.
+
+             The colours are literal rather than palette keys because the notch palette has no
+             scrim family, and they are dark in both themes on purpose: NotchInk is #F2F5F8 in
+             Light as well as Dark, so this surface is dark whichever theme is chosen, and a chip
+             that flipped with the theme would carry light ink on a light ground. -->
+        <Style x:Key="TileRemoveButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="Chip"
+                                CornerRadius="9"
+                                Background="#D91B2027"
+                                BorderBrush="#40FFFFFF"
+                                BorderThickness="1"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chip" Property="Background" Value="#FF4C5864" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="#A6FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
+    <!-- Only the BOTTOM corners are round, the same rule NotchGeometry.BottomRoundedClip states
+         for the notch itself: this page grows out of the notch and is anchored at the same top
+         screen edge (OpenShelf carries the same X/Y/W/H rectangle Show does), and rounding the
+         top would carve two notches of desktop out of the edge the shape is part of. -->
+    <Border x:Name="Surface"
+            CornerRadius="0,0,16,16"
+            Background="{DynamicResource OsdSurfaceBrush}"
+            BorderThickness="1"
+            BorderBrush="{DynamicResource NotchTrack}">
+        <Grid Margin="16">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="*" />
+            </Grid.RowDefinitions>
+
+            <!-- Header: a title, and the one shelf-wide action left. Clear is a real Button
+                 rather than a pressable Border, so Tab and a screen reader reach it the same way
+                 any other control in the product is reached. The tiles below cannot be, because a
+                 tile's action (select, then drag) has no equivalent gesture on a keyboard, which
+                 is the same reason ShelfWidget's tiles are Borders and not Buttons. -->
+            <Grid Grid.Row="0" Margin="0,0,0,12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <TextBlock Grid.Column="0"
+                           Text="Shelf"
+                           FontSize="13"
+                           FontWeight="SemiBold"
+                           VerticalAlignment="Center"
+                           Foreground="{DynamicResource NotchInk}" />
+
+                <!-- Two controls where there was one, and the one was wrong.
+
+                     The ✕ used to CLEAR the shelf. Reported from a real session as "pressing the
+                     X does not close it", which is the kinder half of the problem: a ✕ in the
+                     top-right corner of a window means close to everyone who has used Windows,
+                     so the press that was meant to put the shelf away emptied it instead.
+
+                     Clear says the word. It is the destructive one, it is rare, and a word cannot
+                     be mistaken for the close box. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="ClearButton"
+                            Style="{StaticResource HeaderButtonStyle}"
+                            Height="24"
+                            Padding="8,0"
+                            Margin="0,0,4,0"
+                            AutomationProperties.Name="Clear the shelf"
+                            Click="OnClearClick">
+                        <TextBlock Text="Clear"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource NotchInkMuted}" />
+                    </Button>
+
+                    <Button x:Name="CloseButton"
+                            Style="{StaticResource HeaderButtonStyle}"
+                            Width="28" Height="28"
+                            Padding="0"
+                            AutomationProperties.Name="Close the shelf"
+                            Click="OnCloseClick">
+                        <!-- Same coordinates as PlithIcons' IconClose, duplicated: see the header
+                             comment. -->
+                        <Path Data="M6,6 L18,18 M18,6 L6,18"
+                              Width="14" Height="14"
+                              Stretch="Uniform"
+                              Stroke="{DynamicResource NotchInk}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <!-- The stacks, built in code the same way ShelfWidget builds its tiles: each one
+                 needs its own AutomationProperties.Name and its own press handler, which an
+                 ItemsControl template cannot give an individual generated element.
+
+                 AllowDrop lives here, on the container, rather than on each built column: a
+                 drop past the last stack has to land somewhere too (it means "start a new
+                 stack"), and there is no column there to carry the flag. OnColumnsDrop works
+                 out which column, if any, the drop point actually fell inside. -->
+            <!-- The host is what catches the drop; Columns is what the eye sees.
+
+                 They are two elements because they want opposite widths. Columns is centred, so
+                 a shelf holding two stacks sits in the middle of the panel instead of hugging
+                 the left edge with the rest of the card empty beside it. But the drop target has
+                 to stay the FULL width: releasing a tile in the empty area past the last stack is
+                 how a new stack is made, and a panel shrunk to its content would stop receiving
+                 exactly the release that gesture needs.
+
+                 So the handlers live out here and report positions in the host's coordinates.
+                 TargetStackIndex translates each column into the same space, which is the only
+                 reason it can still decide which column, if any, a point fell inside. -->
+            <Grid x:Name="ColumnsHost"
+                  Grid.Row="1"
+                  VerticalAlignment="Top"
+                  Background="Transparent"
+                  AllowDrop="False">
+                <StackPanel x:Name="Columns"
+                            Orientation="Horizontal"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Top" />
+            </Grid>
+
+            <!-- The empty state's own host, a SIBLING of ColumnsHost rather than a child of it,
+                 so its dashed box can stretch to the whole row. ColumnsHost is top-aligned and
+                 therefore only as tall as the tiles in it; a box stretched inside that would
+                 stretch to nothing.
+
+                 The box used to be a fixed 136 DIP, which is the two-row height an empty shelf
+                 OPENS at. That is right when it opens empty and wrong the moment a full shelf is
+                 cleared while it is up: the frame is chosen once at open by design (see
+                 NotchGeometry.ShelfFrameFor), so clearing a three-row shelf left a 283 DIP window
+                 with a 136 DIP box hanging in the top of it. Reported from a real session. -->
+            <Grid x:Name="EmptyHost" Grid.Row="1" Visibility="Collapsed" />
+        </Grid>
+    </Border>
+</UserControl>

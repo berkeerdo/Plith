@@ -279,4 +279,42 @@ public class NotchPagerTests
     {
         Assert.Throws<ArgumentOutOfRangeException>(() => new NotchPager(0));
     }
+
+    [Fact]
+    public void ResetTo_GoesToThePageAsked()
+    {
+        var pager = new NotchPager(4);
+
+        pager.ResetTo(2);
+
+        Assert.Equal(2, pager.Index);
+    }
+
+    [Fact]
+    public void ResetTo_ClampsRatherThanWrapping()
+    {
+        // GoTo wraps, because a page-dot click past the end means the other end. An opening page
+        // is not a gesture: an index past the end is a bug upstream, and wrapping would hide it
+        // by opening somewhere plausible.
+        var pager = new NotchPager(3);
+
+        pager.ResetTo(7);
+        Assert.Equal(2, pager.Index);
+
+        pager.ResetTo(-2);
+        Assert.Equal(0, pager.Index);
+    }
+
+    [Fact]
+    public void ResetTo_ForgetsTheLastGesturesTiming()
+    {
+        var g = new Gesture();
+        g.Feed(NotchPager.CommitThreshold);   // pages once, leaving the pager unarmed
+
+        g.Pager.ResetTo(0);
+
+        // Armed again, and measured from nothing: a swipe after the notch was reopened must not
+        // be read as the continuation of the swipe that closed it.
+        Assert.True(g.Pager.Accumulate(NotchPager.CommitThreshold, 0));
+    }
 }

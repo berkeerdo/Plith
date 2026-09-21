@@ -1,9 +1,29 @@
+using System.Globalization;
+
 namespace Plith.Services;
+
+/// <summary>
+/// One day of the forecast: which day it is, what it will mostly be, and the two ends of it.
+///
+/// A day rather than an hour, because the page has room for two columns and nobody reads an
+/// hourly series at a glance. The high comes first in the pair for the same reason it does
+/// everywhere else people read weather.
+/// </summary>
+public readonly record struct WeatherDay(DateOnly Date, int WeatherCode, double MaxC, double MinC);
 
 /// <summary>One reading of current conditions. Immutable and timestamped: the ambient row
 /// shows it only while it is fresh, and freshness is decided against the fetch time rather
-/// than against a "last updated" flag that a failed refresh would leave stale.</summary>
-public readonly record struct WeatherSnapshot(double TemperatureC, int WeatherCode, DateTimeOffset FetchedAt);
+/// than against a "last updated" flag that a failed refresh would leave stale.
+///
+/// <paramref name="Days"/> is the short forecast that comes back in the SAME call as the
+/// current conditions, so it costs no extra request. Empty when the response carried none:
+/// the page draws the columns it has and nothing where it has none, which is the same rule the
+/// place line follows.</summary>
+public readonly record struct WeatherSnapshot(
+    double TemperatureC,
+    int WeatherCode,
+    DateTimeOffset FetchedAt,
+    IReadOnlyList<WeatherDay>? Days = null);
 
 /// <summary>
 /// Turns Open-Meteo's WMO 4677 weather codes into something renderable, and decides whether
@@ -60,5 +80,51 @@ public static class WeatherCodeMap
     {
         var age = now - snapshot.FetchedAt;
         return age >= TimeSpan.Zero && age <= TimeSpan.FromMinutes(maxAgeMinutes);
+    }
+}
+
+/// <summary>
+/// Turns Open-Meteo's parallel daily arrays into days.
+///
+/// Out of the HTTP client and in here for the reason <see cref="WeatherCodeMap"/> is: this is
+/// the part with rules in it, and the client is the part a test cannot reach. The rule that
+/// matters is the ZIP: four arrays indexed by one counter is how a day ends up carrying another
+/// day's weather code, and a response with a short array is a response this has to survive.
+/// </summary>
+public static class WeatherDays
+{
+    /// <summary>
+    /// Zip the arrays, stopping at the shortest.
+    ///
+    /// Null rather than an empty list when nothing usable came back, so callers have one thing to
+    /// check. A date that will not parse drops its own day and keeps the rest: one malformed entry
+    /// is not a reason to throw a forecast away.
+    /// </summary>
+    public static IReadOnlyList<WeatherDay>? From(
+        IReadOnlyList<string>? dates,
+        IReadOnlyList<int>? codes,
+        IReadOnlyList<double>? highs,
+        IReadOnlyList<double>? lows)
+    {
+        if (dates is null || codes is null || highs is null || lows is null) return null;
+
+        var count = Math.Min(dates.Count, Math.Min(codes.Count, Math.Min(highs.Count, lows.Count)));
+        if (count == 0) return null;
+
+        var days = new List<WeatherDay>(count);
+        for (var i = 0; i < count; i++)
+        {
+            // InvariantCulture: the API answers in ISO, and a tr-TR install parses "2026-09-21"
+            // as a date only by luck. This project's default user is on tr-TR.
+            if (!DateOnly.TryParse(dates[i], CultureInfo.InvariantCulture,
+                                   DateTimeStyles.None, out var date))
+            {
+                continue;
+            }
+
+            days.Add(new WeatherDay(date, codes[i], highs[i], lows[i]));
+        }
+
+        return days.Count == 0 ? null : days;
     }
 }

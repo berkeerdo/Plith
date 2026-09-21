@@ -293,4 +293,61 @@ public class MediaCardTests
         Assert.Equal(card.AccessibleName, card.ToString());
         Assert.DoesNotContain("Plith.Cards", card.ToString());
     }
+
+    [Fact]
+    public void ApplyTimeline_ReachesTheViewModel()
+    {
+        var card = new MediaCard(NewSettings());
+        var timeline = new MediaTimeline(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(200),
+                                         DateTimeOffset.UnixEpoch);
+
+        card.ApplyTimeline(timeline);
+
+        Assert.Equal(timeline, card.Vm.Timeline);
+    }
+
+    [Fact]
+    public void ApplyTimeline_RaisesNoShowRequest()
+    {
+        // This test is the reason ApplyTimeline exists at all. Apply() raises ShowRequested when
+        // AutoShowOnMedia is on, and TimelinePropertiesChanged fires about once a second on some
+        // sources: routing the position through Apply would summon the OSD every second.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        card.Apply(Playing());
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.ApplyTimeline(new MediaTimeline(TimeSpan.FromSeconds(12), TimeSpan.FromSeconds(200),
+                                             DateTimeOffset.UnixEpoch));
+
+        Assert.Empty(shows);
+    }
+
+    [Fact]
+    public void Seek_ReachesTheCardAsAPosition()
+    {
+        var card = new MediaCard(NewSettings());
+        TimeSpan? seen = null;
+        card.SeekInvoked += (_, p) => seen = p;
+
+        card.Vm.RequestSeek(TimeSpan.FromSeconds(42));
+
+        Assert.Equal(TimeSpan.FromSeconds(42), seen);
+    }
+
+    [Fact]
+    public void Seek_RaisesNoShowRequest()
+    {
+        // A transport command asks for a show; a seek must not. It happens on a surface the
+        // person is already looking at and already holding open, so a show would replace the
+        // page under their own hand with a HUD about it.
+        var card = new MediaCard(NewSettings(autoShowOnMedia: true));
+        card.Apply(Playing());
+        var shows = new List<ShowRequest>();
+        card.ShowRequested += r => shows.Add(r);
+
+        card.Vm.RequestSeek(TimeSpan.FromSeconds(42));
+
+        Assert.Empty(shows);
+    }
 }

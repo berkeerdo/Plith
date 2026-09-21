@@ -1,0 +1,83 @@
+<UserControl x:Class="Plith.Views.Widgets.ShelfWidget"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
+             xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+             xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             mc:Ignorable="d"
+             Focusable="False"
+             Background="Transparent">
+    <UserControl.Resources>
+        <ResourceDictionary>
+            <ResourceDictionary.MergedDictionaries>
+                <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
+            </ResourceDictionary.MergedDictionaries>
+        </ResourceDictionary>
+    </UserControl.Resources>
+
+    <!-- What is on the shelf.
+
+         A row of tiles rather than a list of lines, because the shelf answers "what did I put
+         here" at a glance, and a name is a slower way to recognise your own file than its shape
+         and position.
+
+         No heading. The first pass had one, with a "+3 more" label in the opposite corner, and
+         rendering it showed why neither survives: the heading cost 25 of the 76 DIP the page
+         has, which clipped every tile label through the middle. The page dots already say which
+         page this is, and no other page in the frame introduces itself. What the row cannot show
+         is now the last tile instead - a count in a corner is something to read, a tile is
+         something that looks like the rest of the row and is understood without being read.
+
+         A Grid now rather than the row alone, because the row gained a line under it. The row's
+         track is star-sized and the line's is Auto, so the line cannot be pushed off the page by
+         a row that measures taller than it was meant to: the row clips inside its own track
+         instead, which is the same rule WidgetFrame applies to the page as a whole.
+
+         The bottom margin is 22, not 24, and the row is 68 tall rather than 76. Those two DIP
+         plus the eight are what the line under the row is made of: 116 less 12 and 22 leaves an
+         82 DIP content box, the line measures about 13.3, and 68 is what is left.
+
+         Where that has to end is the part worth stating precisely, because the first version of
+         this comment got it wrong. WidgetFrame's bottom row is 23 DIP, so its rail LANE begins at
+         y=93, not 96 - the page's content ends at about that line. The rail's own 16 DIP target
+         is centred in the lane and starts at 96.5, and its visible 3 DIP mark sits at about 101.
+         The rail is invisible most of the time and fades in on every page turn, so anything
+         overlapping it is a collision that only appears while the page is being changed. -->
+    <!-- The row and the line under it are ONE centred block, not a star row with the line
+         pinned to the bottom.
+
+         They were two rows, which was right at 116 DIP and wrong at 164: the tiles ended up in
+         the middle of the band and the line against the bottom edge, with a hole between them
+         that read as a page missing something. Kept together they centre as a pair, and the line
+         also moves away from the page rail's lane, which it used to sit just above. -->
+    <Grid Margin="{x:Static p:NotchGeometry.PageInsetDip}">
+        <!-- The empty state's own host, so its dashed box can STRETCH to the band instead of
+             being a fixed height centred by arithmetic. The box that was there carried a 7 DIP
+             top margin, which was half the difference between a 68 DIP row and the content box
+             of a 116 DIP frame: both of those numbers are gone, and a number derived from one
+             frame size does not survive the next one. A box that fills what it is given needs no
+             such number. -->
+        <Grid x:Name="EmptyHost" Visibility="Collapsed" />
+
+        <StackPanel x:Name="FilledBlock" VerticalAlignment="Center">
+        <StackPanel x:Name="Tiles"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Center" />
+
+        <!-- The one place the product says the shelf opens.
+
+             Set in XAML rather than built in Render, because it is the same sentence whatever
+             the row above it holds, and a line rebuilt on every shelf change is a line that can
+             be rebuilt wrongly. Render only chooses whether it is showing and, when the shelf
+             cannot open, replaces the text with the reason. -->
+        <TextBlock x:Name="Hint"
+                   Margin="0,10,0,0"
+                   Text="Click to open the shelf"
+                   FontSize="10"
+                   TextAlignment="Center"
+                   TextTrimming="CharacterEllipsis"
+                   Foreground="{DynamicResource NotchInkMuted}"
+                   Visibility="Collapsed" />
+        </StackPanel>
+    </Grid>
+</UserControl>

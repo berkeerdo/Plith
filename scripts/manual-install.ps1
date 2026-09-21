@@ -74,9 +74,23 @@ if (Test-Path $signScript) {
     if (Test-Path $certPath) { Remove-Item $certPath -Force -ErrorAction SilentlyContinue }
 }
 
-# 4. Kill any running Plith. SeDebugPrivilege isn't needed for a normal user-
-#    launched Plith (only UIAccess ones), but taskkill covers both paths.
-Step "Stopping running Plith (if any)"
+# 4. Kill any running Plith AND its drop catcher. SeDebugPrivilege isn't needed
+#    for a normal user-launched Plith (only UIAccess ones), but taskkill covers
+#    both paths.
+#
+#    The catcher matters as much as Plith here, and leaving it out cost a whole
+#    verification round on 2026-09-19. It is a separate process holding its own
+#    Plith.DropCatcher.dll open from this very directory, so a copy over that
+#    file fails with a sharing violation while every other file lands. The
+#    install then reports success, the version check below passes (it reads
+#    Plith.exe, which copied fine), and the product runs new code in one process
+#    and five-hour-old code in the other. What that looked like from outside: a
+#    redesigned shelf that installed cleanly and rendered the previous design.
+#
+#    Killing Plith first and the catcher second is deliberate. Plith restarts the
+#    catcher when it sees it go, so the other order can leave a fresh catcher
+#    holding the file again by the time the copy starts.
+Step "Stopping running Plith and its drop catcher (if any)"
 $before = Get-Process -Name 'Plith' -ErrorAction SilentlyContinue
 if ($before) {
     & taskkill /F /IM Plith.exe /T 2>&1 | Out-Host
@@ -89,6 +103,20 @@ if ($before) {
     }
 } else {
     OK "No Plith running."
+}
+
+$catcher = Get-Process -Name 'Plith.DropCatcher' -ErrorAction SilentlyContinue
+if ($catcher) {
+    & taskkill /F /IM Plith.DropCatcher.exe /T 2>&1 | Out-Host
+    Start-Sleep -Seconds 1
+    $stillThere = Get-Process -Name 'Plith.DropCatcher' -ErrorAction SilentlyContinue
+    if ($stillThere) {
+        Write-Warning "  Drop catcher still alive. Plith.DropCatcher.dll will not copy and the shelf will run OLD code."
+    } else {
+        OK "Drop catcher stopped."
+    }
+} else {
+    OK "No drop catcher running."
 }
 
 # 5. Ensure install directory exists + has admin write. If a previous

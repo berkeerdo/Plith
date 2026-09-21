@@ -87,7 +87,7 @@ public partial class OsdContent : UserControl
     /// The open size used to be one field, assigned outright. That is correct while the notch is
     /// closed — it opens into whatever the content now measures — and wrong while it is already
     /// open, because the panel can CHANGE size without closing: a volume HUD is 300 x 46, a
-    /// media HUD 372 x 54, the widget frame 356 x 116. Clicking a HUD to open the frame snapped
+    /// media HUD 372 x 54, the widget frame 356 x 164. Clicking a HUD to open the frame snapped
     /// the shape between two of those in a single frame, which is the hard jump reported.
     ///
     /// Two sizes and a progress value make that a morph instead. Everything is still derived

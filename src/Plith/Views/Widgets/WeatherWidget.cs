@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -26,6 +27,7 @@ namespace Plith.Views.Widgets;
 public partial class WeatherWidget : UserControl
 {
     private readonly Func<WeatherSnapshot?> _read;
+    private readonly Func<string?>? _readPlace;
     private readonly Func<DateOnly?> _readLastReveal;
     private readonly Action<DateOnly> _writeLastReveal;
     private readonly DiagnosticLog? _log;
@@ -43,17 +45,22 @@ public partial class WeatherWidget : UserControl
     private readonly List<(DependencyObject Target, DependencyProperty Property)> _running = new();
     private SkyKind _sky = SkyKind.Overcast;
 
+    /// <param name="readPlace">The place the reading is for, or null when nothing can name it.
+    /// A typed city has a name; Windows Location and an IP lookup do not hand one back, and the
+    /// line stays hidden rather than carrying a label that pretends to be a fact.</param>
     public WeatherWidget(
         Func<WeatherSnapshot?> read,
         Func<DateOnly?> readLastReveal,
         Action<DateOnly> writeLastReveal,
-        DiagnosticLog? log = null)
+        DiagnosticLog? log = null,
+        Func<string?>? readPlace = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(readLastReveal);
         ArgumentNullException.ThrowIfNull(writeLastReveal);
 
         InitializeComponent();
+        _readPlace = readPlace;
         _read = read;
         _readLastReveal = readLastReveal;
         _writeLastReveal = writeLastReveal;
@@ -151,6 +158,8 @@ public partial class WeatherWidget : UserControl
             // never shows a consent prompt) and that nothing else would ever mention.
             _sky = SkyKind.Overcast;
             Temperature.Text = "—";
+            Place.Visibility = Visibility.Collapsed;
+            Forecast.Visibility = Visibility.Collapsed;
             Condition.Text = "Weather unavailable";
             Detail.Text = "Check location in Settings, or type a city";
             PaintSky();
@@ -163,6 +172,14 @@ public partial class WeatherWidget : UserControl
 
         Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(w.TemperatureC):0}°");
         Condition.Text = label;
+
+        // Read on every render rather than captured once: the city is a setting, and a setting
+        // can be changed while the page exists.
+        var place = _readPlace?.Invoke();
+        Place.Text = place ?? string.Empty;
+        Place.Visibility = string.IsNullOrWhiteSpace(place) ? Visibility.Collapsed : Visibility.Visible;
+
+        RenderForecast(w.Days);
         Detail.Text = string.Create(CultureInfo.CurrentCulture,
             $"Updated {w.FetchedAt.ToLocalTime():t}");
 
@@ -171,6 +188,105 @@ public partial class WeatherWidget : UserControl
         // On the panel, which has a peer. The whole reading, because a bare "18°" announced on
         // its own says nothing about what it measures.
         AutomationProperties.SetName(Readout, $"{Temperature.Text}, {label}");
+    }
+
+    /// <summary>How many days the page has room for beside the sky.</summary>
+    private const int ForecastDays = 2;
+
+    /// <summary>
+    /// The next two days, or nothing.
+    ///
+    /// TODAY IS DROPPED, and that is the point of the filter rather than a detail: Open-Meteo's
+    /// first day is today, and today is the big number on the left of this very page. A column
+    /// repeating it would be the same fact twice with different rounding.
+    ///
+    /// Anything missing collapses the row rather than drawing a placeholder, which is the rule
+    /// every other optional thing on this page follows.
+    /// </summary>
+    private void RenderForecast(IReadOnlyList<WeatherDay>? days)
+    {
+        Forecast.Children.Clear();
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var next = days?.Where(d => d.Date > today).Take(ForecastDays).ToList();
+        if (next is not { Count: > 0 })
+        {
+            Forecast.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        foreach (var day in next) Forecast.Children.Add(BuildDay(day));
+        Forecast.Visibility = Visibility.Visible;
+    }
+
+    private StackPanel BuildDay(WeatherDay day)
+    {
+        var column = new StackPanel
+        {
+            Margin = new Thickness(14, 0, 0, 0),
+            MinWidth = 44,
+        };
+
+        // The day's own name, short. Culture's abbreviation rather than a cut of the full word:
+        // a three-letter slice of a Turkish weekday is not what a Turkish reader expects to see.
+        // Everything here follows the PC's language, because every string comes from
+        // CultureInfo.CurrentCulture rather than from a table in this file.
+        var name = new TextBlock
+        {
+            Text = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(
+                day.Date.DayOfWeek),
+            FontSize = 11,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xAE, 0xFF, 0xFF, 0xFF)),
+        };
+
+        // The whole column, in one sentence, on the day name: a TextBlock has an automation peer
+        // and the StackPanel holding these does not, so a name set on the column would reach
+        // nothing. Without it a screen reader read "Sal", then silence where the mark is, then
+        // two numbers: the shape carries the forecast and says nothing at all out loud.
+        AutomationProperties.SetName(name, string.Create(CultureInfo.CurrentCulture,
+            $"{CultureInfo.CurrentCulture.DateTimeFormat.GetDayName(day.Date.DayOfWeek)}, " +
+            $"{WeatherCodeMap.Describe(day.WeatherCode)}, " +
+            $"{Math.Round(day.MaxC):0}° / {Math.Round(day.MinC):0}°"));
+        column.Children.Add(name);
+
+        // The same mark the clock page uses for the same code, so two surfaces cannot describe
+        // one day's weather differently.
+        //
+        // 26, not 20. At 20 the cloud and the drops under it ran together into a blob and the
+        // page could not answer "what will Tuesday be", which is the one question a forecast
+        // column exists for. Reported from a real session.
+        var mark = new WeatherMark
+        {
+            Width = 26,
+            Height = 26,
+            Margin = new Thickness(0, 4, 0, 4),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        mark.Show(SkyCondition.From(day.WeatherCode, 12));
+        column.Children.Add(mark);
+
+        // High and low, high first and brighter. A pair with no separator reads as one number,
+        // so the low is dimmed rather than divided off with a slash.
+        var pair = new StackPanel { Orientation = Orientation.Horizontal,
+                                    HorizontalAlignment = HorizontalAlignment.Center };
+        pair.Children.Add(new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(day.MaxC):0}°"),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.White,
+        });
+        pair.Children.Add(new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(day.MinC):0}°"),
+            FontSize = 12,
+            Margin = new Thickness(5, 0, 0, 0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x8A, 0xFF, 0xFF, 0xFF)),
+        });
+        column.Children.Add(pair);
+
+        return column;
     }
 
     private void PaintSky()

@@ -58,6 +58,36 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         }
     }
 
+    private MediaTimeline? _timeline;
+
+    /// <summary>
+    /// Where the track is, or null when the source reports no usable duration.
+    ///
+    /// Its own property rather than three, so a position arriving once a second raises one
+    /// notification. The media page routes on the name of this one and repaints only its
+    /// progress row.
+    /// </summary>
+    public MediaTimeline? Timeline
+    {
+        get => _timeline;
+        set => Set(ref _timeline, value);
+    }
+
+    private bool _canSeek;
+
+    /// <summary>
+    /// Whether this source accepts a position write.
+    ///
+    /// The media page disables its track when false, rather than offering a drag that silently
+    /// does nothing: a control that ignores a gesture teaches people not to trust the ones that
+    /// answer it.
+    /// </summary>
+    public bool CanSeek
+    {
+        get => _canSeek;
+        set => Set(ref _canSeek, value);
+    }
+
     private bool _hasSession;
     public bool HasSession
     {
@@ -100,6 +130,13 @@ public sealed class MediaViewModel : INotifyPropertyChanged
 
     public void RequestCommand(MediaCommand command) => CommandRequested?.Invoke(command);
 
+    /// <summary>Raised when the user has finished dragging the track. Carries a position rather
+    /// than a command, which is why it is its own event and not a <see cref="MediaCommand"/>:
+    /// the enum has nowhere to put a value.</summary>
+    public event Action<TimeSpan>? SeekRequested;
+
+    public void RequestSeek(TimeSpan position) => SeekRequested?.Invoke(position);
+
     /// <summary>
     /// Apply a fresh SMTC snapshot to this view-model. Must be called on the WPF dispatcher
     /// thread — the orchestrator marshals SMTC threadpool callbacks before invoking this,
@@ -112,6 +149,8 @@ public sealed class MediaViewModel : INotifyPropertyChanged
         IsPlaying = snapshot.IsPlaying;
         HasSession = snapshot.HasSession;   // setter raises HasSessionChanged on actual change
         AlbumArt = DecodeThumbnail(snapshot.ThumbnailBytes);
+        Timeline = snapshot.Timeline;
+        CanSeek = snapshot.CanSeek;
     }
 
     private static BitmapImage? DecodeThumbnail(byte[]? bytes)
@@ -126,7 +165,11 @@ public sealed class MediaViewModel : INotifyPropertyChanged
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
             bitmap.StreamSource = ms;
-            bitmap.DecodePixelWidth = 96; // capped — we only display 48 dip ≤ ~96 px at 200% DPI
+            // 192, for the notch page's 56 DIP tile: 112 px at 200% DPI and 168 at 300%. It was
+            // 96, chosen for the classic card's 48 DIP row, and the notch page drew its tile from
+            // the same bitmap. A cap is still wanted, so this is a bigger cap rather than none:
+            // the point is to bound what one track change costs.
+            bitmap.DecodePixelWidth = 192;
             bitmap.EndInit();
             bitmap.Freeze(); // cross-thread safe
             return bitmap;

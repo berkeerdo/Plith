@@ -83,6 +83,90 @@ public static class AudioLabel
     }
 
     /// <summary>
+    /// Shorten a whole list, keeping every entry distinct.
+    ///
+    /// <see cref="Shorten"/> cannot do this on its own, and that is why both exist: uniqueness is
+    /// a property of the SET, and a function handed one name cannot see the name it is about to
+    /// collide with. Measured on 2026-09-21, on the machine this is developed on:
+    /// "Hoparlor (Steam Streaming Speakers)" and "Hoparlor (Steam Streaming Microphone)" both
+    /// keep the adapter's first two words, so both come back as "Hoparlor (Steam Streaming)" and
+    /// the settings endpoint dropdown has been showing two identical rows since it was written.
+    ///
+    /// A colliding group gets its FULL names back rather than a longer truncation: three words
+    /// would collide on the next machine, and a device name is not worth guessing at when the
+    /// cost of guessing wrong is routing audio to the wrong output.
+    ///
+    /// Order is preserved, because callers pair the result back up with endpoint ids by index.
+    /// </summary>
+    public static IReadOnlyList<string> ShortenAll(IReadOnlyList<string> names)
+    {
+        ArgumentNullException.ThrowIfNull(names);
+
+        var shortened = new string[names.Count];
+        for (var i = 0; i < names.Count; i++) shortened[i] = Shorten(names[i]);
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var s in shortened) counts[s] = counts.GetValueOrDefault(s) + 1;
+
+        for (var i = 0; i < shortened.Length; i++)
+        {
+            if (counts[shortened[i]] > 1) shortened[i] = (names[i] ?? string.Empty).Trim();
+        }
+
+        return shortened;
+    }
+
+    /// <summary>
+    /// Choose the label for each item, preferring a shorter name but never at the cost of
+    /// telling two items apart.
+    ///
+    /// The same principle as <see cref="ShortenAll"/>, applied to a different pair of inputs.
+    /// Core Audio reports two names per endpoint: the endpoint name ("Hoparlor (Logitech G733
+    /// Gaming Headset)") and the device description ("Logitech G733 Gaming Headset"). In a narrow
+    /// list the description is the better label by a long way, because the endpoint name repeats
+    /// the same parenthesised shape on every row and pushes the distinguishing words off the end.
+    ///
+    /// Measured on 2026-09-21: in a 155 DIP cell at 11 px, "Hoparlor (Steam Streaming Speakers)"
+    /// and "Hoparlor (Steam Streaming Microphone)" BOTH trim to "Hoparlor (Steam Streaming", so
+    /// the two rows read identically even though the strings behind them differ. The descriptions
+    /// do not collide and are short enough to survive.
+    ///
+    /// A preferred name is used only when it is non-empty and unique within the set; anything
+    /// else falls back for that item alone. So a machine with two identical headsets gets the
+    /// endpoint names, which is what tells those apart, and nothing else pays for it.
+    /// </summary>
+    public static IReadOnlyList<string> DistinctLabels(
+        IReadOnlyList<string> preferred, IReadOnlyList<string> fallback)
+    {
+        ArgumentNullException.ThrowIfNull(preferred);
+        ArgumentNullException.ThrowIfNull(fallback);
+        if (preferred.Count != fallback.Count)
+        {
+            // A guard rather than a Math.Min: these are paired by index, and a shorter list
+            // would silently put one item's label on another item.
+            throw new ArgumentException(
+                $"preferred has {preferred.Count} entries and fallback has {fallback.Count}; " +
+                "they are paired by index and must match.", nameof(fallback));
+        }
+
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var p in preferred)
+        {
+            if (string.IsNullOrWhiteSpace(p)) continue;
+            counts[p] = counts.GetValueOrDefault(p) + 1;
+        }
+
+        var labels = new string[preferred.Count];
+        for (var i = 0; i < labels.Length; i++)
+        {
+            var p = preferred[i];
+            labels[i] = !string.IsNullOrWhiteSpace(p) && counts[p] == 1 ? p.Trim() : fallback[i];
+        }
+
+        return labels;
+    }
+
+    /// <summary>
     /// Which rail this level is, in words.
     ///
     /// On a machine running Voicemeeter alongside Sonar alongside a headset, a number with no

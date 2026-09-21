@@ -27,6 +27,12 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     private const uint WINEVENT_SKIPOWNPROCESS = 0x0002;
     private const int SW_HIDE = 0;
 
+    // SHOWNA, not SHOW: the restore must not steal activation from whatever the person is
+    // actually using. It also usually shows nothing at all, because the shell parks this window
+    // off screen when it is idle, so putting its visibility back where the shell believes it
+    // already is has no visible effect until the shell next positions it.
+    private const int SW_SHOWNA = 8;
+
     // Historically the volume / brightness / network flyouts lived in
     // ZBID_IMMERSIVE_NOTIFICATIONS (0x4). Recent Win11 builds moved them to newer bands
     // (0x11 = system-tools-adjacent, 0x12 = shell-owned island widget). We accept the
@@ -78,6 +84,11 @@ public sealed class NativeFlyoutSuppressor : IDisposable
     // managed Process per call — that's a GC + handle-table pressure cliff. Cache the lookup.
     private readonly Dictionary<uint, string> _pidNameCache = new();
 
+    /// <summary>Windows this suppressor hid, so Stop can put them back. See
+    /// <see cref="HiddenWindowRegistry"/> for why leaving them hidden is worse than it
+    /// sounds.</summary>
+    private readonly HiddenWindowRegistry _hidden = new();
+
     public NativeFlyoutSuppressor(DiagnosticLog? log = null)
     {
         _log = log;
@@ -120,6 +131,14 @@ public sealed class NativeFlyoutSuppressor : IDisposable
         _log?.Info("FlyoutSuppressor", $"Started. GetWindowBand available: {_getWindowBand is not null}");
     }
 
+    /// <summary>
+    /// Unhook, and GIVE BACK every window this process hid.
+    ///
+    /// The unhooking was always enough to stop suppressing. It was never enough to undo it: the
+    /// shell's flyout window stays hidden, the shell never hid it and so believes it is visible,
+    /// and on the builds that create it once and merely move it the volume OSD is then gone for
+    /// good. Hooks die with the process even on a crash; a hidden window does not.
+    /// </summary>
     public void Stop()
     {
         if (_showHook != 0) { UnhookWinEvent(_showHook); _showHook = 0; }
@@ -127,6 +146,10 @@ public sealed class NativeFlyoutSuppressor : IDisposable
         if (_locationHook != 0) { UnhookWinEvent(_locationHook); _locationHook = 0; }
         _delegate = null;
         _pidNameCache.Clear();
+
+        var owed = _hidden.Count;
+        _hidden.RestoreAll(h => ShowWindow(h, SW_SHOWNA));
+        if (owed > 0) _log?.Info("FlyoutSuppressor", $"Restored {owed} hidden flyout window(s).");
     }
 
     private void OnWinEvent(nint hWinEventHook, uint eventType, nint hwnd,
@@ -156,7 +179,11 @@ public sealed class NativeFlyoutSuppressor : IDisposable
         // Log only the events that actually pass ALL filters — real suppression targets.
         _log?.Info("FlyoutSuppressor",
             $"Hiding flyout hwnd=0x{hwnd:X} ev=0x{eventType:X} class='{className}' proc='{procName}' band=0x{band:X}");
-        ShowWindow(hwnd, SW_HIDE);
+
+        // Through the registry rather than straight to ShowWindow, so Stop can undo it. The
+        // shell's flyout window is not ours, and on the builds where the shell creates it once
+        // and only moves it, a window left hidden here is a volume OSD that never comes back.
+        _hidden.Hide(hwnd, h => ShowWindow(h, SW_HIDE));
     }
 
     private static string GetClassNameSafe(nint hwnd)

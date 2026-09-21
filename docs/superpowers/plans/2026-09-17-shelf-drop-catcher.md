@@ -10,6 +10,25 @@
 
 **Spec:** `docs/ROADMAP.md` — Phase 7, the Shelf card entry, which records the measurements this plan is built on.
 
+> **Tasks 1-4 are done and their boxes are ticked. A tick means the step was taken, NOT that
+> nothing was deviated from.** Four deviations, each recorded in the code that carries it:
+>
+> 1. **The wire carries physical pixels, not DIP.** Two processes each doing their own DIP
+>    arithmetic disagree on any monitor that is not at 100%.
+> 2. **Task 4 Step 1 could not be done as written.** `efd0db8^` does not contain the drag
+>    detection — the spike lived only in a working tree and was never committed. It was rebuilt
+>    from the roadmap's description, which that commit wrote for exactly this case.
+> 3. **The plan's own `DropChannel` code had two defects** and was not copied as printed: chained
+>    Replace calls corrupt ordinary Windows paths, and the numbers were culture-formatted while
+>    the decoder parsed invariant.
+> 4. **Entering and staying use different rectangles.** Not in the plan; found by running it.
+>
+> Three defects were found by running rather than building, all with a green build behind them:
+> `EnsureHandle` + `SWP_SHOWWINDOW` makes a window WPF does not consider shown (no visual tree,
+> no drop target, nothing on screen); `AllowsTransparency` makes it layered and therefore
+> invisible to every screen-capture route over RDP; and a single approach threshold pulled the
+> notch back 700 ms into a live drag.
+
 ## Global Constraints
 
 - All code, comments and commit messages in English. Conventional Commits. No AI attribution anywhere.
@@ -73,7 +92,7 @@ The riskiest assumption in the design, so it goes first and is proven in code ra
 - Consumes: nothing.
 - Produces: `DropChannel.PipeName(string userSid) -> string`; `DropChannel.Encode(DropMessage) -> string`; `DropChannel.TryDecode(string, out DropMessage) -> bool`; `DropMessage(DropVerb Verb, double X, double Y, double W, double H, IReadOnlyList<string> Paths)`; `DropVerb { Show, Hide, Dropped, Hello }`; `DropChannelServer.Start()`, `.SendAsync(DropMessage)`, `event Action<DropMessage> Received`, `.Dispose()`.
 
-- [ ] **Step 1: Write the failing test for the wire format**
+- [x] **Step 1: Write the failing test for the wire format**
 
 ```csharp
 [Fact]
@@ -103,12 +122,12 @@ public void Encode_NeutralisesSeparatorsInsidePaths(string hostile)
 }
 ```
 
-- [ ] **Step 2: Run it and watch it fail**
+- [x] **Step 2: Run it and watch it fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: FAIL — `DropChannel` does not exist.
 
-- [ ] **Step 3: Write `DropChannel`**
+- [x] **Step 3: Write `DropChannel`**
 
 ```csharp
 namespace Plith.Services.Shelf;
@@ -165,12 +184,12 @@ public static class DropChannel
 }
 ```
 
-- [ ] **Step 4: Run the test and watch it pass**
+- [x] **Step 4: Run the test and watch it pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 5: Write the failing test for the server's reachability**
+- [x] **Step 5: Write the failing test for the server's reachability**
 
 ```csharp
 /// <summary>
@@ -196,12 +215,12 @@ public void Server_OpensThePipeToEveryone()
 }
 ```
 
-- [ ] **Step 6: Run it and watch it fail**
+- [x] **Step 6: Run it and watch it fail**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: FAIL — `DropChannelServer` does not exist.
 
-- [ ] **Step 7: Write `DropChannelServer`**
+- [x] **Step 7: Write `DropChannelServer`**
 
 ```csharp
 using System.IO;
@@ -264,12 +283,12 @@ public sealed class DropChannelServer : IDisposable
 }
 ```
 
-- [ ] **Step 8: Run the test and watch it pass**
+- [x] **Step 8: Run the test and watch it pass**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter DropChannelTests -v q -m:1`
 Expected: PASS.
 
-- [ ] **Step 9: Write the read/write loop**
+- [x] **Step 9: Write the read/write loop**
 
 ```csharp
     private async Task AcceptLoop(CancellationToken ct)
@@ -323,12 +342,12 @@ Expected: PASS.
     }
 ```
 
-- [ ] **Step 10: Run the whole suite**
+- [x] **Step 10: Run the whole suite**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj -v q -m:1`
 Expected: PASS, count up by the new tests.
 
-- [ ] **Step 11: Commit**
+- [x] **Step 11: Commit**
 
 ```bash
 git add src/Plith/Services/Shelf tests/Plith.Tests/DropChannelTests.cs
@@ -347,7 +366,7 @@ git commit -m "feat(shelf): a pipe a lower-integrity process can reach"
 - Consumes: `DropChannel` (linked compile item, not a project reference — the catcher must not drag Plith's assembly in).
 - Produces: an exe that connects, shows a window on `Show`, hides on `Hide`, and sends `Dropped`.
 
-- [ ] **Step 1: Create the project and manifest**
+- [x] **Step 1: Create the project and manifest**
 
 `app.manifest` — the critical file:
 
@@ -357,7 +376,7 @@ git commit -m "feat(shelf): a pipe a lower-integrity process can reach"
 
 This is the entire reason the catcher exists. A uiAccess manifest here would raise it to High and it would be as unreachable as Plith.
 
-- [ ] **Step 2: Link the shared contract rather than referencing Plith**
+- [x] **Step 2: Link the shared contract rather than referencing Plith**
 
 ```xml
 <ItemGroup>
@@ -369,15 +388,15 @@ This is the entire reason the catcher exists. A uiAccess manifest here would rai
 
 Note for whoever adds more links here: `scripts/check-shared-xaml.ps1` exists because a file compiled into two assemblies must not name one of them. It only reads the installer's csproj today; extend it to this one at the same time.
 
-- [ ] **Step 3: Write the window**
+- [x] **Step 3: Write the window**
 
 Borderless, `WindowStyle=None`, `AllowsTransparency=True`, `Topmost=True`, `ShowInTaskbar=False`, `AllowDrop=True`, `Background` a nearly-transparent brush — fully transparent takes no hit-tests, so it needs about 1% alpha to be droppable while invisible.
 
-- [ ] **Step 4: Verify by hand that the catcher receives a drop**
+- [x] **Step 4: Verify by hand that the catcher receives a drop**
 
 Run the catcher alone with a hard-coded rectangle, drag a file onto it, confirm the log records the paths. This is the step that proves a Medium window can do what the notch cannot; nothing later is worth building if it fails.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Plith.DropCatcher Plith.sln
@@ -391,7 +410,7 @@ git commit -m "feat(shelf): a medium-integrity window that can receive a drop"
 **Files:**
 - Modify: `src/Plith/App.xaml.cs`, `src/Plith.Installer/Services/InstallSteps.cs` (Run-key entry)
 
-- [ ] **Step 1: Start the catcher through the shell, never as a child**
+- [x] **Step 1: Start the catcher through the shell, never as a child**
 
 ```csharp
 // Started via explorer.exe, which makes Explorer the parent and gives the catcher Explorer's
@@ -400,11 +419,11 @@ git commit -m "feat(shelf): a medium-integrity window that can receive a drop"
 Process.Start(new ProcessStartInfo("explorer.exe", $"\"{catcherPath}\"") { UseShellExecute = true });
 ```
 
-- [ ] **Step 2: Verify the integrity level of the launched process**
+- [x] **Step 2: Verify the integrity level of the launched process**
 
 Read its token integrity and assert Medium in the log at startup. If it comes up High, the launch route is wrong and every later task is dead — so it is checked here, once, loudly.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ---
 
@@ -413,21 +432,21 @@ Read its token integrity and assert Medium in the log at startup. If it comes up
 **Files:**
 - Modify: `src/Plith/Views/Presentation/NotchHoverPoller.cs` (restore `DraggingOverChanged` from `efd0db8`), `src/Plith/Views/OsdHost.cs`
 
-- [ ] **Step 1: Restore the drag-approach detection**
+- [x] **Step 1: Restore the drag-approach detection**
 
 It was removed deliberately when it had nothing to serve. `git show efd0db8^:src/Plith/Views/Presentation/NotchHoverPoller.cs` has it, including the rule that separates a drag from a press — the button must have gone down outside the notch.
 
-- [ ] **Step 2: Hand the rectangle over on drag-approach**
+- [x] **Step 2: Hand the rectangle over on drag-approach**
 
 Hide the band window, send `Show` with the panel's screen rectangle in DIP.
 
-- [ ] **Step 3: Take it back on `Dropped` or on drag-end**
+- [x] **Step 3: Take it back on `Dropped` or on drag-end**
 
-- [ ] **Step 4: Verify by hand — drag a file onto the notch**
+- [x] **Step 4: Verify by hand — drag a file onto the notch**
 
 Expected in the log: the approach, the handoff, `Dropped` with the file names, the notch returning. This is the moment the feature either exists or does not.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ---
 
@@ -436,7 +455,7 @@ Expected in the log: the approach, the handoff, `Dropped` with the file names, t
 **Files:**
 - Create: `src/Plith/Services/Shelf/ShelfStore.cs`, `tests/Plith.Tests/ShelfStoreTests.cs`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```csharp
 /// <summary>Paths arrive from a lower-integrity process, so they are claims rather than facts.
@@ -456,7 +475,7 @@ public void Add_KeepsTheMostRecentFirst() { /* ... */ }
 public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 ```
 
-- [ ] **Steps 2-5:** run-fail, implement, run-pass, commit.
+- [x] **Steps 2-5:** run-fail, implement, run-pass, commit.
 
 ---
 
@@ -466,13 +485,13 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 - Create: `src/Plith/Views/Widgets/ShelfWidget.xaml` / `.cs`
 - Modify: `src/Plith/Views/OsdHost.cs` (`ApplyWidgetPages`)
 
-- [ ] **Step 1: Build the page against the render harness**
+- [x] **Step 1: Build the page against the render harness**
 
 `pwsh -STA -File scripts/render-widgets.ps1` — and render it in **both** themes with a tinted accent. The system page shipped unreadable because every colour judgement was made against a flat dark ground the product does not have; that harness now takes `-Theme` and `-Accent` precisely so this page does not repeat it.
 
-- [ ] **Step 2: Install the page only when the shelf has something**, the same rule the weather page follows.
+- [x] **Step 2: Install the page only when the shelf has something**, the same rule the weather page follows.
 
-- [ ] **Steps 3-5:** accessibility names, lint, commit.
+- [x] **Steps 3-5:** accessibility names, lint, commit.
 
 ---
 
@@ -480,9 +499,127 @@ public void Add_IsIdempotentForTheSamePath() { /* ... */ }
 
 **Not planned in detail, on purpose.** Dragging an item OUT of the shelf means `DoDragDrop` from a High-integrity process to a Medium one, which is the reverse of the direction that is already known to be blocked and may well behave differently — the source initiates, and UIPI restricts what a *lower* integrity process may send to a higher one, not the other way round.
 
-- [ ] **Step 1: Measure it.** A throwaway build that starts a drag from the notch with one hard-coded file, dropped onto an Explorer window. Log whether it lands.
-- [ ] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
-- [ ] **Step 3: Plan the rest only then.** If it is blocked too, the catcher window has to serve as the drag SOURCE as well, which is a different design and deserves its own plan rather than a guess appended to this one.
+- [x] **Step 1: Measure it.** Done, and with a control: the same binary at HIGH returns `None` three times and copies nothing, at MEDIUM returns `Copy, Move` and the file lands. Integrity is the cause, not the probe.
+- [x] **Step 2: Write the answer into `docs/ROADMAP.md`** next to the inbound measurements, whichever way it goes.
+- [x] **Step 3: Plan the rest only then.** It IS blocked too, so the catcher has to serve as the drag SOURCE as well. Still deliberately unplanned here, and Task 8 has since narrowed what that plan may assume: the catcher can only start a drag for a press on its OWN window, so the stand-aside route this step originally implied is dead. Read Task 8 before designing anything on top of this step.
+
+### Task 8: The probe that answers whether the stand-aside can work at all
+
+**Built and run on 18.09.2026. The answer is below, and it is no.** Designed in an earlier
+session that then went elsewhere, written down here rather than left in a transcript nobody
+would read, and measured the next day.
+
+**The question.** The catcher has to become the drag SOURCE. But the press that starts the drag
+lands on PLITH's window, and only then does the notch stand aside and the catcher take its
+place. So the catcher would be calling `DoDragDrop` for a gesture whose button went down in a
+different process. Nothing in Task 7's measurement says whether OLE's drag loop will pick that
+up: Task 7 measured a press on the catcher's OWN window.
+
+**The probe.** A mode in `Plith.DropCatcher` that shows nothing until it sees, by the
+`GetAsyncKeyState` polling the catcher already does, that the left button is down and was
+pressed somewhere else. It then puts itself under the cursor and calls `DoDragDrop` with a test
+file, logging the return value.
+
+Run it, press and hold on any ordinary window, drag toward the top of the screen, and release
+over an Explorer window. `dropcatcher.log` has the answer, and `IntegrityLevel.cs` confirms the
+probe ran at Medium.
+
+**The control already exists**, which is what makes this worth one run: Task 7 measured the same
+binary returning `Copy, Move` from Medium with the press on its own window. The only variable
+being changed is where the press landed.
+
+**If it returns `None`, stop.** The press-a-tile interaction is dead and the design question
+becomes a different one, which is exactly what this plan would rather find out before a spec
+than after one.
+
+Two things deliberately NOT probed: whether Plith hiding the notch mid-press disturbs anything,
+which is the implementation and only matters if this passes, and the OLE loop's capture
+behaviour in isolation, which the return value already answers.
+
+**Verification got cheaper since this was written.** From a console session a gesture can be
+synthesised with `keybd_event` and `mouse_event`, and the screen can be photographed with
+`Graphics.CopyFromScreen`. Both techniques are written up on `feature/brightness`, in that
+branch's `docs/PHASE6-VERIFICATION.md` — NOT in this branch's copy, which predates them. Neither
+works over Remote Desktop, and over RDP this probe is meaningless anyway.
+
+- [x] **Step 1: Build the probe.** `src/Plith.DropCatcher/DragSourceProbe.cs`, reached by
+  `Plith.DropCatcher.exe --dragsource "<file>"`, beside the two existing hand-run probe modes and
+  ahead of the single-instance guard. It carries its own `GetCursorPos`/`GetAsyncKeyState` loop:
+  the premise above, that the catcher already polls, was wrong — that polling lives in Plith's
+  `NotchHoverPoller`, and the catcher has none of its own.
+- [x] **Step 2: Run it.** Console session, 18.09.2026, gesture synthesised with `mouse_event` and
+  the screen photographed at three points.
+
+#### The answer: it does not work. Stop, as this task said to.
+
+**`DoDragDrop` never delivers a drag for a press that landed in another process.** Three valid
+runs, at MEDIUM integrity (logged by `IntegrityLevel` each time), press verified by
+`WindowFromPoint` to belong to a different process:
+
+| Run | Press origin | Release over | Result |
+|---|---|---|---|
+| A | Windows Terminal | the same terminal | blocked 3.6 s, returned `None` on release |
+| B | a window of the harness's own, stand-in not yet painted | a window that accepts `FileDrop` and logs it | **never returned** — still blocked 17 s after the release |
+| C | the same, stand-in painted first (`Visible=True`) | the same | returned `None` 9 s after the release, and only once unrelated mouse input arrived |
+
+**No drop target ever saw the drag.** In B and C the release landed on a window whose whole
+purpose was to accept a file and write down what it received, and its log records no `DragEnter`
+and no drop. The target is not the variable.
+
+**The control is Task 7's run**: the same binary, the same integrity, the same
+`DragDropEffects.Copy | Link` call, differing only in where the button went down — press on the
+probe's own window returned `Copy, Move` and the file landed. One variable changed, and the drag
+stopped working.
+
+**A second finding, and it is the more dangerous one.** The call does not merely fail, it can
+fail to RETURN. Run B blocked indefinitely on the thread that called it. In the real design that
+is the catcher's UI thread, so a press-a-tile gesture would not just do nothing — it would hang
+the catcher, which is the process the whole shelf depends on. Any future design must treat
+`DoDragDrop` from a foreign press as a hazard, not merely as a dead end.
+
+**Limits of this measurement, stated rather than left to be discovered.** The input was injected
+rather than pressed by a hand; one machine, one session. And the press origin was a MEDIUM window,
+while in the real design the press lands on Plith at HIGH — untested, and a difference that could
+not turn a blocked path into a working one, but it is not measured either.
+
+**What this closes.** The press-a-tile interaction is dead, and with it the assumption behind
+Task 7 Step 3 that the catcher can simply "serve as the drag SOURCE as well". It can start a drag
+for a press on its OWN window, and that is the only shape left: the tile the person presses has to
+BE the catcher's window, not Plith's. That is a different design for the notch, not a detail, and
+it belongs in its own plan.
+
+#### Driving a drag gesture on this machine, and what fought it
+
+Five of the eight attempts at this measurement were lost to the harness rather than to the
+question, and every one of them failed SILENTLY: a run that aims at the wrong window still
+produces a plausible log line. Written down so the next hardware run starts from attempt six.
+
+- **Ask `qwinsta`, never `$env:SESSIONNAME`.** This session's environment said `RDP-Tcp#0` and the
+  session was in fact `console`, active, with no RDP connected. The variable is stamped when the
+  process starts and never updated. Believing it would have skipped a measurement that was
+  perfectly possible.
+- **`explorer.exe <path>` does not open Explorer here.** The default file manager on this machine
+  is Files, so the window that appears is `WinUIDesktopWin32WindowClass`, not `CabinetWClass`. A
+  script that opens a folder and then looks for `CabinetWClass` never finds the window it just
+  opened, and opens another one on every retry. That is what put a stream of folder windows on
+  the user's screen.
+- **Never match a window by a generic title.** Matching `Notepad` found the user's own open
+  document and dragged across it. Use a window the harness creates and owns, or match on a title
+  the harness itself set.
+- **Windows 11 answers `MainWindowHandle = 0`** for both Notepad and Explorer, because the process
+  that was started is a launcher and the window belongs to another one. Enumerate top-level
+  windows instead.
+- **Stage and gesture in ONE process, and re-verify the aim in the same breath as the press.**
+  Across two separate scripts another window came forward in the gap, twice, and took both the
+  press and the release. The check must abort, not warn.
+- **Topmost is not enough; minimise the competitor.** Pinning the staged windows `HWND_TOPMOST`
+  still lost to a maximised terminal on two runs. Minimising that one window for the eight seconds
+  of the gesture, and restoring it in a `finally`, is what finally made runs repeatable.
+- **`WindowFromPoint` returns the CHILD under the cursor**, never the top-level handle a window
+  was found by. Compare owning process ids.
+- **Let WPF paint before the UI thread disappears into a modal call.** Calling `DoDragDrop`
+  straight after `Show()` leaves the stand-in unrendered, which a screenshot caught and a log
+  never would. Same family as the catcher's own `Show()` trap in Task 2.
 
 ---
 

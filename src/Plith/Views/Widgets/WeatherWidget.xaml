@@ -1,6 +1,7 @@
 <UserControl x:Class="Plith.Views.Widgets.WeatherWidget"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              mc:Ignorable="d"
@@ -103,11 +104,19 @@
         <!-- Inset on the sides only. The page is vertically centred and the sky behind it wants
              every pixel, so vertical padding here bought nothing and cost the readout the room
              it needed - the temperature clipped at the top and the update line at the bottom. -->
-        <StackPanel x:Name="Readout" VerticalAlignment="Center" Margin="18,0,18,14">
+        <!-- Anchored to the BOTTOM of the page rather than centred in it.
+
+             Centred was right while the frame was 116 and the readout nearly filled it. At 164
+             the block floated in the middle of a tall sky with air above and below, which reads
+             as a page that lost something. On the bottom edge the sky above it is the picture and
+             the numbers sit on it, which is how a weather card is built and what the painted
+             gradient was for in the first place. The 26 DIP of bottom margin clears the page
+             rail's lane. -->
+        <StackPanel x:Name="Readout" VerticalAlignment="Bottom" Margin="{x:Static p:NotchGeometry.PageInsetDip}">
             <TextBlock x:Name="Temperature"
-                       FontSize="30" FontWeight="SemiBold"
+                       FontSize="42" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="31" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="43" LineStackingStrategy="BlockLineHeight"
                        Foreground="White">
                 <!-- The design puts a soft shadow under the number for the same reason the scrim
                      is there: over a bright sky, white on pale blue is the one thing on the page
@@ -117,6 +126,18 @@
                                       Opacity="0.45" Color="Black" />
                 </TextBlock.Effect>
             </TextBlock>
+            <!-- WHERE, which this page never said.
+
+                 It showed a temperature, a condition and when it was read, and left the one
+                 question a person asks of a weather page they did not set up unanswered. Only
+                 shown when there is a name to show: the location can be resolved from Windows or
+                 from an IP lookup, and neither hands back a city. Inventing "your location"
+                 would be a label pretending to be a fact. -->
+            <TextBlock x:Name="Place"
+                       Margin="0,1,0,0"
+                       FontSize="12.5" FontWeight="SemiBold"
+                       Foreground="#F2FFFFFF"
+                       Visibility="Collapsed" />
             <TextBlock x:Name="Condition"
                        Margin="0,3,0,0"
                        FontSize="12.5"
@@ -126,5 +147,24 @@
                        FontSize="11"
                        Foreground="#AEFFFFFF" />
         </StackPanel>
+
+        <!-- The next two days, on the other side of the sky.
+
+             The page painted a sky and then used a third of it. The right half was the empty
+             half, which is also where the sun is drawn, so the days sit at the bottom of it and
+             under the light rather than across it.
+
+             Two, not seven: this is a page you glance at, and the room here is honest about how
+             much it has. What the API returns arrives in the SAME request as the current
+             conditions, so the columns cost nothing but the space they take.
+
+             Built in code, like the sky, because each column is the same three lines with
+             different values in them and a row that can be absent. -->
+        <StackPanel x:Name="Forecast"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Bottom"
+                    Margin="{x:Static p:NotchGeometry.PageInsetDip}"
+                    Visibility="Collapsed" />
     </Grid>
 </UserControl>

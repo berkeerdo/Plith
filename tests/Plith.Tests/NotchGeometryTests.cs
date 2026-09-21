@@ -1,4 +1,4 @@
-﻿using System.Windows;
+using System.Windows;
 using Plith.Views.Presentation;
 
 namespace Plith.Tests;
@@ -239,5 +239,148 @@ public class NotchGeometryTests
     {
         var r = NotchGeometry.HoverRect(740, 0, 440, 20);
         Assert.False(NotchGeometry.IsInsideNotch(r, new Point(r.Left - 1, 2)));
+    }
+
+    /// <summary>
+    /// The guarantee the flat shelf rests on: the cap is exactly what the surface can draw, so no
+    /// file can be on the shelf and off the screen. Written as a test rather than left to the
+    /// definition because a later edit could reintroduce a free-standing number.
+    /// </summary>
+    [Fact]
+    public void ShelfCapacityIsExactlyWhatTheGridDraws()
+    {
+        Assert.Equal(NotchGeometry.ShelfTilesPerRow * NotchGeometry.ShelfRowCount,
+                     NotchGeometry.ShelfCapacity);
+        Assert.Equal(15, NotchGeometry.ShelfCapacity);
+    }
+
+    /// <summary>
+    /// The frame must be tall enough for every row it promises. A height typed as a literal is
+    /// free to stop matching the row count above it, which is the failure this derivation exists
+    /// to make impossible.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameIsTallEnoughForEveryRow()
+    {
+        var rows = NotchGeometry.ShelfRowCount * NotchGeometry.ShelfTileSize
+                 + (NotchGeometry.ShelfRowCount - 1) * NotchGeometry.ShelfGap;
+
+        Assert.True(NotchGeometry.ShelfFrameDip.Height >= rows,
+            $"frame {NotchGeometry.ShelfFrameDip.Height} is shorter than its " +
+            $"{NotchGeometry.ShelfRowCount} rows ({rows})");
+    }
+
+    /// <summary>
+    /// The shelf hugs what it holds. Two files must not open a pane sized for fifteen, and the
+    /// row count is what the frame height is built from.
+    /// </summary>
+    [Fact]
+    public void ShelfRowsFollowTheItemCount()
+    {
+        // An empty shelf gets TWO rows, which is more than anything it holds needs.
+        //
+        // Not an oversight and not symmetry for its own sake: the empty state is the only thing
+        // the shelf ever draws that is not a tile. It carries an icon over a line of text, and at
+        // one row the box around it is 352 by 64, which is the aspect ratio of a text input. It
+        // read as a field to type in rather than a place to drop onto, reported exactly that way
+        // from the running build.
+        //
+        // The shelf cannot gain items while it is open (see ShelfFrameFor), so nobody ever
+        // watches it shrink from two rows to one; the next open is simply the right size for what
+        // is on it.
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(0));
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(1));
+        Assert.Equal(1, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow));
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfTilesPerRow + 1));
+        Assert.Equal(NotchGeometry.ShelfRowCount, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfCapacity));
+    }
+
+    /// <summary>
+    /// A count past the cap cannot ask for a fourth row. The store enforces the cap, but this
+    /// number arrives from a caller and the ceiling is what keeps the frame inside the design.
+    /// </summary>
+    [Fact]
+    public void ShelfRowsAreClampedToTheCeiling()
+    {
+        Assert.Equal(NotchGeometry.ShelfRowCount, NotchGeometry.ShelfRowsFor(NotchGeometry.ShelfCapacity + 40));
+        Assert.Equal(2, NotchGeometry.ShelfRowsFor(-3));
+    }
+
+    /// <summary>
+    /// A full shelf is exactly the frame the ceiling describes, and a smaller one is genuinely
+    /// smaller. The first half is what stops the two definitions drifting; the second is the
+    /// whole point of sizing to the contents.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameForAFullShelfIsTheCeilingFrame()
+    {
+        Assert.Equal(NotchGeometry.ShelfFrameDip.Height,
+                     NotchGeometry.ShelfFrameFor(NotchGeometry.ShelfCapacity).Height);
+        Assert.True(NotchGeometry.ShelfFrameFor(2).Height < NotchGeometry.ShelfFrameDip.Height,
+            "a two-file shelf should not open a pane sized for a full one");
+    }
+
+    /// <summary>
+    /// A row of tiles plus the gaps between them must fit the frame's width, which is unchanged
+    /// at 384. Five 64 DIP tiles with four 8 DIP gaps is 352, leaving 32 for the horizontal
+    /// chrome.
+    /// </summary>
+    [Fact]
+    public void ShelfFrameIsWideEnoughForARow()
+    {
+        var row = NotchGeometry.ShelfTilesPerRow * NotchGeometry.ShelfTileSize
+                + (NotchGeometry.ShelfTilesPerRow - 1) * NotchGeometry.ShelfGap;
+
+        Assert.True(NotchGeometry.ShelfFrameDip.Width >= row,
+            $"frame {NotchGeometry.ShelfFrameDip.Width} is narrower than one row ({row})");
+    }
+
+    [Fact]
+    public void OutputPickerCapacityIsTheProductOfItsGrid()
+    {
+        // Defined as the product for the same reason ShelfCapacity is: a literal beside a grid is
+        // free to stop matching it, and this is the number that decides whether a device is drawn
+        // at all.
+        Assert.Equal(NotchGeometry.OutputPickerColumns * NotchGeometry.OutputPickerRows,
+                     NotchGeometry.OutputPickerCapacity);
+    }
+
+    [Fact]
+    public void GrowthStartKeepsTheFrameWhenTheWindowIsBigger()
+    {
+        var start = NotchGeometry.GrowthStart(new Size(356, 164), new Size(384, 283));
+
+        Assert.Equal(356, start.Width);
+        Assert.Equal(164, start.Height);
+    }
+
+    [Fact]
+    public void GrowthStartNeverExceedsTheWindowItGrowsInto()
+    {
+        // The defect this function exists for. A shelf of one to five files is 139 DIP tall and
+        // the open frame is 164, so the growth was starting LARGER than the window and
+        // SurfaceSize, which only ever grows, kept it there: a 164 DIP shape in a 139 DIP window,
+        // with its bottom quarter outside. Per axis, because the shelf is wider than the frame
+        // and shorter than it at the same time.
+        var start = NotchGeometry.GrowthStart(new Size(356, 164), new Size(384, 139));
+
+        Assert.Equal(356, start.Width);
+        Assert.Equal(139, start.Height);
+    }
+
+    [Fact]
+    public void GrowthStartClampsTheRealShelfSizesAgainstTheRealFrame()
+    {
+        // Against the product's own numbers rather than fixtures, so this test fails if either
+        // side moves: the open frame grew from 116 to 164 and that is what broke the shelf.
+        foreach (var count in new[] { 0, 1, 3, 5, 6, 10, 15 })
+        {
+            var window = NotchGeometry.ShelfFrameFor(count);
+            var start = NotchGeometry.GrowthStart(NotchGeometry.OpenFrameDip, window);
+
+            Assert.True(start.Height <= window.Height,
+                $"a shelf of {count} would open a {start.Height} DIP shape in a {window.Height} DIP window");
+            Assert.True(start.Width <= window.Width);
+        }
     }
 }

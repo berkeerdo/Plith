@@ -1,10 +1,15 @@
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using System.Windows.Media;
 using System.Windows.Media.Animation;
+using System.Windows.Threading;
 using Plith.Cards;
+using Plith.Services;
 using Plith.ViewModels;
+using Plith.Views.Presentation;
 
 namespace Plith.Views.Widgets;
 
@@ -21,11 +26,21 @@ public partial class MediaWidget : UserControl
 
     /// <param name="openSource">Brings the app that owns the session to the front. Null leaves
     /// the art and title inert rather than looking pressable and doing nothing.</param>
-    public MediaWidget(MediaViewModel vm, Action? openSource = null)
+    /// <param name="outputs">The outputs the picker should offer, or null to read the machine's
+    /// own. Injected for the render harness: a harness that draws whatever is plugged in today
+    /// draws something different tomorrow, and this page's grid is one of the things worth
+    /// looking at.</param>
+    /// <param name="currentOutputId">Which of <paramref name="outputs"/> is the default. Ignored
+    /// when outputs is null.</param>
+    public MediaWidget(MediaViewModel vm, Action? openSource = null,
+                       IReadOnlyList<WindowsAudioEndpointInfo>? outputs = null,
+                       string? currentOutputId = null)
     {
         ArgumentNullException.ThrowIfNull(vm);
         InitializeComponent();
         _vm = vm;
+        _injectedOutputs = outputs;
+        _injectedCurrentOutputId = currentOutputId;
 
         if (openSource is not null)
         {
@@ -36,11 +51,76 @@ public partial class MediaWidget : UserControl
             System.Windows.Automation.AutomationProperties.SetName(OpenSourceArea, "Open the app that is playing");
         }
 
-        _vm.PropertyChanged += (_, _) => Render();
+        _vm.PropertyChanged += (_, e) =>
+        {
+            // The position arrives about once a second on some sources. A full Render reassigns
+            // the artwork and both marquees, so it goes straight to the progress row instead.
+            if (e.PropertyName == nameof(MediaViewModel.Timeline)) RenderProgress();
+            else Render();
+        };
 
         Previous.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipPrevious);
         Next.Click += (_, _) => _vm.RequestCommand(MediaCommand.SkipNext);
         PlayPause.Click += (_, _) => _vm.RequestCommand(MediaCommand.TogglePlayPause);
+
+        // Windows' own sound page, not a device list of ours. Changing the default
+        // endpoint has no documented API, only the undocumented IPolicyConfig, so an
+        // in-notch picker is its own slice. See SystemSoundPanel.
+        Output.Click += (_, _) => OpenPicker();
+        PickerBack.Click += (_, _) => ClosePicker();
+
+        // Escape leaves the picker. Handled here rather than on the grid, because focus can be
+        // on any cell or on the back control and the key means the same thing from all of them.
+        PreviewKeyDown += (_, e) =>
+        {
+            if (e.Key == Key.Escape && PickerMode.Visibility == Visibility.Visible)
+            {
+                ClosePicker();
+                e.Handled = true;
+            }
+        };
+
+        // The drag is OWNED HERE rather than left to the Slider, and that is a measured
+        // correction, not a preference.
+        //
+        // IsMoveToPointEnabled does not do what its name suggests to a dragging hand: WPF's
+        // Slider handles the press, jumps the thumb to the pointer, and marks the event HANDLED.
+        // No thumb drag begins. So Thumb.DragStarted and DragCompleted never fire unless the
+        // press happens to land on the 10 DIP thumb itself, and dragging the bar anywhere else
+        // moved nothing at all. Driven on hardware on 2026-09-21: a press at 13 per cent read
+        // 11.3 on the control, stayed 11.3 halfway through the drag with the button still down,
+        // and stayed 11.3 after the release. Three runs in a row failed that way while a fourth
+        // passed, and the fourth was the one whose press happened to land on the thumb.
+        //
+        // Capture, track, release. The value comes from the pointer's x within the control, so
+        // the ends map exactly to 0 and 100 rather than to the thumb's inset centre.
+        Bar.PreviewMouseLeftButtonDown += (_, e) =>
+        {
+            if (!Bar.IsEnabled) return;
+            _dragging = true;
+            Bar.CaptureMouse();
+            SetBarFromPointer(e.GetPosition(Bar).X);
+            e.Handled = true;
+        };
+        Bar.MouseMove += (_, e) =>
+        {
+            if (!_dragging) return;
+            SetBarFromPointer(e.GetPosition(Bar).X);
+        };
+        Bar.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            if (!_dragging) return;
+            _dragging = false;
+            Bar.ReleaseMouseCapture();
+            SetBarFromPointer(e.GetPosition(Bar).X);
+
+            // The write happens HERE, once, and not on every sample of the drag: a position
+            // write per mouse move makes the source scrub and stutter, which is what Spotify's
+            // own bar avoids too.
+            CommitSeek();
+            e.Handled = true;
+        };
+        Bar.ValueChanged += OnBarValueChanged;
 
         // Play/pause sits a touch brighter than the two beside it, as the design has it: it is
         // the one a person reaches for without looking.
@@ -50,17 +130,69 @@ public partial class MediaWidget : UserControl
         PlayPause.Background = new SolidColorBrush(Color.FromArgb(0x2E, 0xFF, 0xFF, 0xFF));
         PlayPause.Margin = new Thickness(6, 0, 6, 0);
 
-        // Re-rendered on the way in as well as on change: a page that has been away misses every
-        // notification while it is off the tree, so arriving without this would show whatever
-        // was playing when it last left.
-        // The backdrop reaches the frame's edges, so the page takes the notch's outline the way
-        // the weather page does - otherwise the artwork draws square corners inside a rounded
-        // shape and overhangs into nothing.
-        SizeChanged += (_, e) => Clip = Presentation.NotchGeometry.BottomRoundedClip(e.NewSize);
+        _tick = new DispatcherTimer(DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(1),
+        };
+        _tick.Tick += (_, _) => RenderProgress();
 
-        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Render(); };
+        // Re-rendered on the way in as well as on change: a page that has been away misses every
+        // notification while it is off the tree, so arriving without this would show whatever was
+        // playing when it last left.
+        IsVisibleChanged += (_, e) =>
+        {
+            if ((bool)e.NewValue) { Render(); _tick.Start(); }
+            else _tick.Stop();
+        };
+
         Render();
     }
+
+    /// <summary>
+    /// Moves the bar between readings.
+    ///
+    /// 1 Hz is enough for both halves of the row: the seconds text changes at 1 Hz, and a 232 DIP
+    /// bar over a four minute track advances about one DIP per second.
+    ///
+    /// Started and stopped with visibility rather than left running. A page that is off the tree
+    /// is not being looked at, and this widget is built once and kept for the life of the window,
+    /// so a timer left running would tick for the whole session to paint nothing.
+    /// </summary>
+    private readonly DispatcherTimer _tick;
+
+    private readonly IReadOnlyList<WindowsAudioEndpointInfo>? _injectedOutputs;
+    private readonly string? _injectedCurrentOutputId;
+
+    /// <summary>True between the thumb being grabbed and released.</summary>
+    private bool _dragging;
+
+    /// <summary>
+    /// When the user last drove the track, so the tick does not pull the thumb out from under
+    /// their hand.
+    ///
+    /// A flag beside a timestamp rather than a sentinel timestamp alone, and that is AudioWidget's
+    /// recorded lesson rather than a preference: initialising the stamp to long.MinValue and
+    /// asking whether TickCount64 minus it is small OVERFLOWS to a negative number, which is
+    /// smaller than the window, so the widget believes the user is driving from the moment it is
+    /// built and never paints the position at all. That defect was found by rendering the widget
+    /// offscreen, with the track at zero beside a readout that said 62 per cent.
+    /// </summary>
+    private long _lastUserChangeMs;
+
+    private bool _hasUserChanged;
+
+    /// <summary>
+    /// How long after a user-driven change the tick stays out of the way.
+    ///
+    /// Long enough to cover the round trip: the seek is written on release, the source applies it
+    /// and reports a new timeline back, and until that arrives the interpolation is still running
+    /// from the OLD reading. Writing the bar from it in that gap is what would snap the thumb back
+    /// to where the track was before the gesture.
+    /// </summary>
+    private const long UserDrivingWindowMs = 900;
+
+    private bool UserIsDriving
+        => _hasUserChanged && Environment.TickCount64 - _lastUserChangeMs < UserDrivingWindowMs;
 
     /// <summary>What the page last showed, so a repaint that changes nothing does not animate.
     /// Every property change on the view model lands here — play/pause alone must not make the
@@ -78,48 +210,6 @@ public partial class MediaWidget : UserControl
     /// things: the art is the album, which simply becomes another album, and the text is the
     /// thing you are reading, which is replaced.
     /// </summary>
-    /// <summary>
-    /// The album-coloured backdrop.
-    ///
-    /// Its own method because it wants an early return, and the one it had was inside Render -
-    /// so whenever the backdrop was already correct, Render stopped there and never reached the
-    /// play/pause shape or the transport's enabled state. The pause mark simply vanished. An
-    /// early return is only safe in a method that does one thing.
-    /// </summary>
-    private void RenderBackdrop()
-    {
-        Backdrop.Source = _vm.AlbumArt;
-        var wantBackdrop = _vm.AlbumArt is not null ? BackdropOpacity : 0.0;
-        if (Math.Abs(Backdrop.Opacity - wantBackdrop) <= 0.01) return;
-
-        // Animated only when there is a clock to animate against. Off screen — and in any host
-        // that lays the control out without presenting it — a DoubleAnimation never ticks, so
-        // the backdrop would sit at its starting value forever and the page would render without
-        // the artwork it is built around. Assigning covers that; the fade is the nicety.
-        if (!IsVisible || !SystemParameters.ClientAreaAnimation)
-        {
-            Backdrop.BeginAnimation(OpacityProperty, null);
-            Backdrop.Opacity = wantBackdrop;
-            return;
-        }
-
-        Backdrop.BeginAnimation(OpacityProperty,
-            new DoubleAnimation(wantBackdrop, TimeSpan.FromMilliseconds(320))
-            {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
-            });
-
-    }
-
-    /// <summary>
-    /// How strongly the artwork shows through.
-    ///
-    /// Low on purpose. The backdrop is there to give the page the album's colour, not to be
-    /// looked at: past about a third the scrim stops winning and the title starts competing with
-    /// whatever happens to be in the picture behind it.
-    /// </summary>
-    private const double BackdropOpacity = 0.32;
-
     private void AnimateTrackChange()
     {
         if (!SystemParameters.ClientAreaAnimation) return;
@@ -148,8 +238,6 @@ public partial class MediaWidget : UserControl
         Artist.Text = _vm.HasSession ? _vm.Artist : string.Empty;
         Art.Source = _vm.AlbumArt;
 
-        RenderBackdrop();
-
         if (trackChanged) AnimateTrackChange();
 
         // The play/pause glyph is chosen here rather than bound to the view model's
@@ -169,5 +257,284 @@ public partial class MediaWidget : UserControl
         Previous.IsEnabled = enabled;
         Next.IsEnabled = enabled;
         PlayPause.IsEnabled = enabled;
+
+        RenderProgress();
+    }
+
+    /// <summary>
+    /// Where the track is, in the bar and in the two clocks.
+    ///
+    /// Its own method, and the one early return in this file lives here rather than in Render.
+    /// That is not a style choice: Render's early return used to sit in the middle of it, so
+    /// whenever the backdrop was already correct it stopped there and never reached the
+    /// play/pause shape. An early return is only safe in a method that does one thing.
+    ///
+    /// A null timeline collapses the row rather than drawing an empty bar. A source with no end
+    /// time (a live stream) reports null, and a bar of unknown length is a lie.
+    /// </summary>
+    private void RenderProgress()
+    {
+        var timeline = _vm.Timeline;
+        if (timeline is null || !_vm.HasSession)
+        {
+            ProgressRow.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        ProgressRow.Visibility = Visibility.Visible;
+
+        PaintBar();
+
+        // Only a source that accepts a position write gets a draggable track. The bar still
+        // reports where the track is either way.
+        Bar.IsEnabled = _vm.CanSeek;
+
+        // The hand wins. While the thumb is held, or inside the window after a write, the bar is
+        // the user's and the interpolation is still running from a reading that predates their
+        // gesture: writing it here is what would snap the thumb back.
+        if (_dragging || UserIsDriving)
+        {
+            ShowTimesFor(TargetPosition());
+            return;
+        }
+
+        var elapsed = MediaProgress.Elapsed(timeline.Position, timeline.LastUpdated,
+                                            timeline.Duration, _vm.IsPlaying, DateTimeOffset.Now);
+
+        // Detached around the write, so this repaint cannot come back through OnBarValueChanged
+        // and turn a report into a seek.
+        Bar.ValueChanged -= OnBarValueChanged;
+        // Duration is positive by construction: ReadTimeline returns null otherwise, which is
+        // what makes this division safe without a guard here.
+        Bar.Value = elapsed / timeline.Duration * 100;
+        Bar.ValueChanged += OnBarValueChanged;
+
+        ShowTimesFor(elapsed);
+    }
+
+    private void ShowTimesFor(TimeSpan elapsed)
+    {
+        var duration = _vm.Timeline?.Duration ?? TimeSpan.Zero;
+        Elapsed.Text = MediaProgress.Clock(elapsed);
+        Remaining.Text = "-" + MediaProgress.Clock(duration - elapsed);
+    }
+
+    /// <summary>
+    /// The track moved, and this only ever runs for a change the USER made.
+    ///
+    /// RenderProgress detaches this handler around its own write, which is the same shape
+    /// AudioWidget uses and for the same reason: otherwise a repaint reads as a gesture and the
+    /// page seeks the source to wherever it had just finished drawing.
+    /// </summary>
+    private void OnBarValueChanged(object sender, RoutedPropertyChangedEventArgs<double> e)
+    {
+        _hasUserChanged = true;
+        _lastUserChangeMs = Environment.TickCount64;
+
+        // Labels follow the thumb while it is held, so the gesture has a readout. The position
+        // itself is not written until release.
+        ShowTimesFor(TargetPosition());
+
+        // Keyboard only: arrows, Home and End raise this with no drag around it, so nothing else
+        // will commit it.
+        //
+        // The button state is checked as well as _dragging, and that is a MEASURED correction
+        // rather than belt and braces. IsMoveToPointEnabled makes a press jump the thumb to the
+        // pointer and only then begin dragging it, so the press raises this with _dragging still
+        // false: the page committed a seek to the press point, and then a second one to the
+        // release point when the drag finished. Driven on hardware on 2026-09-21, a drag from 10
+        // per cent to 75 per cent left the source at 8 per cent and then moved it again, which is
+        // exactly the scrubbing this design says it avoids. With the left button down the commit
+        // belongs to DragCompleted and to nothing else.
+        if (!_dragging && Mouse.LeftButton != MouseButtonState.Pressed) CommitSeek();
+    }
+
+    /// <summary>
+    /// Put the thumb under the pointer.
+    ///
+    /// Linear in the control's own width, which is what makes both ends reachable: the Slider's
+    /// own Track insets its range by half a thumb, so its extremes sit 5 DIP inside the bar and a
+    /// drag to the very end lands short of the end.
+    /// </summary>
+    private void SetBarFromPointer(double x)
+    {
+        if (Bar.ActualWidth <= 0) return;
+
+        var fraction = Math.Clamp(x / Bar.ActualWidth, 0, 1);
+        Bar.Value = Bar.Minimum + fraction * (Bar.Maximum - Bar.Minimum);
+    }
+
+    /// <summary>Where the thumb currently points, in the track's own time.</summary>
+    private TimeSpan TargetPosition()
+    {
+        var duration = _vm.Timeline?.Duration ?? TimeSpan.Zero;
+        return MediaProgress.PositionFor(Bar.Value / Bar.Maximum, duration);
+    }
+
+    private void CommitSeek()
+    {
+        if (!_vm.CanSeek || _vm.Timeline is null) return;
+
+        _lastUserChangeMs = Environment.TickCount64;   // the round trip starts now, not at the grab
+        _vm.RequestSeek(TargetPosition());
+    }
+
+    /// <summary>How much of the ink the unplayed groove keeps.</summary>
+    private const byte GrooveAlpha = 0x3D;
+
+    /// <summary>
+    /// The bar's two colours, computed from the page's ink.
+    ///
+    /// The played part is the ink itself and the groove is the same ink at
+    /// <see cref="GrooveAlpha"/>, which is the one arrangement that cannot come out backwards.
+    /// Three others were tried and measured first:
+    ///
+    /// The accent on NotchTrack failed check-contrast.ps1 at 1,0:1 with a lime accent on the
+    /// light theme, because the user's accent can land anywhere including on the track.
+    ///
+    /// NotchInk on NotchTrack reached only 2,6:1 with a near-white accent, because
+    /// ContrastInk.TrackOn walks from the surface just far enough to clear 3:1 AGAINST THE
+    /// SURFACE and stops, leaving the ink an unpredictable distance further along the same ramp.
+    ///
+    /// An ink derived from the groove with ContrastInk.PairOn cleared the ratio and drew the bar
+    /// INVERTED: on a dark-theme surface TrackOn returns a light grey, so the derived ink is
+    /// near-black and the played part read as a hole punched in the groove. Found in
+    /// widget-media.png, and not visible to the contrast lint, which measures ratios and has no
+    /// notion of which side should be stronger.
+    ///
+    /// Computed on every repaint rather than in the constructor: a brush written once cannot
+    /// follow a theme or accent change, which is the staleness this branch has produced five
+    /// times over.
+    /// </summary>
+    private void PaintBar()
+    {
+        if (FindResource("NotchInk") is not SolidColorBrush ink) return;
+
+        Bar.Foreground = ink;
+        Bar.Background = new SolidColorBrush(
+            Color.FromArgb(GrooveAlpha, ink.Color.R, ink.Color.G, ink.Color.B));
+    }
+
+    /// <summary>
+    /// Show the outputs, in place of what is playing.
+    ///
+    /// The list is read ONCE, when the picker opens, and not refreshed while it is up. A device
+    /// can sleep or be unplugged mid-gesture, and a grid that rearranged itself under a pointer
+    /// already moving toward a cell would route audio somewhere nobody chose. A press on a device
+    /// that has since gone returns false and lands in the header instead. This is the shelf
+    /// frame's own rule, for the same reason.
+    /// </summary>
+    public void OpenPicker()
+    {
+        var endpoints = _injectedOutputs ?? WindowsAudioClient.EnumerateRenderEndpoints();
+        var current = _injectedOutputs is not null
+            ? _injectedCurrentOutputId ?? string.Empty
+            : WindowsAudioClient.TryGetDefaultRenderEndpointId() ?? string.Empty;
+
+        var cells = OutputPickerModel.Cells(endpoints, current, NotchGeometry.OutputPickerCapacity);
+
+        PickerHeader.Text = cells.Count == 0 ? "No outputs available" : "Output";
+        PickerCells.Columns = NotchGeometry.OutputPickerColumns;
+        PickerCells.Rows = NotchGeometry.OutputPickerRows;
+        PickerCells.Children.Clear();
+        foreach (var cell in cells) PickerCells.Children.Add(BuildCell(cell));
+
+        MediaMode.Visibility = Visibility.Collapsed;
+        PickerMode.Visibility = Visibility.Visible;
+
+        // Focus goes to the back control rather than the first cell: arriving with focus on a
+        // device means one stray Space or Enter changes where the machine's audio comes out.
+        PickerBack.Focus();
+    }
+
+    private void ClosePicker()
+    {
+        PickerMode.Visibility = Visibility.Collapsed;
+        MediaMode.Visibility = Visibility.Visible;
+    }
+
+    private Button BuildCell(OutputChoice choice)
+    {
+        // A Grid, not a horizontal StackPanel, and that is what makes the trimming work.
+        //
+        // A StackPanel measures its children with INFINITE width, so TextTrimming never fires:
+        // the label was laid out at its full length and then cut by the Border's clip, which
+        // draws a device name sliced mid-letter with no ellipsis to say it was shortened. Found
+        // in widget-media-picker.png. A star column gives the label a finite width, which is all
+        // CharacterEllipsis needs.
+        var row = new Grid();
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+        row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+
+        // The dot sits in the layout whether or not it is drawn, so a non-current label starts
+        // where a current one does and the column does not look ragged.
+        var dot = new System.Windows.Shapes.Ellipse
+        {
+            Width = 5,
+            Height = 5,
+            Margin = new Thickness(0, 0, 5, 0),
+            VerticalAlignment = VerticalAlignment.Center,
+            Fill = (Brush)FindResource("NotchInk"),
+            Visibility = choice.IsCurrent ? Visibility.Visible : Visibility.Hidden,
+        };
+        Grid.SetColumn(dot, 0);
+        row.Children.Add(dot);
+
+        var label = new TextBlock
+        {
+            Text = choice.Label,
+            FontSize = 11,
+            TextTrimming = TextTrimming.CharacterEllipsis,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = (Brush)FindResource(choice.IsCurrent ? "NotchInk" : "NotchInkMuted"),
+        };
+        Grid.SetColumn(label, 1);
+        row.Children.Add(label);
+
+        var button = new Button
+        {
+            Style = (Style)FindResource("PickerCellStyle"),
+            // From the grid's own constants rather than the style, so the numbers the capacity is
+            // computed from are the numbers that get drawn. The gap is on the right and the
+            // bottom, which is what makes a 2 by 3 UniformGrid of these come to the 56 DIP the
+            // band leaves for it.
+            Height = NotchGeometry.OutputPickerCellHeight,
+            Margin = new Thickness(0, 0, NotchGeometry.OutputPickerCellGap,
+                                   NotchGeometry.OutputPickerCellGap),
+            Content = row,
+            // The FULL name, on both. The label above is trimmed to its cell, and a hover or a
+            // screen reader must not inherit that trimming: this is why the design refuses a
+            // "distinguishing token" heuristic, since the truth can simply be carried here.
+            ToolTip = choice.Label,
+        };
+
+        AutomationProperties.SetName(button,
+            choice.IsCurrent ? $"{choice.Label}, current output" : choice.Label);
+
+        button.Click += (_, _) => Choose(choice);
+        return button;
+    }
+
+    private void Choose(OutputChoice choice)
+    {
+        if (choice.IsOverflow)
+        {
+            SystemSoundPanel.TryOpen();
+            ClosePicker();
+            return;
+        }
+
+        if (OutputDeviceSwitcher.TrySetDefault(choice.Id))
+        {
+            // Back to what is playing. The level the notch shows follows on its own:
+            // WindowsAudioClient implements IMMNotificationClient and re-attaches on a default
+            // change, a path hardened in 9de0664 so it can no longer fail silently.
+            ClosePicker();
+            return;
+        }
+
+        // Stays open and says so. Silently doing nothing is what every other control on this
+        // page is written not to do.
+        PickerHeader.Text = "Could not switch output";
     }
 }

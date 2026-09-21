@@ -124,7 +124,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 | Airplane / Wi-Fi / BT | `RadioManager` COM API. |
 | Battery events | `RegisterPowerSettingNotification` + `GUID_BATTERY_*`. |
 | Notifications | `UserNotificationListener` (WinRT). |
-| Shelf drag targets | **Not reachable from the OSD window.** `IDropTarget` registers fine but UIPI blocks the drag: a UIAccess process runs at High integrity and Explorer at Medium. `WM_DROPFILES` is not a way around it. See the Phase 7 note. |
+| Shelf drag targets | **Not reachable from the OSD window, in EITHER direction, and solved by a second process.** `IDropTarget` registers fine but UIPI blocks the drag: a UIAccess process runs at High integrity and Explorer at Medium. `WM_DROPFILES` is not a way around it, and neither is initiating the drag from the High side — measured, `DoDragDrop` returns `None` from High and `Copy, Move` from Medium with everything else identical. `Plith.DropCatcher` owns both sides. See the Phase 7 note. |
 
 Each becomes a `IEventSource` service; cards subscribe to the sources
 they care about.
@@ -233,6 +233,21 @@ absent with `CAPTUREBLT`, and `PrintWindow` with `PW_RENDERFULLCONTENT` returns 
 black — while the window is provably on screen and correctly positioned. Anything
 pixel-based has to run from the physical console. UI Automation works fine over RDP.
 
+**Worth re-measuring, and NOT yet contradicted (2026-09-19.)** The shelf's own layered
+window was captured over RDP on that date, which falsified the same sentence where
+`docs/SHELF-VERIFICATION.md` had copied it. That does not overturn this one: the band
+window is drawn with `UpdateLayeredWindow`, the shelf is an `AllowsTransparency` WPF
+window, and those are different mechanisms. Nobody has pointed the new
+`scripts/capture-shelf.ps1` at the OSD.
+
+What makes it worth redoing is a confound found the same day. Capture stops working when
+the session is **disconnected or locked**, and it then fails for any window, layered or
+not, with `BitBlt` simply returning false. Session state was not recorded when the
+measurement above was taken, and over RDP a session drops without the person at the
+keyboard necessarily noticing. So "absent with `CAPTUREBLT`" and "the session had no
+composed desktop" are not distinguished by the evidence as written. Re-run it with
+`qwinsta` showing `Active`, and record that it did, before treating this as settled.
+
 Deferred to Phase 6 (recorded so they are not rediscovered):
 
 - Accent swatches should be `RadioButton`s, not `Button`s: that brings the UIA
@@ -324,6 +339,61 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
   removed once the volume HUD already answered a volume key. If a laptop-specific reading
   ever needs more room than a line (time remaining, health, per-app drain), that is a
   different feature and deserves its own entry rather than this one reopened.
+- **The media widget page, redesigned after Alcove. Code-complete on
+  `feature/shelf-drop-catcher`, and unusually for this repo, part of it is measured on
+  hardware.**
+
+  Alcove's expanded now-playing panel was measured from its own press screenshot rather than
+  described from memory: a 64 px tile with the title beside it and an accent waveform at the
+  right of that row, then elapsed / bar / remaining, then five centred controls, all on a plain
+  black ground with no artwork tint at all. Its panel is about 2.16:1 and the widget frame is
+  3.07:1, so the layout was opened out horizontally rather than copied: a 56 DIP tile, the text,
+  a four-control rail, and a full-width progress row underneath.
+
+  The frame did NOT move, and that was decided rather than assumed: `NotchGeometry.OpenFrameDip`
+  records that letting a page drive the size was tried twice and rejected on the mockup.
+
+  Also here: the notch now opens on the media page while something is playing, computed at open
+  time by `NotchOpeningPolicy` and never stored. Playing rather than merely having a session, so
+  a paused Spotify cannot lock the notch onto one page for days.
+
+  **Seek was deferred and then built**, because one of the two reasons for deferring it was
+  wrong. "SMTC position writes are not universal" is true in general and false for this machine's
+  main source: Spotify reports `IsPlaybackPositionEnabled` true with a seek range covering the
+  whole track. The other reason answered itself, since `HoverKeepAlive` already holds the panel
+  open while the pointer is on it. The bar is a templated `Slider` now, so it also gained keyboard
+  arrows, Home and End. **Measured on hardware: a drag moved Spotify from 15s to 139s against a
+  137s target.**
+
+  **The output picker was deferred and then built too**, on the user's own counter-proposal: the
+  page becomes the list, so there is no popup and therefore no second window outside the notch's
+  layered surface. `OutputDeviceSwitcher` writes the default through `IPolicyConfig` for the
+  Console and Multimedia roles, leaving Communications alone exactly as Windows' own
+  "Set as Default Device" does.
+
+  **Two measurements worth keeping from that work.** The vtable has TEN methods ahead of
+  `SetDefaultEndpoint`, not nine: declaring nine compiled and returned `0x800706F4`,
+  RPC_X_NULL_REF_POINTER, because the call landed on `SetPropertyValue`. And over Remote Desktop
+  the interface refuses the "Remote Audio" endpoint with `0x80004002`, E_NOINTERFACE, while the
+  same call returns `S_OK` in a console session against a local device.
+
+  **The device-name finding above is superseded in part.** "Trimming to fit produces the same
+  useless string for all five" is right about the endpoint names, and the cause turned out to be
+  Plith's own shortener keeping the adapter's first two words: two Steam devices collided, and the
+  Settings combo box had been showing two identical rows since it was written. The picker labels
+  its cells with Core Audio's device DESCRIPTION instead, which is shorter and distinct here, and
+  falls back to the endpoint name for any description that is not unique. No model-token heuristic
+  was needed after all.
+
+  **Deliberately still not built:** the live waveform (Alcove's four bars decorate a physical
+  camera notch, which Windows does not have, and there is no level metering anywhere in this
+  codebase), and input-device switching.
+
+  Measured on hardware and recorded in `docs/PHASE6-VERIFICATION.md` section 20: with a paused
+  session a click opens the clock page, the notch pages to the media widget, and the live UIA
+  tree reads back `Now playing | Three | Mahmut Orhan | Previous track | Play | Next track |
+  Change output device | 0:00 | Playback position | -2:59`. **The playing direction is still
+  unmeasured**, because nothing was playing during either run.
 - Preset migration: existing installs default to Classic OSD; a
   one-shot "meet the new Plith" nudge lets them try Ambient / Full. **Not started.**
 - Success metric: install-to-second-launch retention crosses 60 %
@@ -361,15 +431,137 @@ The two features that Windows has no good answer for.
   carried toward it, and distinguishes that from a press by requiring the button to have gone
   down outside it.
 
-  **The way forward, if the shelf is wanted:** a companion window at Medium integrity that
-  owns the drop. It cannot simply sit under the notch — a Medium window cannot be above a
-  UIAccess band — so it would have to take the notch's place for the duration: on the
-  drag-approach signal above, hide the band window and show the helper in the same rectangle,
-  then hand the paths back over a pipe. That is a real design rather than a hope, and it is
-  built entirely on the one thing today's measurement proved.
+  **BUILT, and it works.** `Plith.DropCatcher` is a second process at Medium integrity that owns
+  the drop. It cannot sit under the notch — a Medium window cannot enter the UIAccess band — so
+  it takes the notch's place for the duration: the notch sees the drag coming, its window goes
+  down, the catcher appears in the same rectangle, receives the drop, and hands the paths back
+  over a named pipe. Measured end to end on a running build, drag to drop to a row on the shelf
+  page.
+
+  Four things that had to be true, each measured rather than assumed:
+
+  - **A Medium process CAN reach a High process's pipe — but only with an explicit ACL.** The
+    default gives "Access to the path is denied"; a rule for Everyone connects and delivers. That
+    is a real widening, so everything arriving is treated as a CLAIM about paths, never a command:
+    `ShelfStore` stats what it is told about and stores nothing it cannot see.
+  - **The launch route decides the integrity level.** Measured from an elevated parent: launched
+    directly the catcher comes up HIGH, handed to the running Explorer it comes up MEDIUM. The
+    first case is the dangerous one — it starts, connects and shows itself normally, and simply
+    never receives a drop. Explorer does not forward arguments to the target, so nothing may be
+    appended after the path.
+  - **The approach band is 356x48 DIP, not 190x28.** The first live run failed every time and
+    produced no band entry at all; the one attempt that worked entered at y=0, meaning the file
+    had to be pressed against the top edge of the screen to be seen.
+  - **Entering and staying are different rectangles.** With one threshold the catcher stood in,
+    DragEnter arrived, and 700 ms later the notch came back while the file was still in the air —
+    because aiming a drop inside the 356x116 panel means leaving the 190-wide band that started it.
+
+  **Dragging back OUT is blocked too, and that was measured by controlled comparison rather than
+  inferred.** The same binary, the same code path, the same gesture, differing only in integrity:
+
+  | Source | `DoDragDrop` returns | File copied |
+  |---|---|---|
+  | HIGH (elevated, standing in for an installed Plith) | `None`, three times | no |
+  | MEDIUM (identical exe) | `Copy, Move`, twice | yes |
+
+  So UIPI blocks both directions, and the initiator changing sides does not help. The consequence
+  is a design rather than a tweak: the catcher has to be the drag SOURCE as well.
+
+  **And the obvious way of reaching that is dead too, measured 18.09.2026.** The stand-aside the
+  catcher already performs cannot carry the gesture: press a shelf tile, the notch goes down, the
+  catcher takes its rectangle and starts the drag — except the press landed on PLITH's window, in
+  another process, and `DoDragDrop` does not deliver a drag for a press it did not receive. Three
+  runs at MEDIUM with the press verified to belong to another process: no drop target ever saw a
+  `DragEnter`, and the call returned `None` — once after not returning at all for seventeen
+  seconds. The control is the row above: the same binary, same integrity, same call, press on its
+  OWN window, `Copy, Move`, file lands.
+
+  Worse than dead: a call that does not return would hang the catcher's UI thread, so this is a
+  hazard to design away from rather than an avenue to retry.
+
+  What survives is narrow but real — the catcher CAN start a drag for a press on its own window.
+  So the tile a person presses has to BE the catcher's window rather than Plith's, which is a
+  different shape for the notch and needs its own plan. Full ledger in the shelf plan, Task 8.
 
   The alternative is dropping UIAccess, which trades the shelf for the ability to draw over
   games. That is the wrong trade for this product.
+
+  **Slice 2, code-complete on `feature/shelf-drop-catcher`, not yet merged: the shelf became a
+  real, interactive surface (stacks, actions, real shell icons, drag-out, and an accessibility
+  pass), and the drag-out design the slice 1 note above called for turned out to work.** The
+  shelf's whole interactive page moved into `Plith.DropCatcher` (a `UserControl`, so it can be
+  rendered offscreen and photographed rather than only judged live), because that is where a drag
+  can start at all: `ShelfWindow` presses its OWN tile, so `DoDragDrop` receives the press it
+  needs instead of one that landed on Plith. Plith keeps `ShelfStore` as the only writer of
+  `shelf.txt`, unchanged, so the shelf survives the catcher not running; the two talk over the
+  existing pipe with four new verbs (`RemoveItems`, `ClearShelf`, `NewStack`, `Restack`). Files
+  drop into named stacks rather than one flat list, each tile carries a real shell icon (falling
+  back to drawn geometry when the shell has none), a tile drags out to any application or onto
+  another stack through the one `DoDragDrop` call above, and every control (every tile, every
+  stack, the clear and new-stack buttons) now has arrow-key/Space/Enter/Delete navigation and
+  carries an accessible name. `check-contrast.ps1` now scans the catcher's own XAML too,
+  including the selection ring, which is computed at runtime and had been invisible to that check
+  until this slice.
+
+  **Slice 3, code-complete on the same branch: the stacks are gone and the shelf is one flat
+  list.** Alcove and Dropover have no such concept, and the stack model cost a list-of-lists in
+  the store, two of the six catcher-to-Plith verbs, a grouped file format, and per-column
+  building with its own fold rule. The decisive number was that `ShelfStore.MaxItems` was 20
+  while the surface could draw 10: five columns of two, with the other half behind `+N` chips,
+  and a folded tile is in no UIA tree at all, so it is invisible to a screen reader and reachable
+  by no key. Half of a full shelf was unreachable and no gate could see it.
+
+  The cap is now `NotchGeometry.ShelfCapacity`, defined as the product of the grid that has to
+  draw it, in the one file both projects already compile. At most 15 files, newest first, no hand
+  reordering, so the within-surface drag is deleted and a tile drags OUT only. The `Items` message
+  collapsed from one-per-stack to one, taking `ShelfModel`'s whole delivery-reassembly with it.
+  The frame hugs its contents, one to three rows, chosen once at open. Spec and plan:
+  `docs/superpowers/specs/2026-09-20-shelf-single-list-design.md` and the plan beside it.
+
+  This retires `docs/SHELF-VERIFICATION.md` §3.4, §3.5 and §3.6, and §4.5, §4.6 and §4.9 with
+  them. §3.4 and §3.6 had been run and were passing hours earlier; what they measured is kept in
+  §3.12. What replaced them is one check the stack build could never have passed: seed the shelf
+  to capacity and require every file to be in the UIA tree.
+
+  **Verified on hardware for slice 1's plumbing, not yet for slice 2's interactive surface.** The
+  drop, the round trip, the shelf page and persistence were driven on a running build and found
+  three real defects that a green build had missed. Slice 2's stacks, actions, drag-out and
+  keyboard support are code-complete, build clean, pass every lint including the widened contrast
+  check, and render correctly offscreen in both themes. None of that presses a key, drags a
+  tile, or runs a screen reader. ~~That needs a physical console session, which this work was not
+  done in~~; see `docs/SHELF-VERIFICATION.md` for exactly what was and was not driven, and by what
+  date.
+
+  **The shelf can be PRESSED by a script, and the premise that it could not was about a different
+  window (2026-09-19).** "Synthetic input cannot reach it" is true of Plith's own OSD, a UIAccess
+  window at High integrity; the shelf belongs to `Plith.DropCatcher` at **Medium**, where UIPI
+  blocks nothing. UI Automation reads its whole tree and `SendInput` drives it, over Remote
+  Desktop, with no console session. `scripts/drive-shelf.ps1` is the instrument; sections 3.1,
+  3.2 and 3.9 plus the tile context menu are now RUN and passing.
+
+  **Pressing it found the tile dead in the middle.** A tile answered a pointer only where its icon
+  or label painted: at its exact centre there was no hover affordance, no selection, and no press,
+  so no drag could start there either — the same gesture-unreachable family as the Task 8 finding
+  above, by a different route. Cause: the tile carried no `Background`, and WPF hit-tests a
+  `Transparent` brush but not a `null` one. Fixed, plus a `tile-hit` check in `render-widgets.ps1`
+  that fails the build if it returns. Every gate was green before the fix too, which is why the
+  check asks the one question the others never did: not "does the tile handle this event" but
+  "whose element is this POINT". Record: `docs/SHELF-VERIFICATION.md` section 3.10.
+
+  That is the THIRD claim in these documents inherited from the OSD's notes and applied to the
+  shelf unmeasured, after "layered windows cannot be captured" and "Remote Desktop cannot capture
+  them". All three were false here. **The same premise still stands unexamined over Phases 5 and
+  6**, where it gates most of the open items — and note that the OSD is genuinely a UIAccess
+  window, so the pressing half may well hold there even though the capturing half should be
+  measured before it is believed.
+
+  **Known limit, for the next slice to pick up: a tile's selection has no automation semantics.**
+  Every tile, stack, and the clear/new-stack controls reach a real automation peer now (a review
+  caught the first version naming a plain Border and StackPanel, neither of which WPF gives one
+  at all), but a tile's selection ring is not backed by a SelectionItemPattern. Toggling a tile
+  with Space changes what is on screen and announces nothing. Fixing this needs the tiles to move
+  onto a real Selector/ListBoxItem, deliberately not attempted in this slice; see
+  `docs/SHELF-VERIFICATION.md` section 5.4 for the full reasoning.
 - **Notifications card** — last N notifications with quick dismiss.
   Aspires to replace Action Center for people who never open it.
 - Notch dynamic sizing: notch grows when shelf has stashed items.

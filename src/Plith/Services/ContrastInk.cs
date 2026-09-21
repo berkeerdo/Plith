@@ -125,6 +125,59 @@ public static class ContrastInk
         return track;
     }
 
+    /// <summary>
+    /// A non-text ring or outline that should read as the ACCENT the user picked, not as chrome,
+    /// so it is not simply TrackOn: TrackOn is a function of the surface alone and can only ever
+    /// return a neutral tone with none of the accent's hue in it. Measured on the shelf's own
+    /// selection ring: a lime accent already at 8.87:1 against its dark-theme surface came back
+    /// from TrackOn at 3.03:1, a dull grey-olive, to fix a threshold that colour had already
+    /// cleared by nearly three times over. Most accents already clear 3:1 against their own
+    /// surface; the rare one that does not (a near-white accent measured at 1.25:1) is the only
+    /// one this should ever touch.
+    ///
+    /// So: the accent is returned unchanged when it already clears the threshold. Otherwise its
+    /// LIGHTNESS is walked in HSL, hue and saturation held fixed, the same shape
+    /// <see cref="AccentTheme.Derive"/> uses to darken a light-theme accent against its own
+    /// surface. That walk only ever needed one direction, because it only ever ran
+    /// against a light background. This one serves both themes, so the direction is chosen from
+    /// the SURFACE's own relative luminance: darken against a light surface, brighten against a
+    /// dark one. If that direction runs out of room before reaching the threshold, the other one
+    /// is tried rather than giving up, the same reasoning <see cref="AccentTheme.Derive"/>'s own
+    /// Nudge helper uses for hover and pressed colours. The answer is not "as far as you can
+    /// go", it is "somewhere visibly different".
+    /// </summary>
+    public static Color RingOn(Color accent, Color surface)
+    {
+        if (ContrastRatio(accent, surface) >= 3.0) return accent;
+
+        var (h, s, l) = AccentTheme.RgbToHsl(accent);
+
+        var darkenFirst = RelativeLuminance(surface) >= 0.5;
+
+        var moved = WalkLightness(h, s, l, surface, towardDark: darkenFirst);
+        if (ContrastRatio(moved, surface) >= 3.0) return moved;
+
+        return WalkLightness(h, s, l, surface, towardDark: !darkenFirst);
+    }
+
+    /// <summary>
+    /// 0.12 and 0.88 mirror the floor <see cref="AccentTheme.Derive"/> already uses for its own
+    /// lightness walk: past either bound a colour reads as flat black or flat white rather than a
+    /// tinted extreme, and a hue that still cannot clear the threshold there needs the OTHER
+    /// direction, not more of this one. The bound is what stops a pathological accent from
+    /// spinning rather than settling.
+    /// </summary>
+    private static Color WalkLightness(double h, double s, double l, Color surface, bool towardDark)
+    {
+        while ((towardDark ? l > 0.12 : l < 0.88) &&
+               ContrastRatio(AccentTheme.HslToRgb(h, s, l), surface) < 3.0)
+        {
+            l += towardDark ? -0.02 : 0.02;
+        }
+
+        return AccentTheme.HslToRgb(h, s, l);
+    }
+
     private static Color Mix(Color from, Color to, double t)
     {
         static byte Lerp(byte a, byte b, double t) => (byte)Math.Round(a + (b - a) * t);

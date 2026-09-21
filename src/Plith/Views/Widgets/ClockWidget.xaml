@@ -1,6 +1,7 @@
 <UserControl x:Class="Plith.Views.Widgets.ClockWidget"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:w="clr-namespace:Plith.Views.Widgets"
@@ -26,7 +27,12 @@
          glanceable fact and was sitting on a page of its own that nobody opens to check whether
          it is raining. Along the bottom, what is playing. Each side collapses on its own: no
          weather without a reading, no track line with nothing playing, no battery on a desktop. -->
-    <Grid Margin="20,14,20,26">
+    <!-- Centred, not pinned to the top. The frame grew from 116 DIP to 164 on 2026-09-21 and
+         this page kept its Auto rows at the top edge, which left about 60 DIP of dead space
+         under the track line and made the page read as unfinished. The rows stay Auto: a star
+         row here is a recorded defect, because it let the readings grow until the track line had
+         nowhere to be. -->
+    <Grid Margin="{x:Static p:NotchGeometry.PageInsetDip}" VerticalAlignment="Center">
         <!-- Auto over Auto with a gap between, not Auto over star. A star row let the readings
              grow until the track line underneath had nowhere left to be, and the two ran into
              each other. Two Auto rows cannot: each takes what it needs and the gap is real. -->
@@ -41,23 +47,45 @@
 
         <!-- Time and date on ONE line, the date against the time's baseline.
 
-             Stacked, this block came to 56 DIP; with the gap and the track line under it the
-             page needed 86 and the frame has 76, so the track row ran off the bottom edge and
-             was clipped in half. Putting the date beside the time gives back the 18 that
-             overflowed - and it reads correctly here in a way it did not when everything was
-             centred, because there is a left edge for both of them to sit on. -->
-        <StackPanel Grid.Row="0" Grid.Column="0"
-                    Orientation="Horizontal"
-                    VerticalAlignment="Top">
+             The date is UNDER the time now, which is where it belongs and where the old frame
+             had no room for it. The record of why it was beside it is worth keeping, because the
+             reason was arithmetic and the arithmetic changed: stacked, the block came to 56 DIP,
+             and with the gap and the track line under it the page needed 86 where the frame gave
+             76, so the track row ran off the bottom edge and was clipped in half. The frame is
+             164 now and the band is 130. Stacked costs 52 and the whole page comes to 92.
+
+             Everything after the date is still on the date's line: the battery, the charging
+             bolt and the mic mark are all secondary to the two facts above them. -->
+        <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Top">
+        <!-- The digits big and the designator small, side by side.
+             On a 12-hour machine "12:49 PM" at 46 point ran into the weather mark beside it:
+             measured in widget-clock-12hour.png. Collapsed entirely on a 24-hour machine, where
+             FormatClockParts hands back an empty designator. -->
+        <StackPanel Orientation="Horizontal">
             <TextBlock x:Name="Time"
-                       FontSize="36" FontWeight="SemiBold"
+                       FontSize="46" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
-                       LineHeight="36" LineStackingStrategy="BlockLineHeight"
+                       LineHeight="46" LineStackingStrategy="BlockLineHeight"
+                       Foreground="{DynamicResource NotchInk}" />
+            <TextBlock x:Name="Meridiem"
+                       Margin="5,0,0,7"
+                       VerticalAlignment="Bottom"
+                       FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       Visibility="Collapsed" />
+        </StackPanel>
+        <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <!-- The weekday, which the page has room for now and which is the one thing a glance
+                 at a clock most often actually wants. Brighter than the date beside it: the day
+                 is the fact, the date is the qualifier. -->
+            <TextBlock x:Name="Weekday"
+                       VerticalAlignment="Bottom"
+                       FontSize="13" FontWeight="SemiBold"
                        Foreground="{DynamicResource NotchInk}" />
             <TextBlock x:Name="Date"
-                       Margin="10,0,0,3"
+                       Margin="7,0,0,0"
                        VerticalAlignment="Bottom"
-                       FontSize="12"
+                       FontSize="13"
                        Foreground="{DynamicResource NotchInkMuted}" />
             <Path x:Name="ChargingBolt"
                   Data="{StaticResource IconBolt}"
@@ -93,6 +121,7 @@
                 </Canvas>
             </Viewbox>
         </StackPanel>
+        </StackPanel>
 
         <!-- Right-aligned and baseline-matched to the time, so the two readings sit on one line
              rather than one floating beside the other. -->
@@ -115,6 +144,20 @@
                            Typography.NumeralAlignment="Tabular"
                            LineHeight="36" LineStackingStrategy="BlockLineHeight"
                            Foreground="{DynamicResource NotchInk}" />
+                <!-- Today's two ends, which the current temperature alone cannot answer.
+                
+                     The data arrived with the two-day forecast rather than being fetched for this: the
+                     daily block rides along in the same request and its FIRST day is today. So this costs
+                     nothing, and "do I need a jacket" is the question a glance at a clock actually has.
+                
+                     Hidden when there is no daily block, like every other optional thing on these
+                     pages. -->
+                <TextBlock x:Name="Range"
+                           Margin="8,0,0,0"
+                           VerticalAlignment="Bottom"
+                           FontSize="12"
+                           Foreground="{DynamicResource NotchInkMuted}"
+                           Visibility="Collapsed" />
             </StackPanel>
         </StackPanel>
 
