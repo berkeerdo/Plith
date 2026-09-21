@@ -688,7 +688,28 @@ try {
             } | Select-Object -First 1
 
             if (-not $canSwitch) {
-                "  (skipped: one output in this session, so there is nothing to switch TO)"
+                # The FAILURE path, measured rather than asserted, and this session is the one
+                # place it can be: over Remote Desktop IPolicyConfig refuses the only endpoint
+                # there is with 0x80004002. Pressing the current output is a legitimate action
+                # that changes nothing when it succeeds, so this is safe to drive anywhere; what
+                # differs is the answer, and here the answer is a refusal.
+                $currentCellName = $names | Where-Object { $_ -match 'current output' } | Select-Object -First 1
+                if (-not $currentCellName) {
+                    Add-Verdict 'the current output is offered as a cell' $false `
+                        "names: $($names -join ' | ')"
+                } else {
+                    $currentCell = Get-Element -Hwnd $notch.Hwnd -Name $currentCellName -Type 'Button'
+                    Move-Pointer -X $currentCell.CX -Y $currentCell.CY -Settle 250
+                    [MediaInput]::LeftClick()
+                    Start-Sleep -Milliseconds 900
+
+                    $afterPress = Get-Names -Hwnd $notch.Hwnd
+                    $saidSo = $afterPress -contains 'Could not switch output'
+                    $stillOpen = $afterPress -contains 'Back to now playing'
+                    Add-Verdict 'a refused switch keeps the picker open and says so' `
+                        ($saidSo -and $stillOpen) `
+                        ("pressed '$currentCellName'; names: $($afterPress -join ' | ')")
+                }
             } elseif (-not $target) {
                 Add-Verdict 'a second output is offered' $false "names: $($names -join ' | ')"
             } else {

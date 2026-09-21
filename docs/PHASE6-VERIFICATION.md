@@ -1522,3 +1522,23 @@ page announced `playing Gotta Be Cool`. The cause was a local named `playing` th
 than from `IsPlaying`. A local whose name is not true is a comment that lies, and this one was
 read as though it were. Both are fixed, and the fix is confirmed by the same evidence string now
 reading `paused Gotta Be Cool`.
+
+### The refused switch, measured in the session that refuses (2026-09-21)
+
+The design says a failed switch keeps the picker open and says so, on the argument that silently
+doing nothing is what every other control on that page is written not to do. That was an
+assertion until this run, and the environment blocking the other measurement turned out to be the
+one place the failure path can be driven: over Remote Desktop `IPolicyConfig` refuses the only
+endpoint there is.
+
+Pressing the current output is a legitimate action that changes nothing when it succeeds, so it
+is safe to drive anywhere; what differs is the answer.
+
+```
+[PASS] a refused switch keeps the picker open and says so
+       pressed 'Remote Audio, current output'; names: Now playing | Back to now playing |
+       Could not switch output | Remote Audio, current output | Remote Audio
+```
+
+Eight verdicts now pass in one run. What is still owed is unchanged and needs a console session:
+a switch that SUCCEEDS, and the playing direction of the opening rule.
