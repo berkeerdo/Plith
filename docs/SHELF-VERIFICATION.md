@@ -2711,3 +2711,37 @@ it. Nothing is stranded, which is the property `Dismiss`'s own comments exist to
 than an arrival: a drop's hold is 2.4 seconds because a drop wants reading.
 
 Driven twice after the change: 13 verdicts, no failures.
+
+### 10.13 The shelf appeared twice, in two designs (2026-09-21)
+
+Reported: clearing an already-empty shelf shows the clock widget for an instant, then the shelf,
+then the notch closes. The log again:
+
+```
+44.011  Shelf closed; notch back
+44.839  Cards: Visible set: media, audio      <- the ambient card leaving, so the frame collapsed
+```
+
+**800 ms of the wrong shelf.** `RestoreNotch` only shows the window; it changes nothing about what
+is inside it, and what is inside it is the widget frame, still open, still on the shelf page, from
+the moment `ReconcileShelfFrame` handed the frame over. So the catcher's shelf disappears and
+Plith's own imitation of the same page takes its place until the hide timer runs out. The clock is
+the same effect one page earlier: opening the frame resets to the opening page and then the page
+turn to the shelf animates, which is correct while a person is driving it and noise on the way
+out.
+
+There is nothing to come back TO. The shelf went away because the pointer left it or because the
+person cleared it, so the notch is parked before the window is shown: `Park()` rather than
+`FadeOutAndHide()`, because the window is still hidden at that point and an animation nobody can
+see only delays the window by its own duration. The three things the animated path's completion
+does that matter here are done by hand beside it: the hide timer stops, click-through goes back on
+(`ShowOsd`'s forward half only ever turns it off, so every path back to rest owes the backward
+half), and the ambient row closes with the panel it lived in.
+
+Driven on hardware after the change: 13 verdicts, all passing.
+
+**One run in three produced 11 verdicts rather than 13, with no failure among them**, which means
+the script threw after the eleventh and the report printed what it had. Written down rather than
+smoothed over: the driver restarts the pair twice for the clear stages, and a restart that does not
+bring the shelf up is the likeliest candidate. The verdicts it does produce have been stable
+across every run.

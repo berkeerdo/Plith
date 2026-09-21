@@ -714,6 +714,40 @@ public sealed class OsdHost : BandWindow
         if (_standAside != StandAsideReason.Shelf) return;
 
         _standAside = StandAsideReason.None;
+
+        // THE FRAME GOES DOWN BEFORE THE WINDOW COMES BACK, and without this a person sees the
+        // shelf twice in a row, in two different designs.
+        //
+        // RestoreNotch only shows the window; it changes nothing about what is inside it. What is
+        // inside it is the widget frame, still open, still on the shelf page, from the moment
+        // ReconcileShelfFrame handed the frame over. So the catcher's shelf disappears and
+        // Plith's own imitation of the same page takes its place for whatever the hide timer has
+        // left, then collapses. Measured from a real session's log: "Shelf closed; notch back" at
+        // 44.011 and the ambient card leaving at 44.839, so 800 ms of the wrong shelf. Reported
+        // as a clock appearing, then a shelf, then the notch closing.
+        //
+        // There is nothing to come back TO. The shelf went away because the pointer left it or
+        // because the person cleared it, and either way they are done with it; the notch belongs
+        // at rest.
+        //
+        // Park() rather than FadeOutAndHide(), which is the animated path the hide timer takes:
+        // the window is still hidden at this point, so there is no collapse for anyone to watch,
+        // and animating one only delays the window coming back by its duration. The three things
+        // that path's completion does and that matter here are done below.
+        if (_presentation is AmbientNotchPresentation notch)
+        {
+            _hideTimer?.Stop();
+            notch.Park();
+
+            // The panel is closed, so the notch is click-through again. ShowOsd's forward half
+            // only ever turns this OFF; every path back to rest owes the backward half.
+            IsClickThrough = !_presentation.WantsHitTesting;
+
+            // And the ambient row closes with the panel it lived in, exactly as it does at the
+            // end of the ordinary fade-out.
+            _home.Close();
+        }
+
         RestoreNotch();
 
         // No Hide sent back. That verb belongs to the catcher's OTHER window, the one that
