@@ -143,7 +143,23 @@ public partial class WidgetFrame : UserControl
         if (animate) SlideIn(incoming, direction);
 
         UpdateRail(index, animate);
+
+        if (animate) _slideUntil = Environment.TickCount64 + SlideMs;
     }
+
+    /// <summary>
+    /// How much of the current page turn is still to run, in milliseconds, or zero when nothing
+    /// is moving.
+    ///
+    /// Asked by OsdHost before it hands the frame to the drop catcher. The handover replaces this
+    /// whole window with another process's, so doing it while a page is mid-flight cuts the slide
+    /// off part-way: MEASURED at 151 ms into a 260 ms turn, and reported as the transition to the
+    /// shelf not being smooth like the others. See ReconcileShelfFrame, which waits this out.
+    /// </summary>
+    public long SlideRemainingMs => Math.Max(0, _slideUntil - Environment.TickCount64);
+
+    /// <summary>When the running page turn finishes. Zero until the first animated turn.</summary>
+    private long _slideUntil;
 
     private static void SlideIn(FrameworkElement page, int direction)
     {

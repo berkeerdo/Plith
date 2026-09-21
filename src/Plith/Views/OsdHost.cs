@@ -624,6 +624,13 @@ public sealed class OsdHost : BandWindow
 
         if (_shelfSession is null || _shelfPageIndex < 0) return;
 
+        // Any handover this call was waiting to make is cancelled here, unconditionally, and
+        // restarted below only if it is still the right thing to do. Every path that changes
+        // whether the catcher should hold the frame comes through this method, so cancelling at
+        // the top is what keeps a deferred handover from acting on a decision that has since
+        // changed: a drag starting, the page turning past the shelf, the notch closing.
+        _handoverWait?.Stop();
+
         // A DRAG IN FLIGHT WINS, always, and this guard is the difference between a file landing
         // and a file going nowhere. While a drag is near the notch the catcher's window is its
         // STAND-IN, which is the thing that accepts the drop; the shelf page taking that window
@@ -660,10 +667,35 @@ public sealed class OsdHost : BandWindow
         // ms, and during that swap the accumulated intent belongs to a surface that has already
         // gone. Resting the accumulator means a second page costs a second gesture.
         _pager.Rest();
-        _shelfHandoverAt = Environment.TickCount64;
 
         if (wantsCatcher)
         {
+            // NOT WHILE A PAGE IS STILL MOVING.
+            //
+            // The handover replaces this window with the catcher's, so it ends every animation
+            // running in this one. MEASURED from the logs: the page turn commits, the catcher's
+            // window is opaque 151 ms later and this window goes down, and the outgoing page's
+            // 260 ms slide is cut off at 58 per cent of its travel. Reported as the transition to
+            // the shelf not being smooth like the other four, which it was not: the other four
+            // finish their movement.
+            //
+            // So the gesture animates to completion in ONE process, and the frame changes hands
+            // after it. The catcher's own arrival fade then runs on a page that has stopped
+            // moving, which is the thing section 10.26 found could not be done while it was still
+            // going.
+            var moving = _widgets.SlideRemainingMs;
+            if (moving > 0)
+            {
+                _handoverWait ??= new DispatcherTimer(DispatcherPriority.Send, Dispatcher);
+                _handoverWait.Interval = TimeSpan.FromMilliseconds(moving);
+                _handoverWait.Tick -= OnHandoverWaitElapsed;
+                _handoverWait.Tick += OnHandoverWaitElapsed;
+                _handoverWait.Start();
+                return;
+            }
+
+            _shelfHandoverAt = Environment.TickCount64;
+
             // The rail's shape travels with the open: only this class knows how many pages there
             // are, and without it the catcher would draw no rail at all and the chrome would
             // blink out on one page in five.
@@ -673,9 +705,23 @@ public sealed class OsdHost : BandWindow
         }
         else
         {
+            _shelfHandoverAt = Environment.TickCount64;
             _shelfSession.Close();
         }
     }
+
+    /// <summary>The page turn has finished moving, so the frame may change hands now. Decided
+    /// again from scratch rather than acted on: 260 ms is long enough for the page, the drag
+    /// state or the notch itself to have changed.</summary>
+    private void OnHandoverWaitElapsed(object? sender, EventArgs e)
+    {
+        _handoverWait?.Stop();
+        ReconcileShelfFrame();
+    }
+
+    /// <summary>Waits out a page turn before handing the frame to the catcher. See the deferral
+    /// in <see cref="ReconcileShelfFrame"/>.</summary>
+    private DispatcherTimer? _handoverWait;
 
     /// <summary>
     /// How long after a handover a forwarded wheel delta is treated as the tail of the gesture
@@ -690,24 +736,20 @@ public sealed class OsdHost : BandWindow
     /// <summary>When the frame last changed hands, for <see cref="ShelfSettleMs"/>.</summary>
     private long _shelfHandoverAt;
 
-    /// <summary>
-    /// The direction a page turn should SLIDE, which is zero when the page arriving is the shelf.
-    ///
-    /// The shelf page draws nothing: the catcher's window covers it about 25 ms later and is the
-    /// thing a person actually sees. Sliding the placeholder therefore animates a blank
-    /// rectangle, and then the real surface appears part-way through that movement, which is what
-    /// was reported as stuttering.
-    ///
-    /// Sliding it in the CATCHER instead was tried and was worse, because then both processes
-    /// animated the same page turn and neither could line up with the other; that attempt lasted
-    /// one commit (see ShelfWindow, where SlidePageIn used to be).
-    ///
-    /// So the turn onto the shelf is ONE event: the outgoing page slides away, and the shelf's
-    /// window arrives at the same rectangle with the same shadow and a four-frame fade. Turns
-    /// between Plith's own four pages are untouched.
-    /// </summary>
-    private int SlideDirectionTo(int index, int direction) =>
-        index == _shelfPageIndex ? 0 : direction;
+    // SlideDirectionTo is DELETED, and the history is the point.
+    //
+    // It returned 0 for the shelf's page so that page turn alone did not slide, because the
+    // catcher's window used to arrive part-way through the movement and a slide interrupted at
+    // 58 per cent reads as a stutter. Sliding it in the CATCHER instead was tried first and was
+    // worse: two processes animating one page turn across a window handover cannot line up (see
+    // ShelfWindow, where SlidePageIn used to be, and section 10.26).
+    //
+    // Both of those were treating the symptom. The cause was that the handover happened WHILE the
+    // page was moving, and the fix is in ReconcileShelfFrame: the gesture now animates to
+    // completion in this process, and the frame changes hands after it has stopped. With nothing
+    // left to interrupt, the shelf's page slides exactly like the other four, which is what a
+    // person asked for twice.
+
 
     /// <summary>
     /// A paging gesture arrived from the catcher while it was holding the frame.
@@ -1391,7 +1433,7 @@ public sealed class OsdHost : BandWindow
     {
         var before = _pager.Index;
         if (!_pager.GoTo(index)) return;
-        _widgets.SyncToPager(SlideDirectionTo(_pager.Index, Math.Sign(_pager.Index - before)));
+        _widgets.SyncToPager(Math.Sign(_pager.Index - before));
         ReconcileShelfFrame();
     }
 
@@ -1406,7 +1448,7 @@ public sealed class OsdHost : BandWindow
         // gap rule stays testable.
         if (!_pager.Accumulate(delta, Environment.TickCount64)) return;
 
-        _widgets.SyncToPager(SlideDirectionTo(_pager.Index, Math.Sign(delta)));
+        _widgets.SyncToPager(Math.Sign(delta));
 
         // Logged because this is the only way the user's own touchpad can be characterised
         // later: the commit threshold and the rearm floor are provisional constants, and
