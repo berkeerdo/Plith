@@ -22,7 +22,10 @@ namespace Plith.Views.Widgets;
 /// </summary>
 public partial class WidgetFrame : UserControl
 {
-    private const int SlideMs = 260;
+    /// <summary>Taken from NotchGeometry, where the catcher can read it too: the shelf page is
+    /// drawn by the other process and has to arrive on the same curve over the same time, or the
+    /// page turn onto it reads as a different kind of movement. See PageSlideMs.</summary>
+    private const int SlideMs = NotchGeometry.PageSlideMs;
 
     private readonly List<FrameworkElement> _pages = new();
 

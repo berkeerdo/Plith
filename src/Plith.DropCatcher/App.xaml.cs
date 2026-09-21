@@ -191,8 +191,9 @@ public partial class App : Application, IDisposable
                 _shelf.CloseNow();
                 break;
             case DropVerb.Rail:
-                // How many pages there are and which one is the shelf. Neither is knowable here.
-                _shelf.SetRail((int)message.X, (int)message.Y);
+                // How many pages there are, which one is the shelf, and which way the page turn
+                // that is bringing it in was going. None of the three is knowable here.
+                _shelf.SetRail((int)message.X, (int)message.Y, (int)message.W);
                 break;
             case DropVerb.Palette:
                 if (ShelfPaletteWire.TryFromPaths(message.Paths, out var palette)) _shelf.Apply(palette);

@@ -3090,3 +3090,29 @@ exactly that margin, so it compares against `ShelfWindowRect` and is renamed for
 ```
 
 **14 of 14 on hardware.**
+
+### 10.25 The shelf page appeared; the other four slide (2026-09-21)
+
+Reported: the transition to that widget is not smooth like the others.
+
+It was not, and the difference was not subtle once looked for. `WidgetFrame.SlideIn` brings each of
+Plith's own pages in from the side the turn came from: `NotchGeometry.PageSlideDip` of travel over
+260 ms on a `CubicEase` `EaseOut`, fading as it goes. The shelf page simply appeared, with the
+card's own 70 ms fade and no movement at all, because it is drawn by another process that was never
+told a page turn was happening.
+
+**Two processes animating the same movement have to agree on three things**, so the distance and
+the duration now live in `NotchGeometry` (`PageSlideDip` was already there, `PageSlideMs` is moved
+out of `WidgetFrame`) and the easing is the same curve written out in both. The DIRECTION travels
+on the `Rail` message, whose `W` field was free and which is sent immediately before `OpenShelf`:
+1 from the right, -1 from the left, and **0 for an open that was not a page turn**, which is a
+drop's acknowledgement, where nothing was travelling and a page that slid in would be movement
+with no gesture behind it.
+
+`ReconcileShelfFrame` takes the direction from the commit that called it (`Math.Sign(delta)` for a
+wheel, the index delta for a rail click) and `ShelfSession` clears it after every open so a later
+open cannot inherit one.
+
+**14 of 14 on hardware**, and this is the fifth thing that had to match between the two surfaces
+before the handover stopped being visible: the rectangle (10.24), the shadow (10.24), the gap
+(10.15), the fade (10.15) and now the movement.

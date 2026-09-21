@@ -391,6 +391,17 @@ public static class NotchGeometry
                OpenFrameDip.Width, OpenFrameDip.Height);
 
     /// <summary>
+    /// How long a page takes to slide into the frame.
+    ///
+    /// Here rather than in WidgetFrame because the shelf page is drawn by the CATCHER, and a page
+    /// that arrives by fading while its four neighbours arrive by sliding is what a person
+    /// reported as the transition to that widget not being smooth like the others. Two processes
+    /// animating the same movement have to agree on its duration, its distance and its easing;
+    /// the first two are here and the third is a CubicEase EaseOut in both.
+    /// </summary>
+    public const int PageSlideMs = 260;
+
+    /// <summary>
     /// The room the panel leaves around itself for its shadow.
     ///
     /// Plith's own window is the panel plus this on the left, the right and the BOTTOM, and

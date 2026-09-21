@@ -614,11 +614,11 @@ public sealed class OsdHost : BandWindow
     /// itself refuses a second Open while the shelf is up, but relying on that would make this
     /// method's correctness depend on another class's guard.
     /// </summary>
-    private void ReconcileShelfFrame()
+    private void ReconcileShelfFrame(int slideDirection = 0)
     {
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(new Action(ReconcileShelfFrame));
+            Dispatcher.BeginInvoke(new Action(() => ReconcileShelfFrame(slideDirection)));
             return;
         }
 
@@ -669,6 +669,11 @@ public sealed class OsdHost : BandWindow
             // blink out on one page in five.
             _shelfSession.RailPageCount = _pager.PageCount;
             _shelfSession.RailShelfIndex = _shelfPageIndex;
+
+            // The direction the page turn was going, so the catcher's page slides in the way
+            // Plith's own four do rather than fading. Zero when this open was not a page turn at
+            // all, which is a drop's acknowledgement: nothing was travelling, so nothing slides.
+            _shelfSession.RailSlideDirection = slideDirection;
             OpenShelf();
         }
         else
@@ -1365,8 +1370,9 @@ public sealed class OsdHost : BandWindow
     {
         var before = _pager.Index;
         if (!_pager.GoTo(index)) return;
-        _widgets.SyncToPager(Math.Sign(_pager.Index - before));
-        ReconcileShelfFrame();
+        var direction = Math.Sign(_pager.Index - before);
+        _widgets.SyncToPager(direction);
+        ReconcileShelfFrame(direction);
     }
 
     private void OnHorizontalWheel(object? sender, int delta)
@@ -1388,8 +1394,9 @@ public sealed class OsdHost : BandWindow
         // inside; three external sampling harnesses during slice 2 all gave misleading answers.
         _log?.Info("OsdHost", $"Widget page committed: delta={delta}, index={_pager.Index}/{_pager.PageCount}");
 
-        // The page turn IS the handover, in both directions.
-        ReconcileShelfFrame();
+        // The page turn IS the handover, in both directions, and it carries which way it went so
+        // the catcher's page can arrive on the same curve as Plith's own.
+        ReconcileShelfFrame(Math.Sign(delta));
     }
 
     /// <summary>

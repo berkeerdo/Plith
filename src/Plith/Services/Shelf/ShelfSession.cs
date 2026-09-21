@@ -144,6 +144,16 @@ public sealed class ShelfSession
     /// <inheritdoc cref="RailPageCount"/>
     public int RailShelfIndex { get; set; }
 
+    /// <summary>
+    /// Which way the page turn that is opening the shelf was going: 1 from the right, -1 from the
+    /// left, 0 for an open that was not a page turn.
+    ///
+    /// Sent so the catcher's page can slide in exactly as Plith's own four do. Set by OsdHost,
+    /// which is the only thing that knows a direction, and reset to 0 after every open so that a
+    /// later open which is not a page turn does not inherit one.
+    /// </summary>
+    public int RailSlideDirection { get; set; }
+
     public void Open(Rect notchRectDip, double dpiScale)
     {
         var start = DropCatcherLauncher.EnsureRunning(_log);
@@ -169,7 +179,7 @@ public sealed class ShelfSession
 
         Send(DropVerb.Palette, ShelfPaletteWire.ToPaths(_palette()));
         SendItems();
-        Send(DropVerb.Rail, [], RailPageCount, RailShelfIndex);
+        Send(DropVerb.Rail, [], RailPageCount, RailShelfIndex, RailSlideDirection);
         Send(DropVerb.OpenShelf, [], x, y, w, h);
 
         // Asked AGAIN, after the sends. The first check can be stale by the time it matters: the
@@ -187,6 +197,7 @@ public sealed class ShelfSession
         }
 
         _shelfOpen = true;
+        RailSlideDirection = 0;
         _log?.Info("Shelf", $"Shelf requested at {x},{y} {w}x{h} with {_store.Items.Count} item(s).");
         Opened?.Invoke();
     }
