@@ -39,6 +39,12 @@
     <Compile Include="..\Plith\Services\Shelf\ShelfPaletteWire.cs">
       <Link>Shared\ShelfPaletteWire.cs</Link>
     </Compile>
+    <!-- The tile caption's rule: which ten characters of a name are worth the line. Linked rather
+         than copied for the same reason as the two above, and it is the only one of the three with
+         tests, which live in Plith.Tests and cover the shared file. -->
+    <Compile Include="..\Plith\Services\Shelf\ShelfLabel.cs">
+      <Link>Shared\ShelfLabel.cs</Link>
+    </Compile>
     <!-- The catcher stands in for the notch, so it has to grow the same shape. Linked rather
          than reimplemented: two copies of a morph drift, and the drift would show as the
          stand-in visibly not being the thing it replaced. -->

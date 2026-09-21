@@ -110,6 +110,20 @@ Add-Type -AssemblyName UIAutomationClient, UIAutomationTypes, System.Windows.For
 $root = Split-Path -Parent $PSScriptRoot
 $plithExe = Join-Path $root "src\Plith\bin\$Configuration\net10.0-windows10.0.22000.0\Plith.exe"
 $catcherExe = Join-Path (Split-Path -Parent $plithExe) 'Plith.DropCatcher.exe'
+
+# Plith.dll is loaded for its CONSTANTS, not to run anything: the fixture and the size checks
+# below compare what is on screen against NotchGeometry rather than against numbers typed here,
+# which is the rule this file has broken twice in other ways (a page keyed by a sentence, a
+# fixture keyed by a literal capacity).
+#
+# It has to be loaded BEFORE any bare type literal names it, which is why this sits with the
+# paths rather than beside the check that needs it: the first run that reached that check failed
+# with "Unable to find type [Plith.Views.Presentation.NotchGeometry]".
+$plithDll = Join-Path (Split-Path -Parent $plithExe) 'Plith.dll'
+if (-not (Test-Path $plithDll)) {
+    throw "Plith.dll is not beside Plith.exe ($plithDll); the geometry checks cannot run."
+}
+[void][Reflection.Assembly]::LoadFrom($plithDll)
 $plithLog = Join-Path $env:LOCALAPPDATA 'Plith\plith.log'
 $catcherLog = Join-Path $env:LOCALAPPDATA 'Plith\dropcatcher.log'
 $storePath = Join-Path $env:LOCALAPPDATA 'Plith\shelf.txt'
@@ -338,6 +352,56 @@ function Invoke-Drag {
     Start-Sleep -Milliseconds 500
     [PairInput]::LeftUp()
     Start-Sleep -Milliseconds 900
+}
+
+# Restart the pair with a given set of files on the shelf, and bring the shelf up.
+#
+# ShelfStore reads its file at construction, and this driver cannot perform a real drag from
+# Explorer, so seeding means writing shelf.txt and restarting. Factored out because two stages
+# need it and the first hand-written copy of it failed silently: when the shelf did not come up,
+# the stage that followed reported "no menu item appeared", which is a verdict about the wrong
+# thing. This returns the shelf window or $null, and the caller says which it got.
+function Restart-WithShelf {
+    param([string[]]$Files)
+
+    Set-Content -Path $storePath -Encoding UTF8 -Value @($Files)
+    Stop-Process -Name 'Plith*' -Force -ErrorAction SilentlyContinue
+    for ($i = 0; $i -lt 20 -and @(Get-Process -Name 'Plith*' -ErrorAction SilentlyContinue).Count -gt 0; $i++) {
+        Start-Sleep -Milliseconds 250
+    }
+
+    $mark = @(Get-Content $plithLog -ErrorAction SilentlyContinue).Count
+    $script:proc = Start-Process -FilePath $plithExe -PassThru
+
+    # Waited for rather than slept past: the catcher is launched through Explorer and the pipe
+    # connects when it connects.
+    $connected = $false
+    for ($i = 0; $i -lt 60 -and -not $connected; $i++) {
+        Start-Sleep -Milliseconds 250
+        $connected = [bool](@(Get-Content $plithLog -ErrorAction SilentlyContinue) |
+            Select-Object -Skip $mark | Select-String 'Drop catcher connected')
+    }
+    if (-not $connected) { return $null }
+    Start-Sleep -Milliseconds 1200
+
+    # Two attempts at the frame, because a track change can take it between the click and the
+    # wheel: the same instrument defect this file records as number 6.
+    for ($attempt = 1; $attempt -le 2; $attempt++) {
+        $notch = Find-LayeredWindow -ProcessLike 'Plith'
+        if (-not $notch) { Start-Sleep -Milliseconds 800; continue }
+
+        Move-Pointer -X ($notch.X + [int]($notch.W / 2)) -Y 4 -Settle 900
+        [PairInput]::LeftClick()
+        Start-Sleep -Milliseconds 1500
+
+        for ($i = 1; $i -le 6; $i++) {
+            $found = Find-ShelfWindow
+            if ($found) { return $found }
+            [PairInput]::Wheel(-1)
+            Start-Sleep -Milliseconds 900
+        }
+    }
+    $null
 }
 
 function Save-Shot {
@@ -574,9 +638,21 @@ New-Item -ItemType Directory -Force -Path $fixtureDir | Out-Null
 # still be reachable. See the tree check below, which is the whole point of the change.
 # NOT $names: the paging loop below reassigns that for the notch page's UIA names, and
 # the capacity check further down would then measure the wrong list.
+# EXACTLY ShelfCapacity files, read from the product. It was fifteen names typed here, which was
+# the capacity when this file was written and is ten now that the shelf is the notch's own page.
+# The mismatch failed the tree check with five names "missing" that the store had correctly
+# refused to load, and it made the check above it pass vacuously: that one compares shelf.txt
+# with this list, and the driver WROTE shelf.txt from this list, so it was reading its own input
+# back. Trimmed rather than re-typed, so the next capacity change moves the fixture with it.
+$capacity = [Plith.Views.Presentation.NotchGeometry]::ShelfCapacity
 $fixtureNames = @('alpha.txt','bravo.txt','charlie.txt','delta.txt','echo.txt',
                   'foxtrot.txt','golf.txt','hotel.txt','india.txt','juliett.txt',
                   'kilo.txt','lima.txt','mike.txt','november.txt','oscar.txt')
+if ($fixtureNames.Count -lt $capacity) {
+    throw "the fixture has $($fixtureNames.Count) names and the shelf holds $capacity; add more."
+}
+$fixtureNames = @($fixtureNames | Select-Object -First $capacity)
+"fixture: $($fixtureNames.Count) file(s), which is ShelfCapacity" 
 foreach ($n in $fixtureNames) { Set-Content -Path (Join-Path $fixtureDir $n) -Value "fixture $n" -Encoding UTF8 }
 Set-Content -Path $storePath -Encoding UTF8 -Value @($fixtureNames | ForEach-Object { Join-Path $fixtureDir $_ })
 "seeded: $(Format-Shelf (Read-Shelf))"
@@ -854,24 +930,89 @@ try {
         "store now $(Format-Shelf (Read-Shelf))"
     Save-Shot 0 0 $screen.Width 400 '10-emptied-one-by-one.png' | Out-Null
 
-    # --- 3.3 clear empties the shelf, and asks nothing ---------------------------------------------
-    $shelf = Find-ShelfWindow
-    $clear = Get-Element -Hwnd $shelf.Hwnd -Name 'Clear the shelf' -Type Button
+    # --- 3.3 clear, which has no button any more --------------------------------------------------
+    #
+    # The header that carried one cost 40 DIP of a 121 DIP band, which is the difference between
+    # two rows of tiles and one, so Clear became a context menu on the page background plus Ctrl+A
+    # and Delete from the keyboard. This stage used to look for a Button named "Clear the shelf"
+    # and reported it "not in the UIA tree": true, and about the instrument rather than the
+    # product, because a menu item is in no tree until its menu is open.
+    #
+    # Something has to be on the shelf to clear, and the removal stages above emptied it, so this
+    # re-seeds and restarts the pair. Restarting rather than dropping files in: this driver has no
+    # way to perform a real drag from Explorer, and ShelfStore reads its file at construction.
+    $shelf = Restart-WithShelf -Files @($fixtureNames[0..2] | ForEach-Object { Join-Path $fixtureDir $_ })
+    Add-Verdict '3.3 the shelf comes back up after a restart with files on it' ([bool]$shelf) `
+        "$(if ($shelf) { "$($shelf.W)x$($shelf.H) at $($shelf.X),$($shelf.Y)" } else { 'the shelf never came up, so the two clear stages below measure nothing' })"
+
+    # The KEYBOARD route first: no popup to hunt, and it is the route that exists because a
+    # destructive action reachable only by right-click is reachable only by a mouse.
+    if ($shelf) {
+        Move-Pointer -X ($shelf.X + 30) -Y ($shelf.Y + 30) -Settle 400
+        [PairInput]::KeyDown(0x11)          # Ctrl
+        [PairInput]::Key(0x41)               # A
+        [PairInput]::KeyUp(0x11)
+        Start-Sleep -Milliseconds 500
+        [PairInput]::Key(0x2E)               # Delete
+        Start-Sleep -Milliseconds 1500
+        $afterKeys = Read-Shelf
+        Add-Verdict '3.3 Ctrl+A then Delete clears the shelf from the keyboard' `
+            (@($afterKeys).Count -eq 0) "store now $(Format-Shelf $afterKeys)"
+    } else {
+        Add-Verdict '3.3 Ctrl+A then Delete clears the shelf from the keyboard' $false `
+            'the shelf never came up after the restart'
+    }
+
+    # And the menu route, which is the mouse's only way to Clear. Driven on an EMPTY shelf if the
+    # keyboard route worked, which is the honest thing to measure there: the menu is attached only
+    # while there is something to clear (see ShelfSurface.Render), so its absence on an empty shelf
+    # is correct and its presence on a full one is the check.
+    $shelf = Restart-WithShelf -Files @($fixtureNames[0..1] | ForEach-Object { Join-Path $fixtureDir $_ })
+    if (-not $shelf) {
+        Add-Verdict '3.3b the page menu clears the shelf, and asks nothing' $false `
+            'the shelf never came up after the restart, so the menu was never asked for'
+    }
+
+    $clear = $null
+    if ($shelf) {
+        # Low on the page, below the tiles, so the right-click lands on the host rather than on a
+        # tile (a tile has its own menu with Open, Show in file manager and Remove).
+        Move-Pointer -X ($shelf.X + [int]($shelf.W / 2)) -Y ($shelf.Y + 120) -Settle 400
+        [PairInput]::RightClick()
+        Start-Sleep -Milliseconds 1000
+
+        # A ContextMenu is a popup in a window of its own, not a child of the shelf's, so the
+        # shelf's tree is searched first and the desktop second.
+        $clear = Get-Element -Hwnd $shelf.Hwnd -Name 'Clear the shelf'
+        if (-not $clear) {
+            $root = [System.Windows.Automation.AutomationElement]::RootElement
+            $cond = New-Object System.Windows.Automation.PropertyCondition(
+                [System.Windows.Automation.AutomationElement]::NameProperty, 'Clear the shelf')
+            $found = $root.FindFirst([System.Windows.Automation.TreeScope]::Descendants, $cond)
+            if ($found) {
+                $r = $found.Current.BoundingRectangle
+                $clear = [pscustomobject]@{ CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
+            }
+        }
+    }
+
     if ($clear) {
         $before = Read-Shelf
         Move-Pointer -X $clear.CX -Y $clear.CY -Settle 400
         [PairInput]::LeftClick()
-        Start-Sleep -Milliseconds 1400
+        Start-Sleep -Milliseconds 1500
         $after = Read-Shelf
         # No dialog: a confirmation would be a window of its own, so this looks for one rather
         # than trusting the file to imply its absence.
         $dialog = @(Find-LayeredWindows -ProcessLike '*DropCatcher*') | Where-Object { $_.W -lt 200 }
-        Add-Verdict '3.3 clear empties the shelf without asking' `
-            (($after.Count -eq 0) -and -not $dialog) `
+        Add-Verdict '3.3b the page menu clears the shelf, and asks nothing' `
+            ((@($after).Count -eq 0) -and -not $dialog) `
             "before $(Format-Shelf $before) -> after $(Format-Shelf $after); confirmation window: $([bool]$dialog)"
-    } else {
-        Add-Verdict '3.3 clear empties the shelf without asking' $false "'Clear the shelf' is not in the UIA tree"
+    } elseif ($shelf) {
+        Add-Verdict '3.3b the page menu clears the shelf, and asks nothing' $false `
+            'no menu item named "Clear the shelf" appeared anywhere after a right-click on the page'
     }
+
     Save-Shot 0 0 $screen.Width 400 '9-cleared.png' | Out-Null
 
     # --- 2.6 paging OFF the shelf hands the frame back --------------------------------------------

@@ -2609,3 +2609,77 @@ re-drop, which asserts all three halves: one kept, the count unchanged, and the 
 
 This is the second time in two changes that a number stood in for an event and was wrong about it.
 The other was the frame equality check reading a surface that measured `0 x 0` and passing.
+
+### 10.10 Driven on hardware, all of it, and it found two defects (2026-09-21)
+
+`scripts/drive-shelf-pair.ps1`, with the pointer left alone. **Thirteen verdicts, all passing:**
+
+```
+[PASS] 2.2  paging onto the shelf page hands the frame to the catcher   722,0 356x164
+[PASS] 2.3  the shelf is the size of the notch frame, not a pane        356x164 = 356x164
+[PASS] 2.4  the catcher draws the notch rail, and names it              'Page 4 of 4'
+[PASS]      the shelf arrives holding everything that was seeded        10 files
+[PASS]      every file on a FULL shelf is in the UIA tree               10 seeded, missing: none
+[PASS] 3.1  remove takes the tile off the page AND out of shelf.txt
+[PASS] 3.2  remove acts on the whole selection
+[PASS] 3.13 emptying one by one never puts a file back                  7 removals, non-increasing
+[PASS] 3.13 one-by-one removal does empty the shelf
+[PASS] 3.3  the shelf comes back up after a restart with files on it
+[PASS] 3.3  Ctrl+A then Delete clears the shelf from the keyboard
+[PASS] 3.3b the page menu clears the shelf, and asks nothing
+[PASS] 2.6  paging off the shelf gives the frame back to Plith
+```
+
+2.2 and 2.6 together are the slice: the frame goes to the catcher when you page onto the shelf and
+comes back when you page off, which means the wheel forwarding over the pipe works on real
+hardware. 10 of 10 in the UIA tree is the capacity guarantee, and it is the check the stack build
+could never have passed.
+
+**Two product defects came out of the run.**
+
+**A right-click on the page dismissed the shelf instead of opening a menu.** The tile menu reports
+its own `Opened`/`Closed` so `ShelfWindow` can defer its dismissal while a menu is up; the page
+menu, added two rounds ago, did not. A menu popup takes activation the instant it opens,
+`Deactivated` fired, the shelf closed and took the menu with it. The tracking is a shared helper
+now (`Track`), because the tile menu had it from the day it was written and never showed the
+defect, which is exactly why a second menu needed the rule to be shared rather than copied.
+
+**And the page menu was attached to the tile HOST, which hugs its content.** `ColumnsHost` is
+centred and only as tall as the rows it holds, so on a two-file shelf most of the page is not the
+host and a right-click on the obvious empty area reached nothing at all. It is on the surface root
+now; a tile still wins on a tile, because WPF opens the menu of the innermost element that has one.
+
+**Three instrument defects, all mine, all of the same family: a number or a name typed here
+instead of read from the product.**
+
+- The fixture seeded fifteen files where capacity is ten, which failed the tree check with five
+  names the store had correctly refused to load, and made the check above it pass VACUOUSLY: that
+  one compares `shelf.txt` against the fixture list, and the driver writes `shelf.txt` from that
+  list, so it was reading its own input back. It reads `NotchGeometry.ShelfCapacity` now.
+- The size check named `NotchGeometry` without the driver ever loading `Plith.dll`, and failed
+  with "Unable to find type".
+- The clear stage looked for a Button named "Clear the shelf", which stopped existing when the
+  header went. Worse, when its restart failed to bring the shelf up it reported "no menu item
+  appeared", a verdict about the wrong thing. `Restart-WithShelf` waits for the pipe to connect,
+  returns the window or null, and the caller says which it got.
+
+### 10.11 The captions came back, short (2026-09-21)
+
+Deleting them outright was wrong and the argument against it was better than the one for it: with
+several files of the SAME TYPE the icons are identical, so the only way to tell them apart was to
+hover each one and read the name at the top. **The picture answers "what kind of thing is this"
+and cannot answer "which one".**
+
+`ShelfLabel.Short` decides which eleven characters are worth the line, and it is shared code with
+nine tests rather than a call to `TextTrimming`:
+
+- **The extension goes.** The tile's picture is the shell's own icon for that extension, so
+  ".xlsx" under a green X spends a quarter of the caption saying what the picture said. A name that
+  is nothing but an extension keeps it, because ".gitignore" trimmed of its extension is nothing.
+- **The MIDDLE goes, not the end.** Files of one type on one shelf are usually one export series,
+  and what separates them is the tail. Measured on this repo's own fixture:
+  `NM_Mukellef_Veri_Dosyasi_2026-09-21` trimmed from the right is `NM_Mukel...`, which is the same
+  string for every file in the series; trimmed in the middle it is `NM_Mu…09-21`.
+
+The picture keeps 34 of the tile's 48 DIP, which is still two and a half times the area it had when
+the caption was two lines of 9.5 point.

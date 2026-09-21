@@ -465,9 +465,18 @@ public partial class ShelfSurface : UserControl
         };
         ShowCount();
 
-        // The page's own menu, present only when there is something to clear. A menu whose single
-        // item would do nothing is worse than no menu: it answers a right-click with a dead word.
-        ColumnsHost.ContextMenu = items.Count > 0 ? _pageMenu : null;
+        // ON THE PAGE, not on the tile host, and the hardware run is what said so: a right-click
+        // on the empty part of the page offered nothing at all.
+        //
+        // ColumnsHost hugs its content (it is centred and only as tall as the rows it holds), so
+        // with two files on a two-row shelf most of the page is NOT the host, and the obvious
+        // place to right-click is precisely that empty area. The surface root spans the whole
+        // page. A tile still wins on a tile: WPF opens the menu of the innermost element that has
+        // one, and a tile has its own Open, Show in file manager and Remove.
+        //
+        // Present only when there is something to clear. A menu whose single item would do
+        // nothing is worse than no menu: it answers a right-click with a dead word.
+        ContextMenu = items.Count > 0 ? _pageMenu : null;
 
         if (items.Count == 0)
         {
@@ -740,23 +749,39 @@ public partial class ShelfSurface : UserControl
             RequestShellIcon(entry.Path, iconHost);
         }
 
-        // NO CAPTION UNDER THE TILE, and this is the third attempt at this page's design rather
-        // than a tweak to the second. Told twice that it still looked bad, which it did, and the
-        // reason was an assumption rather than a value: that every tile needs its name written
-        // under it.
+        // ONE SHORT LINE under the picture, and the argument for it was better than mine.
         //
-        // On a SHELF it does not. You put the file there seconds ago and you recognise it by
-        // sight; the name is what a file manager needs, where you are looking for something you
-        // have not seen. Two lines of 9.5 point type under every tile cost half the tile's height
-        // and all of its calm, and they are why ten tiles in a 356 by 164 frame read as a dense
-        // grid of small squares.
+        // The captions were deleted outright a round ago, on the reasoning that you recognise a
+        // file you just put here by sight. That is true of a photograph and false of a series:
+        // reported from a real session, several files of the SAME TYPE have the same icon, so the
+        // only way to tell them apart was to hover each one in turn and read the name at the top.
+        // The picture answers "what kind of thing is this" and cannot answer "which one".
         //
-        // So the picture gets the whole tile, and the name goes where there is room for one at a
-        // time: the chrome row, which names whichever tile the pointer is on (see the hover
-        // handlers below). It is still on the tile for a SCREEN READER - the accessible name has
-        // always been the file name and has not moved - and still in the tooltip for a pointer
-        // that rests without pressing.
-        var content = iconHost;
+        // So the caption is back, at one line rather than the two it used to be, and it is not
+        // the file name: ShelfLabel drops the extension (the picture already says it) and trims
+        // the MIDDLE so both ends survive, because what separates one export from the next is the
+        // tail. The picture keeps 34 of the tile's 48 DIP, which is still three times the area it
+        // had when the caption was two lines.
+        var label = new TextBlock
+        {
+            Text = ShelfLabel.Short(entry.Name, CaptionChars),
+            FontSize = 9,
+            LineHeight = 11,
+            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
+            Height = 11,
+            Margin = new Thickness(0, 2, 0, 0),
+            Foreground = (Brush)FindResource("NotchInk"),
+            HorizontalAlignment = HorizontalAlignment.Center,
+            TextAlignment = TextAlignment.Center,
+            // No trimming and no wrapping: ShelfLabel has already decided what fits, and letting
+            // WPF trim on top of it would cut the tail this exists to preserve.
+            TextTrimming = TextTrimming.None,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+
+        var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
+        content.Children.Add(iconHost);
+        content.Children.Add(label);
 
         // A Grid rather than handing content straight to the Border, so the hover-only remove
         // affordance can sit on top of it without changing the tile's own layout: the overlay
@@ -1080,6 +1105,7 @@ public partial class ShelfSurface : UserControl
 
         var menu = new ContextMenu();
         menu.Items.Add(clear);
+        Track(menu);
         return menu;
     }
 
@@ -1174,18 +1200,40 @@ public partial class ShelfSurface : UserControl
         // time it closes. That is what makes _openMenu (and Render's force-close of it) reliable
         // in the one case that broke the previous design: a re-render destroying the tile while
         // its menu is still up.
+        Track(menu);
+        return menu;
+    }
+
+    /// <summary>
+    /// Report a menu's open state, so the window can defer its own dismissal while it is up.
+    ///
+    /// NOT OPTIONAL, and the page menu proved it by not having it. ShelfWindow closes the shelf
+    /// on Deactivated, a menu popup takes activation the moment it opens, and the deferral that
+    /// stops those two from fighting is keyed on this signal. Without it, a right-click on the
+    /// page opened a menu, deactivated the window, dismissed the shelf and took the menu down
+    /// with it: measured on hardware by the pair driver, which found no menu item anywhere a
+    /// second after the right-click. The tile menu had the tracking from the day it was written
+    /// and never showed the defect, which is exactly why a second menu needed the same thing to
+    /// be a shared helper rather than a copied pair of lines.
+    ///
+    /// Opened/Closed on the MENU rather than ContextMenuOpening/Closing on the element: a
+    /// ContextMenu is popup content, hosted outside its owner's visual subtree, so these fire
+    /// correctly whether the element that opened it still exists by the time it closes. That is
+    /// what makes Render's force-close reliable in the one case that broke the previous design, a
+    /// re-render destroying a tile while its menu is up.
+    /// </summary>
+    private void Track(ContextMenu menu)
+    {
         menu.Opened += (_, _) => { _openMenu = menu; MenuOpenChanged?.Invoke(true); };
         menu.Closed += (_, _) =>
         {
             // Guards against stomping a DIFFERENT, newer menu: this fires both for an ordinary
-            // close (Esc, a click, losing focus) and for the force-close Render performs above,
-            // and either way _openMenu must already be (or be about to become) this same menu.
+            // close (Esc, a click, losing focus) and for the force-close Render performs, and
+            // either way _openMenu must already be (or be about to become) this same menu.
             if (!ReferenceEquals(_openMenu, menu)) return;
             _openMenu = null;
             MenuOpenChanged?.Invoke(false);
         };
-
-        return menu;
     }
 
     /// <summary>Whether <paramref name="source"/> is <paramref name="ancestor"/> or sits inside
@@ -1303,22 +1351,34 @@ public partial class ShelfSurface : UserControl
     }
 
     /// <summary>
-    /// The picture's box: THE WHOLE TILE, less its two DIP of padding a side.
+    /// The picture's box: the tile less its padding, and less the caption's one line.
     ///
-    /// It was 34 by 22, which was as much as a tile could spare while a two-line caption sat
-    /// under it. With the caption gone (see BuildTile) a screenshot gets 52 by 48 instead of 34
-    /// by 22, which is a little over three times the area, and that is the difference between
-    /// recognising which screenshot it is and seeing that it is one.
+    /// The arithmetic, since three versions of this tile have now been sized by hand. The tile is
+    /// 52 tall with 2 DIP of padding a side, so 48 of content. The caption is one 11 DIP line with
+    /// 2 of margin above it, which leaves 35, and the box takes 34 of that.
+    ///
+    /// For scale: it was 34 by 22 when the caption was two lines, and 52 by 48 for the one round
+    /// when there was no caption at all. At 52 by 34 a screenshot still has two and a half times
+    /// the area it had originally, and the tile still says which file it is.
     /// </summary>
     private const double PreviewWidth = TileWidth - 4;
 
     /// <inheritdoc cref="PreviewWidth"/>
-    private const double PreviewHeight = TileHeight - 4;
+    private const double PreviewHeight = 34;
+
+    /// <summary>
+    /// How many characters the caption gets.
+    ///
+    /// Eleven, measured rather than guessed: at 9 point in a 52 DIP line, eleven characters of a
+    /// mixed-case name fit without the line growing wider than the tile. ShelfLabel spends one of
+    /// them on the ellipsis when it has to trim.
+    /// </summary>
+    private const int CaptionChars = 11;
 
     /// <summary>An icon's own size inside that box. Not stretched to fill: a shell icon is a
-    /// glyph with its own padding baked in, and blowing it up to 52 DIP makes it blurry and
-    /// crowds the chip's edges.</summary>
-    private const double IconSize = 30;
+    /// glyph with its own padding baked in, and blowing it up makes it blurry and crowds the
+    /// chip's edges. 26 rather than 30 now that the caption has a line back.</summary>
+    private const double IconSize = 26;
 
     private static SolidColorBrush Solid(Color color)
     {
