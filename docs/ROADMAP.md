@@ -401,6 +401,16 @@ verified on a running build (see `docs/PHASE6-VERIFICATION.md`):**
 
 ### Phase 7 — Shelf + Notifications (3–4 wk)
 
+> **STATUS BAND, 2026-09-22: the shelf SHIPPED, in 0.3.0, and again in 0.3.1.** Everything below
+> this line is the record of how it got there and is read as history, not as status. In
+> particular the slice notes still say "code-complete, not yet merged" because that is what was
+> true when each was written; all three are merged and released. What the shelf finally became is
+> not what slices 1 to 3 describe either: it is the notch's own page, drawn by
+> `Plith.DropCatcher` at the notch's own size, holding ten files in two rows of five, with no
+> stacks and no separate pane. The current description lives in `CLAUDE.md`, the design in
+> `docs/superpowers/specs/2026-09-21-shelf-in-the-notch-design.md`, and every measurement in
+> `docs/SHELF-VERIFICATION.md`. Notifications are NOT started.
+
 The two features that Windows has no good answer for.
 
 - **Shelf card** — persistent floating drop target on the notch's

@@ -3258,3 +3258,27 @@ agreed, because nothing in the driver or the logs could see the difference betwe
 the catcher's window existed" and "Plith hid after the catcher's window was visible". Both halves
 were logged; the ORDER between them was not, on either side. A person watching the screen found it
 twice before an instrument could state it once.
+
+### 10.29 Two things that were only ever said out loud (2026-09-22)
+
+Both of these existed only in a conversation at the end of the day the shelf shipped, which is the
+one place a decision cannot survive. Written down so the next session does not have to rediscover
+either.
+
+**The 40 ms of empty panel, and the skeleton that was NOT built.** With the handover deferred to
+the end of the page turn (§10.28), the slide lands on Plith's own shelf page, which draws nothing,
+and the catcher's tiles fade in shortly after. Measured from the timings there, the panel is empty
+for roughly 40 ms on a warmed catcher, longer on a cold one. The fix, if it is ever wanted, is a
+SKELETON: Plith's page drawing the store's own count of chips at `NotchGeometry`'s tile geometry,
+so the page turn carries the shelf's shape in and the catcher's fade only fills in icons and names.
+It was offered and deliberately not built, for two reasons. A person who looked at the finished
+transition did not report the gap, and a skeleton whose chips do not line up pixel for pixel with
+the catcher's is worse than none, because a visible jump replaces a brief absence. If it is built,
+the geometry has to come from `NotchGeometry` on both sides, never from two sets of numbers.
+
+**Kill the running pair before a release build.** `scripts/build-release.ps1` runs `dotnet test`,
+which builds Debug, and a Debug pair left running locks `Plith.exe` and `Plith.DropCatcher.exe` in
+`bin\Debug`. The build then fails at the test step with MSB3027 and the script reports
+`Plith.Tests failed.`, which is a lie about what happened: the tests never ran. `sudo taskkill /F
+/IM Plith.exe /T` first, because a Release install runs elevated and a plain taskkill cannot touch
+it. The same lock class cost a whole afternoon once already, from the other direction (§10.23).
