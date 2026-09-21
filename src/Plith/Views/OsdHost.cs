@@ -658,6 +658,7 @@ public sealed class OsdHost : BandWindow
         // ms, and during that swap the accumulated intent belongs to a surface that has already
         // gone. Resting the accumulator means a second page costs a second gesture.
         _pager.Rest();
+        _shelfHandoverAt = Environment.TickCount64;
 
         if (wantsCatcher)
         {
@@ -675,6 +676,19 @@ public sealed class OsdHost : BandWindow
     }
 
     /// <summary>
+    /// How long after a handover a forwarded wheel delta is treated as the tail of the gesture
+    /// that caused it rather than as a new one.
+    ///
+    /// 400 ms. The swap itself takes about 25 ms and the measured tail arrived at 234, so this
+    /// covers it with room; a person who means to page again has to pause for less than half a
+    /// second, which is shorter than the time it takes to see that the shelf has arrived.
+    /// </summary>
+    private const long ShelfSettleMs = 400;
+
+    /// <summary>When the frame last changed hands, for <see cref="ShelfSettleMs"/>.</summary>
+    private long _shelfHandoverAt;
+
+    /// <summary>
     /// A paging gesture arrived from the catcher while it was holding the frame.
     ///
     /// Fed to the SAME two methods a gesture on Plith's own window reaches, rather than to the
@@ -687,6 +701,34 @@ public sealed class OsdHost : BandWindow
         if (!Dispatcher.CheckAccess())
         {
             Dispatcher.BeginInvoke(new Action(() => OnShelfPageRequested(delta, index)));
+            return;
+        }
+
+        // THE TAIL OF THE GESTURE THAT BROUGHT US HERE IS NOT A NEW GESTURE.
+        //
+        // Reported as: I move toward the shelf and the moment I arrive the notch closes. From the
+        // person's own log, with a precision touchpad:
+        //
+        //     22.647  Widget page committed: delta=-6, index=3/4   <- the shelf, reached
+        //     22.664  Shelf requested / Standing aside
+        //     22.881  Widget page committed: delta=-3, index=2/4   <- 234 ms later, back off it
+        //     22.881  Shelf closed by Plith: the page turned away from it
+        //
+        // A touchpad sends a STREAM of small deltas (six, three) rather than discrete notches of
+        // 120, so one flick easily carries enough total to page twice. Between Plith's own pages
+        // that is correct and wanted. Across the handover it is not: the window has just been
+        // swapped between two processes, and the deltas arriving in the next fraction of a second
+        // were part of the flick that asked for THIS page.
+        //
+        // Resting the accumulator at the handover (see ReconcileShelfFrame) was not enough, and
+        // the log above is why: the stream continues, and 234 ms of it is another 120.
+        //
+        // A RAIL CLICK IS NEVER IGNORED. It carries an index rather than a delta, and a click is
+        // a decision rather than momentum.
+        if (delta != 0 && Environment.TickCount64 - _shelfHandoverAt < ShelfSettleMs)
+        {
+            _log?.Info("Shelf", $"Ignored a forwarded wheel delta of {delta}: it arrived " +
+                                $"{Environment.TickCount64 - _shelfHandoverAt} ms after the handover.");
             return;
         }
 

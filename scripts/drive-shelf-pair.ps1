@@ -190,6 +190,21 @@ public static class PairInput {
         System.Threading.Thread.Sleep(70);
         Send(new INPUT[] { Mouse(RIGHTUP, 0) }, "RIGHTUP");
     }
+    // A TOUCHPAD'S STREAM, not a wheel's notch, and the difference is a defect this file missed.
+    //
+    // Wheel(1) sends a single delta of 120, which is what a mouse wheel does. A precision touchpad
+    // sends a stream of small deltas instead: the log of a real flick shows six and three. One
+    // flick therefore carries far more than 120 in total and pages more than once, which is
+    // correct between Plith's own pages and wrong across the shelf handover. Every run of this
+    // driver passed while a person could not stop on the shelf page at all, because the
+    // instrument sent one notch and then waited 900 ms.
+    public static void Flick(int messages, int deltaPerMessage) {
+        for (int i = 0; i < messages; i++) {
+            Send(new INPUT[] { Mouse(WHEEL, unchecked((uint)deltaPerMessage) ) }, "FLICK");
+            System.Threading.Thread.Sleep(8);
+        }
+    }
+
     public static void Wheel(int notches) {
         Send(new INPUT[] { Mouse(WHEEL, unchecked((uint)(notches * 120))) }, "WHEEL");
     }
@@ -742,6 +757,63 @@ try {
     Add-Verdict '2.3 the shelf is the size of the notch frame, not a pane of its own' $sameSize `
         "catcher $($shelf.W)x$($shelf.H), frame $($frameDip.Width)x$($frameDip.Height)"
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '3-shelf.png' | Out-Null
+
+    # 2.3b A TOUCHPAD FLICK MUST BE ABLE TO STOP ON THE SHELF.
+    #
+    # The check this driver could not make until it could imitate a touchpad, and the defect it
+    # missed for a whole afternoon while passing 13 of 13. Reported from a real session: "I move
+    # toward the shelf and the moment I arrive the notch closes." The person's log:
+    #
+    #     22.647  Widget page committed: delta=-6, index=3/4
+    #     22.664  Shelf requested / Standing aside
+    #     22.881  Widget page committed: delta=-3, index=2/4
+    #     22.881  Shelf closed by Plith: the page turned away from it
+    #
+    # Deltas of six and three: a touchpad streams, where Wheel(1) sends one discrete 120 and then
+    # this script waits 900 ms. One flick carries far more than one page's worth.
+    #
+    # THE GESTURE IS DRIVEN FROM A CLOSED NOTCH, which is how a person does it and which the first
+    # version of this stage got wrong: it paged AWAY first, and paging away closes the shelf and
+    # parks the notch (see OsdHost.OnShelfClosed), so the flick arrived at a collapsed notch and
+    # produced no page turns at all. The verdict then blamed the flick for carrying past a shelf
+    # it had never reached.
+    #
+    # Eighty messages of six is 480 of delta, four times the commit threshold: enough to reach the
+    # shelf at the third commit and to have kept going twice over. If the settle window after the
+    # handover works, it stops there.
+    Stop-Process -Name 'Plith*' -Force -ErrorAction SilentlyContinue
+    Start-Sleep -Milliseconds 800
+    $flickMark = @(Get-Content $plithLog -ErrorAction SilentlyContinue).Count
+    $proc = Start-Process -FilePath $plithExe -PassThru
+    Start-Sleep -Seconds 8
+
+    $notch = Find-LayeredWindow -ProcessLike 'Plith'
+    if ($notch) {
+        Move-Pointer -X ($notch.X + [int]($notch.W / 2)) -Y 4 -Settle 900
+        [PairInput]::LeftClick()
+        Start-Sleep -Milliseconds 1600
+        [PairInput]::Flick(80, -6)
+        Start-Sleep -Milliseconds 1800
+
+        $afterFlick = Find-ShelfWindow
+        $commits = @(@(Get-Content $plithLog -ErrorAction SilentlyContinue) |
+            Select-Object -Skip $flickMark | Select-String 'Widget page committed').Count
+        $ignored = @(@(Get-Content $plithLog -ErrorAction SilentlyContinue) |
+            Select-Object -Skip $flickMark | Select-String 'Ignored a forwarded wheel delta').Count
+        Add-Verdict '2.3b a touchpad flick can stop on the shelf page' ([bool]$afterFlick) `
+            "$(if ($afterFlick) { "the shelf is up at $($afterFlick.X),$($afterFlick.Y)" } else { 'the flick carried past the shelf' }); $commits page commit(s), $ignored forwarded delta(s) ignored"
+    } else {
+        Add-Verdict '2.3b a touchpad flick can stop on the shelf page' $false `
+            'no notch to flick at after the restart'
+    }
+
+    # The stages below need the shelf up. A discrete notch is the gesture that always worked.
+    for ($i = 1; $i -le 6 -and -not (Find-ShelfWindow); $i++) {
+        [PairInput]::Wheel(-1)
+        Start-Sleep -Milliseconds 900
+    }
+    $shelf = Find-ShelfWindow
+    if (-not $shelf) { throw 'The shelf could not be brought back after the flick check.' }
 
     # 2.4 The rail is drawn by the catcher while it holds the frame, and it is a real control:
     # without it the notch's own chrome would blink out on one page in five.

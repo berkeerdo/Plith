@@ -2853,3 +2853,47 @@ Then the driver: **13 verdicts, all passing.** Two of its own races were fixed o
 which had been reporting product failures: a restart now waits 2.5 seconds after the pipe connects
 before clicking, because a connected pipe is not a notch ready to take a click, and the removal
 loop retries a round that misses rather than abandoning the shelf half empty.
+
+### 10.18 The instrument sent notches; the hardware sends a stream (2026-09-21)
+
+Asked, after a run of 13 of 13: **how did you test this, the notch closes the moment I get to the
+shelf.** The answer is that the driver could not do what the hardware does, and this is the most
+expensive instrument defect in this document.
+
+From the person's own log:
+
+```
+22.647  Widget page committed: delta=-6, index=3/4   <- the shelf, reached
+22.664  Shelf requested / Standing aside for the shelf
+22.881  Widget page committed: delta=-3, index=2/4   <- 234 ms later, back off it
+22.881  Shelf closed by Plith: the page turned away from it
+```
+
+**Deltas of six and three.** A precision touchpad streams small deltas; `PairInput.Wheel(1)` sends
+one discrete 120 and the driver then waits 900 ms. So one flick carries several pages' worth of
+delta, which is correct behaviour between Plith's own pages and makes the shelf impossible to stop
+on: the tail of the gesture that asked for the page immediately asks for the next one.
+
+Resting the accumulator at the handover (10.14) was not enough, because the stream continues and
+234 ms of it is another 120. `OnShelfPageRequested` now ignores a forwarded WHEEL delta that
+arrives within 400 ms of a handover, on the grounds that it is the tail of the gesture that caused
+the handover rather than a new one. A rail CLICK is never ignored: it carries an index, and a click
+is a decision rather than momentum.
+
+**The driver can flick now**, `PairInput.Flick(messages, deltaPerMessage)`, and the new stage 2.3b
+drives 80 messages of six, which is 480 of delta, four times the commit threshold and enough to
+have carried past the shelf twice over. The verdict carries the mechanism rather than a yes:
+
+```
+[PASS] 2.3b a touchpad flick can stop on the shelf page
+       the shelf is up at 722,0; 3 page commit(s), 9 forwarded delta(s) ignored
+```
+
+Three commits reach the shelf and nine forwarded deltas are discarded after it. **14 of 14 on
+hardware.**
+
+The first version of the stage was wrong in a way worth recording: it paged AWAY from the shelf
+and then flicked back, and paging away closes the shelf and parks the notch, so the flick arrived
+at a collapsed notch, produced no page turns at all, and the verdict blamed the flick for carrying
+past a shelf it had never reached. A verdict that names the wrong cause is the failure mode this
+file keeps finding in itself.
