@@ -443,6 +443,7 @@ public sealed class OsdHost : BandWindow
         session.Unavailable += OnShelfUnavailable;
         // Paging while the catcher holds the frame. It arrives here because the pager is here.
         session.PageRequested += OnShelfPageRequested;
+        session.Shown += OnShelfShown;
     }
 
     /// <summary>
@@ -702,7 +703,25 @@ public sealed class OsdHost : BandWindow
         }
 
         _standAside = StandAsideReason.Shelf;
-        HideForCatcher();
+
+        // THE WINDOW DOES NOT GO DOWN HERE ANY MORE, and that is the difference between a
+        // handover and a blink.
+        //
+        // Opened fires when the REQUEST goes out. The catcher's window arrives about 25 ms later,
+        // and hiding on this event left those milliseconds with nothing on screen, which a person
+        // reported as the shelf closing and instantly reopening. The catcher answers with
+        // ShelfShown once its window is up (see OnShelfShown), and the hide happens there.
+        //
+        // With a TIMEOUT, because an answer that never comes must not leave Plith's window over
+        // the shelf: in a Release build Plith is in the UIAccess band and the catcher is not, so
+        // Plith's window sits ABOVE it, and a missing hide would mean a shelf nobody can see.
+        // The fallback is the old behaviour, which was merely ugly.
+        _shelfShownWait?.Stop();
+        _shelfShownWait ??= new DispatcherTimer(DispatcherPriority.Send, Dispatcher);
+        _shelfShownWait.Interval = ShelfShownTimeout;
+        _shelfShownWait.Tick -= OnShelfShownTimedOut;
+        _shelfShownWait.Tick += OnShelfShownTimedOut;
+        _shelfShownWait.Start();
 
         // The hide timer is deliberately LEFT RUNNING, and stopping it was the first version.
         //
@@ -720,6 +739,44 @@ public sealed class OsdHost : BandWindow
         // and re-derives click-through, and its HideWindowIfPossible is guarded by the same
         // covered-monitor condition RestoreNotch is.
         _log?.Info("Shelf", "Standing aside for the shelf.");
+    }
+
+    /// <summary>How long Plith waits for the catcher to say its window is up before hiding
+    /// anyway. Generous next to the 25 ms the answer actually takes, and short enough that a
+    /// catcher which never answers costs a flicker rather than a visible wait.</summary>
+    private static readonly TimeSpan ShelfShownTimeout = TimeSpan.FromMilliseconds(400);
+
+    private DispatcherTimer? _shelfShownWait;
+
+    /// <summary>
+    /// The catcher's shelf is on screen. Take Plith's window down, with nothing visible between
+    /// the two.
+    /// </summary>
+    private void OnShelfShown()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnShelfShown));
+            return;
+        }
+
+        _shelfShownWait?.Stop();
+
+        // Guarded, because this arrives from another process and may arrive late: a ShelfShown
+        // for a shelf that has already closed must not hide the notch that came back.
+        if (_standAside != StandAsideReason.Shelf) return;
+
+        HideForCatcher();
+    }
+
+    private void OnShelfShownTimedOut(object? sender, EventArgs e)
+    {
+        _shelfShownWait?.Stop();
+        if (_standAside != StandAsideReason.Shelf) return;
+
+        _log?.Warn("Shelf", "The catcher never said its window was up; hiding anyway after " +
+                            $"{ShelfShownTimeout.TotalMilliseconds:0} ms.");
+        HideForCatcher();
     }
 
     private void OnShelfClosed()

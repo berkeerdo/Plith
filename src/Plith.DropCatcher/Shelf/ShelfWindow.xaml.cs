@@ -65,10 +65,18 @@ public partial class ShelfWindow : Window
     /// same reason: both stand in for the notch, and a stand-in that arrives at a different speed
     /// reads as a second object rather than the same one continuing.
     /// </summary>
-    // 150, not 220. The longer run was paced for a shape that grew from a 190 by 6 strip into a
-    // pane; a card that only fades wants to be quick, and 220 ms of fading reads as a lag between
-    // the release and the result.
-    private static readonly Duration GrowDuration = new(TimeSpan.FromMilliseconds(150));
+    // 70, and the number has come down twice for two different reasons.
+    //
+    // It was 220, paced for a shape that grew from a 190 by 6 strip into a pane. The shape stopped
+    // growing when the shelf became the notch's frame, leaving only a fade, and a 220 ms fade
+    // reads as lag between the release and the result: 150.
+    //
+    // Now that Plith waits for ShelfShown before hiding its own window (see the verb's own
+    // comment), the fade is no longer covering a gap - Plith's page is BEHIND it - so its only
+    // job is to stop a one-frame tear between the two surfaces. It is a crossfade between two
+    // pages that do not look alike, and the less of it there is, the less it reads as two shelves.
+    // 70 ms is four frames at 60 Hz: enough to never cut, short enough to never be watched.
+    private static readonly Duration GrowDuration = new(TimeSpan.FromMilliseconds(70));
 
     /// <summary>
     /// How long the shelf waits after the pointer leaves before it takes itself down.

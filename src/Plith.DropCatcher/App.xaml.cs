@@ -166,6 +166,12 @@ public partial class App : Application, IDisposable
             case DropVerb.OpenShelf:
                 _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
 
+                // Sent the moment the window is up, so Plith can take its own down without
+                // leaving a gap between the two. OpenAt has already called Show and placed the
+                // window by the time it returns, so this is not a promise about a future frame:
+                // the surface is on screen.
+                _ = _client?.SendAsync(new DropMessage(DropVerb.ShelfShown, 0, 0, 0, 0, []));
+
                 // Opened by a drop, rather than by paging to the shelf: hold it on screen, or the
                 // pointer that is already leaving takes it down within a second.
                 if (DateTime.UtcNow - _droppedAt < DropWindow)

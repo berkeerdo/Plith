@@ -2769,3 +2769,36 @@ second gesture. Nothing else changes: within Plith's four pages a long swipe sti
 them as it always did.
 
 Driven on hardware after the change: 13 verdicts, all passing.
+
+### 10.15 The handover looked like one shelf closing and another opening (2026-09-21)
+
+Reported: the transition is not smooth, it is as if the shelf closes and instantly reopens, like a
+double shelf. It was a GAP, and the gap was in the ordering.
+
+Plith hid its own window the instant it had sent `OpenShelf`. The catcher's window arrives about
+25 ms later (measured: `Shelf requested` at 59.045, `Shelf opened` at 59.068) and then faded in
+over 150 ms. Between the two there was nothing on screen at all.
+
+**The wire now has one acknowledgement**, `ShelfShown`, sent by the catcher the moment `OpenAt`
+returns with the window placed and shown. Plith hides on that instead. Every other verb here is
+fire-and-forget on purpose, and `Open`'s own comment says why, so this one is answered with a
+**400 ms timeout**: in a Release build Plith sits in the UIAccess band and the catcher does not, so
+Plith's window is ABOVE it, and a hide that never happened would mean a shelf nobody can see. The
+fallback is the old behaviour, which was merely ugly. Across every run since, the timeout has
+fired zero times.
+
+And the fade came down from 150 ms to **70**, four frames at 60 Hz. Its job used to be covering
+the gap; with Plith's page behind it there is nothing to cover, so all it does now is stop a
+one-frame tear between two surfaces that do not look alike. The less of it there is, the less it
+reads as two shelves.
+
+Driven on hardware after the change: 13 verdicts, all passing.
+
+**The driver is flaky at the margins, and it is worth writing down rather than hiding.** Across
+five runs of this stage: three gave 13 of 13; one gave 11 verdicts with no failures among them,
+meaning the script threw after the eleventh; and one gave two transient failures, a removal round
+that clicked without removing and a `2.6` that found the shelf still up 1.2 seconds after the
+wheel. The run immediately after showed `2.6` working in the log (`page committed index=0/4`,
+`Shelf closed by Plith`, `notch back`), so the product path is sound and the instrument's timing is
+not. The removal loop re-finds its target between the hover and the click, which is where that
+flake most likely lives.

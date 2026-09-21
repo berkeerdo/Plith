@@ -61,6 +61,15 @@ public sealed class ShelfSession
     /// </summary>
     public event Action<int, int>? PageRequested;
 
+    /// <summary>
+    /// The shelf's window is on screen. Plith's own window can go down now, with nothing visible
+    /// between the two.
+    ///
+    /// Distinct from <see cref="Opened"/>, which fires when the REQUEST goes out and is what the
+    /// notch's stand-aside bookkeeping keys on. This one is the catcher answering.
+    /// </summary>
+    public event Action? Shown;
+
     /// <summary>The catcher has been asked to show the shelf. Raised before it has done so:
     /// there is no acknowledgement on the wire, and waiting for one that does not exist would
     /// mean the notch staying up over a shelf that is already growing.</summary>
@@ -229,6 +238,10 @@ public sealed class ShelfSession
             case DropVerb.ShelfClosed:
                 _shelfOpen = false;
                 Closed?.Invoke();
+                break;
+
+            case DropVerb.ShelfShown:
+                Shown?.Invoke();
                 break;
 
             case DropVerb.Page:

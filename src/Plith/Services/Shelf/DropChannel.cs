@@ -41,6 +41,21 @@ public enum DropVerb
     ShelfClosed,
 
     /// <summary>
+    /// Catcher to Plith: the shelf's window is ON SCREEN. Plith may take its own window down.
+    ///
+    /// THE ONLY ACKNOWLEDGEMENT ON THIS WIRE, and it exists because its absence was visible.
+    /// Plith used to hide the instant it had sent OpenShelf, and the catcher's window arrives
+    /// about 25 ms later and then faded in over 150: between the two there was nothing on screen
+    /// at all, which a person reported as the shelf closing and reopening, "like a double shelf".
+    ///
+    /// Every other verb here is fire-and-forget on purpose, and the comments on Open and Opened
+    /// say why: waiting for an answer that may never come would leave Plith's window hidden
+    /// behind a shelf that never appeared. This one is answered with a TIMEOUT rather than
+    /// trusted, so the worst case is the old behaviour rather than a missing notch.
+    /// </summary>
+    ShelfShown,
+
+    /// <summary>
     /// Plith to catcher: take the shelf down.
     ///
     /// New with the shelf becoming a page in the notch's frame. Until then the shelf only ever
