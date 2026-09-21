@@ -518,8 +518,6 @@ public partial class ShelfWindow : Window
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut },
             });
-
-            SlidePageIn();
         }
 
         // Logged rather than assumed. A process that is not already the foreground process is not
@@ -605,20 +603,7 @@ public partial class ShelfWindow : Window
 
     /// <summary>The notch's rail, as Plith sees it: the page count and the shelf's own index.
     /// </summary>
-    public void SetRail(int pageCount, int shelfIndex, int slideDirection)
-    {
-        Page.SetRail(pageCount, shelfIndex);
-        _slideDirection = slideDirection;
-    }
-
-    /// <summary>
-    /// Which way the page turn bringing this shelf in was going, so the page can slide the way
-    /// Plith's own four pages do. Zero means no slide: an open that was not a page turn.
-    ///
-    /// Arrives with the Rail message, which is sent immediately before OpenShelf, so it is always
-    /// set by the time OpenAt runs.
-    /// </summary>
-    private int _slideDirection;
+    public void SetRail(int pageCount, int shelfIndex) => Page.SetRail(pageCount, shelfIndex);
 
     /// <summary>The whole shelf, as one message. See ShelfModel.SetItems.</summary>
     public void SetItems(IReadOnlyList<string> paths)
@@ -1018,40 +1003,19 @@ public partial class ShelfWindow : Window
         if (Page.HandleKey(e.Key)) e.Handled = true;
     }
 
-    /// <summary>
-    /// Bring the page in from the side the page turn came from, exactly as WidgetFrame does for
-    /// Plith's own four pages.
-    ///
-    /// REPORTED AS "the transition to that widget is not smooth like the others", and it was not:
-    /// the other four pages slide 40 DIP on a 260 ms CubicEase EaseOut while fading in, and this
-    /// one simply appeared with the card's own 70 ms fade. Two processes animating the same
-    /// movement have to agree on the distance, the duration and the easing, so the first two come
-    /// from NotchGeometry (PageSlideDip, PageSlideMs) and the third is the same curve written out
-    /// in both places.
-    ///
-    /// No slide when the direction is zero, which is an open that was not a page turn: a drop's
-    /// acknowledgement has nothing travelling, so a page that slid in would be movement with no
-    /// gesture behind it.
-    /// </summary>
-    private void SlidePageIn()
-    {
-        if (_slideDirection == 0)
-        {
-            Page.RenderTransform = null;
-            return;
-        }
-
-        var from = _slideDirection >= 0 ? NotchGeometry.PageSlideDip : -NotchGeometry.PageSlideDip;
-        var shift = new TranslateTransform(from, 0);
-        Page.RenderTransform = shift;
-
-        var ease = new CubicEase { EasingMode = EasingMode.EaseOut };
-        shift.BeginAnimation(TranslateTransform.XProperty,
-            new DoubleAnimation(0, TimeSpan.FromMilliseconds(NotchGeometry.PageSlideMs))
-            {
-                EasingFunction = ease,
-            });
-    }
+    // SlidePageIn is DELETED, one commit after it was added, and the reason is worth more than
+    // the code was.
+    //
+    // It slid this page in from the side the page turn came from, to match the four pages Plith
+    // draws itself. On screen that was WORSE, reported as stuttering: Plith's own frame was ALSO
+    // sliding a page, its blank shelf placeholder, and two processes animating one page turn with
+    // a window handover in the middle cannot line up. What a person saw was a slide, then a
+    // second slide starting from wherever the first had got to.
+    //
+    // The arrival is ONE event now: the outgoing page slides away inside Plith's frame, and the
+    // shelf's window appears at the same rectangle with the same shadow and a four-frame fade.
+    // Plith no longer slides the blank placeholder either (see OsdHost's call to SyncToPager),
+    // so there is exactly one movement and one arrival rather than two of each.
 
     private nint OnWindowMessage(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
     {

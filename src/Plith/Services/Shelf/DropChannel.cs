@@ -67,11 +67,12 @@ public enum DropVerb
     CloseShelf,
 
     /// <summary>
-    /// Plith to catcher: how the notch's page rail should look while the catcher holds the frame,
-    /// and which way the page turn that is bringing it in was going.
-    /// X is how many pages there are, Y is the index of the shelf's own page, and W is the slide
-    /// DIRECTION: 1 for a page arriving from the right, -1 from the left, 0 for no slide at all
-    /// (an open that was not a page turn, such as a drop's acknowledgement).
+    /// Plith to catcher: how the notch's page rail should look while the catcher holds the frame.
+    /// X is how many pages there are, Y is the index of the shelf's own page.
+    ///
+    /// It carried a slide direction in W for one commit. That is gone with the slide: two
+    /// processes cannot animate one page turn across a window handover, and the attempt read as
+    /// stuttering.
     ///
     /// The catcher cannot know either. Only Plith knows how many widget pages are installed,
     /// which depends on settings (the weather page comes and goes), and without this the rail

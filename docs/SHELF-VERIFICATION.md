@@ -3116,3 +3116,31 @@ open cannot inherit one.
 **14 of 14 on hardware**, and this is the fifth thing that had to match between the two surfaces
 before the handover stopped being visible: the rectangle (10.24), the shadow (10.24), the gap
 (10.15), the fade (10.15) and now the movement.
+
+### 10.26 Two processes cannot animate one page turn (2026-09-22)
+
+Reported one commit after 10.25: **more buggy now, only that widget slides, and it stutters.**
+
+10.25 was wrong, and the mistake is worth keeping. Matching the slide meant the CATCHER animated
+the page turn onto the shelf, and Plith's frame was already animating the same page turn: its own
+blank shelf placeholder slid in while the catcher's real page slid in behind it, with a window
+handover between the two and no way for either to know where the other had got to. What a person
+sees is a slide, then a second slide starting from wherever the first one was.
+
+**The turn onto the shelf is ONE event now.** The outgoing page slides away inside Plith's frame,
+and the shelf's window arrives at the same rectangle with the same shadow and a four-frame fade.
+Nobody slides the shelf page:
+
+- `SlidePageIn` is deleted from `ShelfWindow`, one commit after it was added, and the slide
+  direction is off the wire with it.
+- `OsdHost.SlideDirectionTo` passes 0 to `SyncToPager` when the page arriving is the shelf, so
+  Plith stops sliding a blank placeholder that something else is about to cover. Turns between
+  Plith's own four pages are untouched.
+
+Three arrangements were tried on real hardware and the person judged each: only Plith sliding the
+placeholder read as "not smooth like the others" (10.25's report), both sliding read as stuttering,
+and neither sliding is what ships. **The middle one was the worst, which is the part worth
+remembering: making two surfaces match is not the same as making two processes agree, and the
+second is not always possible.**
+
+14 of 14 on hardware, 641 tests, three lints and the renders green.

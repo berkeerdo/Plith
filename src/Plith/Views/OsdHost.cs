@@ -614,11 +614,11 @@ public sealed class OsdHost : BandWindow
     /// itself refuses a second Open while the shelf is up, but relying on that would make this
     /// method's correctness depend on another class's guard.
     /// </summary>
-    private void ReconcileShelfFrame(int slideDirection = 0)
+    private void ReconcileShelfFrame()
     {
         if (!Dispatcher.CheckAccess())
         {
-            Dispatcher.BeginInvoke(new Action(() => ReconcileShelfFrame(slideDirection)));
+            Dispatcher.BeginInvoke(new Action(ReconcileShelfFrame));
             return;
         }
 
@@ -669,11 +669,6 @@ public sealed class OsdHost : BandWindow
             // blink out on one page in five.
             _shelfSession.RailPageCount = _pager.PageCount;
             _shelfSession.RailShelfIndex = _shelfPageIndex;
-
-            // The direction the page turn was going, so the catcher's page slides in the way
-            // Plith's own four do rather than fading. Zero when this open was not a page turn at
-            // all, which is a drop's acknowledgement: nothing was travelling, so nothing slides.
-            _shelfSession.RailSlideDirection = slideDirection;
             OpenShelf();
         }
         else
@@ -694,6 +689,25 @@ public sealed class OsdHost : BandWindow
 
     /// <summary>When the frame last changed hands, for <see cref="ShelfSettleMs"/>.</summary>
     private long _shelfHandoverAt;
+
+    /// <summary>
+    /// The direction a page turn should SLIDE, which is zero when the page arriving is the shelf.
+    ///
+    /// The shelf page draws nothing: the catcher's window covers it about 25 ms later and is the
+    /// thing a person actually sees. Sliding the placeholder therefore animates a blank
+    /// rectangle, and then the real surface appears part-way through that movement, which is what
+    /// was reported as stuttering.
+    ///
+    /// Sliding it in the CATCHER instead was tried and was worse, because then both processes
+    /// animated the same page turn and neither could line up with the other; that attempt lasted
+    /// one commit (see ShelfWindow, where SlidePageIn used to be).
+    ///
+    /// So the turn onto the shelf is ONE event: the outgoing page slides away, and the shelf's
+    /// window arrives at the same rectangle with the same shadow and a four-frame fade. Turns
+    /// between Plith's own four pages are untouched.
+    /// </summary>
+    private int SlideDirectionTo(int index, int direction) =>
+        index == _shelfPageIndex ? 0 : direction;
 
     /// <summary>
     /// A paging gesture arrived from the catcher while it was holding the frame.
@@ -1370,9 +1384,8 @@ public sealed class OsdHost : BandWindow
     {
         var before = _pager.Index;
         if (!_pager.GoTo(index)) return;
-        var direction = Math.Sign(_pager.Index - before);
-        _widgets.SyncToPager(direction);
-        ReconcileShelfFrame(direction);
+        _widgets.SyncToPager(SlideDirectionTo(_pager.Index, Math.Sign(_pager.Index - before)));
+        ReconcileShelfFrame();
     }
 
     private void OnHorizontalWheel(object? sender, int delta)
@@ -1386,7 +1399,7 @@ public sealed class OsdHost : BandWindow
         // gap rule stays testable.
         if (!_pager.Accumulate(delta, Environment.TickCount64)) return;
 
-        _widgets.SyncToPager(Math.Sign(delta));
+        _widgets.SyncToPager(SlideDirectionTo(_pager.Index, Math.Sign(delta)));
 
         // Logged because this is the only way the user's own touchpad can be characterised
         // later: the commit threshold and the rearm floor are provisional constants, and
@@ -1394,9 +1407,8 @@ public sealed class OsdHost : BandWindow
         // inside; three external sampling harnesses during slice 2 all gave misleading answers.
         _log?.Info("OsdHost", $"Widget page committed: delta={delta}, index={_pager.Index}/{_pager.PageCount}");
 
-        // The page turn IS the handover, in both directions, and it carries which way it went so
-        // the catcher's page can arrive on the same curve as Plith's own.
-        ReconcileShelfFrame(Math.Sign(delta));
+        // The page turn IS the handover, in both directions.
+        ReconcileShelfFrame();
     }
 
     /// <summary>
