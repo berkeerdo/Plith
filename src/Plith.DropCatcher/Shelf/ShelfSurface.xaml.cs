@@ -39,9 +39,12 @@ public partial class ShelfSurface : UserControl
     /// of these two, which is what makes "every file on the shelf is on the screen" a fact about
     /// the code rather than a thing to remember.
     /// </summary>
-    private const double TileSize = NotchGeometry.ShelfTileSize;
+    private const double TileWidth = NotchGeometry.ShelfTileWidth;
 
-    /// <inheritdoc cref="TileSize"/>
+    /// <inheritdoc cref="TileWidth"/>
+    private const double TileHeight = NotchGeometry.ShelfTileHeight;
+
+    /// <inheritdoc cref="TileWidth"/>
     private const double Gap = NotchGeometry.ShelfGap;
 
     /// <summary>Icon geometry duplicated from Resources/PlithIcons.xaml's IconDocument, not
@@ -102,6 +105,10 @@ public partial class ShelfSurface : UserControl
     /// not in anything the tile or the drop target itself remembers.</summary>
     private ShelfModel? _lastModel;
 
+    /// <summary>The page's context menu, built once: it belongs to the page, not to a render.
+    /// </summary>
+    private ContextMenu? _pageMenu;
+
 
     /// <summary>The context menu a tile currently has open, or null. Tracked here rather than
     /// left to be inferred from ContextMenuOpening/Closing bubbling up from whatever tile owns
@@ -135,6 +142,7 @@ public partial class ShelfSurface : UserControl
     public ShelfSurface()
     {
         InitializeComponent();
+        _pageMenu = BuildPageMenu();
 
         // A button-DOWN anywhere on this control ends the previous press before the new one is
         // recorded. Tunnelling reaches this root first, so a down that goes on to run BeginPress
@@ -171,7 +179,6 @@ public partial class ShelfSurface : UserControl
 
     /// <summary>Raised by the close box. ShelfWindow decides when the shelf can actually go
     /// down.</summary>
-    public event Action? CloseRequested;
 
     /// <summary>Take these paths off the shelf: the tile's own selection, or the whole current
     /// selection if the tile removed belongs to it. Raised by the hover affordance and by the
@@ -258,6 +265,26 @@ public partial class ShelfSurface : UserControl
     /// selected. A surface that takes focus and then answers no key is worse than one that never
     /// took focus, which is the whole reason this exists.
     /// </summary>
+    /// <summary>
+    /// Select every tile, which with Delete is how the shelf is cleared from the keyboard.
+    ///
+    /// It exists because the Clear button does not. The header that carried one cost 40 DIP of a
+    /// 121 DIP band, which is the difference between two rows of tiles and one, so Clear moved to
+    /// a context menu for the mouse and to this for the keyboard. A destructive action reachable
+    /// only by right-click would be reachable only by a mouse.
+    ///
+    /// Renders, because the selection ring is painted at render time from the selection it was
+    /// handed: selecting without rendering selects invisibly.
+    /// </summary>
+    public void SelectAll()
+    {
+        if (_lastModel is not { } model) return;
+        if (model.Items.Count == 0) return;
+
+        model.SelectAll();
+        Render(model);
+    }
+
     public bool HandleKey(Key key)
     {
         if (_lastModel is not { } model) return false;
@@ -407,15 +434,9 @@ public partial class ShelfSurface : UserControl
 
         var items = model.Items;
 
-        // The header count, set here rather than in either branch below, so an empty shelf
-        // cannot be left showing the number the last full one had.
-        HeaderCount.Text = items.Count switch
-        {
-            0 => string.Empty,
-            1 => "1 file",
-            _ => string.Create(CultureInfo.CurrentCulture, $"{items.Count} files"),
-        };
-        HeaderCount.Visibility = items.Count == 0 ? Visibility.Collapsed : Visibility.Visible;
+        // The page's own menu, present only when there is something to clear. A menu whose single
+        // item would do nothing is worse than no menu: it answers a right-click with a dead word.
+        ColumnsHost.ContextMenu = items.Count > 0 ? _pageMenu : null;
 
         if (items.Count == 0)
         {
@@ -560,7 +581,7 @@ public partial class ShelfSurface : UserControl
             // A full first row (six files or more) still measures the same 360 as before, so the
             // wrap point and the capacity guarantee above are untouched.
             Width = Math.Min(items.Count, NotchGeometry.ShelfTilesPerRow)
-                  * (NotchGeometry.ShelfTileSize + NotchGeometry.ShelfGap),
+                  * (NotchGeometry.ShelfTileWidth + NotchGeometry.ShelfGap),
             Orientation = Orientation.Horizontal,
             HorizontalAlignment = HorizontalAlignment.Center,
         };
@@ -644,7 +665,6 @@ public partial class ShelfSurface : UserControl
     // clearing it deletes nothing on disk, and a confirmation dialog for a reversible action on
     // a surface this small is friction rather than safety. If a future change makes Clear do
     // something that is NOT trivially reversible, this is the line that stops being true.
-    private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
 
     /// <summary>
     /// The close box.
@@ -654,7 +674,6 @@ public partial class ShelfSurface : UserControl
     /// while a drag or a context menu is in flight, and calling Hide() from here would take a
     /// live drag down with it.
     /// </summary>
-    private void OnCloseClick(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     /// <param name="index">Where this tile sits in the flat list, carried only so a mouse press
     /// on it can set keyboard navigation's position to match (see the press handler below), so an
@@ -690,10 +709,14 @@ public partial class ShelfSurface : UserControl
         var label = new TextBlock
         {
             Text = entry.Name,
-            FontSize = 10,
-            LineHeight = 12,
+            FontSize = 9.5,
+            LineHeight = 11,
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            Margin = new Thickness(0, 4, 0, 0),
+            // Two, not four: the tile is 52 tall and its content (a 22 icon, this gap and
+            // two 11 DIP lines of name) has to fit inside the padding as well. At four each
+            // the stack came to 47 in a 44 DIP box and the second line of every long name
+            // was clipped, which a render showed and no gate could.
+            Margin = new Thickness(0, 2, 0, 0),
             Foreground = (Brush)FindResource("NotchInk"),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
@@ -707,14 +730,19 @@ public partial class ShelfSurface : UserControl
             // overflow its line instead of tearing it apart, where CharacterEllipsis then trims
             // it. Verified by rendering both modes on the same two names side by side.
             TextWrapping = TextWrapping.WrapWithOverflow,
-            // A FIXED height, not a maximum: ShelfWidget's tiles found this the hard way. With a
+            // TWO lines, at 9.5 rather than one at 11, and the difference was measured rather
+            // than argued: at 11 on a 56 DIP tile a name is cut after about seven characters, so
+            // "Project assets" rendered as "Proje...". Two lines at 9.5 fit the same 52 DIP tile
+            // (a 22 icon, 3 of margin, two 11 DIP lines, 4 of padding is 51) and carry roughly
+            // twice the name.
+            //
+            // Fixed rather than a maximum, for the reason the original comment gives: with a
             // maximum, a one-line name makes a shorter stack than a two-line one and neighbouring
-            // tiles' icons land at different heights, visible in the render as a row that does
-            // not line up.
-            Height = 24,
+            // tiles' icons land at different heights.
+            Height = 22,
             VerticalAlignment = VerticalAlignment.Top,
             TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = TileSize - 8,
+            MaxWidth = TileWidth - 4,
         };
 
         var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
@@ -731,8 +759,8 @@ public partial class ShelfSurface : UserControl
 
         var tile = new NamedBorder
         {
-            Width = TileSize,
-            Height = TileSize,
+            Width = TileWidth,
+            Height = TileHeight,
             CornerRadius = new CornerRadius(8),
             // HALF THE GAP ON EACH SIDE, not a whole one on the right.
             //
@@ -762,7 +790,9 @@ public partial class ShelfSurface : UserControl
             // tile did not follow it. render-widgets.ps1's tile-hit check now fails the build if
             // this is removed, because no other check here asks which element a POINT belongs to.
             Background = Brushes.Transparent,
-            Padding = new Thickness(4),
+            // TWO, for the same arithmetic as the label's margin above: 4 a side left a 44 DIP
+            // box for 47 DIP of content and clipped the second line of every long name.
+            Padding = new Thickness(2),
             Cursor = Cursors.Hand,
             Child = overlay,
         };
@@ -861,6 +891,164 @@ public partial class ShelfSurface : UserControl
         };
 
         return button;
+    }
+
+    /// <summary>
+    /// A page on the rail was asked for. Carries the page index, which only Plith can act on.
+    /// </summary>
+    public event Action<int>? PageRequested;
+
+    /// <summary>
+    /// How the notch's rail should look while this surface holds the frame: how many pages there
+    /// are, and which one is the shelf.
+    ///
+    /// Arrives over the wire because neither number is knowable here. A count of one or zero
+    /// draws nothing, the same rule WidgetFrame follows: a rail with one segment is a rail that
+    /// says there is nowhere else to go.
+    /// </summary>
+    public void SetRail(int pageCount, int shelfIndex)
+    {
+        _railPageCount = pageCount;
+        _railShelfIndex = shelfIndex;
+        BuildRail();
+    }
+
+    private int _railPageCount;
+    private int _railShelfIndex;
+
+    /// <summary>The rail's own size, copied from WidgetFrame.xaml rather than shared, because it
+    /// is two numbers in a XAML file this project cannot reach. They must match: the rail is the
+    /// one piece of chrome a person sees on both Plith's pages and this one, and a rail that
+    /// changed width on the page turn onto the shelf would announce the handover.</summary>
+    private const double RailWidth = 76;
+
+    /// <inheritdoc cref="RailWidth"/>
+    private const double RailHeight = 16;
+
+    /// <summary>
+    /// The rail: a 3 DIP track with a pip over the current page, and a 16 DIP hit target around
+    /// it, which is WidgetFrame's own arrangement down to the numbers.
+    ///
+    /// Drawn here rather than declared in XAML because the page count arrives at runtime, and
+    /// drawn at all because Plith's window is hidden while this surface is up: without it the
+    /// rail would vanish on one page out of five and come back on the others.
+    /// </summary>
+    private void BuildRail()
+    {
+        Rail.Children.Clear();
+        if (_railPageCount <= 1) { Rail.Visibility = Visibility.Collapsed; return; }
+
+        Rail.Visibility = Visibility.Visible;
+
+        // A BUTTON, not the Grid this was first written as, and the accessibility lint is what
+        // said so: WPF gives a Grid no automation peer, so the name below would have reached
+        // nothing and a screen reader would have found an unnamed clickable strip. A Button has a
+        // peer, announces its name, and carries an invoke pattern, which is what a control that
+        // pages actually is.
+        //
+        // Focusable = false all the same. The tiles own the keyboard here (arrows, Space, Enter,
+        // Delete, Ctrl+A), and a focusable rail would sit in that tab order between them and
+        // whatever pressed a key next.
+        var track = new Button
+        {
+            Width = RailWidth,
+            Height = RailHeight,
+            Background = Brushes.Transparent,
+            BorderThickness = new Thickness(0),
+            Padding = new Thickness(0),
+            Focusable = false,
+            Cursor = Cursors.Hand,
+            Template = TransparentButtonTemplate(),
+        };
+        AutomationProperties.SetName(track, string.Create(CultureInfo.CurrentCulture,
+            $"Page {_railShelfIndex + 1} of {_railPageCount}"));
+
+        var marks = new Grid();
+        track.Content = marks;
+
+        marks.Children.Add(new Border
+        {
+            Height = 3,
+            VerticalAlignment = VerticalAlignment.Center,
+            CornerRadius = new CornerRadius(1.5),
+            Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+        });
+
+        var segment = RailWidth / _railPageCount;
+        marks.Children.Add(new Border
+        {
+            Width = segment,
+            Height = 3,
+            VerticalAlignment = VerticalAlignment.Center,
+            HorizontalAlignment = HorizontalAlignment.Left,
+            Margin = new Thickness(segment * _railShelfIndex, 0, 0, 0),
+            CornerRadius = new CornerRadius(1.5),
+            IsHitTestVisible = false,
+            // AccentBrush, which is what Apply defines here. It was OsdAccent, Plith's own key,
+            // and FindResource THREW on it: this project builds its palette from the seven values
+            // that come over the wire and never sees Plith's dictionaries. The throw cost the
+            // OpenShelf message that followed the rail's (see App.OnReceived) and the shelf
+            // simply never appeared.
+            Background = (Brush)FindResource("AccentBrush"),
+        });
+
+        // A click pages, which is the only way to reach another page without a wheel. The index
+        // is computed from where in the track the press landed, exactly as WidgetFrame does it.
+        track.PreviewMouseLeftButtonUp += (_, e) =>
+        {
+            var x = e.GetPosition(track).X;
+            var index = (int)Math.Floor(x / segment);
+            if (index < 0) index = 0;
+            if (index >= _railPageCount) index = _railPageCount - 1;
+            e.Handled = true;
+            if (index != _railShelfIndex) PageRequested?.Invoke(index);
+        };
+
+        Rail.Children.Add(track);
+    }
+
+    /// <summary>
+    /// A button that draws nothing but its content.
+    ///
+    /// The rail is a 3 DIP mark in a 16 DIP target, and WPF's default button template would paint
+    /// a grey chrome over both. Built in code for the same reason everything else on this surface
+    /// is: this project cannot reach Plith's resource dictionaries.
+    /// </summary>
+    private static ControlTemplate TransparentButtonTemplate()
+    {
+        var presenter = new FrameworkElementFactory(typeof(ContentPresenter));
+        presenter.SetValue(ContentPresenter.HorizontalAlignmentProperty, HorizontalAlignment.Stretch);
+        presenter.SetValue(ContentPresenter.VerticalAlignmentProperty, VerticalAlignment.Stretch);
+
+        var root = new FrameworkElementFactory(typeof(Border));
+        root.SetValue(Border.BackgroundProperty, Brushes.Transparent);
+        root.AppendChild(presenter);
+
+        var template = new ControlTemplate(typeof(Button)) { VisualTree = root };
+        template.Seal();
+        return template;
+    }
+
+    /// <summary>
+    /// Clear, with no button anywhere.
+    ///
+    /// The header that used to carry one is gone: it cost 40 DIP of a 121 DIP band, which is the
+    /// difference between two rows of tiles and one. A context menu on the page background costs
+    /// nothing at all, and `Ctrl+A` then `Delete` reaches the same end from the keyboard, which
+    /// is the idiom every file manager already uses.
+    ///
+    /// Built once and attached to the host rather than rebuilt per render, because it belongs to
+    /// the page rather than to anything on it.
+    /// </summary>
+    private ContextMenu BuildPageMenu()
+    {
+        var clear = new MenuItem { Header = "Clear the shelf" };
+        AutomationProperties.SetName(clear, "Clear the shelf");
+        clear.Click += (_, _) => ClearRequested?.Invoke();
+
+        var menu = new ContextMenu();
+        menu.Items.Add(clear);
+        return menu;
     }
 
     /// <summary>

@@ -103,9 +103,16 @@ public static class NotchGeometry
     /// <summary>Tiles in one row of the shelf grid.</summary>
     public const int ShelfTilesPerRow = 5;
 
-    /// <summary>Rows the shelf draws. Every row is drawn; nothing folds and nothing scrolls.
+    /// <summary>
+    /// Rows the shelf draws. Every row is drawn; nothing folds and nothing scrolls.
+    ///
+    /// TWO, not three, because the shelf is the notch's own page now rather than a pane of its
+    /// own. Three rows needed 384 x 290 and that surface is what a person reported as a separate
+    /// shelf; two rows fit the 121 DIP band the open frame gives a page, with slack. The cost is
+    /// ten files instead of fifteen, and it is the right trade: a cap the surface cannot draw is
+    /// the defect this constant exists to prevent.
     /// </summary>
-    public const int ShelfRowCount = 3;
+    public const int ShelfRowCount = 2;
 
     /// <summary>
     /// The most files the shelf holds, defined as exactly what the grid can draw.
@@ -118,8 +125,26 @@ public static class NotchGeometry
     /// </summary>
     public const int ShelfCapacity = ShelfTilesPerRow * ShelfRowCount;
 
-    /// <summary>One tile, square, in DIP.</summary>
-    public const double ShelfTileSize = 64;
+    /// <summary>
+    /// One tile, in DIP. NOT square any more, and both numbers come from the frame rather than
+    /// from taste.
+    ///
+    /// Width: five tiles must fit the content band, which is 356 less the page inset's 18 a side,
+    /// so 320. A tile occupies width + gap, so 5 * (56 + 8) = 320 exactly.
+    ///
+    /// Height: two rows and one gap must fit the vertical band, which is 164 less the inset's 14
+    /// top and 29 bottom (the bottom already clears the page rail), so 121. At 52 the pair comes
+    /// to 112 and leaves slack; at 56 it would be 120 and leave one DIP, which is the kind of
+    /// margin that disappears the next time a font metric moves.
+    ///
+    /// A tile holds a 24 DIP icon over ONE line of name at 52. Two lines do not fit, and the pane
+    /// that used to carry them is gone, so a long name survives only in the tooltip. That is a
+    /// real loss, recorded in the spec rather than discovered later.
+    /// </summary>
+    public const double ShelfTileWidth = 56;
+
+    /// <summary>See <see cref="ShelfTileWidth"/> for where 52 comes from.</summary>
+    public const double ShelfTileHeight = 52;
 
     /// <summary>Columns in the output picker's grid.</summary>
     public const int OutputPickerColumns = 2;
@@ -178,68 +203,6 @@ public static class NotchGeometry
     /// in the other project and this file cannot measure it.
     /// </summary>
     private const double ShelfChromeDip = 2 + 32 + 40;
-
-    /// <summary>
-    /// The shelf surface, which is a second process's window and still belongs here.
-    ///
-    /// It lives in NotchGeometry because both ends of the wire need it and this file is already
-    /// linked into the catcher: Plith computes the rectangle it hands over, the catcher's
-    /// ShelfWindow.xaml declares the same numbers as its design size, and a third copy in a
-    /// service on Plith's side would be the one free to drift.
-    ///
-    /// The height is an EXPRESSION over the grid above, not a literal. A literal is free to stop
-    /// matching the number of rows beside it, silently, and the result is a row drawn outside the
-    /// window. See scripts/render-widgets.ps1, the shelf-surface section, which renders the
-    /// surface at exactly this size.
-    /// </summary>
-    public static readonly Size ShelfFrameDip = ShelfFrameFor(ShelfCapacity);
-
-    /// <summary>
-    /// Rows a shelf of <paramref name="itemCount"/> files needs.
-    ///
-    /// AN EMPTY SHELF GETS TWO, which is more than any single row of files needs and is the one
-    /// deliberate asymmetry here. The empty state is the only thing the shelf draws that is not a
-    /// tile: it carries an icon over a line of text, and in a single row the box around it is 352
-    /// by 64. That is the aspect ratio of a text input, and it read as a field to type in rather
-    /// than a place to drop onto, reported that way from the running build.
-    ///
-    /// Nobody watches it shrink, because the shelf cannot gain items while it is open (see
-    /// <see cref="ShelfFrameFor"/>); the next open is simply the right size for what is on it.
-    ///
-    /// The ceiling at the top because the count arrives from a caller: ShelfStore enforces the
-    /// cap, but this is the arithmetic that keeps the frame inside the design even if it did not.
-    /// </summary>
-    public static int ShelfRowsFor(int itemCount)
-        => itemCount <= 0
-            ? Math.Min(2, ShelfRowCount)
-            : Math.Clamp((int)Math.Ceiling(itemCount / (double)ShelfTilesPerRow), 1, ShelfRowCount);
-
-    /// <summary>
-    /// The frame a shelf of <paramref name="itemCount"/> files opens at.
-    ///
-    /// THE SHELF HUGS WHAT IT HOLDS, and it decides once. Two files do not open a pane sized for
-    /// fifteen, which is what a fixed three-row frame gave: a render of a seven-file shelf had a
-    /// whole empty row under it.
-    ///
-    /// Chosen at OPEN and never changed while the shelf is up. The window is sized by Plith and
-    /// applied by the catcher over the pipe, so a resize per item would spread an animation
-    /// across two processes, and every cross-process coordination on this branch has cost
-    /// several runs to get right. It is safe to decide once because while the shelf is open the
-    /// only verbs that touch the store are RemoveItems and ClearShelf, which can only make it
-    /// smaller, and the shelf window accepts no drops of its own. Removing a file reflows the
-    /// content and leaves the window alone.
-    /// </summary>
-    public static Size ShelfFrameFor(int itemCount)
-    {
-        var rows = ShelfRowsFor(itemCount);
-
-        // TILE PLUS GAP PER ROW, including the last one. A tile carries a uniform bottom margin
-        // of ShelfGap so it occupies tile + gap (see ShelfSurface.BuildTile, which spells out why
-        // the horizontal half-gaps are split and the vertical one is not), so the last row's
-        // margin is inside the grid's measurement as well. The old expression charged the gap
-        // only BETWEEN rows, and was one gap short at every row count.
-        return new Size(384, rows * (ShelfTileSize + ShelfGap) + ShelfChromeDip);
-    }
 
     /// <summary>
     /// The rail's row at the bottom of the frame, which every page keeps its content clear of.
@@ -329,27 +292,6 @@ public static class NotchGeometry
     public static double Lerp(double from, double to, double t) => from + (to - from) * Clamp01(t);
 
     /// <summary>
-    /// Where a growth into <paramref name="window"/> starts: the open frame, never larger than
-    /// the window it grows into.
-    ///
-    /// <see cref="SurfaceSize"/> only ever GROWS. It clamps at the collapsed size on both axes,
-    /// which is right while the frame is smaller than what it opens into and wrong the moment it
-    /// is not, and the shelf made it not: <see cref="ShelfFrameFor"/> hugs its contents, so a
-    /// shelf of one to five files is 139 DIP tall while the open frame is 164. Measured on
-    /// 2026-09-21: a 139 DIP window was handed a 164 DIP shape and a 164 DIP page, and the bottom
-    /// quarter of the page hung below the window. Reported from a real session as half the shelf
-    /// not being visible.
-    ///
-    /// Taking the smaller value per axis rather than skipping the growth entirely keeps the
-    /// shrinking case animating: a shelf shorter than the frame still opens, it just opens from
-    /// its own size, which is a shape appearing rather than one growing. There is nothing to
-    /// interpolate there and nothing that needs to be.
-    /// </summary>
-    public static Size GrowthStart(Size frame, Size window) => new(
-        Math.Min(frame.Width, window.Width),
-        Math.Min(frame.Height, window.Height));
-
-    /// <summary>
     /// Size of the notch surface at progress <paramref name="t"/>.
     ///
     /// <paramref name="expanded"/> is the measured size of the card content. Clamped at the
@@ -425,20 +367,21 @@ public static class NotchGeometry
                OpenFrameDip.Width, OpenFrameDip.Height);
 
     /// <summary>
-    /// Where the shelf stands: the same top edge and the same centre as the open frame, in the
-    /// shelf's own larger size.
+    /// Where the shelf stands: the notch's open frame, exactly.
     ///
-    /// The centre has to match <see cref="DropTargetRect"/> exactly, because the shelf grows OUT
-    /// of the open frame: the catcher animates from the open frame to this rectangle, and a centre
-    /// that moved by even a few DIP would read as the shape sliding sideways while it opened
-    /// rather than as the notch continuing into something larger.
+    /// It IS <see cref="DropTargetRect"/>, and this method exists anyway, for two reasons. The
+    /// name says what the rectangle is for, so a reader of ShelfSession does not have to know
+    /// that the shelf and the drop target happen to be the same box. And a second caller
+    /// computing the open frame itself is precisely how the two would drift: the previous version
+    /// of this method returned a LARGER rectangle, 384 wide by up to 290 tall, and that
+    /// difference is what a person reported as the shelf being a separate window rather than the
+    /// notch.
+    ///
+    /// The shelf no longer depends on how many files are on it. There is nothing to hug: the page
+    /// is the size of every other page.
     /// </summary>
-    public static Rect ShelfRect(Rect hoverRect, int itemCount)
-    {
-        var frame = ShelfFrameFor(itemCount);
-        return new Rect(hoverRect.Left + (hoverRect.Width - frame.Width) / 2, hoverRect.Top,
-                        frame.Width, frame.Height);
-    }
+    public static Rect ShelfPageRect(Rect hoverRect) => DropTargetRect(hoverRect);
+
 
     /// <summary>
     /// The one conversion back out of DIP, mirroring <see cref="PhysicalToDip"/>.

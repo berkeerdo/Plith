@@ -73,7 +73,7 @@
              shelf cannot open at all. -->
         <TextBlock x:Name="Hint"
                    Margin="0,10,0,0"
-                   Text="hover to open"
+                   Text="N files on the shelf"
                    FontSize="10"
                    TextAlignment="Center"
                    TextTrimming="CharacterEllipsis"

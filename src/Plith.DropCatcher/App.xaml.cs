@@ -131,7 +131,29 @@ public partial class App : Application, IDisposable
         _client.Start();
     }
 
+    /// <summary>
+    /// A message from Plith.
+    ///
+    /// WRAPPED, and the wrapper is not defensive programming for its own sake: it is here because
+    /// the absence of it cost a whole hardware run and pointed at the wrong thing. A new verb's
+    /// handler asked for a resource key this project does not define, FindResource threw, and the
+    /// throw travelled out of this Invoke and took the OpenShelf message that came after it with
+    /// it. What the catcher's log then showed was an Items line and nothing else: the shelf never
+    /// appeared, with no error anywhere, and the run blamed the pipe.
+    ///
+    /// One message failing must cost that message and nothing more. Logged rather than swallowed,
+    /// because a verb that always throws would otherwise be invisible forever.
+    /// </summary>
     private void OnReceived(DropMessage message) => Dispatcher.Invoke(() =>
+    {
+        try { Route(message); }
+        catch (Exception ex)
+        {
+            _log.Info($"Message {message.Verb} failed and was dropped: {ex.GetType().Name}: {ex.Message}");
+        }
+    }, DispatcherPriority.Send);
+
+    private void Route(DropMessage message)
     {
         switch (message.Verb)
         {
@@ -148,6 +170,15 @@ public partial class App : Application, IDisposable
                 // One message is the whole shelf now, so X and Y carry nothing and are ignored.
                 _shelf.SetItems(message.Paths);
                 break;
+            case DropVerb.CloseShelf:
+                // Plith paged away from the shelf. CloseNow refuses while a drag is in flight and
+                // remembers the order, which is why this is a send rather than a request.
+                _shelf.CloseNow();
+                break;
+            case DropVerb.Rail:
+                // How many pages there are and which one is the shelf. Neither is knowable here.
+                _shelf.SetRail((int)message.X, (int)message.Y);
+                break;
             case DropVerb.Palette:
                 if (ShelfPaletteWire.TryFromPaths(message.Paths, out var palette)) _shelf.Apply(palette);
                 else _log.Info("Palette payload did not decode; keeping the built-in colours.");
@@ -155,7 +186,7 @@ public partial class App : Application, IDisposable
             default:
                 break;
         }
-    }, DispatcherPriority.Send);
+    }
 
     /// <summary>Tell Plith to put the notch back. Hide is the verb in this direction too, and the
     /// two ends distinguish them by who sent it.</summary>
@@ -180,6 +211,10 @@ public partial class App : Application, IDisposable
             _ = _client?.SendAsync(new DropMessage(DropVerb.ClearShelf, 0, 0, 0, 0, []));
         shelf.RemoveItemsRequested += paths =>
             _ = _client?.SendAsync(new DropMessage(DropVerb.RemoveItems, 0, 0, 0, 0, paths));
+        // A paging gesture: a wheel delta or a page index, with the other zero. Carried rather
+        // than acted on, because the pager lives in Plith and there is one of it.
+        shelf.PageRequested += (delta, index) =>
+            _ = _client?.SendAsync(new DropMessage(DropVerb.Page, delta, index, 0, 0, []));
     }
 
     private static bool TryReadProbeRect(string[] args, out (int x, int y, int w, int h) rect)

@@ -55,6 +55,12 @@ public sealed class ShelfSession
         _log = log;
     }
 
+    /// <summary>
+    /// A paging gesture happened on the shelf page: a raw wheel delta, or a page index, with the
+    /// other zero. Raised on the UI thread, because App marshals every message before routing it.
+    /// </summary>
+    public event Action<int, int>? PageRequested;
+
     /// <summary>The catcher has been asked to show the shelf. Raised before it has done so:
     /// there is no acknowledgement on the wire, and waiting for one that does not exist would
     /// mean the notch staying up over a shelf that is already growing.</summary>
@@ -88,6 +94,19 @@ public sealed class ShelfSession
     /// holding the built-in fallback colours and an empty page, and repaints once the rest
     /// catches up.
     /// </summary>
+    /// <summary>
+    /// How many widget pages there are, and which one is the shelf, so the catcher can draw the
+    /// notch's own rail while it holds the frame.
+    ///
+    /// Set by OsdHost, which owns the pager, rather than read from anything here: the page list
+    /// follows settings (the weather page comes and goes) and this class has no business knowing
+    /// that. Zero means "do not draw a rail", which is what a caller that never set it gets.
+    /// </summary>
+    public int RailPageCount { get; set; }
+
+    /// <inheritdoc cref="RailPageCount"/>
+    public int RailShelfIndex { get; set; }
+
     public void Open(Rect notchRectDip, double dpiScale)
     {
         var start = DropCatcherLauncher.EnsureRunning(_log);
@@ -102,10 +121,14 @@ public sealed class ShelfSession
 
         GrantForeground();
 
-        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfRect(notchRectDip, _store.Items.Count), dpiScale);
+        // The NOTCH'S OWN FRAME, not a rectangle of the shelf's own. ShelfPageRect is
+        // DropTargetRect, and the item count is no longer an input: the shelf is a page in the
+        // frame rather than a pane that hugs its contents.
+        var (x, y, w, h) = NotchGeometry.DipToPhysical(NotchGeometry.ShelfPageRect(notchRectDip), dpiScale);
 
         Send(DropVerb.Palette, ShelfPaletteWire.ToPaths(_palette()));
         SendItems();
+        Send(DropVerb.Rail, [], RailPageCount, RailShelfIndex);
         Send(DropVerb.OpenShelf, [], x, y, w, h);
 
         // Asked AGAIN, after the sends. The first check can be stale by the time it matters: the
@@ -125,6 +148,27 @@ public sealed class ShelfSession
         _shelfOpen = true;
         _log?.Info("Shelf", $"Shelf requested at {x},{y} {w}x{h} with {_store.Items.Count} item(s).");
         Opened?.Invoke();
+    }
+
+    /// <summary>
+    /// Take the shelf down: the page turned away from it, or the frame collapsed.
+    ///
+    /// Raises <see cref="Closed"/> immediately rather than waiting for the catcher to answer with
+    /// ShelfClosed, for the same reason <see cref="Open"/> raises Opened before the shelf is on
+    /// screen: there is no acknowledgement on this wire, and waiting for one that may never come
+    /// would leave Plith's own window hidden behind a shelf that is already going away.
+    ///
+    /// A ShelfClosed that arrives afterwards is harmless: the guard below makes this idempotent
+    /// and HandleMessage's branch does the same thing again to a session that is already closed.
+    /// </summary>
+    public void Close()
+    {
+        if (!_shelfOpen) return;
+
+        _shelfOpen = false;
+        Send(DropVerb.CloseShelf, []);
+        _log?.Info("Shelf", "Shelf closed by Plith: the page turned away from it.");
+        Closed?.Invoke();
     }
 
     /// <summary>
@@ -185,6 +229,14 @@ public sealed class ShelfSession
             case DropVerb.ShelfClosed:
                 _shelfOpen = false;
                 Closed?.Invoke();
+                break;
+
+            case DropVerb.Page:
+                // Routed, not interpreted. The numbers arrive from a lower-integrity process, so
+                // they are a REQUEST: OsdHost feeds them to the same pager every other page turn
+                // goes through, which is what clamps an index and what decides whether a delta is
+                // a commit at all.
+                PageRequested?.Invoke((int)message.X, (int)message.Y);
                 break;
 
             default:

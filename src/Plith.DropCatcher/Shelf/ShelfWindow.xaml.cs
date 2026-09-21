@@ -8,6 +8,8 @@ using System.Windows.Threading;
 using Plith.Services.Shelf;
 using Plith.Views.Presentation;
 
+using Plith.Services;
+
 namespace Plith.DropCatcher.Shelf;
 
 /// <summary>
@@ -267,6 +269,9 @@ public partial class ShelfWindow : Window
         // StartDrag for what that guard is and why it is a control rather than a formality.
         Page.DragOutRequested += StartDrag;
 
+        // A click on the rail asks for a page, and only Plith can grant it.
+        Page.PageRequested += index => PageRequested?.Invoke(0, index);
+
         // ClearRequested and RemoveRequested both cross the wire, and this window does not send
         // them itself: App owns the one CatcherClient this process has, the same reason
         // CatcherWindow's FilesDropped and Withdrew are plain events rather than direct sends.
@@ -277,7 +282,6 @@ public partial class ShelfWindow : Window
         // The close box goes through Dismiss, not straight to Hide, so it obeys the same
         // deferrals every other dismissal does: a drag or a context menu in flight postpones it
         // rather than having the window vanish from under the gesture. Same entry point as Esc.
-        Page.CloseRequested += () => Dismiss("close button");
         Page.RemoveRequested += paths => RemoveItemsRequested?.Invoke(paths);
 
         // OpenRequested and RevealRequested are the opposite: they never touch the wire at all,
@@ -325,8 +329,26 @@ public partial class ShelfWindow : Window
     /// <inheritdoc cref="ClearShelfRequested"/>
     public event Action<IReadOnlyList<string>>? RemoveItemsRequested;
 
+    /// <summary>
+    /// A paging gesture on the shelf page: a wheel delta, or a page index, with the other zero.
+    ///
+    /// Raised rather than acted on, and the split is deliberate. This window can see the gesture
+    /// and cannot decide what it means: NotchPager holds the accumulator, the commit threshold
+    /// and the idle rearm, and there is one of it, in Plith. A second accumulator here would
+    /// page differently on one page out of five.
+    /// </summary>
+    public event Action<int, int>? PageRequested;
+
     private void OnSourceInitialized(object? sender, EventArgs e)
     {
+        // The wheel arrives as a window message rather than through WPF's MouseWheel event,
+        // because a TILT wheel (WM_MOUSEHWHEEL) is not a WPF event at all and the notch pages on
+        // both. WheelDecoder is LINKED from Plith rather than copied, so the sign conventions
+        // have one definition: a plain vertical wheel is negated, a tilt is not, and getting that
+        // wrong would page backwards on this page only.
+        var source = (HwndSource)PresentationSource.FromVisual(this)!;
+        source.AddHook(OnWindowMessage);
+
         var handle = new WindowInteropHelper(this).Handle;
 
         // TOOLWINDOW keeps the shelf out of Alt+Tab, exactly as it keeps the catcher out.
@@ -476,6 +498,10 @@ public partial class ShelfWindow : Window
 
         Page.Render(_model);
     }
+
+    /// <summary>The notch's rail, as Plith sees it: the page count and the shelf's own index.
+    /// </summary>
+    public void SetRail(int pageCount, int shelfIndex) => Page.SetRail(pageCount, shelfIndex);
 
     /// <summary>The whole shelf, as one message. See ShelfModel.SetItems.</summary>
     public void SetItems(IReadOnlyList<string> paths)
@@ -846,7 +872,27 @@ public partial class ShelfWindow : Window
             return;
         }
 
+        // Ctrl+A, which with Delete is how the shelf is cleared from the keyboard now that the
+        // Clear button is gone. Handled here rather than in ShelfSurface.HandleKey because that
+        // method takes a key and this needs a modifier, and threading modifiers through it would
+        // make every other key's rule harder to read for the sake of one.
+        if (e.Key == Key.A && (Keyboard.Modifiers & ModifierKeys.Control) == ModifierKeys.Control)
+        {
+            e.Handled = true;
+            Page.SelectAll();
+            return;
+        }
+
         if (Page.HandleKey(e.Key)) e.Handled = true;
+    }
+
+    private nint OnWindowMessage(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        if (WheelDecoder.TryDecode((uint)msg, wParam) is not { } delta) return nint.Zero;
+
+        handled = true;
+        PageRequested?.Invoke(delta, 0);
+        return nint.Zero;
     }
 
     /// <summary>
@@ -862,12 +908,19 @@ public partial class ShelfWindow : Window
         // rectangle Plith handed over, which is where the growth has to end up.
         var open = new Size(ActualWidth, ActualHeight);
 
-        // The growth starts from the notch's open frame, CLAMPED to the window it grows into.
-        // GrowthStart owns that rule and records what happens without it; the arithmetic lives
-        // there rather than here because this file is a Window the test project cannot construct,
-        // which is how the shelf came to be cut in half with every gate green.
-        var from = NotchGeometry.GrowthStart(NotchGeometry.OpenFrameDip, open);
-        var size = NotchGeometry.SurfaceSize(from.Width, from.Height, open, t);
+        // NOTHING GROWS ANY MORE, and that is the slice in one line: the shelf's window IS the
+        // notch's open frame, so there is no second size to interpolate toward. The shape is the
+        // window, at full size, from the first frame.
+        //
+        // What is left is the CONTENT fade below, and it is not decoration. Plith hides its own
+        // window and this one appears in its place; the two are different processes and the
+        // handover is not instantaneous, so a hard cut reads as a flash on the page turn. The
+        // fade covers it.
+        //
+        // The clamp that used to live here (GrowthStart) is deleted with the pane. It existed to
+        // stop a 164 DIP page being laid into a 139 DIP window, a case that cannot arise when
+        // both are the same rectangle by construction.
+        var size = open;
 
         Shape.Width = size.Width;
         Shape.Height = size.Height;

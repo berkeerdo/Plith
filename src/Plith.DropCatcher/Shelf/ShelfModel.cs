@@ -69,6 +69,20 @@ public sealed class ShelfModel
         if (!_selection.Remove(path)) _selection.Add(path);
     }
 
+    /// <summary>
+    /// Select everything on the shelf.
+    ///
+    /// NOT a loop over <see cref="Select"/> with additive true, which is the version that was
+    /// written first and was wrong: additive TOGGLES, so it deselects whatever was already
+    /// selected, and Ctrl+A on a shelf with one tile already picked would have left that tile out
+    /// of the very selection it was in. Cleared and refilled instead, which is what "all" means.
+    /// </summary>
+    public void SelectAll()
+    {
+        _selection.Clear();
+        foreach (var item in _items) _selection.Add(item.Path);
+    }
+
     public void ClearSelection() => _selection.Clear();
 
     /// <summary>

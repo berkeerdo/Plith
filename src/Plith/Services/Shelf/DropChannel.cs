@@ -22,9 +22,10 @@ public enum DropVerb
     /// out of travels in X/Y/W/H, the same way Show carries it.</summary>
     OpenShelf,
 
-    /// <summary>One stack of the shelf. X is its index, Y is how many stacks there are in total,
-    /// and the paths are its items, newest first. Sent once per stack so a stack boundary needs
-    /// no separator inside a field.</summary>
+    /// <summary>The whole shelf, in one message: the paths, newest first. X and Y carry nothing.
+    ///
+    /// It used to be one message per stack, with an index and a total in X and Y. Stacks are gone
+    /// and so is the reassembly that needed them.</summary>
     Items,
 
     /// <summary>The resolved theme, as seven values. See ShelfPaletteWire.</summary>
@@ -38,6 +39,38 @@ public enum DropVerb
 
     /// <summary>Catcher to Plith: the shelf surface is gone, put the notch back.</summary>
     ShelfClosed,
+
+    /// <summary>
+    /// Plith to catcher: take the shelf down.
+    ///
+    /// New with the shelf becoming a page in the notch's frame. Until then the shelf only ever
+    /// closed because the pointer left it, so Plith had nothing to say; now PAGING AWAY from the
+    /// shelf page has to close it, and only Plith knows a page turned. The catcher's CloseNow
+    /// already expected this message to exist: it defers one that arrives mid-drag and honours it
+    /// when the drag ends.
+    /// </summary>
+    CloseShelf,
+
+    /// <summary>
+    /// Plith to catcher: how the notch's page rail should look while the catcher holds the frame.
+    /// X is how many pages there are, Y is the index of the shelf's own page.
+    ///
+    /// The catcher cannot know either. Only Plith knows how many widget pages are installed,
+    /// which depends on settings (the weather page comes and goes), and without this the rail
+    /// would simply vanish on one page out of five and come back on the others, which reads as
+    /// the shelf being a different thing.
+    /// </summary>
+    Rail,
+
+    /// <summary>
+    /// Catcher to Plith: a paging gesture happened on the shelf page. X is a raw wheel delta and
+    /// Y is a page index; exactly one of the two is meaningful and the other is zero.
+    ///
+    /// THE DELTA IS RAW, deliberately. WheelDecoder and NotchPager stay in Plith, so the commit
+    /// threshold and the idle rearm have one definition rather than one per process. The catcher
+    /// reports what the hardware did; Plith decides what it means.
+    /// </summary>
+    Page,
 }
 
 /// <param name="X">Physical screen pixels, not DIP, and the same for Y/W/H.

@@ -441,6 +441,8 @@ public sealed class OsdHost : BandWindow
         session.Opened += OnShelfOpened;
         session.Closed += OnShelfClosed;
         session.Unavailable += OnShelfUnavailable;
+        // Paging while the catcher holds the frame. It arrives here because the pager is here.
+        session.PageRequested += OnShelfPageRequested;
     }
 
     /// <summary>
@@ -521,6 +523,73 @@ public sealed class OsdHost : BandWindow
         if (_standAside != StandAsideReason.None) return;
 
         _shelfSession.Open(_hoverPoller.HoverRect, _hoverPoller.DpiScale);
+    }
+
+    /// <summary>
+    /// Who holds the frame: Plith, or the catcher.
+    ///
+    /// THE ONE PLACE THAT DECIDES, called after every page commit, after the frame opens, and
+    /// when it collapses. The shelf is a page in the notch's frame now, and the catcher is what
+    /// draws that page, for a reason that is not a preference: a file can only be dragged out of
+    /// the catcher's window (Plith is high integrity in Release and DoDragDrop carries nothing
+    /// from there), and a press cannot be delegated between processes. Both measured, in
+    /// docs/SHELF-VERIFICATION.md section 4. So landing on the shelf page has to BE the handover;
+    /// anything later is a press that has already gone to the wrong window.
+    ///
+    /// Idempotent, because three callers ask and the answer is usually "no change". The session
+    /// itself refuses a second Open while the shelf is up, but relying on that would make this
+    /// method's correctness depend on another class's guard.
+    /// </summary>
+    private void ReconcileShelfFrame()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(ReconcileShelfFrame));
+            return;
+        }
+
+        if (_shelfSession is null || _shelfPageIndex < 0) return;
+
+        var wantsCatcher = _presentation is AmbientNotchPresentation notch
+                        && notch.IsOpenEnoughToShowContent
+                        && _content.PanelContent == NotchPanelContent.Widgets
+                        && _pager.Index == _shelfPageIndex;
+
+        if (wantsCatcher == (_standAside == StandAsideReason.Shelf)) return;
+
+        if (wantsCatcher)
+        {
+            // The rail's shape travels with the open: only this class knows how many pages there
+            // are, and without it the catcher would draw no rail at all and the chrome would
+            // blink out on one page in five.
+            _shelfSession.RailPageCount = _pager.PageCount;
+            _shelfSession.RailShelfIndex = _shelfPageIndex;
+            OpenShelf();
+        }
+        else
+        {
+            _shelfSession.Close();
+        }
+    }
+
+    /// <summary>
+    /// A paging gesture arrived from the catcher while it was holding the frame.
+    ///
+    /// Fed to the SAME two methods a gesture on Plith's own window reaches, rather than to the
+    /// pager directly: those methods hold the guards (edit mode, the presentation, whether the
+    /// frame is open enough to page at all) and a second path around them would page a notch that
+    /// is not there. A delta of zero means the index is meant, and vice versa.
+    /// </summary>
+    private void OnShelfPageRequested(int delta, int index)
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(() => OnShelfPageRequested(delta, index)));
+            return;
+        }
+
+        if (delta != 0) OnHorizontalWheel(this, delta);
+        else OnWidgetPageRequested(this, index);
     }
 
     private void OnShelfOpened()
@@ -1032,6 +1101,7 @@ public sealed class OsdHost : BandWindow
         var before = _pager.Index;
         if (!_pager.GoTo(index)) return;
         _widgets.SyncToPager(Math.Sign(_pager.Index - before));
+        ReconcileShelfFrame();
     }
 
     private void OnHorizontalWheel(object? sender, int delta)
@@ -1052,6 +1122,9 @@ public sealed class OsdHost : BandWindow
         // whether they are right can only be read back from a real gesture. Instrument from
         // inside; three external sampling harnesses during slice 2 all gave misleading answers.
         _log?.Info("OsdHost", $"Widget page committed: delta={delta}, index={_pager.Index}/{_pager.PageCount}");
+
+        // The page turn IS the handover, in both directions.
+        ReconcileShelfFrame();
     }
 
     /// <summary>

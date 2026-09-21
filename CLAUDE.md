@@ -4,7 +4,21 @@ Modern Windows audio OSD with Voicemeeter-first design + integrated media contro
 
 ## Status
 
-**0.2.0 is the current release. Everything below is in `main`.** Phases 1 to 7 plus
+**The shelf is the notch's own page, on `main`, not yet released.** Paging onto the shelf page
+hands the frame to `Plith.DropCatcher`, which draws it at the notch's own 356 x 164 with the notch's
+own rail, so a file is dragged straight out of the notch in one gesture. It has to work this way
+rather than through a pane: Plith is high integrity in Release and `DoDragDrop` carries nothing from
+there, and a press cannot be delegated between processes. Both measured.
+
+What it costs, stated where the gain is: **ten files instead of fifteen**, two short lines of name
+instead of two long ones, no Clear button (a context menu and `Ctrl+A` then `Delete` instead), and
+a cross-process window swap on every page turn onto the shelf. Spec and plan:
+`docs/superpowers/specs/2026-09-21-shelf-in-the-notch-design.md`.
+
+**The handover is measured on hardware; the rest of that run is not.** See
+`docs/SHELF-VERIFICATION.md` section 10, which names which half.
+
+**0.2.0 is the current release. Everything else below is in `main`.** Phases 1 to 7 plus
 brightness: Voicemeeter and Windows Core Audio, SMTC media, Settings with live theming,
 Game mode (UIAccess-signed BandWindow), endpoint pinning, native flyout suppression, the
 Ambient Notch with paged widgets, the shelf, and brightness.

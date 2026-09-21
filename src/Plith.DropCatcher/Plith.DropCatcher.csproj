@@ -42,6 +42,15 @@
     <!-- The catcher stands in for the notch, so it has to grow the same shape. Linked rather
          than reimplemented: two copies of a morph drift, and the drift would show as the
          stand-in visibly not being the thing it replaced. -->
+    <!-- The shelf is a page in the notch's frame now, so the catcher takes the wheel while it
+         holds that frame and has to read it the same way Plith does. The SIGN conventions are the
+         part most likely to be wrong (a plain vertical wheel is negated, a tilt wheel is not), and
+         a second copy of them would drift silently: paging would work in one direction on one
+         page out of five. NotchPager is NOT linked and must not be, because the commit threshold
+         and the idle rearm are a single accumulator that belongs to one process. -->
+    <Compile Include="..\Plith\Services\WheelDecoder.cs">
+      <Link>Shared\WheelDecoder.cs</Link>
+    </Compile>
     <Compile Include="../Plith/Views/Presentation/NotchGeometry.cs">
       <Link>Shared/NotchGeometry.cs</Link>
     </Compile>

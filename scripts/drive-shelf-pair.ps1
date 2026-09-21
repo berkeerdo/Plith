@@ -285,21 +285,11 @@ function Get-Element {
                        CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
 }
 
-# Is the notch showing its SHELF page?
-#
-# Keyed on "hover to open", the part of that page's line that names the GESTURE, rather than on
-# the whole sentence. This file used to assert equality against "Click to open the shelf" and its
-# own comment argued that the hint was the better key precisely because it "does not change as
-# files come and go". It changed: the line carries the file count now. The paging loop then
-# wheeled six times past a page that was right there, and the run reported that the notch never
-# reached the shelf. The gesture is the part that does not move.
-#
-# The catcher's own pane carries no such line, so this cannot match the wrong window.
-function Test-OnShelfPage {
-    param($Hwnd)
-    if ($null -eq $Hwnd) { return $false }
-    [bool](@(Get-Names -Hwnd $Hwnd) -match 'hover to open')
-}
+# Test-OnShelfPage is DELETED, and its history is worth one line: it keyed on Plith's shelf page
+# by the sentence that page printed, which changed twice under it. There is nothing left to key
+# on, because Plith's shelf page is no longer what is on screen when the shelf is. The catcher's
+# window is, and Find-ShelfWindow already finds that by the one name that is an identity rather
+# than a sentence: "Shelf, N items" on the control root.
 
 function Get-Names {
     param($Hwnd)
@@ -633,113 +623,49 @@ try {
     Start-Sleep -Milliseconds 1500
     Save-Shot 0 0 $screen.Width 300 '1-frame.png' | Out-Null
 
-    # 2. Page to the shelf widget. One wheel notch is exactly NotchPager.CommitThreshold (120)
-    #    and IdleRearmMs is 150, so a notch every 700 ms is one page with the accumulator rested
-    #    in between. A plain vertical wheel pages (WheelDecoder negates it) and DOWN is "next".
-    #    The shelf page is installed last, so at most one full lap is needed.
+    # 2. Page toward the shelf. THE PAGE TURN IS THE HANDOVER.
     #
-    #    The page is recognised by the gesture its own line names (see
-    #    Test-OnShelfPage): the line itself carries the file count now, so an equality
-    #    test against the whole sentence stopped matching the moment the count arrived,
-    #    and not by the row's announcement. That announcement used to reach nothing at all -
-    #    "Shelf, N items" was set on `Tiles`, a StackPanel, which WPF gives no automation peer -
-    #    and it has since been moved onto the control root, so it IS in the tree now. The hint is
-    #    still the better key: it names the page's purpose rather than its contents, so it does
-    #    not change as files come and go. See docs/SHELF-VERIFICATION.md section 5.4.
-    $onShelf = $false
-    for ($i = 1; $i -le 6; $i++) {
-        $names = Get-Names -Hwnd $notch.Hwnd
-        if (@($names) -match 'hover to open') { $onShelf = $true; break }
-        [PairInput]::Wheel(-1)
-        Start-Sleep -Milliseconds 700
-    }
-    Add-Verdict 'the notch pages to the shelf widget' $onShelf `
-        "names: $((Get-Names -Hwnd $notch.Hwnd) -join ' | ')"
-    Save-Shot 0 0 $screen.Width 300 '2-shelf-page.png' | Out-Null
-    if (-not $onShelf) { throw 'Never reached the shelf page; nothing below can run.' }
-
-    # 2.5 HOVER opens the shelf, with no click at all.
+    # There is no click and no hover any more, and there is nothing of Plith's on screen to look
+    # for either: landing on the shelf page hands the frame to the catcher, so what the driver
+    # waits for is the CATCHER's window appearing at the notch's own rectangle.
     #
-    # The reason the gesture exists, from a real install on someone else's machine: the first
-    # person to meet the shelf tried to drag a tile straight out of the notch page, and the press
-    # that begins a drag opened the shelf instead. It cannot be fixed on Plith's side, because a
-    # file is dragged out of the catcher's window and a drag is never delivered for a press that
-    # happened in another process (section 4). So the shelf has to be open BEFORE the press, and
-    # hovering is what opens it.
+    # Why it has to work this way, since it is the whole slice: a file can only be dragged out of
+    # the catcher's window (Plith is high integrity in Release and DoDragDrop carries nothing from
+    # there) and a press cannot be delegated between processes. Both measured, section 4. So the
+    # catcher has to hold the frame BEFORE the press, which means the page turn has to be what
+    # hands it over.
     #
-    # Measured here rather than reasoned about, because the guard around it is timing: a real
-    # pointer movement, then a 320 ms dwell, and this is the only place a real pointer exists.
-    $hoverOpened = $false
-    $frame = Find-LayeredWindow -ProcessLike 'Plith'
-    if (Test-OnShelfPage -Hwnd $frame.Hwnd) {
-        # Onto the page and then STOP. Move-Pointer glides, so the movement the intent requires
-        # happens on the way in; the dwell is what the sleep below waits out.
-        Move-Pointer -X ($frame.X + [int]($frame.W / 2)) -Y ($frame.Y + [int]($frame.H / 2)) -Settle 200
-        Start-Sleep -Milliseconds 1200
-        $hovered = Find-ShelfWindow
-        $hoverOpened = [bool]$hovered
-        Add-Verdict '2.5 hovering the shelf page opens the shelf, with no click' $hoverOpened `
-            "$(if ($hovered) { "$($hovered.X),$($hovered.Y) $($hovered.W)x$($hovered.H)" } else { 'no catcher window after a 1.2 s rest on the page' })"
-    } else {
-        Add-Verdict '2.5 hovering the shelf page opens the shelf, with no click' $false `
-            "the shelf page was not on screen to hover: names were $(if ($frame) { (Get-Names -Hwnd $frame.Hwnd) -join ' | ' } else { 'no layered Plith window' })"
-    }
-
-    # The shelf is taken back down so the click path below measures what it always measured. A
-    # dismissal needs the pointer OFF the shelf, which is also the state step 3 expects.
-    if ($hoverOpened) {
-        Move-Pointer -X ($screen.Width - 40) -Y ($screen.Height - 40) -Settle 400
-        for ($i = 0; $i -lt 12 -and (Find-ShelfWindow); $i++) { Start-Sleep -Milliseconds 300 }
-        "  shelf after moving away: $(if (Find-ShelfWindow) { 'still up' } else { 'dismissed' })"
-    }
-
-    # 3. Click the page, which is what ShelfWidget turns into OpenRequested.
-    #
-    # INSTRUMENT DEFECT 6: AN EVENT CAN TAKE THE FRAME AWAY BETWEEN PAGING AND CLICKING, and the
-    # product is right to let it. A volume key or a track change does not open the widget frame
-    # any more, it gets its own short HUD shape - and that shape REPLACES an open frame. Measured
-    # on 2026-09-20, from Plith's own log, with the click landing in the gap:
-    #
-    #     12:57:35.489  Widget page committed: index=3/4     <- the shelf page, reached
-    #     12:57:36.451  Reposition: content=400x130          <- the HUD took the frame
-    #     12:57:36.684  Reposition: content=400x68           <- back to the parked notch
-    #
-    # The click then hit nothing, and the run reported "the shelf never appeared", which points
-    # at the catcher and the pipe. Neither was involved. Spotify was.
-    #
-    # So the page is re-checked IMMEDIATELY before the press, and a frame that has gone is
-    # re-opened and re-paged rather than reported as a product failure. The press is still one
-    # press: this retries reaching the page, never the verdict.
+    # A plain vertical wheel pages (WheelDecoder negates it) and DOWN is "next". One notch is
+    # exactly NotchPager.CommitThreshold and IdleRearmMs is 150, so a notch every 700 ms is one
+    # page with the accumulator rested in between.
     $shelf = $null
-    for ($attempt = 1; $attempt -le 3 -and -not $shelf; $attempt++) {
-        $frame = Find-LayeredWindow -ProcessLike 'Plith'
-        $stillThere = $frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)
-
-        if (-not $stillThere) {
-            "  attempt ${attempt}: an event replaced the frame before the click; re-opening"
-            Move-Pointer -X ($notch.X + [int]($notch.W / 2)) -Y 4 -Settle 900
-            [PairInput]::LeftClick()
-            Start-Sleep -Milliseconds 1500
-            for ($i = 1; $i -le 6; $i++) {
-                $frame = Find-LayeredWindow -ProcessLike 'Plith'
-                if ($frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)) { break }
-                [PairInput]::Wheel(-1)
-                Start-Sleep -Milliseconds 700
-            }
-            $stillThere = $frame -and (Test-OnShelfPage -Hwnd $frame.Hwnd)
-            if (-not $stillThere) { continue }
-        }
-
-        Move-Pointer -X ($frame.X + [int]($frame.W / 2)) -Y ($frame.Y + [int]($frame.H / 2)) -Settle 500
-        [PairInput]::LeftClick()
-        Start-Sleep -Seconds 2
+    for ($i = 1; $i -le 6 -and -not $shelf; $i++) {
         $shelf = Find-ShelfWindow
+        if ($shelf) { break }
+        [PairInput]::Wheel(-1)
+        Start-Sleep -Milliseconds 900
     }
 
-    Add-Verdict '2.2 a click on the shelf page opens the shelf' ([bool]$shelf) `
-        "$(if ($shelf) { "$($shelf.X),$($shelf.Y) $($shelf.W)x$($shelf.H)" } else { 'no catcher window after 3 attempts' })"
-    if (-not $shelf) { throw 'The shelf never appeared; nothing below can run.' }
+    Add-Verdict '2.2 paging onto the shelf page hands the frame to the catcher' ([bool]$shelf) `
+        "$(if ($shelf) { "catcher window at $($shelf.X),$($shelf.Y) $($shelf.W)x$($shelf.H)" } else { 'no catcher window after six wheel notches' })"
+    if (-not $shelf) { throw 'The shelf never took the frame; nothing below can run.' }
+    Save-Shot 0 0 $screen.Width 300 '2-shelf-page.png' | Out-Null
+
+    # AT THE NOTCH'S OWN SIZE, which is what makes it the notch rather than a pane. Measured
+    # against the product's own constant rather than a literal: the whole defect this slice fixes
+    # was a shelf 384 wide by up to 290 tall where the frame is 356 by 164.
+    $frameDip = [Plith.Views.Presentation.NotchGeometry]::OpenFrameDip
+    $sameSize = [Math]::Abs($shelf.W - $frameDip.Width) -le 2 -and
+                [Math]::Abs($shelf.H - $frameDip.Height) -le 2
+    Add-Verdict '2.3 the shelf is the size of the notch frame, not a pane of its own' $sameSize `
+        "catcher $($shelf.W)x$($shelf.H), frame $($frameDip.Width)x$($frameDip.Height)"
     Save-Shot $shelf.X $shelf.Y $shelf.W $shelf.H '3-shelf.png' | Out-Null
+
+    # 2.4 The rail is drawn by the catcher while it holds the frame, and it is a real control:
+    # without it the notch's own chrome would blink out on one page in five.
+    $railName = @(Get-Names -Hwnd $shelf.Hwnd) | Where-Object { $_ -match '^Page \d+ of \d+$' } | Select-Object -First 1
+    Add-Verdict '2.4 the catcher draws the notch rail, and names it' ([bool]$railName) `
+        "$(if ($railName) { "rail announces '$railName'" } else { "no rail in the tree; names: $((Get-Names -Hwnd $shelf.Hwnd) -join ' | ')" })"
 
     # Onto the shelf AT ONCE, so LeaveGrace is never armed for the rest of the run.
     Move-Pointer -X ($shelf.X + 20) -Y ($shelf.Y + 8) -Settle 400
@@ -947,6 +873,28 @@ try {
         Add-Verdict '3.3 clear empties the shelf without asking' $false "'Clear the shelf' is not in the UIA tree"
     }
     Save-Shot 0 0 $screen.Width 400 '9-cleared.png' | Out-Null
+
+    # --- 2.6 paging OFF the shelf hands the frame back --------------------------------------------
+    #
+    # The other half of the handover, and the half that would leave a person stuck: the wheel has
+    # to reach Plith while the catcher holds the frame. The catcher forwards the raw delta over the
+    # pipe (DropVerb.Page) and Plith decodes it with the same WheelDecoder and the same NotchPager
+    # every other page uses, so this measures the forwarding rather than a second pager.
+    $before = Find-ShelfWindow
+    if ($before) {
+        Move-Pointer -X ($before.X + [int]($before.W / 2)) -Y ($before.Y + 10) -Settle 400
+        [PairInput]::Wheel(-1)
+        Start-Sleep -Milliseconds 1200
+        $after = Find-ShelfWindow
+        $plithBack = Find-LayeredWindow -ProcessLike 'Plith'
+        Add-Verdict '2.6 paging off the shelf gives the frame back to Plith' `
+            ((-not $after) -and [bool]$plithBack) `
+            "catcher after the wheel: $(if ($after) { 'still up' } else { 'gone' }); Plith window: $(if ($plithBack) { "$($plithBack.W)x$($plithBack.H)" } else { 'none' })"
+    } else {
+        Add-Verdict '2.6 paging off the shelf gives the frame back to Plith' $false `
+            'the shelf was not up to page away from'
+    }
+    Save-Shot 0 0 $screen.Width 400 '10-paged-away.png' | Out-Null
 }
 finally {
     Get-Process -Name 'Plith*' -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue

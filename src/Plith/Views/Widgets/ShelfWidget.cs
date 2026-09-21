@@ -5,7 +5,6 @@ using System.Windows.Controls;
 using System.Windows.Media;
 using System.Windows.Threading;
 using Plith.Services.Shelf;
-using Plith.Views.Presentation;
 
 namespace Plith.Views.Widgets;
 
@@ -73,21 +72,23 @@ public partial class ShelfWidget : UserControl
     private static readonly TimeSpan UnavailableFor = TimeSpan.FromSeconds(6);
 
     /// <summary>Kept beside the timer that replaces it, so the sentence and the thing that
-    /// restores it cannot drift. Declared in XAML too, which is where it is first shown.
+    /// restores it cannot drift.
     ///
-    /// It said "Click to open the shelf", and after hover-open that sentence was simply false:
-    /// the shelf opens under a pointer that rests here, and a person who read the line and
-    /// clicked was doing the slower of the two things the page supports.
+    /// THE COUNT, and nothing about a gesture, which is the third text this line has carried and
+    /// the first that is about this page rather than about another one.
     ///
-    /// It carries the COUNT now, which is the other half of the same report. The page shows four
-    /// tiles and a "+N" chip, and "+4" says nothing about what those four are; the count at least
-    /// answers how much is there without expanding anything. Ten files legibly in this band was
-    /// measured and is not possible: two rows of tiles come to 136 DIP where the band gives 121,
-    /// and a narrower tile takes the name down to about eight characters. The pane is where the
-    /// whole shelf is read, and it is now one hover away rather than one click.</summary>
+    /// It said "Click to open the shelf" while a click was the only way in. Hover-open made that
+    /// false, so it became "N files · hover to open". Now the handover happens on the page
+    /// commit, so there is no gesture to name at all: landing here IS the shelf, drawn by the
+    /// catcher, and this page is what shows for the moment before that or when the catcher cannot
+    /// be reached. A line naming a gesture would be describing a surface the reader is not
+    /// looking at.
+    ///
+    /// The count survives because it is the one fact this page can add: it shows five tiles and
+    /// a "+N" chip, and "+4" says nothing about how much is there.</summary>
     private static string OpenHintFor(int count) => count == 1
-        ? "1 file · hover to open"
-        : string.Create(CultureInfo.CurrentCulture, $"{count} files · hover to open");
+        ? "1 file on the shelf"
+        : string.Create(CultureInfo.CurrentCulture, $"{count} files on the shelf");
 
     private readonly ShelfStore _shelf;
     private DispatcherTimer? _unavailable;
@@ -130,97 +131,13 @@ public partial class ShelfWidget : UserControl
             OpenRequested?.Invoke();
         };
 
-        // HOVER OPENS IT TOO, and this is the change that made the feature usable.
-        //
-        // A click was the only way in, and the first person to meet the shelf on a machine that
-        // was not this one tried to drag a tile straight out of this page. A drag begins with a
-        // press, the press landed here, and so the click opened the shelf instead: the gesture
-        // that reads as "take this file" did the one thing that cannot lead to taking it.
-        //
-        // It cannot be fixed on this side. A file is dragged out of the CATCHER's window, never
-        // this one, because Plith runs at high integrity in a Release build and DoDragDrop
-        // carries nothing from there; delegating the press to the catcher was measured and is a
-        // dead end, since a drag is never delivered for a press that happened in another process
-        // (docs/SHELF-VERIFICATION.md section 4). So the shelf has to already be open when the
-        // press arrives, which means opening before the press: on hover.
-        //
-        // HoverOpenIntent decides what counts as a hover, and the reason it is a separate object
-        // with tests is the case it guards: paging with the wheel leaves the pointer still while
-        // pages change under it, and a page that opened on arrival would open every time someone
-        // paged past it.
-        MouseMove += OnHoverMove;
-        MouseLeave += (_, _) => CancelHoverOpen();
-
         _shelf.Changed += OnShelfChanged;
 
         // IsVisibleChanged rather than Loaded: the frame keeps pages loaded between opens, so a
         // repaint bound to Loaded would fire once and then never again.
-        IsVisibleChanged += (_, e) =>
-        {
-            // Both directions reset the hover. Arriving, because the pointer may already be
-            // sitting here and the move that materialises this page must anchor rather than arm.
-            // Leaving, because the notch is hidden for the shelf's whole visit and the pointer
-            // that comes back is a new gesture, not the continuation of the one that opened it.
-            CancelHoverOpen();
-            if ((bool)e.NewValue) Render();
-        };
+        IsVisibleChanged += (_, e) => { if ((bool)e.NewValue) Render(); };
 
         Render();
-    }
-
-    /// <summary>
-    /// How long the pointer must rest on this page, after a real movement, before the shelf
-    /// opens under it.
-    ///
-    /// 320 ms, and the number is a compromise with a measured shape on each side. Shorter and
-    /// the shelf lands under a pointer merely crossing the notch on its way somewhere else;
-    /// longer and a person reaching for a tile presses before the catcher's window is there,
-    /// which puts them back in exactly the two-gesture hole this exists to fill.
-    /// </summary>
-    private static readonly TimeSpan HoverOpenDwell = TimeSpan.FromMilliseconds(320);
-
-    private readonly HoverOpenIntent _hoverIntent = new();
-    private DispatcherTimer? _hoverTimer;
-
-    /// <summary>
-    /// A pointer moved over this page. Starts the dwell if this is the move that means business.
-    ///
-    /// Refused while the shelf is empty, which is not a guard against a crash but a judgement:
-    /// an empty shelf has nothing to drag and nothing to see, so expanding into it would be the
-    /// notch taking over the screen to show a dashed box. The click still opens it, for anyone
-    /// who wants to look.
-    /// </summary>
-    private void OnHoverMove(object sender, System.Windows.Input.MouseEventArgs e)
-    {
-        if (_shelf.Items.Count == 0) return;
-        if (!_hoverIntent.NoteMove(e.GetPosition(this))) return;
-
-        _hoverTimer ??= new DispatcherTimer(DispatcherPriority.Input, Dispatcher) { Interval = HoverOpenDwell };
-        _hoverTimer.Tick -= OnHoverDwellElapsed;
-        _hoverTimer.Tick += OnHoverDwellElapsed;
-        _hoverTimer.Start();
-    }
-
-    private void OnHoverDwellElapsed(object? sender, EventArgs e)
-    {
-        _hoverTimer?.Stop();
-
-        // Asked again at the moment it matters. The dwell is a third of a second, and a track
-        // change or a page turn inside it can leave this page off screen with the timer still
-        // running; opening the shelf then would take a frame the person is looking at.
-        if (!IsVisible || _shelf.Items.Count == 0) { _hoverIntent.Reset(); return; }
-
-        // Reset BEFORE raising, not after: OpenRequested runs synchronously into OsdHost, which
-        // hides this window, and a reset that came afterwards would be undoing state the
-        // visibility change has already cleared.
-        _hoverIntent.Reset();
-        OpenRequested?.Invoke();
-    }
-
-    private void CancelHoverOpen()
-    {
-        _hoverTimer?.Stop();
-        _hoverIntent.Reset();
     }
 
     /// <summary>
@@ -239,7 +156,6 @@ public partial class ShelfWidget : UserControl
     {
         _shelf.Changed -= OnShelfChanged;
         _unavailable?.Stop();
-        CancelHoverOpen();
     }
 
     /// <summary>

@@ -2321,3 +2321,86 @@ suspect. Every instrument pointed at the data path and every one came back clean
 in a popup that no state machine owns. **The frame-by-frame capture is what found it**, and it was
 added only after the tree polling had already returned twelve clean rounds. A check that reads the
 tree can only ever see what the page was asked to draw. What was on the screen was something else.
+
+## 10. The shelf became the notch's own page (2026-09-21)
+
+0.2.0 shipped, was installed on someone else's machine, and the first person to meet the shelf
+tried to drag a file straight out of the notch. The press that begins a drag opened the shelf
+instead. Hover-open shipped as an intermediate fix and the user's conclusion was sharper: **do not
+have a separate shelf at all.**
+
+Spec: `docs/superpowers/specs/2026-09-21-shelf-in-the-notch-design.md`.
+Plan: `docs/superpowers/plans/2026-09-21-shelf-in-the-notch.md`.
+
+### 10.1 What changed
+
+The catcher's window is the notch's open frame now: 356 x 164, same anchor, same inset, same rail.
+The shelf is two rows of five, ten files, with no header, no close box and no Clear button. The
+handover happens on the **page commit** rather than on a click or a hover, so landing on the shelf
+page IS the shelf, and a press lands on the catcher's own tile, which is the only window a drag
+can leave from.
+
+Deleted with the pane: `ShelfRect`, `ShelfFrameFor`, `ShelfRowsFor`, `ShelfFrameDip` and
+`GrowthStart`, each of which encoded "the shelf is bigger than the notch"; the growth animation
+between two sizes; `HoverOpenIntent` and its six tests, one commit old, because the commit-driven
+handover makes it redundant and a second trigger for a cross-process swap is a second thing to get
+wrong.
+
+New on the wire: `Rail` (Plith tells the catcher the page count and the shelf's index, since only
+Plith knows them), `Page` (the catcher forwards a raw wheel delta or a rail click, and Plith
+decodes it with the same `WheelDecoder` and the same `NotchPager` every other page uses), and
+`CloseShelf` (paging away has to take the shelf down, and until now the shelf only ever closed
+because the pointer left it).
+
+### 10.2 Measured on hardware
+
+`scripts/drive-shelf-pair.ps1`, run 12:42 on 2026-09-21:
+
+```
+[PASS] 2.2 paging onto the shelf page hands the frame to the catcher
+       catcher window at 722,0 356x164
+```
+
+Plith's own log for the same moment, which is the whole slice in four lines:
+
+```
+Widget page committed: delta=120, index=3/4
+Drop catcher is already running.
+Shelf requested at 722,0 356x164 with 10 item(s).
+Standing aside for the shelf.
+```
+
+**The rest of that run is NOT measured.** A second attempt stopped at its own opening guard: the
+pointer was sent to 900,4 and was found at 236,782, which is a hand on the mouse. So the size
+check, the rail check, the removal stages, the drag-out and the page-off check are all written and
+none of them has run. They need a minute with the pointer left alone.
+
+### 10.3 Three defects the gates could not see, and one they could
+
+- **The tile's second line was clipped.** Two lines of name at 9.5 in a 52 DIP tile come to 47 DIP
+  of content, and a 4 DIP padding leaves a 44 DIP box. Every long name lost its second line. Found
+  by looking at a render; the build, 628 tests and all three lints were green.
+- **A name was cut after seven characters.** One line at 11 on a 56 DIP tile renders "Project
+  assets" as "Proje...". The option this was chosen from said "about twelve characters", which was
+  my estimate and was wrong. Two lines at 9.5 carry roughly twice as much and fit the same tile.
+- **The rail asked for a resource this project does not define,** `OsdAccent` instead of
+  `AccentBrush`. `FindResource` threw, and the throw took the `OpenShelf` message that came after
+  it: the catcher logged an Items line and nothing else, the shelf never appeared, and the run
+  reported the handover as broken. **One message failing must cost that message and nothing more**,
+  so `App.OnReceived` now wraps each route and logs what it dropped. The defect was mine and the
+  robustness gap was older.
+- **The lint caught the rail being a `Grid`.** A Grid has no automation peer, so its accessible
+  name reached nothing. It is a focusless `Button` with a transparent template now, which is what
+  a control that pages actually is, and a screen reader gets "Page 5 of 5" plus an invoke pattern.
+
+### 10.4 The instrument's own key has now moved three times
+
+The driver identified Plith's shelf page by the sentence that page printed: first "Click to open
+the shelf", then "N files · hover to open", then "N files on the shelf". Each rename broke it, and
+one of those breaks cost a run that reported "the notch never reached the shelf" while the page was
+right there.
+
+It is deleted rather than fixed a third time. Plith's shelf page is not what is on screen when the
+shelf is, so there is nothing to key on: the driver waits for the CATCHER's window, which
+`Find-ShelfWindow` finds by "Shelf, N items" on the control root. **A name that is an identity
+survives a rename; a sentence does not.**

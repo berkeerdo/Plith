@@ -667,21 +667,19 @@ $surfaceModel.SetItems($shelfItems)
 # overflow count, so the ring is visible next to that tile in the same picture.
 $surfaceModel.Select($shelfFolder, $false)
 
-# READ from NotchGeometry rather than kept in sync here by hand.
+# THE NOTCH'S OWN FRAME, read from the product rather than typed.
 #
-# It used to be two literals, 384 x 224, with a comment explaining that they were "kept in sync
-# here by hand" because the harness and the control are two separate assemblies. The hand-sync
-# broke the moment the shelf went from two rows to three: the frame grew to 283 and this file
-# still arranged the control in 224, which does not fail loudly. It renders a picture of a
-# surface with its last row cut off, and a cropped render is indistinguishable from a layout
-# defect.
+# It was ShelfFrameDip, a size that ran from 384 x 211 to 384 x 290 depending on how many
+# files were on the shelf, because the shelf was a pane that hugged its contents. That
+# difference is exactly what a person reported as the shelf being a separate window rather
+# than the notch, so the pane is gone and this page is 356 x 164 like every other one.
 #
-# The harness already loads Plith.dll, so it can just ask. NotchGeometry.ShelfFrameDip is the
-# one place the frame is defined, and its height is now an expression over the row count, so
-# this follows a row being added without anyone remembering to come here.
-$shelfFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameDip
-$shelfSurfaceW = $shelfFrame.Width
-$shelfSurfaceH = $shelfFrame.Height
+# Before that it was two literals with a comment explaining they were "kept in sync here by
+# hand", and the hand-sync broke the moment the shelf gained a row: the frame grew and this
+# file still arranged the control in the old box, which renders a picture of a surface with
+# its last row cut off. A cropped render is indistinguishable from a layout defect.
+$shelfSurfaceW = $frameW
+$shelfSurfaceH = $frameH
 
 $shelfSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
 $shelfSurface.Apply($shelfPalette)
@@ -689,64 +687,46 @@ $shelfSurface.Render($surfaceModel)
 Wait-ForDispatcher
 Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface'
 
-# --- a SMALL shelf, at the size the real window actually opens for it --------------------------
+# The three checks that used to sit here are deleted with the pane they measured: a render of
+# a one-row shelf, a clamp that stopped a 164 DIP page being laid into a 139 DIP window, and
+# an assertion that the frame matched the surface at every file count. None of them has
+# anything to check now. There is one frame, it is the notch's, and it does not depend on how
+# many files are on the shelf. See docs/SHELF-VERIFICATION.md section 8 for what they caught
+# while the pane existed, which is the reason they were written rather than guessed at.
+
+# --- the RAIL, which only exists while the catcher holds the frame ----------------------------
 #
-# Only the three-row frame was ever rendered, and the shelf hugs what it holds: a shelf of one to
-# five files opens 139 DIP tall, which is SHORTER than the notch's 164 DIP open frame. That
-# difference is where the shelf was reported cut in half, and no render existed at the size where
-# it happens. This one is the surface at the frame its own window gives it, so a page that does
-# not fit its window is visible here rather than only in a real session.
-$smallModel = [Plith.DropCatcher.Shelf.ShelfModel]::new()
-$smallModel.SetItems([string[]]($fixtures[0..2] | ForEach-Object { Join-Path $shelfDir $_ }))
-$smallSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
-$smallSurface.Apply($shelfPalette)
-$smallSurface.Render($smallModel)
+# Plith draws the rail for its own four pages; the shelf is the fifth and it is drawn by another
+# process, so without this the chrome would blink out on one page in five. The page count and the
+# shelf's index arrive over the wire (DropVerb.Rail), which is why no fixture had one until now:
+# a surface nobody told would draw nothing, and that is also the correct behaviour.
+$shelfSurface.SetRail(5, 4)
 Wait-ForDispatcher
-$smallFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor(3)
-$smallSurface.Measure([Windows.Size]::new($smallFrame.Width, [double]::PositiveInfinity))
-"  shelf of 3 wants $([Math]::Round($smallSurface.DesiredSize.Height,1)) DIP; its window is $($smallFrame.Height); the open frame is $([Plith.Views.Presentation.NotchGeometry]::OpenFrameDip.Height)"
-Save-Visual -Element $smallSurface -W $smallFrame.Width -H $smallFrame.Height -Name 'shelf-surface-small'
-
-# The growth must never START larger than the window it grows into, on either axis, for any shelf
-# the product can open. Unit-tested as well (NotchGeometryTests), and repeated here against the
-# real frame because this is the file that renders these sizes and would otherwise render a
-# picture of the wrong one.
-foreach ($n in 0, 1, 3, 5, 6, 10, 15) {
-    $win = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor($n)
-    $start = [Plith.Views.Presentation.NotchGeometry]::GrowthStart(
-        [Plith.Views.Presentation.NotchGeometry]::OpenFrameDip, $win)
-    if ($start.Height -gt $win.Height -or $start.Width -gt $win.Width) {
-        throw "growth start $($start.Width)x$($start.Height) exceeds the window a shelf of $n opens ($($win.Width)x$($win.Height))"
-    }
+$railHost = @(Find-VisualDescendants -Root $shelfSurface -Predicate {
+    param($n) $n -is [Windows.Controls.Button] -and
+              [Windows.Automation.AutomationProperties]::GetName($n) -match '^Page \d+ of \d+$'
+})
+if ($railHost.Count -ne 1) {
+    throw "rail check FAILED: expected one named rail control, found $($railHost.Count). A rail " +
+          "that is not a control has no automation peer, which is how the first version of it " +
+          "failed the accessibility lint."
 }
-"  growth start fits every shelf size"
+"  rail: '$([Windows.Automation.AutomationProperties]::GetName($railHost[0]))', " +
+"$([Math]::Round($railHost[0].Width,0)) x $([Math]::Round($railHost[0].Height,0)) DIP"
+Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface-rail'
 
-# --- the frame must be EXACTLY what the surface measures, at every shelf size ------------------
-#
-# The check that would have caught the shelf being cut, and it did not exist. NotchGeometry
-# computes the frame from parts it cannot see: the surface and its header live in the catcher's
-# project, so the frame is an ARITHMETIC CLAIM about a control in another assembly, and nothing
-# ever compared the claim to the control. It was wrong by one tile gap at every row count, so a
-# one-row shelf opened a 139 DIP window around a 146 DIP page and the bottom of the tile row was
-# outside it. Reported from a real session; invisible to the build, the tests and every lint.
-#
-# This harness is the one place both sides are loaded at once, which is why the check belongs
-# here rather than in the test project.
-foreach ($n in 1, 3, 5, 6, 10, 15) {
-    $m = [Plith.DropCatcher.Shelf.ShelfModel]::new()
-    $m.SetItems([string[]](0..($n - 1) | ForEach-Object { Join-Path $shelfDir $fixtures[$_ % $fixtures.Count] }))
-    $probe = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
-    $probe.Apply($shelfPalette)
-    $probe.Render($m)
-    Wait-ForDispatcher
-    $win = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor($n)
-    $probe.Measure([Windows.Size]::new($win.Width, [double]::PositiveInfinity))
-    $wants = [Math]::Round($probe.DesiredSize.Height, 1)
-    if ([Math]::Abs($wants - $win.Height) -gt 0.5) {
-        throw "a shelf of $n files measures $wants DIP and ShelfFrameFor gives it $($win.Height): the window would cut the page"
-    }
-}
-"  frame matches the surface's own measurement at 1, 3, 5, 6, 10 and 15 files"
+# And a rail of ONE page draws nothing, the same rule WidgetFrame follows: a rail with one segment
+# says there is nowhere else to go.
+$shelfSurface.SetRail(1, 0)
+Wait-ForDispatcher
+$railAlone = @(Find-VisualDescendants -Root $shelfSurface -Predicate {
+    param($n) $n -is [Windows.Controls.Button] -and
+              [Windows.Automation.AutomationProperties]::GetName($n) -match '^Page \d+ of \d+$'
+})
+if ($railAlone.Count -ne 0) { throw 'rail check FAILED: a single page still drew a rail.' }
+"  rail with one page: nothing drawn, correctly"
+$shelfSurface.SetRail(5, 4)
+Wait-ForDispatcher
 
 # --- the per-tile remove chip, at REST ---------------------------------------------------------
 #
@@ -778,22 +758,13 @@ $emptySurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
 $emptySurface.Apply($shelfPalette)
 $emptySurface.Render($emptyModel)
 Wait-ForDispatcher
-$emptyFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor(0)
+$emptyFrame = [Windows.Size]::new($frameW, $frameH)
 $emptySurface.Measure([Windows.Size]::new($emptyFrame.Width, [double]::PositiveInfinity))
 "  empty shelf wants $([Math]::Round($emptySurface.DesiredSize.Height,1)) DIP at $($emptyFrame.Width) wide; the frame gives $($emptyFrame.Height)"
 Save-Visual -Element $emptySurface -W $emptyFrame.Width -H $emptyFrame.Height -Name 'shelf-surface-empty'
 
-# The same empty surface at the size a FULL shelf opens at, which is the state reported broken
-# from a real session: the frame is chosen once at open by design, so clearing a three-row shelf
-# while it is up leaves the window at three rows with an empty page in it. The dashed box used to
-# be a fixed two-row height and hung in the top of that window. Rendered at both sizes now,
-# because the bug lived in the difference between them.
-$clearedFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameDip
-$clearedSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
-$clearedSurface.Apply($shelfPalette)
-$clearedSurface.Render($emptyModel)
-Wait-ForDispatcher
-Save-Visual -Element $clearedSurface -W $clearedFrame.Width -H $clearedFrame.Height -Name 'shelf-surface-cleared'
+# The cleared-shelf render is gone too: an empty shelf and a full one open the same frame now,
+# so 'the empty state in a window sized for three rows' is not a state that exists.
 
 # What the empty card's parts actually measure to. A dashed outline that draws its top and bottom
 # but not its sides is a thing pixels can suggest and only the tree can settle.
@@ -1235,9 +1206,16 @@ $layoutHost.UpdateLayout()
 #
 # So this check asks the tree the question real input asks: given a point, which element is it?
 $findAnyTile = { param($n) $n -is [Windows.Controls.Border] -and
-    $n.Width -eq 64 -and $n.Height -eq 64 -and $null -ne $n.Child }
+    $n.Width -eq $tileW -and $n.Height -eq $tileH -and $null -ne $n.Child }
+# READ from the product. These were 64 and 64, typed, and the tile stopped being square when the
+# shelf became the notch's own page: 56 x 52. A literal here does not fail loudly, it fails by
+# finding nothing and reporting that the surface has no tiles at all, which is what it did.
+$tileW = [Plith.Views.Presentation.NotchGeometry]::ShelfTileWidth
+$tileH = [Plith.Views.Presentation.NotchGeometry]::ShelfTileHeight
 $hitTiles = @(Find-VisualDescendants -Root $shelfSurface -Predicate $findAnyTile)
-if ($hitTiles.Count -eq 0) { throw "tile-hit check: no 64x64 tile Borders in the rendered surface." }
+if ($hitTiles.Count -eq 0) {
+    throw "tile-hit check: no ${tileW}x${tileH} tile Borders in the rendered surface."
+}
 
 # --- the selection ring must have room at BOTH edges of a row --------------------------------
 #

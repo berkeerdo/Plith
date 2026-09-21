@@ -202,43 +202,31 @@ public sealed class ShelfSessionTests : IDisposable
     }
 
     /// <summary>
-    /// The shelf grows out of the open frame, so the two rectangles must share a centre. A shift
-    /// of even a few DIP reads as the shape sliding sideways while it opens rather than as the
-    /// notch continuing into something larger.
+    /// The shelf page IS the open frame, and this is the assertion the whole slice turns on.
+    ///
+    /// Two tests used to live here, and both were about a shelf LARGER than the notch: one
+    /// checked that the two rectangles shared a centre, the other that the centre held at every
+    /// shelf size. Neither has anything to check now, because there is one rectangle. What
+    /// replaced them is the stronger statement: not "the two are aligned" but "there is no
+    /// second rectangle to align".
     /// </summary>
     [Fact]
-    public void ShelfRect_SharesTheOpenFramesCentreAndTop()
+    public void ShelfPageRect_IsTheOpenFrameExactly()
     {
         var hover = new Rect(865, 0, 190, 6);
 
-        var frame = NotchGeometry.DropTargetRect(hover);
-        var shelf = NotchGeometry.ShelfRect(hover, NotchGeometry.ShelfCapacity);
-
-        Assert.Equal(frame.Left + (frame.Width / 2), shelf.Left + (shelf.Width / 2), 6);
-        Assert.Equal(frame.Top, shelf.Top);
-        Assert.Equal(NotchGeometry.ShelfFrameDip.Width, shelf.Width);
-        Assert.Equal(NotchGeometry.ShelfFrameDip.Height, shelf.Height);
+        Assert.Equal(NotchGeometry.DropTargetRect(hover), NotchGeometry.ShelfPageRect(hover));
     }
 
-    /// <summary>
-    /// And the centre holds at every size, which is what makes a shelf that hugs its contents
-    /// still read as the notch continuing rather than as a shape that drifts sideways when it
-    /// happens to be shorter.
-    /// </summary>
-    [Theory]
-    [InlineData(0)]
-    [InlineData(1)]
-    [InlineData(7)]
-    [InlineData(15)]
-    public void ShelfRect_KeepsItsCentreAtEverySize(int itemCount)
+    [Fact]
+    public void ShelfPageRect_DoesNotDependOnHowManyFilesAreOnTheShelf()
     {
+        // It cannot: there is no count in the signature any more. Asserted anyway, because the
+        // count WAS a parameter and a future hand adding it back would be re-introducing the
+        // pane one argument at a time.
         var hover = new Rect(865, 0, 190, 6);
 
-        var frame = NotchGeometry.DropTargetRect(hover);
-        var shelf = NotchGeometry.ShelfRect(hover, itemCount);
-
-        Assert.Equal(frame.Left + (frame.Width / 2), shelf.Left + (shelf.Width / 2), 6);
-        Assert.Equal(frame.Top, shelf.Top);
-        Assert.Equal(NotchGeometry.ShelfFrameFor(itemCount).Height, shelf.Height);
+        Assert.Equal(NotchGeometry.OpenFrameDip.Width, NotchGeometry.ShelfPageRect(hover).Width);
+        Assert.Equal(NotchGeometry.OpenFrameDip.Height, NotchGeometry.ShelfPageRect(hover).Height);
     }
 }
