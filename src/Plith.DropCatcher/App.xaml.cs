@@ -161,7 +161,7 @@ public partial class App : Application, IDisposable
                 _window.ShowAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
                 break;
             case DropVerb.Hide:
-                _window.HideNow();
+                HideStandIn();
                 break;
             case DropVerb.OpenShelf:
                 _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
@@ -186,6 +186,46 @@ public partial class App : Application, IDisposable
             default:
                 break;
         }
+    }
+
+    /// <summary>
+    /// Take the stand-in down, and do it AFTER the shelf has finished arriving if the shelf is
+    /// what is replacing it.
+    ///
+    /// Both windows belong to this process and sit on the same rectangle, and both are layered
+    /// with per-pixel alpha: while the shelf fades in, whatever is behind it shows through. With
+    /// the pill hidden first that is the DESKTOP, which is a flash of nothing in the middle of a
+    /// drop. Left underneath, it is the pill, so the two read as one surface changing into
+    /// another.
+    ///
+    /// Only for the drop path in practice: a withdrawal with no shelf behind it takes the pill
+    /// down at once, which is what IsOpen distinguishes.
+    /// </summary>
+    private void HideStandIn()
+    {
+        if (!_shelf.IsOpen)
+        {
+            _window.HideNow();
+            return;
+        }
+
+        // One timer, restarted, rather than one per call: two Hides in quick succession would
+        // otherwise leave two clocks running and hide the pill twice, and the second could land
+        // after the pill has been shown again for the next drag.
+        _standInHide ??= new DispatcherTimer(DispatcherPriority.Send, Dispatcher);
+        _standInHide.Interval = Shelf.ShelfWindow.FadeIn;
+        _standInHide.Tick -= OnStandInHideElapsed;
+        _standInHide.Tick += OnStandInHideElapsed;
+        _standInHide.Stop();
+        _standInHide.Start();
+    }
+
+    private DispatcherTimer? _standInHide;
+
+    private void OnStandInHideElapsed(object? sender, EventArgs e)
+    {
+        _standInHide?.Stop();
+        _window.HideNow();
     }
 
     /// <summary>Tell Plith to put the notch back. Hide is the verb in this direction too, and the

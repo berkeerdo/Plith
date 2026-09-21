@@ -65,7 +65,10 @@ public partial class ShelfWindow : Window
     /// same reason: both stand in for the notch, and a stand-in that arrives at a different speed
     /// reads as a second object rather than the same one continuing.
     /// </summary>
-    private static readonly Duration GrowDuration = new(TimeSpan.FromMilliseconds(220));
+    // 150, not 220. The longer run was paced for a shape that grew from a 190 by 6 strip into a
+    // pane; a card that only fades wants to be quick, and 220 ms of fading reads as a lag between
+    // the release and the result.
+    private static readonly Duration GrowDuration = new(TimeSpan.FromMilliseconds(150));
 
     /// <summary>
     /// How long the shelf waits after the pointer leaves before it takes itself down.
@@ -499,6 +502,21 @@ public partial class ShelfWindow : Window
         Page.Render(_model);
     }
 
+    /// <summary>
+    /// Whether the shelf is on screen, so the stand-in knows whether it is being replaced or
+    /// merely dismissed. See App's Hide branch.
+    /// </summary>
+    public bool IsOpen => _open;
+
+    /// <summary>
+    /// How long the shelf takes to fade in, for a caller that has to wait it out.
+    ///
+    /// Exposed rather than duplicated: the stand-in has to stay under the shelf for exactly this
+    /// long, and two copies of the number would drift into either a flash of desktop or a pill
+    /// lingering over a shelf that is already up.
+    /// </summary>
+    public static TimeSpan FadeIn => GrowDuration.TimeSpan;
+
     /// <summary>The notch's rail, as Plith sees it: the page count and the shelf's own index.
     /// </summary>
     public void SetRail(int pageCount, int shelfIndex) => Page.SetRail(pageCount, shelfIndex);
@@ -924,8 +942,23 @@ public partial class ShelfWindow : Window
 
         Shape.Width = size.Width;
         Shape.Height = size.Height;
-        var radius = NotchGeometry.SurfaceRadius(t, size.Height);
+        // The FINAL radius, not an animated one. A radius that opens out belongs to a shape that
+        // is growing, and this one is the notch's frame from the first frame; animating it made
+        // the corners creep while nothing else moved.
+        var radius = NotchGeometry.SurfaceRadius(1, size.Height);
         Shape.CornerRadius = new CornerRadius(0, 0, radius, radius);
+
+        // ONE OBJECT FADING IN, which is the whole of this animation now.
+        //
+        // It used to be a shape that appeared at once and a page that faded in over the last 45
+        // per cent of the run (see NotchGeometry.ContentOpacity), and that staging had a reason
+        // while the shape grew: the content arrived into a surface that had already settled. With
+        // the shape being the window from the first frame, what was left was an EMPTY full-size
+        // panel sitting on screen for about 120 ms and then filling, which is what a person
+        // reported as the moment after a drop not being smooth.
+        //
+        // The page is at full opacity throughout and the card fades as a whole instead.
+        Shape.Opacity = NotchGeometry.Clamp01(t);
 
         // The page is pinned at the FINAL size for the whole growth and clipped by the shape
         // around it, rather than being laid out into whatever the shape currently measures. Laid
@@ -938,7 +971,8 @@ public partial class ShelfWindow : Window
         // max here would go back to laying a 164 DIP page into a 139 DIP window.
         Page.Width = open.Width;
         Page.Height = open.Height;
-        Page.Opacity = NotchGeometry.ContentOpacity(t);
+        // Fully opaque, always: the fade is the card's, above. See that comment.
+        Page.Opacity = 1;
     }
 
     /// <summary>

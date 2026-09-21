@@ -2493,3 +2493,47 @@ host by `$tile.Child.Children[0].Children[0]`, which was wrong when the hover re
 an overlay Grid and wrong again when the caption was deleted. Both times it failed with a sentence
 about the icon cache, which was not what had changed. It searches for an Image now, because what
 it is actually asking is whether an Image is there.
+
+### 10.7 A drop goes straight into the filled shelf (2026-09-21)
+
+Reported: the moment you release is not smooth, a small preview shows, and the widget should just
+open already loaded. All three are the same thing, and the log said what it was:
+
+```
+36.463  Standing aside for a drag: 722,0 356x164     <- the catcher's pill
+37.822  Drag over; notch back                        <- PLITH's notch returns
+...     Shelf requested ...                          <- the catcher's shelf
+```
+
+**Three windows at the same place inside a second**, with Plith's own notch flickering between two
+of the catcher's. The drop path began with `OnCatcherStoodDown`, which restores the notch, and only
+then asked for the shelf.
+
+`OnDropLanded` replaces that. The stand-aside changes REASON rather than ending, so Plith's window
+never comes back, and the order on the wire does the rest: `OpenShelf` first, the pill's `Hide`
+after it. The channel serialises sends in call order, so the shelf's window is up before the pill
+goes. The store is written first, which is the "filled" half: `Open` sends the item list as it is
+at that moment, so a shelf opened before the `Add` would arrive empty and gain the file a beat
+later, which is the same flicker in another place.
+
+Nothing kept means nothing to acknowledge, and then the notch comes back the ordinary way: a shelf
+opened for a drop that resolved to no files would be an empty page presented as a result.
+
+**Two more things were making the arrival itself untidy.**
+
+The shelf stopped growing when it became the notch's frame, but the content fade did not: the page
+still faded in over the last 45 per cent of a 220 ms run, which with a full-size shape from the
+first frame meant an EMPTY panel on screen for about 120 ms and then a fill. The card fades as one
+object now, over 150 ms, with the page fully opaque throughout, and the corner radius sits at its
+final value instead of creeping while nothing else moves.
+
+And the pill was being hidden before the shelf had finished arriving. Both windows are layered
+with per-pixel alpha on the same rectangle, so during the fade whatever is behind shows through:
+with the pill already gone that is the desktop, a flash of nothing in the middle of a drop. The
+catcher holds the pill under the shelf for exactly `ShelfWindow.FadeIn` and takes it down after,
+so the two read as one surface becoming another. The duration is exposed rather than copied,
+because two numbers here drift into either a flash or a pill lingering over a live shelf.
+
+**None of this is measured yet.** An animation's smoothness is not something a render can see and
+not something the pair driver asks about: three of the four changes are timing. It needs looking
+at, on hardware, with a real drag.

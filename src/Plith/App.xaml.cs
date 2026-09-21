@@ -261,7 +261,11 @@ public partial class App : Application
                 break;
             case DropVerb.Dropped:
                 _diagnosticLog?.Info("Shelf", $"Drop reported: {message.Paths.Count} path(s).");
-                _osd?.OnCatcherStoodDown();
+                // NOT OnCatcherStoodDown first, which is where this used to begin. That puts the
+                // notch back, and the notch coming back between the drop pill and the shelf is
+                // the flicker a person reported as the moment after a drop not being smooth. The
+                // stand-aside is ended by whichever branch below runs.
+                //
                 // Onto the UI thread: ShelfStore is not thread-safe, and whatever ends up
                 // painting these rows will read them from there.
                 Dispatcher.BeginInvoke(new Action(() =>
@@ -273,10 +277,16 @@ public partial class App : Application
                     // is the one failure this path has and is otherwise completely silent.
                     _diagnosticLog?.Info("Shelf", $"Shelf now holds {after} item(s) (was {before}).");
 
-                    // The acknowledgement. A drop that changes nothing on screen reads as the
-                    // app having crashed, which is exactly how the first live run of this
-                    // reported it.
-                    _osd?.ShowShelfLanding();
+                    // The acknowledgement, and it is the shelf itself: the file is in the store
+                    // by now, so the shelf opens holding it. A drop that changes nothing on
+                    // screen reads as the app having crashed, which is how the first live run of
+                    // this reported it.
+                    //
+                    // Nothing kept means nothing to acknowledge, and then the notch has to come
+                    // back the ordinary way: a shelf opened for a drop that resolved to no files
+                    // would be an empty page presented as a result.
+                    if (after > before) _osd?.OnDropLanded();
+                    else _osd?.OnCatcherStoodDown();
                 }));
                 break;
             case DropVerb.Hide:

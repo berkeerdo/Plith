@@ -496,6 +496,77 @@ public sealed class OsdHost : BandWindow
     }
 
     /// <summary>
+    /// A drop landed and the store kept it. Go STRAIGHT from the drop pill to the filled shelf.
+    ///
+    /// THREE WINDOWS BECAME ONE HANDOVER, and the three were what a person reported as the moment
+    /// after a drop not being smooth. The old path was: the catcher's stand-in pill goes away,
+    /// Plith's notch comes back at its resting strip, and then the shelf is asked for and appears.
+    /// Three shapes at the same place inside a second, with Plith's own notch flickering between
+    /// two of the catcher's windows.
+    ///
+    /// Here the notch never comes back. The stand-aside simply changes REASON, from a drag to the
+    /// shelf, so Plith's window stays down throughout, and the order on the wire does the rest:
+    /// OpenShelf first, the stand-in's Hide after it. The channel serialises sends in call order
+    /// (see DropChannelServer.SendAsync), so the shelf's window is up before the pill goes, and
+    /// the swap happens under a surface that is already painted.
+    ///
+    /// The store is written BEFORE this is called, which is the other half of "filled": Open
+    /// sends the item list as it is at that moment, so a shelf opened before the Add would arrive
+    /// empty and gain the file a beat later, which is the same flicker in a different place.
+    /// </summary>
+    public void OnDropLanded()
+    {
+        if (!Dispatcher.CheckAccess())
+        {
+            Dispatcher.BeginInvoke(new Action(OnDropLanded));
+            return;
+        }
+
+        // Not a notch presentation, no shelf page, or no session: fall back to the old path,
+        // which puts the notch back. Better a flicker than a notch that never returns.
+        if (_shelfSession is null || _shelfPageIndex < 0 || _presentation is not AmbientNotchPresentation)
+        {
+            OnCatcherStoodDown();
+            return;
+        }
+
+        ApplyWidgetPages();
+
+        // The frame is the shelf's page, and the pager has to agree: the catcher draws the rail
+        // from the index this sends, and a rail pointing at another page would be the one piece
+        // of chrome that disagrees with what is on screen.
+        var before = _pager.Index;
+        if (_pager.GoTo(_shelfPageIndex)) _widgets.SyncToPager(Math.Sign(_pager.Index - before));
+        _content.SetPanelContent(NotchPanelContent.Widgets);
+
+        // Taken out of the DRAG's stand-aside by hand rather than through EndStandAside, which
+        // would restore the notch on its way past. The reason changes to Shelf below, when the
+        // session reports itself open.
+        _standAside = StandAsideReason.None;
+
+        _shelfSession.RailPageCount = _pager.PageCount;
+        _shelfSession.RailShelfIndex = _shelfPageIndex;
+        _shelfSession.Open(_hoverPoller.HoverRect, _hoverPoller.DpiScale);
+
+        // The pill, AFTER the shelf. If the session refused (no catcher connected, which it
+        // reports through Unavailable), the notch has to come back instead, and the guard below
+        // is how this tells the two apart: OnShelfOpened sets the reason to Shelf.
+        if (_standAside == StandAsideReason.Shelf)
+        {
+            _ = _dropChannel?.SendAsync(new Plith.Services.Shelf.DropMessage(
+                Plith.Services.Shelf.DropVerb.Hide, 0, 0, 0, 0, []));
+            _log?.Info("Shelf", "Drop landed; straight into the shelf, no notch in between.");
+        }
+        else
+        {
+            _log?.Info("Shelf", "Drop landed but the shelf did not open; putting the notch back.");
+            _ = _dropChannel?.SendAsync(new Plith.Services.Shelf.DropMessage(
+                Plith.Services.Shelf.DropVerb.Hide, 0, 0, 0, 0, []));
+            RestoreNotch();
+        }
+    }
+
+    /// <summary>
     /// Stand aside for the shelf rather than for a drop.
     ///
     /// The same mechanism as BeginStandAside and deliberately not the same method: that one
