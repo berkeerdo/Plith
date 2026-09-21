@@ -1575,3 +1575,47 @@ and cleared the change wrongly. And the earlier conclusion that "composites rend
 standalone widgets are empty" came from comparing files written at 05:59 against files written at
 03:04, because the run had died partway and left the later ones stale. Both are the same mistake:
 reading output without checking that it came from the run being judged.
+
+### The switch itself, measured on the console (2026-09-21, 09:39)
+
+The session that was owed this measurement. `>console sari 1 Active`, five active render
+endpoints, Spotify holding a paused session.
+
+```
+[PASS] pressing a cell changes the system default output
+       pressed 'Steam Streaming Speakers'
+       default was {0.0.0.00000000}.{fef49643-4e0e-4cfb-8305-75fe5c19e950}
+       now         {0.0.0.00000000}.{1742054d-4937-49f0-a7c6-745164bdfa53}
+[PASS] the page returns to now playing after a switch
+output after : Hoparlor (Logitech G733 Gaming Headset) (restore returned True)
+```
+
+Ten verdicts pass in one run. `IPolicyConfig` moved the system default from the headset to a
+Steam virtual device and the `finally` put the headset back, so the machine ends where it
+started. The picker's whole tree is in the evidence of the run above, and every device carries a
+distinct name:
+
+```
+Logitech G733 Gaming Headset, current output | Logitech G733 Gaming Headset |
+Steam Streaming Speakers | Steam Streaming Speakers | Realtek(R) Audio | Realtek(R) Audio |
+Steam Streaming Microphone | Steam Streaming Microphone | NVIDIA High Definition Audio |
+NVIDIA High Definition Audio
+```
+
+Each appears twice, once as the cell Button's accessible name and once as the label inside it.
+That is also how instrument defect 8 happened.
+
+**8. Choosing the device to press by filtering NAMES picked the wrong element.** The current
+device's Button is named "Logitech G733 Gaming Headset, current output" and the TextBlock inside
+it says "Logitech G733 Gaming Headset", so a filter written to exclude the first took the second
+and then failed to find a Button by that name. The script enumerates controls of type Button now,
+which cannot make that mistake.
+
+**The renders were re-taken and are unchanged** after moving the cell height and gap out of the
+style and into `BuildCell`, which was the point of checking.
+
+### Still owed: one
+
+The playing direction of the opening rule. Four runs, four paused tracks at the moment of the
+click. Everything needed for it is in place, including the script judging whichever direction is
+live at the press; it needs a track playing when the notch is clicked.

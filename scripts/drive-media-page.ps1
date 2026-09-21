@@ -212,6 +212,27 @@ function Get-Element {
                        CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
 }
 
+function Get-Buttons {
+    # Every Button in the tree, by name.
+    #
+    # INSTRUMENT DEFECT 8. Picking a device by filtering the flat list of NAMES chose the current
+    # device's inner TextBlock: the Button is named "Logitech G733 Gaming Headset, current output"
+    # and the TextBlock inside it says "Logitech G733 Gaming Headset", so a filter that excluded
+    # the first happily took the second and then could not find a Button by that name. Asking for
+    # controls of the right TYPE cannot make that mistake.
+    param($Hwnd)
+    $el = [System.Windows.Automation.AutomationElement]::FromHandle([IntPtr]$Hwnd)
+    $cond = New-Object System.Windows.Automation.PropertyCondition(
+        [System.Windows.Automation.AutomationElement]::ControlTypeProperty,
+        [System.Windows.Automation.ControlType]::Button)
+    $all = $el.FindAll([System.Windows.Automation.TreeScope]::Descendants, $cond)
+    @($all | ForEach-Object {
+        $r = $_.Current.BoundingRectangle
+        [pscustomobject]@{ Name=$_.Current.Name
+                           CX=[int]($r.X + $r.Width/2); CY=[int]($r.Y + $r.Height/2) }
+    })
+}
+
 function Move-Pointer {
     param([int]$X, [int]$Y, [int]$Settle = 300)
     [MediaInput]::Move($X, $Y)
@@ -696,13 +717,20 @@ try {
                 }
             }
 
-            # A device that is NOT the current one, found by its own accessible name: the current
-            # one carries ", current output" and pressing it would prove nothing at all.
-            $target = $names | Where-Object {
-                $_ -ne 'Back to now playing' -and $_ -ne 'Output' -and
-                $_ -notmatch 'current output' -and $_ -ne 'More in Windows settings' -and
-                $_ -ne 'Now playing'
+            # A device that is NOT the current one, chosen from the picker's BUTTONS: the current
+            # one carries ", current output" in its name and pressing it would prove nothing.
+            $buttons = Get-Buttons -Hwnd $notch.Hwnd
+            $deviceBtn = $buttons | Where-Object {
+                $_.Name -ne 'Back to now playing' -and
+                $_.Name -ne 'More in Windows settings' -and
+                $_.Name -notmatch ', current output$'
             } | Select-Object -First 1
+            $target = $deviceBtn.Name
+
+            if ($canSwitch -and -not $deviceBtn) {
+                Add-Verdict 'a second output is offered as a button' $false `
+                    "buttons: $(($buttons | ForEach-Object { $_.Name }) -join ' | ')"
+            }
 
             if (-not $canSwitch) {
                 # The FAILURE path, measured rather than asserted, and this session is the one
@@ -727,13 +755,12 @@ try {
                         ($saidSo -and $stillOpen) `
                         ("pressed '$currentCellName'; names: $($afterPress -join ' | ')")
                 }
-            } elseif (-not $target) {
-                Add-Verdict 'a second output is offered' $false "names: $($names -join ' | ')"
+            } elseif (-not $deviceBtn) {
+                # Already reported above.
             } else {
-                $cell = Get-Element -Hwnd $notch.Hwnd -Name $target -Type 'Button'
+                $cell = $deviceBtn
                 if (-not $cell) {
-                    Add-Verdict 'the offered output is pressable' $false `
-                        "'$target' is in the tree but not as a Button"
+                    Add-Verdict 'the offered output is pressable' $false 'no button'
                 } else {
                     Move-Pointer -X $cell.CX -Y $cell.CY -Settle 250
                     [MediaInput]::LeftClick()
