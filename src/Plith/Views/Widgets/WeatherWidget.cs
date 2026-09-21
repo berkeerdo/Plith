@@ -26,6 +26,7 @@ namespace Plith.Views.Widgets;
 public partial class WeatherWidget : UserControl
 {
     private readonly Func<WeatherSnapshot?> _read;
+    private readonly Func<string?>? _readPlace;
     private readonly Func<DateOnly?> _readLastReveal;
     private readonly Action<DateOnly> _writeLastReveal;
     private readonly DiagnosticLog? _log;
@@ -43,17 +44,22 @@ public partial class WeatherWidget : UserControl
     private readonly List<(DependencyObject Target, DependencyProperty Property)> _running = new();
     private SkyKind _sky = SkyKind.Overcast;
 
+    /// <param name="readPlace">The place the reading is for, or null when nothing can name it.
+    /// A typed city has a name; Windows Location and an IP lookup do not hand one back, and the
+    /// line stays hidden rather than carrying a label that pretends to be a fact.</param>
     public WeatherWidget(
         Func<WeatherSnapshot?> read,
         Func<DateOnly?> readLastReveal,
         Action<DateOnly> writeLastReveal,
-        DiagnosticLog? log = null)
+        DiagnosticLog? log = null,
+        Func<string?>? readPlace = null)
     {
         ArgumentNullException.ThrowIfNull(read);
         ArgumentNullException.ThrowIfNull(readLastReveal);
         ArgumentNullException.ThrowIfNull(writeLastReveal);
 
         InitializeComponent();
+        _readPlace = readPlace;
         _read = read;
         _readLastReveal = readLastReveal;
         _writeLastReveal = writeLastReveal;
@@ -151,6 +157,7 @@ public partial class WeatherWidget : UserControl
             // never shows a consent prompt) and that nothing else would ever mention.
             _sky = SkyKind.Overcast;
             Temperature.Text = "—";
+            Place.Visibility = Visibility.Collapsed;
             Condition.Text = "Weather unavailable";
             Detail.Text = "Check location in Settings, or type a city";
             PaintSky();
@@ -163,6 +170,12 @@ public partial class WeatherWidget : UserControl
 
         Temperature.Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(w.TemperatureC):0}°");
         Condition.Text = label;
+
+        // Read on every render rather than captured once: the city is a setting, and a setting
+        // can be changed while the page exists.
+        var place = _readPlace?.Invoke();
+        Place.Text = place ?? string.Empty;
+        Place.Visibility = string.IsNullOrWhiteSpace(place) ? Visibility.Collapsed : Visibility.Visible;
         Detail.Text = string.Create(CultureInfo.CurrentCulture,
             $"Updated {w.FetchedAt.ToLocalTime():t}");
 

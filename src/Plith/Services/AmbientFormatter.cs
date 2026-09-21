@@ -29,6 +29,17 @@ public static class AmbientFormatter
     }
 
     /// <summary>
+    /// The weekday, in the culture's own words.
+    ///
+    /// Here rather than inline in the widget, for the reason the clock above is here: two
+    /// surfaces showing the same fact must not write it two ways. It is a separate method rather
+    /// than a third member of FormatClock's tuple because only the notch's clock page has the
+    /// room for it, and adding it to the tuple would change every existing caller to ignore it.
+    /// </summary>
+    public static string FormatWeekday(DateTime now, CultureInfo culture)
+        => culture.DateTimeFormat.GetDayName(now.DayOfWeek);
+
+    /// <summary>
     /// The battery column. Returns Show=false for every case that has no honest percentage:
     /// a desktop (BatteryFlag bit 128), an unknown level (255), or a failed read (null).
     /// All three collapse the column rather than rendering a placeholder, because a battery

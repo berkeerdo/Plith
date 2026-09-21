@@ -802,7 +802,11 @@ public sealed class OsdHost : BandWindow
         // mattered. The draggable track it carried moves to the HUD's speaker instead.
         _media = media;
         _clockPage = new Widgets.ClockWidget(media, weather, microphone);
-        _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log);
+        // The typed city, read through a delegate so the page follows a settings change without
+        // being rebuilt. Empty when the location is resolved from Windows or an IP lookup, and
+        // the page hides the line rather than naming a place it cannot name.
+        _weatherPage = new Widgets.WeatherWidget(weather, ReadRevealDate, WriteRevealDate, _log,
+                                                 () => _settings.Current.WeatherLocation);
         _mediaPage = new Widgets.MediaWidget(media, openSource);
 
         BuildShelfPage();

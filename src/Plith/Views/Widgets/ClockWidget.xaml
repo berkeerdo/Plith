@@ -62,7 +62,15 @@
                        LineHeight="46" LineStackingStrategy="BlockLineHeight"
                        Foreground="{DynamicResource NotchInk}" />
         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
+            <!-- The weekday, which the page has room for now and which is the one thing a glance
+                 at a clock most often actually wants. Brighter than the date beside it: the day
+                 is the fact, the date is the qualifier. -->
+            <TextBlock x:Name="Weekday"
+                       VerticalAlignment="Bottom"
+                       FontSize="13" FontWeight="SemiBold"
+                       Foreground="{DynamicResource NotchInk}" />
             <TextBlock x:Name="Date"
+                       Margin="7,0,0,0"
                        VerticalAlignment="Bottom"
                        FontSize="13"
                        Foreground="{DynamicResource NotchInkMuted}" />

@@ -84,6 +84,7 @@ public partial class ClockWidget : UserControl
         var (time, date) = AmbientFormatter.FormatClock(DateTime.Now, CultureInfo.CurrentCulture);
         Time.Text = time;
         Date.Text = date;
+        Weekday.Text = AmbientFormatter.FormatWeekday(DateTime.Now, CultureInfo.CurrentCulture);
 
         // Read every tick rather than cached. GetSystemPowerStatus is a struct read, and the
         // states that matter — a cable going in, a machine dropping to low power — are exactly

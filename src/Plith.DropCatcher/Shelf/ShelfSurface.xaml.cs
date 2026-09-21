@@ -168,6 +168,10 @@ public partial class ShelfSurface : UserControl
     /// <summary>The "clear the shelf" control was pressed.</summary>
     public event Action? ClearRequested;
 
+    /// <summary>Raised by the close box. ShelfWindow decides when the shelf can actually go
+    /// down.</summary>
+    public event Action? CloseRequested;
+
     /// <summary>Take these paths off the shelf: the tile's own selection, or the whole current
     /// selection if the tile removed belongs to it. Raised by the hover affordance and by the
     /// tile's context menu, both computing the same set from ShelfModel.DragPaths.</summary>
@@ -372,6 +376,12 @@ public partial class ShelfSurface : UserControl
 
         Columns.Children.Clear();
 
+        // Both hosts reset here, so the empty state cannot outlive the empty shelf. Setting them
+        // only inside the empty branch would make the transition one-way: the first file to
+        // arrive would leave the dashed box up with the tiles hidden behind it.
+        Columns.Visibility = Visibility.Visible;
+        EmptyHost.Visibility = Visibility.Collapsed;
+
         var items = model.Items;
         if (items.Count == 0)
         {
@@ -437,17 +447,35 @@ public partial class ShelfSurface : UserControl
 
             var empty = new Grid
             {
-                Width = NotchGeometry.ShelfTilesPerRow * TileSize
-                      + (NotchGeometry.ShelfTilesPerRow - 1) * Gap,
-                // TWO rows, which is what NotchGeometry.ShelfRowsFor gives an empty shelf and why
-                // it gives it. At one row this box was 352 by 64, the aspect ratio of a text
-                // input, and it read as a field to type in.
-                Height = 2 * TileSize + Gap,
+                // Stretched in BOTH directions, and the width is not a separate decision: the
+                // host is exactly as wide as a full tile row, because that is what the panel's
+                // margins leave. It carried an explicit 352 DIP width beside a stretching
+                // vertical alignment, and the two disagreed enough to push the box one DIP right
+                // and clip its right edge away entirely. The harness's own empty-outline check
+                // caught it: "left=248, right=0".
+                HorizontalAlignment = HorizontalAlignment.Stretch,
+                // STRETCHED, not two rows tall.
+                //
+                // It was Height = 2 * TileSize + Gap, which is the two-row height an empty shelf
+                // OPENS at, and the reasoning was sound as far as it went: at one row the box is
+                // 352 by 64, the aspect ratio of a text input, and it reads as a field to type
+                // in. What it missed is that the frame is chosen once at open by design, so
+                // clearing a three-row shelf while it is up leaves a 283 DIP window with a 136
+                // DIP box hanging in the top of it. Reported from a real session.
+                //
+                // Filling the host cannot be wrong at either size, and the box stays taller than
+                // it is wide-and-short either way.
+                VerticalAlignment = VerticalAlignment.Stretch,
             };
             empty.Children.Add(outline);
             empty.Children.Add(stack);
 
-            Columns.Children.Add(empty);
+            // Its own host rather than the tile row: a horizontal StackPanel gives its children
+            // their desired size and never stretches them.
+            EmptyHost.Children.Clear();
+            EmptyHost.Children.Add(empty);
+            EmptyHost.Visibility = Visibility.Visible;
+            Columns.Visibility = Visibility.Collapsed;
             // Named on THIS control, not on Columns: Columns is a StackPanel, and WPF gives a
             // StackPanel no automation peer at all, so a name set on one reaches nothing (see
             // NamedBorder's own header comment for the review that caught this same defect on
@@ -575,6 +603,16 @@ public partial class ShelfSurface : UserControl
     // a surface this small is friction rather than safety. If a future change makes Clear do
     // something that is NOT trivially reversible, this is the line that stops being true.
     private void OnClearClick(object sender, RoutedEventArgs e) => ClearRequested?.Invoke();
+
+    /// <summary>
+    /// The close box.
+    ///
+    /// Raised rather than acted on, like every other verb this surface offers: whether the shelf
+    /// may go down right now is ShelfWindow's question, and it has a real answer. Dismiss defers
+    /// while a drag or a context menu is in flight, and calling Hide() from here would take a
+    /// live drag down with it.
+    /// </summary>
+    private void OnCloseClick(object sender, RoutedEventArgs e) => CloseRequested?.Invoke();
 
     /// <param name="index">Where this tile sits in the flat list, carried only so a mouse press
     /// on it can set keyboard navigation's position to match (see the press handler below), so an

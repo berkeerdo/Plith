@@ -64,25 +64,50 @@
                            VerticalAlignment="Center"
                            Foreground="{DynamicResource NotchInk}" />
 
-                <Button x:Name="ClearButton"
-                        Grid.Column="1"
-                        Width="28" Height="28"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Padding="0"
-                        Cursor="Hand"
-                        AutomationProperties.Name="Clear the shelf"
-                        Click="OnClearClick">
-                    <!-- Same coordinates as PlithIcons' IconClose, duplicated: see the header
-                         comment. -->
-                    <Path Data="M6,6 L18,18 M18,6 L6,18"
-                          Width="14" Height="14"
-                          Stretch="Uniform"
-                          Stroke="{DynamicResource NotchInk}"
-                          StrokeThickness="1.6"
-                          StrokeStartLineCap="Round"
-                          StrokeEndLineCap="Round" />
-                </Button>
+                <!-- Two controls where there was one, and the one was wrong.
+
+                     The ✕ used to CLEAR the shelf. Reported from a real session as "pressing the
+                     X does not close it", which is the kinder half of the problem: a ✕ in the
+                     top-right corner of a window means close to everyone who has used Windows,
+                     so the press that was meant to put the shelf away emptied it instead.
+
+                     Clear says the word. It is the destructive one, it is rare, and a word cannot
+                     be mistaken for the close box. -->
+                <StackPanel Grid.Column="1" Orientation="Horizontal">
+                    <Button x:Name="ClearButton"
+                            Height="24"
+                            Padding="8,0"
+                            Margin="0,0,4,0"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Cursor="Hand"
+                            AutomationProperties.Name="Clear the shelf"
+                            Click="OnClearClick">
+                        <TextBlock Text="Clear"
+                                   FontSize="11"
+                                   VerticalAlignment="Center"
+                                   Foreground="{DynamicResource NotchInkMuted}" />
+                    </Button>
+
+                    <Button x:Name="CloseButton"
+                            Width="28" Height="28"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            Padding="0"
+                            Cursor="Hand"
+                            AutomationProperties.Name="Close the shelf"
+                            Click="OnCloseClick">
+                        <!-- Same coordinates as PlithIcons' IconClose, duplicated: see the header
+                             comment. -->
+                        <Path Data="M6,6 L18,18 M18,6 L6,18"
+                              Width="14" Height="14"
+                              Stretch="Uniform"
+                              Stroke="{DynamicResource NotchInk}"
+                              StrokeThickness="1.6"
+                              StrokeStartLineCap="Round"
+                              StrokeEndLineCap="Round" />
+                    </Button>
+                </StackPanel>
             </Grid>
 
             <!-- The stacks, built in code the same way ShelfWidget builds its tiles: each one
@@ -115,6 +140,18 @@
                             HorizontalAlignment="Center"
                             VerticalAlignment="Top" />
             </Grid>
+
+            <!-- The empty state's own host, a SIBLING of ColumnsHost rather than a child of it,
+                 so its dashed box can stretch to the whole row. ColumnsHost is top-aligned and
+                 therefore only as tall as the tiles in it; a box stretched inside that would
+                 stretch to nothing.
+
+                 The box used to be a fixed 136 DIP, which is the two-row height an empty shelf
+                 OPENS at. That is right when it opens empty and wrong the moment a full shelf is
+                 cleared while it is up: the frame is chosen once at open by design (see
+                 NotchGeometry.ShelfFrameFor), so clearing a three-row shelf left a 283 DIP window
+                 with a 136 DIP box hanging in the top of it. Reported from a real session. -->
+            <Grid x:Name="EmptyHost" Grid.Row="1" Visibility="Collapsed" />
         </Grid>
     </Border>
 </UserControl>

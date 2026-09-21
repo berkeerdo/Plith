@@ -375,7 +375,10 @@ $writer = [Func[double, bool]] { param($v) $true }
 $audio = [Plith.Views.Widgets.AudioWidget]::new($audioVm, $writer)
 Save-Visual -Element $audio -W $frameW -H $frameH -Name 'widget-audio'
 
-$weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null)
+# A typed city, so the new place line is in shot. Empty would hide it, which is the other state
+# and the one the unavailable render already covers.
+$place = [Func[string]] { 'Istanbul' }
+$weather = [Plith.Views.Widgets.WeatherWidget]::new($reader, $readDate, $writeDate, $null, $place)
 Save-Visual -Element $weather -W $frameW -H $frameH -Name 'widget-weather'
 
 # The shelf, against a store in a temp directory with real files in it. Real files rather than a
@@ -535,6 +538,18 @@ $emptyFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameFor(0)
 $emptySurface.Measure([Windows.Size]::new($emptyFrame.Width, [double]::PositiveInfinity))
 "  empty shelf wants $([Math]::Round($emptySurface.DesiredSize.Height,1)) DIP at $($emptyFrame.Width) wide; the frame gives $($emptyFrame.Height)"
 Save-Visual -Element $emptySurface -W $emptyFrame.Width -H $emptyFrame.Height -Name 'shelf-surface-empty'
+
+# The same empty surface at the size a FULL shelf opens at, which is the state reported broken
+# from a real session: the frame is chosen once at open by design, so clearing a three-row shelf
+# while it is up leaves the window at three rows with an empty page in it. The dashed box used to
+# be a fixed two-row height and hung in the top of that window. Rendered at both sizes now,
+# because the bug lived in the difference between them.
+$clearedFrame = [Plith.Views.Presentation.NotchGeometry]::ShelfFrameDip
+$clearedSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+$clearedSurface.Apply($shelfPalette)
+$clearedSurface.Render($emptyModel)
+Wait-ForDispatcher
+Save-Visual -Element $clearedSurface -W $clearedFrame.Width -H $clearedFrame.Height -Name 'shelf-surface-cleared'
 
 # What the empty card's parts actually measure to. A dashed outline that draws its top and bottom
 # but not its sides is a thing pixels can suggest and only the tree can settle.

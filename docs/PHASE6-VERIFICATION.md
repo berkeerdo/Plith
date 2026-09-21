@@ -1750,3 +1750,56 @@ depend on whether a fourth control is beside them.
 
 Driven on hardware after all of it: eight verdicts, all passing, including a seek from 128s to
 41s against a 41s target.
+
+### The shelf's close box, its empty state after a clear, and two additions (2026-09-21)
+
+Three more reports from the running build, and the first was worse than it sounded.
+
+**The ✕ did not close the shelf. It CLEARED it.** Reported as "pressing the X does not close it",
+which is the kind half of the problem: the button in the window's top-right corner was
+`ClearButton`, named "Clear the shelf", and a ✕ in that corner means close to anyone who has used
+Windows. So the press meant to put the shelf away emptied it instead.
+
+There are two controls now: **Clear**, which says the word, and a ✕ that closes. The word is the
+right shape for the destructive one, and it cannot be mistaken for a close box. The ✕ goes
+through `Dismiss`, the same entry point Esc uses, so it obeys the deferrals every other
+dismissal does: a drag or a context menu in flight postpones it rather than having the window
+vanish out from under the gesture.
+
+**Clearing a full shelf while it was open broke the empty state**, and the cause is the same
+shape as the notch page's: a box sized for one frame. `ShelfSurface`'s dashed box was a fixed
+`2 * TileSize + Gap`, which is the two-row height an empty shelf OPENS at. The frame is chosen
+once at open by design, so clearing a three-row shelf left a 283 DIP window with a 136 DIP box
+hanging in the top of it. It stretches now, in its own host, because a horizontal `StackPanel`
+never stretches its children.
+
+`shelf-surface-cleared.png` renders exactly that state, at the full frame with an empty model.
+The bug lived in the difference between the two sizes, so both are rendered.
+
+**Two defects while fixing it, both caught by the harness rather than by reading.** The empty
+host was first placed inside `ColumnsHost`, which is top-aligned and therefore only as tall as
+the tiles in it, so stretching inside it stretched to nothing. And the box kept an explicit 352
+DIP width beside its new stretching alignment; the two disagreed enough to push it one DIP right
+and clip its right edge away, which the empty-outline check reported as `left=248, right=0`. That
+check exists because the same class of defect happened once before.
+
+**A one-way state, twice.** Both the notch page and the window set their empty-state visibility
+inside the empty branch and reset it nowhere, so the first file to arrive on an empty shelf would
+have left the dashed box up with the tiles hidden behind it. Both reset on every render now.
+
+### The additions the taller pages earned
+
+Asked for, and both use data the product already has rather than filling space with a label.
+
+**The clock page shows the weekday**, brighter than the date beside it: the day is the fact and
+the date is the qualifier. `AmbientFormatter.FormatWeekday` is a separate method rather than a
+third member of `FormatClock`'s tuple, because only this page has room for it and every existing
+caller would otherwise have to ignore it. Two tests, one of which asserts seven distinct words
+across a week rather than hard-coding a calendar.
+
+**The weather page says WHERE.** It showed a temperature, a condition and when it was read, and
+left the one question a person asks of a page they did not set up unanswered. Only when there is
+a name to show: a typed city has one, while Windows Location and an IP lookup do not hand a city
+back, and the line stays hidden rather than carrying "your location" as though it were a fact.
+Read through a delegate on every render, because a city is a setting and a setting can change
+while the page exists.

@@ -100,4 +100,28 @@ public class AmbientFormatterTests
         var (_, _, charging) = AmbientFormatter.FormatBattery(new BatteryStatusRaw(0, 73, 255));
         Assert.False(charging);
     }
+
+    [Fact]
+    public void FormatWeekday_UsesTheCulturesOwnWord()
+    {
+        var sunday = new DateTime(2026, 9, 20);
+
+        Assert.Equal("Sunday", AmbientFormatter.FormatWeekday(sunday, new CultureInfo("en-GB")));
+        Assert.Equal("Pazar", AmbientFormatter.FormatWeekday(sunday, new CultureInfo("tr-TR")));
+    }
+
+    [Fact]
+    public void FormatWeekday_CoversEveryDay()
+    {
+        // Seven distinct words, which is the only property worth asserting without hard-coding
+        // a calendar: the day comes from DayOfWeek and the word from the culture.
+        var culture = new CultureInfo("en-GB");
+        var start = new DateTime(2026, 9, 21);
+        var names = Enumerable.Range(0, 7)
+            .Select(i => AmbientFormatter.FormatWeekday(start.AddDays(i), culture))
+            .ToList();
+
+        Assert.Equal(7, names.Distinct().Count());
+        Assert.Equal("Monday", names[0]);
+    }
 }

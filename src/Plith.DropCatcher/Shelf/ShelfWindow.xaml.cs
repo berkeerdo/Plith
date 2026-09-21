@@ -273,6 +273,11 @@ public partial class ShelfWindow : Window
         // Bubbled through unchanged rather than translated to a DropMessage here, so this file
         // does not have to know the wire format to raise them.
         Page.ClearRequested += () => ClearShelfRequested?.Invoke();
+
+        // The close box goes through Dismiss, not straight to Hide, so it obeys the same
+        // deferrals every other dismissal does: a drag or a context menu in flight postpones it
+        // rather than having the window vanish from under the gesture. Same entry point as Esc.
+        Page.CloseRequested += () => Dismiss("close button");
         Page.RemoveRequested += paths => RemoveItemsRequested?.Invoke(paths);
 
         // OpenRequested and RevealRequested are the opposite: they never touch the wire at all,

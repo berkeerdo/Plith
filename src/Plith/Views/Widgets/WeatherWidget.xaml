@@ -125,6 +125,18 @@
                                       Opacity="0.45" Color="Black" />
                 </TextBlock.Effect>
             </TextBlock>
+            <!-- WHERE, which this page never said.
+
+                 It showed a temperature, a condition and when it was read, and left the one
+                 question a person asks of a weather page they did not set up unanswered. Only
+                 shown when there is a name to show: the location can be resolved from Windows or
+                 from an IP lookup, and neither hands back a city. Inventing "your location"
+                 would be a label pretending to be a fact. -->
+            <TextBlock x:Name="Place"
+                       Margin="0,1,0,0"
+                       FontSize="12.5" FontWeight="SemiBold"
+                       Foreground="#F2FFFFFF"
+                       Visibility="Collapsed" />
             <TextBlock x:Name="Condition"
                        Margin="0,3,0,0"
                        FontSize="12.5"
