@@ -460,6 +460,23 @@ if ($expectMedia) {
         ($onClock -and -not $onMedia) "names in the tree: $($names -join ' | ')"
 }
 
+# The clock page's own verb, asserted rather than left in an evidence string.
+#
+# This is how the "playing for a paused session" defect was FOUND: it sat in the evidence of a
+# passing verdict, where nothing was checking it. A regression would have passed every gate this
+# repo has, so it gets an assertion of its own. Only meaningful while the clock page is up.
+if ($onClock) {
+    $clockLine = $names | Where-Object { $_ -match '^\d{1,2}:\d{2}, ' } | Select-Object -First 1
+    if ($clockLine -match ', (playing|paused) ') {
+        $verb = $Matches[1]
+        $wanted = if ($playingNow) { 'playing' } else { 'paused' }
+        Add-Verdict "the clock page says '$wanted' for a $wanted track" ($verb -eq $wanted) `
+            "clock line: $clockLine"
+    } else {
+        "  (no track line on the clock page, so its verb cannot be checked)"
+    }
+}
+
 # The other half of the accessibility claim: the bar is a real ProgressBar, so where the track has
 # got to reaches a screen reader as a VALUE rather than as a length of pixels. Only meaningful on
 # the media page, so it is skipped rather than failed when the run measured the other direction.

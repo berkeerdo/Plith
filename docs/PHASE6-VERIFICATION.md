@@ -1542,3 +1542,36 @@ is safe to drive anywhere; what differs is the answer.
 
 Eight verdicts now pass in one run. What is still owed is unchanged and needs a console session:
 a switch that SUCCEEDS, and the playing direction of the opening rule.
+
+### The render harness draws NOTHING in a disconnected session, and says it drew everything
+
+Found while self-reviewing the day's work, by looking at a PNG and finding it blank.
+
+In a session whose state is `Disc` rather than `Active`, `scripts/render-widgets.ps1` runs,
+prints `widget-media.png  (356 x 116)` for every render, and writes files that are **769 bytes of
+pure transparency**. Sampled across the whole image, every pixel is `A=0, R=0, G=0, B=0`. The
+viewer shows that as white, which is why the first reading of it was "the picker renders white".
+
+**That is worse than failing, because the output looks like output.** The only thing that caught
+it was the shelf's own empty-outline check throwing `left=0, right=0, top=0, bottom=0`, which
+reads as a defect in a dashed border rather than as an empty image, and by then fifteen renders
+had been reported as done. Anyone comparing a fresh empty PNG against an older good one would
+conclude the widget had broken, which is exactly the wrong end of the stick and is what the first
+three attempts at diagnosing this did.
+
+Section 7.5 of `docs/SHELF-VERIFICATION.md` records the related fact for screen CAPTURE: what
+breaks it is the session being disconnected or locked, not the window being layered. This adds
+`RenderTargetBitmap` to that list, which is NOT the obvious extension of it: offscreen rendering
+has no window and nothing to capture, and it still produces nothing.
+
+The harness now refuses to run unless the session is Active, with the same check
+`drive-media-page.ps1` already had and a message naming what the PNGs would otherwise contain.
+
+**Two instrument defects of my own on the way to that.** An isolation test meant to decide
+whether the last change caused it was written as
+`git stash && dotnet build | grep -cE " error " && pwsh render`, and `grep -c` exits 1 when it
+finds nothing: the render never ran, so the test sampled the previous run's already-empty files
+and cleared the change wrongly. And the earlier conclusion that "composites render fine while
+standalone widgets are empty" came from comparing files written at 05:59 against files written at
+03:04, because the run had died partway and left the later ones stale. Both are the same mistake:
+reading output without checking that it came from the run being judged.

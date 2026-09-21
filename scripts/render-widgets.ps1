@@ -34,6 +34,28 @@ if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
     throw "Must run under -STA. Use: pwsh -STA -File $PSCommandPath"
 }
 
+# The session has to be Active, and this is not a copy of drive-media-page.ps1's check for
+# tidiness: it was MEASURED here on 2026-09-21. In a DISCONNECTED session this harness runs to
+# completion, prints "widget-media.png  (356 x 116)" for every render, and writes PNGs that are
+# 769 bytes of pure transparency. Every pixel comes back A=0.
+#
+# That is worse than failing, because the output looks like output. The only thing that caught it
+# was the shelf's own empty-outline check throwing with "left=0, right=0, top=0, bottom=0", which
+# reads as a design defect in a dashed border rather than as an empty image, and by then fifteen
+# renders had already been reported as done.
+#
+# docs/SHELF-VERIFICATION.md section 7.5 records the related fact for screen CAPTURE: what breaks
+# it is the session being disconnected or locked. This adds RenderTargetBitmap to that list, which
+# is not obvious: offscreen rendering has no window and no desktop surface to capture, and it
+# still produces nothing.
+$session = qwinsta 2>$null | Where-Object { $_ -match '^\s*>' }
+if ($session -notmatch 'Active') {
+    throw ("This session is not Active (`qwinsta` says: $($session -replace '\s+', ' ')). " +
+           "RenderTargetBitmap produces FULLY TRANSPARENT images in a disconnected or locked " +
+           "session while reporting every render as done, so the PNGs would be 769 bytes of " +
+           "nothing and the run would look successful. Reconnect and re-run.")
+}
+
 $root = Split-Path -Parent $PSScriptRoot
 $bin = Join-Path $root "src\Plith\bin\$Configuration\net10.0-windows10.0.22000.0"
 $dll = Join-Path $bin 'Plith.dll'

@@ -435,6 +435,13 @@ public partial class MediaWidget : UserControl
         var button = new Button
         {
             Style = (Style)FindResource("PickerCellStyle"),
+            // From the grid's own constants rather than the style, so the numbers the capacity is
+            // computed from are the numbers that get drawn. The gap is on the right and the
+            // bottom, which is what makes a 2 by 3 UniformGrid of these come to the 56 DIP the
+            // band leaves for it.
+            Height = NotchGeometry.OutputPickerCellHeight,
+            Margin = new Thickness(0, 0, NotchGeometry.OutputPickerCellGap,
+                                   NotchGeometry.OutputPickerCellGap),
             Content = row,
             // The FULL name, on both. The label above is trimmed to its cell, and a hover or a
             // screen reader must not inherit that trimming: this is why the design refuses a

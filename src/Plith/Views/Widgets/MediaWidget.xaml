@@ -207,10 +207,14 @@
                 </Setter>
             </Style>
 
+            <!-- No Height and no Margin here. BuildCell sets both from NotchGeometry's grid
+                 constants, because those are the numbers the capacity is computed from and a
+                 second copy in a style is free to stop matching them. This style DID carry
+                 literal 16 and 4 while the comment below claimed otherwise, which is both of
+                 this repo's recorded failure modes in one place: a duplicated constant and a
+                 comment that lies about it. -->
             <Style x:Key="PickerCellStyle" TargetType="Button">
-                <Setter Property="Height" Value="16" />
                 <Setter Property="Cursor" Value="Hand" />
-                <Setter Property="Margin" Value="0,0,4,4" />
                 <Setter Property="HorizontalContentAlignment" Value="Stretch" />
                 <Setter Property="Template">
                     <Setter.Value>
@@ -388,8 +392,9 @@
         </Grid>
         </Grid>
 
-        <!-- 14 + 3 + 56 = 73, the content band. The 56 is three 16 DIP cells and two 4 DIP gaps,
-             and all four numbers come from NotchGeometry rather than from here. -->
+        <!-- 14 + 3 + 56 = 73, the content band. The 56 is three 16 DIP cells and two 4 DIP gaps:
+             the cell height and the gap come from NotchGeometry, applied in BuildCell, and the
+             14 and the 3 are this page's own. -->
         <Grid x:Name="PickerMode" Visibility="Collapsed">
             <Grid.RowDefinitions>
                 <RowDefinition Height="14" />
