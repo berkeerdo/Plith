@@ -270,12 +270,16 @@ public partial class App : Application
                 // painting these rows will read them from there.
                 Dispatcher.BeginInvoke(new Action(() =>
                 {
-                    var before = _shelf?.Items.Count ?? 0;
-                    _shelf?.Add(message.Paths);
-                    var after = _shelf?.Items.Count ?? 0;
-                    // Both numbers, because they differ whenever a path did not resolve - which
-                    // is the one failure this path has and is otherwise completely silent.
-                    _diagnosticLog?.Info("Shelf", $"Shelf now holds {after} item(s) (was {before}).");
+                    // HOW MANY WERE KEPT, not how much the count grew by, and the difference is
+                    // a measured defect rather than a fine distinction. A file already on the
+                    // shelf is kept again and moves to the front, so the drop did something, but
+                    // the count is unchanged: comparing counts read a re-drop of the same file as
+                    // nothing having happened, skipped the acknowledgement, and left a person
+                    // watching their drop disappear into an empty notch. The log said it plainly
+                    // and nobody had read it that way: "Shelf now holds 1 item(s) (was 1)".
+                    var kept = _shelf?.Add(message.Paths) ?? 0;
+                    _diagnosticLog?.Info("Shelf",
+                        $"Shelf kept {kept} of {message.Paths.Count} dropped path(s); it now holds {_shelf?.Items.Count ?? 0}.");
 
                     // The acknowledgement, and it is the shelf itself: the file is in the store
                     // by now, so the shelf opens holding it. A drop that changes nothing on
@@ -285,7 +289,7 @@ public partial class App : Application
                     // Nothing kept means nothing to acknowledge, and then the notch has to come
                     // back the ordinary way: a shelf opened for a drop that resolved to no files
                     // would be an empty page presented as a result.
-                    if (after > before) _osd?.OnDropLanded();
+                    if (kept > 0) _osd?.OnDropLanded();
                     else _osd?.OnCatcherStoodDown();
                 }));
                 break;

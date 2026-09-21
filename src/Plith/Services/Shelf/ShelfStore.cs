@@ -58,9 +58,21 @@ public sealed class ShelfStore
     /// first. Raises <see cref="Changed"/> once for the batch, and not at all when nothing was
     /// kept. A drop of three paths is one event, and a drop of nothing is none.
     /// </summary>
-    public void Add(IEnumerable<string> paths)
+    /// <returns>
+    /// How many paths were KEPT, which is not the same question as how much the shelf grew by and
+    /// is the reason this returns anything at all.
+    ///
+    /// A path already on the shelf is kept again: it is removed and re-inserted at the front, so
+    /// the row moves, the file is the newest thing here, and the drop plainly did something. The
+    /// COUNT, though, does not change. A caller that compared the count before and after
+    /// therefore read a re-drop as nothing having happened, which is exactly what happened:
+    /// dropping the same file twice logged "Shelf now holds 1 item(s) (was 1)" and the drop's
+    /// acknowledgement was skipped, so the shelf never appeared and the person saw the drop
+    /// vanish into nothing. Measured from a real session's log on 2026-09-21.
+    /// </returns>
+    public int Add(IEnumerable<string> paths)
     {
-        var kept = false;
+        var kept = 0;
 
         foreach (var path in paths)
         {
@@ -70,14 +82,15 @@ public sealed class ShelfStore
             // leaving a second copy behind.
             _items.RemoveAll(i => string.Equals(i.Path, item.Path, StringComparison.OrdinalIgnoreCase));
             _items.Insert(0, item);
-            kept = true;
+            kept++;
         }
 
-        if (!kept) return;
+        if (kept == 0) return 0;
 
         TrimToCap();
         Save();
         Changed?.Invoke();
+        return kept;
     }
 
     public void Remove(string path) => RemoveMany([path]);

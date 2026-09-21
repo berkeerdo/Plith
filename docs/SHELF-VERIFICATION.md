@@ -2581,3 +2581,31 @@ row starting at `y=140`.
 surface into a second host throws, and measuring it in place returned `0 x 0` for the name, which
 satisfies "the name ends above the rail" for any rail. It has its own surface now, and the width is
 asserted before the position, because a zero-sized element is not a passing case.
+
+### 10.9 The drop that did nothing had done something (2026-09-21)
+
+Reported: the file I dropped never showed its preview at all. The log answers it in two lines, and
+neither is about previews.
+
+```
+36.657  DROP: 1 path(s): ...NM_Mukellef_Veri_Dosyasi_2026-09-21.xlsx
+36.659  Hidden.
+36.665  Shelf now holds 1 item(s) (was 1)
+36.666  Drag over; notch back
+40.732  Items received: 1 path(s)          <- FOUR SECONDS LATER, and from a hover
+```
+
+**The same file was dropped twice.** `ShelfStore.Add` keeps a path it already holds: it removes the
+row and re-inserts it at the front, so the file is the newest thing on the shelf and the drop
+plainly did something. The COUNT is unchanged. The new drop path asked `after > before`, read that
+as nothing having happened, and took the fallback branch that restores the notch, so the
+acknowledgement never ran and the shelf never appeared. Four seconds of nothing, and then the
+shelf opening from an unrelated hover, which is not a preview failing to load; it is a drop
+vanishing.
+
+**"Did it work" is not a question a count can answer when a set absorbs a duplicate.** `Add`
+returns how many paths it KEPT now, and the drop path asks that. Three tests, including the
+re-drop, which asserts all three halves: one kept, the count unchanged, and the file at the front.
+
+This is the second time in two changes that a number stood in for an event and was wrong about it.
+The other was the frame equality check reading a surface that measured `0 x 0` and passing.

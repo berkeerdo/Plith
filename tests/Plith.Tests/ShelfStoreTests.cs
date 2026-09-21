@@ -282,4 +282,46 @@ public sealed class ShelfStoreTests : IDisposable
         Assert.Equal(2, lines.Length);
         Assert.DoesNotContain(lines, string.IsNullOrWhiteSpace);
     }
+
+    [Fact]
+    public void Add_ReportsHowManyItKept()
+    {
+        var store = new ShelfStore(_storePath);
+
+        Assert.Equal(2, store.Add([MakeFile("a.txt"), MakeFile("b.txt")]));
+    }
+
+    [Fact]
+    public void Add_DoesNotCountAPathItCouldNotResolve()
+    {
+        var store = new ShelfStore(_storePath);
+
+        Assert.Equal(1, store.Add([MakeFile("a.txt"), Path.Combine(_directory, "not-there.txt")]));
+        Assert.Equal(0, store.Add([Path.Combine(_directory, "also-not-there.txt")]));
+    }
+
+    /// <summary>
+    /// The defect this return value exists for, and it reached a real session: a re-drop keeps the
+    /// file, moves its row to the front, and leaves the COUNT unchanged. The caller compared the
+    /// count before and after, read that as nothing having happened, and skipped the drop's whole
+    /// acknowledgement, so the shelf never appeared and a person watched their drop vanish.
+    ///
+    /// "Did it work" is not a question a count can answer when a set absorbs a duplicate.
+    /// </summary>
+    [Fact]
+    public void Add_CountsAFileThatIsAlreadyOnTheShelfAsKept()
+    {
+        var store = new ShelfStore(_storePath);
+        var file = MakeFile("a.txt");
+        store.Add([MakeFile("b.txt"), file]);
+        var countBefore = store.Items.Count;
+
+        var kept = store.Add([file]);
+
+        Assert.Equal(1, kept);
+        Assert.Equal(countBefore, store.Items.Count);
+        // And it is the newest thing on the shelf now, which is the other half of "it did
+        // something".
+        Assert.Equal(file, store.Items[0].Path);
+    }
 }
