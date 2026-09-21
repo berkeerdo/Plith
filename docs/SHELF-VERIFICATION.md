@@ -2949,3 +2949,26 @@ times the threshold, and pages ONCE; and a second flick after a pause still page
 and the driver refuses to press anything without a desktop, which is correct. Stage 2.3b is written
 and is the check that would confirm this: it flicks 80 messages of six from a closed notch and
 requires the shelf to be up afterwards.
+
+### 10.20 The driver only ever worked on one of the two ways into this machine (2026-09-21)
+
+Run on the physical console rather than over Remote Desktop for the first time, and its own first
+precondition refused it:
+
+```
+SetCursorPos reported success but the pointer read back at 408,400 instead of 400,400.
+```
+
+Eight pixels in four hundred is two per cent, which is a display scale rather than a driver
+rejecting anything: Windows virtualises coordinates for a process that has not declared DPI
+awareness, and the RDP session this instrument was written against happened to be at 100 per cent.
+So the whole driver only worked on one of the two ways into this machine, and the precondition that
+caught it was right to be there.
+
+`PairInput.DeclareDpiAware` calls `SetProcessDpiAwarenessContext` with per-monitor v2 before
+anything reads or writes a coordinate. The precondition passes now.
+
+**The run still did not happen**, and the second guard is why: 1154 px of pointer drift in one
+second with `steamwebhelper` in the foreground, which is a person using their machine. The driver
+drives the real pointer and cannot share it. Stage 2.3b, the flick check that would confirm
+10.19's pager fix on hardware, is written and has not run since that fix.

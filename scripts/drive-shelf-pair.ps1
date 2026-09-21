@@ -170,6 +170,25 @@ public static class PairInput {
         return i;
     }
 
+    // PER-MONITOR DPI AWARENESS, declared before this process asks anything about coordinates.
+    //
+    // Without it Windows virtualises them for a non-aware process, and on a display that is not
+    // at 100 per cent every SetCursorPos lands scaled: measured on the physical console at
+    // 2026-09-21, asking for 400,400 and reading back 408,400, which this file's own precondition
+    // correctly refused to run past. The RDP session this driver was written against happened to
+    // be at 100 per cent, so the whole instrument only worked on one of the two ways into this
+    // machine.
+    //
+    // Best-effort by design: the call fails if the host process has already been made aware, and
+    // that failure is harmless because the outcome is the same.
+    [DllImport("user32.dll")]
+    private static extern bool SetProcessDpiAwarenessContext(IntPtr context);
+
+    public static void DeclareDpiAware() {
+        // DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2
+        SetProcessDpiAwarenessContext(new IntPtr(-4));
+    }
+
     // Movement is SetCursorPos, not SendInput. See defect 4.
     public static void Move(int x, int y) {
         if (!SetCursorPos(x, y))
@@ -476,6 +495,9 @@ if (-not (Test-Path $catcherExe)) {
            "that one rule, so Plith would report 'Drop catcher not found' and the shelf would " +
            "never open. Rebuild rather than copying it by hand.")
 }
+
+# Declared before anything reads or writes a coordinate. See DeclareDpiAware.
+[PairInput]::DeclareDpiAware()
 
 $session = qwinsta 2>$null | Where-Object { $_ -match '^\s*>' }
 if ($session -notmatch 'Active') {
