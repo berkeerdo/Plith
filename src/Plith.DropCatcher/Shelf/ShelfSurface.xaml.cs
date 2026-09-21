@@ -1103,23 +1103,27 @@ public partial class ShelfSurface : UserControl
     private string _countText = string.Empty;
 
     /// <summary>
-    /// Name the tile the pointer is on, in the chrome row.
+    /// Name the tile the pointer is on, along the top of the page.
     ///
-    /// ONE at a time, which is the whole trade this page makes: the tiles gave up their captions
-    /// so the pictures could have the space, and a shelf is looked at with a pointer on it. The
-    /// name is trimmed rather than wrapped, because the row is one line tall by construction.
+    /// ONE at a time, which is the trade this page makes: the tiles gave up their captions so the
+    /// pictures could have the space, and a shelf is looked at with a pointer on it.
+    ///
+    /// The count in the chrome row is left alone. The two used to share one element and the name
+    /// collided with the page rail; they are two elements at two ends of the page now, so both
+    /// can be true at once.
     /// </summary>
     private void ShowName(string name)
     {
-        PageCount.Text = name;
-        PageCount.Opacity = 1;
+        HoverName.Text = name;
+        HoverName.Visibility = Visibility.Visible;
     }
 
-    /// <summary>The resting state: how many files are here.</summary>
+    /// <summary>Nothing hovered: the name goes away and the count stands on its own.</summary>
     private void ShowCount()
     {
+        HoverName.Text = string.Empty;
+        HoverName.Visibility = Visibility.Collapsed;
         PageCount.Text = _countText;
-        PageCount.Opacity = 0.75;
     }
 
     /// <summary>

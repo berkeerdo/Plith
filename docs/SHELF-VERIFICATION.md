@@ -2537,3 +2537,47 @@ because two numbers here drift into either a flash or a pill lingering over a li
 **None of this is measured yet.** An animation's smoothness is not something a render can see and
 not something the pair driver asks about: three of the four changes are timing. It needs looking
 at, on hardware, with a real drag.
+
+### 10.8 It appeared and went, and the name was under the rail (2026-09-21)
+
+Both reported after looking at the previous change, and the catcher's own log names the first one:
+
+```
+41.475  DROP: 1 path(s)
+41.477  Hidden.
+41.560  Shelf opened at 722,0 356x164. foreground=True
+42.430  Shelf closing: the pointer left and did not come back.
+```
+
+**870 milliseconds on screen.** A person releases a file and moves the mouse away, so the shelf
+opens under a pointer that is already leaving and the leave grace takes it straight down. The page
+Plith used to show instead held for 2.6 seconds and never consulted the pointer at all, which is
+why the old path did not have this problem.
+
+`ShelfWindow.HoldOpen` is a third deferral beside the two already in `Dismiss`, rather than a
+special case in the dismissal rules: while a hold is running a pointer-driven dismissal is kept
+and re-applied when it expires. Esc still closes, focus still closes. The catcher decides when to
+hold, because it is the process that caught the drop: an `OpenShelf` arriving within 1.2 seconds of
+a drop is that drop's acknowledgement and holds for 2.4 seconds.
+
+That log line also shows the crossfade from 10.7 did **not** work: `Hidden.` at 41.477 is 83 ms
+before the shelf opened. The pill is taken down by the catcher's own withdrawal after a drop, not
+by Plith's `Hide` verb, so the deferral added to that verb never ran on this path. Left as it is
+for now and written down here rather than claimed: the hold above is what makes the moment
+readable, and the pill's own exit is a separate 80 ms.
+
+**And the hovered name ran under the page rail.** Measured with a real file:
+`NM_Mukellef_Veri_Dosyasi_2026-09-21.xlsx` starts at x=18 and runs to about 218, while the rail
+begins at `(356-76)/2 = 140`. The end of the name was unreadable, which on a shelf of dated
+exports is the part that tells two files apart. Trimming it at the rail would have left about
+twenty characters.
+
+It is along the TOP now, in the page inset's own 14 DIP band, which was empty: full width, about
+fifty characters, and the tiles lose nothing. The count stays in the chrome row, so both are true
+at once instead of sharing one element. Measured in the harness: `191 x 14 at 83,1` against a rail
+row starting at `y=140`.
+
+**The check for it passed vacuously twice before it passed honestly.** Re-parenting the rendered
+surface into a second host throws, and measuring it in place returned `0 x 0` for the name, which
+satisfies "the name ends above the rail" for any rail. It has its own surface now, and the width is
+asserted before the position, because a zero-sized element is not a passing case.

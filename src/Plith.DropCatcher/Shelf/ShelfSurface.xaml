@@ -166,6 +166,34 @@
             <Grid x:Name="EmptyHost" Visibility="Collapsed" />
             </Grid>
 
+            <!-- THE HOVERED FILE'S NAME, along the TOP, in the page inset's own band.
+
+                 It was in the chrome row beside the count, and it collided with the page rail:
+                 measured with a real file, "NM_Mukellef_Veri_Dosyasi_2026-09-21.xlsx" starts at
+                 x=18 and runs to about 218, while the rail begins at (356-76)/2 = 140. The name
+                 ran under it and the end of it could not be read, which is what was reported.
+                 Trimming it to the rail's edge would have left about twenty characters, and a
+                 shelf full of dated exports is exactly where the END of a name is the part that
+                 tells two files apart.
+
+                 The top band is FREE: the page inset reserves 14 DIP above the content and
+                 nothing is drawn in it. A 10 point line is about 13. So the name gets the full
+                 320 DIP width, roughly fifty characters, and the tiles lose nothing at all.
+
+                 Centred, because it names whatever the pointer is on rather than labelling the
+                 page, and a label that jumped between left and centre as the pointer moved would
+                 read as two different things. -->
+            <TextBlock x:Name="HoverName"
+                       VerticalAlignment="Top"
+                       HorizontalAlignment="Center"
+                       Margin="18,0,18,0"
+                       Height="{x:Static p:NotchGeometry.ShelfNameRowDip}"
+                       MaxWidth="320"
+                       FontSize="10"
+                       TextTrimming="CharacterEllipsis"
+                       Foreground="{DynamicResource NotchInk}"
+                       Visibility="Collapsed" />
+
             <!-- THE PAGE'S NAME, in the chrome row, where it costs the tiles nothing.
 
                  Reported from a real session: you cannot tell what this page IS. It was a grid of

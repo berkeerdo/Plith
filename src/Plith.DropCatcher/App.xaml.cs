@@ -165,6 +165,15 @@ public partial class App : Application, IDisposable
                 break;
             case DropVerb.OpenShelf:
                 _shelf.OpenAt((int)message.X, (int)message.Y, (int)message.W, (int)message.H);
+
+                // Opened by a drop, rather than by paging to the shelf: hold it on screen, or the
+                // pointer that is already leaving takes it down within a second.
+                if (DateTime.UtcNow - _droppedAt < DropWindow)
+                {
+                    _droppedAt = DateTime.MinValue;
+                    _shelf.HoldOpen(DropHold);
+                    _log.Info($"Shelf held for {DropHold.TotalMilliseconds:0} ms: it is a drop's acknowledgement.");
+                }
                 break;
             case DropVerb.Items:
                 // One message is the whole shelf now, so X and Y carry nothing and are ignored.
@@ -234,7 +243,29 @@ public partial class App : Application, IDisposable
         => _ = _client?.SendAsync(new DropMessage(DropVerb.Hide, 0, 0, 0, 0, []));
 
     private void OnFilesDropped(IReadOnlyList<string> paths)
-        => _ = _client?.SendAsync(new DropMessage(DropVerb.Dropped, 0, 0, 0, 0, paths));
+    {
+        // Remembered, because the shelf that opens a moment from now is this drop's
+        // acknowledgement and has to stay long enough to be one. Plith could send the fact, but
+        // it is already known HERE: this process is the one that caught the files.
+        _droppedAt = DateTime.UtcNow;
+        _ = _client?.SendAsync(new DropMessage(DropVerb.Dropped, 0, 0, 0, 0, paths));
+    }
+
+    /// <summary>When this process last caught a drop. See <see cref="OnFilesDropped"/>.</summary>
+    private DateTime _droppedAt = DateTime.MinValue;
+
+    /// <summary>
+    /// How soon after a drop an OpenShelf counts as that drop's acknowledgement.
+    ///
+    /// Generous, because the round trip in between is a pipe write, a store write and a window
+    /// swap, and mean, because a person who pages to the shelf a second later has not asked for
+    /// anything to be held.
+    /// </summary>
+    private static readonly TimeSpan DropWindow = TimeSpan.FromMilliseconds(1200);
+
+    /// <summary>How long a drop's acknowledgement stays on screen. The 2.6 seconds Plith's own
+    /// landing page used, less the fade, so the two feel the same.</summary>
+    private static readonly TimeSpan DropHold = TimeSpan.FromMilliseconds(2400);
 
     /// <summary>
     /// Bridges the shelf's four wire-bound requests onto the client, the same way FilesDropped

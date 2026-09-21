@@ -177,6 +177,15 @@ public static class NotchGeometry
     /// <summary>The gap between output cells, in DIP, horizontally and vertically.</summary>
     public const double OutputPickerCellGap = 4;
 
+    /// <summary>
+    /// The band along the top of the shelf page where the hovered file's name is drawn.
+    ///
+    /// It is the page inset's own top margin, which is 14 and is otherwise empty, so the name
+    /// costs the tiles nothing. Named rather than repeated as a literal because the shelf surface
+    /// is in the other project and a 14 typed there would stop following this one.
+    /// </summary>
+    public const double ShelfNameRowDip = 14;
+
     /// <summary>The gap between tiles, in DIP, horizontally and vertically.</summary>
     public const double ShelfGap = 8;
 

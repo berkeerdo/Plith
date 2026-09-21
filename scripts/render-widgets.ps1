@@ -714,6 +714,59 @@ Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'sh
 # many files are on the shelf. See docs/SHELF-VERIFICATION.md section 8 for what they caught
 # while the pane existed, which is the reason they were written rather than guessed at.
 
+# --- the hovered file's NAME, along the top, and NOT over the rail ---------------------------
+#
+# Reported: the name was in the chrome row and ran under the page rail, so the end of it could not
+# be read. Measured with a real file name here rather than a short one, because the defect only
+# appears when the text is long enough to reach the rail, and a shelf full of dated exports is
+# exactly where the END of a name is the part that tells two files apart.
+$nameShown = [Plith.DropCatcher.Shelf.ShelfSurface].GetMethod('ShowName',
+    [Reflection.BindingFlags]'Instance,NonPublic')
+if (-not $nameShown) { throw 'name check: ShelfSurface has no ShowName to drive.' }
+
+# A SURFACE OF ITS OWN for this check, and the two attempts before it are why.
+#
+# Re-parenting the rendered surface into a second host throws ("already the logical child of
+# another element"), and measuring it in place returned 0 x 0 for the name, which sailed through
+# the overlap assertion below: zero is less than the rail's y for any rail. A vacuous pass is
+# worse than a failure, so the width is asserted too.
+$nameSurface = [Plith.DropCatcher.Shelf.ShelfSurface]::new()
+$nameSurface.Apply($shelfPalette)
+$nameSurface.Render($surfaceModel)
+$nameSurface.SetRail(5, 4)
+$nameShown.Invoke($nameSurface, @([string]'NM_Mukellef_Veri_Dosyasi_2026-09-21.xlsx'))
+$nameHost = [Windows.Controls.Border]::new()
+$nameHost.Width = $shelfSurfaceW; $nameHost.Height = $shelfSurfaceH; $nameHost.Child = $nameSurface
+$nameHost.Measure([Windows.Size]::new($shelfSurfaceW, $shelfSurfaceH))
+$nameHost.Arrange([Windows.Rect]::new(0, 0, $shelfSurfaceW, $shelfSurfaceH))
+$nameHost.UpdateLayout()
+Wait-ForDispatcher
+
+$nameBlock = $nameSurface.FindName('HoverName')
+$railBlock = $nameSurface.FindName('Rail')
+
+if ($nameBlock.Visibility -ne [Windows.Visibility]::Visible) {
+    throw 'name check FAILED: a hovered name was set and the block is not visible.'
+}
+$namePt = $nameBlock.TranslatePoint([Windows.Point]::new(0,0), $nameHost)
+$railPt = $railBlock.TranslatePoint([Windows.Point]::new(0,0), $nameHost)
+$nameBottom = $namePt.Y + $nameBlock.ActualHeight
+if ($nameBlock.ActualWidth -lt 40 -or $nameBlock.ActualHeight -lt 8) {
+    throw ("name check FAILED: the name measured " +
+           "$([Math]::Round($nameBlock.ActualWidth,1)) x $([Math]::Round($nameBlock.ActualHeight,1)), " +
+           "which is nothing. A zero-sized element would pass the overlap test below for any " +
+           "rail position, so this is checked first.")
+}
+if ($nameBottom -gt $railPt.Y) {
+    throw ("name check FAILED: the name runs to y=$([Math]::Round($nameBottom,1)) and the rail " +
+           "row starts at y=$([Math]::Round($railPt.Y,1)), so they overlap - which is the defect " +
+           "this moved the name to the top to fix.")
+}
+"  hovered name: $([Math]::Round($nameBlock.ActualWidth,0)) x $([Math]::Round($nameBlock.ActualHeight,0)) at " +
+"$([Math]::Round($namePt.X,0)),$([Math]::Round($namePt.Y,0)); the rail row starts at y=$([Math]::Round($railPt.Y,0))"
+$nameHost.Child = $null
+Save-Visual -Element $nameSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'shelf-surface-hovered'
+
 # --- the RAIL, which only exists while the catcher holds the frame ----------------------------
 #
 # Plith draws the rail for its own four pages; the shelf is the fifth and it is drawn by another

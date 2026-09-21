@@ -213,6 +213,11 @@ public partial class ShelfWindow : Window
             // Re-armed rather than dropped when the pointer IS here and a dismissal is still
             // pending, because a deferral must never be left without a clock - that stranding is
             // the whole reason Dismiss defers rather than cancels.
+            // Back to the plain grace period. HoldOpen stretches this interval to cover its own
+            // duration, and leaving it stretched would make every later dismissal wait out a
+            // drop's acknowledgement.
+            _leave.Interval = LeaveGrace;
+
             if (PointerIsOverShelf())
             {
                 if (_pendingDismissal is not null) _leave.Start();
@@ -503,6 +508,36 @@ public partial class ShelfWindow : Window
     }
 
     /// <summary>
+    /// Keep the shelf on screen for <paramref name="duration"/> whatever the pointer does.
+    ///
+    /// For the one case that needs it: a drop. The person releases the file and moves the mouse
+    /// away, so the shelf opens under a pointer that is already leaving and the leave grace takes
+    /// it down again within a second. That is not a shelf, it is a flash, and it is what the page
+    /// Plith used to show instead was avoiding by holding for 2.6 seconds and ignoring the
+    /// pointer entirely.
+    ///
+    /// A hold does not force the shelf to STAY: Esc still closes it, a click elsewhere still
+    /// takes focus away, and the reason is remembered and applied the moment the hold expires
+    /// (see Dismiss). It only stops the pointer's absence from counting during the moment a
+    /// person is meant to be looking.
+    ///
+    /// The clock is armed here as well, because nothing else will: with the pointer already gone
+    /// there may be no further mouse message at all, and a deferral without a clock is the
+    /// stranding this file's own comments warn about three times over.
+    /// </summary>
+    public void HoldOpen(TimeSpan duration)
+    {
+        _holdUntil = DateTime.UtcNow + duration;
+        _leave.Stop();
+        _leave.Interval = duration + LeaveGrace;
+        _leave.Start();
+    }
+
+    /// <summary>Until when the shelf refuses to be dismissed by the pointer. Default is the past,
+    /// which is no hold at all.</summary>
+    private DateTime _holdUntil = DateTime.MinValue;
+
+    /// <summary>
     /// Whether the shelf is on screen, so the stand-in knows whether it is being replaced or
     /// merely dismissed. See App's Hide branch.
     /// </summary>
@@ -565,6 +600,8 @@ public partial class ShelfWindow : Window
         }
 
         _leave.Stop();
+        _leave.Interval = LeaveGrace;
+        _holdUntil = DateTime.MinValue;
         if (!_open) return;
         _open = false;
 
@@ -639,7 +676,17 @@ public partial class ShelfWindow : Window
         // retry clock running against a window nobody can see.
         if (!_open) return;
 
-        if (_dragInFlight || _menuOpen)
+        // A HOLD is a deferral like the other two, and it exists because of what a person
+        // actually does after a drop: they release the file and move the mouse away. The shelf
+        // opens under a pointer that is already leaving, the leave grace fires, and the whole
+        // acknowledgement is 870 ms of something appearing and going (measured from a real
+        // session's log, 2026-09-21). The page that used to acknowledge a drop was held for 2.6
+        // seconds by Plith and never consulted the pointer at all.
+        //
+        // Not a special case in the dismissal rules: it joins the two deferrals already here and
+        // reuses the same clock, which re-evaluates whatever is pending. When the hold expires,
+        // the next tick applies the reason that was kept.
+        if (_dragInFlight || _menuOpen || DateTime.UtcNow < _holdUntil)
         {
             // The FIRST reason is kept, not the latest. What the person did to dismiss the shelf
             // is the interesting line in the log; the retries after it are this method talking to
@@ -647,7 +694,10 @@ public partial class ShelfWindow : Window
             if (_pendingDismissal is null)
             {
                 _pendingDismissal = why;
-                _log.Info($"Shelf dismissal deferred ({why}): a drag or a menu is in flight.");
+                var reason = DateTime.UtcNow < _holdUntil
+                    ? "the shelf is being held on screen as a drop's acknowledgement"
+                    : "a drag or a menu is in flight";
+                _log.Info($"Shelf dismissal deferred ({why}): {reason}.");
             }
 
             _leave.Stop();
