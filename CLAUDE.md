@@ -18,7 +18,7 @@ a cross-process window swap on every page turn onto the shelf. Spec and plan:
 **The handover is measured on hardware; the rest of that run is not.** See
 `docs/SHELF-VERIFICATION.md` section 10, which names which half.
 
-**0.3.0 is the current release, and everything in this file ships in it.** Phases 1 to 7 plus
+**0.3.1 is the current release, and everything in this file ships in it.** Phases 1 to 7 plus
 brightness: Voicemeeter and Windows Core Audio, SMTC media, Settings with live theming,
 Game mode (UIAccess-signed BandWindow), endpoint pinning, native flyout suppression, the
 Ambient Notch with paged widgets, the shelf, and brightness.
@@ -26,7 +26,8 @@ Ambient Notch with paged widgets, the shelf, and brightness.
 Phase 6 slice 1 (the notch shape) shipped in 0.1.6; the notch widgets and the accent work
 shipped in 0.1.8. 0.2.0 added the shelf as a pane, the media page rebuilt after Alcove with seek
 and an output picker, the notch event rule, and brightness. 0.3.0 makes the shelf the notch's own
-page: one surface instead of two, reached by a page turn instead of an expand.
+page: one surface instead of two, reached by a page turn instead of an expand. 0.3.1 is that
+release plus the idle-cost fixes in `docs/PERF-VERIFICATION.md`.
 
 **There is no auto-update.** Nothing in the repo checks for a new version, and updates are a
 download from GitHub Releases. See `docs/ROADMAP.md` for the remaining Phase 4 item this
