@@ -1845,3 +1845,39 @@ SHORTEST: four parallel arrays indexed by one counter is exactly how a day ends 
 another day's weather code, and a response with one short array has to be survived rather than
 trusted. Another asserts ISO dates parse under tr-TR, where this project's default user lives
 and where a culture-sensitive parse succeeds only by luck.
+
+### Rain that did not read as rain, on two pages (2026-09-21)
+
+Reported as "you cannot tell what Tuesday will be" of the new forecast columns. The cause was in
+`WeatherMark`, and its own comment had claimed the opposite for as long as it has existed.
+
+The comment said the drop "hangs below the cloud rather than sitting in the middle of it". The
+numbers said `Canvas.SetLeft(3)`, `SetTop(7)`, `18 x 18`, against a cloud occupying y=10 to 18.4
+of a 24 box: the drop started three units ABOVE the cloud's top and covered nearly all of it.
+**It read correctly on the big sky page only because the fall animation pulls it clear and the
+eye follows the motion.** Static, at 26 DIP, it was one white blob.
+
+Two changes, and the second is the one that fixed it:
+
+- The drop hangs where the sentence says, 9 by 9 at Top 15, which still keeps the fall
+  animation's -2 to +6 travel inside the box.
+- **Rain is three short strokes now, not a filled teardrop.** A teardrop is a shape you
+  recognise at 48 DIP and a blob at 26, and strokes survive the size, which is why every weather
+  application in the world draws rain that way. `IconWxDrops`, drawn geometry like every other
+  icon here. `Fall.Fill` is null for both kinds now: filled, the three strokes close into three
+  wedges.
+
+**The clock page had the same defect and nobody had reported it**, because its mark is also 26
+DIP and the harness had only ever rendered it with a clear sky. `widget-clock-rain.png` renders
+that case now. The forecast columns were not a new bug; they were the first surface to show an
+old one.
+
+**Each forecast column also announces itself.** A screen reader read "Sal", then silence where
+the mark is, then two numbers: the shape carried the forecast and said nothing out loud. The
+sentence goes on the day-name `TextBlock`, which has an automation peer, because the `StackPanel`
+holding the column does not and a name set there would reach nothing.
+
+**And on the PC's language, which was asked:** every string in these columns comes from
+`CultureInfo.CurrentCulture` rather than from a table in the source, so the abbreviations, the
+weekday on the clock page and the condition word in the announcement all follow Windows. That is
+why the renders read "Pazartesi", "Sal" and "Çar" on this machine.

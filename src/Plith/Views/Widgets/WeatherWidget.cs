@@ -229,22 +229,38 @@ public partial class WeatherWidget : UserControl
 
         // The day's own name, short. Culture's abbreviation rather than a cut of the full word:
         // a three-letter slice of a Turkish weekday is not what a Turkish reader expects to see.
-        column.Children.Add(new TextBlock
+        // Everything here follows the PC's language, because every string comes from
+        // CultureInfo.CurrentCulture rather than from a table in this file.
+        var name = new TextBlock
         {
             Text = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(
                 day.Date.DayOfWeek),
             FontSize = 11,
             HorizontalAlignment = HorizontalAlignment.Center,
             Foreground = new SolidColorBrush(Color.FromArgb(0xAE, 0xFF, 0xFF, 0xFF)),
-        });
+        };
+
+        // The whole column, in one sentence, on the day name: a TextBlock has an automation peer
+        // and the StackPanel holding these does not, so a name set on the column would reach
+        // nothing. Without it a screen reader read "Sal", then silence where the mark is, then
+        // two numbers: the shape carries the forecast and says nothing at all out loud.
+        AutomationProperties.SetName(name, string.Create(CultureInfo.CurrentCulture,
+            $"{CultureInfo.CurrentCulture.DateTimeFormat.GetDayName(day.Date.DayOfWeek)}, " +
+            $"{WeatherCodeMap.Describe(day.WeatherCode)}, " +
+            $"{Math.Round(day.MaxC):0}° / {Math.Round(day.MinC):0}°"));
+        column.Children.Add(name);
 
         // The same mark the clock page uses for the same code, so two surfaces cannot describe
         // one day's weather differently.
+        //
+        // 26, not 20. At 20 the cloud and the drops under it ran together into a blob and the
+        // page could not answer "what will Tuesday be", which is the one question a forecast
+        // column exists for. Reported from a real session.
         var mark = new WeatherMark
         {
-            Width = 20,
-            Height = 20,
-            Margin = new Thickness(0, 3, 0, 3),
+            Width = 26,
+            Height = 26,
+            Margin = new Thickness(0, 4, 0, 4),
             HorizontalAlignment = HorizontalAlignment.Center,
         };
         mark.Show(SkyCondition.From(day.WeatherCode, 12));

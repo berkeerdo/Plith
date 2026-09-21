@@ -323,6 +323,16 @@ $micReader = [Func[Plith.Services.MicrophoneSnapshot]] {
 $clock = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader)
 Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 
+# The clock page with RAIN, which no render ever drew: its fixture has always been a clear sky, so
+# the one case where its 26 DIP mark has to distinguish a cloud from rain was never looked at. It
+# turned out to be the same defect the forecast columns had, found there first only because those
+# were new.
+$rainReader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
+    [Plith.Services.WeatherSnapshot]::new(14.0, 61, [DateTimeOffset]::Now, $days)
+}
+$clockRain = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $rainReader, $micReader)
+Save-Visual -Element $clockRain -W $frameW -H $frameH -Name 'widget-clock-rain'
+
 $media = [Plith.Views.Widgets.MediaWidget]::new($mediaVm, $null)
 Save-Visual -Element $media -W $frameW -H $frameH -Name 'widget-media'
 

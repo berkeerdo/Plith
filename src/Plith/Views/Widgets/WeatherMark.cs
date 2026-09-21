@@ -54,7 +54,9 @@ public partial class WeatherMark : UserControl
         Sun.Fill = ink;
         Moon.Fill = ink;
         Cloud.Fill = ink;
-        Fall.Fill = ink;
+        // Rain is strokes and snow is a stroked flake, so neither wants a fill: filled, the
+        // three rain strokes close into three wedges.
+        Fall.Fill = null;
         Rays.Stroke = ink;
         Fall.Stroke = ink;
     }
@@ -87,17 +89,45 @@ public partial class WeatherMark : UserControl
         Fall.Visibility = rain || snow ? Visibility.Visible : Visibility.Collapsed;
         if (rain || snow)
         {
-            Fall.Data = (Geometry)FindResource(snow ? "IconWxFlake" : "IconWxDrop");
+            // Three strokes for rain, a flake for snow. Both are line art at this size, which
+            // is what makes them readable in a 26 DIP column: see IconWxDrops.
+            Fall.Data = (Geometry)FindResource(snow ? "IconWxFlake" : "IconWxDrops");
 
             // The drop hangs below the cloud rather than sitting in the middle of it, and is
             // small enough to read as falling FROM it.
+            //
+            // THE NUMBERS NOW DO WHAT THAT SENTENCE SAYS. They were Left 3, Top 7, 18 by 18,
+            // against a cloud that occupies y=10 to 18.4 of the 24 box: the drop started three
+            // units ABOVE the cloud's top and covered nearly all of it. On the big sky page the
+            // fall animation pulls it clear and the eye follows the motion, so it read correctly
+            // there and nowhere else. In a 26 DIP forecast column, static, it was one white blob
+            // and the page could not answer "what will Tuesday be". Reported from a real session.
+            //
+            // 9 by 9 at Top 15 leaves the drop hanging from the cloud's lower edge with three
+            // units of overlap, and the fall animation travels from -2 to +6, which keeps it
+            // inside the 24 box at both ends.
             Fall.RenderTransform = FallDrop;
-            Canvas.SetLeft(Fall, 3);
-            Canvas.SetTop(Fall, 7);
-            Fall.Width = 18;
-            Fall.Height = 18;
+            if (snow)
+            {
+                Canvas.SetLeft(Fall, 7.5);
+                Canvas.SetTop(Fall, 15);
+                Fall.Width = 9;
+                Fall.Height = 9;
+            }
+            else
+            {
+                // The strokes span the cloud's own width and start at its lower edge, so they
+                // read as coming FROM it rather than as a mark beside it.
+                Canvas.SetLeft(Fall, 6);
+                Canvas.SetTop(Fall, 15.5);
+                Fall.Width = 12;
+                Fall.Height = 6.5;
+            }
+
             Fall.Stretch = Stretch.Uniform;
-            Fall.StrokeThickness = snow ? 1.4 : 0;
+            // Stroked for both now. Rain was a filled teardrop with no stroke at all, which is
+            // why it merged into the cloud above it.
+            Fall.StrokeThickness = 1.5;
         }
 
         ApplyInk(Ink);
