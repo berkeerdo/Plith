@@ -1965,4 +1965,132 @@ Worth recording as a pattern rather than as three fixes: every one of these was 
 looking at the running product, and none of them could have been found any other way. A glyph
 that is wrong at 26 DIP passes every test, every lint, and every contrast measurement, because
 none of those can see a shape.
+## 23. Brightness, driven on hardware (from feature/brightness)
+
+Spec: `docs/superpowers/specs/2026-09-18-brightness-design.md`.
+Plan: `docs/superpowers/plans/2026-09-18-brightness.md`.
+
+### What is green
+
+Build 0 errors with the 3 known CA1861 warnings, 429 tests (412 + 17), and
+`check-a11y`, `check-shared-xaml` and `check-contrast` all exit 0.
+
+None of that reaches the feature. The suite covers the step arithmetic, the rule that a
+device is kept when it answers a read, the writer's coalescing, the card's transient
+visibility and the settings round trip. Everything those talk to is a fake.
+
+### What was measured on the running product
+
+The product was launched and stayed up. Both halves reported themselves:
+
+```
+[Brightness] Discovery found 0 device(s).
+[Brightness] No brightness event source: ManagementException: Invalid parameter
+```
+
+Both lines are correct here and both are the degraded path, so what this run proves is that
+the degraded path is quiet rather than fatal. That is worth having: a Phase 6 slice shipped
+equally green and crashed on the first hover.
+
+**One plan step gave a false all-clear.** A probe in the test host reported that
+`BrightnessMonitor.Start()` throws nothing on this machine. In the real product it throws
+`ManagementException: Invalid parameter`, which is what a machine with no internal panel
+answers. The wide catch was already there and held. The lesson is the repo's usual one in a
+new place: a probe run inside the test host is not the path the product takes.
+
+### What is NOT verified, and why
+
+**Nothing about brightness actually changing has been verified on hardware, and it could not
+be from this session.** Measured with `$env:SESSIONNAME` and `GetSystemMetrics(SM_REMOTESESSION)`:
+the session is Remote Desktop. Inside one, `EnumDisplayMonitors` returns the RDP virtual
+display, no physical panel is reachable, and every DDC/CI call fails. The same code read
+`min=0 current=30 max=100` from the console earlier the same day.
+
+From a console session, these six are still open:
+
+1. One press changes the monitor's brightness and the OSD appears showing the new level.
+2. The level shown matches what the monitor actually did, confirmed by an independent read.
+3. Holding the key ramps smoothly and stops when the key comes up, with no run of writes
+   continuing afterwards. This is the coalescing, and the thing most likely to be wrong.
+4. The brightness row is NOT present when the OSD appears for a volume key.
+5. In notch mode the change uses the short HUD shape, the one a volume key gets.
+6. Turning the feature off in Settings unbinds both keys immediately.
+
+**The sense half is unverified and stays that way.** There is no laptop here, so
+`WmiMonitorBrightnessEvent` has never fired in this product. On a desktop it cannot.
+
+### Verified on hardware, 18.09.2026
+
+Driven on the running product from a console session, with both key presses synthesised and
+the result read out of the log rather than watched.
+
+- Both directions bind and both move the monitor: `brighter Ctrl+Alt+Up=True, dimmer
+  Ctrl+Alt+Down=True`, then `Brighter 70 to 80.` and `Dimmer 80 to 70.`
+- Holding a key produces one line and one summary, not one line per write:
+  `held Brighter: 3 steps, 30 to 60.`
+- A brightness change shows the brightness card alone: `Visible set: brightness (exclusive).`
+  with no intermediate frame containing the others.
+
+Three defects were found doing it, all with a green build and green tests behind them:
+
+1. **Capturing the dimmer hotkey also wrote it into the summon binding.** SettingsWindow kept
+   one pair of scratch fields for the capture in progress and saved the summon hotkey straight
+   out of them. The summon service then claimed Ctrl+Alt+Down at startup and Windows refused
+   it to the brightness service, so the key summoned the OSD instead of dimming. Both of the
+   symptoms reported by hand were this one bug.
+2. **A brightness change raised the whole card stack**, because the Audio card is always
+   visible. `ShowRequest.Exclusive` now lets a card ask for the surface alone.
+3. **The card raised its visibility change before its show request**, so the first recompute
+   contained every card and the second contained one. One frame of the volume bar.
+
+None of the three was reachable from the suite. The first needed two key presses and a
+registry of who owns a hotkey; the second and third needed to know what was on screen, which
+is why CardHost now reports its visible set into the log.
+
+### The internal panel write path: built, unverifiable here
+
+The spec describes an internal-panel device using `WmiMonitorBrightnessMethods.WmiSetBrightness`
+alongside the DDC/CI one. The implementation plan's file list dropped it and nothing was built,
+which was not noticed until someone asked whether this works on a laptop.
+
+So on a laptop today: pressing the machine's own brightness key should show Plith's OSD,
+because the sense half is wired, while Plith's own hotkeys will find no device to write to. A
+built-in panel is not normally reachable over DDC/CI, and discovery creates DDC devices only.
+
+Both halves of that sentence are unverified. There is no laptop here.
+
+**Built on 18.09.2026, and still unverified.** `WmiBrightnessDevice` now reads
+`WmiMonitorBrightness` and writes through `WmiMonitorBrightnessMethods.WmiSetBrightness`, and
+discovery offers built-in panels ahead of DDC/CI displays because on a laptop the panel is
+"the screen". Every line of it is reasoned from the documentation rather than measured.
+
+What could be measured was: on this desktop the internal-panel path finds **0 panels** and
+discovery still returns the same single DDC/CI monitor, so the addition changes nothing here.
+That is the whole of what this machine can say about it.
+
+The trap most likely to bite on a laptop is the WQL escaping. An instance name is full of
+backslashes, a backslash escapes the next character in WQL, and an unescaped name matches
+nothing silently, which looks exactly like a panel that is not there. It is escaped, and the
+reason is in the code.
+
+### How this was verified without asking anyone to press anything
+
+Both techniques are new to this repo and both only work from a **console session**. They are
+written down because the whole of today's brightness verification rested on them, and the next
+person to need them should not have to invent them again.
+
+**Synthesising a hotkey.** `keybd_event` from PowerShell fires a combination that
+`RegisterHotKey` responds to, so a global hotkey can be tested without a human at the keyboard.
+Repeating the key-down at roughly 31 per second stands in for auto-repeat, which is what turned
+"holding it feels slow" into a number: 26 steps in 2.3 s before the level cache, 53 after.
+
+**Photographing the OSD.** `Graphics.CopyFromScreen` captures the OSD from a console session.
+The earlier phases recorded that the OSD cannot be captured over RDP, which is true and is why
+nobody tried; it does not follow that it cannot be captured at all. A screenshot is what proved
+the notch was drawing the volume HUD for a brightness key, after the log had said, correctly,
+that the card stack held only the brightness card. The log was describing a surface that was not
+the one on screen.
+
+The general lesson is the second one: a log can be perfectly truthful about the wrong thing.
+When a log and a person disagree, photograph the screen before trusting either.
 

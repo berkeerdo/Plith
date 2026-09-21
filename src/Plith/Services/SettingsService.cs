@@ -17,6 +17,7 @@ public sealed class SettingsService
     private const string SectionAudio = "Audio";
     private const string SectionMedia = "Media";
     private const string SectionAppearance = "Appearance";
+    private const string SectionBrightness = "Brightness";
 
     private readonly string _path;
     private readonly FileIniDataParser _parser = new();
@@ -82,6 +83,12 @@ public sealed class SettingsService
                 AutoShowOnMedia = ParseBool(data[SectionMedia]["AutoShowOnMedia"], false),
                 SummonHotkeyMods = ParseUInt(data[SectionOsd]["SummonHotkeyMods"], 0),
                 SummonHotkeyKey = ParseInt(data[SectionOsd]["SummonHotkeyKey"], 0, 0, 255),
+                BrightnessEnabled = ParseBool(data[SectionBrightness]["BrightnessEnabled"], false),
+                BrightnessStepPercent = ParseInt(data[SectionBrightness]["BrightnessStepPercent"], 10, 1, 50),
+                BrightnessUpHotkeyMods = ParseUInt(data[SectionBrightness]["BrightnessUpHotkeyMods"], 0),
+                BrightnessUpHotkeyKey = ParseInt(data[SectionBrightness]["BrightnessUpHotkeyKey"], 0, 0, 255),
+                BrightnessDownHotkeyMods = ParseUInt(data[SectionBrightness]["BrightnessDownHotkeyMods"], 0),
+                BrightnessDownHotkeyKey = ParseInt(data[SectionBrightness]["BrightnessDownHotkeyKey"], 0, 0, 255),
                 AccentThemeId = string.IsNullOrWhiteSpace(data[SectionAppearance]["AccentThemeId"])
                     ? AccentTheme.DefaultId
                     : data[SectionAppearance]["AccentThemeId"],
@@ -139,6 +146,12 @@ public sealed class SettingsService
         data[SectionOsd]["FullscreenVideoHideList"] = m.FullscreenVideoHideList ?? string.Empty;
         data[SectionOsd]["SummonHotkeyMods"] = m.SummonHotkeyMods.ToString(inv);
         data[SectionOsd]["SummonHotkeyKey"] = m.SummonHotkeyKey.ToString(inv);
+        data[SectionBrightness]["BrightnessEnabled"] = m.BrightnessEnabled.ToString(inv);
+        data[SectionBrightness]["BrightnessStepPercent"] = m.BrightnessStepPercent.ToString(inv);
+        data[SectionBrightness]["BrightnessUpHotkeyMods"] = m.BrightnessUpHotkeyMods.ToString(inv);
+        data[SectionBrightness]["BrightnessUpHotkeyKey"] = m.BrightnessUpHotkeyKey.ToString(inv);
+        data[SectionBrightness]["BrightnessDownHotkeyMods"] = m.BrightnessDownHotkeyMods.ToString(inv);
+        data[SectionBrightness]["BrightnessDownHotkeyKey"] = m.BrightnessDownHotkeyKey.ToString(inv);
         // Strip the legacy enum key on save so we don't keep a stale value around.
         data[SectionOsd].RemoveKey("SummonHotkey");
         data[SectionAudio]["AudioSource"] = m.AudioSource.ToString();

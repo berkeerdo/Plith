@@ -3,342 +3,73 @@
 Modern Windows audio OSD with Voicemeeter-first design + integrated media controls. Replaces Windows' aging volume flyout with a Mica/rounded overlay that works over fullscreen games and shows now-playing media inline.
 
 ## Status
-**Phases 1–4f shipped (0.1.5).** Voicemeeter + Windows Core Audio + SMTC media
-integration, Settings UI with live theming, Game mode (UIAccess-signed BandWindow),
-free-form hotkey capture, mixer-agnostic endpoint pinning (Sonar / Unify / Wave Link
-channels), Win11-safe native flyout suppression, WH_KEYBOARD_LL hook.
 
-**Phase 5 code-complete on `feature/phase-5-cardhost`, not yet merged.** The OSD now
-renders through a `CardHost` service that owns card visibility and is the single
-authority for when the OSD appears; today's OSD is an Audio card plus a Media card.
-Adds fullscreen-video auto-hide (on by default, never fires during games) and an
-accessibility pass. `OsdViewModel` is gone; `OsdOrchestrator` is a pure source driver.
+**0.2.0 is the current release. Everything below is in `main`.** Phases 1 to 7 plus
+brightness: Voicemeeter and Windows Core Audio, SMTC media, Settings with live theming,
+Game mode (UIAccess-signed BandWindow), endpoint pinning, native flyout suppression, the
+Ambient Notch with paged widgets, the shelf, and brightness.
 
-**Phase 5 is partly verified.** Layout and accessibility were measured against a running
-build; the remaining checks need a physical console session, because over RDP the OSD's
-layered window cannot be captured by any means. Four real defects were found doing it —
-all inside the "completed" accessibility pass, all fixed on the branch. A green build,
-green tests and a green lint had missed every one, because nothing looked at the running
-accessibility surface. The lint now covers three of the four.
+Phase 6 slice 1 (the notch shape) shipped in 0.1.6; the notch widgets and the accent work
+shipped in 0.1.8. 0.2.0 adds the shelf, the media page rebuilt after Alcove with seek and an
+output picker, the notch event rule, and brightness.
 
-Still open, in `docs/PHASE5-VERIFICATION.md`: §1.4, §2, §4.2-4.3, §5 and most of §6.
+**There is no auto-update.** Nothing in the repo checks for a new version, and updates are a
+download from GitHub Releases. See `docs/ROADMAP.md` for the remaining Phase 4 item this
+depends on (MSIX + a real signing certificate); the installer is self-signed today, so
+SmartScreen warns on first run.
 
-**§2 (games must keep the OSD) passed on real hardware and is no longer a release gate.**
-Run with `HideDuringFullscreenVideo` enabled, a game covering the monitor, and Spotify
-actually playing — the combination that makes the check meaningful rather than vacuous:
-the OSD appeared on every volume key, and not one `Suppression -> True` was logged. The
-predicate behind it is unit-tested (`FullscreenVideoDetector.AumidMatchesProcess`), and the
-measured AUMID makes a false positive unreachable on this configuration anyway: Spotify's
-Store build reduces to the stem `SpotifyAB`, which no game process name can equal.
+### What is deliberately not done
 
-Also measured with a game running: it reported `QUNS_BUSY`, not
-`QUNS_RUNNING_D3D_FULL_SCREEN`, confirming that Fullscreen Optimizations put it on the
-composited path and that the D3D veto is dead code for such titles.
+- Phase 4c-4: MSIX packaging and a SignPath OSS certificate.
+- Phase 4g (optional): Sonar HTTP API deep integration.
+- The ambient hover row that notch slice 3 made unreachable is still wired.
+- `Palette.Dark` and `OsdPalette.Dark` each declare the accent green.
+- The media page has no live waveform and no in-notch device list beyond the picker page;
+  the spec records why for each.
 
-Remaining from Phase 4: 4c-4 (MSIX + SignPath OSS cert) and optional 4g (Sonar HTTP
-API deep integration).
+### The lesson this repo keeps paying for
 
-**Phase 7 slice 1 (the Shelf) code-complete on `feature/shelf-drop-catcher`, not yet merged.**
-A file dropped on the notch now lands on a shelf page. The roadmap called this blocked, and it
-was: UIAccess puts Plith at High integrity and UIPI refuses Explorer's cross-integrity drag, by
-both the OLE and the `WM_DROPFILES` route. It works through a second process — `Plith.DropCatcher`,
-Medium integrity, launched via Explorer so it does not inherit Plith's token — which takes the
-notch's place for the duration of a drag and hands the paths back over a named pipe with an
-explicit ACL.
+**A green build, green tests and green lints cannot see a wrong shape, a wrong layout, or a
+window that is not on screen.** Every slice here has shipped green and then failed on the
+first real use, and every defect found since has been found by looking at a render, driving
+the real UI, or capturing the screen. Recent examples, each with a full ledger in the
+verification documents: a layered window nothing had ever captured, a tile that answered a
+pointer only where its icon painted, a contrast ratio that passed while drawing the bar
+inverted, a shelf page laid out 7 DIP taller than the window holding it, and a tooltip that
+outlived the tile it belonged to and read as a file coming back.
 
-**Verified on hardware, unusually for this repo.** The drop, the round trip, the shelf page and
-persistence were all driven on a running build; three defects were found that way with a green
-build behind them (a window WPF did not consider shown, a layered window nothing could capture,
-and one approach threshold used for two different questions). Two more came from pointing
-`check-contrast.ps1` at colours set in code, which it could not see before and now can.
+So: **measure it on a running build before saying it works, and say plainly which half you
+measured.** Claims inherited from another surface's notes have been wrong four times.
 
-**Dragging back OUT is blocked too, measured by controlled comparison:** the same binary returns
-`None` from High with nothing copied and `Copy, Move` from Medium with the file landing. So the
-catcher must become the drag source as well — a different design, deliberately unplanned. That
-plus the Alcove/Dropover-style shelf actions the user asked for (clear, remove, open in Explorer,
-stacking, real shell icons) is the next slice and needs its own plan.
+### Where the measurements live
 
-**Task 8 measured how that drag source would have to work, and killed the obvious answer.** The
-stand-aside cannot carry a drag out: the press lands on Plith's window, and `DoDragDrop` does not
-deliver a drag for a press that happened in another process. Three runs at Medium, press verified
-by `WindowFromPoint` to belong to another process, releasing over a window built to accept files
-and log what it got — no `DragEnter` ever arrived and the call returned `None`, once only after
-not returning at all for seventeen seconds. The control is Task 7's own run: same binary, same
-integrity, same call, press on its own window, `Copy, Move`, file lands. A call that may never
-return would hang the catcher's UI thread, so this is a hazard rather than a retry. What is left:
-the tile has to BE the catcher's window, not Plith's — a different shape for the notch.
+| Document | What it records |
+|---|---|
+| `docs/PHASE5-VERIFICATION.md` | CardHost, fullscreen-video auto-hide, accessibility |
+| `docs/PHASE6-VERIFICATION.md` | The notch, its widgets, the media page, seek, the output picker, brightness |
+| `docs/SHELF-VERIFICATION.md` | The shelf end to end, including the drop catcher and every instrument defect |
+| `docs/ROADMAP.md` | Phase status, estimates beside actuals, and open questions |
 
-Full ledger: `docs/superpowers/plans/2026-09-17-shelf-drop-catcher.md` (Tasks 1-6 done, Tasks 7
-and 8 measured), and `docs/ROADMAP.md` Phase 7 for every measurement behind it.
+### The instruments
 
-**Phase 7 slice 2 (stacks, actions, drag-out, accessibility) code-complete on the same branch,
-not yet merged.** Task 8's finding above turned into a design rather than a dead end: the shelf's
-whole interactive page moved into `Plith.DropCatcher` as a `UserControl`, `ShelfWindow` presses
-its OWN tile so `DoDragDrop` gets a press it can actually use, and a tile now drags out to any
-application or restacks onto another column through that one call. Files land in named stacks,
-each carries a real shell icon with a drawn fallback, and every tile, stack, and the clear/new-stack
-controls carry an accessible name plus arrow-key/Space/Enter/Delete navigation, forwarded from
-`ShelfWindow`, which is what actually holds keyboard focus, not the page itself.
-`check-contrast.ps1` now scans the catcher's XAML too and measures the selection ring, which is
-computed at runtime and had been invisible to it. Full record, including the file-list deviation
-this needed: `docs/SHELF-VERIFICATION.md` §5.
+Run these before claiming anything works. They are cheap and they have each caught defects
+nothing else could see.
 
-**Verified on hardware for slice 1's plumbing only.** Slice 2 builds clean, passes every lint, and
-renders correctly offscreen in both themes and three accents. None of that presses a key, drags
-a tile, or runs a screen reader. ~~That still needs a person, because synthetic input cannot reach
-a UIAccess window.~~ **Wrong, and about a different window** — see below.
+| Script | What it answers |
+|---|---|
+| `scripts/render-widgets.ps1` | What every surface looks like, in both themes and three accents, plus tree assertions no eye can make |
+| `scripts/check-a11y.ps1` | Every interactive control has a name, and no view uses a glyph font |
+| `scripts/check-contrast.ps1` | Text clears 4.5:1 and non-text 3:1, on both themes and every accent |
+| `scripts/check-shared-xaml.ps1` | Shared XAML names no assembly (0.1.6 shipped a broken installer this way) |
+| `scripts/drive-shelf-pair.ps1` | Drives the real Plith and catcher pair through the notch, on hardware |
+| `scripts/drive-media-page.ps1` | Clicks the real notch and reads the live UI Automation tree |
+| `scripts/build-release.ps1` | Builds and signs the installer. Needs admin and the signing cert |
 
-**The shelf CAN be pressed by a script, and pressing it found a defect immediately (2026-09-19).**
-The "needs a person" premise is true of Plith's own OSD, a UIAccess window at High integrity, and
-the shelf is not that window: it belongs to `Plith.DropCatcher` at **Medium**, where UIPI blocks
-nothing. UI Automation reads its whole tree and `SendInput` drives it, over Remote Desktop. The
-instrument is `scripts/drive-shelf.ps1`. §3.1, §3.2 and §3.9 of `docs/SHELF-VERIFICATION.md` are
-now RUN and passing, along with the tile context menu.
+A Debug build runs at **medium** integrity (`app.manifest` sets `uiAccess="false"`; only
+Release swaps in the signed one), so UI Automation reads the OSD's tree and `SendInput` drives
+it, over Remote Desktop included. The premise that none of this could be driven was false for
+two whole phases.
 
-**What it found:** a tile answered a pointer only where its icon or label painted and was dead
-everywhere else, **including its exact centre** — no hover affordance, no selection, and no press,
-so no drag could start there either. One missing `Background = Brushes.Transparent` (WPF
-hit-tests a Transparent brush but not a null one, a rule `ShelfWindow.xaml` states in its own
-comment). Fixed, with a `tile-hit` check in `render-widgets.ps1` that fails the build if it
-returns. Every gate was green before the fix as well, which is this branch's recurring lesson.
-Record: `docs/SHELF-VERIFICATION.md` §3.10.
-
-That makes **three** claims in these documents inherited from the OSD's notes and applied to the
-shelf unmeasured: layered windows cannot be captured, Remote Desktop cannot capture them, and
-nothing can press them. All three were false here. The pattern is the finding.
-
-**But it no longer needs a physical console session to be LOOKED at.** The shelf's centred
-surface was captured live over Remote Desktop on 2026-09-19, which this repo's documents said
-was impossible by any means. That claim turned out to be inherited from the OSD's notes and never
-measured against the shelf, `CAPTUREBLT` turned out not to be what makes the capture work, and
-what actually breaks capture is the session being disconnected or locked, not the window being
-layered. The instrument is `scripts/capture-shelf.ps1`; the reasoning is in
-`docs/SHELF-VERIFICATION.md` §7.5 and the dated section at the top.
-
-**And the premise over Phases 5 and 6 has now fallen too, which is the fourth (2026-09-19).**
-Plith's own OSD was never a UIAccess window in the build anyone verifies against: `app.manifest`
-sets `uiAccess="false"` and only Release swaps in the signed one, so a Debug Plith runs at
-**MEDIUM**, and it says so on every start (`UIAccess NOT granted — ... Expected for a Debug
-build`). UI Automation reads the OSD's whole tree and a script clicks the notch open, pages it
-and clicks a widget. Measured end to end: `scripts/drive-shelf-pair.ps1` drives the real Plith +
-catcher pair through the notch, and **§3.5 (restack) and §3.3 (clear) of the shelf are now RUN
-and passing**, judged by reading `shelf.txt` before and after rather than by looking at pixels.
-The same run answered §1's open foreground question (the real click path reaches
-`foreground=True`) and produced the first real-input evidence for Phase 6's provisional paging
-constants (one wheel notch, one page, three times).
-
-So most of the open items in `docs/PHASE5-VERIFICATION.md` and `docs/PHASE6-VERIFICATION.md` are
-reachable by script, and were reachable the whole time.
-
-**The last four shelf items (§3.1's second half, §3.2, §3.4, §3.6) are now RUN and passing too
-(2026-09-20), and Vanguard was never what stood in the way.** Its driver was loaded throughout
-and refused `SendInput` on a single attempt; every other attempt accepted a full click round
-trip. What actually blocked them was a fullscreen game holding the pointer, and four defects in
-the driving script: an opening check that blamed "the pointer did not move" when the call had
-worked perfectly, a mid-run press that could land anywhere without saying so, an overflow rule
-written down wrong so the fixture aimed at tiles the surface had folded away, and an assertion
-that compared a string against an array and so could not return True on any input. A fifth, a
-stale Plith holding the single-instance mutex, made the drop catcher look guilty for a failure
-that was not its. **Every gate was green through all of it.** Record:
-`docs/SHELF-VERIFICATION.md` §3.12.
-
-**Phase 7 slice 3 (one flat list) is code-complete on the same branch.** Stacks are gone. Alcove
-and Dropover, the two applications this feature is modelled on, have one storage area, and the
-stack model cost a list-of-lists in the store, two of the six catcher-to-Plith verbs, a grouped
-file format, and per-column building with its own fold rule.
-
-**The decisive number was that `MaxItems` was 20 while the surface could draw 10.** Five columns
-of two, with the other half behind `+N` chips, and a folded tile is in no UIA tree at all: it is
-invisible to a screen reader and reachable by no key. The cap is now `NotchGeometry.ShelfCapacity`,
-defined as the product of the grid it must match, in the one file both projects already compile.
-
-The shelf is one wrapping grid of at most 15 files, newest first, with no hand reordering, so the
-within-surface drag is deleted rather than repurposed and a tile drags OUT only. The `Items` wire
-message collapsed from one-per-stack to one, which took `ShelfModel`'s whole reassembly with it:
-that was the most intricate code in the shelf and existed entirely to survive two deliveries
-interleaving on a pipe any local process may write. The frame hugs its contents, one to three
-rows, chosen once when the shelf opens and never while it is up.
-
-Spec: `docs/superpowers/specs/2026-09-20-shelf-single-list-design.md`. Plan and its two corrected
-task boundaries: `docs/superpowers/plans/2026-09-20-shelf-single-list.md`.
-
-**Two defects were found by the render harness rather than the compiler**, and both were mine:
-each tile carries a uniform right margin so it occupies tile + gap, and sizing the panel without
-that left the fifth tile of every row short of fitting, which made the capacity guarantee quietly
-false; and deleting the dead drop-target check took a layout pass with it that the tile-hit check
-also depended on.
-
-**`ShelfWidget`'s item count now reaches a screen reader.** It was set on `Tiles`, a `StackPanel`,
-which WPF gives no automation peer, and the comment above that line said so correctly and then
-contradicted itself. Confirmed absent from the live UIA tree on 2026-09-19, fixed on the control
-root, and `check-a11y.ps1` drops the suppression that recorded it.
-
-**RUN ON HARDWARE and passing (2026-09-20), which is unusual for this repo and was the point.**
-`scripts/drive-shelf-pair.ps1` seeds the shelf to capacity and requires every file to be in the
-UIA tree: 15 seeded, none missing. That is the check the stack build could never have passed, and
-it passed here. The frame came back `384x283` for a full shelf, confirming the derived height on
-the real window rather than in a render. §3.1, §3.2 and §3.3 pass; §3.4, §3.5 and §3.6 are deleted
-along with §4.5, §4.6 and §4.9.
-
-It took two runs, and the first failure was not the product. A track change replaced the open
-widget frame between paging and clicking, which Plith is designed to allow, and the driver
-reported "the shelf never appeared" and pointed at the catcher and the pipe. Filed as the
-driver's instrument defect 6 and fixed by re-checking the page immediately before the press.
-
-**An event you did not cause no longer takes the open notch away (2026-09-20).** A track
-advancing because the song ended used to replace the open widget frame with a HUD, taking away a
-place the person had deliberately navigated to. The rule now asks who caused the event: a volume
-key, a transport command or the summon hotkey still takes the frame, because that is feedback for
-something just pressed; a track change on its own does not. `AudioChange` is deliberately not in
-the caused set, since "the volume changed" says nothing about who changed it and the person's own
-press arrives separately as `VolumeKey`. The older rule survives whole inside the new one: an
-event the open page already displays never takes the frame.
-
-It lives in `NotchEventPolicy`, free of WPF, because `OsdHost` is a `BandWindow` the test project
-cannot construct, which is how the two previous versions of this rule reached a running build
-with no test between them. Ten unit tests, plus a hardware run with both witnesses outside the
-behaviour: Plith naming the track on its own media page, and Spotify's window title changing.
-Getting that probe honest took three attempts, because the first two asked Plith's log whether
-the event arrived, and a kept frame writes nothing to the log.
-
-**Unrelated, and more serious than anything above: Plith used to leave the Windows volume OSD
-broken behind it.** It hides the shell's own flyout with `ShowWindow(SW_HIDE)` and never put it
-back. Nothing is persisted, so uninstalling leaves no setting and a crash takes the hooks with it,
-but on the builds where the shell creates that window once and merely moves it, the shell never
-hid it and so believes it is visible: a window Plith hid behind its back is one the shell keeps
-positioning and never shows again. `HiddenWindowRegistry` records what was hidden and `Stop`
-restores it, recording only a real visible-to-hidden transition so it never reveals a window it
-did not take. A killed process still restores nothing; that case needs the shell to recreate it.
-
-**The notch's media page is rebuilt after Alcove, and the notch now opens on it while something
-is playing (2026-09-20).** Alcove's own layout was measured from its press screenshot rather than
-recalled: a large tile, title and artist beside it, elapsed / bar / remaining, and five centred
-controls, on a plain black ground with **no artwork tint at all**. Plith's page had been doing the
-opposite, compensating for a 46 DIP thumbnail with a blurred copy of the album behind a scrim, and
-paying for it by declaring its own ink so that the light theme did not put dark text on a dark
-scrim. The tile is 56 DIP and crisp (the decode went from 96 px to 192), the ground is the themed
-surface like every other page, the rail gained an output control that opens Windows' sound
-settings, and a full-width progress row carries the position, ticked at 1 Hz while the page is on
-screen from a stamped SMTC reading rather than polled.
-
-Alcove's panel is 2.16:1 and the frame is 3.07:1, so the layout was opened out horizontally
-instead of copied. **The frame did not move**, and that was a decision rather than an oversight:
-`NotchGeometry.OpenFrameDip` records that letting a page drive the size was tried twice and
-rejected on the mockup.
-
-Deliberately not built, each with its reason in the spec: the live waveform (its four bars
-decorate a physical camera notch, and Windows has none), seek, and an in-notch device list.
-
-**Four verdicts passed on real hardware, and the instrument names which half it measured.**
-`scripts/drive-media-page.ps1` clicks the real notch and reads the live UIA tree: with a paused
-Spotify a click opens the clock page, the notch pages to the media widget, the bar reports
-`value=0 of 100` to UI Automation, and both clocks are drawn. **The playing direction is still
-unmeasured** because nothing was playing during either run, and the script says so rather than
-reporting the other direction as passed.
-
-**Three of the four defects in this change were found by looking, not by a gate.** The contrast
-lint measured this page for the first time (removing the private ink is what made it visible) and
-the progress fill failed on every accent, worst 1,0:1. Four fill-and-groove pairs were measured;
-the one that finally cleared every ratio **drew the bar inverted**, because a contrast ratio has
-no notion of which side should be stronger. That one was caught in a render. So was a disabled
-transport that looked exactly like a live one, which a replaced `ControlTemplate` causes by losing
-WPF's own dimming. Full ledger: `docs/PHASE6-VERIFICATION.md` section 20.
-
-**The media page can seek, and its output control now turns the page into the device list
-(2026-09-21).** Both were deferred in the spec and both were un-deferred by a measurement rather
-than by a change of mind. Seek was refused partly because "SMTC position writes are not universal",
-applied to Spotify from memory; asked directly, Spotify reports `IsPlaybackPositionEnabled` true
-with a seek range covering the whole track. The picker was refused because it "needs a popup
-surface the notch does not have", and the user's own counter-proposal removed that reason: the
-page becomes the list, so no second window exists to fall outside the notch's layered surface.
-
-The bar is a templated `Slider` now, which keeps the automation value and adds keyboard arrows,
-Home and End. `OutputDeviceSwitcher` writes the default through the undocumented `IPolicyConfig`
-for the Console and Multimedia roles, leaving Communications alone as Windows' own
-"Set as Default Device" does.
-
-**Seven verdicts passed on hardware, and two things are still owed.** A drag moved Spotify from
-15s to 139s against a 137s target; the picker opens, names itself in the UIA tree and returns.
-Unmeasured: the switch itself, because over Remote Desktop there is exactly ONE output and
-`IPolicyConfig` refuses it with `E_NOINTERFACE` (the same call returns `S_OK` in a console session
-against a local device), and the playing direction of the opening rule, paused at the click for
-three runs running.
-
-**Three defects came out of this that no gate could have caught, and one of them was already
-shipping.** `AudioLabel.Shorten` keeps the adapter's first two words, so two Steam endpoints
-collapsed to the same string and **Settings' endpoint combo box had been showing two identical
-rows since it was written**; uniqueness is a property of the set, so it is fixed where the list is
-built. The `IPolicyConfig` vtable needs TEN reserved slots and nine compiled perfectly, returning
-`RPC_X_NULL_REF_POINTER` because the call landed on `SetPropertyValue`. And a drag wrote TWO
-seeks, because `IsMoveToPointEnabled` jumps the thumb on press before the drag starts: a drag from
-10 to 75 per cent moved the source to 8 per cent and then moved it again. Build, 559 tests, both
-lints and the renders were green through all three. Full ledger:
-`docs/PHASE6-VERIFICATION.md` section 21.
-
-> **This file's Status section is SPLIT across two branches, and neither half is right on its
-> own.** This branch carries the shelf paragraphs above and still describes Phases 5 and 6 as
-> unmerged, which is wrong — they are in `main`. `feature/brightness` carries the corrected
-> phase status and the brightness work, and has no shelf paragraph at all. Whichever merges
-> second must merge this section by hand rather than taking one side. Both branches also sit on
-> `beea6e8` and are missing `main`'s media track-change fix.
-
-**Phase 6 slice 1 code-complete on `feature/phase-6-notch-shell`, not yet merged.**
-Adds presentation modes behind a new `IOsdPresentation` seam: Classic OSD (unchanged
-behaviour, moved behind the seam) and Ambient Notch — a 190 DIP wide shape of
-configurable height (2–24 DIP) resting at top-center that **grows** into the full
-panel on event/hover and shrinks back, and that falls back to Classic wholesale
-while a window covers the monitor. Settings gained a presentation picker and a
-resting-height slider. Default stays Classic OSD for every install. Full Notch is
-deferred — its always-on cards (System Controls' mic status, a Clock card) don't
-exist yet. Multi-monitor: the notch pins to the saved monitor device name, falling
-back to primary — this closes ROADMAP §10's open question.
-
-**The first design was run and rejected.** It parked a full-width strip over the
-card and translated the card down from behind it. On screen that reads as a drawer
-opening, not a notch, and the strip's width tracked the window so a media session
-appearing moved the anchor. It is now one surface whose width, height, corner radius,
-shadow and content opacity all derive from a single expansion value, with the content
-fading in only after the shape has mostly settled. Spec §2 records why.
-
-**Phase 6 slice 2 (notch home view) code-complete on the same branch, not yet
-merged.** Hovering the resting notch now opens an ambient row above the OSD's other
-cards — a clock, current weather, and battery — with each column collapsing
-independently (no battery column on a desktop; weather disappears with no location,
-no network, or a stale reading). A volume or media event never opens the row; only a
-deliberate hover does, and Classic OSD never opens it at all. Weather is Open-Meteo
-(keyless), location priority is a typed city, then Windows Location, then IP
-geolocation, refreshed every 15 minutes; Windows Location is asked on every refresh
-rather than cached, since it does not re-prompt after the first answer. Settings
-gained "Show weather" and "Weather location", hidden while Classic is selected.
-(The "Show ambient info on hover" toggle this slice added is gone — slice 3 made hover a
-peek and a click the way in, so it described a behaviour that no longer happens.)
-
-**Phase 6 slice 3 (notch widgets) code-complete on the same branch, not yet merged.**
-The open notch is now a fixed 356×116 frame with paged widgets — clock, weather, media,
-audio — reached by a two-finger swipe, a tilt wheel, `Shift`+wheel or a click on the page
-dots. An event no longer opens that frame: a volume key or a track change gets its own
-short HUD shape instead, because an answer to something you did must not look like a place
-you went. Plith also gained its **first audio write path** — the audio widget's level is
-draggable, on Voicemeeter and on a Windows endpoint.
-
-**The Classic OSD and Settings redesign is code-complete too, through Task 7 of its plan.**
-Every icon in the product is now drawn geometry rather than Segoe MDL2, and the
-accessibility lint fails the build on any that are not — in code-behind as well as XAML,
-which was the rule's own blind spot on the day it was written. The classic card is sized by
-its fullest row (300 DIP, 224 compact), titles scroll rather than ellipse, and Settings has
-a grouped left rail and a preview that finally knows the notch exists.
-
-**None of it is verified on a running build.** Build, the tests and the lint are green (504
-passing, measured 2026-09-20; the 344 in `docs/PHASE6-VERIFICATION.md` is that run's own
-number and stays there), and none of that reaches any of it: the suite is not STA, and the
-OSD renders in a layered window nothing can capture over RDP. Slice 2 shipped equally green
-and then crashed on the first hover. Full ledgers in `docs/PHASE6-VERIFICATION.md` §15 and §16; the highest-risk
-items are the three provisional paging constants, which were chosen without hardware and can
-only be corrected from the log line each commit writes.
-
-Two things are deliberately left undone: the ambient row that slice 3 made unreachable is
-still wired (its removal is gated on slice 3 being driven on hardware first), and
-`Palette.Dark` and `OsdPalette.Dark` still each declare the accent green.
 
 ## Stack
 - **WPF + .NET 10 (LTS)** — proven topmost-over-fullscreen path via BandWindow + renamed `ApplicationFrameHost.exe` (borrowed from MIT-licensed VoicemeeterFancyOSD's Host/Bridge/Interop layer).

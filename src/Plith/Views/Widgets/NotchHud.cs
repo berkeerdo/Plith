@@ -12,6 +12,7 @@ public enum NotchHudKind
 {
     Volume,
     Media,
+    Brightness,
 }
 
 /// <summary>
@@ -35,11 +36,16 @@ public partial class NotchHud : UserControl
 {
     private readonly AudioCardViewModel _audio;
     private readonly MediaViewModel _media;
+    private readonly BrightnessCardViewModel? _brightness;
 
     /// <param name="toggleMute">Optional. Null leaves the speaker inert rather than pretending
     /// to be a control — a button that does nothing when pressed teaches people not to trust the
     /// ones that do.</param>
-    public NotchHud(AudioCardViewModel audio, MediaViewModel media, Func<bool>? toggleMute = null)
+    /// <param name="brightness">Optional. Null leaves the brightness kind unreachable rather
+    /// than drawing an empty bar, which is the right answer on a build with no brightness
+    /// source wired.</param>
+    public NotchHud(AudioCardViewModel audio, MediaViewModel media, Func<bool>? toggleMute = null,
+                    BrightnessCardViewModel? brightness = null)
     {
         ArgumentNullException.ThrowIfNull(audio);
         ArgumentNullException.ThrowIfNull(media);
@@ -47,6 +53,7 @@ public partial class NotchHud : UserControl
         InitializeComponent();
         _audio = audio;
         _media = media;
+        _brightness = brightness;
 
         if (toggleMute is null) MuteButton.IsEnabled = false;
         else MuteButton.Click += (_, _) => toggleMute();
@@ -55,6 +62,8 @@ public partial class NotchHud : UserControl
         // HUD that painted once would sit there showing the first of them.
         _audio.PropertyChanged += (_, _) => { if (Kind == NotchHudKind.Volume) RenderVolume(); };
         _media.PropertyChanged += (_, _) => { if (Kind == NotchHudKind.Media) RenderMedia(); };
+        if (_brightness is not null)
+            _brightness.PropertyChanged += (_, _) => { if (Kind == NotchHudKind.Brightness) RenderBrightness(); };
 
         Show(NotchHudKind.Volume);
     }
@@ -73,15 +82,22 @@ public partial class NotchHud : UserControl
     {
         Kind = kind;
 
+        // Brightness takes the narrow shape, like volume: it is a level and a number, and the
+        // wide one exists for a title that needs the room.
         var size = kind == NotchHudKind.Media ? NotchGeometry.HudWideDip : NotchGeometry.HudDip;
         Width = size.Width;
         Height = size.Height;
 
         VolumeRow.Visibility = kind == NotchHudKind.Volume ? Visibility.Visible : Visibility.Collapsed;
         MediaRow.Visibility = kind == NotchHudKind.Media ? Visibility.Visible : Visibility.Collapsed;
+        BrightnessRow.Visibility = kind == NotchHudKind.Brightness ? Visibility.Visible : Visibility.Collapsed;
 
-        if (kind == NotchHudKind.Volume) RenderVolume();
-        else RenderMedia();
+        switch (kind)
+        {
+            case NotchHudKind.Media: RenderMedia(); break;
+            case NotchHudKind.Brightness: RenderBrightness(); break;
+            default: RenderVolume(); break;
+        }
     }
 
     private void RenderVolume()
@@ -99,9 +115,15 @@ public partial class NotchHud : UserControl
 
         LevelFill.Background = _audio.GainColor;
 
-        // On the row, which has a peer. The HUD is not focusable, but a screen reader following
-        // the OSD still needs the whole reading rather than a bare number.
-        AutomationProperties.SetName(VolumeRow, _audio.AccessibleSummary);
+        // ON THIS CONTROL, not on the row. The comment here used to say "on the row, which has a
+        // peer" and that was simply false: WPF gives a Grid no automation peer, so the name
+        // reached nothing and a screen reader following the OSD heard silence. The scan that says
+        // so had two of these three rows on a known-gap list rather than fixed, and the third
+        // arrived with brightness and failed the build, which is what got all three looked at.
+        //
+        // The root is the right place and not merely an available one: exactly one row is visible
+        // at a time (see Show), so the HUD has one reading, and it is whichever row is up.
+        AutomationProperties.SetName(this, _audio.AccessibleSummary);
     }
 
     /// <summary>Below this the speaker drops its outer wave. A third of the way is where "quiet"
@@ -117,13 +139,26 @@ public partial class NotchHud : UserControl
     /// because a bar that flashes empty on every event is worse than one that arrives a frame
     /// late.
     /// </summary>
-    private void UpdateFill(double t)
+    private void UpdateFill(double t) => UpdateFill(LevelFill, t);
+
+    private static void UpdateFill(Border fill, double t)
     {
-        if (LevelFill.Parent is not FrameworkElement track) return;
+        if (fill.Parent is not FrameworkElement track) return;
         var available = track.ActualWidth;
         if (available <= 0) return;
 
-        LevelFill.Width = available * t;
+        fill.Width = available * t;
+    }
+
+    private void RenderBrightness()
+    {
+        if (_brightness is null) return;
+
+        BrightnessText.Text = _brightness.DisplayText;
+        UpdateFill(BrightnessFill, _brightness.Normalized);
+
+        // On this control. See RenderVolume for why the row cannot carry it.
+        AutomationProperties.SetName(this, _brightness.AccessibleSummary);
     }
 
     private void RenderMedia()
@@ -132,7 +167,8 @@ public partial class NotchHud : UserControl
         Artist.Text = _media.HasSession ? _media.Artist : string.Empty;
         Art.Source = _media.AlbumArt;
 
-        AutomationProperties.SetName(MediaRow, _media.AccessibleSummary);
+        // On this control. See RenderVolume for why the row cannot carry it.
+        AutomationProperties.SetName(this, _media.AccessibleSummary);
     }
 
     protected override Size ArrangeOverride(Size arrangeBounds)
@@ -144,6 +180,7 @@ public partial class NotchHud : UserControl
         // first time a HUD of this width is shown - the exact class of defect that comes from
         // reading a measurement before the tree has one.
         if (Kind == NotchHudKind.Volume) UpdateFill(VolumeMath.Clamp01(_audio.GainNormalized));
+        else if (Kind == NotchHudKind.Brightness && _brightness is not null) UpdateFill(BrightnessFill, _brightness.Normalized);
 
         return result;
     }

@@ -1,6 +1,7 @@
 using System.Windows;
 using Plith.Cards;
 using Plith.Services;
+using Plith.Services.Brightness;
 using Plith.Services.Shelf;
 using Plith.Views;
 
@@ -23,6 +24,16 @@ public partial class App : Application
     private AudioCard? _audioCard;
     private MediaCard? _mediaCard;
     private AmbientCard? _ambientCard;
+    private BrightnessCard? _brightnessCard;
+    private BrightnessMonitor? _brightnessMonitor;
+    private BrightnessWriter? _brightnessWriter;
+    private IReadOnlyList<IBrightnessDevice> _brightnessDevices = [];
+    private HotkeyService? _brightnessUpHotkey;
+    private HotkeyService? _brightnessDownHotkey;
+    private BrightnessRunLog? _brightnessRunLog;
+    private System.Windows.Threading.DispatcherTimer? _brightnessRunTimer;
+    private bool _loggedNoBrightnessDevices;
+    private readonly BrightnessLevelCache _brightnessLevel = new();
     private OpenMeteoClient? _weatherClient;
     private WindowsLocationProvider? _windowsLocation;
     private IpLocationProvider? _ipLocation;
@@ -71,13 +82,15 @@ public partial class App : Application
         _ipLocation = new IpLocationProvider(_diagnosticLog);
         _weatherService = new WeatherService(_settings, _weatherClient, _windowsLocation, _ipLocation, _diagnosticLog);
         _ambientCard = new AmbientCard(_home, _settings, _weatherService);
+        _brightnessCard = new BrightnessCard(_settings);
 
         _fullscreenWatcher = new FullscreenVideoWatcher(_settings, _mediaSession, Dispatcher, _diagnosticLog);
 
-        _cardHost = new CardHost(_settings, _fullscreenWatcher);
+        _cardHost = new CardHost(_settings, _fullscreenWatcher, line => _diagnosticLog?.Info("Cards", line));
         _cardHost.Register(_ambientCard);  // Order 5 — the notch's ambient row, above media
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
+        _cardHost.Register(_brightnessCard);  // Order 30, below audio, and only while it has something to say
 
         _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += (reason, d) => _osd.ShowOsd(d, reason: reason);
@@ -115,7 +128,8 @@ public partial class App : Application
                                () => _weatherService.Current,
                                _orchestrator.TryToggleMute,
                                () => _mediaSession.TryOpenSourceApp(),
-                               () => _microphone.Current);
+                               () => _microphone.Current,
+            brightness: _brightnessCard.Vm);
 
 
         // Marshalled, because the endpoint's notification arrives on a COM thread.
@@ -174,7 +188,9 @@ public partial class App : Application
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
 
-        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService);
+        StartBrightness();
+
+        _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService, _diagnosticLog);
         _trayHost.Initialize();
 
         StartShelf();
@@ -284,6 +300,209 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// Bring up both halves of brightness: the WMI watcher that notices a change on an
+    /// internal panel, and the writer plus hotkeys that make one on an external monitor.
+    /// </summary>
+    private void StartBrightness()
+    {
+        if (_settings is null || _osd is null) return;
+
+        // Discovery costs one DDC/CI read per attached monitor, measured at 56 ms each, so it
+        // happens here rather than per key press. It can legitimately find nothing: inside a
+        // Remote Desktop session no physical display is reachable at all. See
+        // EnsureBrightnessDevices.
+        // One line when a run of key presses starts and one summary when it ends, rather than
+        // a line per write. A write is 56 ms, so a held key produces roughly fifteen a second
+        // and per-write logging would flood the file during the one gesture worth reading.
+        _brightnessRunTimer = new System.Windows.Threading.DispatcherTimer();
+        _brightnessRunTimer.Tick += (_, _) =>
+        {
+            _brightnessRunTimer.Stop();
+            _brightnessRunLog?.Close();
+
+            // The level is only cached for the length of a gesture. Someone can change
+            // brightness from the monitor's own buttons and nothing tells us, so holding the
+            // value past the run would let it drift away from the screen.
+            _brightnessLevel.Invalidate();
+        };
+        _brightnessRunLog = new BrightnessRunLog(
+            line => _diagnosticLog?.Info("Brightness", line),
+            (after, _) =>
+            {
+                _brightnessRunTimer.Stop();
+                _brightnessRunTimer.Interval = after;
+                _brightnessRunTimer.Start();
+            });
+
+        _brightnessDevices = BrightnessDiscovery.Discover();
+        _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
+        _diagnosticLog?.Info("Brightness", $"Discovery found {_brightnessDevices.Count} device(s).");
+
+        _brightnessMonitor = new BrightnessMonitor(_osd.Dispatcher, _diagnosticLog);
+        _brightnessMonitor.Changed += percent => _brightnessCard?.Report(percent);
+        _brightnessMonitor.Start();
+
+        ApplyBrightnessHotkeys(_settings.Current);
+        _settings.Changed += ApplyBrightnessHotkeys;
+    }
+
+    /// <summary>The writer, with its result routed to the card on the dispatcher. The pump runs
+    /// on the thread pool, and CardHost's own documentation names an off-dispatcher card update
+    /// as the expected cause of a crash inside the WPF binding engine.</summary>
+    private BrightnessWriter NewBrightnessWriter(IReadOnlyList<IBrightnessDevice> devices)
+    {
+        var writer = new BrightnessWriter(devices);
+        writer.Wrote += value => _osd?.Dispatcher.BeginInvoke(
+            new Action(() => _brightnessCard?.Report(ToBrightnessPercent(value))));
+
+        // Refusals arrive on the pump thread and the run log is only ever touched on the
+        // dispatcher, alongside the steps it is summarising.
+        writer.Refused += id => _osd?.Dispatcher.BeginInvoke(
+            new Action(() => _brightnessRunLog?.NoteRefusal(id)));
+
+        return writer;
+    }
+
+    /// <summary>
+    /// The devices, rediscovering them first if there are none.
+    ///
+    /// Measured: moving a session from the console to Remote Desktop takes every DDC/CI capable
+    /// display away mid-session, and moving back returns it. Discovery that ran only at startup
+    /// would leave the feature dead until a restart for anyone who connects to their desktop
+    /// remotely and later sits back down at it.
+    ///
+    /// Retried here rather than from a WM_DISPLAYCHANGE and WM_WTSSESSION_CHANGE listener,
+    /// which is the fuller answer and needs a message window this slice does not have. The cost
+    /// of this version is one enumeration per key press while the list is empty, and nothing at
+    /// all once it is not.
+    /// </summary>
+    private IReadOnlyList<IBrightnessDevice> EnsureBrightnessDevices()
+    {
+        if (_brightnessDevices.Count > 0) return _brightnessDevices;
+
+        _brightnessDevices = BrightnessDiscovery.Discover();
+        if (_brightnessDevices.Count == 0) return _brightnessDevices;
+
+        _diagnosticLog?.Info("Brightness", $"Rediscovery found {_brightnessDevices.Count} device(s).");
+        _brightnessLevel.Invalidate();
+
+        // The writer holds the list it was built with, so a new set needs a new writer.
+        _brightnessWriter = NewBrightnessWriter(_brightnessDevices);
+        return _brightnessDevices;
+    }
+
+    /// <summary>
+    /// The first device's value expressed as 0 to 100, because the card shows one number while
+    /// every display is written together. On two monitors reporting different ranges the OSD is
+    /// exact about the first and approximate about the rest, which is a display inaccuracy
+    /// rather than a control bug. Recorded in the spec as the known limit of this slice.
+    /// </summary>
+    private int ToBrightnessPercent(int value)
+    {
+        // From the cached range rather than a fresh read. This runs on every write, and a read
+        // here was the third DDC/CI round trip of a single key press: 60 ms spent re-asking the
+        // monitor for a minimum and a maximum that cannot change while it is plugged in.
+        if (!_brightnessLevel.TryGet(out var reading))
+        {
+            if (_brightnessDevices.Count == 0) return value;
+            if (!_brightnessDevices[0].TryRead(out reading)) return value;
+            _brightnessLevel.Set(reading);
+        }
+
+        var span = reading.Max - reading.Min;
+        if (span <= 0) return 100;
+        return (int)Math.Round((value - reading.Min) * 100.0 / span);
+    }
+
+    /// <summary>
+    /// Bind or unbind the two brightness keys.
+    ///
+    /// Deliberately NOT conditioned on any device having been found. Inside a Remote Desktop
+    /// session none can be, and a binding that only appeared after a restart would strand the
+    /// person who walks back to their machine. The key press is also what triggers rediscovery.
+    /// </summary>
+    private void ApplyBrightnessHotkeys(SettingsModel m)
+    {
+        if (!m.BrightnessEnabled)
+        {
+            _brightnessUpHotkey?.Apply(0, 0);
+            _brightnessDownHotkey?.Apply(0, 0);
+            return;
+        }
+
+        // noRepeat: false, so holding the key keeps moving the value. The coalescing writer is
+        // what makes that safe at 56 ms per write.
+        _brightnessUpHotkey ??= BuildBrightnessHotkey(hotkeyId: 2, up: true);
+        _brightnessDownHotkey ??= BuildBrightnessHotkey(hotkeyId: 3, up: false);
+
+        // Logged, because "did the key even bind" was a question the log could not answer and
+        // it is the first thing to ask when a direction does nothing. Windows refuses a combo
+        // another process already owns, and says so only through this return value.
+        var boundUp = _brightnessUpHotkey.Apply(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey);
+        var boundDown = _brightnessDownHotkey.Apply(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey);
+
+        _diagnosticLog?.Info("Brightness",
+            $"Hotkeys bound: brighter {HotkeyService.FormatCombo(m.BrightnessUpHotkeyMods, m.BrightnessUpHotkeyKey)}={boundUp}"
+            + (boundUp ? "" : $" (err {_brightnessUpHotkey.LastError})")
+            + $", dimmer {HotkeyService.FormatCombo(m.BrightnessDownHotkeyMods, m.BrightnessDownHotkeyKey)}={boundDown}"
+            + (boundDown ? "" : $" (err {_brightnessDownHotkey.LastError})")
+            // Only when something actually failed. A note about an error code printed next to
+            // two successes is noise in the one file that has to stay readable.
+            + (boundUp && boundDown ? "." : ". Error 1409 means another window already owns that combination."));
+    }
+
+    private HotkeyService BuildBrightnessHotkey(int hotkeyId, bool up)
+    {
+        var service = new HotkeyService(hotkeyId, noRepeat: false);
+        service.Pressed += () => StepBrightness(up);
+        return service;
+    }
+
+    private void StepBrightness(bool up)
+    {
+        var devices = EnsureBrightnessDevices();
+
+        if (devices.Count == 0 || _brightnessWriter is null || _settings is null)
+        {
+            // Logged once per dry spell rather than per press. Held down, this path runs as
+            // fast as the key repeats, and the reader only needs to know the key arrived and
+            // had nothing to write to.
+            if (!_loggedNoBrightnessDevices)
+            {
+                _loggedNoBrightnessDevices = true;
+                _diagnosticLog?.Info("Brightness",
+                    $"{(up ? "Brighter" : "Dimmer")} pressed with no display answering. "
+                    + "Inside a Remote Desktop session this is expected.");
+            }
+            return;
+        }
+
+        _loggedNoBrightnessDevices = false;
+
+        // The first device is the one the step is measured from. They all move together, so a
+        // second display with a different span follows rather than leads.
+        //
+        // Read only when the cache is empty, which means once per gesture. A read costs the
+        // same 60 ms as a write, so asking before every step made a held key half as fast as
+        // the hardware allows and a single press twice as slow as it needed to be.
+        if (!_brightnessLevel.TryGet(out var reading))
+        {
+            if (!devices[0].TryRead(out reading))
+            {
+                _diagnosticLog?.Info("Brightness", $"{devices[0].Id} stopped answering a read.");
+                return;
+            }
+
+            _brightnessLevel.Set(reading);
+        }
+
+        var next = BrightnessStep.Next(reading, _settings.Current.BrightnessStepPercent, up);
+        _brightnessLevel.NoteWritten(next);
+        _brightnessRunLog?.Step(up, reading.Current, next);
+        _brightnessWriter.Request(next);
+    }
+
     private void ApplyHotkeyFromSettings(SettingsModel m)
     {
         if (_hotkey is null) return;
@@ -316,9 +535,13 @@ public partial class App : Application
                 _fullscreenWatcher.ForegroundCoversMonitorChanged -= _osd.OnForegroundCoversMonitorChanged;
             _fullscreenWatcher?.Dispose();
         });
+        DisposeStep("BrightnessRunLog",   () => { _brightnessRunTimer?.Stop(); _brightnessRunLog?.Close(); });
+        DisposeStep("BrightnessMonitor",  () => _brightnessMonitor?.Dispose());
+        DisposeStep("BrightnessHotkeys",  () => { _brightnessUpHotkey?.Dispose(); _brightnessDownHotkey?.Dispose(); });
         DisposeStep("CardHost",           () => _cardHost?.Dispose());
         // After CardHost: AmbientCard.Deactivate() unsubscribes from _weatherService.Updated
         // as part of that Dispose, so the service must still be alive when it runs.
+        DisposeStep("BrightnessDevices",  () => { foreach (var d in _brightnessDevices) (d as IDisposable)?.Dispose(); });
         DisposeStep("WeatherService",     () => _weatherService?.Dispose());
         DisposeStep("MicrophoneClient",   () => _microphone?.Dispose());
         DisposeStep("OpenMeteoClient",    () => _weatherClient?.Dispose());

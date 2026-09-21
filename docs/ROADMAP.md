@@ -117,7 +117,7 @@ for audio endpoints, SMTC session manager for media). Missing pieces:
 |---|---|
 | Volume / mute keys | `WH_KEYBOARD_LL` (already wired). |
 | Media transport keys | `WH_KEYBOARD_LL` VK_MEDIA_*. |
-| Brightness up/down | `WH_KEYBOARD_LL` VK_BRIGHTNESS_*, apply via DDC/CI (`dxva2.dll`) — measured working; WMI reaches laptop panels only. See the Phase 6 note. |
+| Brightness up/down | **Not a keyboard hook, and `VK_BRIGHTNESS_*` does not exist.** Zero hits in `WinUser.h` (SDK 10.0.26100.0), and no brightness `APPCOMMAND` either; laptop brightness keys are consumed in the driver stack. Windows raises `WmiMonitorBrightnessEvent` instead, carrying the new percentage, for **internal panels only** (ModernFlyouts shows its flyout from that event and hooks nothing). An external monitor never raises it, because DDC/CI is request and response. So: sense via the WMI event, act via `dxva2.dll`, and on a desktop Plith's own hotkey is the only possible trigger. `GetMonitorCapabilities` is NOT a usable gate: on a PG27AQDM it returns false with caps=0x0 while reads and writes both work. One write measured 56 ms. See `docs/superpowers/specs/2026-09-18-brightness-design.md`. |
 | Keyboard backlight | Vendor SDKs (Razer Chroma, Corsair iCUE, Logitech G HUB) — start with Microsoft Precision + laptop-native, add vendor SDKs later. |
 | Mic mute | Vendor keys → intercept + broadcast via Windows.Devices.Enumeration. |
 | Caps / Num / Scroll Lock | `WH_KEYBOARD_LL`, read state via `GetKeyState`. |

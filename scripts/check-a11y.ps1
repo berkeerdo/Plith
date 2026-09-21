@@ -219,10 +219,6 @@ $knownCodeBehindGaps = @{
         'section 5.4.'
     'MediaWidget.cs:OpenSourceArea' = 'found by this same scan, unrelated to the shelf: ' +
         'OpenSourceArea is a Border. Predates this branch. Filed, not fixed.'
-    'NotchHud.cs:VolumeRow' = 'found by this same scan, unrelated to the shelf: VolumeRow is a ' +
-        'Grid. Predates this branch. Filed, not fixed.'
-    'NotchHud.cs:MediaRow' = 'found by this same scan, unrelated to the shelf: MediaRow is a ' +
-        'Grid. Predates this branch. Filed, not fixed.'
     'WeatherWidget.cs:Readout' = 'found by this same scan, unrelated to the shelf: Readout is a ' +
         'StackPanel. Predates this branch. Filed, not fixed.'
 }

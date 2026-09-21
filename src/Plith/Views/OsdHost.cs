@@ -790,7 +790,7 @@ public sealed class OsdHost : BandWindow
     public void AttachAudioSource(AudioCardViewModel audio, Func<double, bool> write, MediaViewModel media,
                                   Func<WeatherSnapshot?> weather, Func<bool>? toggleMute = null,
                                   Action? openSource = null, Func<MicrophoneSnapshot?>? microphone = null,
-                                  Func<bool?>? toggleMicMute = null)
+                                  Func<bool?>? toggleMicMute = null, BrightnessCardViewModel? brightness = null)
     {
         _toggleMute = toggleMute;
         // Built once and kept. The widgets own timers and storyboards, so rebuilding them on
@@ -812,7 +812,7 @@ public sealed class OsdHost : BandWindow
         BuildShelfPage();
         ApplyWidgetPages();
 
-        _hud = new Widgets.NotchHud(audio, media, _toggleMute);
+        _hud = new Widgets.NotchHud(audio, media, _toggleMute, brightness);
         _content.SetWidgetContent(_widgets, _hud);
     }
 
@@ -1020,6 +1020,10 @@ public sealed class OsdHost : BandWindow
     private static NotchHudKind PickHudKind(ShowReason? reason) => reason switch
     {
         ShowReason.MediaChange or ShowReason.MediaCommand => NotchHudKind.Media,
+        // Named rather than left to the default. Brightness used to fall through to Volume, so
+        // a brightness key drew the speaker and the volume level: the right answer existed in
+        // the card stack, which an event never reaches in notch mode.
+        ShowReason.BrightnessChange => NotchHudKind.Brightness,
         _ => NotchHudKind.Volume,
     };
 

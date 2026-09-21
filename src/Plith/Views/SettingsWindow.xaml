@@ -158,6 +158,9 @@
                 <RadioButton x:Name="RailMedia" Style="{StaticResource RailItemStyle}"
                              Content="Media" Tag="SecMedia"
                              GroupName="SettingsSection" AutomationProperties.Name="Media" />
+                <RadioButton x:Name="RailBrightness" Style="{StaticResource RailItemStyle}"
+                             Content="Brightness" Tag="SecBrightness"
+                             GroupName="SettingsSection" AutomationProperties.Name="Brightness" />
 
                 <TextBlock Style="{StaticResource RailGroupStyle}" Text="APP" />
                 <RadioButton x:Name="RailGeneral" Style="{StaticResource RailItemStyle}"
@@ -812,6 +815,113 @@
                                       AutomationProperties.LabeledBy="{Binding ElementName=ShowOnTrackChangeLabel}" />
                         </Grid>
                     </Border>
+                </Border>
+                </StackPanel>
+
+                <StackPanel x:Name="SecBrightness">
+
+                <!-- ============== Brightness ============== -->
+                <TextBlock Style="{StaticResource SectionHeaderStyle}" Text="Brightness" Margin="4,18,0,10" />
+                <Border Style="{StaticResource CardStyle}">
+                    <StackPanel>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock x:Name="BrightnessEnabledLabel" Style="{StaticResource RowLabelStyle}" Text="Brightness hotkeys" />
+                                    <!-- The Remote Desktop sentence is here because the alternative is a feature
+                                         that silently does nothing and looks broken. Measured: inside an RDP
+                                         session no physical display is reachable at all. -->
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Off by default. When on, the two keys below change every display that answers, and the OSD shows the new level. No display is reachable from inside a Remote Desktop session; the keys start working again at the machine itself." />
+                                </StackPanel>
+                                <CheckBox x:Name="BrightnessToggle"
+                                          Grid.Column="1"
+                                          Style="{StaticResource ToggleSwitchStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=BrightnessEnabledLabel}" />
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock x:Name="BrightnessUpLabel" Style="{StaticResource RowLabelStyle}" Text="Brighter" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Holding the key keeps raising the level." />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="BrightnessUpCaptureButton"
+                                            Style="{StaticResource HotkeyCaptureButtonStyle}"
+                                            Content="Not set"
+                                            AutomationProperties.LabeledBy="{Binding ElementName=BrightnessUpLabel}" />
+                                    <Button x:Name="BrightnessUpClearButton"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="Clear"
+                                            FontSize="11"
+                                            MinHeight="34"
+                                            MinWidth="60"
+                                            Padding="10,0"
+                                            Margin="6,0,0,0"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Clear brighter hotkey" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock x:Name="BrightnessDownLabel" Style="{StaticResource RowLabelStyle}" Text="Dimmer" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="Both directions have to be bound before either one works." />
+                                </StackPanel>
+                                <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                    <Button x:Name="BrightnessDownCaptureButton"
+                                            Style="{StaticResource HotkeyCaptureButtonStyle}"
+                                            Content="Not set"
+                                            AutomationProperties.LabeledBy="{Binding ElementName=BrightnessDownLabel}" />
+                                    <Button x:Name="BrightnessDownClearButton"
+                                            Style="{StaticResource GhostButtonStyle}"
+                                            Content="Clear"
+                                            FontSize="11"
+                                            MinHeight="34"
+                                            MinWidth="60"
+                                            Padding="10,0"
+                                            Margin="6,0,0,0"
+                                            Visibility="Collapsed"
+                                            AutomationProperties.Name="Clear dimmer hotkey" />
+                                </StackPanel>
+                            </Grid>
+                        </Border>
+
+                        <Border Style="{StaticResource RowLastStyle}">
+                            <Grid>
+                                <Grid.ColumnDefinitions>
+                                    <ColumnDefinition Width="*" />
+                                    <ColumnDefinition Width="Auto" />
+                                </Grid.ColumnDefinitions>
+                                <StackPanel Grid.Column="0" Margin="0,0,24,0">
+                                    <TextBlock x:Name="BrightnessStepLabel" Style="{StaticResource RowLabelStyle}" Text="Step size" />
+                                    <TextBlock Style="{StaticResource RowHintStyle}" Text="How far one press moves the level, as a share of what the display itself reports." />
+                                </StackPanel>
+                                <ComboBox x:Name="BrightnessStepCombo"
+                                          Grid.Column="1"
+                                          VerticalAlignment="Center"
+                                          Style="{StaticResource ModernComboStyle}"
+                                          AutomationProperties.LabeledBy="{Binding ElementName=BrightnessStepLabel}" />
+                            </Grid>
+                        </Border>
+
+                    </StackPanel>
                 </Border>
                 </StackPanel>
 
