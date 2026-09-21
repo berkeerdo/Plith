@@ -454,14 +454,16 @@ public partial class ShelfSurface : UserControl
 
         var items = model.Items;
 
-        // The page's name carries the count, which is the one fact the tiles cannot state: ten of
-        // ten are drawn, so the number is not about what is hidden but about what is here.
-        PageCount.Text = items.Count switch
+        // The chrome row's resting text: the count, which is the one fact the tiles cannot state
+        // now that they carry no captions. Remembered as well as shown, because a pointer leaving
+        // a tile has to put it back.
+        _countText = items.Count switch
         {
             0 => string.Empty,
             1 => "1 file",
             _ => string.Create(CultureInfo.CurrentCulture, $"{items.Count} files"),
         };
+        ShowCount();
 
         // The page's own menu, present only when there is something to clear. A menu whose single
         // item would do nothing is worse than no menu: it answers a right-click with a dead word.
@@ -714,14 +716,14 @@ public partial class ShelfSurface : UserControl
         // fallback to a real shell icon changes what fills this box without changing the box:
         // same 22x22 size, same centered position, so the row does not shift when the two are
         // mixed on the same shelf.
+        // The tile's whole inner box, since there is no caption to share it with. A preview
+        // fills it; an icon sits in the middle of it at its own size.
         var iconHost = new Grid
         {
-            // The PREVIEW's box, which is wider than an icon and the same height. Every tile gets
-            // the same host whether it ends up holding a 22 DIP glyph or a 34 by 22 photograph,
-            // so a row of mixed tiles has its labels on one line.
             Width = PreviewWidth,
             Height = PreviewHeight,
             HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
         };
         // Cache checked synchronously, on the UI thread, before anything is drawn: this is a
         // dictionary lookup, never an extraction, so it cannot stall. A hit paints the real icon
@@ -738,48 +740,23 @@ public partial class ShelfSurface : UserControl
             RequestShellIcon(entry.Path, iconHost);
         }
 
-        var label = new TextBlock
-        {
-            Text = entry.Name,
-            FontSize = 9.5,
-            LineHeight = 11,
-            LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
-            // Two, not four: the tile is 52 tall and its content (a 22 icon, this gap and
-            // two 11 DIP lines of name) has to fit inside the padding as well. At four each
-            // the stack came to 47 in a 44 DIP box and the second line of every long name
-            // was clipped, which a render showed and no gate could.
-            Margin = new Thickness(0, 2, 0, 0),
-            Foreground = (Brush)FindResource("NotchInk"),
-            HorizontalAlignment = HorizontalAlignment.Center,
-            TextAlignment = TextAlignment.Center,
-            // WrapWithOverflow, not Wrap. ShelfWidget settled on the surrounding shape here (two
-            // fixed lines, ellipsis-trimmed) and that shape is kept, but Wrap itself is the wrong
-            // half of the choice: it breaks a run with no space in it wherever it has to, so a
-            // rendered probe of this exact tile showed "screenshot.p" over "ng" and "invoice-202"
-            // over "6-09.xlsx", splitting a filename and a date mid-character. WrapWithOverflow
-            // still wraps at real word and hyphen boundaries (confirmed by rendering "Project
-            // assets" and "one-more.txt" beside it, unchanged), but lets an unbreakable run
-            // overflow its line instead of tearing it apart, where CharacterEllipsis then trims
-            // it. Verified by rendering both modes on the same two names side by side.
-            TextWrapping = TextWrapping.WrapWithOverflow,
-            // TWO lines, at 9.5 rather than one at 11, and the difference was measured rather
-            // than argued: at 11 on a 56 DIP tile a name is cut after about seven characters, so
-            // "Project assets" rendered as "Proje...". Two lines at 9.5 fit the same 52 DIP tile
-            // (a 22 icon, 3 of margin, two 11 DIP lines, 4 of padding is 51) and carry roughly
-            // twice the name.
-            //
-            // Fixed rather than a maximum, for the reason the original comment gives: with a
-            // maximum, a one-line name makes a shorter stack than a two-line one and neighbouring
-            // tiles' icons land at different heights.
-            Height = 22,
-            VerticalAlignment = VerticalAlignment.Top,
-            TextTrimming = TextTrimming.CharacterEllipsis,
-            MaxWidth = TileWidth - 4,
-        };
-
-        var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(iconHost);
-        content.Children.Add(label);
+        // NO CAPTION UNDER THE TILE, and this is the third attempt at this page's design rather
+        // than a tweak to the second. Told twice that it still looked bad, which it did, and the
+        // reason was an assumption rather than a value: that every tile needs its name written
+        // under it.
+        //
+        // On a SHELF it does not. You put the file there seconds ago and you recognise it by
+        // sight; the name is what a file manager needs, where you are looking for something you
+        // have not seen. Two lines of 9.5 point type under every tile cost half the tile's height
+        // and all of its calm, and they are why ten tiles in a 356 by 164 frame read as a dense
+        // grid of small squares.
+        //
+        // So the picture gets the whole tile, and the name goes where there is room for one at a
+        // time: the chrome row, which names whichever tile the pointer is on (see the hover
+        // handlers below). It is still on the tile for a SCREEN READER - the accessible name has
+        // always been the file name and has not moved - and still in the tooltip for a pointer
+        // that rests without pressing.
+        var content = iconHost;
 
         // A Grid rather than handing content straight to the Border, so the hover-only remove
         // affordance can sit on top of it without changing the tile's own layout: the overlay
@@ -848,11 +825,15 @@ public partial class ShelfSurface : UserControl
         {
             removeButton.Visibility = Visibility.Visible;
             tile.Background = TileHover;
+            // The name, in the one place there is room for exactly one of them. This is where the
+            // caption under the tile went.
+            ShowName(entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
         };
         tile.MouseLeave += (_, _) =>
         {
             removeButton.Visibility = Visibility.Collapsed;
             tile.Background = TileRest;
+            ShowCount();
         };
 
         tile.PreviewMouseLeftButtonDown += (_, e) =>
@@ -1117,6 +1098,30 @@ public partial class ShelfSurface : UserControl
     private static void AttachToolTip(FrameworkElement element, string text)
         => element.ToolTip = new ToolTip { Content = text };
 
+    /// <summary>The chrome row's resting text, so a pointer leaving a tile can restore it.
+    /// </summary>
+    private string _countText = string.Empty;
+
+    /// <summary>
+    /// Name the tile the pointer is on, in the chrome row.
+    ///
+    /// ONE at a time, which is the whole trade this page makes: the tiles gave up their captions
+    /// so the pictures could have the space, and a shelf is looked at with a pointer on it. The
+    /// name is trimmed rather than wrapped, because the row is one line tall by construction.
+    /// </summary>
+    private void ShowName(string name)
+    {
+        PageCount.Text = name;
+        PageCount.Opacity = 1;
+    }
+
+    /// <summary>The resting state: how many files are here.</summary>
+    private void ShowCount()
+    {
+        PageCount.Text = _countText;
+        PageCount.Opacity = 0.75;
+    }
+
     /// <summary>
     /// Close any tooltip open on <paramref name="root"/> or anything under it.
     ///
@@ -1274,8 +1279,8 @@ public partial class ShelfSurface : UserControl
 
         if (!isPreview)
         {
-            image.Width = 22;
-            image.Height = 22;
+            image.Width = IconSize;
+            image.Height = IconSize;
             return image;
         }
 
@@ -1287,18 +1292,29 @@ public partial class ShelfSurface : UserControl
         {
             Width = PreviewWidth,
             Height = PreviewHeight,
-            CornerRadius = new CornerRadius(4),
-            Clip = new RectangleGeometry(new Rect(0, 0, PreviewWidth, PreviewHeight), 4, 4),
+            CornerRadius = new CornerRadius(7),
+            Clip = new RectangleGeometry(new Rect(0, 0, PreviewWidth, PreviewHeight), 7, 7),
             Child = image,
         };
     }
 
-    /// <summary>The preview's box, wider than it is tall because photographs are: 34 by 22 fits
-    /// the icon host without moving the label under it.</summary>
-    private const double PreviewWidth = 34;
+    /// <summary>
+    /// The picture's box: THE WHOLE TILE, less its two DIP of padding a side.
+    ///
+    /// It was 34 by 22, which was as much as a tile could spare while a two-line caption sat
+    /// under it. With the caption gone (see BuildTile) a screenshot gets 52 by 48 instead of 34
+    /// by 22, which is a little over three times the area, and that is the difference between
+    /// recognising which screenshot it is and seeing that it is one.
+    /// </summary>
+    private const double PreviewWidth = TileWidth - 4;
 
     /// <inheritdoc cref="PreviewWidth"/>
-    private const double PreviewHeight = 22;
+    private const double PreviewHeight = TileHeight - 4;
+
+    /// <summary>An icon's own size inside that box. Not stretched to fill: a shell icon is a
+    /// glyph with its own padding baked in, and blowing it up to 52 DIP makes it blurry and
+    /// crowds the chip's edges.</summary>
+    private const double IconSize = 30;
 
     private static SolidColorBrush Solid(Color color)
     {

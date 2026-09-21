@@ -550,6 +550,17 @@ public sealed class OsdHost : BandWindow
 
         if (_shelfSession is null || _shelfPageIndex < 0) return;
 
+        // A DRAG IN FLIGHT WINS, always, and this guard is the difference between a file landing
+        // and a file going nowhere. While a drag is near the notch the catcher's window is its
+        // STAND-IN, which is the thing that accepts the drop; the shelf page taking that window
+        // instead would put a surface with no drop handling under the pointer at the exact moment
+        // a file is being released onto it. Measured from a real session's log: a held cursor
+        // entered the band and no "Standing aside for a drag" followed it.
+        //
+        // Refused rather than deferred. When the drag ends the notch comes back on whatever page
+        // it was on, and if that is the shelf the next gesture hands it over as usual.
+        if (_standAside == StandAsideReason.Drag) return;
+
         var wantsCatcher = _presentation is AmbientNotchPresentation notch
                         && notch.IsOpenEnoughToShowContent
                         && _content.PanelContent == NotchPanelContent.Widgets
@@ -941,6 +952,20 @@ public sealed class OsdHost : BandWindow
         if (_pager.GoTo(_shelfPageIndex)) _widgets.SyncToPager(Math.Sign(_pager.Index - before));
 
         _content.SetPanelContent(NotchPanelContent.Widgets);
+
+        // AND THE HANDOVER, so what a person sees after a drop is the shelf rather than Plith's
+        // imitation of it.
+        //
+        // Reported from a real session as something weird appearing for a couple of seconds after
+        // a drag, and it was two designs one second apart: this acknowledgement drew Plith's own
+        // ShelfWidget (small tiles, its own hint line) while the shelf itself, one hover later,
+        // is the catcher's page (tiles with a ground, the name in the chrome row, real previews).
+        // The same shelf, twice, looking different.
+        //
+        // It costs a cross-process swap for a 2.6 second glance, which is the same swap every
+        // page turn onto the shelf already pays. Paying it here buys the thing this whole slice
+        // is about: there is ONE shelf.
+        ReconcileShelfFrame();
 
         // fromHover: true is what stops ShowOsd taking the frame straight back off us and
         // replacing it with a HUD. The flag names the click path rather than a hover, and this

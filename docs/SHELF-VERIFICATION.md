@@ -2449,3 +2449,47 @@ An icon and a preview want opposite treatment, which is why `BuildIconImage` is 
 line: an icon is a square glyph with padding baked in, and a preview is a photograph that has to
 be cropped to a 34 by 22 rounded box or it arrives as a sliver. They are told apart by aspect,
 which is a judgement, and a square photograph gets icon treatment at no cost to itself.
+
+### 10.6 The weird few seconds after a drop, and the third design (2026-09-21)
+
+Two reports in one sentence: it still looks bad, and something odd shows for a few seconds during
+a drag.
+
+**The few seconds were two designs one second apart.** From a real session's log:
+
+```
+36.463  Standing aside for a drag: 722,0 356x164
+37.820  Drop reported: 1 path(s)
+37.822  Drag over; notch back
+37.826  Store changed: 1 item(s)
+```
+
+`ShowShelfLanding` then opens the notch on its shelf page for 2.6 seconds as the drop's
+acknowledgement. That page is Plith's own `ShelfWidget` and the shelf itself is now the catcher's
+page, which looks nothing like it: the same shelf, twice, a second apart, in two designs. The
+landing hands the frame over now, so what a person sees after a drop is the shelf with their file
+in it.
+
+**And a drag in flight must win.** The same log shows a held cursor entering the band at 43.076
+with no `Standing aside for a drag` after it: the shelf had the frame. While a drag is near the
+notch the catcher's window is its STAND-IN, and that is the thing that accepts the drop, so a
+shelf page holding that window puts a surface with no drop handling under the pointer at the exact
+moment a file is released onto it. `ReconcileShelfFrame` refuses while `_standAside` is `Drag`.
+
+**The third design deletes the captions.** Told twice that the page still looked bad, and the
+reason was an assumption rather than a value: that every tile needs its name written under it. On
+a shelf it does not. You put the file there seconds ago and you recognise it by sight; a name is
+what a file manager needs, where you are looking for something you have not seen. Two lines of 9.5
+point type under every tile cost half the tile's height and all of its calm, which is why ten
+tiles in a 356 by 164 frame read as a dense grid of small squares.
+
+So the picture takes the whole tile: a preview goes from 34 by 22 to **52 by 48**, a little over
+three times the area, and an icon sits at 30 DIP in the middle of the chip. The name goes to the
+chrome row, which names whichever tile the pointer is on and shows the file count at rest. It is
+still on the tile for a screen reader, where it always was, and still in the tooltip.
+
+**The harness's own path broke for the second time.** The second-pass icon check reached the icon
+host by `$tile.Child.Children[0].Children[0]`, which was wrong when the hover remove button added
+an overlay Grid and wrong again when the caption was deleted. Both times it failed with a sentence
+about the icon cache, which was not what had changed. It searches for an Image now, because what
+it is actually asking is whether an Image is there.

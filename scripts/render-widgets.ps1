@@ -882,11 +882,14 @@ $findPlithTile = { param($n) $n -is [Windows.Controls.Border] -and
 
 $pass1Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
 if (-not $pass1Tile) { throw "second-pass check: could not find the Plith.exe tile after the first render." }
-# Border.Child is the overlay Grid Task 7 added for the hover remove button (content at
-# Children[0], the remove button at Children[1]), not the icon/label StackPanel directly any
-# more - one more Children[0] than before reaches the icon host again.
-$pass1IconHost = $pass1Tile.Child.Children[0].Children[0]
-$pass1Image = $pass1IconHost.Children | Where-Object { $_ -is [Windows.Controls.Image] } | Select-Object -First 1
+# SEARCHED, not indexed. This was $pass1Tile.Child.Children[0].Children[0], a path through the
+# tile's tree that has now been wrong twice: once when the hover remove button added an overlay
+# Grid, and once when the caption under the tile was deleted and the icon host stopped being a
+# child of a StackPanel. Each time the check failed with a sentence about the icon cache, which is
+# not what was broken. What this check is actually about is whether an Image is there, so it looks
+# for an Image.
+$pass1Image = @(Find-VisualDescendants -Root $pass1Tile -Predicate {
+    param($n) $n -is [Windows.Controls.Image] }) | Select-Object -First 1
 if (-not $pass1Image) {
     throw "second-pass check: the first render never resolved a real icon for Plith.exe (still " +
           "the fallback after Wait-ForDispatcher) - the cache has nothing for the second pass to hit."
@@ -898,15 +901,17 @@ Save-Visual -Element $shelfSurface -W $shelfSurfaceW -H $shelfSurfaceH -Name 'sh
 
 $pass2Tile = Find-VisualDescendants -Root $shelfSurface -Predicate $findPlithTile | Select-Object -First 1
 if (-not $pass2Tile) { throw "second-pass check: could not find the Plith.exe tile after the second render." }
-$pass2IconHost = $pass2Tile.Child.Children[0].Children[0]
+# Searched for the same reason as pass one's.
 
-$pass2Fallback = $pass2IconHost.Children | Where-Object { $_ -is [Windows.Shapes.Path] }
+$pass2Fallback = @(Find-VisualDescendants -Root $pass2Tile -Predicate {
+    param($n) $n -is [Windows.Shapes.Path] })
 if ($pass2Fallback) {
     throw "second-pass check FAILED (assertion 1): the icon host still drew the fallback " +
           "geometry on a cache hit. The synchronous cache probe in BuildTile did not take."
 }
 
-$pass2Image = $pass2IconHost.Children | Where-Object { $_ -is [Windows.Controls.Image] } | Select-Object -First 1
+$pass2Image = @(Find-VisualDescendants -Root $pass2Tile -Predicate {
+    param($n) $n -is [Windows.Controls.Image] }) | Select-Object -First 1
 if (-not $pass2Image) {
     throw "second-pass check FAILED (assertion 1): no Image at all in the icon host on the " +
           "cache-hit pass - not even a late one, since this pass never calls Wait-ForDispatcher."
