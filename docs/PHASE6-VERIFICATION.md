@@ -1486,3 +1486,39 @@ device name matter.
 shortened to the same string and **the Settings endpoint combo box had been showing two identical
 rows since it was written**. Fixed where the list is built, because uniqueness is a property of
 the set. Measured before and after on the real machine.
+
+### Three more instrument defects, and the clock's own honesty defect (2026-09-21, later)
+
+Four more runs after section 21 was written, chasing the two measurements it says are owed. Every
+one of them found something, and none of the somethings was in the product's behaviour except
+the last.
+
+**6. A HUD between the press and the read.** Plith applies its first media snapshot a moment
+after it starts, and with `AutoShowOnMedia` on that shows the media HUD; any
+`PlaybackInfoChanged` from the source does the same. A click while a HUD is up opens the frame,
+deliberately, but another event arriving in the next second replaces it. One run read a tree
+holding exactly two names, a title and an artist, and reported that the notch had never opened.
+The script clicks until a widget PAGE is in the tree now, up to five times, and says how many it
+took. This is the third defect of one family on this script: something happening between the
+press and the read.
+
+**A paging failure that was the pointer, measured rather than guessed.** One run paged zero times
+where two earlier runs had paged fine. A wheel event goes to the window under the cursor, and the
+pointer had drifted off the frame. The loop puts it back before each notch and REPORTS where it
+is, which is what turned "the pager looks broken" into one line of evidence: `wheel 1 -> cursor
+900,3 over hwnd=1638700`.
+
+**7. A seek check that could not fail.** The target was a fixed 75 per cent of the track, and a
+previous run of the same script leaves the position there: one run reported "before 139s, after
+139s, wanted about 137s" and called it a pass. An assertion that cannot fail is not a
+measurement. The target is now chosen away from wherever the track already is, and the verdict
+requires the position to have MOVED as well as landed. Re-run: `before 139s, after 32s, wanted
+about 37s`, which also exercises seeking backwards.
+
+**`ClockWidget` announced "playing" for a paused session.** Found in the evidence string of a
+passing verdict rather than by a check aimed at it: SMTC reported the session paused and the clock
+page announced `playing Gotta Be Cool`. The cause was a local named `playing` that actually meant
+"there is a session with a title", and the announcement was built from the row's visibility rather
+than from `IsPlaying`. A local whose name is not true is a comment that lies, and this one was
+read as though it were. Both are fixed, and the fix is confirmed by the same evidence string now
+reading `paused Gotta Be Cool`.

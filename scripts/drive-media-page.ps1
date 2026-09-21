@@ -396,9 +396,38 @@ $notch = $windows | Sort-Object Y | Select-Object -First 1
 $x = [int](($notch.X + $notch.X + $notch.W) / 2)
 $y = [int]($notch.Y + 3)
 
-Move-Pointer -X $x -Y $y -Settle 500
-[MediaInput]::LeftClick()
-Start-Sleep -Milliseconds 900      # the expansion animates
+# Clicked until a widget PAGE is up, not once.
+#
+# INSTRUMENT DEFECT 6, and the third of this family on this script: something happening between
+# the press and the read. Plith applies its first media snapshot a moment after it starts, and
+# with AutoShowOnMedia on that shows the media HUD; any PlaybackInfoChanged from the source does
+# the same. A click while a HUD is up opens the frame, which is deliberate, but another event
+# arriving in the next second replaces it again. The run at 03:05 on 2026-09-21 read a tree
+# holding exactly two names, the HUD's title and artist, and reported that the notch had not
+# opened at all.
+#
+# A page is recognised by what only a page has: the media page's own name, or the clock page's
+# "HH:mm, <date>" announcement. A HUD carries neither.
+$pageUp = $false
+for ($attempt = 1; $attempt -le 5; $attempt++) {
+    Move-Pointer -X $x -Y $y -Settle 400
+    [MediaInput]::LeftClick()
+    Start-Sleep -Milliseconds 900      # the expansion animates
+
+    $seen = Get-Names -Hwnd $notch.Hwnd
+    if ($seen -contains 'Now playing' -or ($seen -match '^\d{1,2}:\d{2}, ')) {
+        $pageUp = $true
+        if ($attempt -gt 1) { "  (the frame took $attempt clicks: an event had replaced it)" }
+        break
+    }
+    Start-Sleep -Milliseconds 600
+}
+if (-not $pageUp) {
+    throw ("Five clicks and no widget page ever appeared. The tree holds: " +
+           "$((Get-Names -Hwnd $notch.Hwnd) -join ' | '). If those are a title and an artist, a " +
+           "HUD is being shown faster than it can be clicked through, which is a product " +
+           "question rather than a missed click.")
+}
 
 # The playing state is re-read HERE, immediately after the click, not taken from the snapshot
 # that was read before Plith was even started.
@@ -461,10 +490,19 @@ if ($onMedia) {
 # notch every 700 ms is one page with the accumulator rested in between. A plain vertical wheel
 # pages, and the media page is installed third at most, so one lap is enough.
 if (-not $onMedia) {
+    # The pointer is put back on the frame before each notch, and where it is is REPORTED.
+    #
+    # A wheel event goes to the window under the cursor, so a pointer that has drifted off the
+    # frame pages nothing and looks exactly like a pager that is broken. The run at 03:01 on
+    # 2026-09-21 paged zero times while two earlier runs paged fine, and the failure said only
+    # "names after paging" with the clock page still in them, which names neither cause.
     for ($i = 1; $i -le 6; $i++) {
+        Move-Pointer -X $x -Y $y -Settle 150
+        $where = [MediaInput]::Where()
         [MediaInput]::Wheel(-1)
         Start-Sleep -Milliseconds 700
         $names = Get-Names -Hwnd $notch.Hwnd
+        "  wheel $i -> $where; tree: $(($names | Select-Object -First 2) -join ' | ')"
         if ($names -contains 'Now playing') { $onMedia = $true; break }
     }
     Add-Verdict 'the notch pages to the media widget' $onMedia `
@@ -514,10 +552,25 @@ if ($onMedia) {
         "  (skipped: the bar is not in the tree, so there is nothing to drag)"
     } else {
         $before = [SnapshotCollector]::LatestTimeline
+
+        # The target is chosen AWAY from where the track already is.
+        #
+        # INSTRUMENT DEFECT 7. A fixed 75 per cent target passes vacuously when the position is
+        # already there, which is exactly what a previous run of this same script leaves behind:
+        # at 03:02 on 2026-09-21 it reported "before 139s, after 139s, wanted about 137s" and
+        # called that a pass. An assertion that cannot fail is not a measurement. Whichever end
+        # the track is not at is the end this drags to, so before and after always differ by more
+        # than the tolerance.
+        $atFraction = if ($before.Duration.TotalSeconds -gt 0) {
+            $before.Position.TotalSeconds / $before.Duration.TotalSeconds
+        } else { 0 }
+        $targetFraction = if ($atFraction -gt 0.5) { 0.20 } else { 0.75 }
+        "  seeking from $([int]$before.Position.TotalSeconds)s (fraction $([Math]::Round($atFraction,2))) to fraction $targetFraction"
+
         $r = $bar.Current.BoundingRectangle
         $y = [int]($r.Y + $r.Height / 2)
-        $from = [int]($r.X + $r.Width * 0.10)
-        $to = [int]($r.X + $r.Width * 0.75)
+        $from = [int]($r.X + $r.Width * $atFraction)
+        $to = [int]($r.X + $r.Width * $targetFraction)
 
         [MediaInput]::Drag($from, $y, $to, $y)
 
@@ -529,7 +582,7 @@ if ($onMedia) {
         # a target of 137s for that reason, next to a real product defect with the same symptom.
         # Fixed on both sides: the product now writes once per gesture, and this waits for the
         # value it is actually asserting on.
-        $want = $before.Duration.TotalSeconds * 0.75
+        $want = $before.Duration.TotalSeconds * $targetFraction
         $deadline = [Diagnostics.Stopwatch]::StartNew()
         while ($deadline.Elapsed.TotalSeconds -lt 5) {
             $seen = [SnapshotCollector]::LatestTimeline
@@ -538,14 +591,18 @@ if ($onMedia) {
         }
         $after = [SnapshotCollector]::LatestTimeline
 
-        # 75 per cent of the track, within a tolerance the gesture itself cannot beat: the bar is
-        # about 232 DIP wide, so one DIP is nearly a second on a three minute track, and the
-        # pointer lands on a whole pixel.
+        # Within a tolerance the gesture itself cannot beat: the bar is about 232 DIP wide, so one
+        # DIP is nearly a second on a three minute track and the pointer lands on a whole pixel.
+        #
+        # The verdict also requires the position to have MOVED, which is what makes it a
+        # measurement rather than a coincidence. See instrument defect 7 above.
         $got = $after.Position.TotalSeconds
-        $ok = [Math]::Abs($got - $want) -le 6
-        Add-Verdict 'dragging the track seeks the source' $ok `
+        $moved = [Math]::Abs($got - $before.Position.TotalSeconds) -gt 6
+        $landed = [Math]::Abs($got - $want) -le 6
+        Add-Verdict 'dragging the track seeks the source' ($moved -and $landed) `
             ("before $([int]$before.Position.TotalSeconds)s, after $([int]$got)s, " +
-             "wanted about $([int]$want)s of $([int]$after.Duration.TotalSeconds)s")
+             "wanted about $([int]$want)s of $([int]$after.Duration.TotalSeconds)s" +
+             "$(if (-not $moved) { ' - IT DID NOT MOVE' })")
     }
 }
 

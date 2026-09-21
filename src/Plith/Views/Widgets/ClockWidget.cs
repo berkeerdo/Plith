@@ -111,7 +111,16 @@ public partial class ClockWidget : UserControl
         var announced = $"{Time.Text}, {Date.Text}";
         if (show) announced += $", battery {text}";
         if (MicMark.Visibility == Visibility.Visible) announced += ", microphone muted";
-        if (NowPlaying.Visibility == Visibility.Visible) announced += $", playing {NowTitle.Text}";
+        // The WORD follows IsPlaying, not the row's visibility. The row shows whatever the
+        // session holds, playing or paused, and this used to announce "playing" for both: found
+        // in the evidence of a hardware verdict on 2026-09-21, where SMTC reported the session
+        // paused and the clock page announced "playing Gotta Be Cool". A screen reader was being
+        // told something the product knew to be false.
+        if (NowPlaying.Visibility == Visibility.Visible)
+        {
+            var verb = _media?.IsPlaying == true ? "playing" : "paused";
+            announced += $", {verb} {NowTitle.Text}";
+        }
         System.Windows.Automation.AutomationProperties.SetName(Time, announced);
     }
 
@@ -155,12 +164,15 @@ public partial class ClockWidget : UserControl
     /// </summary>
     private void RenderNowPlaying()
     {
-        var playing = _media is { HasSession: true } && !string.IsNullOrWhiteSpace(_media.Title);
+        // Named for what it is. It was called "playing", which is what led the announcement above
+        // to say "playing" for a paused session: a local whose name is not true is a comment that
+        // lies, and this one was read as though it were.
+        var hasTrack = _media is { HasSession: true } && !string.IsNullOrWhiteSpace(_media.Title);
 
         // No divider any more: the track line sits on the page's bottom edge with the readings
         // at the top, and space between two blocks says "separate" without a line drawn to say it.
-        NowPlaying.Visibility = playing ? Visibility.Visible : Visibility.Collapsed;
-        if (!playing) return;
+        NowPlaying.Visibility = hasTrack ? Visibility.Visible : Visibility.Collapsed;
+        if (!hasTrack) return;
 
         NowTitle.Text = string.IsNullOrWhiteSpace(_media!.Artist)
             ? _media.Title
