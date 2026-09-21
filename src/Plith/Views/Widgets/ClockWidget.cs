@@ -83,7 +83,10 @@ public partial class ClockWidget : UserControl
         // Reuses the ambient row's formatter rather than a second one: the clock in the notch
         // and the clock in the ambient row must never disagree about how a time is written.
         var (time, date) = AmbientFormatter.FormatClock(DateTime.Now, CultureInfo.CurrentCulture);
-        Time.Text = time;
+        var (digits, meridiem) = AmbientFormatter.FormatClockParts(DateTime.Now, CultureInfo.CurrentCulture);
+        Time.Text = digits;
+        Meridiem.Text = meridiem;
+        Meridiem.Visibility = string.IsNullOrEmpty(meridiem) ? Visibility.Collapsed : Visibility.Visible;
         Date.Text = date;
         Weekday.Text = AmbientFormatter.FormatWeekday(DateTime.Now, CultureInfo.CurrentCulture);
 
@@ -110,7 +113,11 @@ public partial class ClockWidget : UserControl
         // landing on "21:04" alone has no way to know what it is. Everything joins it rather
         // than announcing separately — a StackPanel has no automation peer, so a name set there
         // would reach nothing at all.
-        var announced = $"{Time.Text}, {Date.Text}";
+        // The FULL time here, designator included, rather than the digits the page draws large:
+        // a screen reader saying "12:49" on a 12-hour machine has dropped the half that says
+        // which 12:49 it is. `time` is FormatClock's one-string form, which is why that method
+        // stays.
+        var announced = $"{time}, {Date.Text}";
         if (show) announced += $", battery {text}";
         if (MicMark.Visibility == Visibility.Visible) announced += ", microphone muted";
         // The WORD follows IsPlaying, not the row's visibility. The row shows whatever the

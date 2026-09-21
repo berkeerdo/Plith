@@ -1919,3 +1919,34 @@ It cost no request: the daily block arrives with the same reading the temperatur
 its first day is today. Matched BY DATE rather than taken by index, so a reading that survives
 midnight cannot put yesterday's range beside today's temperature. Hidden when there is no daily
 block, like every other optional thing on these pages.
+
+### Rain that looked like snow, and the AM/PM machine (2026-09-21)
+
+**Rain and snow were confusable**, reported after the strip was drawn. Three strokes 4.4 units
+long at a 1.5 weight read as three dots, and three dots are what a flake's arms look like at 26
+DIP. They are nearly seven units long at 1.25 now and the fall box is taller than it is wide,
+which is the shape falling water has and a flake does not. Side by side in
+`weather-marks.png`, the five kinds are now five different things.
+
+**"Does it work if the PC is on AM/PM?"** The formatter was already tested for it and the test
+was HALF a test: it asserted the string contained "2:05" and said nothing about the designator,
+so a pattern that dropped the PM entirely would have passed. Three tests now cover the
+designator, both halves of the day, noon and midnight, and a culture whose short pattern carries
+seconds, which is the case the `Replace(":ss", "")` exists for and the one where an over-eager
+edit could take the designator with it.
+
+**And the layout was wrong, which only a render could say.** `widget-clock-12hour.png` did not
+exist until the question was asked; it renders the page with the thread's culture set to en-US.
+At 46 point, "12:49 PM" ran straight into the weather mark beside it with no gap at all. The
+format was right and the page was not.
+
+The page draws the digits at 46 and the designator at 14 now, which is what Windows' own clock
+does and what the space allows. `FormatClockParts` hands the two back separately and returns an
+empty designator on a 24-hour culture, so the page collapses its own element without asking what
+kind of clock the machine has. `FormatClock` is unchanged and still returns one string: the
+ambient row has room for it, and it is what the screen reader is given, because a reader saying
+"12:49" on a 12-hour machine has dropped the half that says which 12:49 it is.
+
+One limit is recorded rather than handled: a culture that puts its designator BEFORE the time
+still gets it after. Such cultures exist, none of them is this product's user, and the
+alternative is laying the page out twice for a case nothing has asked for.

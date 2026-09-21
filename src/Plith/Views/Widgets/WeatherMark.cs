@@ -136,17 +136,20 @@ public partial class WeatherMark : UserControl
             {
                 // The strokes span the cloud's own width and start at its lower edge, so they
                 // read as coming FROM it rather than as a mark beside it.
+                // Taller than it is wide now, which is the shape falling water has and a flake
+                // does not: the two were confusable when the strokes were short.
                 Canvas.SetLeft(Fall, 6);
                 Canvas.SetTop(Fall, 14.5);
                 Fall.Width = 12;
-                Fall.Height = 8;
+                Fall.Height = 9.5;
             }
 
             Fall.Stretch = Stretch.Uniform;
             // Stroked for both now. Rain was a filled teardrop with no stroke at all, which is
             // why it merged into the cloud above it. The flake is thinner than the rain strokes
             // because it has three lines crossing in one place and they have to stay apart.
-            Fall.StrokeThickness = snow ? 1.1 : 1.5;
+            // Rain thinner than it was as well as longer: a thick short stroke is a dot.
+            Fall.StrokeThickness = snow ? 1.1 : 1.25;
         }
 
         ApplyInk(Ink);

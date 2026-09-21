@@ -57,11 +57,23 @@
              Everything after the date is still on the date's line: the battery, the charging
              bolt and the mic mark are all secondary to the two facts above them. -->
         <StackPanel Grid.Row="0" Grid.Column="0" VerticalAlignment="Top">
+        <!-- The digits big and the designator small, side by side.
+             On a 12-hour machine "12:49 PM" at 46 point ran into the weather mark beside it:
+             measured in widget-clock-12hour.png. Collapsed entirely on a 24-hour machine, where
+             FormatClockParts hands back an empty designator. -->
+        <StackPanel Orientation="Horizontal">
             <TextBlock x:Name="Time"
                        FontSize="46" FontWeight="SemiBold"
                        Typography.NumeralAlignment="Tabular"
                        LineHeight="46" LineStackingStrategy="BlockLineHeight"
                        Foreground="{DynamicResource NotchInk}" />
+            <TextBlock x:Name="Meridiem"
+                       Margin="5,0,0,7"
+                       VerticalAlignment="Bottom"
+                       FontSize="14" FontWeight="SemiBold"
+                       Foreground="{DynamicResource NotchInkMuted}"
+                       Visibility="Collapsed" />
+        </StackPanel>
         <StackPanel Orientation="Horizontal" Margin="0,4,0,0">
             <!-- The weekday, which the page has room for now and which is the one thing a glance
                  at a clock most often actually wants. Brighter than the date beside it: the day

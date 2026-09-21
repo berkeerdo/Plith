@@ -330,6 +330,24 @@ Save-Visual -Element $clock -W $frameW -H $frameH -Name 'widget-clock'
 $rainReader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
     [Plith.Services.WeatherSnapshot]::new(14.0, 61, [DateTimeOffset]::Now, $days)
 }
+# The clock page on a 12-HOUR machine, which no render had ever drawn.
+#
+# Asked directly: does it work if the PC is on AM/PM? The formatter is tested for it, but a test
+# cannot say whether "12:43 PM" still FITS beside the weather at 46 point in a 356 DIP frame,
+# and the designator makes the time block visibly wider. Rendered rather than reasoned about.
+#
+# The culture is set on this thread for the duration: the widget reads
+# CultureInfo.CurrentCulture at Render time, which is the whole reason it follows Windows.
+$previousCulture = [Threading.Thread]::CurrentThread.CurrentCulture
+try {
+    [Threading.Thread]::CurrentThread.CurrentCulture = [Globalization.CultureInfo]::new('en-US')
+    $clock12 = [Plith.Views.Widgets.ClockWidget]::new($mediaVm, $reader, $micReader)
+    Wait-ForDispatcher
+    Save-Visual -Element $clock12 -W $frameW -H $frameH -Name 'widget-clock-12hour'
+} finally {
+    [Threading.Thread]::CurrentThread.CurrentCulture = $previousCulture
+}
+
 # EVERY sky kind, side by side, at the size the pages actually draw the mark.
 #
 # Asked directly: are all of the conditions' icons and animations right? Nothing could answer

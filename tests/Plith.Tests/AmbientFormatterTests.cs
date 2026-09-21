@@ -23,6 +23,36 @@ public class AmbientFormatterTests
     {
         var (time, _) = AmbientFormatter.FormatClock(new DateTime(2026, 9, 7, 14, 5, 0), EnUs);
         Assert.Contains("2:05", time);
+
+        // AND the designator, which this test used to leave unasserted: "2:05" with no PM would
+        // have passed it, and on a 12-hour machine that is an afternoon clock claiming to be a
+        // morning one. The pattern this method edits is the culture's ShortTimePattern with any
+        // seconds removed, so the designator surviving that edit is the thing worth checking.
+        Assert.Contains(EnUs.DateTimeFormat.PMDesignator, time);
+    }
+
+    [Fact]
+    public void FormatClock_KeepsTheAmDesignatorToo()
+    {
+        var (time, _) = AmbientFormatter.FormatClock(new DateTime(2026, 9, 7, 9, 5, 0), EnUs);
+
+        Assert.Contains("9:05", time);
+        Assert.Contains(EnUs.DateTimeFormat.AMDesignator, time);
+    }
+
+    [Fact]
+    public void FormatClock_DropsSecondsWithoutEatingTheDesignator()
+    {
+        // A culture whose short time pattern carries seconds is the case the Replace(":ss", "")
+        // was written for, and the one where an over-eager edit could take the designator with
+        // it. Built here rather than hunted for in the installed culture list, which differs
+        // between machines and would make this test's subject depend on the box it runs on.
+        var seconds = (CultureInfo)EnUs.Clone();
+        seconds.DateTimeFormat.ShortTimePattern = "h:mm:ss tt";
+
+        var (time, _) = AmbientFormatter.FormatClock(new DateTime(2026, 9, 7, 14, 5, 9), seconds);
+
+        Assert.Equal("2:05 PM", time);
     }
 
     [Fact]
@@ -123,5 +153,76 @@ public class AmbientFormatterTests
 
         Assert.Equal(7, names.Distinct().Count());
         Assert.Equal("Monday", names[0]);
+    }
+
+    // --- FormatClockParts: the designator, separately, so the page can size it ---------------
+
+    [Fact]
+    public void FormatClockParts_SplitsTheDesignatorOffOnA12HourCulture()
+    {
+        var (digits, meridiem) = AmbientFormatter.FormatClockParts(
+            new DateTime(2026, 9, 7, 14, 5, 0), EnUs);
+
+        Assert.Equal("2:05", digits);
+        Assert.Equal("PM", meridiem);
+    }
+
+    [Fact]
+    public void FormatClockParts_GivesNoDesignatorOnA24HourCulture()
+    {
+        // Empty rather than absent, so the page can collapse its own element without asking what
+        // kind of clock the machine has.
+        var (digits, meridiem) = AmbientFormatter.FormatClockParts(
+            new DateTime(2026, 9, 7, 14, 5, 0), Tr);
+
+        Assert.Equal("14:05", digits);
+        Assert.Equal(string.Empty, meridiem);
+    }
+
+    [Fact]
+    public void FormatClockParts_UsesAmBeforeNoonAndPmAfter()
+    {
+        Assert.Equal("AM", AmbientFormatter.FormatClockParts(new DateTime(2026, 9, 7, 9, 5, 0), EnUs).Designator);
+        Assert.Equal("PM", AmbientFormatter.FormatClockParts(new DateTime(2026, 9, 7, 21, 5, 0), EnUs).Designator);
+
+        // Noon and midnight are the two the hour comparison can get backwards.
+        Assert.Equal("PM", AmbientFormatter.FormatClockParts(new DateTime(2026, 9, 7, 12, 0, 0), EnUs).Designator);
+        Assert.Equal("AM", AmbientFormatter.FormatClockParts(new DateTime(2026, 9, 7, 0, 0, 0), EnUs).Designator);
+    }
+
+    [Fact]
+    public void FormatClockParts_LeavesNoTrailingSpaceWhereTheDesignatorWas()
+    {
+        // "h:mm tt" with the token removed leaves "h:mm ", which draws a gap before nothing and
+        // pushes the digits off centre.
+        var (digits, _) = AmbientFormatter.FormatClockParts(new DateTime(2026, 9, 7, 14, 5, 0), EnUs);
+
+        Assert.Equal(digits.Trim(), digits);
+    }
+
+    [Fact]
+    public void FormatClockParts_DropsSecondsLikeFormatClockDoes()
+    {
+        var seconds = (CultureInfo)EnUs.Clone();
+        seconds.DateTimeFormat.ShortTimePattern = "h:mm:ss tt";
+
+        var (digits, meridiem) = AmbientFormatter.FormatClockParts(
+            new DateTime(2026, 9, 7, 14, 5, 9), seconds);
+
+        Assert.Equal("2:05", digits);
+        Assert.Equal("PM", meridiem);
+    }
+
+    [Fact]
+    public void FormatClockParts_AgreesWithFormatClockAboutTheTime()
+    {
+        // The two must never describe one moment differently: the page draws the parts and the
+        // screen reader is given FormatClock's whole string.
+        var now = new DateTime(2026, 9, 7, 14, 5, 0);
+        var (whole, _) = AmbientFormatter.FormatClock(now, EnUs);
+        var (digits, meridiem) = AmbientFormatter.FormatClockParts(now, EnUs);
+
+        Assert.Contains(digits, whole);
+        Assert.Contains(meridiem, whole);
     }
 }
