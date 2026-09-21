@@ -299,8 +299,15 @@ $mediaVm.Timeline = [Plith.Services.MediaTimeline]::new(
 # pointer, so no still frame can show it either way.
 $mediaVm.CanSeek = $true
 
+# Two days AFTER today, which is what the page draws: Open-Meteo's own first day is today and
+# the page drops it, because today is already the big number on the left.
+$days = [System.Collections.Generic.List[Plith.Services.WeatherDay]]::new()
+$days.Add([Plith.Services.WeatherDay]::new([DateOnly]::FromDateTime([DateTime]::Now), 1, 21.0, 14.0))
+$days.Add([Plith.Services.WeatherDay]::new([DateOnly]::FromDateTime([DateTime]::Now.AddDays(1)), 61, 18.0, 12.0))
+$days.Add([Plith.Services.WeatherDay]::new([DateOnly]::FromDateTime([DateTime]::Now.AddDays(2)), 3, 23.0, 15.0))
+
 $reader = [Func[Nullable[Plith.Services.WeatherSnapshot]]] {
-    [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now)
+    [Plith.Services.WeatherSnapshot]::new(19.0, 1, [DateTimeOffset]::Now, $days)
 }
 $readDate = [Func[Nullable[DateOnly]]] { [DateOnly]::FromDateTime([DateTime]::Now) }  # not a first look
 $writeDate = [Action[DateOnly]] { param($d) }

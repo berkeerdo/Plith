@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Windows;
 using System.Windows.Automation;
 using System.Windows.Controls;
@@ -158,6 +159,7 @@ public partial class WeatherWidget : UserControl
             _sky = SkyKind.Overcast;
             Temperature.Text = "—";
             Place.Visibility = Visibility.Collapsed;
+            Forecast.Visibility = Visibility.Collapsed;
             Condition.Text = "Weather unavailable";
             Detail.Text = "Check location in Settings, or type a city";
             PaintSky();
@@ -176,6 +178,8 @@ public partial class WeatherWidget : UserControl
         var place = _readPlace?.Invoke();
         Place.Text = place ?? string.Empty;
         Place.Visibility = string.IsNullOrWhiteSpace(place) ? Visibility.Collapsed : Visibility.Visible;
+
+        RenderForecast(w.Days);
         Detail.Text = string.Create(CultureInfo.CurrentCulture,
             $"Updated {w.FetchedAt.ToLocalTime():t}");
 
@@ -184,6 +188,89 @@ public partial class WeatherWidget : UserControl
         // On the panel, which has a peer. The whole reading, because a bare "18°" announced on
         // its own says nothing about what it measures.
         AutomationProperties.SetName(Readout, $"{Temperature.Text}, {label}");
+    }
+
+    /// <summary>How many days the page has room for beside the sky.</summary>
+    private const int ForecastDays = 2;
+
+    /// <summary>
+    /// The next two days, or nothing.
+    ///
+    /// TODAY IS DROPPED, and that is the point of the filter rather than a detail: Open-Meteo's
+    /// first day is today, and today is the big number on the left of this very page. A column
+    /// repeating it would be the same fact twice with different rounding.
+    ///
+    /// Anything missing collapses the row rather than drawing a placeholder, which is the rule
+    /// every other optional thing on this page follows.
+    /// </summary>
+    private void RenderForecast(IReadOnlyList<WeatherDay>? days)
+    {
+        Forecast.Children.Clear();
+
+        var today = DateOnly.FromDateTime(DateTime.Now);
+        var next = days?.Where(d => d.Date > today).Take(ForecastDays).ToList();
+        if (next is not { Count: > 0 })
+        {
+            Forecast.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        foreach (var day in next) Forecast.Children.Add(BuildDay(day));
+        Forecast.Visibility = Visibility.Visible;
+    }
+
+    private StackPanel BuildDay(WeatherDay day)
+    {
+        var column = new StackPanel
+        {
+            Margin = new Thickness(14, 0, 0, 0),
+            MinWidth = 44,
+        };
+
+        // The day's own name, short. Culture's abbreviation rather than a cut of the full word:
+        // a three-letter slice of a Turkish weekday is not what a Turkish reader expects to see.
+        column.Children.Add(new TextBlock
+        {
+            Text = CultureInfo.CurrentCulture.DateTimeFormat.GetAbbreviatedDayName(
+                day.Date.DayOfWeek),
+            FontSize = 11,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xAE, 0xFF, 0xFF, 0xFF)),
+        });
+
+        // The same mark the clock page uses for the same code, so two surfaces cannot describe
+        // one day's weather differently.
+        var mark = new WeatherMark
+        {
+            Width = 20,
+            Height = 20,
+            Margin = new Thickness(0, 3, 0, 3),
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        mark.Show(SkyCondition.From(day.WeatherCode, 12));
+        column.Children.Add(mark);
+
+        // High and low, high first and brighter. A pair with no separator reads as one number,
+        // so the low is dimmed rather than divided off with a slash.
+        var pair = new StackPanel { Orientation = Orientation.Horizontal,
+                                    HorizontalAlignment = HorizontalAlignment.Center };
+        pair.Children.Add(new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(day.MaxC):0}°"),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            Foreground = Brushes.White,
+        });
+        pair.Children.Add(new TextBlock
+        {
+            Text = string.Create(CultureInfo.CurrentCulture, $"{Math.Round(day.MinC):0}°"),
+            FontSize = 12,
+            Margin = new Thickness(5, 0, 0, 0),
+            Foreground = new SolidColorBrush(Color.FromArgb(0x8A, 0xFF, 0xFF, 0xFF)),
+        });
+        column.Children.Add(pair);
+
+        return column;
     }
 
     private void PaintSky()

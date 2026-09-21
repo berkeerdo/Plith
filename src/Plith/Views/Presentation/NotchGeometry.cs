@@ -226,14 +226,36 @@ public static class NotchGeometry
     }
 
     /// <summary>
-    /// Height of the page-dot lane, and it is FIXED rather than sized to its content.
+    /// The rail's row at the bottom of the frame, which every page keeps its content clear of.
     ///
-    /// Sized to content, a page measuring one pixel taller than its share pushes the dots past
-    /// the panel's padding and onto the frame's edge — which is what the weather page did on the
-    /// mockup. A fixed lane over a page row that cannot exceed its track means an over-tall page
-    /// clips inside itself instead of displacing the chrome.
+    /// FIXED rather than sized to its content, which is the rule the dots lane it replaced had
+    /// for a reason worth keeping: sized to content, a page measuring one pixel taller than its
+    /// share pushes the chrome past the panel's padding and onto the frame's edge, which is what
+    /// the weather page did on the mockup. A fixed row over a page that cannot exceed its track
+    /// means an over-tall page clips inside itself instead of displacing the chrome.
+    ///
+    /// It replaces DotsLaneDip, which said 14, was used by nothing at all, and disagreed with
+    /// both the frame's actual row (23) and the media page's own comment (20). Three numbers for
+    /// one measurement, two of them wrong, none of them load-bearing.
     /// </summary>
-    public const double DotsLaneDip = 14;
+    public const double PageRailRowDip = 23;
+
+    /// <summary>The same number as a GridLength, so WidgetFrame.xaml's row can take it from here
+    /// rather than repeating it.</summary>
+    public static readonly GridLength PageRailRow = new(PageRailRowDip);
+
+    /// <summary>
+    /// The one content inset every widget page lays itself out in.
+    ///
+    /// It was four different insets: the media page 18,14,18,29, the clock 20,14,20,26, the shelf
+    /// 20,12,20,22 and the weather readout 18,0,18,26. Paging between them moved the left edge by
+    /// two DIP and put three different floors under the content, which is visible as a sideways
+    /// jump on every page turn, and the shelf's 22 reached one DIP INTO the rail's row: its own
+    /// comment worried about exactly that collision.
+    ///
+    /// The bottom is the rail's row plus six, so the row is cleared rather than shared.
+    /// </summary>
+    public static readonly Thickness PageInsetDip = new(18, 14, 18, PageRailRowDip + 6);
 
     /// <summary>
     /// The event HUD: short, wide and transient. A different shape family from the widget frame,

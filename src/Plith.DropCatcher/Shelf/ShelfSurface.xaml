@@ -31,6 +31,56 @@
          render harness proved once already (ShelfWidget) that anything reaching through
          Application renders in colours the product never shows. -->
 
+    <UserControl.Resources>
+        <!-- The header buttons' own template.
+
+             They had NONE, which is how "hover makes things disappear" happens: a Button with
+             Background="Transparent" and no template still uses WPF's default chrome, and that
+             chrome paints a light system fill on hover with a system-coloured border. On this
+             panel it swallowed a white glyph and grey text. Reported from a real session.
+
+             Declared here rather than taken from Plith's dictionary for the reason this file's
+             header comment gives: this project does not reference Plith.csproj, so a pack:// URI
+             would resolve in the render harness and fail in the real catcher process. The hover
+             and pressed washes are the same values the notch's own controls use.
+
+             Apply(ShelfPalette) merges the palette into this same Resources collection at
+             runtime, and a merge does not disturb what is declared here. -->
+        <Style x:Key="HeaderButtonStyle" TargetType="Button">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <!-- Transparent, not null: WPF hit-tests a Transparent brush and does not
+                             hit-test a null one, so a null background here would leave the button
+                             answering only where its glyph paints. -->
+                        <Border x:Name="Chrome"
+                                CornerRadius="7"
+                                Background="Transparent"
+                                Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center"
+                                              VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#1FFFFFFF" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="Chrome" Property="Background" Value="#33FFFFFF" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </UserControl.Resources>
+
     <!-- Only the BOTTOM corners are round, the same rule NotchGeometry.BottomRoundedClip states
          for the notch itself: this page grows out of the notch and is anchored at the same top
          screen edge (OpenShelf carries the same X/Y/W/H rectangle Show does), and rounding the
@@ -75,12 +125,10 @@
                      be mistaken for the close box. -->
                 <StackPanel Grid.Column="1" Orientation="Horizontal">
                     <Button x:Name="ClearButton"
+                            Style="{StaticResource HeaderButtonStyle}"
                             Height="24"
                             Padding="8,0"
                             Margin="0,0,4,0"
-                            Background="Transparent"
-                            BorderThickness="0"
-                            Cursor="Hand"
                             AutomationProperties.Name="Clear the shelf"
                             Click="OnClearClick">
                         <TextBlock Text="Clear"
@@ -90,11 +138,9 @@
                     </Button>
 
                     <Button x:Name="CloseButton"
+                            Style="{StaticResource HeaderButtonStyle}"
                             Width="28" Height="28"
-                            Background="Transparent"
-                            BorderThickness="0"
                             Padding="0"
-                            Cursor="Hand"
                             AutomationProperties.Name="Close the shelf"
                             Click="OnCloseClick">
                         <!-- Same coordinates as PlithIcons' IconClose, duplicated: see the header

@@ -1803,3 +1803,45 @@ a name to show: a typed city has one, while Windows Location and an IP lookup do
 back, and the line stays hidden rather than carrying "your location" as though it were a fact.
 Read through a delegate on every render, because a city is a setting and a setting can change
 while the page exists.
+
+### Alignment across the pages, the header's hover, and two days of weather (2026-09-21)
+
+Three more reports, one of which was measurable the moment it was asked: "is everything on the
+same alignment?"
+
+**It was not, and nothing shared a number.** Each page carried its own hand-typed inset: the
+media page `18,14,18,29`, the clock `20,14,20,26`, the shelf `20,12,20,22`, the weather readout
+`18,0,18,26`. Paging between them moved the left edge two DIP sideways and put three different
+floors under the content. The shelf's 22 reached one DIP INTO the rail's row, which its own
+comment had worried about.
+
+There is one `NotchGeometry.PageInsetDip` now and all four pages use that object, so the
+alignment is guaranteed by construction rather than by four people typing the same number.
+
+**Three numbers described the rail and two were wrong.** `NotchGeometry.DotsLaneDip` said 14 and
+was referenced by nothing at all; the media page's comment said the bottom inset cleared a "20
+rail lane"; the frame's actual row, in `WidgetFrame.xaml`, is 23. The dots it was named for were
+replaced by a rail some time ago. It is `PageRailRowDip = 23` now, the frame's row takes its
+height from it through `x:Static`, and the inset's bottom is that row plus six.
+
+**The shelf header's buttons had no template at all**, which is how "hover makes things
+disappear" happens: a `Button` with `Background="Transparent"` and no template still uses WPF's
+default chrome, and that chrome paints a light system fill with a system-coloured border on
+hover. On this panel it swallowed a white glyph and grey text. Both header controls now use a
+local style whose hover and pressed washes are the same values the notch's own controls use. A
+still render cannot show a hover state, so this one is verified by hand.
+
+**The weather page shows the next two days.** Asked for, and they cost no extra request: the
+daily block rides along in the same Open-Meteo call as the current conditions, with
+`forecast_days=3` and `timezone=auto`, because the API's first day is TODAY at the LOCATION and
+today is already the big number on the left of this page. The columns carry the culture's own
+abbreviated day name, the same weather mark the clock page draws for the same code, and a high
+and low with the low dimmed rather than divided off with a slash.
+
+The zipping rule is a pure `WeatherDays.From` rather than a private method on the HTTP client,
+for the reason `WeatherCodeMap` is: it is the part with rules in it, and the client is the part a
+test cannot reach. Seven tests, and the one that matters asserts the arrays are zipped to the
+SHORTEST: four parallel arrays indexed by one counter is exactly how a day ends up carrying
+another day's weather code, and a response with one short array has to be survived rather than
+trusted. Another asserts ISO dates parse under tr-TR, where this project's default user lives
+and where a culture-sensitive parse succeeds only by luck.

@@ -1,6 +1,7 @@
 <UserControl x:Class="Plith.Views.Widgets.ClockWidget"
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:w="clr-namespace:Plith.Views.Widgets"
@@ -31,7 +32,7 @@
          under the track line and made the page read as unfinished. The rows stay Auto: a star
          row here is a recorded defect, because it let the readings grow until the track line had
          nowhere to be. -->
-    <Grid Margin="20,14,20,26" VerticalAlignment="Center">
+    <Grid Margin="{x:Static p:NotchGeometry.PageInsetDip}" VerticalAlignment="Center">
         <!-- Auto over Auto with a gap between, not Auto over star. A star row let the readings
              grow until the track line underneath had nowhere left to be, and the two ran into
              each other. Two Auto rows cannot: each takes what it needs and the gap is real. -->
