@@ -8,9 +8,10 @@ in this repo.
 Voicemeeter not installed.** That is not the shipping configuration and the numbers are not a
 product claim. They are enough to find waste, which is what they were taken for.
 
-**Section 5 is the exception and was taken on both**, including a signed Release install running
-UIAccess. It says so where it says the numbers, and section 6 says how far that generalises, which
-is: one path, not a build.
+**Sections 5 and 6 are the exceptions.** Section 5 was taken on Debug, on a Release build from
+`bin`, and on a signed Release install running UIAccess. Section 6 was taken on Debug and on
+Release from `bin`, not on an install. Each says so where it says the numbers, and section 7 says
+how far that generalises, which is: two paths, not a build.
 
 ## 1. The resting cost
 
@@ -152,7 +153,7 @@ blocked" when it may mean "nothing was ever looked at".
 
 **So where is the second?** Not here, and this run does not say. It was reported as "first use",
 which is as consistent with app startup as with the first open, and startup has never been timed.
-That is a separate run with a separate instrument, and it is now the open question in section 6.
+That is a separate run with a separate instrument. Section 6 is that run, and it found it.
 
 **Three instrument defects, each found by running it rather than by reading it.**
 
@@ -176,16 +177,128 @@ That is a separate run with a separate instrument, and it is now the open questi
    A claim inherited rather than measured, which is the failure mode this repo has now recorded
    five times, and the first time the wrong claim was inside the instrument's own documentation.
 
-## 6. What has never been measured
+## 6. What a launch costs, and the second is here
 
-- **The Release build, apart from one path.** Everything above is Debug except section 5, which was
-  taken on Debug, on a Release build from `bin`, and on a signed Release install, and found the
-  three within noise of each other. That is one path measured on Release, not a build.
+Section 7 below used to carry this as the prime suspect with nothing behind it: the notch's own
+first open had been cleared at 26 to 36 ms, the report said "first use" rather than "first open",
+and nothing had ever timed what happens between launching Plith and the notch being ready. It is
+measured now, and the suspect was right.
+
+**A warm launch takes 791 to 1008 ms, and the UI thread is blocked for 878 to 926 ms of it.** That
+is the reported second. The notch's own open was about two per cent of it; this is nearly all of
+it.
+
+**The instrument.** `StartupTrace` writes one line per launch into `plith.log` and
+`scripts/measure-startup.ps1` starts the process and tabulates the lines. Ten consecutive spans
+that PARTITION the launch, so adding them up lands on the total and no column can be blamed twice.
+What each one covers is documented on `StartupPhase` rather than repeated here.
+
+Beside them, and separate on purpose, `UiStallWatch`: a `DispatcherTimer` at Input priority, ticking
+every 250 ms. Input sits below Loaded, Render, DataBind and Normal in WPF's queue, so that timer
+cannot tick while any of them is backed up and cannot tick at all while the thread is blocked
+outright. The gap between its ticks is therefore not a proxy for the busy cursor. It is a
+measurement of it. Unlike section 5's probe, this one is **not armed around one event**: it runs
+for the life of the process, because the symptom could not be reproduced on demand and a probe
+armed only around a launch would be looking away at the moment it exists to catch.
+
+**What it costs.** Five consecutive launches per build, in milliseconds.
+
+| build | total | clr | app | settings | cards | window | audio | hooks | tray | shelf | settle | stall |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| Debug, from `bin` | 823 | 40 | 77 | 22 | 5 | 349 | 43 | 8 | 134 | 55 | 90 | 899 |
+| Debug, from `bin` | 811 | 37 | 77 | 22 | 5 | 360 | 38 | 8 | 117 | 56 | 91 | 903 |
+| Debug, from `bin` | 1008 | 38 | 76 | 22 | 5 | 340 | 38 | 9 | 117 | 56 | 307 | 897 |
+| Debug, from `bin` | 808 | 38 | 77 | 22 | 5 | 344 | 38 | 8 | 128 | 56 | 92 | 881 |
+| Debug, from `bin` | 805 | 37 | 76 | 22 | 5 | 360 | 37 | 9 | 114 | 56 | 89 | 896 |
+| Release, from `bin` | 812 | 39 | 76 | 22 | 5 | 350 | 37 | 9 | 128 | 58 | 88 | 915 |
+| Release, from `bin` | 913 | 37 | 76 | 21 | 5 | 345 | 39 | 8 | 114 | 57 | 211 | 884 |
+| Release, from `bin` | 817 | 37 | 78 | 21 | 5 | 348 | 37 | 8 | 122 | 58 | 103 | 895 |
+| Release, from `bin` | 809 | 37 | 77 | 22 | 5 | 343 | 37 | 9 | 131 | 55 | 93 | 879 |
+| Release, from `bin` | 1003 | 37 | 76 | 21 | 6 | 343 | 36 | 8 | 118 | 54 | 304 | 878 |
+
+Debug and Release sit within the noise of each other, which is the same result section 5 got and a
+more surprising one here: section 5 timed WPF's own layout, which is framework code optimized in
+both, while every span above is this repo's code calling COM, WinRT, the registry and the display
+cable.
+
+**Where it goes.** Three phases carry nine tenths of it:
+
+- **`window`, 337 to 368 ms.** The `OsdHost` constructor, which creates the native banded HWND,
+  builds `OsdContent` and constructs all four widget pages, plus `CardHost.Start` and
+  `WeatherService.Start`. The largest single thing Plith does at startup by a factor of two and a
+  half.
+- **`tray`, 114 to 134 ms.** `StartBrightness` and `TrayIconHost.Initialize`.
+- **`app`, 76 to 78 ms.** The `App` constructor and `InitializeComponent`, which is WPF parsing
+  `App.xaml` and building the resource dictionaries. Before `OnStartup` runs at all.
+
+The remaining six phases total under 170 ms between them, and `cards` and `hooks` are close enough
+to zero to be worth stating: constructing the SMTC client, four cards, the weather chain and
+`CardHost` costs 5 ms, and installing the low-level keyboard hook, the flyout suppressor, the
+foreground watcher and the hotkey costs 8.
+
+**The stall is not a column that can be added to the others**, and it is larger than the total on
+every row. It is anchored at the `App` constructor, so it spans `app` through `settle` and past
+it, ending at the probe's first tick, which is up to 250 ms after the thread was free. What it
+establishes is the shape rather than the exact figure: one unbroken block from the moment managed
+UI code got control to the moment the launch finished, with nothing pumping input in between.
+
+**Three things this does NOT say**, and the first is the one most likely to be misread:
+
+1. **Every launch above is warm.** Windows had the binary and its dependencies cached from a launch
+   minutes earlier. `clr` reads 37 to 53 ms here, which is low for a .NET WPF process and is a
+   measurement of a warm file cache rather than of the runtime. A launch at login, on a machine
+   that has just booted, is the case the report came from and is not in this table.
+2. **The installed, signed Release build was not measured.** The Plith in `Program Files` is a dev
+   build that predates this instrument and writes no line at all. Section 5 measured an install
+   and found it within noise, which is a reason to expect the same here and not a reason to claim
+   it.
+3. **Nothing here says where inside `window` the 350 ms goes.** The phase names a constructor, not
+   a cause.
+
+**Two instrument defects, each found by running it rather than by reading it.**
+
+1. **The stall column read `0ms over 0 ticks` on every launch.** The line was formatted at the
+   settle, which is posted at ContextIdle, and the probe's first tick is one 250 ms interval away.
+   Input priority sits above ContextIdle, so the tick would have won a race, but there was no race:
+   the settle routinely arrives first. Honest, because the tick count said plainly that nothing had
+   been sampled, and useless, because it always would. Split into `Idle`, which stamps the end of
+   the launch, and `Report`, which formats from the probe's tick once there is a gap to report.
+2. **The script picked launch lines by counting them.** `DiagnosticLog` rotates at a 512 KB cap,
+   and a rotation resets the count, so the script then waits for a file to grow past a length it no
+   longer has. It cost the fifth run of the first real Release measurement, which timed out while
+   Plith had started and logged normally, and the comment above the defect asserted that counting
+   lines was what made it rotation-safe. Lines are selected by their own timestamp now.
+
+**The positive control.** A deliberate `Thread.Sleep(300)` was injected into the `hooks` phase and
+the launch re-run: `hooks` went from 8 to 321 ms, the total went up by 358, and the other nine
+columns stayed inside the noise of the run before it. The delay appeared in the column it was
+injected into and nowhere else.
+
+**What the watchdog costs.** Four timer wakeups a second, for the life of the process, against
+section 3 which cut the orchestrator from 33 a second to 2 precisely because wakeups matter on a
+laptop. It is worth paying while an unexplained block is being hunted. It is the first thing to
+reconsider once one is not.
+
+## 7. What has never been measured
+
+- **The Release build, apart from two paths.** Everything above is Debug except sections 5 and 6.
+  Section 5 was taken on Debug, on a Release build from `bin`, and on a signed Release install, and
+  found the three within noise of each other; section 6 on Debug and Release from `bin`, likewise
+  within noise. That is two paths measured on Release, not a build.
+- **A cold launch.** Every launch in section 6 is warm: the binary and its dependencies were in
+  the file cache from a launch minutes earlier, and `clr` reads 37 to 53 ms because of it. The
+  case the report came from is a launch at login on a machine that has just booted, and it is not
+  in that table. It needs a reboot between runs, which is the one thing none of these instruments
+  can drive.
+- **What is inside the `window` phase.** Section 6 found 337 to 368 ms in the `OsdHost`
+  constructor, which is the largest single thing Plith does at startup and a phase name rather
+  than a cause. It builds a banded native window and all four widget pages; nothing says which.
+  That is where to look next, and it is the first place worth trying to move.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
 - **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
   section 5 is taken on the UI thread too, so none of it sees the frame the monitor scanned out.
-- **App startup, which is now the prime suspect for the reported second.** Section 5 measured the
-  notch's own first open and cleared it at 26 to 36 ms. The report said "first use", and nothing
-  has ever timed what happens between launching Plith and the notch being ready. That is where to
-  look next.
+- **Whether moving any of it is worth doing.** Section 6 says where the launch's time goes; it does
+  not say that a person minds. Plith starts at login on the machine it was measured on, so the
+  block lands while Windows is still bringing the desktop up. The report was "first use", which
+  may have been a launch by hand.
