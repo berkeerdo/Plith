@@ -56,6 +56,18 @@
   the binary and its dependencies after the first launch, so a cold first run and a warm sixth are
   two different measurements sharing a column.
 
+  A RELEASE BUILD FROM `bin` CANNOT BE LAUNCHED AS IT SHIPS, and the error says nothing useful:
+  Start-Process fails with "A referral was returned from the server." The Release manifest asks for
+  uiAccess=true, which Windows honours only for a signed binary in a trusted location, and refuses
+  outright otherwise. Relink Release with the Debug manifest to measure the JIT and the optimizer
+  without the integrity level:
+
+      dotnet build src\Plith\Plith.csproj -c Release -p:ApplicationManifest=app.manifest --no-incremental
+
+  `--no-incremental` is not optional. Without it the build is considered up to date and the old
+  manifest stays embedded, so the launch fails again with the same message and nothing on disk says
+  why. Verify with mt.exe -inputresource if it ever fails twice.
+
   Run with: pwsh -File scripts/measure-startup.ps1
             pwsh -File scripts/measure-startup.ps1 -ExePath 'C:\Program Files\Plith\Plith.exe'
             pwsh -File scripts/measure-startup.ps1 -NoDrive -Runs 3
