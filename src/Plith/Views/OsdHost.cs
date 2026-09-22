@@ -56,6 +56,26 @@ public sealed class OsdHost : BandWindow
     // Built when the audio and media view models arrive, for the same reason the frame's pages
     // are: it reads them live, and a HUD rebuilt per event would resubscribe every time.
     private Widgets.NotchHud? _hud;
+
+    // First-open instrumentation. See NotchOpenTrace for what the numbers mean and why the
+    // stall is measured apart from the duration.
+    //
+    // Stopwatch rather than Environment.TickCount64: the system tick advances in ~15,6 ms steps
+    // by default, which is larger than the interval this is trying to resolve. The deliberate
+    // one-turn defer is expected to be a few milliseconds, and a clock that coarse would report
+    // it as either 0 or 16 and never as itself.
+    private readonly System.Diagnostics.Stopwatch _openClock = System.Diagnostics.Stopwatch.StartNew();
+    private readonly NotchOpenTrace _openTrace;
+
+    /// <summary>
+    /// The stall probe. Runs ONLY between a click and its first frame, which is the whole reason
+    /// it is affordable: an Input-priority timer left running would be exactly the kind of idle
+    /// wakeup PERF-VERIFICATION.md exists to hunt, and this one is asleep whenever the notch is.
+    /// </summary>
+    private DispatcherTimer? _openProbe;
+
+    private const int OpenProbeIntervalMs = 15;
+
     private DispatcherTimer? _hideTimer;
     private int _showGeneration;
     private TimeSpan _currentVisibleFor;
@@ -99,6 +119,7 @@ public sealed class OsdHost : BandWindow
         _home = home;
         Shell = new OsdShellViewModel(cardHost);
         _presentation = new ClassicPresentation(this);
+        _openTrace = new NotchOpenTrace(() => _openClock.ElapsedMilliseconds);
         _hoverPoller = new NotchHoverPoller(Dispatcher, _log);
         _hoverPoller.HoverChanged += OnNotchHoverChanged;
         _hoverPoller.DraggingOverChanged += OnDragApproachChanged;
@@ -1491,6 +1512,20 @@ public sealed class OsdHost : BandWindow
         // is a function of what is playing right now, and the carousel spec's deferral of
         // remembering the last page is kept deliberately. The zero passed to SyncToPager is the
         // slide DIRECTION, not a page: an opening frame does not slide.
+        // Stamped here rather than at the top of the method: every return above is the notch
+        // declining to open, and counting those as opens that took forever to arrive would
+        // make the one number this instrument exists to produce meaningless.
+        _openTrace.Click();
+        StartOpenProbe();
+
+        // Armed HERE rather than in the deferred callback, and the ordering is the whole point.
+        // SetPanelContent below makes WidgetHost visible synchronously, which invalidates
+        // layout; WPF runs layout at Render priority, ABOVE the Loaded priority the rest of
+        // this open is deferred to. So by the time the callback runs, the pass this is trying
+        // to time has already happened and been missed.
+        _widgets.LayoutUpdated -= OnOpenLayoutUpdated;
+        _widgets.LayoutUpdated += OnOpenLayoutUpdated;
+
         _pager.ResetTo(NotchOpeningPolicy.OpeningPage(_media?.IsPlaying == true, _mediaPageIndex));
         _widgets.SyncToPager(0);
 
@@ -1512,12 +1547,72 @@ public sealed class OsdHost : BandWindow
         {
             // A mode switch, edit mode or a covering window can all land between the click and
             // this callback, and each makes the show wrong rather than merely late.
-            if (_isEditMode) return;
-            if (_presentation is not AmbientNotchPresentation) return;
-            if (!_home.IsOpen) return;
+            // Each of these abandons the open, so each has to stop the probe. A timer left
+            // running here would tick at Input priority forever on a notch that never opened.
+            if (_isEditMode) { AbandonOpen(); return; }
+            if (_presentation is not AmbientNotchPresentation) { AbandonOpen(); return; }
+            if (!_home.IsOpen) { AbandonOpen(); return; }
 
+            _openTrace.Deferred();
             ShowOsd(visibleFor, fromHover: true);
+            _openTrace.Shown();
+
+            // ContextIdle runs only once everything above it has drained, so this lands when the
+            // UI thread has finished what the open queued and gone idle, which is the moment
+            // the busy cursor would have cleared.
+            Dispatcher.BeginInvoke(new Action(OnOpenSettled), DispatcherPriority.ContextIdle);
         }), DispatcherPriority.Loaded);
+    }
+
+    /// <summary>
+    /// A layout pass finished while an open was in flight.
+    ///
+    /// Detaches itself on the first one. LayoutUpdated fires after every pass, and the expansion
+    /// animates the panel's shape, so leaving this attached would both overwrite the stamp and
+    /// keep a handler running for the life of the window.
+    /// </summary>
+    private void OnOpenLayoutUpdated(object? sender, EventArgs e)
+    {
+        _widgets.LayoutUpdated -= OnOpenLayoutUpdated;
+        _openTrace.LaidOut();
+    }
+
+    /// <summary>The UI thread went idle after the show. Writes the one line per open.</summary>
+    private void OnOpenSettled()
+    {
+        var line = _openTrace.Settled();
+        if (line is null) return;
+
+        StopOpenProbe();
+        _log?.Info("OsdHost", line);
+    }
+
+    /// <summary>
+    /// Arm the stall probe for the length of one open.
+    ///
+    /// Input priority is the mechanism rather than a detail: WPF processes Input below Loaded,
+    /// Render, DataBind and Normal, so this timer cannot tick while any of those is backed up,
+    /// and cannot tick at all while the thread is blocked outright. Those are the two conditions
+    /// that put the busy cursor on screen, which is the symptom this whole instrument exists for.
+    /// </summary>
+    private void StartOpenProbe()
+    {
+        _openProbe ??= new DispatcherTimer(TimeSpan.FromMilliseconds(OpenProbeIntervalMs),
+                                           DispatcherPriority.Input,
+                                           (_, _) => _openTrace.Tick(),
+                                           Dispatcher);
+        _openProbe.Start();
+    }
+
+    private void StopOpenProbe() => _openProbe?.Stop();
+
+    /// <summary>The open was given up between the click and the show. Drop both watches: a
+    /// layout handler and an Input-priority timer left running belong to an open that will
+    /// never report.</summary>
+    private void AbandonOpen()
+    {
+        _widgets.LayoutUpdated -= OnOpenLayoutUpdated;
+        StopOpenProbe();
     }
 
 
