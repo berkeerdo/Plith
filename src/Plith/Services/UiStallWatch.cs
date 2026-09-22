@@ -13,16 +13,18 @@ namespace Plith.Services;
 /// it. The same mechanism <see cref="NotchOpenTrace"/> uses, lifted out because it is needed for
 /// longer than one open.
 ///
-/// It has NO notion of a window it is watching, and that is the design rather than an omission. The
-/// symptom this was built for could not be reproduced on demand, so an instrument armed only around
-/// a launch or only around a click would be looking away at the moment it is meant to catch. This
-/// one runs for the life of the process and reports every gap over its threshold.
+/// It has NO notion of a window it is watching, and that is the design rather than an omission: it
+/// reports every gap over its threshold, for as long as its caller keeps ticking it, and the
+/// caller decides how long that is. <see cref="Plith.App"/> ticks it for the length of one launch.
 ///
-/// What that costs is a real trade and is recorded here rather than left implicit: section 3 of
-/// docs/PERF-VERIFICATION.md cut the orchestrator from 33 timer wakeups a second to 2, because
-/// wakeups matter on a laptop for reasons CPU per cent does not show. A probe at 250 ms adds four a
-/// second back. It is worth it while the reported second is unexplained, and it is the first thing
-/// to reconsider once it is.
+/// IT USED TO BE TICKED FOR THE LIFE OF THE PROCESS, and the old reason is kept because it was a
+/// good one: the symptom this was built for could not be reproduced on demand, so a probe armed
+/// only around a launch or only around a click would be looking away at the moment it is meant to
+/// catch. That held until the block was explained. Sections 6 to 8 of docs/PERF-VERIFICATION.md
+/// did explain it, and section 3 is the standard the change was then held to: it cut the
+/// orchestrator from 33 timer wakeups a second to 2, because wakeups matter on a laptop for
+/// reasons CPU per cent does not show, and a probe at 250 ms adds four a second back. Section 6
+/// records what those four measured, on both axes, before and after.
 ///
 /// Anchored at construction rather than at the first tick, so a thread that blocks immediately
 /// still reports the block. Waiting for a first tick to anchor on would mean the worst case of all,
@@ -37,7 +39,9 @@ public sealed class UiStallWatch
     private long _maxGap;
     private int _ticks;
 
-    /// <summary>The largest gap seen so far. Read by <see cref="StartupTrace"/> at the settle.</summary>
+    /// <summary>The largest gap seen so far. Read on the probe's own tick and passed to
+    /// <see cref="StartupTrace.Report"/>, which is a tick later than the settle and deliberately
+    /// so: at the settle there is nothing sampled yet.</summary>
     public long MaxGapMs => _maxGap;
 
     /// <summary>

@@ -52,8 +52,9 @@ public partial class App : Application
 
     /// <summary>How often the stall probe fires, and the largest gap between two of its ticks
     /// that is still considered ordinary. A true block of B produces a gap between B and
-    /// B + interval, so this pair reports blocks longer than about 250 ms. See UiStallWatch for
-    /// what the interval costs and why it is worth paying for now.</summary>
+    /// B + interval, so this pair reports blocks longer than about 250 ms. The interval is paid
+    /// for the length of one launch rather than for the life of the process; see
+    /// <see cref="StartStallProbe"/> for why that changed and what it gave up.</summary>
     private const int StallProbeMs = 250;
     private const int StallThresholdMs = 500;
 
@@ -259,19 +260,38 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Arm the probe that measures the busy cursor, and leave it armed for the life of the
-    /// process.
+    /// Arm the probe that measures the busy cursor, for the length of one launch.
     ///
     /// Input priority is the mechanism rather than a detail: it sits below Loaded, Render,
     /// DataBind and Normal, so this timer cannot tick while any of them is backed up and cannot
     /// tick at all while the thread is blocked outright. See UiStallWatch.
     ///
-    /// It does not stop after the launch because the symptom it was built for could not be
-    /// reproduced on demand. An instrument armed only around a launch would be looking away at
-    /// the moment it exists to catch.
+    /// IT USED TO RUN FOR THE LIFE OF THE PROCESS, and the reason it no longer does is recorded
+    /// because the old reason was good. The symptom it was built for could not be reproduced on
+    /// demand, so an instrument armed only around a launch would have been looking away at the
+    /// moment it existed to catch. That held until the block was explained: sections 6 to 8 of
+    /// docs/PERF-VERIFICATION.md say where the launch's time goes, what its largest span is made
+    /// of, and why the biggest piece of that cannot be moved between our own controls. Nothing is
+    /// being hunted any more, so the probe was four timer wakeups a second in exchange for a
+    /// number nobody was reading.
+    ///
+    /// WHAT THAT GIVES UP, stated rather than implied: a block that happens an hour into a
+    /// session is now caught by nothing. The launch keeps its stall column on every run, which is
+    /// the one figure that measures the reported symptom, and that is the whole of what is kept.
+    /// Re-arming this for the life of the process is one line if a block is ever reported again.
+    ///
+    /// It stops on the tick that REPORTS the launch rather than on the first tick, and the
+    /// difference is not cosmetic. The probe is started inside OnStartup and the settle is posted
+    /// at ContextIdle, which Input priority preempts: when settle work outruns one interval, the
+    /// first tick finds no launch to report and the second one does. Stopping on the first tick
+    /// would drop the launch line on exactly the slow launches it exists to describe.
     /// </summary>
     private void StartStallProbe()
     {
+        // Nothing to measure without the clock Main started, and a probe that can never report is
+        // a probe that can never stop itself either. Both instruments stay null on that path.
+        if (_stall is null || _startup is null) return;
+
         _stallProbe = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Input)
         {
             Interval = TimeSpan.FromMilliseconds(StallProbeMs),
@@ -292,6 +312,10 @@ public partial class App : Application
                 if (window is not null) _diagnosticLog?.Info("Perf", window);
             }
             if (stall is not null) _diagnosticLog?.Info("Perf", stall);
+
+            // Last, so this tick's own gap is still reported. The launch is described and the
+            // idle cost of describing it ends here.
+            if (launch is not null) _stallProbe?.Stop();
         };
         _stallProbe.Start();
     }

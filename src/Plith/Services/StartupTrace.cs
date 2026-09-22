@@ -57,8 +57,10 @@ public enum StartupPhase
 /// The stall is the separate half and the only figure that measures the reported symptom, because
 /// a launch that takes a second while pumping input does not put the busy cursor on screen and a
 /// launch that blocks for 300 ms does. It is measured by <see cref="UiStallWatch"/> and passed in
-/// at <see cref="Settled"/> rather than computed here: this type owns the spans, that one owns the
-/// blocking, and the watch outlives the launch while this does not.
+/// in at <see cref="Report"/> rather than computed here: this type owns the spans and that one
+/// owns the blocking. They are constructed together and they measure different things from the
+/// same clock: this one the distance between marks it is handed, that one the distance between
+/// ticks it is not handed, which is why only one of them can see a thread that is not running.
 ///
 /// Wall-clock only, and deliberately: the caller supplies the clock, so the tests drive it and the
 /// app hands it a monotonic one.

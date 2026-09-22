@@ -69,9 +69,10 @@ public enum StartupWindowPhase
 /// closeness is the positive control on the whole instrument: a sub-total that does NOT land on
 /// the window column means a mark is in the wrong place, not that the launch varied.
 ///
-/// No stall figure here, deliberately. <see cref="UiStallWatch"/> already runs for the life of
-/// the process and its probe cannot tick while this phase holds the thread, so a second stall
-/// measurement over the same window would be the same block reported twice under two names.
+/// No stall figure here, deliberately. <see cref="UiStallWatch"/> is already armed across the
+/// whole launch, this phase included, and its probe cannot tick while this phase holds the
+/// thread, so a second stall measurement over the same window would be the same block reported
+/// twice under two names.
 ///
 /// Wall-clock only, and the caller supplies the clock, so the tests drive it and the app hands it
 /// the same monotonic one Main started.

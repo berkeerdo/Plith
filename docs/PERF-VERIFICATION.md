@@ -30,6 +30,11 @@ The spread on the last row is real and is left in rather than averaged away: thr
 ten-second samples of the same build gave 0,81, 0,79 and 0,15 per cent. Anything quoted here as a
 single number would be a number this instrument cannot produce.
 
+Every figure in this section was taken by hand. `scripts/measure-idle-cost.ps1`, added by section
+6b, is the instrument that does it repeatably, and it samples a second axis this table does not
+have: context switches per second, which is how often the process wakes a thread. That axis sees
+timers this one cannot, and section 6b is the case that shows the difference.
+
 The catcher costs nothing while it waits, which is worth stating because it is a whole second WPF
 process: 114 MB of working set and no measurable CPU.
 
@@ -197,9 +202,12 @@ Beside them, and separate on purpose, `UiStallWatch`: a `DispatcherTimer` at Inp
 every 250 ms. Input sits below Loaded, Render, DataBind and Normal in WPF's queue, so that timer
 cannot tick while any of them is backed up and cannot tick at all while the thread is blocked
 outright. The gap between its ticks is therefore not a proxy for the busy cursor. It is a
-measurement of it. Unlike section 5's probe, this one is **not armed around one event**: it runs
-for the life of the process, because the symptom could not be reproduced on demand and a probe
-armed only around a launch would be looking away at the moment it exists to catch.
+measurement of it. When this section was written it ran for the life of the process, unlike
+section 5's probe, because the symptom could not be reproduced on demand and a probe armed only
+around a launch would be looking away at the moment it exists to catch. **It is now armed around
+the launch and stops on the tick that reports it**, and section 6b is the measurement that closed
+that decision. Every number in this section was taken with the probe still running for the life of
+the process; the launch line and its stall column are unchanged by the retirement, which 6b shows.
 
 **What it costs.** Five consecutive launches per build, in milliseconds.
 
@@ -278,15 +286,94 @@ injected into and nowhere else.
 **What the watchdog costs.** Four timer wakeups a second, for the life of the process, against
 section 3 which cut the orchestrator from 33 a second to 2 precisely because wakeups matter on a
 laptop. It is worth paying while an unexplained block is being hunted. It is the first thing to
-reconsider once one is not.
+reconsider once one is not. That condition was met once sections 7 and 8 landed, and section 6b is
+what was done about it.
 
-**That condition is now met, and this is the open work item it creates.** The block is explained:
-this section says where the launch's time goes, section 7 says what the largest span is made of,
-and section 8 says why the biggest piece of that cannot be moved between our own controls. Nothing
-is being hunted any more, so `UiStallWatch` is now four wakeups a second in exchange for a number
-nobody is reading. Retiring it, or arming it only around a launch the way section 5's probe is
-armed only around an open, is held to section 3's own standard rather than to a guess: measure the
-idle wakeups and the idle CPU before and after, and record both here.
+## 6b. Retiring the watchdog, on section 3's terms
+
+Section 6 left this as an open item and named the terms rather than the answer: the block is
+explained, so `UiStallWatch` had become four wakeups a second in exchange for a number nobody was
+reading, and retiring it or arming it around the launch was to be **held to section 3's own
+standard, which is to measure the idle wakeups and the idle CPU before and after**. Both are
+measured here.
+
+**What was changed.** The probe is armed at the end of `OnStartup` as before and stops on the tick
+that reports the launch. The launch keeps its stall column on every run, which is the only figure
+that measures the reported symptom. A block an hour into a session is now caught by nothing, and
+that is the whole of what was given up.
+
+It stops on the tick that REPORTS rather than on the first tick, and that is not cosmetic. The
+settle is posted at ContextIdle and Input priority preempts it, so on a launch whose settle outruns
+one interval the first tick finds nothing to report and the second one does. Stopping on the first
+tick would drop the launch line on exactly the slow launches it exists to describe.
+
+**The instrument, because section 3 had none.** Its 33-to-2 figure was taken by hand and left
+nothing behind. `scripts/measure-idle-cost.ps1` is that instrument now. It samples a process at
+rest on two axes: CPU as a per cent of one core from the process's own `TotalProcessorTime`, and
+**wakeups as context switches per second**, per thread, from
+`Win32_PerfRawData_PerfProc_Thread`. A `DispatcherTimer` tick wakes a thread that was asleep and
+that wake is a context switch, so a 250 ms probe shows up on the second axis at a magnitude the
+first one cannot see. `Get-Counter` is not used and the script says why: `\Thread(plith/*)\Context
+Switches/sec` does not filter on this machine, matching all 13.000 threads on the system and
+returning a six-figure total.
+
+**What it measured.** Debug from `bin`, app at rest, ten samples of ten seconds per row. A/B/A/B
+rather than A/B, because the first pair alone would not have been believable at this spread.
+
+| build | probe | ui cs/s, median | ui cs/s, range | cpu %, range |
+|---|---|---|---|---|
+| before | 4/s, for life | 173,1 | 130,4 to 190,9 | 0,08 to 0,68 |
+| before, again | 4/s, for life | 168,7 | 154,5 to 199,9 | 0,08 to 6,70 |
+| after | none after the launch | 150,6 | 138,7 to 156,9 | 0,08 to 0,59 |
+| after, again | none after the launch | 149,2 | 142,4 to 160,2 | 0,17 to 0,76 |
+| positive control | 40/s, for life | 306,8 | 275,2 to 350,3 | 0,17 to 0,84 |
+
+**The wakeup axis sees it and the CPU axis does not.** Both before rows land at 169 to 173 and both
+after rows at 149 to 151, so the probe was worth about **21 context switches a second on the UI
+thread**, which is about an eighth of the idle total. The CPU column moves by nothing: the four
+ranges overlap completely, and the one reading of 6,70 per cent is a single sample of one before
+run that some other work landed in. This is exactly the case section 3 asserted without being able
+to show it, that wakeups matter for reasons CPU per cent does not show, and it is the first time
+this repo has had both axes on the same change.
+
+**The positive control is what makes the 21 readable.** The two distributions overlap: the lowest
+before sample, 130,4, is under every after sample. A median that moved 21 with that much spread is
+not on its own a measurement. So the probe was rebuilt at 25 ms, a tenfold version of itself at
+40 wakeups a second, and measured the same way: 306,8, which is 136 above the before median. That
+gives **3,8 context switches per tick**, and the before-to-after drop gives 5,3 for the same
+quantity. Two independent estimates of the same per-tick cost, one from a lever ten times larger
+than the effect being claimed. The instrument is linear in the thing it is being asked about.
+
+**The number nobody was reading, measured rather than assumed.** The retained `plith.log` at the
+time of this run held **79 launch lines and 79 stall lines, and not one stall line sat more than
+two seconds from a launch line.** Over every launch in that log the probe never once reported a
+block that was not the launch itself. That is the evidence for "nobody was reading it" and it is
+weaker than it looks: `DiagnosticLog` rotates at 512 KB, so that window is one day, and it is a day
+of launches driven by `measure-startup.ps1` rather than a day of ordinary use.
+
+**The launch line is unchanged**, which is the regression this change could have caused and did
+not. Three runs after it: 897, 864 and 870 ms total, with `stall 965`, `934` and `940` ms **over 1
+tick**, and the window sub-total landing on the `window` column on all three. The tick count is now
+1 on every launch by construction rather than by luck, and it is still printed, because a stall
+figure without its sample count reads as "nothing blocked" when it may mean "nothing was looked
+at".
+
+**Three things this does NOT say.**
+
+1. **It does not say the UI thread is quiet.** It wakes **about 150 times a second with the probe
+   gone**, and nothing here explains what the other 150 are. The probe was 21 of them. That is a
+   new open question and it is in section 9.
+2. **It does not measure Release, or a laptop on battery.** Debug from `bin`, on the one desktop
+   every other number here comes from. The wakeup argument section 3 makes is about battery, and
+   no measurement in this repo has ever been taken on one.
+3. **It does not claim a person would notice either state.** An eighth of the idle wakeups of a
+   process that costs well under one per cent of one core is a real quantity and a small one. What
+   justifies the change is that the thing being paid for was no longer being read, not that the
+   payment hurt.
+
+**Re-arming it is one line** if a block is ever reported again, and the comment on
+`App.StartStallProbe` keeps the old reason intact rather than deleting it, because the old reason
+was a good one for as long as the symptom was unexplained.
 
 ## 7. Inside the `window` phase, and the largest thing in the launch
 
@@ -532,6 +619,14 @@ not, and `StartupWindowTrace` is back at its ten spans.
   obvious. It cannot split that second figure further: three mechanisms share one column, and
   telling them apart needs a sampling profiler or the runtime's own JIT events rather than another
   mark. Only one of the three would be this repo's to move.
+- **What wakes the UI thread 150 times a second at rest.** Section 6b set out to measure one
+  timer's wakeups and found the floor it sits on: with the stall probe gone, the UI thread still
+  takes about 150 context switches a second while the app is doing nothing, and bursts to between
+  200 and 800 for a sample at a time. The timers this repo knows about do not add up to it. The
+  orchestrator is 2 a second, the hover poller 17, the clock 1. Nothing here has looked for the
+  rest, and section 2's finding applies in advance: the last two times the idle cost was chased,
+  the answer came from reading the code a profile pointed at rather than from narrowing the
+  profile.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
 - **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
