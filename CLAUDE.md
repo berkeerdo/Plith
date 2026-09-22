@@ -64,7 +64,7 @@ measured.** Claims inherited from another surface's notes have been wrong four t
 | `docs/PHASE5-VERIFICATION.md` | CardHost, fullscreen-video auto-hide, accessibility |
 | `docs/PHASE6-VERIFICATION.md` | The notch, its widgets, the media page, seek, the output picker, brightness |
 | `docs/SHELF-VERIFICATION.md` | The shelf end to end, including the drop catcher and every instrument defect |
-| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, down to what the first XAML load is made of, which of it has been fixed, and what the launch watchdog cost once it was no longer needed |
+| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, down to what the first XAML load is made of, which of it has been fixed, what the launch watchdog cost once it was no longer needed, and which single timer was waking the UI thread at rest |
 | `docs/ROADMAP.md` | Phase status, estimates beside actuals, and open questions |
 
 ### The instruments
@@ -82,7 +82,8 @@ nothing else could see.
 | `scripts/drive-media-page.ps1` | Clicks the real notch and reads the live UI Automation tree |
 | `scripts/measure-notch-open.ps1` | What one open of the notch costs, and whether the UI thread blocked during it |
 | `scripts/measure-startup.ps1` | What one launch costs, split ten ways, its largest phase split ten ways again, and how long it blocks the UI thread |
-| `scripts/measure-idle-cost.ps1` | What the app costs while it is doing nothing, on two axes: CPU, and how often it wakes a thread |
+| `scripts/measure-idle-cost.ps1` | What the app costs while it is doing nothing, on two axes: CPU, and how often it wakes a thread. Flags any sample that saw input, because the keyboard hook makes typing look like idle cost |
+| `scripts/measure-hover-peek.ps1` | Whether the real notch still peeks when the cursor arrives, and how long it takes. Drives the mouse, so do not use the machine while it runs |
 | `scripts/build-release.ps1` | Builds and signs the installer. Needs admin and the signing cert |
 
 A Debug build runs at **medium** integrity (`app.manifest` sets `uiAccess="false"`; only

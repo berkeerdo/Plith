@@ -1,4 +1,4 @@
-#requires -Version 7
+﻿#requires -Version 7
 <#
 .SYNOPSIS
   Measures what Plith costs while it is doing nothing: CPU, and how often it wakes the UI thread.
@@ -36,6 +36,12 @@
   WPF's Application runs on the thread that entered Main. The script prints the whole-process
   figure beside it so a wrong guess about which thread is which cannot hide a wakeup.
 
+  INPUT IDLENESS IS CHECKED, because it silently ruins a sample. Plith carries a system-wide
+  WH_KEYBOARD_LL hook on its UI thread, so every key anyone presses anywhere wakes that thread.
+  A sample taken while someone types measures the typing. Each row therefore carries a `clean`
+  flag from GetLastInputInfo, true only when there was no keyboard or mouse input for the WHOLE
+  window. Read the clean rows; a false row is not a resting figure.
+
   WHAT THIS CANNOT SAY. It samples a process that is ALREADY at rest and it does not verify that
   it is: an open notch, a track playing, or a settings window left up all change every number
   here. Put the app at rest yourself, then run this. It also cannot attribute a wakeup to a
@@ -58,6 +64,30 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
+
+# GetLastInputInfo reports the tick of the last input on the session. Comparing it before and
+# after a window says whether ANY input landed inside that window, which is the only thing that
+# separates a resting sample from one that measured the keyboard hook.
+Add-Type @'
+using System;
+using System.Runtime.InteropServices;
+public static class PlithLastInput
+{
+    [StructLayout(LayoutKind.Sequential)]
+    public struct LASTINPUTINFO { public uint cbSize; public uint dwTime; }
+
+    [DllImport("user32.dll")] private static extern bool GetLastInputInfo(ref LASTINPUTINFO info);
+    [DllImport("kernel32.dll")] private static extern uint GetTickCount();
+
+    public static uint IdleMs()
+    {
+        var info = new LASTINPUTINFO();
+        info.cbSize = (uint)Marshal.SizeOf(info);
+        GetLastInputInfo(ref info);
+        return GetTickCount() - info.dwTime;
+    }
+}
+'@
 
 $proc = Get-Process -Name $ProcessName -ErrorAction SilentlyContinue
 if (-not $proc) { throw "No process named '$ProcessName' is running. Start it first." }
@@ -88,6 +118,7 @@ Start-Sleep -Seconds $SettleSeconds
 $rows = @()
 for ($i = 1; $i -le $Samples; $i++) {
     $proc.Refresh()
+    $idle0 = [PlithLastInput]::IdleMs()
     $cpu0 = $proc.TotalProcessorTime
     $cs0 = Get-ContextSwitches -ProcessId $proc.Id
     $t0 = [System.Diagnostics.Stopwatch]::StartNew()
@@ -97,22 +128,37 @@ for ($i = 1; $i -le $Samples; $i++) {
     $proc.Refresh()
     $cpu1 = $proc.TotalProcessorTime
     $cs1 = Get-ContextSwitches -ProcessId $proc.Id
+    $idle1 = [PlithLastInput]::IdleMs()
     $t0.Stop()
 
     $elapsed = $t0.Elapsed.TotalSeconds
+    # Idle time has to have grown by the whole window. A 500 ms allowance covers the gap between
+    # reading the clock and reading the counter, not a keystroke.
+    $clean = $idle1 -ge ($idle0 + ($elapsed * 1000) - 500)
     $rows += [pscustomobject]@{
         sample     = $i
         'cpu %'    = [math]::Round((($cpu1 - $cpu0).TotalMilliseconds / ($elapsed * 1000)) * 100, 2)
         'cpu ms'   = [math]::Round(($cpu1 - $cpu0).TotalMilliseconds, 0)
         'cs/s all' = [math]::Round(($cs1.Total - $cs0.Total) / $elapsed, 1)
         'cs/s ui'  = [math]::Round(($cs1.Ui - $cs0.Ui) / $elapsed, 1)
+        clean      = $clean
     }
 }
 
 $rows | Format-Table -AutoSize
 
-$cpuValues = $rows.'cpu %'
-$uiValues = $rows.'cs/s ui'
+$clean = @($rows | Where-Object { $_.clean })
+if ($clean.Count -lt $rows.Count) {
+    Write-Host ("{0} of {1} samples saw input and are NOT resting figures. Summary uses the {2} clean ones." `
+        -f ($rows.Count - $clean.Count), $rows.Count, $clean.Count) -ForegroundColor Yellow
+}
+if ($clean.Count -eq 0) {
+    Write-Host "No clean sample. Stop touching the keyboard and mouse and run it again." -ForegroundColor Red
+    return
+}
+
+$cpuValues = $clean.'cpu %'
+$uiValues = $clean.'cs/s ui'
 Write-Host ("cpu %%   : {0:N2} to {1:N2} of one core" -f ($cpuValues | Measure-Object -Minimum).Minimum, ($cpuValues | Measure-Object -Maximum).Maximum)
 Write-Host ("cs/s ui : {0:N1} to {1:N1}" -f ($uiValues | Measure-Object -Minimum).Minimum, ($uiValues | Measure-Object -Maximum).Maximum)
 Write-Host ""

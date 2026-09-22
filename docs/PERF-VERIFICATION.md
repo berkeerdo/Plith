@@ -619,14 +619,11 @@ not, and `StartupWindowTrace` is back at its ten spans.
   obvious. It cannot split that second figure further: three mechanisms share one column, and
   telling them apart needs a sampling profiler or the runtime's own JIT events rather than another
   mark. Only one of the three would be this repo's to move.
-- **What wakes the UI thread 150 times a second at rest.** Section 6b set out to measure one
-  timer's wakeups and found the floor it sits on: with the stall probe gone, the UI thread still
-  takes about 150 context switches a second while the app is doing nothing, and bursts to between
-  200 and 800 for a sample at a time. The timers this repo knows about do not add up to it. The
-  orchestrator is 2 a second, the hover poller 17, the clock 1. Nothing here has looked for the
-  rest, and section 2's finding applies in advance: the last two times the idle cost was chased,
-  the answer came from reading the code a profile pointed at rather than from narrowing the
-  profile.
+- ~~**What wakes the UI thread 150 times a second at rest.**~~ **Answered in section 10, and the
+  question was built on an arithmetic mistake.** It set about 20 TICKS a second beside 150 CONTEXT
+  SWITCHES a second as though they were the same unit. They are not: section 6b had already
+  measured that one tick costs several switches, so the known timers never had to add up to 150 to
+  explain it. `NotchHoverPoller` alone carries 80 to 85 per cent of the resting wakeups.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
 - **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
@@ -635,3 +632,191 @@ not, and `StartupWindowTrace` is back at its ten spans.
   not say that a person minds. Plith starts at login on the machine it was measured on, so the
   block lands while Windows is still bringing the desktop up. The report was "first use", which
   may have been a launch by hand.
+
+## 10. What wakes the UI thread at rest, and it is one timer
+
+Section 9 carried this as the open item: about 150 context switches a second on the UI thread with
+nothing happening, and "the timers this repo knows about do not add up to it." Both halves of that
+were wrong, and the way they were wrong is the point.
+
+**The answer is `NotchHoverPoller`.** Its 60 ms `DispatcherTimer` carries **80 to 85 per cent of
+the resting wakeups**, measured twice, hours apart, on two builds, at two different absolute
+scales. Nothing else in the app comes close.
+
+### The arithmetic mistake in the question
+
+Section 9 set 20 ticks a second beside 150 context switches a second and concluded the timers did
+not account for it. Those are different units. Section 6b had already measured the conversion on
+this very axis, 3,8 to 5,3 switches per tick, and never applied it: at that rate the known timers
+predict 76 to 106 of the 150 on their own. There was far less missing than the question claimed.
+
+### What was measured
+
+Debug from `bin` and the signed Release install, app at rest, three clean samples of ten seconds
+per row. Each run changes ONE thing.
+
+| run | build | configuration | ui cs/s |
+|---|---|---|---|
+| A | Debug from `bin` | as shipped, notch parked | 400 to 430 |
+| | installed Release 0.3.1 | as shipped, notch parked | 390 to 420 |
+| B | Debug from `bin` | `ShowWeather = False` | 401 to 420 |
+| C | Debug from `bin` | `Presentation = ClassicOsd` | 70 to 89 |
+| D | Debug from `bin` | `ShowNotchWidgets = False` | 394 to 415 |
+| E | Debug from `bin` | poller interval 1000 ms | 85 to 87 |
+| F | Debug from `bin` | poller 60 ms, `Poll` body stubbed out | 391 to 411 |
+| G | Debug from `bin` | as F, timer at Input instead of Background | 389 to 422 |
+| H | Debug from `bin` | poller 250 ms, body stubbed out | 147 to 157 |
+| | `Plith.DropCatcher`, idle | a whole second WPF process | **0,0** |
+
+**The catcher is the control that makes the rest readable.** A complete second WPF process, idle,
+wakes its UI thread ZERO times a second. There is no WPF floor to blame: every wakeup counted
+above is work this app asked for.
+
+### It is linear in the tick rate, and that is the proof
+
+The poller's rate was set three ways and the tick rate logged from inside `Poll` rather than
+assumed, because "the timer fires far more often than it was told to" was a live hypothesis worth
+killing. It was not over-firing: 15,9 ticks/s at 60 ms and 4,0 at 250 ms, as configured.
+
+| ticks/s, logged | ui cs/s | cost per tick across the step |
+|---|---|---|
+| 1,0 | 85,7 | |
+| 4,0 | 150,2 | 21,5 |
+| 15,9 | about 404 | 21,3 |
+
+Three points, two independent slopes, 21,5 and 21,3. A straight line with an intercept near 64.
+**The poller was costing about 340 wakeups a second and the whole rest of the app about 64.**
+
+### Four hypotheses died on the way, and each one looked obvious
+
+- **WRONG: the weather widget's perpetual animations.** `WeatherMark` and `WeatherWidget` start
+  `RepeatBehavior.Forever` animations, and a live WPF animation ticks the media context every
+  display frame. This machine's panel runs at **239 Hz**, and 239 plus section 6b's 150 lands
+  almost exactly on the 400 being measured. It was a good fit and it was wrong: run B turned
+  weather off and moved nothing. `WeatherMark` stops its motion on `IsVisibleChanged`, and the
+  arithmetic coincidence was a coincidence.
+- **WRONG: the notch's widget pages.** Run D removed them. Nothing moved.
+- **WRONG: the win32 calls inside the poll.** `Poll` calls `GetCursorPos` and `GetAsyncKeyState`,
+  both syscalls into the window manager, which is exactly where a per-tick cost of 20 would
+  naturally come from. Run F replaced the whole body with an immediate `return` and still read 391
+  to 411. **The cost is the tick, not the work inside it.**
+- **WRONG: the timer's dispatcher priority.** The poller runs at `Background` and section 6b's
+  cheap probe ran at `Input`, the one structural difference between them. Run G moved the poller
+  to `Input` and changed nothing.
+
+### The absolute number is not a property of this app
+
+The same installed binary read **390 to 420** early in this session and **203 to 208** an hour
+later, restored and at rest both times. Under the second state the attribution was re-run and held
+exactly: AmbientNotch 203 to 208 against ClassicOsd 32,6 to 32,9, the same 84 per cent share of a
+smaller total. **The share is stable, the scale is not.**
+
+The likely hidden variable is the machine-wide timer resolution. `NtQueryTimerResolution` reported
+**1,0 ms** during the second state, against a 15,625 ms default. The first state's poller logged
+15,9 ticks/s, which is 60 ms rounded up to 4 x 15,625 ms, the signature of the coarse default. Any
+process on the machine can raise that resolution, and a browser playing video routinely does.
+
+So this axis carries a caveat every earlier section missed: **a wakeup figure is comparable only
+against another taken minutes from it.** Section 6b's rows were interleaved A/B/A/B, which is what
+makes them survive this. Its 3,8 to 5,3 per tick and this section's 21,4 are the same quantity in
+two machine states, not a contradiction.
+
+### The instrument, and a confound it used to miss
+
+`scripts/measure-idle-cost.ps1` now gates every sample on input idleness via `GetLastInputInfo` and
+prints a `clean` column. The reason is specific: Plith carries a system-wide `WH_KEYBOARD_LL` hook
+on its UI thread, so **every keystroke anyone types anywhere wakes the thread being measured**. The
+first sample taken in this investigation was contaminated that way. A resting figure taken while
+someone types is measuring the typing, and nothing in the old script could tell the two apart.
+Every number in this section comes from a row that reported `clean`.
+
+### What this does NOT say
+
+1. ~~**It does not say the poll rate should change.**~~ **Closed by section 11**, which made the
+   rate follow the cursor and measured both halves of the trade.
+2. **It does not explain the floor.** About 64 wakeups a second remain with the poller at one tick
+   a second, and the orchestrator at 2, the fullscreen watcher at 1 and the clock at 1 do not
+   obviously fill it. A smaller open question of the same shape.
+3. **It does not explain why one tick costs about 21 switches**, or about 10 in the other machine
+   state. That a bare `DispatcherTimer` tick with an empty handler costs that much is measured
+   here and unexplained here. Telling it apart needs the kernel's own scheduling events rather
+   than another counter.
+4. **It is one machine, at the local console, on one display.** No laptop, no battery and no
+   Remote Desktop session, which is what sections 1 to 4 were taken over and is a live candidate
+   for why their scale differs again.
+
+## 11. The poll rate now follows the cursor
+
+Section 10 left the decision open: the poller cost about 340 wakeups a second and the question was
+whether that bought enough responsiveness. It did not have to buy anything while the cursor is
+nowhere near the notch, which is the state a resting machine is in.
+
+**`NotchPollRate` holds the rule.** Poll at 60 ms when the cursor is within 400 DIP of the OSD
+window, or when a mouse button is held, or before the notch has been positioned. Poll at 200 ms
+otherwise. The fast rate is UNCHANGED at 60 ms, so the sampling of a hover a person actually
+performs is identical to what shipped; what changed is when it applies.
+
+**The margin and the slow rate are one decision, not two.** A cursor would have to cross the whole
+400 DIP margin inside one 200 ms tick to reach the notch without ever having been seen approaching
+it, which is 2000 DIP a second. `NotchPollRateTests` holds the two constants to that relationship
+rather than to their values, so changing either one alone fails the suite.
+
+**The button clause is about the shelf, not about hover.** `DragApproachDetector` samples where a
+press began on the RISING EDGE of the button, so a press first observed while the cursor is already
+over the OSD records the origin as "inside" and refuses the drag. Any button held anywhere
+therefore forces the fast rate. It costs nothing at rest for the obvious reason: a resting machine
+is not holding a mouse button.
+
+### What it bought, interleaved because section 10 showed the scale drifts
+
+Installed Release 0.3.1 as the before, Debug from `bin` as the after, the cursor parked by the
+script at the same point on every run so the two are compared at one cursor position.
+
+| run | build | ui cs/s |
+|---|---|---|
+| before | flat 60 ms, Release 0.3.1 | 175,9 to 201,1 |
+| after | adaptive, Debug | 80,9 to 87,7 |
+| after, again | adaptive, Debug | 79,3 to 86,4 |
+
+**About 188 down to about 83: 56 per cent of the resting wakeups, gone.** The residual is the
+model's own prediction rather than a surprise: the floor measured at 33 in this machine state,
+plus a poller now ticking 5 times a second at the roughly 9 switches a tick this state costs, is
+about 78 against the 83 measured.
+
+### What it cost, which is the half worth measuring
+
+A new instrument, because nothing here could see a peek. The first version read the notch window's
+height and reported "never peeked" against the SHIPPING build, which is the instrument being wrong
+rather than the app: the window is sized to the open panel and keeps that size while parked, so
+only what is DRAWN changes. Running the before build first is what caught it. The oracle is now a
+band of screen just below the resting strip, sampled until it stops looking like it did at rest.
+
+| approach | before | after |
+|---|---|---|
+| glide in from far away, the human case | 429 to 469 ms | 404 to 433 ms |
+| teleport straight onto the strip | 46 to 92 ms | 29 to 109 ms |
+
+**The glide is unchanged**, which is the whole design: crossing the margin puts the poller back at
+60 ms hundreds of DIP before the cursor arrives. The glide figures are dominated by the sweep
+itself, which the script spends about 360 ms performing.
+
+**The teleport is the case that widens, and only a machine can do it.** A jump from outside the
+margin straight onto the strip waits for the next slow tick, so it is bounded by 200 ms plus the
+peek's own growth rather than by 60. Twelve measured jumps landed between 29 and 109 ms, which
+does not reach that bound and is not evidence that nothing does. No hand moves a pointer this way;
+a KVM, a remote desktop and this script's own `SetCursorPos` all do.
+
+`scripts/measure-notch-open.ps1` was run against the new build as the standing check on the other
+path: five opens, 30 ms for the first and 3 to 4 ms after, against section 5's 26 to 36 ms.
+Unchanged.
+
+### What this run does NOT say
+
+1. **One glide out of eight never peeked, and it is recorded as unmeasured rather than as a
+   defect.** The person using the machine moved the physical mouse during that run, against a
+   script driving the same pointer. A contested pointer is not a measurement of anything. It has
+   not been re-run on a quiet machine.
+2. **It is the same single machine, at the console, in one timer-resolution state.** Section 10's
+   whole caveat about scale applies unchanged.
+3. **Nothing here measured a battery**, which is the argument wakeups are reduced for in the first
+   place. No measurement in this repo ever has.
