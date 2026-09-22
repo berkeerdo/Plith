@@ -50,9 +50,41 @@ public partial class App : Application
     private ShelfStore? _shelf;
     private ShelfSession? _shelfSession;
 
+    /// <summary>How often the stall probe fires, and the largest gap between two of its ticks
+    /// that is still considered ordinary. A true block of B produces a gap between B and
+    /// B + interval, so this pair reports blocks longer than about 250 ms. See UiStallWatch for
+    /// what the interval costs and why it is worth paying for now.</summary>
+    private const int StallProbeMs = 250;
+    private const int StallThresholdMs = 500;
+
+    private StartupTrace? _startup;
+    private UiStallWatch? _stall;
+    private System.Windows.Threading.DispatcherTimer? _stallProbe;
+
+    /// <summary>
+    /// Hand the app the clock Main started, before Run gets control.
+    ///
+    /// A method rather than a constructor parameter, and the reason is the build rather than the
+    /// design: App.xaml is an ApplicationDefinition, so PresentationBuildTasks generates its own
+    /// Main into App.g.cs which calls a parameterless constructor. That Main is dead code here,
+    /// because StartupObject points at Plith.Program, but it still has to compile.
+    ///
+    /// Both instruments stay null when this is never called, and then a launch reports nothing at
+    /// all rather than reporting numbers measured from the wrong zero.
+    /// </summary>
+    internal void UseStartupClock(Func<long> clockMs, long clrMs)
+    {
+        _startup = new StartupTrace(clockMs, clrMs);
+        // Anchored here rather than at the first tick, so the whole of OnStartup counts as the
+        // block it is: the probe cannot tick while OnStartup holds the thread, which is exactly
+        // the property being relied on.
+        _stall = new UiStallWatch(clockMs, StallThresholdMs);
+    }
+
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
+        _startup?.Mark(StartupPhase.App);
 
         _diagnosticLog = new DiagnosticLog();
         _diagnosticLog.Info("App", "OnStartup begin — Plith.exe path: " + Environment.ProcessPath);
@@ -71,6 +103,7 @@ public partial class App : Application
         // Cards cache brush references for hot-path getters; fan a palette/accent swap out to
         // every one of them, visible or not.
         _theme.ThemeApplied += () => _cardHost?.NotifyThemeChanged();
+        _startup?.Mark(StartupPhase.Settings);
 
         // One SMTC client shared by every consumer; App owns its lifetime.
         _mediaSession = new MediaSessionClient();
@@ -91,6 +124,7 @@ public partial class App : Application
         _cardHost.Register(_mediaCard);   // Order 10 — renders above
         _cardHost.Register(_audioCard);   // Order 20
         _cardHost.Register(_brightnessCard);  // Order 30, below audio, and only while it has something to say
+        _startup?.Mark(StartupPhase.Cards);
 
         _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += (reason, d) => _osd.ShowOsd(d, reason: reason);
@@ -105,6 +139,7 @@ public partial class App : Application
         // is UI-thread-only, and can reach SettingsService.Save (via GeocodeAndCacheAsync) and
         // AmbientCard's Tick, both of which must run on the dispatcher too. See WeatherService.
         _weatherService.Start();
+        _startup?.Mark(StartupPhase.Window);
 
         // The capture endpoint. Start() failing is an ordinary outcome rather than an error - a
         // desktop with no microphone reports nothing, and Current staying null is how the notch
@@ -146,6 +181,7 @@ public partial class App : Application
         var osd = _osd;
         _weatherService.Updated += () => osd.Dispatcher.BeginInvoke(new Action(osd.OnWeatherUpdated));
         _fullscreenWatcher.Start();   // after the orchestrator, so the first Evaluate sees a live session client
+        _startup?.Mark(StartupPhase.Audio);
 
         // Re-assert HWND_TOPMOST when the system foreground window changes so a game or
         // video player popping a topmost window mid-OSD doesn't steal the z-order ahead of us.
@@ -187,13 +223,57 @@ public partial class App : Application
         _hotkey.Pressed += () => _cardHost?.RequestShow(new ShowRequest(ShowReason.SummonHotkey));
         ApplyHotkeyFromSettings(_settings.Current);
         _settings.Changed += ApplyHotkeyFromSettings;
+        _startup?.Mark(StartupPhase.Hooks);
 
         StartBrightness();
 
         _trayHost = new TrayIconHost(this, _settings, _hotkey, _theme, _osd, _weatherService, _diagnosticLog);
         _trayHost.Initialize();
+        _startup?.Mark(StartupPhase.Tray);
 
         StartShelf();
+        _startup?.Mark(StartupPhase.Shelf);
+
+        StartStallProbe();
+
+        // ContextIdle, which WPF runs only once every higher priority has drained. So this is the
+        // first moment the UI thread has nothing left queued from the launch, which is what the
+        // settle span is for: work the launch caused but did not do inside itself, the notch's
+        // first paint included.
+        // Stamped here, reported from the probe's tick. See StartupTrace.Report for why the two
+        // are separate, which is a defect the first version of this had on a running build.
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.ContextIdle,
+                               new Action(() => _startup?.Idle()));
+    }
+
+    /// <summary>
+    /// Arm the probe that measures the busy cursor, and leave it armed for the life of the
+    /// process.
+    ///
+    /// Input priority is the mechanism rather than a detail: it sits below Loaded, Render,
+    /// DataBind and Normal, so this timer cannot tick while any of them is backed up and cannot
+    /// tick at all while the thread is blocked outright. See UiStallWatch.
+    ///
+    /// It does not stop after the launch because the symptom it was built for could not be
+    /// reproduced on demand. An instrument armed only around a launch would be looking away at
+    /// the moment it exists to catch.
+    /// </summary>
+    private void StartStallProbe()
+    {
+        _stallProbe = new System.Windows.Threading.DispatcherTimer(System.Windows.Threading.DispatcherPriority.Input)
+        {
+            Interval = TimeSpan.FromMilliseconds(StallProbeMs),
+        };
+        _stallProbe.Tick += (_, _) =>
+        {
+            var stall = _stall?.Tick();
+            // The launch line first, because on the tick that carries both they describe the same
+            // gap and the launch is the one that explains it.
+            var launch = _startup?.Report(_stall?.MaxGapMs ?? 0, _stall?.Ticks ?? 0);
+            if (launch is not null) _diagnosticLog?.Info("Perf", launch);
+            if (stall is not null) _diagnosticLog?.Info("Perf", stall);
+        };
+        _stallProbe.Start();
     }
 
     /// <summary>
@@ -531,6 +611,7 @@ public partial class App : Application
     protected override void OnExit(ExitEventArgs e)
     {
         _diagnosticLog?.Info("App", "OnExit — begin");
+        _stallProbe?.Stop();
         if (_settings is not null) _settings.Changed -= ApplyHotkeyFromSettings;
 
         // Per-step logging: shutdown hangs used to freeze silently after "OnExit". Wrapping
