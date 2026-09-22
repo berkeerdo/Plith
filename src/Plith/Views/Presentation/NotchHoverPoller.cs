@@ -1,4 +1,4 @@
-using System.Runtime.InteropServices;
+﻿using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Threading;
 using Plith.Services;
@@ -14,6 +14,12 @@ namespace Plith.Views.Presentation;
 /// larger risk. The resting notch is a few pixels tall and only needs to feel responsive to
 /// a deliberate move toward it, which 60 ms comfortably covers.
 ///
+/// The 60 ms is no longer flat. It applies while the cursor is near the notch or a button is
+/// held, and the poller drops to 200 ms otherwise, which is where nearly all of its cost was:
+/// docs/PERF-VERIFICATION.md section 10 measured the flat rate at about 340 context switches a
+/// second, 80 to 85 per cent of everything the app does at rest. <see cref="NotchPollRate"/>
+/// holds the rule and the reasoning.
+///
 /// The timer runs for as long as notch mode is the active presentation — including while the
 /// panel is open, since the resting rectangle's own hover state still needs tracking to know
 /// when the user has left it — and stops only when the mode switches away from the notch, so Classic
@@ -21,8 +27,6 @@ namespace Plith.Views.Presentation;
 /// </summary>
 internal sealed class NotchHoverPoller : IDisposable
 {
-    private static readonly TimeSpan Interval = TimeSpan.FromMilliseconds(60);
-
     private readonly DispatcherTimer _timer;
     private readonly DragApproachDetector _drag = new();
     private bool _wasInside;
@@ -33,7 +37,7 @@ internal sealed class NotchHoverPoller : IDisposable
     public NotchHoverPoller(Dispatcher dispatcher, DiagnosticLog? log = null)
     {
         _log = log;
-        _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = Interval };
+        _timer = new DispatcherTimer(DispatcherPriority.Background, dispatcher) { Interval = NotchPollRate.Fast };
         _timer.Tick += (_, _) => Poll();
     }
 
@@ -104,6 +108,10 @@ internal sealed class NotchHoverPoller : IDisposable
         _wasInside = false;
         _wasInsidePanel = false;
         _drag.Reset();
+
+        // Fast, whatever rate the previous run ended on. A poller that restarted slow would
+        // take its first look up to a fifth of a second after the notch appeared.
+        _timer.Interval = NotchPollRate.Fast;
         _timer.Start();
     }
 
@@ -153,6 +161,8 @@ internal sealed class NotchHoverPoller : IDisposable
         }
         _buttonWasDownForLog = buttonDown;
 
+        ApplyPollRate(dip, buttonDown);
+
         var inBand = NotchGeometry.IsInsideNotch(NotchGeometry.DragApproachRect(HoverRect), dip);
 
         // The other half of the question. The press line above says where a gesture began; this
@@ -186,6 +196,19 @@ internal sealed class NotchHoverPoller : IDisposable
 
         _wasInside = inside;
         HoverChanged?.Invoke(inside);
+    }
+
+    /// <summary>
+    /// Re-rate the timer from where the cursor is now. See <see cref="NotchPollRate"/> for the
+    /// rule and for what the flat 60 ms was costing.
+    ///
+    /// Guarded on inequality because assigning Interval restarts a DispatcherTimer's countdown:
+    /// writing the same value every tick would keep pushing the next tick away.
+    /// </summary>
+    private void ApplyPollRate(Point cursorDip, bool buttonDown)
+    {
+        var want = NotchPollRate.For(PanelRect, cursorDip, buttonDown);
+        if (_timer.Interval != want) _timer.Interval = want;
     }
 
     private bool _buttonWasDownForLog;
