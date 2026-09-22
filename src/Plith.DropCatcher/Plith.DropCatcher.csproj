@@ -20,7 +20,7 @@
     <Authors>Plith</Authors>
     <Product>Plith</Product>
     <Description>Receives file drops on behalf of the Plith OSD, which cannot receive them itself.</Description>
-    <Version>0.3.1</Version>
+    <Version>0.3.2</Version>
     <EnableNETAnalyzers>true</EnableNETAnalyzers>
     <AnalysisLevel>latest</AnalysisLevel>
     <AnalysisMode>Recommended</AnalysisMode>

@@ -3,7 +3,73 @@
 All notable changes to Plith are documented here. Format loosely follows
 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
-## [Unreleased]
+> **0.1.6 through 0.3.1 were written after the fact, on 2026-09-22**, from the git history and the
+> verification documents. They are shorter and blunter than the entries below them because they
+> were reconstructed rather than kept as the work happened. The tags are authoritative for what
+> each release actually contains.
+
+## [0.3.2] - 2026-09-22
+
+### Changed
+- **The notch's hover poller now follows the cursor.** It polls at 60 ms while the cursor is
+  within 400 DIP of the OSD window, while a mouse button is held, or before the notch has been
+  positioned, and at 200 ms otherwise. The fast rate itself is unchanged, so a hover a person
+  actually performs is sampled exactly as before: moving toward the notch crosses into the fast
+  zone hundreds of DIP before arriving. Measured on a running build, the UI thread's resting
+  wakeups fall from about 188 to about 83 a second, which is 56 per cent of everything the app
+  was doing at rest, and the measured hover latency of a pointer gliding in is unchanged. A
+  pointer that JUMPS onto the notch from outside that zone, which a KVM or a remote desktop can
+  do and a hand cannot, now waits for the next slow tick. Full ledger in
+  `docs/PERF-VERIFICATION.md` sections 10 and 11.
+
+## [0.3.1] - 2026-09-22
+
+### Fixed
+- **Voicemeeter's installation check no longer runs on every tick.** On a machine with Voicemeeter
+  installed but not running, Plith opened two registry keys and touched the file system about 33
+  times a second, for the life of the process, because the cheap rate-limit clause sat to the
+  right of the expensive one.
+
+### Changed
+- **The audio poll rate follows the source.** 30 ms only while Voicemeeter is the active source
+  and logged in, 500 ms otherwise. Voicemeeter needs the fast rate because its API has no
+  callback; Windows Core Audio has callbacks and needed no fast poll at all.
+
+## [0.3.0] - 2026-09-22
+
+### Changed
+- **The shelf became the notch's own page** rather than a separate pane beside it. Paging onto it
+  hands the frame to `Plith.DropCatcher`, which draws it at the notch's own 356x164 with the
+  notch's own rail, so a file is dragged straight out of the notch in one gesture. It has to work
+  this way: Plith runs at high integrity in Release and `DoDragDrop` carries nothing from there.
+  The cost, stated where the gain is: ten files instead of fifteen, two short lines of name
+  instead of two long ones, and no Clear button (a context menu, or `Ctrl+A` then `Delete`).
+
+## [0.2.0] - 2026-09-21
+
+### Added
+- **The shelf.** Drag files onto the notch and they wait there until you drag them out again.
+- **Brightness**, on the display and on its own hotkeys.
+- **Weather on the clock page**, two days, drawn rather than taken from an icon font.
+
+### Changed
+- **The notch frame grew to 356x164** and every page was redrawn for it. The media page was
+  rebuilt after Alcove, gaining a seek drag and an output picker.
+
+## [0.1.8] - 2026-09-17
+
+### Fixed
+- **The accent now actually shows.** Ink is computed from the colour behind it rather than
+  declared as a constant, so a tinted surface no longer puts text below readable contrast.
+
+## [0.1.7] - 2026-09-17
+
+### Fixed
+- **The installer no longer crashes on startup.** Shared XAML named the Plith assembly, which
+  0.1.6 shipped with a green build, two green suites and a green lint.
+- Installer caption marks are drawn rather than taken from glyph code points.
+
+## [0.1.6] - 2026-09-16
 
 ### Added
 - **Presentation modes.** The OSD can now run as either **Classic OSD** (today's
