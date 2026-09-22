@@ -64,7 +64,7 @@ measured.** Claims inherited from another surface's notes have been wrong four t
 | `docs/PHASE5-VERIFICATION.md` | CardHost, fullscreen-video auto-hide, accessibility |
 | `docs/PHASE6-VERIFICATION.md` | The notch, its widgets, the media page, seek, the output picker, brightness |
 | `docs/SHELF-VERIFICATION.md` | The shelf end to end, including the drop catcher and every instrument defect |
-| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, and which of that has been fixed |
+| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, and which of it has been fixed |
 | `docs/ROADMAP.md` | Phase status, estimates beside actuals, and open questions |
 
 ### The instruments
@@ -81,7 +81,7 @@ nothing else could see.
 | `scripts/drive-shelf-pair.ps1` | Drives the real Plith and catcher pair through the notch, on hardware |
 | `scripts/drive-media-page.ps1` | Clicks the real notch and reads the live UI Automation tree |
 | `scripts/measure-notch-open.ps1` | What one open of the notch costs, and whether the UI thread blocked during it |
-| `scripts/measure-startup.ps1` | What one launch costs, split ten ways, and how long it blocks the UI thread |
+| `scripts/measure-startup.ps1` | What one launch costs, split ten ways, its largest phase split ten ways again, and how long it blocks the UI thread |
 | `scripts/build-release.ps1` | Builds and signs the installer. Needs admin and the signing cert |
 
 A Debug build runs at **medium** integrity (`app.manifest` sets `uiAccess="false"`; only

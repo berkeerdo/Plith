@@ -8,10 +8,10 @@ in this repo.
 Voicemeeter not installed.** That is not the shipping configuration and the numbers are not a
 product claim. They are enough to find waste, which is what they were taken for.
 
-**Sections 5 and 6 are the exceptions.** Section 5 was taken on Debug, on a Release build from
-`bin`, and on a signed Release install running UIAccess. Section 6 was taken on Debug and on
-Release from `bin`, not on an install. Each says so where it says the numbers, and section 7 says
-how far that generalises, which is: two paths, not a build.
+**Sections 5 to 7 are the exceptions.** Section 5 was taken on Debug, on a Release build from
+`bin`, and on a signed Release install running UIAccess. Sections 6 and 7 were taken on Debug and
+on Release from `bin`, not on an install. Each says so where it says the numbers, and section 8
+says how far that generalises, which is: two paths, not a build.
 
 ## 1. The resting cost
 
@@ -179,7 +179,7 @@ That is a separate run with a separate instrument. Section 6 is that run, and it
 
 ## 6. What a launch costs, and the second is here
 
-Section 7 below used to carry this as the prime suspect with nothing behind it: the notch's own
+Section 8 below used to carry this as the prime suspect with nothing behind it: the notch's own
 first open had been cleared at 26 to 36 ms, the report said "first use" rather than "first open",
 and nothing had ever timed what happens between launching Plith and the notch being ready. It is
 measured now, and the suspect was right.
@@ -223,10 +223,11 @@ cable.
 
 **Where it goes.** Three phases carry nine tenths of it:
 
-- **`window`, 337 to 368 ms.** The `OsdHost` constructor, which creates the native banded HWND,
-  builds `OsdContent` and constructs all four widget pages, plus `CardHost.Start` and
-  `WeatherService.Start`. The largest single thing Plith does at startup by a factor of two and a
-  half.
+- **`window`, 337 to 368 ms.** The `OsdHost` constructor, which creates the native banded HWND
+  and builds `OsdContent`, plus `CardHost.Start` and `WeatherService.Start`. The largest single
+  thing Plith does at startup by a factor of two and a half. This line said "and constructs all
+  four widget pages" until section 7 split the phase and found it constructs one; the correction
+  is recorded there rather than silently applied here.
 - **`tray`, 114 to 134 ms.** `StartBrightness` and `TrayIconHost.Initialize`.
 - **`app`, 76 to 78 ms.** The `App` constructor and `InitializeComponent`, which is WPF parsing
   `App.xaml` and building the resource dictionaries. Before `OnStartup` runs at all.
@@ -279,21 +280,127 @@ section 3 which cut the orchestrator from 33 a second to 2 precisely because wak
 laptop. It is worth paying while an unexplained block is being hunted. It is the first thing to
 reconsider once one is not.
 
-## 7. What has never been measured
+## 7. Inside the `window` phase, and the largest thing in the launch
 
-- **The Release build, apart from two paths.** Everything above is Debug except sections 5 and 6.
+Section 8 used to carry this as the next thing to look at: section 6 found 337 to 368 ms in the
+`window` column, the largest single span of the launch by a factor of two and a half over the next
+one, and named it with a constructor rather than a cause. It is measured now, and the answer moved
+the question somewhere the obvious fix does not reach.
+
+**Three of the ten spans carry the whole phase**, and each one is a single call.
+
+**The instrument.** `StartupWindowTrace` writes a second line per launch, immediately after the
+launch line and from the same probe tick, and `scripts/measure-startup.ps1` tabulates it under the
+first table. Ten spans that PARTITION the `window` column, the same property the launch's own ten
+spans hold. Its zero is a clock read taken one statement after `StartupTrace` marks `cards`, and
+its last mark one statement before `window` is marked, so the two instruments measure the same
+interval from opposite sides. **That is the positive control on the pairing, and it is checked
+rather than eyeballed**: the script warns when `sum` and `window` differ by more than 2 ms. Across
+every run below they were identical on every row.
+
+**What it costs.** Five launches per build, in milliseconds.
+
+| build | window | fields | shell | band | content | pages | accent | hwnd | present | host | weather |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| Debug, from `bin` | 373 | 147 | 0 | 2 | 12 | 12 | 0 | 144 | 13 | 1 | 42 |
+| Debug, from `bin` | 370 | 144 | 1 | 2 | 12 | 12 | 1 | 143 | 12 | 1 | 42 |
+| Debug, from `bin` | 363 | 142 | 0 | 2 | 12 | 11 | 1 | 138 | 14 | 1 | 42 |
+| Debug, from `bin` | 361 | 141 | 1 | 2 | 12 | 12 | 1 | 138 | 12 | 1 | 41 |
+| Debug, from `bin` | 365 | 143 | 1 | 1 | 13 | 11 | 1 | 139 | 13 | 1 | 42 |
+| Release, from `bin` | 368 | 141 | 1 | 1 | 11 | 11 | 1 | 138 | 13 | 1 | 50 |
+| Release, from `bin` | 360 | 143 | 1 | 1 | 12 | 11 | 1 | 133 | 12 | 1 | 45 |
+| Release, from `bin` | 371 | 146 | 1 | 1 | 14 | 10 | 1 | 138 | 15 | 1 | 44 |
+| Release, from `bin` | 355 | 140 | 1 | 1 | 13 | 10 | 1 | 133 | 12 | 1 | 43 |
+| Release, from `bin` | 356 | 144 | 0 | 2 | 11 | 11 | 1 | 133 | 12 | 1 | 41 |
+
+Debug and Release sit within the noise of each other for the third time in this document, which is
+now the expected result rather than a finding.
+
+**Where it goes.**
+
+- **`fields`, 140 to 147 ms.** OsdHost's field initializers and the `BandWindow` base constructor:
+  everything that runs before the first statement of the constructor body, which is the earliest
+  point a mark of ours can reach. Read the heading below before drawing any conclusion from this
+  name, because the name is misleading and the A/B is what says so.
+- **`hwnd`, 133 to 144 ms.** `CreateWindow`: the native top-level layered window and the
+  `HwndSource` over it. A single call into `BandWindow`, and a cause rather than a name.
+- **`weather`, 41 to 50 ms.** `WeatherService.Start`.
+- **The other seven total under 45 ms between them**, and two of those are worth stating because
+  they were the suspects going in. Building the widget pages costs 10 to 12 ms, and
+  `ApplyPresentationMode`, which reshapes the content, measures it through `Reposition` and parks
+  the strip, costs 12 to 15.
+
+**The widget pages were never the cost, and the earlier description of this phase was wrong.**
+Section 6 said the `window` phase constructs all four widget pages. It constructs ONE, the clock;
+the weather, media and shelf pages are installed by `AttachAudioSource` and `AttachShelf`, which
+run after the phase is over, inside the `audio` column. A claim inherited from section 5 — where
+four pages really are laid out, because by the time the notch opens all four exist — rather than
+measured where it was repeated. That is the failure mode this repo has now recorded six times, and
+this is the first time it travelled between two sections of the same document.
+
+**The 127 ms belongs to the first XAML load, not to the control that pays it.** `fields` is a grab
+bag of five allocations plus a base constructor, so it was split further in a throwaway build:
+`new WidgetFrame()`, the one field initializer that loads XAML, was moved into the constructor body
+with a mark of its own. It read **126 to 128 ms**, and the remaining four allocations plus both
+`BandWindow` constructors read **16**.
+
+That looked like an actionable answer, and it was not. `OsdContent`, the next XAML control built,
+read 12 ms right after it, so the two were A/B'd by swapping which one is constructed first:
+
+| order | first control | second control |
+|---|---|---|
+| frame first | `WidgetFrame` **126 to 128** | `OsdContent` 12 |
+| content first | `OsdContent` **133 to 135** | `WidgetFrame` 2 to 3 |
+
+**The cost follows the position, not the control.** Whichever XAML control this process loads first
+pays about 130 ms, and the second pays ten. So it is the first BAML load, the merged resource
+dictionaries being built, and the JIT of that path. None of that is `WidgetFrame`, and none of it
+is removed by making `WidgetFrame` cheaper or by building it lazily: **deferring it moves the
+130 ms to whatever loads next.** That is the fix this measurement rules out, and ruling it out is
+most of what the measurement was for.
+
+Both experimental splits were reverted. What ships is the ten-span instrument above, with
+`_widgets` back where it was as a field initializer, so nothing in OsdHost is shaped by the
+instrument beyond ten calls to `Mark`.
+
+**The A/B needed a second run to be readable, and the reason is worth recording.** The first
+attempt built the frame after the content but left the phase ORDER alone, and the trace clamps a
+mark that arrives out of order to the previous boundary. So `frame` absorbed everything between
+and `content` read 0. The clamp did exactly what it is built to do, which is refuse to report a
+negative span; what it cannot do is tell a reader that the marks, rather than the launch, were the
+thing that changed. Reordering the enum to match the code made the run readable.
+
+**The positive control.** A deliberate `Thread.Sleep(200)` was injected just before the `accent`
+mark, a column that reads 1 ms, and the launch re-run three times: `accent` went to 203 to 216 ms,
+`window` went from about 363 to between 577 and 583, and the other nine sub-spans stayed inside the
+noise of the run before it. `sum` still landed on `window` on every row. The delay appeared in the
+column it was injected into and nowhere else.
+
+**What this does NOT say.** Every launch above is warm, on Debug and on a Release build from `bin`
+with `uiAccess` off, on one machine. Section 8's caveats about cold launches and installed builds
+apply here unchanged. And nothing here says that 130 ms of first XAML load can be removed at all.
+It says only that moving the control that pays it will not remove it.
+
+## 8. What has never been measured
+
+- **The Release build, apart from two paths.** Everything above is Debug except sections 5 to 7.
   Section 5 was taken on Debug, on a Release build from `bin`, and on a signed Release install, and
-  found the three within noise of each other; section 6 on Debug and Release from `bin`, likewise
-  within noise. That is two paths measured on Release, not a build.
-- **A cold launch.** Every launch in section 6 is warm: the binary and its dependencies were in
-  the file cache from a launch minutes earlier, and `clr` reads 37 to 53 ms because of it. The
-  case the report came from is a launch at login on a machine that has just booted, and it is not
-  in that table. It needs a reboot between runs, which is the one thing none of these instruments
-  can drive.
-- **What is inside the `window` phase.** Section 6 found 337 to 368 ms in the `OsdHost`
-  constructor, which is the largest single thing Plith does at startup and a phase name rather
-  than a cause. It builds a banded native window and all four widget pages; nothing says which.
-  That is where to look next, and it is the first place worth trying to move.
+  found the three within noise of each other; sections 6 and 7 on Debug and Release from `bin`,
+  likewise within noise. That is two paths measured on Release, not a build. The Release build in
+  `bin` cannot even be launched as it ships: its manifest asks for `uiAccess`, which Windows
+  refuses outside a signed install, so both runs used a Release build relinked with the Debug
+  manifest. That is the JIT and the optimizer under measurement, not the shipping integrity
+  level.
+- **A cold launch.** Every launch in sections 6 and 7 is warm: the binary and its dependencies
+  were in the file cache from a launch minutes earlier, and `clr` reads 37 to 53 ms because of
+  it. The case the report came from is a launch at login on a machine that has just booted, and it
+  is not in those tables. It needs a reboot between runs, which is the one thing none of these
+  instruments can drive.
+- **Where inside the first XAML load the 127 ms goes.** Section 7 above establishes that the
+  largest thing in the launch is the process's first XAML control, whichever one that happens to
+  be. It does not say how much of that is the BAML reader, how much is the merged resource
+  dictionaries, and how much is JIT of the loading path. Those have different answers and only one
+  of them is this repo's to move.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
 - **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
