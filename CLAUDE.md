@@ -64,7 +64,7 @@ measured.** Claims inherited from another surface's notes have been wrong four t
 | `docs/PHASE5-VERIFICATION.md` | CardHost, fullscreen-video auto-hide, accessibility |
 | `docs/PHASE6-VERIFICATION.md` | The notch, its widgets, the media page, seek, the output picker, brightness |
 | `docs/SHELF-VERIFICATION.md` | The shelf end to end, including the drop catcher and every instrument defect |
-| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, and which of it has been fixed |
+| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, down to what the first XAML load is made of, and which of it has been fixed |
 | `docs/ROADMAP.md` | Phase status, estimates beside actuals, and open questions |
 
 ### The instruments

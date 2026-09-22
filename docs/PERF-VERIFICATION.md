@@ -8,9 +8,9 @@ in this repo.
 Voicemeeter not installed.** That is not the shipping configuration and the numbers are not a
 product claim. They are enough to find waste, which is what they were taken for.
 
-**Sections 5 to 7 are the exceptions.** Section 5 was taken on Debug, on a Release build from
-`bin`, and on a signed Release install running UIAccess. Sections 6 and 7 were taken on Debug and
-on Release from `bin`, not on an install. Each says so where it says the numbers, and section 8
+**Sections 5 to 8 are the exceptions.** Section 5 was taken on Debug, on a Release build from
+`bin`, and on a signed Release install running UIAccess. Sections 6 to 8 were taken on Debug and
+on Release from `bin`, not on an install. Each says so where it says the numbers, and section 9
 says how far that generalises, which is: two paths, not a build.
 
 ## 1. The resting cost
@@ -102,7 +102,7 @@ Full ledgers for these in `docs/SHELF-VERIFICATION.md` sections 10.27 and 10.28.
 
 ## 5. The notch's own first open
 
-Section 6 below used to carry this as the one reported symptom with nothing behind it: a person saw
+Section 9 below used to carry this as the one reported symptom with nothing behind it: a person saw
 the mouse go busy for about a second on first use, and the note guessed the likely place was the
 first render of Plith's four widget pages. Both halves are now measured. The guess was wrong.
 
@@ -179,7 +179,7 @@ That is a separate run with a separate instrument. Section 6 is that run, and it
 
 ## 6. What a launch costs, and the second is here
 
-Section 8 below used to carry this as the prime suspect with nothing behind it: the notch's own
+Section 9 below used to carry this as the prime suspect with nothing behind it: the notch's own
 first open had been cleared at 26 to 36 ms, the report said "first use" rather than "first open",
 and nothing had ever timed what happens between launching Plith and the notch being ready. It is
 measured now, and the suspect was right.
@@ -280,9 +280,17 @@ section 3 which cut the orchestrator from 33 a second to 2 precisely because wak
 laptop. It is worth paying while an unexplained block is being hunted. It is the first thing to
 reconsider once one is not.
 
+**That condition is now met, and this is the open work item it creates.** The block is explained:
+this section says where the launch's time goes, section 7 says what the largest span is made of,
+and section 8 says why the biggest piece of that cannot be moved between our own controls. Nothing
+is being hunted any more, so `UiStallWatch` is now four wakeups a second in exchange for a number
+nobody is reading. Retiring it, or arming it only around a launch the way section 5's probe is
+armed only around an open, is held to section 3's own standard rather than to a guess: measure the
+idle wakeups and the idle CPU before and after, and record both here.
+
 ## 7. Inside the `window` phase, and the largest thing in the launch
 
-Section 8 used to carry this as the next thing to look at: section 6 found 337 to 368 ms in the
+Section 9 used to carry this as the next thing to look at: section 6 found 337 to 368 ms in the
 `window` column, the largest single span of the launch by a factor of two and a half over the next
 one, and named it with a constructor rather than a cause. It is measured now, and the answer moved
 the question somewhere the obvious fix does not reach.
@@ -377,30 +385,153 @@ noise of the run before it. `sum` still landed on `window` on every row. The del
 column it was injected into and nowhere else.
 
 **What this does NOT say.** Every launch above is warm, on Debug and on a Release build from `bin`
-with `uiAccess` off, on one machine. Section 8's caveats about cold launches and installed builds
+with `uiAccess` off, on one machine. Section 9's caveats about cold launches and installed builds
 apply here unchanged. And nothing here says that 130 ms of first XAML load can be removed at all.
 It says only that moving the control that pays it will not remove it.
 
-## 8. What has never been measured
+## 8. Inside the first XAML load
 
-- **The Release build, apart from two paths.** Everything above is Debug except sections 5 to 7.
+Section 9 below used to carry this as its first open item: section 7 established that the largest
+thing in the launch is the process's FIRST XAML control, whichever one that happens to be, and
+that deferring it only moves the cost to whatever loads next. It did not say how much of that is
+the BAML reader, how much is the merged resource dictionaries, and how much is JIT of the loading
+path. It is measured now, and the split rules out the one fix that looked obvious going in.
+
+**The instrument.** Seven throwaway marks in front of `fields`, in a throwaway build, reusing
+`StartupWindowTrace` rather than writing a new type, so the positive control it already carries
+still holds over the new columns: `sum` has to land on the `window` column, and it did on every
+row of every run below. Five of them realize one merged dictionary each, by looking up every key
+it holds and every key its nested merges hold. The other two build a control apiece, and they are
+read against the `fields` column that was already there:
+
+- **`empty`**, a `UserControl` whose whole content is a bare `Grid`. It references no brush, no
+  style and no static, so whatever it costs is the framework's own first-XAML-load path with no
+  content of ours in it to blame.
+- **`rich`**, a control that uses every XAML FEATURE `WidgetFrame` uses without being it: star and
+  fixed `RowDefinition`s, `x:Static`, a named element, `ClipToBounds`, a literal `#AARRGGBB`
+  brush, `CornerRadius`, a `DynamicResource` brush, a `RenderTransform` and a `Cursor`.
+- **`fields`**, unchanged, which is where `new WidgetFrame()` actually happens.
+
+The dictionaries are resolved by `Source` and not by index, and that is not fussiness.
+`ThemeService` has already run by this point: `SwapPalette` can move a palette within the
+collection and `ApplyAccentOverride` APPENDS a sixth dictionary that has no `Source` at all, so
+indices would have measured the wrong dictionary under each name and said nothing about it. Caught
+by reading `ThemeService` before the run rather than by disbelieving a number after it. The
+leading slash is the same disambiguation `ThemeService` documents, because "/Palette." must not
+match `OsdPalette.Dark.xaml`.
+
+**What it costs.** Five launches per build, in milliseconds. The three columns on the right are
+unchanged from section 7 and are carried here as the control on the other three.
+
+| build | window | empty | rich | fields | content | hwnd | weather |
+|---|---|---|---|---|---|---|---|
+| Debug, from `bin` | 351 | 54 | 80 | 3 | 11 | 133 | 41 |
+| Debug, from `bin` | 347 | 54 | 80 | 4 | 11 | 130 | 40 |
+| Debug, from `bin` | 345 | 54 | 77 | 4 | 11 | 132 | 41 |
+| Debug, from `bin` | 346 | 54 | 79 | 3 | 12 | 130 | 42 |
+| Debug, from `bin` | 346 | 55 | 80 | 4 | 11 | 128 | 40 |
+| Release, from `bin` | 369 | 56 | 82 | 3 | 13 | 144 | 42 |
+| Release, from `bin` | 371 | 58 | 85 | 3 | 12 | 142 | 45 |
+| Release, from `bin` | 370 | 56 | 81 | 4 | 13 | 141 | 45 |
+| Release, from `bin` | 382 | 61 | 85 | 3 | 12 | 138 | 46 |
+| Release, from `bin` | 374 | 57 | 87 | 3 | 12 | 142 | 43 |
+
+Debug and Release sit within the noise of each other for the fourth time in this document. It was
+worth re-checking here rather than assuming, and this is the one section where that is true: the
+claim below names JIT, which is the thing a Release build is supposed to change.
+
+**Where it goes, and none of it is the control that used to be blamed.**
+
+- **`empty`, 54 to 61 ms.** A control with no content of ours costs this. It is the BAML reader,
+  the XAML object writer and the JIT of that path, and nothing in it is reachable from this repo
+  except by not loading XAML at all.
+- **`rich`, 77 to 87 ms.** The first USE of the feature vocabulary: a `DynamicResource` lookup, an
+  `x:Static` resolution, a type converter, a `Freezable` under a `RenderTransform`. Paid once, by
+  whichever control uses each feature first.
+- **`fields`, 3 to 4 ms.** `new WidgetFrame()` plus four other allocations and both `BandWindow`
+  constructors, all of it, now that the two probes in front of it have paid for the machinery.
+
+**That is the answer, and it finishes section 7's sentence.** `fields` read 140 to 147 ms in
+section 7, of which `new WidgetFrame()` was 126 to 128. It reads 3 to 4 here. Section 7 proved the
+cost follows the POSITION rather than the control; this says what the positional work actually is,
+and it splits in two: about 55 ms of framework core that any XAML control whatsoever would pay,
+and about 80 ms of first-use that follows the FEATURES rather than the file. `WidgetFrame`'s own
+content was never in it, and neither was `OsdContent`'s.
+
+**The merged dictionaries are not the cost, and the obvious fix is dead.** `SettingsTheme.xaml` is
+740 lines of styles for a window that may never open in a session, merged into `App.xaml` at every
+launch, and going in it was the actionable-looking finding. It is not one. A `ResourceDictionary`
+loaded from a `Source` has its STRUCTURE read when the `Source` is set, which happens inside
+`App.InitializeComponent` and is already counted in the `app` column, but each of its VALUES is
+held as a deferred byte range and realized on first lookup. Nothing looks up a Settings style until
+Settings opens. Realizing all five eagerly measures this:
+
+| build | window | osdpal | theme | pal | setth | cardtpl | empty | rich | fields |
+|---|---|---|---|---|---|---|---|---|---|
+| Debug, from `bin` | 411 | 2 | 19 | 0 | 39 | 1 | 30 | 88 | 4 |
+| Debug, from `bin` | 409 | 1 | 16 | 0 | 41 | 0 | 30 | 89 | 4 |
+| Debug, from `bin` | 412 | 2 | 16 | 0 | 40 | 1 | 30 | 87 | 4 |
+| Debug, from `bin` | 394 | 2 | 14 | 0 | 40 | 1 | 29 | 81 | 3 |
+| Debug, from `bin` | 404 | 1 | 14 | 0 | 37 | 0 | 29 | 86 | 4 |
+
+Realizing the five costs 52 to 60 ms and makes the whole launch SLOWER, from a `window` of 345 to
+351 up to 394 to 412. **The launch does not pay that money today.** So moving those dictionaries
+out of `App.xaml` and loading them when Settings first opens saves nothing at launch, because
+there is nothing there to save. That is the second fix these two sections have ruled out, after
+section 7 ruled out deferring `WidgetFrame`, and ruling it out is most of what the measurement was
+for.
+
+What the dictionary run does show is an overlap rather than a saving: realizing dictionaries first
+cut `empty` from 54 to 29, because realizing a deferred value RUNS the BAML reader and warms the
+same path the first control otherwise warms. So roughly 24 ms of that 52 to 60 is work a first
+control would have done anyway, and the rest is addition. Read that as a shape and not to the
+millisecond: `hwnd` also read 146 to 152 in this run against 128 to 133 in the one above it, and
+nothing here explains why.
+
+**The positive control.** A deliberate `Thread.Sleep(200)` was injected inside the `empty` span
+and the launch re-run three times: `empty` went from 54 to between 262 and 270, `window` went from
+345 to 351 up to between 561 and 575, and every other column, `rich` and `fields` and `hwnd` and
+`weather` included, stayed inside the noise of the run before it. The delay appeared in the column
+it was injected into and nowhere else.
+
+All of it was reverted. Nothing of this instrument ships, exactly as section 7's two splits did
+not, and `StartupWindowTrace` is back at its ten spans.
+
+**What this does NOT say.**
+
+1. **`rich` is one column with three plausible tenants.** JIT of the lookup paths, static
+   construction of WPF types touched for the first time, and the resource lookups themselves. It
+   is named honestly as one column because this instrument cannot separate them, and separating
+   them needs a sampling profiler or the runtime's own JIT events rather than another mark.
+2. **The probes RELOCATE the cost; they do not prove it is irreducible.** What is ruled out is
+   moving it between our own controls or our own dictionaries. Whether the framework's 55 ms core
+   can be cut by a different loading strategy altogether, ReadyToRun or startup-path trimming, is
+   not something any launch above touched.
+3. Every launch here is warm, on Debug and on a Release build from `bin` with `uiAccess` off, on
+   one machine. Section 9's caveats apply unchanged, and nothing here says a person minds.
+
+## 9. What has never been measured
+
+- **The Release build, apart from two paths.** Everything above is Debug except sections 5 to 8.
   Section 5 was taken on Debug, on a Release build from `bin`, and on a signed Release install, and
-  found the three within noise of each other; sections 6 and 7 on Debug and Release from `bin`,
-  likewise within noise. That is two paths measured on Release, not a build. The Release build in
-  `bin` cannot even be launched as it ships: its manifest asks for `uiAccess`, which Windows
-  refuses outside a signed install, so both runs used a Release build relinked with the Debug
-  manifest. That is the JIT and the optimizer under measurement, not the shipping integrity
-  level.
-- **A cold launch.** Every launch in sections 6 and 7 is warm: the binary and its dependencies
+  found the three within noise of each other; sections 6, 7 and 8 on Debug and Release from `bin`,
+  likewise within noise, which is now four findings of the same shape. That is still two paths
+  measured on Release, not a build, and repeating one of them does not add a third. The Release
+  build in `bin` cannot even be launched as it ships: its manifest asks for `uiAccess`, which
+  Windows refuses outside a signed install, so every one of those runs used a Release build
+  relinked with the Debug manifest. That is the JIT and the optimizer under measurement, not the
+  shipping integrity level.
+- **A cold launch.** Every launch in sections 6, 7 and 8 is warm: the binary and its dependencies
   were in the file cache from a launch minutes earlier, and `clr` reads 37 to 53 ms because of
   it. The case the report came from is a launch at login on a machine that has just booted, and it
   is not in those tables. It needs a reboot between runs, which is the one thing none of these
   instruments can drive.
-- **Where inside the first XAML load the 127 ms goes.** Section 7 above establishes that the
-  largest thing in the launch is the process's first XAML control, whichever one that happens to
-  be. It does not say how much of that is the BAML reader, how much is the merged resource
-  dictionaries, and how much is JIT of the loading path. Those have different answers and only one
-  of them is this repo's to move.
+- **Which of JIT, type initialization and resource lookup carries section 8's `rich` column.**
+  Section 8 splits the first XAML load into about 55 ms of framework core and about 80 ms of
+  first-use that follows the features rather than the file, and rules out both fixes that looked
+  obvious. It cannot split that second figure further: three mechanisms share one column, and
+  telling them apart needs a sampling profiler or the runtime's own JIT events rather than another
+  mark. Only one of the three would be this repo's to move.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
 - **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
