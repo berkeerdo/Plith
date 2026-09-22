@@ -4,9 +4,13 @@ What Plith costs when nothing is happening, and which of it has been fixed. Writ
 shipped, because the question "how is performance overall" had never been answered with a number
 in this repo.
 
-**Every figure here is a DEBUG build over Remote Desktop, on one machine, with Voicemeeter not
-installed.** That is not the shipping configuration and the numbers are not a product claim. They
-are enough to find waste, which is what they were taken for.
+**Every figure in sections 1 to 4 is a DEBUG build over Remote Desktop, on one machine, with
+Voicemeeter not installed.** That is not the shipping configuration and the numbers are not a
+product claim. They are enough to find waste, which is what they were taken for.
+
+**Section 5 is the exception and was taken on both**, including a signed Release install running
+UIAccess. It says so where it says the numbers, and section 6 says how far that generalises, which
+is: one path, not a build.
 
 ## 1. The resting cost
 
@@ -95,14 +99,93 @@ the fallback source end to end: a real volume key, a Core Audio notification, an
 
 Full ledgers for these in `docs/SHELF-VERIFICATION.md` sections 10.27 and 10.28.
 
-## 5. What has never been measured
+## 5. The notch's own first open
 
-- **The Release build.** Everything here is Debug, which carries checks Release does not.
+Section 6 below used to carry this as the one reported symptom with nothing behind it: a person saw
+the mouse go busy for about a second on first use, and the note guessed the likely place was the
+first render of Plith's four widget pages. Both halves are now measured. The guess was wrong.
+
+**The instrument.** `NotchOpenTrace` writes one line per open into `plith.log`, and
+`scripts/measure-notch-open.ps1` drives the clicks and tabulates them. Four consecutive spans that
+PARTITION the open, so adding them up lands on the total and no column can be blamed twice:
+`layout`, `defer`, `show`, `settle`.
+
+Beside them, and separate on purpose, a stall probe: a `DispatcherTimer` at Input priority, armed
+only between a click and its settle. Input sits below Loaded, Render, DataBind and Normal in WPF's
+queue, so that timer cannot tick while any of them is backed up, and cannot tick at all while the
+thread is blocked outright. The largest gap between its ticks is therefore not a proxy for the busy
+cursor. It is a measurement of it.
+
+The split is the point. The expansion is a deliberate 340 ms quintic, so timing the open alone
+would have called that animation a defect and still missed a block underneath it.
+
+**What it costs.** Six runs across four configurations.
+
+| configuration | first open | of which layout | later opens |
+|---|---|---|---|
+| Debug, from `bin` | 27 ms | 19 ms | 3 ms |
+| Debug, from `bin`, again | 36 ms | 18 ms | 11 ms |
+| Release JIT, from `bin`, uiAccess off | 26 ms | 18 ms | 7 ms |
+| Release installed and signed, clicked by hand | 26 ms | 16 ms | 2 ms |
+| Release installed and signed, driven | 33 ms | 21 ms | not captured |
+| Release installed and signed, driven again | 28 ms | 14 ms | 3 ms |
+
+The first open costs 26 to 36 ms, of which 14 to 21 ms is the first layout of the four widget
+pages. Every open after it costs 2 to 4 ms and lays nothing out. **That is about two per cent of
+the reported second, on the exact path the replaced hypothesis named.**
+
+The layout column is the positive control on the whole instrument: large exactly once per process,
+small every time after, which is the signature the code predicts. `WidgetHost` is `Collapsed` until
+an open and a collapsed element is never measured, so the pages are laid out once, at the first
+open, and never again.
+
+Debug and Release sit within the noise of each other here. Worth stating because it is not what
+section 6 assumes about Release in general: WPF layout is framework code and is already optimized
+in both.
+
+**The stall column says nothing, and says so out loud.** On every first open it reads 25 to 31 ms
+over ONE sample. One sample means the probe fired once in the whole window, so the figure is the
+width of that window rather than a block inside it. What can honestly be claimed is bounded: no
+block longer than about 15 ms occurred, because a longer one would have taken a sample with it.
+This is why the line carries the sample count at all. A stall of zero otherwise reads as "nothing
+blocked" when it may mean "nothing was ever looked at".
+
+**So where is the second?** Not here, and this run does not say. It was reported as "first use",
+which is as consistent with app startup as with the first open, and startup has never been timed.
+That is a separate run with a separate instrument, and it is now the open question in section 6.
+
+**Three instrument defects, each found by running it rather than by reading it.**
+
+1. **The `INPUT` struct marshalled to 48 bytes instead of 40.** A hand-simplified layout with
+   `MOUSEINPUT` inline plus padding, instead of the explicit union the other drivers carry.
+   `SendInput` refuses it with Win32 error 87 and no other clue. The union is back, with a comment
+   saying why it is not decoration.
+
+2. **The first version of the paint interval measured nothing at all.** It hung off
+   `CompositionTarget.Rendering` and reported `0 ms` on every open, including the first. That event
+   fires per frame whether or not the content in question was laid out, and the notch is animating
+   by then, so it was timing the next frame boundary of an animation already in flight. Replaced by
+   `LayoutUpdated`, armed at the CLICK: WPF runs layout at Render priority, above the Loaded
+   priority the rest of the open is deferred to, so a handler attached in the deferred callback has
+   already missed the pass it exists to time. Thirteen unit tests were green throughout.
+
+3. **The script's own header claimed a signed Release Plith could not be driven.** Measured:
+   `SendInput` from a MEDIUM-integrity shell reaches a UIAccess window at HIGH integrity. Accepted,
+   no error, the notch opened. UIPI blocks window messages sent AT a higher-integrity window; it
+   does not block injection into the raw input stream, which the system then delivers by hit test.
+   A claim inherited rather than measured, which is the failure mode this repo has now recorded
+   five times, and the first time the wrong claim was inside the instrument's own documentation.
+
+## 6. What has never been measured
+
+- **The Release build, apart from one path.** Everything above is Debug except section 5, which was
+  taken on Debug, on a Release build from `bin`, and on a signed Release install, and found the
+  three within noise of each other. That is one path measured on Release, not a build.
 - **Long-run memory.** The longest sample here is five minutes. A leak does not show in five
   minutes, and nothing in this repo has ever run the app for a day and looked.
-- **GPU and the render thread.** All the sampling above is CPU time per thread.
-- **The notch's own first open.** A person reported the mouse going busy for about a second on
-  first use. The shelf handover accounts for 85 ms of that and nothing else here accounts for the
-  rest, so the likely place is the first render of Plith's four widget pages inside its own layered
-  window. That path is animation-driven and timing it means timing a first render rather than a
-  method; no instrument for it exists.
+- **GPU and the render thread.** All the sampling above is CPU time per thread. Every stamp in
+  section 5 is taken on the UI thread too, so none of it sees the frame the monitor scanned out.
+- **App startup, which is now the prime suspect for the reported second.** Section 5 measured the
+  notch's own first open and cleared it at 26 to 36 ms. The report said "first use", and nothing
+  has ever timed what happens between launching Plith and the notch being ready. That is where to
+  look next.
