@@ -16,7 +16,9 @@ public enum StartupPhase
     Settings,
     /// <summary>The SMTC client, the four cards, weather, the fullscreen watcher, CardHost.</summary>
     Cards,
-    /// <summary>The OsdHost constructor, which creates the native HWND and builds the widget pages.</summary>
+    /// <summary>The OsdHost constructor, which creates the native HWND and builds the content and
+    /// the first widget page, plus CardHost.Start and WeatherService.Start. Split ten ways by
+    /// <see cref="StartupWindowTrace"/>, because this is the launch's largest span.</summary>
     Window,
     /// <summary>The microphone endpoint and the orchestrator: Core Audio enumeration, and the
     /// Voicemeeter probe on a machine that has it.</summary>

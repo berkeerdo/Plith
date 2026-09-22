@@ -111,8 +111,18 @@ public sealed class OsdHost : BandWindow
     /// can flip its Edit/Save/Cancel button state.</summary>
     public event Action<bool>? EditModeChanged;
 
-    public OsdHost(SettingsService settings, ThemeService theme, CardHost cardHost, NotchHomeState home)
+    /// <param name="trace">Splits this constructor into the spans that make up the launch's
+    /// `window` column. Optional and null everywhere but App, so nothing outside a real launch
+    /// carries the cost of it — which is eight clock reads, and is mentioned only because this
+    /// class is where a performance instrument would be most embarrassing to find.</param>
+    public OsdHost(SettingsService settings, ThemeService theme, CardHost cardHost, NotchHomeState home,
+                   StartupWindowTrace? trace = null)
     {
+        // The field initializers and the BandWindow base constructor, which both ran before this
+        // line. There is no earlier statement of ours to stamp, so this is the boundary rather
+        // than a choice.
+        trace?.Mark(StartupWindowPhase.Fields);
+
         _settings = settings;
         _theme = theme;
         _cardHost = cardHost;
@@ -126,6 +136,7 @@ public sealed class OsdHost : BandWindow
 
         _hoverPoller.Polled += ResyncClickThrough;
         Application.Current.Exit += (_, _) => _hoverPoller.Dispose();
+        trace?.Mark(StartupWindowPhase.Shell);
 
         ZBandID = NativeMethods.GetTopMostZBandID();
         // Recorded once at startup because it silently decides whether the OSD can cover an
@@ -136,13 +147,16 @@ public sealed class OsdHost : BandWindow
         IsClickThrough = false;   // mouse hover keep-alive needs hit-testing
         Opacity = 0;
         Focusable = false;
+        trace?.Mark(StartupWindowPhase.Band);
 
         _content = new OsdContent { DataContext = Shell, Log = _log };
         ApplyShellWidth();
         Content = _content;
+        trace?.Mark(StartupWindowPhase.Content);
 
         _widgets.PageRequested += OnWidgetPageRequested;
         _widgets.SetPages(_pager, BuildWidgetPages());
+        trace?.Mark(StartupWindowPhase.Pages);
 
         // Re-measure the notch's surface whenever the content's laid-out size actually changes.
         //
@@ -224,12 +238,16 @@ public sealed class OsdHost : BandWindow
             Reposition();
         });
 
+        trace?.Mark(StartupWindowPhase.Accent);
+
         // Pre-create the native HWND so the first ShowOsd is instant.
         // BandWindow.CreateWindow is idempotent if HasSourceCreated is already true.
         CreateWindow();
+        trace?.Mark(StartupWindowPhase.Hwnd);
 
         _activeMode = _settings.Current.Presentation;
         ApplyPresentationMode();
+        trace?.Mark(StartupWindowPhase.Present);
     }
 
     // While a window covers the monitor, the notch does not merely shrink away — it stops

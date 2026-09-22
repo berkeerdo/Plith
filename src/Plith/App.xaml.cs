@@ -58,6 +58,8 @@ public partial class App : Application
     private const int StallThresholdMs = 500;
 
     private StartupTrace? _startup;
+    private StartupWindowTrace? _windowTrace;
+    private Func<long>? _clockMs;
     private UiStallWatch? _stall;
     private System.Windows.Threading.DispatcherTimer? _stallProbe;
 
@@ -75,6 +77,9 @@ public partial class App : Application
     internal void UseStartupClock(Func<long> clockMs, long clrMs)
     {
         _startup = new StartupTrace(clockMs, clrMs);
+        // Held because the window trace takes its own zero, and it has to take it in the middle
+        // of OnStartup rather than here.
+        _clockMs = clockMs;
         // Anchored here rather than at the first tick, so the whole of OnStartup counts as the
         // block it is: the probe cannot tick while OnStartup holds the thread, which is exactly
         // the property being relied on.
@@ -126,7 +131,12 @@ public partial class App : Application
         _cardHost.Register(_brightnessCard);  // Order 30, below audio, and only while it has something to say
         _startup?.Mark(StartupPhase.Cards);
 
-        _osd = new OsdHost(_settings, _theme, _cardHost, _home);   // ctor calls CreateWindow() so first ShowOsd is instant
+        // Built on the statement after the mark above, and that placement is the instrument: this
+        // trace takes its own zero in its constructor, so the two agree to within a clock read.
+        // See StartupWindowTrace for what that buys and what it costs.
+        _windowTrace = _clockMs is null ? null : new StartupWindowTrace(_clockMs);
+
+        _osd = new OsdHost(_settings, _theme, _cardHost, _home, _windowTrace);   // ctor calls CreateWindow() so first ShowOsd is instant
         _cardHost.ShowRequested += (reason, d) => _osd.ShowOsd(d, reason: reason);
         _cardHost.HideRequested += () => _osd.HideOsd();
         // Suppression reaches CardHost by injection above; this is the separate signal the
@@ -134,11 +144,13 @@ public partial class App : Application
         // show at all", while this means "retract the strip and behave like Classic".
         _fullscreenWatcher.ForegroundCoversMonitorChanged += _osd.OnForegroundCoversMonitorChanged;
         _cardHost.Start();
+        _windowTrace?.Mark(StartupWindowPhase.Host);
         // Constructed and started here, on the UI thread, and never off it: WeatherService's
         // refresh chain calls WindowsLocationProvider.GetAsync, whose Geolocator.RequestAccessAsync
         // is UI-thread-only, and can reach SettingsService.Save (via GeocodeAndCacheAsync) and
         // AmbientCard's Tick, both of which must run on the dispatcher too. See WeatherService.
         _weatherService.Start();
+        _windowTrace?.Mark(StartupWindowPhase.Weather);
         _startup?.Mark(StartupPhase.Window);
 
         // The capture endpoint. Start() failing is an ordinary outcome rather than an error - a
@@ -270,7 +282,15 @@ public partial class App : Application
             // The launch line first, because on the tick that carries both they describe the same
             // gap and the launch is the one that explains it.
             var launch = _startup?.Report(_stall?.MaxGapMs ?? 0, _stall?.Ticks ?? 0);
-            if (launch is not null) _diagnosticLog?.Info("Perf", launch);
+            if (launch is not null)
+            {
+                _diagnosticLog?.Info("Perf", launch);
+                // Immediately after the line it zooms into, and only then. On its own it reads as
+                // a window that took 350 ms with nothing to compare against; the pair is what
+                // lets a reader check the sub-total against the column and catch a misplaced mark.
+                var window = _windowTrace?.Report();
+                if (window is not null) _diagnosticLog?.Info("Perf", window);
+            }
             if (stall is not null) _diagnosticLog?.Info("Perf", stall);
         };
         _stallProbe.Start();

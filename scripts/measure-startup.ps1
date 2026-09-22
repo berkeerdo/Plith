@@ -28,8 +28,17 @@
                you want to measure a launch that happened the ordinary way, from the Start menu or
                at login.
 
-  WHAT THE COLUMNS MEAN is documented on StartupTrace itself, not repeated here, so the two cannot
-  drift apart. Three things are worth saying beside the table rather than inside the type:
+  It tabulates a SECOND line beside the launch line, and a second table under the first. Section 6
+  found 337 to 368 ms in the `window` column, which is the largest single thing Plith does at
+  startup and was a phase name rather than a cause. StartupWindowTrace splits that one column into
+  the ten spans of OsdHost's constructor, and those are the second table. Its `sum` column is
+  the positive control: the ten spans partition the same interval the `window` column measures,
+  so `sum` and `window` must agree to within a millisecond. They do not agree when a mark has been
+  moved into the wrong place, which is the failure this pairing exists to make visible.
+
+  WHAT THE COLUMNS MEAN is documented on StartupTrace and StartupWindowTrace themselves, not
+  repeated here, so the two cannot drift apart. Three things are worth saying beside the table
+  rather than inside the type:
 
     - The ten spans PARTITION the launch. Adding them up lands on the total, so a column can be
       read as "this phase cost that much" without any of it being double counted.
@@ -88,8 +97,8 @@ if (-not (Test-Path $log)) {
 # had in fact started and logged normally.
 #
 # The newest line is always in the live file, because rotation happens on the way to writing it.
-function Get-LaunchLineAfter([datetime]$marker) {
-    foreach ($match in (Get-Content $log -ErrorAction SilentlyContinue | Select-String 'Perf\] Startup: ')) {
+function Get-PerfLineAfter([datetime]$marker, [string]$kind) {
+    foreach ($match in (Get-Content $log -ErrorAction SilentlyContinue | Select-String "Perf\] ${kind}: ")) {
         $text = $match.ToString()
         if ($text -notmatch '^\[([^\]]+)\]') { continue }
 
@@ -124,7 +133,24 @@ function Read-LaunchLine([string]$line) {
     [pscustomobject]$row
 }
 
+# "Window: 346ms total (fields 139, shell 1, band 2, ...)"
+#
+# Written immediately after the launch line, by the same probe tick, so a launch that produced one
+# produced the other. A missing window line therefore means an older build, not a slow launch: the
+# Plith in Program Files predates this instrument and writes neither.
+function Read-WindowLine([string]$line) {
+    if ($line -notmatch 'Window: (\d+)ms total \((.+?)\)') { return $null }
+
+    $row = [ordered]@{ sum = [int]$Matches[1] }
+    foreach ($span in $Matches[2] -split ',\s*') {
+        $parts = $span.Trim() -split '\s+'
+        $row[$parts[0]] = [int]$parts[1]
+    }
+    [pscustomobject]$row
+}
+
 $rows = @()
+$windows = @()
 
 if ($NoDrive) {
     Write-Host "Watching $log. Launch Plith $Runs time(s); Ctrl+C to stop." -ForegroundColor Cyan
@@ -144,7 +170,7 @@ for ($i = 1; $i -le $Runs; $i++) {
     $deadline = (Get-Date).AddSeconds($TimeoutSec)
     $line = $null
     while ((Get-Date) -lt $deadline) {
-        $line = Get-LaunchLineAfter $marker
+        $line = Get-PerfLineAfter $marker 'Startup'
         if ($line) { break }
         Start-Sleep -Milliseconds 200
     }
@@ -163,6 +189,22 @@ for ($i = 1; $i -le $Runs; $i++) {
     $row | Add-Member -NotePropertyName run -NotePropertyValue $i
     $rows += $row
     Write-Host ("  run {0}: {1} ms total, stall {2} ms over {3} ticks" -f $i, $row.total, $row.stall, $row.ticks)
+
+    # Already written by the time the launch line appeared, so no second wait: the probe emits the
+    # pair on one tick.
+    $windowLine = Get-PerfLineAfter $marker 'Window'
+    if ($windowLine) {
+        $window = Read-WindowLine $windowLine
+        if ($window) {
+            $window | Add-Member -NotePropertyName run -NotePropertyValue $i
+            # Beside the sub-total rather than instead of it. The two are measured by different
+            # instruments over the same interval, and a reader must be able to see them disagree.
+            $window | Add-Member -NotePropertyName window -NotePropertyValue $row.window
+            $windows += $window
+        } else {
+            Write-Warning "Run ${i}: a window line that did not parse. $windowLine"
+        }
+    }
 }
 
 if (-not $rows) { throw 'Nothing measured.' }
@@ -172,6 +214,26 @@ $rows | Format-Table run, total, clr, app, settings, cards, window, audio, hooks
 
 Write-Host 'The first run of a session is cold and the rest are warm. They are not the same measurement.' -ForegroundColor DarkGray
 Write-Host 'Columns partition the total; clr is wall-clock and the rest are one Stopwatch; stall is the only one that measures the busy cursor.' -ForegroundColor DarkGray
+
+if ($windows) {
+    Write-Host ''
+    Write-Host 'Inside the window column:' -ForegroundColor Cyan
+    $windows | Format-Table run, sum, window, fields, shell, band, content, pages, accent, hwnd, present, host, weather -AutoSize
+
+    # The positive control, checked rather than left to the eye. Two clock reads separate each
+    # end of the two intervals, so one millisecond of disagreement is expected and two is the
+    # most arithmetic can produce. Anything larger is a mark in the wrong place.
+    $drift = $windows | Where-Object { [math]::Abs($_.sum - $_.window) -gt 2 }
+    if ($drift) {
+        Write-Warning ("The sub-spans do not add up to the window column on run(s) {0}. A mark is misplaced." `
+                       -f (($drift.run) -join ', '))
+    } else {
+        Write-Host 'sum lands on window on every run: the ten spans do partition the column.' -ForegroundColor DarkGray
+    }
+} elseif ($rows) {
+    Write-Host ''
+    Write-Host 'No window line. That build predates StartupWindowTrace.' -ForegroundColor DarkGray
+}
 
 if (-not $NoDrive) {
     Write-Host ''
