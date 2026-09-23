@@ -8,6 +8,27 @@ All notable changes to Plith are documented here. Format loosely follows
 > were reconstructed rather than kept as the work happened. The tags are authoritative for what
 > each release actually contains.
 
+## [0.3.3] - 2026-09-23
+
+### Fixed
+- **The laptop brightness key now reaches Plith.** It never had. The WMI namespace was written
+  one backslash short, `\.\root\wmi` instead of `\\.\root\wmi`, and `ManagementScope` rejects
+  that from its constructor before WMI is contacted, so the subscription to
+  `WmiMonitorBrightnessEvent` failed on every machine Plith has ever run on. A brightness key is
+  consumed in the driver stack and there is no key to hook, so that event was the only way Plith
+  could see one: pressing it dimmed the screen and Plith showed nothing. Brightness hotkeys set
+  in Settings were never affected and always worked, which is why this looked like a missing
+  feature rather than a defect.
+- **The same failure can no longer hide.** It was reported at INFO as "No brightness event
+  source", which is what a desktop with no internal panel was expected to say, so a broken path
+  and a normal machine produced the same line. Measured on a desktop with no internal panel and
+  no `WmiMonitorBrightness` instance: subscribing succeeds there too and simply never fires.
+  Reaching that branch therefore always means a defect, and it now logs at WARN and says so.
+
+### Added
+- The first brightness event of a session is logged, so whether this feature ever heard anything
+  on a given machine can be answered from the log instead of from the screen.
+
 ## [0.3.2] - 2026-09-22
 
 ### Changed
