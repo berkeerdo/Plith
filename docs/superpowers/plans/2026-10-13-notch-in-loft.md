@@ -44,6 +44,14 @@ Input classes the spec implies but no task's own tests would otherwise exercise.
 - Consumes: `ContrastInk.ContrastRatio(Color, Color)`, which already exists.
 - Produces: `Oklch.FromColor(Color) -> (double L, double C, double H)`, `Oklch.ToColor(double L, double C, double H) -> Color`, and `Oklch.Walk(Color seed, Func<Color, bool> passes, int direction) -> Color`. `direction` is `+1` to lighten and `-1` to darken. `Walk` returns the first tone that passes, or the endpoint tone it reached if none did.
 
+**The endpoint is `L = 1.0` or `L = 0.0` exactly, and the walk must try it.** Stepping by 0.01 and
+breaking when the next step would leave the range stops at 0.99, so white and black are never
+tested, and `Walk` can return a failing tone while a passing one existed. The final step is
+clamped to the endpoint and tried. This is load-bearing for Task 2, whose
+`DeriveLoftRoles_ExtremeSeedsStillPassTheirRatios` pins "never returns a failing one" for seeds
+that need the very end of the range. Found by review of the first implementation of this task,
+which followed the code below literally; the code below is corrected.
+
 Why OKLCH rather than the HSL already in `AccentTheme`: HSL lightness is not perceptual, so a walk in it changes apparent chroma as it moves and two accents of the same HSL lightness read as different brightnesses. praxvon-ui settled this in `packages/cli/src/accent.ts`; this is the same math so the two can be compared.
 
 - [ ] **Step 1: Write the failing test**
@@ -74,15 +82,93 @@ public class OklchTests
         Assert.InRange(back.B, start.B - 1, start.B + 1);
     }
 
+    /// <summary>
+    /// Pins an absolute value, not just a round trip. A matrix pair that is wrong in a mutually
+    /// consistent way survives RoundTrip_PreservesTheColour and is caught here, and these are the
+    /// numbers to compare against praxvon-ui's `packages/cli/src/accent.ts`, which is the stated
+    /// reason this conversion exists rather than the HSL one.
+    /// </summary>
+    [Theory]
+    [InlineData(0xFF, 0xFF, 0xFF, 1.0000, 0.0000)]
+    [InlineData(0x00, 0x00, 0x00, 0.0000, 0.0000)]
+    [InlineData(0xFF, 0x00, 0x00, 0.6280, 0.2577)]
+    public void FromColor_MatchesThePublishedOklabValues(byte r, byte g, byte b, double l, double c)
+    {
+        var (gotL, gotC, _) = Oklch.FromColor(Color.FromRgb(r, g, b));
+
+        Assert.Equal(l, gotL, precision: 3);
+        Assert.Equal(c, gotC, precision: 3);
+    }
+
     [Fact]
     public void Walk_LightensUntilThePredicatePasses()
     {
         var floor = Color.FromRgb(0x0B, 0x0B, 0x0A);
         var seed = Color.FromRgb(0x1D, 0x4E, 0x89);  // prussian, too dark on the dark floor
+        var (seedL, _, _) = Oklch.FromColor(seed);
+
+        var walked = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(c, floor) >= 3.0, direction: 1);
+        var (walkedL, _, _) = Oklch.FromColor(walked);
+
+        Assert.True(ContrastInk.ContrastRatio(walked, floor) >= 3.0);
+
+        // It must have gone UP, and not all the way to white: a stub returning white also clears
+        // the ratio, and "the first tone that passes" is the contract, not "any tone that passes".
+        Assert.True(walkedL > seedL, $"expected a lighter tone, seed L {seedL}, walked L {walkedL}");
+        Assert.True(walkedL < 1.0, $"walked all the way to white, L {walkedL}");
+    }
+
+    [Fact]
+    public void Walk_DarkensWhenAskedTo()
+    {
+        var floor = Color.FromRgb(0xF3, 0xF2, 0xED);  // the light floor's surface
+        var seed = Color.FromRgb(0xCA, 0xFF, 0x33);   // lime, far too pale on paper
+        var (seedL, _, _) = Oklch.FromColor(seed);
+
+        var walked = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(c, floor) >= 3.0, direction: -1);
+        var (walkedL, _, _) = Oklch.FromColor(walked);
+
+        Assert.True(ContrastInk.ContrastRatio(walked, floor) >= 3.0);
+        Assert.True(walkedL < seedL, $"expected a darker tone, seed L {seedL}, walked L {walkedL}");
+    }
+
+    [Fact]
+    public void Walk_ReturnsTheSeedWhenItAlreadyPasses()
+    {
+        var floor = Color.FromRgb(0x0B, 0x0B, 0x0A);
+        var seed = Color.FromRgb(0xCA, 0xFF, 0x33);  // lime already clears 3:1 on the dark floor
 
         var walked = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(c, floor) >= 3.0, direction: 1);
 
-        Assert.True(ContrastInk.ContrastRatio(walked, floor) >= 3.0);
+        Assert.Equal(seed, walked);
+    }
+
+    /// <summary>
+    /// Lime is the seed most likely to leave the sRGB gamut on a walk, because the walk holds
+    /// chroma while lightness rises and ToByte then clamps each channel independently. Hue drift
+    /// from that clamp is accepted; a hue CHANGE is not.
+    /// </summary>
+    [Fact]
+    public void Walk_KeepsHueOnTheSeedMostLikelyToClip()
+    {
+        var floor = Color.FromRgb(0xF3, 0xF2, 0xED);
+        var seed = Color.FromRgb(0xCA, 0xFF, 0x33);
+        var (_, _, seedHue) = Oklch.FromColor(seed);
+
+        var walked = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(c, floor) >= 4.5, direction: -1);
+        var (_, _, walkedHue) = Oklch.FromColor(walked);
+
+        Assert.InRange(HueDistance(walkedHue, seedHue), 0.0, 5.0);
+    }
+
+    /// <summary>
+    /// Shortest way round the circle. A plain subtraction reports 358 degrees for 359 and 1, so a
+    /// seed near the red end of the hue wheel would fail a hue test that is actually passing.
+    /// </summary>
+    private static double HueDistance(double a, double b)
+    {
+        var d = Math.Abs(a - b) % 360.0;
+        return d > 180.0 ? 360.0 - d : d;
     }
 
     [Fact]
@@ -96,18 +182,46 @@ public class OklchTests
         var (_, _, walkedHue) = Oklch.FromColor(walked);
 
         // Two degrees of drift is the gamut clamp, not a hue change.
-        Assert.InRange(Math.Abs(walkedHue - seedHue), 0.0, 2.0);
+        Assert.InRange(HueDistance(walkedHue, seedHue), 0.0, 2.0);
     }
 
-    [Fact]
-    public void Walk_ReturnsTheEndpointWhenNothingPasses()
+    /// <summary>
+    /// The endpoint is white when lightening and black when darkening, and it must be REACHED.
+    /// `Assert.NotEqual(default, walked)` cannot fail here, because `default(Color)` has alpha 0
+    /// and `Color.FromRgb` always sets alpha 255, so a stub returning the seed would pass it.
+    /// Asserting the endpoint is also what proves the walk does not stop one step short at 0.99.
+    /// </summary>
+    [Theory]
+    [InlineData(1, 0xFF, 0xFF, 0xFF)]
+    [InlineData(-1, 0x00, 0x00, 0x00)]
+    public void Walk_ReachesTheEndpointWhenNothingPasses(int direction, byte r, byte g, byte b)
     {
         var impossible = Color.FromRgb(0x80, 0x80, 0x80);
 
-        // No tone of any colour clears 21:1 against mid grey.
-        var walked = Oklch.Walk(impossible, _ => false, direction: 1);
+        var walked = Oklch.Walk(impossible, _ => false, direction);
 
-        Assert.NotEqual(default, walked);
+        Assert.InRange(walked.R, r - 1, r + 1);
+        Assert.InRange(walked.G, g - 1, g + 1);
+        Assert.InRange(walked.B, b - 1, b + 1);
+    }
+
+    /// <summary>
+    /// The guarantee Task 2 leans on: never return a failing tone when a passing one existed. The
+    /// threshold here is only reachable at the very top of the range, which is exactly where a
+    /// walk that breaks before the endpoint gives up.
+    /// </summary>
+    [Fact]
+    public void Walk_FindsATonePassingOnlyAtTheEndpoint()
+    {
+        var floor = Color.FromRgb(0x0B, 0x0B, 0x0A);
+        var seed = Color.FromRgb(0x1D, 0x4E, 0x89);
+
+        // Near the maximum achievable against a near-black floor, so only white-ish tones clear it.
+        var walked = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(c, floor) >= 19.0, direction: 1);
+
+        Assert.True(
+            ContrastInk.ContrastRatio(walked, floor) >= 19.0,
+            $"returned a failing tone {walked} at ratio {ContrastInk.ContrastRatio(walked, floor)}");
     }
 }
 ```
@@ -193,13 +307,21 @@ public static class Oklch
         var (l, c, h) = FromColor(seed);
         const double Step = 0.01;
 
+        var endpoint = direction > 0 ? 1.0 : 0.0;
         var last = seed;
         for (var i = 1; i <= 100; i++)
         {
             var next = l + direction * Step * i;
-            if (next < 0.0 || next > 1.0) break;
+
+            // Clamp the last step to the endpoint rather than breaking short of it. Breaking
+            // stops at 0.99, so white and black are never tried, and the walk can then return a
+            // tone that fails while a passing tone existed one step further on.
+            var atEnd = direction > 0 ? next >= endpoint : next <= endpoint;
+            if (atEnd) next = endpoint;
+
             last = ToColor(next, c, h);
             if (passes(last)) return last;
+            if (atEnd) break;
         }
         return last;
     }
@@ -239,7 +361,10 @@ git commit -m "feat(theme): add OKLCH conversion and a tone walk"
 
 **Interfaces:**
 - Consumes: `Oklch.Walk`, `ContrastInk.ContrastRatio`.
-- Produces: `LoftPalette.DarkFloor` and `LoftPalette.LightFloor`, each a `LoftFloor(Color Background, Color Surface, Color Foreground, Color TextSecondary, Color TextTertiary, Color Border, Color BorderStrong)`; and `AccentTheme.DeriveLoftRoles(Color seed, bool isDark) -> LoftAccentRoles(Color Fill, Color OnFill, Color Mark, Color Text)`.
+- Produces: `LoftPalette.DarkFloor` and `LoftPalette.LightFloor`, each a `LoftFloor(Color Background, Color Surface, Color Foreground, Color TextSecondary, Color TextTertiary, Color Border, Color BorderStrong)`; `LoftPalette.For(bool isDark) -> LoftFloor`, which returns one of the two; and `AccentTheme.DeriveLoftRoles(Color seed, bool isDark) -> LoftAccentRoles(Color Fill, Color OnFill, Color Mark, Color Text)`.
+
+`LoftPalette.For` is part of the produced surface, not an implementation detail: Task 3 consumes
+it by name, and Task 3 is the only reason the two floors are reachable through one call.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -495,15 +620,57 @@ git commit -m "feat(theme): derive the four Loft accent roles"
 
 **Files:**
 - Modify: `src/Plith/Services/ThemeService.cs:228-300` (`BuildAccentOverride`)
-- Modify: `src/Plith/Services/AccentTheme.cs` (remove `DeriveOsdSurfaces` and the `OsdSurfaceDerived` record)
-- Modify: `src/Plith/Resources/OsdPalette.Dark.xaml`, `OsdPalette.Light.xaml` (surface brushes become the Loft floors)
+- Modify: `src/Plith/Services/AccentTheme.cs` (remove `DeriveOsdSurfaces` and the `OsdSurfaceDerived` record; retarget `Derive`'s own call at `:121`)
+- Modify: `src/Plith/Resources/OsdPalette.Dark.xaml`, `OsdPalette.Light.xaml` (surface brushes become the Loft floors; the three `Notch*` keys re-valued to floor constants)
+- Modify: `src/Plith/Services/Shelf/ShelfSession.cs` (`DerivePalette`, the cross-process shelf wire)
+- Modify: `scripts/check-contrast.ps1`, `scripts/render-widgets.ps1`, `scripts/render-accent-variants.ps1` (they reach the deleted method by reflection)
+- Modify: `tests/Plith.Tests/AccentThemeTests.cs` (remove the six tests covering the deleted method)
 - Test: `tests/Plith.Tests/ThemeServiceLoftTests.cs`
 
 **Interfaces:**
 - Consumes: `AccentTheme.DeriveLoftRoles`, `LoftPalette.For`.
-- Produces: the override dictionary's key set, which the render harness and `OsdHost.RefreshAccentMirror` both mirror. Keys after this task: `AccentBrush`, `AccentHover`, `AccentPressed`, `AccentGlow`, `OsdAccent`, `OsdAccentMark`, `OsdAccentText`, `OsdSurfaceBrush`, `OsdBorder`, `OsdTrackBg`, `OsdDivider`, `OnAccent`.
+- Produces: the override dictionary's key set, which the render harness and `OsdHost.RefreshAccentMirror` both mirror. Keys after this task: `AccentBrush`, `AccentHover`, `AccentPressed`, `AccentGlow`, `OsdAccent`, `OsdAccentMark`, `OsdAccentText`, `OsdSurfaceBrush`, `OsdBorder`, `OsdTrackBg`, `OsdDivider`, `OnAccent`, `AccentTrack`.
 
-Removed here, with the reason in one line each: `NotchInk`, `NotchInkMuted`, `NotchTrack` were computed from `osd.SurfaceEnd` because the surface moved; the floor's `Foreground`, `TextSecondary` and a fixed track now say the same thing without a computation. `AccentTrack` was derived from the accent because a progress fill had to read against its own track on an unpredictable panel; on a fixed floor the track is `Border`.
+Removed from the override, with the reason in one line each: `NotchInk`, `NotchInkMuted` and
+`NotchTrack` were computed from `osd.SurfaceEnd` because the surface moved; the floor's
+`Foreground`, `TextSecondary` and a fixed track now say the same thing without a computation.
+
+**Three corrections to this task, ruled before execution. The ledger at
+`.superpowers/sdd/2026-10-13-notch-in-loft/progress.md` holds the full reasoning and the cost of
+each being wrong.**
+
+1. **`AccentTrack` keeps its derivation** and stays in the override, so three keys leave it rather
+   than four. Spec section 4 lists it among five keys that lose their reason to exist, but spec
+   section 5 puts the Settings window out of scope, and this key lives entirely on the Settings
+   path: defined in `Palette.Dark/Light/HighContrast.xaml`, consumed only by
+   `SettingsTheme.xaml:531` (`ModernProgressBarStyle`, the Updates card's download bar). Its own
+   comment there records why it is accent-derived rather than a general neutral: a deep accent
+   measured 1.6:1 against `ButtonGhost`, "a bar with no visible progress". Dropping the override
+   falls back to `Palette.Light.xaml:27` `#2A323C`, a dark slab under a light card, which
+   re-introduces that failure on the theme where it is worst. Section 4's own rationale is limited
+   to "the notch path", and this key is not on it.
+2. **The three `Notch*` keys keep their definitions** in `OsdPalette.Dark.xaml` and
+   `OsdPalette.Light.xaml`, re-valued to the floor's `Foreground`, `TextSecondary` and `Border`.
+   Only their `BuildAccentOverride` entries go. They have about forty `DynamicResource` consumers
+   across `AudioWidget.xaml`, `ClockWidget.xaml`/`.cs` and `MediaWidget.xaml`/`.cs`, and an
+   unresolved `DynamicResource` fails silently in WPF, with no build error and no test failure. No
+   consuming view changes. `OsdPalette.HighContrast.xaml` keeps its own `SystemColors`-mapped
+   versions, untouched.
+3. **Deleting `DeriveOsdSurfaces` reaches five call sites beyond `BuildAccentOverride`**, and the
+   three scripts among them reach it by reflection, so they break at run time rather than build
+   time. Two of those scripts are this task's own Steps 5 and 6, so leaving them would make the
+   task unable to verify itself.
+   - `AccentTheme.cs:121`, inside `Derive` itself, the Settings accent path's light branch:
+     retarget to `LoftPalette.LightFloor.Surface`. It was already measuring against a derived
+     light panel, so the floor makes that a constant without redesigning Settings.
+   - `ShelfSession.cs:387`, `DerivePalette`: rewrite onto the floor plus `DeriveLoftRoles`.
+     Required, not optional. Spec section 5 says the shelf "follows automatically once the wire
+     carries Loft values", and that wire's design premise is that the answer crosses it rather
+     than the inputs, so a second derivation here would drift.
+   - `check-contrast.ps1:258`, `render-widgets.ps1:116`, `render-accent-variants.ps1:52`: move to
+     the floor.
+   - `AccentThemeTests.cs` lines 159, 185, 216, 233, 249 and 264: six tests on the deleted
+     method, which go with it.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -683,7 +850,7 @@ git commit -m "feat(theme): put the Loft floor under the notch"
 ### Task 4: Typography
 
 **Files:**
-- Create: `src/Plith/Assets/Fonts/PublicSans-Regular.ttf`, `PublicSans-SemiBold.ttf`, `MartianMono-Regular.ttf` (download from the upstream OFL releases)
+- Create: `src/Plith/Assets/Fonts/PublicSans-Regular.ttf`, `PublicSans-SemiBold.ttf`, `MartianMono-StdRg.ttf`, plus `OFL-PublicSans.txt` and `OFL-MartianMono.txt`
 - Modify: `src/Plith/Plith.csproj` (embed the fonts as `Resource`)
 - Modify: `src/Plith/Resources/Theme.xaml:8` (`OsdUiFont`, plus a new `OsdMonoFont`)
 - Modify: `src/Plith/Views/AmbientCardView.xaml`, `MediaCardView.xaml`, `AudioCardView.xaml`, `BrightnessCardView.xaml` (tabular figures on every changing number)
@@ -750,8 +917,34 @@ In `src/Plith/Resources/Theme.xaml`, replace line 8 and add the mono family:
 
 ```xml
     <FontFamily x:Key="OsdUiFont">pack://application:,,,/Assets/Fonts/#Public Sans, Segoe UI Variable, Segoe UI</FontFamily>
-    <FontFamily x:Key="OsdMonoFont">pack://application:,,,/Assets/Fonts/#Martian Mono, Cascadia Mono, Consolas</FontFamily>
+    <FontFamily x:Key="OsdMonoFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
 ```
+
+**The mono family name is measured, not guessed, and it is not what this plan first said.** The
+file's internal family name is `Martian Mono Std Rg`, not `Martian Mono`. Taken by asking WPF
+itself, which is the only authority that matters here:
+
+```powershell
+Add-Type -AssemblyName PresentationCore
+[System.Windows.Media.Fonts]::GetFontFamilies("<dir>\")   # trailing slash is required
+# -> #Martian Mono Std Rg   (Normal and Bold, each with an Oblique)
+# -> #Public Sans           (Normal and SemiBold, each with an Oblique)
+```
+
+`#Martian Mono` resolves to nothing and falls back to Cascadia Mono, which renders perfectly and
+is exactly the trap Step 5 below warns about. Public Sans is `Public Sans` as originally written,
+with Regular and SemiBold in one family, so `FontWeight="SemiBold"` reaches the second file.
+
+**Where the files come from.** Upstream for the mono moved: `evilmartians/martian-mono` is a 404
+and the project is now `evilmartians/mono`. Its regular cut ships as `MartianMono-StdRg.ttf`
+(`Std` is the width, `Rg` the weight; the release also carries Condensed and SemiCondensed
+widths). Upstream filenames are kept verbatim, because the cut is information worth keeping and
+the `Assets\Fonts\*.ttf` glob makes the filename irrelevant to the build.
+
+- Public Sans: `uswds/public-sans` release v2.001, `fonts/ttf/` inside the zip.
+- Martian Mono: `evilmartians/mono` release v1.1.0, `martian-mono-1.1.0-ttf.zip`.
+- Both OFL texts ship beside the fonts. The mono's copyright line reads "Copyright 2021 The
+  Martian Mono Project Authors (https://github.com/evilmartians/mono)".
 
 In `src/Plith/Plith.csproj`:
 
@@ -822,16 +1015,44 @@ public class OrnamentTests
         (ResourceDictionary)Application.LoadComponent(
             new Uri($"/Plith;component/Resources/{name}", UriKind.Relative));
 
+    /// <summary>
+    /// Off by FALLTHROUGH, not by being written into the high contrast palette. That file is left
+    /// alone (spec section 7), so this asserts what a lookup RESOLVES to with the high contrast
+    /// palette on top of the always-merged defaults, which is the thing the running app does. A
+    /// direct key read against `OsdPalette.HighContrast.xaml` would be asserting the opposite
+    /// design.
+    /// </summary>
     [StaFact]
     public void Ornaments_ResolveToOffUnderHighContrast()
     {
-        var hc = Load("OsdPalette.HighContrast.xaml");
+        var stack = new ResourceDictionary();
+        stack.MergedDictionaries.Add(Load("Ornaments.xaml"));
+        stack.MergedDictionaries.Add(Load("OsdPalette.HighContrast.xaml"));
 
         // Off, not absent: a missing key throws at resolve time on a surface a user with high
         // contrast turned on is already relying on.
-        Assert.Equal(0.0, (double)hc["OrnamentCornerLength"]);
-        Assert.Equal(0.0, (double)hc["OrnamentOutlineThickness"]);
-        Assert.Equal("None", (string)hc["OrnamentLabelCase"]);
+        Assert.Equal(0.0, (double)stack["OrnamentCornerLength"]);
+        Assert.Equal(0.0, (double)stack["OrnamentOutlineThickness"]);
+        Assert.Equal("None", (string)stack["OrnamentLabelCase"]);
+    }
+
+    /// <summary>
+    /// The constraint this pins is that the high contrast palette does not define the ornament
+    /// tokens at all. If a later change writes them in there, the test above would still pass
+    /// while the spec was being broken.
+    /// </summary>
+    [StaFact]
+    public void Ornaments_AreNotDefinedInTheHighContrastPalette()
+    {
+        var hc = Load("OsdPalette.HighContrast.xaml");
+
+        foreach (var key in new[]
+                 { "OrnamentCornerLength", "OrnamentOutlineThickness", "OrnamentLabelCase" })
+        {
+            Assert.False(
+                hc.Contains(key),
+                $"{key} is defined in OsdPalette.HighContrast.xaml; spec section 7 leaves that file alone");
+        }
     }
 
     [StaFact]
@@ -866,7 +1087,28 @@ Add to each palette. `OsdPalette.Dark.xaml` and `OsdPalette.Light.xaml`:
     <sys:String x:Key="OrnamentLabelCase">Upper</sys:String>
 ```
 
-`OsdPalette.HighContrast.xaml` gets the same keys at `0`, `0` and `None`. Both files need `xmlns:sys="clr-namespace:System;assembly=System.Runtime"`.
+**`OsdPalette.HighContrast.xaml` is NOT edited.** The off values are the defaults, and they live
+in `Ornaments.xaml`, which is always merged:
+
+```xml
+    <!-- The off values, as defaults. Any palette that wants ornaments overrides them; a palette
+         that says nothing gets no ornaments. High contrast says nothing, deliberately: spec
+         section 7 leaves that file alone, because Loft's ornaments would be a second opinion
+         about colours Windows has already decided for the one group of users who cannot work
+         around a wrong answer. -->
+    <sys:Double x:Key="OrnamentCornerLength">0</sys:Double>
+    <sys:Double x:Key="OrnamentOutlineThickness">0</sys:Double>
+    <sys:String x:Key="OrnamentLabelCase">None</sys:String>
+```
+
+`Ornaments.xaml` must therefore be merged BEFORE the active palette in `App.xaml`, or the palette
+cannot override it. Both files need `xmlns:sys="clr-namespace:System;assembly=System.Runtime"`.
+
+This corrects an earlier draft of this task, which wrote the off values into
+`OsdPalette.HighContrast.xaml` and so contradicted this plan's own Global Constraints. The spec
+sentence that settles it needs both halves to hold at once: the file "is left alone" AND "the
+ornament tokens resolve to their off values there". Fallthrough is the only arrangement that does
+both. Ruling recorded in `.superpowers/sdd/2026-10-13-notch-in-loft/progress.md`.
 
 Create `src/Plith/Resources/Ornaments.xaml` with the `LoftFrame` style: four `Path` elements, one per corner, each a two-segment `+` arm of `OrnamentCornerLength`, stroked with `OsdAccentMark` at `OrnamentOutlineThickness`, inset from the panel edge by the notch radius so the mark sits inside the curve.
 
@@ -880,7 +1122,19 @@ reach the accessibility tree, so they are `TextBlock` siblings with
 screen reader announces, and `scripts/check-a11y.ps1` in Step 5 is what proves the names
 survived.
 
-Per `scripts/check-shared-xaml.ps1`, `Ornaments.xaml` must not name an assembly in any `clr-namespace` it declares: it is loaded by both Plith and Plith.DropCatcher, and naming `Plith` there is what shipped the broken 0.1.6 installer.
+`Ornaments.xaml` must not use an absolute `pack://application:,,,/Plith;component/` URI, which is
+what shipped the broken 0.1.6 installer. Note that the `xmlns:sys` declaration above is a
+`clr-namespace` naming a framework assembly, which is required and is not what that check guards:
+`scripts/check-shared-xaml.ps1` reads the INSTALLER's csproj and flags absolute same-solution pack
+URIs, nothing else.
+
+An earlier draft of this task said `Ornaments.xaml` "is loaded by both Plith and
+Plith.DropCatcher". That is measured false: the catcher links five `.cs` files and no XAML, and
+owns `App.xaml`, `CatcherWindow.xaml`, `Shelf/ShelfSurface.xaml` and `Shelf/ShelfWindow.xaml`
+itself. The installer links only `Palette.Dark.xaml`, `SettingsTheme.xaml` and `PlithIcons.xaml`.
+So this dictionary is Plith-only, Step 5's check passes trivially and proves nothing about it, and
+**the catcher's shelf page gets no corner marks in this work.** If that one-page inconsistency
+reads wrong on screen, the fix is to link the dictionary into the catcher, as its own change.
 
 - [ ] **Step 4: Run test to verify it passes**
 
