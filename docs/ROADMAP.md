@@ -133,6 +133,16 @@ they care about.
 
 ## 6. Phase breakdown
 
+### The notch in Loft — **planned, not started**
+
+Spec: `docs/superpowers/specs/2026-10-12-notch-loft-design.md` (approved 2026-10-13).
+Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md` (seven tasks, none started).
+
+Moves the notch onto praxvon-ui's Loft direction. The visible change is that the accent stops
+filling the panel and becomes a mark: a user who picks purple gets a neutral panel with purple
+lines, not a purple panel. Blocked on nothing. One task needs the Public Sans and Martian Mono
+font files fetched by hand before it can run.
+
 ### Carried over from Phase 4 — **4c-4, open, next**
 
 This document covers Phase 5+; `PLAN.md` and `README.md` own Phases 1 to 4. One Phase 4 item is
