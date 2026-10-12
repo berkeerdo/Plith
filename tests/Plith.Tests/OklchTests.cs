@@ -130,51 +130,38 @@ public class OklchTests
     }
 
     /// <summary>
-    /// The endpoint is white when lightening and black when darkening, and it must be REACHED.
-    /// `Assert.NotEqual(default, walked)` cannot fail here, because `default(Color)` has alpha 0
-    /// and `Color.FromRgb` always sets alpha 255, so a stub returning the seed would pass it.
-    /// Asserting the endpoint is also what proves the walk does not stop one step short at 0.99.
+    /// The endpoint must be TRIED, and this is the regression test for the walk that stopped one
+    /// 0.01 step short of it. It is also the guarantee Task 2 leans on: never return a failing
+    /// tone when a passing one existed.
+    ///
+    /// Three earlier shapes of this test did not work, each for a reason worth keeping:
+    ///
+    /// 1. `Assert.NotEqual(default, walked)` cannot fail at all. `default(Color)` has alpha 0 and
+    ///    `Color.FromRgb` always sets 255, so a stub returning the seed passes it.
+    /// 2. Asserting a round-tripped lightness cannot work either, because the walk holds chroma
+    ///    and `ToColor` clamps out-of-gamut channels, so lightness COMPRESSES near the top:
+    ///    for the seed below, the last short step round-trips to L 0.9638 and the true endpoint to
+    ///    L 0.9650. Any threshold has to live in that 0.0012 window. Measured, not reasoned.
+    /// 3. A grey seed does not discriminate. Mid grey sits at L 0.5999, so its step grid lands on
+    ///    0.9999, which already renders #FFFFFF: the broken walk and the fixed one return the
+    ///    identical colour. The seed must carry chroma for the two to be different colours.
+    ///
+    /// So: a chromatic seed, and exact equality against the endpoint colour computed from that
+    /// seed's own chroma and hue. No threshold and no tolerance, nothing to tune. With the short
+    /// step the walk returns #CAFFFF and the assertion fails; with the endpoint tried it returns
+    /// #CCFFFF and passes.
     /// </summary>
     [Theory]
-    [InlineData(1, 0xFF, 0xFF, 0xFF)]
-    [InlineData(-1, 0x00, 0x00, 0x00)]
-    public void Walk_ReachesTheEndpointWhenNothingPasses(int direction, byte r, byte g, byte b)
+    [InlineData(0x1D, 0x4E, 0x89, 1)]   // prussian lightening: #CAFFFF short, #CCFFFF at the end
+    [InlineData(0xFF, 0x00, 0x00, -1)]  // red darkening: #130000 short, #100000 at the end
+    public void Walk_TriesTheExactEndpointWhenNothingPasses(byte r, byte g, byte b, int direction)
     {
-        var impossible = Color.FromRgb(0x80, 0x80, 0x80);
+        var seed = Color.FromRgb(r, g, b);
+        var (_, c, h) = Oklch.FromColor(seed);
+        var endpoint = Oklch.ToColor(direction > 0 ? 1.0 : 0.0, c, h);
 
-        var walked = Oklch.Walk(impossible, _ => false, direction);
+        var walked = Oklch.Walk(seed, _ => false, direction);
 
-        Assert.InRange(walked.R, r - 1, r + 1);
-        Assert.InRange(walked.G, g - 1, g + 1);
-        Assert.InRange(walked.B, b - 1, b + 1);
-    }
-
-    /// <summary>
-    /// The guarantee Task 2 leans on: never return a failing tone when a passing one existed. This
-    /// predicate is satisfiable ONLY at the very top of the range, which is exactly where a walk
-    /// that breaks before the endpoint gives up. Expressed as a lightness bound rather than a
-    /// contrast ratio on purpose: the walk holds chroma, so a blue seed tops out at a pale cyan
-    /// (#CCFFFF, measured at 18.11:1 against the dark floor) and never reaches white's ~20.6:1. Any
-    /// ratio chosen here would be a proxy for "did it reach L=1.0", and a brittle one.
-    /// The blue seed's round-trip through OKLCH plateaus at L~0.965 due to gamut clamping,
-    /// so this test verifies the walk reaches the endpoint by checking that the returned color
-    /// is at the maximum lightness the seed can achieve when converted back.
-    /// </summary>
-    [Fact]
-    public void Walk_FindsATonePassingOnlyAtTheEndpoint()
-    {
-        var seed = Color.FromRgb(0x1D, 0x4E, 0x89);
-
-        var walked = Oklch.Walk(
-            seed,
-            c =>
-            {
-                var (l, _, _) = Oklch.FromColor(c);
-                return l >= 0.96;
-            },
-            direction: 1);
-
-        var (walkedL, _, _) = Oklch.FromColor(walked);
-        Assert.True(walkedL >= 0.96, $"stopped short of the endpoint at L {walkedL}");
+        Assert.Equal(endpoint, walked);
     }
 }
