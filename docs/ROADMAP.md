@@ -133,6 +133,21 @@ they care about.
 
 ## 6. Phase breakdown
 
+### Carried over from Phase 4 — **4c-4, open, next**
+
+This document covers Phase 5+; `PLAN.md` and `README.md` own Phases 1 to 4. One Phase 4 item is
+still open and is the next job, so it is listed here rather than only in the document that
+closed around it:
+
+- **Phase 4c-4: MSIX packaging and a real signing certificate** (SignPath.io OSS path, or a paid
+  certificate). Until it lands there is no auto-update: nothing in the repo checks for a new
+  version and an update is a manual download from GitHub Releases. The installer is self-signed
+  today, so SmartScreen warns on first run.
+
+Recorded 2026-10-12, after a handover check found `CLAUDE.md` pointing here for this item while
+nothing here mentioned it. The pointer was right about where a reader would look and wrong about
+what was written; this closes the gap rather than moving the pointer away.
+
 ### Phase 5 — Consolidation + tech debt — **code-complete, unmerged**
 
 Branch `feature/phase-5-cardhost`. Design: `docs/superpowers/specs/2026-09-02-cardhost-design.md`.
