@@ -1,6 +1,6 @@
 # The notch in Loft
 
-Date: 2026-10-12 · Status: proposed, awaiting owner review
+Date: 2026-10-12 · Status: approved by the owner 2026-10-13
 
 ## 1. Why
 
@@ -111,9 +111,16 @@ sample of custom colours, the derived mark clears 3:1 and the derived text clear
 both floors. That test is the reason the derivation can be trusted without a person checking
 every accent by eye.
 
-## 7. Open question
+## 7. High contrast keeps its own palette
 
-Whether the high contrast theme takes Loft or keeps its current palette. High contrast already
-overrides the accent entirely (`BuildAccentOverride` returns an empty dictionary when
-`IsHighContrast`), so it is untouched by the accent change, but its surfaces and ornaments need a
-decision before implementation. Carried into the plan rather than guessed here.
+Decided 2026-10-13, owner's call on the recommendation.
+
+**The high contrast theme does not take Loft.** It already opts out of the accent entirely:
+`BuildAccentOverride` returns an empty dictionary when `IsHighContrast`, so nothing in section 2's
+accent work reaches it. Its colours come from the user's own Windows high contrast scheme, and
+Loft's floors and ornaments would be a second opinion about colours the operating system has
+already decided, on behalf of the one group of users who cannot work around a wrong answer.
+
+So `OsdPalette.HighContrast.xaml` is left alone, and the ornament tokens resolve to their off
+values there. The practical consequence for the work: every check in section 6 runs on three
+themes, and high contrast passes by being unchanged rather than by being ported.
