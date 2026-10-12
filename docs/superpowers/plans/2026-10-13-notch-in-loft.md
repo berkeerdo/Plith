@@ -54,7 +54,7 @@ which followed the code below literally; the code below is corrected.
 
 Why OKLCH rather than the HSL already in `AccentTheme`: HSL lightness is not perceptual, so a walk in it changes apparent chroma as it moves and two accents of the same HSL lightness read as different brightnesses. praxvon-ui settled this in `packages/cli/src/accent.ts`; this is the same math so the two can be compared.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows.Media;
@@ -228,12 +228,12 @@ public class OklchTests
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~OklchTests`
 Expected: FAIL, `The type or namespace name 'Oklch' could not be found`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 ```csharp
 using System.Windows.Media;
@@ -339,12 +339,12 @@ public static class Oklch
 }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~OklchTests`
 Expected: PASS, 8 tests.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Plith/Services/Oklch.cs tests/Plith.Tests/OklchTests.cs
