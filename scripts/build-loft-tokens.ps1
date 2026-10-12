@@ -3,8 +3,8 @@
 #
 # The generated values are checked in on purpose: a Plith build must not need the praxvon-ui
 # checkout. This script is run by a person when praxvon-ui's theme moves, and its output is
-# reviewed like any other change. LoftAccentTests.DarkFloor_MatchesTheSpec is the guard that
-# fails if someone edits the constants by hand instead.
+# reviewed like any other change. LoftAccentTests.BothFloors_MatchTheSpec is the guard that
+# fails if someone edits any of the 14 constants by hand instead.
 
 [CmdletBinding()]
 param(
