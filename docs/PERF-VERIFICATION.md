@@ -844,36 +844,75 @@ the same 0.3.3 binary (built 23 September) were read end to end:
 **The dispose chain is not the cost.** Twenty steps in 41 to 57 ms, repeatedly. Every claim in
 this section that points elsewhere rests on that.
 
-### 12.2 The stall is before `OnExit`, and it is now instrumented
+### 12.2 A reading that looked like the answer, and was not
 
-The 19:16 run shows a 2.595 s gap between the last logged mouse press and `OnExit begin`, against
-41 ms for the whole of `OnExit`. That the press was the Exit click is an inference and is not
-proven: the coordinate falls outside the display the notch reported, and nothing logged the click
-itself.
+The 19:16 run showed a 2.595 s gap between the last logged mouse press and `OnExit begin`, against
+41 ms for the whole of `OnExit`. Read as "the Exit click to the shutdown", that is the whole
+reported stall, located.
 
-So `TrayIconHost` now logs `Exit clicked` and `Shutdown called`, which bracket the two halves the
-gap can fall in: waiting for the posted `DispatcherPriority.Background` turn to come up, and
-WPF's own `Shutdown` closing the windows before `OnExit` runs.
+**It was an inference and it is now disproven.** `DragWatch` logs presses from the global hook,
+and a later installed run logged no tray press at all before its shutdown: the two bottom-right
+presses behind the 2.595 s figure cannot be assumed to be the right-click and the Exit click.
+The gap is real; what sat inside it is unknown, and most of it was probably a person deciding to
+click. No measurement in this document should rest on it, and none now does.
 
-First instrumented run, from `bin`: click 19:25:12.610, `Shutdown called` .648 (38 ms), `OnExit
-begin` .649, `Environment.Exit` .685. **75 ms end to end, no stall.** The stall did not reproduce
-on that run, so the instrument is proven and the condition is not yet.
+That is the reason for the instrumentation: `TrayIconHost` logs `Exit clicked` and
+`Shutdown called`, which bracket the posted `DispatcherPriority.Background` turn and leave WPF's
+own window close as the other half, with no inference anywhere.
 
-### 12.3 What is still unknown
+### 12.3 What a shutdown actually costs
 
-**There is no root cause for either the stall or the hang.** Stated plainly because the section
-above reads like progress and progress is not an answer.
+Six instrumented shutdowns, and **not one reproduced a stall.** Click to `Environment.Exit`:
 
-- The hang is intermittent on one unchanged binary: two of the five shutdowns on record hung, at
-  two different dispose steps, and three were clean. A race, not a bad step.
+| Build | UIAccess | Uptime | Click to `Shutdown called` | Click to `Environment.Exit` |
+|---|---|---|---|---|
+| `bin` | no | 50 s | 38 ms | 75 ms |
+| `bin` | no | 39 min | 33 ms | 105 ms |
+| installed | yes | ~25 min | 35 ms | 81 ms |
+| installed | yes | ~15 min | 54 ms | 96 ms |
+
+**Two hypotheses died here.** Uptime and use: a 50 second run and a 39 minute run of the same
+binary exit in the same time. UIAccess and high integrity: the installed build, which gets the
+topmost band and hides flyouts, exits as fast as the one from `bin` that does neither. The
+instrumented dll was swapped into `C:\Program Files\Plith` under the signed, unmodified
+`Plith.exe`, so UIAccess was still granted and the comparison is like for like.
+
+The log stops before the user does. A probe polling at 50 ms, across the last of those runs:
+
+| Mark | Offset from the click |
+|---|---|
+| `Shutdown called` | 54 ms |
+| `OnExit begin` | 56 ms |
+| `Environment.Exit` | 96 ms |
+| main window stops being a window | 115 ms |
+| process actually gone | 443 ms |
+
+**443 ms, click to gone, and 328 ms of it falls after `Environment.Exit`.** Plith's own work is
+96 ms; the rest is the CLR tearing down 103 MB of loaded assemblies and the windows being
+destroyed. The window leaves the screen at 115 ms, so the tail is not visible as a frozen panel,
+but the click is not free either: 443 ms after a menu click is comfortably perceptible, and the
+owner's description of it, "it stutters for a moment", matches 443 ms rather than the one to two
+seconds first reported. Short freezes are routinely remembered as longer than they are.
+
+**This is a performance question, not the defect.** It is measured, its largest part is named,
+and improving it (a harder termination than `Environment.Exit`, for one) is a separate decision
+with its own design.
+
+### 12.4 What is still unknown
+
+**There is no root cause for the hang.** Stated plainly because the section above reads like
+progress and progress is not an answer.
+
+- The hang is intermittent on one unchanged binary: two of the shutdowns on record hung, at two
+  different dispose steps. Every one of the eight shutdowns watched since has been clean. A race,
+  not a bad step, and rare enough that it cannot be sat and waited for.
 - Four explanations were eliminated, not confirmed: a system-wide low-level keyboard hook stall
   (the hook is removed second, and was already gone in both recorded hangs), a blocking
   `Dispatcher.Invoke` (there are none in `src/Plith`), the `DiagnosticLog` write lock (its lock
   encloses file IO only and never re-enters the UI thread), and a version difference (the hanging
   and the clean runs are the same build).
-- The two runs differ in more than one way, so neither is isolated: the fast run lived 50 seconds
-  and was barely used, from `bin` at medium integrity; the stalled run had been up for half an
-  hour, had the notch opened repeatedly, and ran installed with UIAccess at high integrity.
+- Nothing yet connects the rare hang to the 443 ms ordinary exit. They may share a cause or may
+  not, and this document does not claim they do.
 
 ### 12.4 How a hang gets caught
 
