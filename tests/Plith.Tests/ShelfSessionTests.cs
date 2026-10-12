@@ -181,18 +181,36 @@ public sealed class ShelfSessionTests : IDisposable
     /// <summary>
     /// The selection ring is DERIVED, never the raw accent.
     ///
-    /// A near-white accent on the dark theme is the case that proves it: sent raw it measured
-    /// 1.25:1 against the surface, which is a ring nobody can see. RingOn walks its lightness
-    /// keeping hue and saturation, so what crosses the wire clears the 3:1 a non-text stroke
-    /// needs.
+    /// A near-white accent on the LIGHT floor is the case that proves it: sent raw it would be
+    /// close to invisible against the surface. DeriveLoftRoles' Mark walks it until it clears the
+    /// 3:1 a non-text stroke needs on both floor surfaces. (This used to use the dark theme, but
+    /// a near-white accent already reads on the dark Loft floor and is correctly left alone.)
     /// </summary>
     [Fact]
     public void DerivePalette_SendsARingThatCanBeSeen()
     {
-        var palette = ShelfSession.DerivePalette(Color.FromRgb(0xFA, 0xFA, 0xFA), isDark: true);
+        var palette = ShelfSession.DerivePalette(Color.FromRgb(0xFA, 0xFA, 0xFA), isDark: false);
 
         Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceEnd) >= 3.0);
+        Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceStart) >= 3.0);
         Assert.NotEqual(palette.Accent, palette.SelectionRing);
+    }
+
+    [Fact]
+    public void DerivePalette_CarriesTheFloorAndNotATintedSurface()
+    {
+        foreach (var isDark in new[] { true, false })
+        {
+            var floor = LoftPalette.For(isDark);
+            var palette = ShelfSession.DerivePalette(Color.FromRgb(0x6D, 0x28, 0xD9), isDark);
+
+            Assert.Equal(floor.Background, palette.SurfaceStart);
+            Assert.Equal(floor.Surface, palette.SurfaceEnd);
+            Assert.Equal(floor.Foreground, palette.Ink);
+            Assert.Equal(floor.TextSecondary, palette.InkMuted);
+            Assert.Equal(floor.Border, palette.Track);
+            Assert.Equal(isDark, palette.IsDark);
+        }
     }
 
     /// <summary>An accent that already clears the threshold is passed through untouched, so the

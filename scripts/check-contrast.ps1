@@ -238,32 +238,33 @@ foreach ($theme in @('Dark', 'Light')) {
         # The selection ring: not a declared resource pair, so it cannot join the sweep above.
         #
         # SelectionRing has no static entry in any theme dictionary for TryFindResource to find -
-        # Plith computes it at runtime with ContrastInk.RingOn(accent, surfaceEnd) and sends the
-        # ANSWER over the wire (ShelfSession.DerivePalette, ShelfPaletteWire), specifically so the
-        # ring cannot drift from the rest of the product's contrast-derived colours. An earlier
-        # reviewer correctly flagged that as invisible to a resource-key sweep: it is a colour
-        # applied conditionally from code, and the honest fix is to make it reachable rather than
-        # to leave it exempt.
+        # Plith computes it at runtime and sends the ANSWER over the wire (ShelfSession.
+        # DerivePalette, ShelfPaletteWire), specifically so the ring cannot drift from the rest of
+        # the product's derived colours. It is a colour applied from code, so a resource-key
+        # sweep cannot see it, and the honest fix is to make it reachable rather than exempt.
         #
-        # So this calls the real function on the real derived inputs, for the same accent/theme
-        # matrix as everything above, using the exact two calls DerivePalette makes rather than a
-        # second, looser derivation of "the accent" and "the surface" that could quietly disagree
-        # with production: AccentTheme.Derive(...).Accent, not the raw parsed accent, and
-        # AccentTheme.DeriveOsdSurfaces(...).SurfaceEnd, not a resource lookup against the probe
-        # scope. RingOn's own logic (does the walk terminate, does it preserve hue) is
-        # ContrastInkTests' job on hand-picked colours; this is the integration RingOn's unit
-        # tests cannot be: whether it actually clears 3:1 for every accent this script already
-        # sweeps, on the surface colour the product actually derives for that accent and theme.
-        $derivedAccent = [Plith.Services.AccentTheme]::Derive($base, ($theme -eq 'Dark')).Accent
-        $surfaceEnd = [Plith.Services.AccentTheme]::DeriveOsdSurfaces($base, ($theme -eq 'Dark')).SurfaceEnd
-        $ring = [Plith.Services.ContrastInk]::RingOn($derivedAccent, $surfaceEnd)
+        # This MIRRORS DerivePalette, call for call, rather than a second and looser derivation
+        # that could quietly disagree with production. DerivePalette now sends:
+        #   SurfaceStart  = LoftPalette.For(isDark).Background
+        #   SurfaceEnd    = LoftPalette.For(isDark).Surface
+        #   SelectionRing = AccentTheme.DeriveLoftRoles(base, isDark).Mark
+        # so this takes the floor from LoftPalette.For and the ring from DeriveLoftRoles(...).Mark,
+        # and measures the ring against both floor surfaces at the non-text threshold. If
+        # DerivePalette changes where the ring comes from, change these lines in the same commit.
+        $isDarkTheme = ($theme -eq 'Dark')
+        $floor = [Plith.Services.LoftPalette]::For($isDarkTheme)
+        $ring = [Plith.Services.AccentTheme]::DeriveLoftRoles($base, $isDarkTheme).Mark
 
-        $measured++
-        $ringRatio = [Plith.Services.ContrastInk]::ContrastRatio($surfaceEnd, $ring)
-        if ($ringRatio -lt $NonTextThreshold) {
-            $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
-                'ShelfSession.cs:SelectionRing (ContrastInk.RingOn)', 'ring', 'OsdSurfaceBrush', `
-                $accentHex, $theme.PadRight(5), $ringRatio, $NonTextThreshold, 'non-text'))
+        foreach ($ringGround in @(
+                @{ Name = 'SurfaceStart (floor Background)'; Color = $floor.Background },
+                @{ Name = 'SurfaceEnd (floor Surface)';      Color = $floor.Surface })) {
+            $measured++
+            $ringRatio = [Plith.Services.ContrastInk]::ContrastRatio($ringGround.Color, $ring)
+            if ($ringRatio -lt $NonTextThreshold) {
+                $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
+                    'ShelfSession.cs:SelectionRing (Mark)', 'ring', $ringGround.Name, `
+                    $accentHex, $theme.PadRight(5), $ringRatio, $NonTextThreshold, 'non-text'))
+            }
         }
     }
 }

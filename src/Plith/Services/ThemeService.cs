@@ -51,24 +51,20 @@ public sealed class ThemeService : IDisposable
     private const string KeyAccentPressed = "AccentPressed";
     private const string KeyAccentGlow = "AccentGlow";
     private const string KeyOsdAccent = "OsdAccent";
-    // OSD surface keys — overriding these tints the whole card, not just the bar.
+    // OSD surface keys: the fixed Loft floor, no longer tinted by the accent.
     private const string KeyOsdSurface = "OsdSurfaceBrush";
     private const string KeyOsdBorder = "OsdBorder";
     private const string KeyOsdTrackBg = "OsdTrackBg";
     private const string KeyOsdDivider = "OsdDivider";
 
-    // Ink computed from the tinted surface rather than declared in a palette. The palettes still
-    // carry defaults for the untinted case; these override them once a tint is in play.
-    private const string KeyNotchInk = "NotchInk";
-    private const string KeyNotchInkMuted = "NotchInkMuted";
-    private const string KeyNotchTrack = "NotchTrack";
+    private const string KeyOsdAccentMark = "OsdAccentMark";
+    private const string KeyOsdAccentText = "OsdAccentText";
     private const string KeyOnAccent = "OnAccent";
+    // Settings path only (the Updates card's download bar). Still accent-derived: a general
+    // neutral measured 1.6:1 against a deep accent there.
     private const string KeyAccentTrack = "AccentTrack";
 
-    // Alpha channels match the values the base OsdPalette.*.xaml files already use, so
-    // swapping in a tinted brush keeps the same drop-shadow-over-game translucency the
-    // OSD had before the Theme Studio landed.
-    private const byte OsdSurfaceAlpha = 0xF0;
+    // Alpha channels match the values the base OsdPalette.*.xaml files already use.
     private const byte OsdTrackAlpha = 0x40;
     private const byte OsdDividerAlpha = 0x40;
 
@@ -247,7 +243,8 @@ public sealed class ThemeService : IDisposable
     public static ResourceDictionary BuildAccentOverride(Color baseColor, bool isDark)
     {
         var derived = AccentTheme.Derive(baseColor, isDark);
-        var osd = AccentTheme.DeriveOsdSurfaces(baseColor, isDark);
+        var roles = AccentTheme.DeriveLoftRoles(baseColor, isDark);
+        var floor = LoftPalette.For(isDark);
 
         return new ResourceDictionary
         {
@@ -255,55 +252,42 @@ public sealed class ThemeService : IDisposable
             [KeyAccentHover]   = FrozenBrush(derived.Hover),
             [KeyAccentPressed] = FrozenBrush(derived.Pressed),
             [KeyAccentGlow]    = FrozenBrush(derived.Glow),
-            // OSD accent uses the raw derived accent (bright) so the volume bar
-            // pops off the tinted card behind it.
-            [KeyOsdAccent]     = FrozenBrush(derived.Accent),
-            // Whole-card tint. The surface is a two-stop gradient so it keeps the
-            // vertical modeling the original palette had, only hue-shifted.
-            [KeyOsdSurface]    = BuildOsdSurfaceBrush(osd),
-            [KeyOsdBorder]     = FrozenBrush(osd.Border),
-            [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(osd.TrackBg, OsdTrackAlpha)),
-            [KeyOsdDivider]    = FrozenBrush(WithAlpha(osd.Divider, OsdDividerAlpha)),
 
-            // Ink for the notch, computed from the surface it will actually be drawn on.
-            //
-            // It used to be a constant in each palette - near-white in both - on the reasoning
-            // that the notch is a near-black cutout rather than a surface. That reasoning was
-            // sound for the bezel and wrong for what got built: NotchSurface paints itself with
-            // OsdSurfaceBrush, which IS tinted, and on the light theme that lands around 90%
-            // lightness. A pink accent gave a pale pink panel with near-white text on it,
-            // reported as simply unreadable.
-            //
-            // Derived from the surface END rather than the start: the gradient runs top to
-            // bottom, the end is the darker of the two on dark themes and the lighter on light
-            // ones, and choosing the harder half means the text clears the threshold across the
-            // whole panel rather than only at the easy end.
-            [KeyNotchInk]      = FrozenBrush(ContrastInk.PairOn(osd.SurfaceEnd).Ink),
-            [KeyNotchInkMuted] = FrozenBrush(ContrastInk.PairOn(osd.SurfaceEnd).Muted),
-            [KeyNotchTrack]    = FrozenBrush(ContrastInk.TrackOn(osd.SurfaceEnd)),
+            // The fill, for filled parts only: a primary button, a checked box. Never a panel.
+            [KeyOsdAccent]     = FrozenBrush(roles.Fill),
 
-            // Text on the accent itself - the primary button. It was hard-coded near-black,
-            // which is right for a pale accent and unreadable on a deep one.
+            // Text on AccentBrush, the Settings primary button. It is measured against the
+            // Settings accent (derived.Accent, darkened on the light theme), NOT against
+            // roles.Fill, which can be a different colour: using roles.OnFill here measured
+            // 3.1:1 to 3.4:1 on three accents in check-contrast.ps1.
             [KeyOnAccent]      = FrozenBrush(ContrastInk.On(derived.Accent)),
 
-            // The groove a progress bar's accent fill runs in. It used to be ButtonGhost, a
-            // general neutral that knows nothing about the accent - and a deep blue accent on it
-            // measured 1.6:1, which is a progress bar you cannot see progressing. Derived from
-            // the accent instead, so the fill always reads against its own track whatever the
-            // accent is, and still looks like the same material recessed rather than a second
-            // colour introduced.
+            // Lines, borders and markers take the mark; accent-coloured text takes the text role.
+            // ADR 0014: a surface is never filled with the accent, so there is no third option.
+            [KeyOsdAccentMark] = FrozenBrush(roles.Mark),
+            [KeyOsdAccentText] = FrozenBrush(roles.Text),
+
+            // The floor. Two stops so the panel keeps the vertical modelling the tinted gradient
+            // had, and both stops are fixed, which is the point of the change.
+            [KeyOsdSurface]    = BuildFloorBrush(floor),
+            [KeyOsdBorder]     = FrozenBrush(floor.Border),
+            [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(floor.Border, OsdTrackAlpha)),
+            [KeyOsdDivider]    = FrozenBrush(WithAlpha(floor.Border, OsdDividerAlpha)),
+
+            // Settings window, out of scope for the notch work: keeps its accent-derived groove.
             [KeyAccentTrack]   = FrozenBrush(ContrastInk.TrackOn(derived.Accent)),
         };
     }
 
-    private static LinearGradientBrush BuildOsdSurfaceBrush(OsdSurfaceDerived s)
+    private static LinearGradientBrush BuildFloorBrush(LoftFloor floor)
     {
-        // Vertical top-to-bottom gradient, matching the original OsdSurfaceBrush's
-        // StartPoint / EndPoint. Alpha F0 keeps the same subtle translucency over games.
-        var brush = new LinearGradientBrush(
-            WithAlpha(s.SurfaceStart, OsdSurfaceAlpha),
-            WithAlpha(s.SurfaceEnd, OsdSurfaceAlpha),
-            new Point(0, 0), new Point(0, 1));
+        var brush = new LinearGradientBrush
+        {
+            StartPoint = new Point(0, 0),
+            EndPoint = new Point(0, 1),
+        };
+        brush.GradientStops.Add(new GradientStop(floor.Background, 0));
+        brush.GradientStops.Add(new GradientStop(floor.Surface, 1));
         brush.Freeze();
         return brush;
     }

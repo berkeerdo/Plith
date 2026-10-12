@@ -9,11 +9,11 @@
     <!-- Dark OSD overlay palette — default. -->
 
     <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#F0181818" Offset="0" />
-        <GradientStop Color="#F0111111" Offset="1" />
+        <GradientStop Color="#0B0B0A" Offset="0" />
+        <GradientStop Color="#151412" Offset="1" />
     </LinearGradientBrush>
 
-    <SolidColorBrush x:Key="OsdBorder" Color="#2A2A2A" />
+    <SolidColorBrush x:Key="OsdBorder" Color="#2B2824" />
     <SolidColorBrush x:Key="OsdHighlight" Color="#1AFFFFFF" />
 
     <SolidColorBrush x:Key="OsdTextPrimary" Color="#F5F5F5" />
@@ -58,13 +58,14 @@
          token. -->
     <SolidColorBrush x:Key="NotchBezelBrush" Color="#06070A" />
 
-    <!-- Ink for anything drawn ON the bezel: the widget pages and the event HUD.
+    <!-- Ink for anything drawn on the notch: the widget pages and the event HUD.
 
-         Constant across themes, exactly like the bezel under it. The theme's own text brushes
-         cannot be used here - on the light theme OsdTextPrimary is near-black, which on a
-         near-black bezel is not a contrast problem so much as an invisible panel. Splitting the
-         token is the price of the bezel being a cutout rather than a surface. -->
-    <SolidColorBrush x:Key="NotchInk" Color="#F2F5F8" />
-    <SolidColorBrush x:Key="NotchInkMuted" Color="#9AA6B2" />
-    <SolidColorBrush x:Key="NotchTrack" Color="#2A323C" />
+         The Loft floor's Foreground, TextSecondary and Border for this theme. The notch paints
+         on OsdSurfaceBrush, which is now the fixed floor and no longer moves with the accent, so
+         these are constants rather than values computed per accent. The keys stay because about
+         forty DynamicResource references consume them, and an unresolved one fails silently.
+         OsdPalette.HighContrast.xaml keeps its own system-colour versions. -->
+    <SolidColorBrush x:Key="NotchInk" Color="#ECE9E2" />
+    <SolidColorBrush x:Key="NotchInkMuted" Color="#A39E94" />
+    <SolidColorBrush x:Key="NotchTrack" Color="#2B2824" />
 </ResourceDictionary>

@@ -156,7 +156,7 @@ public class AccentThemeTests
     {
         var baseColor = Color.FromRgb(r, g, b);
         var accent = AccentTheme.Derive(baseColor, isDarkBg: false).Accent;
-        var surface = AccentTheme.DeriveOsdSurfaces(baseColor, isDarkBg: false).SurfaceEnd;
+        var surface = LoftPalette.LightFloor.Surface;
 
         var ratio = ContrastInk.ContrastRatio(accent, surface);
         Assert.True(ratio >= 3.0 - 0.05,
@@ -179,98 +179,6 @@ public class AccentThemeTests
     {
         var baseColor = Color.FromRgb(r, g, b);
         Assert.Equal(baseColor, AccentTheme.Derive(baseColor, isDarkBg: true).Accent);
-    }
-
-    [Fact]
-    public void DeriveOsdSurfaces_DarkBg_KeepsSurfacesInDarkRange()
-    {
-        // Dark OSD surfaces must stay dark enough to read over exclusive-fullscreen
-        // games. Cap at L <= 0.15 for the surface stops so a bright pick doesn't
-        // wash out gameplay.
-        foreach (var preset in AccentTheme.Presets)
-        {
-            var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDarkBg: true);
-            var (_, _, lStart) = AccentTheme.RgbToHsl(osd.SurfaceStart);
-            var (_, _, lEnd) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
-            Assert.True(lStart <= 0.15 + 0.001,
-                $"{preset.Id} SurfaceStart luminance {lStart:F3} exceeded 0.15 on dark bg");
-            Assert.True(lEnd <= 0.15 + 0.001,
-                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} exceeded 0.15 on dark bg");
-        }
-    }
-
-    /// <summary>
-    /// The accent moves the surface only at the extremes, and every built-in preset is inside.
-    ///
-    /// Both halves matter. Without the pull, choosing black on the light theme produced a
-    /// near-white panel — the accent contributed hue and saturation, and black has neither, so
-    /// the lightness stayed where the theme put it. Reported as "I give it black and it looks
-    /// white", and it did.
-    ///
-    /// Without the band, the fix reached past the case it was for: at a band top of 0.75 the
-    /// violet preset (L 0.776) started lightening the dark surface, changing a shipped look to
-    /// serve a custom pick nobody had made. The test above caught that, which is why the band is
-    /// set from the presets rather than chosen.
-    /// </summary>
-    [Fact]
-    public void DeriveOsdSurfaces_FollowsAnExtremeAccentButLeavesPresetsAlone()
-    {
-        // An extreme is obeyed: black asks for a dark panel even on the light theme.
-        var black = AccentTheme.DeriveOsdSurfaces(Color.FromRgb(0, 0, 0), isDarkBg: false);
-        var (_, _, blackL) = AccentTheme.RgbToHsl(black.SurfaceEnd);
-        Assert.True(blackL < 0.30, $"a black accent left the light surface at {blackL:F3}");
-
-        // And symmetrically on the other theme.
-        var white = AccentTheme.DeriveOsdSurfaces(Color.FromRgb(255, 255, 255), isDarkBg: true);
-        var (_, _, whiteL) = AccentTheme.RgbToHsl(white.SurfaceEnd);
-        Assert.True(whiteL > 0.70, $"a white accent left the dark surface at {whiteL:F3}");
-
-        // While every preset produces exactly the theme's own surface, untouched.
-        foreach (var preset in AccentTheme.Presets)
-        {
-            foreach (var isDark in new[] { true, false })
-            {
-                var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDark);
-                var (_, _, l) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
-                // The theme's own surface, which moved when the tint was strengthened: the panel
-                // was deviating from a neutral grey by about 20 channel units on either theme,
-                // which is no tint at all. Colour needs room in the channels, and at L 0.07 or
-                // 0.90 there is none - so the panel came in from the extreme rather than simply
-                // taking more saturation, which would have changed nothing.
-                var expected = isDark ? 0.12 : 0.84;
-
-                Assert.True(Math.Abs(l - expected) < 0.005,
-                    $"{preset.Id} on {(isDark ? "dark" : "light")} moved the surface to {l:F3}, expected {expected:F2}");
-            }
-        }
-    }
-
-    [Fact]
-    public void DeriveOsdSurfaces_LightBg_KeepsSurfacesInLightRange()
-    {
-        foreach (var preset in AccentTheme.Presets)
-        {
-            var osd = AccentTheme.DeriveOsdSurfaces(preset.BaseColor, isDarkBg: false);
-            var (_, _, lStart) = AccentTheme.RgbToHsl(osd.SurfaceStart);
-            var (_, _, lEnd) = AccentTheme.RgbToHsl(osd.SurfaceEnd);
-            Assert.True(lStart >= 0.80 - 0.001,
-                $"{preset.Id} SurfaceStart luminance {lStart:F3} below 0.80 on light bg");
-            Assert.True(lEnd >= 0.80 - 0.001,
-                $"{preset.Id} SurfaceEnd luminance {lEnd:F3} below 0.80 on light bg");
-        }
-    }
-
-    [Fact]
-    public void DeriveOsdSurfaces_PreservesAccentHue()
-    {
-        // Sky (#7AA2F7, hue ~220) tinted for a dark card must still read as blue-ish —
-        // i.e. the surface hue is close to the base hue, not shifted into a different
-        // colour family by the desaturation clamp.
-        var sky = Color.FromRgb(0x7A, 0xA2, 0xF7);
-        var (baseH, _, _) = AccentTheme.RgbToHsl(sky);
-        var osd = AccentTheme.DeriveOsdSurfaces(sky, isDarkBg: true);
-        var (surfH, _, _) = AccentTheme.RgbToHsl(osd.SurfaceStart);
-        Assert.InRange(surfH, baseH - 2, baseH + 2);
     }
 
     [Fact]

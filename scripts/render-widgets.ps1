@@ -113,7 +113,8 @@ if ($Accent) {
 
 # The ground the OSD actually sits on, so a render shows the contrast a person gets.
 $osdSurfaces = if ($Accent) {
-    [Plith.Services.AccentTheme]::DeriveOsdSurfaces($baseColor, ($Theme -eq 'Dark'))
+    $floor = [Plith.Services.LoftPalette]::For(($Theme -eq 'Dark'))
+    [pscustomobject]@{ SurfaceStart = $floor.Background; SurfaceEnd = $floor.Surface }
 } else { $null }
 
 # The classic cards resolve StaticResource at CONSTRUCTION, which searches the application
@@ -856,12 +857,20 @@ $emptyPng = Join-Path $OutDir 'shelf-surface-empty.png'
 $emptyBmp = [System.Drawing.Bitmap]::FromFile($emptyPng)
 try {
     $sc = $emptyBmp.Width / $emptyFrame.Width
+    # "Lit" means different from the ground, not bright. It used to be R+G+B > 130, which was an
+    # absolute brightness chosen when the outline was #2A323C on a near-black panel. Against the
+    # Loft floor the dark outline is #2B2824 (sum 123, under that line) and on the light floor the
+    # GROUND is over it, so the old test failed the first and passed the second for the wrong
+    # reason. Distance from the floor's own mean is what the question always was.
+    $groundFloor = [Plith.Services.LoftPalette]::For(($Theme -eq 'Dark'))
+    $groundSum = ($groundFloor.Background.R + $groundFloor.Background.G + $groundFloor.Background.B +
+                  $groundFloor.Surface.R + $groundFloor.Surface.G + $groundFloor.Surface.B) / 2.0
     function Measure-Band([double]$x0, [double]$x1, [double]$y0, [double]$y1) {
         $lit = 0
         for ($x = [int]($x0 * $sc); $x -le [int]($x1 * $sc); $x++) {
             for ($y = [int]($y0 * $sc); $y -le [int]($y1 * $sc); $y++) {
                 $c = $emptyBmp.GetPixel([Math]::Min($x, $emptyBmp.Width - 1), [Math]::Min($y, $emptyBmp.Height - 1))
-                if ($c.R + $c.G + $c.B -gt 130) { $lit++ }
+                if ([Math]::Abs(($c.R + $c.G + $c.B) - $groundSum) -gt 40) { $lit++ }
             }
         }
         $lit
