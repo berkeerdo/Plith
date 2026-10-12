@@ -96,6 +96,38 @@ public static class AccentTheme
     }
 
     /// <summary>
+    /// One seed into the four Loft roles, per ADR 0014. The fill keeps the seed when it can;
+    /// the mark and the text walk in OKLCH, hue and chroma held, until each clears its ratio
+    /// against BOTH of the mode's surfaces rather than against one of them. A tone that passes on
+    /// the background and fails on the raised surface is a tone that fails, because the notch
+    /// draws on both.
+    /// </summary>
+    public static LoftAccentRoles DeriveLoftRoles(Color seed, bool isDark)
+    {
+        var floor = LoftPalette.For(isDark);
+        var surfaces = new[] { floor.Background, floor.Surface };
+
+        double MinOn(Color c) => surfaces.Min(s => ContrastInk.ContrastRatio(c, s));
+
+        // The fill is the seed unless its own label cannot sit on it. Walking away from the floor
+        // is the direction that gains contrast: lighter on a dark floor, darker on a light one.
+        var away = isDark ? 1 : -1;
+
+        var fill = seed;
+        var onFill = ContrastInk.On(fill);
+        if (ContrastInk.ContrastRatio(onFill, fill) < 4.5)
+        {
+            fill = Oklch.Walk(seed, c => ContrastInk.ContrastRatio(ContrastInk.On(c), c) >= 4.5, away);
+            onFill = ContrastInk.On(fill);
+        }
+
+        var mark = MinOn(seed) >= 3.0 ? seed : Oklch.Walk(seed, c => MinOn(c) >= 3.0, away);
+        var text = MinOn(seed) >= 4.5 ? seed : Oklch.Walk(seed, c => MinOn(c) >= 4.5, away);
+
+        return new LoftAccentRoles(fill, onFill, mark, text);
+    }
+
+    /// <summary>
     /// Produces the four derived brushes from a base colour, tuned for the current
     /// surface. On dark surfaces hover brightens and pressed darkens; on light
     /// surfaces both go darker (matching WPF Material / macOS button conventions)
