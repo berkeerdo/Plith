@@ -456,7 +456,6 @@ public class LoftAccentTests
         Assert.Equal(lime, roles.Fill);
     }
 
-    [Fact]
     /// <summary>
     /// All FOURTEEN values, not just the two surfaces per mode. This test is what
     /// `scripts/build-loft-tokens.ps1` names as the guard against someone hand-editing the
