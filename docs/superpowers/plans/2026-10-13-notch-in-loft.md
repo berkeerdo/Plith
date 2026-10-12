@@ -424,8 +424,25 @@ public class LoftAccentTests
             var floor = isDark ? LoftPalette.DarkFloor : LoftPalette.LightFloor;
             var roles = AccentTheme.DeriveLoftRoles(seed, isDark);
 
-            Assert.True(ContrastInk.ContrastRatio(roles.Mark, floor.Surface) >= 3.0);
-            Assert.True(ContrastInk.ContrastRatio(roles.Text, floor.Surface) >= 4.5);
+            // BOTH surfaces, because the constraint is "every surface it is drawn on" and the two
+            // differ in which is harder: on light, Background #E7E6E0 is darker than Surface
+            // #F3F2ED, so a darkened tone has LESS contrast against the background. Checking only
+            // Surface would miss exactly the mode where an extreme seed runs out of room, which
+            // is the case this test exists for.
+            foreach (var surface in new[] { floor.Surface, floor.Background })
+            {
+                Assert.True(
+                    ContrastInk.ContrastRatio(roles.Mark, surface) >= 3.0,
+                    $"Mark {roles.Mark} on {surface}, isDark {isDark}, ratio {ContrastInk.ContrastRatio(roles.Mark, surface)}");
+                Assert.True(
+                    ContrastInk.ContrastRatio(roles.Text, surface) >= 4.5,
+                    $"Text {roles.Text} on {surface}, isDark {isDark}, ratio {ContrastInk.ContrastRatio(roles.Text, surface)}");
+            }
+
+            // The third ratio from ADR 0014, on the one surface that is not the floor.
+            Assert.True(
+                ContrastInk.ContrastRatio(roles.OnFill, roles.Fill) >= 4.5,
+                $"OnFill {roles.OnFill} on Fill {roles.Fill}, isDark {isDark}, ratio {ContrastInk.ContrastRatio(roles.OnFill, roles.Fill)}");
         }
     }
 
@@ -440,12 +457,38 @@ public class LoftAccentTests
     }
 
     [Fact]
-    public void DarkFloor_MatchesTheSpec()
+    /// <summary>
+    /// All FOURTEEN values, not just the two surfaces per mode. This test is what
+    /// `scripts/build-loft-tokens.ps1` names as the guard against someone hand-editing the
+    /// generated constants instead of regenerating them, and a guard that covers four of fourteen
+    /// makes that claim false for the other ten. Nothing else pins `Foreground`,
+    /// `TextSecondary`, `TextTertiary`, `Border` or `BorderStrong`.
+    /// </summary>
+    [Fact]
+    public void BothFloors_MatchTheSpec()
     {
         Assert.Equal(Color.FromRgb(0x0B, 0x0B, 0x0A), LoftPalette.DarkFloor.Background);
         Assert.Equal(Color.FromRgb(0x15, 0x14, 0x12), LoftPalette.DarkFloor.Surface);
+        Assert.Equal(Color.FromRgb(0xEC, 0xE9, 0xE2), LoftPalette.DarkFloor.Foreground);
+        Assert.Equal(Color.FromRgb(0xA3, 0x9E, 0x94), LoftPalette.DarkFloor.TextSecondary);
+        Assert.Equal(Color.FromRgb(0x7A, 0x75, 0x6C), LoftPalette.DarkFloor.TextTertiary);
+        Assert.Equal(Color.FromRgb(0x2B, 0x28, 0x24), LoftPalette.DarkFloor.Border);
+        Assert.Equal(Color.FromRgb(0x7A, 0x75, 0x6C), LoftPalette.DarkFloor.BorderStrong);
+
         Assert.Equal(Color.FromRgb(0xE7, 0xE6, 0xE0), LoftPalette.LightFloor.Background);
         Assert.Equal(Color.FromRgb(0xF3, 0xF2, 0xED), LoftPalette.LightFloor.Surface);
+        Assert.Equal(Color.FromRgb(0x16, 0x16, 0x16), LoftPalette.LightFloor.Foreground);
+        Assert.Equal(Color.FromRgb(0x55, 0x54, 0x4F), LoftPalette.LightFloor.TextSecondary);
+        Assert.Equal(Color.FromRgb(0x77, 0x75, 0x6D), LoftPalette.LightFloor.TextTertiary);
+        Assert.Equal(Color.FromRgb(0xD0, 0xCE, 0xC6), LoftPalette.LightFloor.Border);
+        Assert.Equal(Color.FromRgb(0x77, 0x75, 0x6D), LoftPalette.LightFloor.BorderStrong);
+    }
+
+    [Fact]
+    public void For_ReturnsTheFloorForTheMode()
+    {
+        Assert.Equal(LoftPalette.DarkFloor, LoftPalette.For(isDark: true));
+        Assert.Equal(LoftPalette.LightFloor, LoftPalette.For(isDark: false));
     }
 }
 ```
@@ -554,7 +597,7 @@ Expected: PASS. If an extreme seed fails, the walk ran out of range rather than 
 The spec asks for this and the reason is specific: a hand copy of fourteen colours drifts the first
 time either side is tuned, and the drift is silent because both sides still compile. The floors
 stay checked in, so a build never needs the praxvon-ui checkout; the script is what proves they
-still match, and `DarkFloor_MatchesTheSpec` is what fails when they do not.
+still match, and `BothFloors_MatchTheSpec` is what fails when they do not.
 
 Create `scripts/build-loft-tokens.ps1`:
 
@@ -564,7 +607,7 @@ Create `scripts/build-loft-tokens.ps1`:
 #
 # The generated values are checked in on purpose: a Plith build must not need the praxvon-ui
 # checkout. This script is run by a person when praxvon-ui's theme moves, and its output is
-# reviewed like any other change. LoftAccentTests.DarkFloor_MatchesTheSpec is the guard that
+# reviewed like any other change. LoftAccentTests.BothFloors_MatchTheSpec is the guard that
 # fails if someone edits the constants by hand instead.
 
 [CmdletBinding()]
