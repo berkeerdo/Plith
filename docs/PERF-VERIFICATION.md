@@ -933,3 +933,23 @@ because both would recur:
 2. **Three watchers at once.** Killing the elevated child by command line from a non-elevated
    shell silently matched nothing, so stale watchers kept running, doubled every log line and
    fought over the dump file. The fix is a pid lock file plus killing with elevation.
+
+### 12.5 What is left running on the dev machine
+
+Three things from this investigation outlive the session that made them, and none of them is
+visible in the repo.
+
+1. **`C:\Program Files\Plith\Plith.dll` is an instrumented build**, not the 0.3.3 one the
+   installer put there. It carries only the two log lines from `feat(diag): log the two halves of
+   the exit gap` and nothing else; the signed `Plith.exe` beside it is untouched, which is why
+   UIAccess is still granted. It is there so that if the rare hang happens, the dump arrives with
+   the click timestamp rather than without it. The original is backed up in the session scratchpad
+   as `Plith.dll.installed-backup`. Restoring it is a file copy; reinstalling 0.3.3 also does it.
+2. **An elevated watcher process is running** and is not tied to any session. It polls for a Plith
+   process, watches for `OnExit` in the bytes appended after its own baseline, polls `Responding`
+   for a hang that never reaches `OnExit`, and captures a full `dotnet-dump` when either shape
+   appears. It holds a pid lock so a second one refuses to start. Killing it: stop the `pwsh`
+   process whose command line contains `watch-exit-hang`, with elevation, or reboot.
+3. **The hang has not happened since.** Eight clean shutdowns were watched after the watcher was
+   corrected. Until a dump exists, section 12.4 stands unchanged and nothing here should be read
+   as the hang being fixed or gone.
