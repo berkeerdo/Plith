@@ -66,8 +66,22 @@ public sealed class TrayIconHost : IDisposable
         // shutdown flow while the popup is still mid-close, which can wedge the
         // dispatcher on the tray-popup HWND teardown. Deferring one dispatcher turn
         // lets the popup fully close first, then OnExit runs cleanly.
-        exit.Click += (_, _) => _app.Dispatcher.BeginInvoke(
-            new Action(_app.Shutdown), DispatcherPriority.Background);
+        //
+        // The two log lines split the gap this defers into. Measured 2026-10-12 from the user's
+        // own session: the click landed at 19:16:37.765 and "OnExit begin" at 19:16:40.360, a
+        // 2.595 s stall, while OnExit itself took 41 ms. So the whole visible freeze happens
+        // before OnExit and nothing in the log said which half of it: waiting for the Background
+        // turn to come up, or inside WPF's own Shutdown closing the windows. "Exit clicked" and
+        // "Shutdown called" bracket the first half; "OnExit begin" already closes the second.
+        exit.Click += (_, _) =>
+        {
+            _log?.Info("Tray", "Exit clicked");
+            _app.Dispatcher.BeginInvoke(new Action(() =>
+            {
+                _log?.Info("Tray", "Shutdown called");
+                _app.Shutdown();
+            }), DispatcherPriority.Background);
+        };
         menu.Items.Add(exit);
 
         _tray.ContextMenu = menu;
