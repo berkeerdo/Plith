@@ -71,13 +71,21 @@ public static class Oklch
         var (l, c, h) = FromColor(seed);
         const double Step = 0.01;
 
+        var endpoint = direction > 0 ? 1.0 : 0.0;
         var last = seed;
         for (var i = 1; i <= 100; i++)
         {
             var next = l + direction * Step * i;
-            if (next < 0.0 || next > 1.0) break;
+
+            // Clamp the last step to the endpoint rather than breaking short of it. Breaking
+            // stops at 0.99, so white and black are never tried, and the walk can then return a
+            // tone that fails while a passing tone existed one step further on.
+            var atEnd = direction > 0 ? next >= endpoint : next <= endpoint;
+            if (atEnd) next = endpoint;
+
             last = ToColor(next, c, h);
             if (passes(last)) return last;
+            if (atEnd) break;
         }
         return last;
     }
