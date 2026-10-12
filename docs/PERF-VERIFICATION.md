@@ -820,3 +820,77 @@ Unchanged.
    whole caveat about scale applies unchanged.
 3. **Nothing here measured a battery**, which is the argument wakeups are reduced for in the first
    place. No measurement in this repo ever has.
+
+---
+
+## 12. What a shutdown costs, and the stall is not in it
+
+Date: 2026-10-12. Opened by a user report: "sometimes it really locks the system", and separately
+"I press Exit and it freezes for a second or two, then closes, it does not feel performant".
+
+### 12.1 What was measured
+
+`OnExit` has logged every dispose step by name since the earlier silent hangs. Four shutdowns of
+the same 0.3.3 binary (built 23 September) were read end to end:
+
+| Run | `OnExit` begin to `Environment.Exit` | Outcome |
+|---|---|---|
+| 2026-10-12 17:21:07 (installed) | 57 ms | clean, all 20 steps |
+| 2026-10-12 19:16:40 (installed) | 41 ms | clean, all 20 steps |
+| 2026-10-12 19:25:12 (from `bin`) | 75 ms total, click to exit | clean, all 20 steps |
+| 2026-10-09 13:40:32 (installed) | never finished | hung after `Disposing FullscreenVideoWatcher` |
+| 2026-10-10 04:13:33 (installed) | never finished | hung after `Disposed BrightnessHotkeys` |
+
+**The dispose chain is not the cost.** Twenty steps in 41 to 57 ms, repeatedly. Every claim in
+this section that points elsewhere rests on that.
+
+### 12.2 The stall is before `OnExit`, and it is now instrumented
+
+The 19:16 run shows a 2.595 s gap between the last logged mouse press and `OnExit begin`, against
+41 ms for the whole of `OnExit`. That the press was the Exit click is an inference and is not
+proven: the coordinate falls outside the display the notch reported, and nothing logged the click
+itself.
+
+So `TrayIconHost` now logs `Exit clicked` and `Shutdown called`, which bracket the two halves the
+gap can fall in: waiting for the posted `DispatcherPriority.Background` turn to come up, and
+WPF's own `Shutdown` closing the windows before `OnExit` runs.
+
+First instrumented run, from `bin`: click 19:25:12.610, `Shutdown called` .648 (38 ms), `OnExit
+begin` .649, `Environment.Exit` .685. **75 ms end to end, no stall.** The stall did not reproduce
+on that run, so the instrument is proven and the condition is not yet.
+
+### 12.3 What is still unknown
+
+**There is no root cause for either the stall or the hang.** Stated plainly because the section
+above reads like progress and progress is not an answer.
+
+- The hang is intermittent on one unchanged binary: two of the five shutdowns on record hung, at
+  two different dispose steps, and three were clean. A race, not a bad step.
+- Four explanations were eliminated, not confirmed: a system-wide low-level keyboard hook stall
+  (the hook is removed second, and was already gone in both recorded hangs), a blocking
+  `Dispatcher.Invoke` (there are none in `src/Plith`), the `DiagnosticLog` write lock (its lock
+  encloses file IO only and never re-enters the UI thread), and a version difference (the hanging
+  and the clean runs are the same build).
+- The two runs differ in more than one way, so neither is isolated: the fast run lived 50 seconds
+  and was barely used, from `bin` at medium integrity; the stalled run had been up for half an
+  hour, had the notch opened repeatedly, and ran installed with UIAccess at high integrity.
+
+### 12.4 How a hang gets caught
+
+A dump of the hung process is the only thing that can name the blocking call, and the hang is too
+rare to sit and wait for. `scripts/` does not own this yet; it ran from the scratchpad as a
+re-arming watcher that polls for a Plith process, watches for `OnExit` in the bytes appended
+after its own baseline, and captures a full dump with `dotnet-dump` when the process is still
+alive ten seconds later. It also polls `Responding`, because a hang before `OnExit` writes nothing
+to the log at all and the log path alone would miss it.
+
+Two false captures came out of earlier versions of that watcher and both are worth recording,
+because both would recur:
+
+1. **Reading the file's tail instead of its own bytes.** `Get-Content -Tail 20` on a fresh launch
+   still shows the *previous* session's shutdown lines, so the watcher declared a hang one second
+   after a process started and dumped 537 MB of a perfectly healthy app. The fix is a byte offset
+   taken after the process is up.
+2. **Three watchers at once.** Killing the elevated child by command line from a non-elevated
+   shell silently matched nothing, so stale watchers kept running, doubled every log line and
+   fought over the dump file. The fix is a pid lock file plus killing with elevation.
