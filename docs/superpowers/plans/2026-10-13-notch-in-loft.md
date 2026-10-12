@@ -368,7 +368,7 @@ git commit -m "feat(theme): add OKLCH conversion and a tone walk"
 `LoftPalette.For` is part of the produced surface, not an implementation detail: Task 3 consumes
 it by name, and Task 3 is the only reason the two floors are reachable through one call.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows.Media;
@@ -492,12 +492,12 @@ public class LoftAccentTests
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~LoftAccentTests`
 Expected: FAIL, `The type or namespace name 'LoftPalette' could not be found`.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Create `src/Plith/Services/LoftPalette.cs`:
 
@@ -586,12 +586,12 @@ Add to `src/Plith/Services/AccentTheme.cs`, inside `public static class AccentTh
     }
 ```
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~LoftAccentTests`
 Expected: PASS. If an extreme seed fails, the walk ran out of range rather than the math being wrong: fix by walking the other direction when the first endpoint fails, not by lowering a ratio.
 
-- [ ] **Step 5: Make the floors generated rather than copied**
+- [x] **Step 5: Make the floors generated rather than copied**
 
 The spec asks for this and the reason is specific: a hand copy of fourteen colours drifts the first
 time either side is tuned, and the drift is silent because both sides still compile. The floors
@@ -651,7 +651,7 @@ Run: `pwsh -File scripts/build-loft-tokens.ps1`
 Expected: the printed blocks are identical to the two initialisers in `LoftPalette.cs`. If they
 differ, the hand-written constants are wrong and the script is right.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Services/LoftPalette.cs src/Plith/Services/AccentTheme.cs scripts/build-loft-tokens.ps1 tests/Plith.Tests/LoftAccentTests.cs
