@@ -213,6 +213,36 @@ public sealed class ShelfSessionTests : IDisposable
         }
     }
 
+    /// <summary>
+    /// The rail pip is a non-text mark, so it must be painted from the role Mark. It was once
+    /// painted from Fill, which for emerald on the light floor is 1.65:1. This picks a seed where
+    /// the two roles genuinely differ (emerald, light), proves the Mark clears 3:1 and the Fill
+    /// does not, then checks the catcher paints the pip from SelectionRing (Mark) and binds no
+    /// key to Accent (Fill). The catcher is not referenced by this project, so the second half
+    /// reads its source, the same way AppXaml_MergesOrnamentsBeforeTheOsdPalette reads App.xaml.
+    /// </summary>
+    [Fact]
+    public void RailPip_IsPaintedFromTheMarkRoleAndNotFromFill()
+    {
+        var palette = ShelfSession.DerivePalette(Color.FromRgb(0x4A, 0xD6, 0x95), isDark: false);
+
+        Assert.NotEqual(palette.Accent, palette.SelectionRing);
+        Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceStart) >= 3.0);
+        Assert.True(ContrastInk.ContrastRatio(palette.Accent, palette.SurfaceStart) < 3.0);
+
+        string? surface = null;
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d is not null; d = d.Parent)
+        {
+            var candidate = Path.Combine(d.FullName, "src", "Plith.DropCatcher", "Shelf", "ShelfSurface.xaml.cs");
+            if (File.Exists(candidate)) { surface = candidate; break; }
+        }
+
+        Assert.NotNull(surface);
+        var text = File.ReadAllText(surface!);
+        Assert.Contains("Background = (Brush)FindResource(\"SelectionRing\"),", text);
+        Assert.DoesNotContain("palette.Accent", text.Replace("// palette.Accent is deliberately NOT bound", ""));
+    }
+
     /// <summary>An accent that already clears the threshold is passed through untouched, so the
     /// ring still reads as the colour the person picked.</summary>
     [Fact]

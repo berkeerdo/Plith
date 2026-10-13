@@ -27,7 +27,7 @@
 
          Every colour brush used below is resolved from THIS control's own Resources, filled in
          by Apply(ShelfPalette) at runtime, under the same keys Plith uses for the same things
-         (OsdSurfaceBrush, NotchInk, NotchInkMuted, NotchTrack, AccentBrush). Nothing here reaches
+         (OsdSurfaceBrush, NotchInk, NotchInkMuted, NotchTrack, SelectionRing). Nothing here reaches
          through Application.Resources: this process has no application-level theme, and the
          render harness proved once already (ShelfWidget) that anything reaching through
          Application renders in colours the product never shows. -->

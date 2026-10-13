@@ -7,7 +7,9 @@ namespace Plith.Services.Shelf;
 /// OsdSurfaceBrush is a LinearGradientBrush: a single flat stand-in would be visibly not the
 /// product's surface, which is the exact drift this type exists to prevent.</param>
 /// <param name="Accent">The Loft accent role Fill (AccentTheme.DeriveLoftRoles): for filled parts
-/// only, and no contrast claim against the floor.</param>
+/// only, and no contrast claim against the floor. Still on the wire so FieldCount and the
+/// positional order stay put, but the catcher binds it to nothing: a mark drawn from it would
+/// not clear 3:1 on the light floor. Use SelectionRing for any mark.</param>
 /// <param name="SelectionRing">A non-text stroke for a selected tile: the Loft accent role Mark
 /// (AccentTheme.DeriveLoftRoles), the seed unchanged when it clears 3:1 against both floor
 /// surfaces and its Oklch lightness walked until it does when it does not. Sent as the raw

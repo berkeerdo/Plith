@@ -245,13 +245,13 @@ public partial class ShelfSurface : UserControl
             ["NotchInk"] = Solid(palette.Ink),
             ["NotchInkMuted"] = Solid(palette.InkMuted),
             ["NotchTrack"] = Solid(palette.Track),
-            ["AccentBrush"] = Solid(palette.Accent),
-            // NOT necessarily the Accent. Plith derives this as DeriveLoftRoles(...).Mark, which
-            // is the seed unchanged when it already clears 3:1 against both Loft floor surfaces
-            // and walks its lightness in Oklch when it does not, where this product holds a
-            // non-text mark to 3:1. Accent above is the role Fill, which makes no such claim. Plith sends
-            // the answer rather than the accent alone, so the ring cannot drift from the rest of
-            // the product's contrast-derived colours.
+            // palette.Accent is deliberately NOT bound to any key: it is the role Fill, which
+            // makes no contrast claim, and every mark this surface draws is a non-text mark.
+            // This is the role Mark: DeriveLoftRoles(...).Mark is the seed unchanged when it
+            // already clears 3:1 against both Loft floor surfaces and walks its lightness in
+            // Oklch when it does not. Plith sends the answer rather than the accent alone, so the
+            // ring and the rail pip cannot drift from the rest of the product's contrast-derived
+            // colours.
             ["SelectionRing"] = Solid(palette.SelectionRing),
             // Two stops, not one: OsdSurfaceBrush is a LinearGradientBrush in Plith, and a flat
             // stand-in here would be visibly not the surface the shelf sits on everywhere else.
@@ -1039,12 +1039,13 @@ public partial class ShelfSurface : UserControl
             Margin = new Thickness(segment * _railShelfIndex, 0, 0, 0),
             CornerRadius = new CornerRadius(1.5),
             IsHitTestVisible = false,
-            // AccentBrush, which is what Apply defines here. It was OsdAccent, Plith's own key,
+            // SelectionRing, which is what Apply defines here, and the role Mark like Plith's own
+            // pip (WidgetFrame uses OsdAccent, also Mark). It was OsdAccent, Plith's own key,
             // and FindResource THREW on it: this project builds its palette from the seven values
             // that come over the wire and never sees Plith's dictionaries. The throw cost the
             // OpenShelf message that followed the rail's (see App.OnReceived) and the shelf
             // simply never appeared.
-            Background = (Brush)FindResource("AccentBrush"),
+            Background = (Brush)FindResource("SelectionRing"),
         });
 
         // A click pages, which is the only way to reach another page without a wheel. The index
