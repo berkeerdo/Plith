@@ -692,3 +692,11 @@ counts only.
   `Plith.DropCatcher`, a cross-process window swap. That is a suspect to measure, not a
   finding. No instrument covers it: `measure-notch-open` times the open of the notch itself, and
   `drive-shelf-pair` proves the handover works, not what it costs. Outside the Loft work.
+- **The classic OSD card still draws cool grey text on a warm floor**: `OsdTextPrimary`,
+  `OsdTextSecondary` and `OsdTextTertiary` are still the pre-Loft zinc family (`#F5F5F5`,
+  `#A1A1AA`, `#71717A`) while the floor beneath them is Loft's warm one and the notch's own ink
+  is Loft's (`NotchInk` `#ECE9E2`, `NotchInkMuted` `#A39E94`). So one surface draws warm on warm
+  and the other cool on warm. Contrast passes either way, so `check-contrast` will never raise
+  it and no test can. Deliberately not changed at the end of the Loft branch: six text values
+  moved without a side-by-side render is how a regression ships. Needs its own round, with the
+  before and after renders put next to each other.
