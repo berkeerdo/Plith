@@ -31,18 +31,21 @@ internal enum PaletteKind
 /// </summary>
 public sealed class ThemeService : IDisposable
 {
+    // Spelled with the assembly (/Plith;component/...) rather than against the application's
+    // resource assembly: identical in the running exe, and it also resolves where the entry
+    // assembly is a test host, which is what lets the live swap be tested.
     private static readonly Uri SettingsDarkUri = new(
-        "pack://application:,,,/Resources/Palette.Dark.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/Palette.Dark.xaml", UriKind.Absolute);
     private static readonly Uri SettingsLightUri = new(
-        "pack://application:,,,/Resources/Palette.Light.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/Palette.Light.xaml", UriKind.Absolute);
     private static readonly Uri OsdDarkUri = new(
-        "pack://application:,,,/Resources/OsdPalette.Dark.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/OsdPalette.Dark.xaml", UriKind.Absolute);
     private static readonly Uri OsdLightUri = new(
-        "pack://application:,,,/Resources/OsdPalette.Light.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/OsdPalette.Light.xaml", UriKind.Absolute);
     private static readonly Uri SettingsHighContrastUri = new(
-        "pack://application:,,,/Resources/Palette.HighContrast.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/Palette.HighContrast.xaml", UriKind.Absolute);
     private static readonly Uri OsdHighContrastUri = new(
-        "pack://application:,,,/Resources/OsdPalette.HighContrast.xaml", UriKind.Absolute);
+        "pack://application:,,,/Plith;component/Resources/OsdPalette.HighContrast.xaml", UriKind.Absolute);
 
     // Brush keys the accent override replaces. Kept as constants so the surface is
     // greppable and easy to expand if new accent-sensitive brushes get added later.

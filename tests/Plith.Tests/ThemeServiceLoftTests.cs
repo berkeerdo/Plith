@@ -42,6 +42,44 @@ public class ThemeServiceLoftTests
             Assert.Same(palette[key], mirror[key]);
     }
 
+    private static readonly object AppLock = new();
+
+    /// <summary>
+    /// The LIVE path: the mirror must follow the palette a theme switch installs, so it has to be
+    /// read from the current slot on every call. Caching the palette at construction would pass
+    /// the static composition test above and still strand the ink after a Dark to Light switch.
+    /// </summary>
+    [StaFact]
+    public void OsdMirror_FollowsTheActivePaletteAcrossAThemeSwitch()
+    {
+        Application app;
+        lock (AppLock)
+        {
+            app = Application.Current ?? new Application();
+            if (app.Resources.MergedDictionaries.Count == 0)
+            {
+                foreach (var name in new[] { "OsdPalette.Dark.xaml", "Palette.Dark.xaml" })
+                    app.Resources.MergedDictionaries.Add(new ResourceDictionary
+                    {
+                        Source = new Uri($"pack://application:,,,/Plith;component/Resources/{name}", UriKind.Absolute),
+                    });
+            }
+        }
+
+        var ini = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "plith-theme-" + Guid.NewGuid().ToString("N"), "config.ini");
+        var theme = new ThemeService(app, new SettingsService(ini));
+        if (theme.IsHighContrast) return;
+
+        theme.Apply(Plith.Services.ThemeMode.Dark);
+        var dark = Assert.IsType<SolidColorBrush>(theme.BuildOsdMirror()["NotchInk"]).Color;
+        theme.Apply(Plith.Services.ThemeMode.Light);
+        var light = Assert.IsType<SolidColorBrush>(theme.BuildOsdMirror()["NotchInk"]).Color;
+
+        Assert.Equal(LoftPalette.DarkFloor.Foreground, dark);
+        Assert.Equal(LoftPalette.LightFloor.Foreground, light);
+        Assert.NotEqual(dark, light);
+    }
+
     [Fact]
     public void BuildAccentOverride_SurfaceIsTheFloorAndNotTheAccent()
     {
