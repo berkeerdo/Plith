@@ -133,7 +133,7 @@ they care about.
 
 ## 6. Phase breakdown
 
-### The notch in Loft: **built, verified in part, unmerged**
+### The notch in Loft: **merged into main, verified in part**
 
 Spec: `docs/superpowers/specs/2026-10-12-notch-loft-design.md` (approved 2026-10-13).
 Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md` (seven tasks, all seven done).
@@ -144,7 +144,8 @@ lines, not a purple panel.
 
 | Item | Estimate | Actual |
 |---|---|---|
-| Seven tasks, fonts to verification | none written | seven tasks committed on `feature/notch-in-loft`, duration not recorded |
+| Seven tasks, fonts to verification | none written | 47 commits, merged to main 2026-10-13, duration not recorded |
+| Whole-branch review and its fix round | not planned | 5 wrong-value defects found and fixed, 744 to 758 tests |
 
 What was measured and what was not is in `docs/PHASE6-VERIFICATION.md` section 24, which also
 records the whole-branch review (not mergeable on the first pass; five wrong-value defects, since
