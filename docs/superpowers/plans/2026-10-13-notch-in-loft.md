@@ -1301,7 +1301,7 @@ git commit -m "feat(notch): settle values on marks without overshoot"
 
 No code. This task is the repo's own standing lesson: a green build, green tests and green lints cannot see a wrong shape, a wrong layout, or a window that is not on screen.
 
-- [ ] **Step 1: Run every instrument, and record the output, not a summary of it**
+- [x] **Step 1: Run every instrument, and record the output, not a summary of it**
 
 ```bash
 pwsh -File scripts/check-shared-xaml.ps1
@@ -1313,14 +1313,14 @@ pwsh -STA -File scripts/render-widgets.ps1 -Theme Light -Accent '#C2401A'
 dotnet test tests/Plith.Tests/Plith.Tests.csproj
 ```
 
-- [ ] **Step 2: Drive the real notch**
+- [ ] **Step 2: Drive the real notch** (NOT TICKED: run, but the run is not evidence. A remote session had taken over the machine, so `drive-media-page` saw one audio endpoint where there are seven and its wheel events never reached the notch. Needs the physical console.)
 
 ```bash
 pwsh -File scripts/drive-media-page.ps1
 ```
 Expected: unchanged pass. A Debug build runs at medium integrity, so UI Automation reads the tree and `SendInput` drives it.
 
-- [ ] **Step 3: Measure that nothing got slower**
+- [x] **Step 3: Measure that nothing got slower**
 
 ```bash
 pwsh -File scripts/measure-notch-open.ps1
@@ -1328,15 +1328,15 @@ pwsh -File scripts/measure-idle-cost.ps1
 ```
 Expected: no regression against the figures in `docs/PERF-VERIFICATION.md`, and no new timer or wakeup. The ornament layer is static geometry; if idle cost moved, something is animating that should not be.
 
-- [ ] **Step 4: Look at every render with your own eyes**
+- [x] **Step 4: Look at every render with your own eyes**
 
 Open each PNG from Step 1. The panel must be the floor at every accent. The accent must appear only in lines, marks and text. Corner marks must sit inside the radius. Numbers must not shift as they change.
 
-- [ ] **Step 5: Write the verification section**
+- [x] **Step 5: Write the verification section**
 
 Add to `docs/PHASE6-VERIFICATION.md`: what was measured, what was not, and which claims are inherited rather than observed. Name the accents and themes actually rendered, not "all of them". If an instrument was skipped, say which and why.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add docs/PHASE6-VERIFICATION.md docs/ROADMAP.md
