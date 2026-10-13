@@ -13,13 +13,6 @@ public class OrnamentTests
         (ResourceDictionary)Application.LoadComponent(
             new Uri($"/Plith;component/Resources/{name}", UriKind.Relative));
 
-    /// <summary>
-    /// Off by FALLTHROUGH, not by being written into the high contrast palette. That file is left
-    /// alone (spec section 7), so this asserts what a lookup RESOLVES to with the high contrast
-    /// palette on top of the always-merged defaults, which is the thing the running app does. A
-    /// direct key read against `OsdPalette.HighContrast.xaml` would be asserting the opposite
-    /// design.
-    /// </summary>
     /// <summary>Under high contrast the accent override is empty, so the corner-mark stroke key
     /// must still resolve from the defaults rather than to nothing.</summary>
     [StaFact]
@@ -33,6 +26,13 @@ public class OrnamentTests
         Assert.IsType<SolidColorBrush>(stack["OsdAccentText"]);
     }
 
+    /// <summary>
+    /// Off by FALLTHROUGH, not by being written into the high contrast palette. That file is left
+    /// alone (spec section 7), so this asserts what a lookup RESOLVES to with the high contrast
+    /// palette on top of the always-merged defaults, which is the thing the running app does. A
+    /// direct key read against `OsdPalette.HighContrast.xaml` would be asserting the opposite
+    /// design.
+    /// </summary>
     [StaFact]
     public void Ornaments_ResolveToOffUnderHighContrast()
     {
