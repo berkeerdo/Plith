@@ -301,11 +301,13 @@
                 <w:MarqueeText x:Name="Title"
                                Height="22"
                                FontSize="16" FontWeight="SemiBold"
+                               FontFamily="{DynamicResource OsdUiFont}"
                                Foreground="{DynamicResource NotchInk}" />
                 <w:MarqueeText x:Name="Artist"
                                Height="18"
                                Margin="0,3,0,0"
                                FontSize="12"
+                               FontFamily="{DynamicResource OsdUiFont}"
                                Foreground="{DynamicResource NotchInkMuted}" />
             </StackPanel>
         </Grid>

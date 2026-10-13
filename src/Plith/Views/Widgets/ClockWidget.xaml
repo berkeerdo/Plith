@@ -208,6 +208,7 @@
                            Height="16"
                            VerticalAlignment="Center"
                            FontSize="12"
+                           FontFamily="{DynamicResource OsdUiFont}"
                            Foreground="{DynamicResource NotchInkMuted}" />
         </Grid>
     </Grid>
