@@ -1153,3 +1153,42 @@ give one. The arrangements were: only Plith sliding, both sliding, neither slidi
 
 So the prose contains a signal in each direction and 13.5's verdict stands unchanged: a question
 the record cannot answer. One run at the console answers it; nothing else in the repo will.
+
+### 13.8 At the console the gate opens and turns log, and the shelf row is still owed
+
+Date: 2026-10-13, at the PHYSICAL CONSOLE. Session 1 migrated off Remote Desktop when the owner
+logged in locally, and this is the first time anything in this repo has measured the page turn at
+all.
+
+**13.4's unresolved half is CLOSED, and it closed the good way:**
+
+| Measured | |
+|---|---|
+| `GetSystemMetrics(SM_REMOTESESSION)` | **0** |
+| `qwinsta` | `>console  sari  1  Active` |
+| `SystemParameters.ClientAreaAnimation` | **True** |
+
+So the false reading in 13.3 was the SESSION's and not the machine's. The owner's recollection
+that animations are on was right, `MinAnimate=0` pointed the wrong way, and the alternative that
+13.4 had to leave open is dead: **a page slide does run for this person**, so the reported
+choppiness is about a slide that exists. Nothing is explained away.
+
+**`PageTurnTrace` logged turns, which it had never done.** Eight lines from hand paging:
+`0->1`, `2->3`, `3->2`, `2->1`, `1->0`, `0->1`, `1->0` (one more arrived inside a single poll and
+is in the log). The instrument works end to end on the product, not just in its unit tests.
+
+**And none of them is a shelf turn**, so by the script's own rule this run concludes NOTHING about
+the symptom: every index touched is 0 to 3 and the shelf is the last one. The gestures went back
+and forth across the first pages rather than round the frame. The run ended there because the
+owner needed to restart the machine.
+
+Two things about how this will be measured from now on, both of which cost a run to learn:
+
+- **The mouse is not to be driven.** The owner asked for it directly, so the default mode of
+  `measure-page-turn.ps1` is out and `-NoDrive` is the path: the script watches the log while a
+  person pages by hand. It needs a Debug build started for it, which is also why 13.7's guard
+  note was added to that switch's help text.
+- **The installed Plith must be stopped with elevation first.** `Stop-Process` from a medium
+  shell returns "Access is denied" against it, exactly as the script's own error says, and
+  `sudo taskkill /F /IM Plith.exe /T` cleared it on the first try. Plith is single-instance, so
+  the Debug build cannot come up until that happens.
