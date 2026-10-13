@@ -2099,9 +2099,12 @@ When a log and a person disagree, photograph the screen before trusting either.
 Spec: `docs/superpowers/specs/2026-10-12-notch-loft-design.md`.
 Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md`.
 
-Every figure below was produced at HEAD `4cd8a52` on `feature/notch-in-loft`, on a Debug build,
-Windows 11 Pro 26200, .NET 10. Nothing is carried in from another surface's notes. Where a claim
-is inherited rather than observed, it says so.
+This section was first written at HEAD `4cd8a52` on `feature/notch-in-loft`, on a Debug build,
+Windows 11 Pro 26200, .NET 10. A whole-branch review then found the branch not mergeable, a fix
+round followed, and the figures in "What is green" were taken again after the last fix. The three
+measurements in "What it costs" were NOT: they come from the build before the fix round, and the
+section says so where it states them. Nothing is carried in from another surface's notes. Where a
+claim is inherited rather than observed, it says so.
 
 ### What is green
 
@@ -2109,10 +2112,64 @@ is inherited rather than observed, it says so.
 |---|---|
 | `check-shared-xaml.ps1` | Passed. 3 files compiled into both Plith and the installer, none naming an assembly |
 | `check-a11y.ps1` | Passed, with two KNOWN GAPS it reports itself, both predating this branch and not fixed here: `MediaWidget.cs` sets an automation name on `OpenSourceArea`, a Border, and `WeatherWidget.cs` sets one on `Readout`, a StackPanel |
-| `check-contrast.ps1` | Passed. **324 measurements across 9 accents x 2 themes.** 12 pairs declared in XAML, 6 named from code-behind. Two non-text pairs clear 3:1. Three pairs are NOT MEASURED (below) |
-| `dotnet test` | Passed: Failed 0, Passed 744, Skipped 0, Total 744, duration 280 ms. Run under `heavy-run.mjs` |
+| `check-contrast.ps1` | Passed. **360 measurements across 9 accents x 2 themes.** Three non-text pairs clear 3:1 (the ornament tick ruler joined the other two). Three pairs are NOT MEASURED (below). One accepted miss is recorded (below) |
+| `dotnet test` | Passed: Failed 0, **Passed 758**, 294 ms. Run under `heavy-run.mjs` |
+
+`check-shared-xaml` and `check-a11y` passed again after the last fix, unchanged, with the same two
+known a11y gaps. The renders were also repeated and still pass with no failure line, still
+logging `Public Sans` and `Martian Mono Std Rg`.
 
 None of that reaches a pixel. The rest of this section is what did.
+
+### The whole-branch review
+
+The branch was reviewed whole, and **it was found not mergeable on the first pass.** Four blocking
+defects, and a scoped re-review of the fixes found a fifth wrong value of the same class. Three of
+the four blocking defects were invisible to every instrument in this repository, which is the
+lesson this document keeps recording: green tests, a green contrast run and green lints saw none
+of them.
+
+1. **The shelf's rail pip had no contrast guarantee.** `ShelfSession.DerivePalette` sent the `Fill`
+   accent role where Plith's own identical 3 DIP pip uses `Mark`. Emerald on the light shelf floor
+   measured **1.65:1** against the 3:1 a non-text mark needs. It is the same Fill-for-Mark
+   substitution caught on `OsdAccent` earlier in the branch, surviving in the one consumer that
+   lives in another process. `check-contrast` never saw it: it measures `SelectionRing` and never
+   `AccentBrush`. Fixed to paint from `SelectionRing`, which is already `Mark`.
+2. **A live theme switch could strand the notch's ink.** `OsdHost` keeps a local mirror of the
+   accent dictionary because `Application.Resources` changes never reach an `HwndSource`
+   RootVisual. This branch moved `NotchInk`, `NotchInkMuted`, `NotchTrack` and the six `Ornament*`
+   tokens into the per-theme palettes, which the mirror did not carry, while the floor still
+   arrived through it. A Dark to Light switch with the notch open could leave `#ECE9E2` on
+   `#F3F2ED`, about **1.05:1**. Fixed by making the mirror carry the active OSD palette's keys,
+   read live per call so a palette swap cannot serve stale values.
+3. **The notch's own HUD bars did not settle.** Task 6's file list named three classic card views
+   and not `NotchHud.xaml`, so on a branch whose headline is that values settle, the bar a volume
+   or brightness key actually opens in notch mode snapped. Fixed with `SettledBorder`, landing
+   rather than sweeping on a fresh appearance.
+4. **This section claimed the ornament layer ships OFF.** It ships ON (see the `notch-frame.png`
+   note below). Corrected.
+5. **Found by the re-review: a HUD shown mid-collapse jumped in full view.** The landing decision
+   read `IsAtRest`, which returns parked OR collapsing, so a volume key arriving while the HUD was
+   still on screen and shrinking made the bar jump instead of settle. It now reads the live notch
+   expansion (`PresentationPolicy.HudLandsOnShow`), which is neither of the two fragile flags.
+
+### The contrast instrument got stronger
+
+Two changes to `check-contrast.ps1`, both made because of what the review found:
+
+- **It now measures the ornament ink layer, which it previously could not see at all.** It pairs
+  only elements carrying both a Foreground and a Background, while the label style sets Foreground
+  only and the tick brush is a Stroke. Both are now declared pairs, which is where 36 of the 36
+  new measurements come from (324 became 360).
+- **It can now fail on an accepted miss.** The exemption table was keyed by pair only and carried
+  no floor, so one theme was apologised for while it comfortably cleared the bar, and the other
+  could have fallen to 2:1 with the script still printing ACCEPTED and exiting 0. It is now keyed
+  by pair and theme, carries the ratio it was accepted at, and fails the run when a later change
+  makes it worse. Proven by raising the floor and watching it exit 1, then restoring it.
+
+**One accepted miss: the rail label at 3.81:1 on the dark floor**, against the 4.5:1 text bar
+(10 px upper-case mono). The ratio is **pre-existing** (3.38:1 before this branch) and **no colour
+was changed to make it pass.** The light floor is not exempt and clears at **6.90:1**.
 
 ### What the renders show
 
@@ -2150,6 +2207,10 @@ tile-hit on all five probe points of all 8 tiles, edge gaps of 22 DIP both sides
 tooltip-survives-render, menu-survives-render, press-to-drag, empty-outline, second-pass cache.
 
 ### What it costs
+
+**These three measurements were taken on the build before the fix round, not on the current
+branch.** The fix round touched the HUD's write path, so the notch-open and idle figures in
+particular are not claimed for the branch as it now stands. They have not been taken again.
 
 `measure-startup.ps1`, Debug, 5 runs. Total 855 to 996 ms. The window column 361 to 464 ms. The
 ten spans partition the column exactly on every run, so nothing is unaccounted for. Run 1 is cold.
@@ -2208,10 +2269,11 @@ sees "passed" needs to know what was excluded:
    so nothing static knows what is underneath. Checked by eye in the three rendered combinations only (Dark lime, Dark violet, Light
    terracotta).
 
-The two non-text pairs that ARE measured and pass are `OsdContent.xaml:OsdAccent` on the panel
-(the accent bar fill and the rail pip, 3:1 by `DeriveLoftRoles(...).Mark`) and
+The three non-text pairs that ARE measured and pass are `OsdContent.xaml:OsdAccent` on the panel
+(the accent bar fill and the rail pip, 3:1 by `DeriveLoftRoles(...).Mark`),
 `SettingsTheme.xaml:ModernProgressBarStyle` (the accent fill inside its own groove, a 4 DIP bar
-read as a length and not a glyph).
+read as a length and not a glyph), and the ornament tick ruler, added by the instrument change
+above.
 
 **The pack URI is not proven by anything in CI.** `render-widgets.ps1` loads the shipped `.ttf`
 files by file URI and throws on a family mismatch. It cannot use the pack URI, because

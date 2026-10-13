@@ -146,7 +146,9 @@ lines, not a purple panel.
 |---|---|---|
 | Seven tasks, fonts to verification | none written | seven tasks committed on `feature/notch-in-loft`, duration not recorded |
 
-What was measured and what was not is in `docs/PHASE6-VERIFICATION.md` section 24. Four checks
+What was measured and what was not is in `docs/PHASE6-VERIFICATION.md` section 24, which also
+records the whole-branch review (not mergeable on the first pass; five wrong-value defects, since
+fixed). The startup, idle and notch-open figures predate that fix round. Four checks
 still need the physical console: the runtime theme switch, high contrast, the media page drive,
 and the hover peek.
 
