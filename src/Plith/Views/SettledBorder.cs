@@ -121,10 +121,27 @@ public class SettledBorder : Border
         // Forget the clock once it ends, so a finished animation is never asked for a value.
         clock.Completed += (sender, _) =>
         {
-            if (ReferenceEquals(sender, _clock)) _clock = null;
+            if (!ReferenceEquals(sender, _clock)) return;
+            // Remove, not just forget: a finished root clock stays in the time tree until it is
+            // removed, and once _clock is null no later DropClock() can reach it.
+            _clock.Controller?.Remove();
+            _clock = null;
         };
         _clock = clock;
         ApplyAnimationClock(DisplayedProperty, clock);
+    }
+
+    /// <summary>
+    /// Puts the bar on <paramref name="target"/> now, whatever it was showing. For a bar that
+    /// has just come on screen: its last value belongs to an earlier appearance, and sweeping
+    /// from it would show a bar growing from wherever it was left. Later targets settle as usual.
+    /// </summary>
+    public void Jump(double target)
+    {
+        _hasValue = true;
+        Land(target);
+        // Settle runs if the target changed, finds the bar already on it, and lands again.
+        SetValue(TargetProperty, target);
     }
 
     /// <summary>Stops any animation and writes the value directly. Creates no animation object.</summary>

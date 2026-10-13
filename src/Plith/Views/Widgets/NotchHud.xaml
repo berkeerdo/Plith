@@ -3,6 +3,8 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+             xmlns:local="clr-namespace:Plith.Views"
+             xmlns:vm="clr-namespace:Plith.ViewModels"
              mc:Ignorable="d"
              Focusable="False"
              TextOptions.TextFormattingMode="Ideal"
@@ -99,10 +101,26 @@
                      Reported as "every colour looks the same in light mode" - and it was true of
                      both themes, only harder to notice on the dark one where the tinted panel
                      carries some of the colour. -->
-                <Border x:Name="LevelFill"
+                <!-- Settles like the card's bar. The code-behind writes Target; Displayed drives
+                     the width, so the bar's size is never written from code. The settle
+                     resources are DynamicResource so this still loads where no application
+                     theme exists. -->
+                <local:SettledBorder x:Name="LevelFill"
                         HorizontalAlignment="Left"
                         CornerRadius="3"
-                        Background="{Binding GainColor}" />
+                        Background="{Binding GainColor}"
+                        SettleDuration="{DynamicResource LoftSettleDuration}"
+                        SettleEase="{DynamicResource LoftSettleEase}">
+                    <Border.Width>
+                        <MultiBinding>
+                            <MultiBinding.Converter>
+                                <vm:NormalizedToWidthConverter />
+                            </MultiBinding.Converter>
+                            <Binding Path="Displayed" RelativeSource="{RelativeSource Self}" />
+                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Border}" />
+                        </MultiBinding>
+                    </Border.Width>
+                </local:SettledBorder>
             </Border>
 
             <TextBlock x:Name="LevelText" Grid.Column="2"
@@ -143,10 +161,22 @@
             <Border Grid.Column="1" Margin="12,0" Height="6" CornerRadius="3"
                     VerticalAlignment="Center"
                     Background="{DynamicResource NotchTrack}">
-                <Border x:Name="BrightnessFill"
+                <local:SettledBorder x:Name="BrightnessFill"
                         HorizontalAlignment="Left"
                         CornerRadius="3"
-                        Background="{DynamicResource OsdAccent}" />
+                        Background="{DynamicResource OsdAccent}"
+                        SettleDuration="{DynamicResource LoftSettleDuration}"
+                        SettleEase="{DynamicResource LoftSettleEase}">
+                    <Border.Width>
+                        <MultiBinding>
+                            <MultiBinding.Converter>
+                                <vm:NormalizedToWidthConverter />
+                            </MultiBinding.Converter>
+                            <Binding Path="Displayed" RelativeSource="{RelativeSource Self}" />
+                            <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Border}" />
+                        </MultiBinding>
+                    </Border.Width>
+                </local:SettledBorder>
             </Border>
 
             <TextBlock x:Name="BrightnessText" Grid.Column="2"

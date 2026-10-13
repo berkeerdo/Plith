@@ -1759,7 +1759,13 @@ public sealed class OsdHost : BandWindow
 
             var keepFrame = NotchEventPolicy.KeepsOpenFrame(reason, frameIsOpen, pageAlreadyShowsIt);
             var wantsHud = !keepFrame && _presentation is AmbientNotchPresentation && _hud is not null;
-            if (wantsHud) _hud!.Show(PickHudKind(reason));
+            if (wantsHud)
+            {
+                // At rest the window is parked, so the bar's last value belongs to an earlier
+                // appearance: land on the new one rather than sweeping from it.
+                var restOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
+                _hud!.Show(PickHudKind(reason), freshlyShown: _presentation.IsAtRest(restOpacity));
+            }
             if (!keepFrame)
                 _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);
         }
