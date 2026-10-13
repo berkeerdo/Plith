@@ -2137,8 +2137,13 @@ What was seen in the PNGs:
   That is the derivation doing its job in a render rather than in an assertion.
 - `widget-media.png`, dark lime. The seek bar is ink-derived, not accent, as designed: the played
   part is `NotchInk`, the groove the same ink at 24 per cent alpha.
-- `widget-audio.png`, light terracotta. The notch page carries no accent at all. The ornament
-  layer ships OFF by default, so there are no corner marks in any of these renders.
+- `widget-audio.png`, light terracotta. The notch page carries no accent at all.
+- `notch-frame.png`, from the dark violet render (accent `#6D28D9`). Four corner marks are drawn,
+  one in each corner, inside the radius. `Ornaments.xaml` carries the OFF defaults, which exist
+  so high contrast falls through to them; both Loft palettes override them ON
+  (`OrnamentCornerLength` 9, `OrnamentOutlineThickness` 1, `OrnamentLabelCase` `Upper`, asserted
+  by `OrnamentTests.Ornaments_AreOnForBothLoftThemes`). So corner marks ship on and are drawn on
+  every notch open in both themes.
 
 The harness's own tree assertions passed in every run, including the ones no eye can make:
 tile-hit on all five probe points of all 8 tiles, edge gaps of 22 DIP both sides,
@@ -2218,8 +2223,8 @@ the shipped faces.
 
 ### Which claims are inherited, not observed
 
-- Corner marks inside the radius, and numbers that do not shift as they change: not observed.
-  The ornament layer was off in all three renders, so none was drawn.
+- Numbers that do not shift as they change (tabular figures): not observed. The renders are
+  single frames, so no number was seen changing.
 - Settle animation reversal and rapid repeats with a real ticking clock: tests have no render
   tick. The unticked `From` values are tested, and the reversal case is covered by
   `ReverseToStartInsideOneFrame_LandsOnTheModelValue`, which fails if the early return is
