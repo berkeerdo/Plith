@@ -60,9 +60,22 @@ $unresolvable = @{
 $nonText = @{
     'OsdContent.xaml:OsdAccent on the panel' =
         'the accent bar fill and rail pip: a non-text mark, 3:1 by DeriveLoftRoles(...).Mark'
+    'Ornaments.xaml:LoftTicks (OrnamentTickBrush)' =
+        'the ruler under the bars: a Stroke, a non-text mark, and the floor TextSecondary on both themes'
     'SettingsTheme.xaml:ModernProgressBarStyle' =
         'the accent FILL inside its own groove - a 4 DIP bar, read as a length and not a glyph'
 }
+
+# Pairs that are MEASURED at the text bar, REPORTED with the number actually seen, and do not fail
+# the run. Different from $unresolvable (not measured at all) and from $nonText (held to a lower
+# bar): these are known misses that a colour change in this slice was deliberately not allowed to
+# paper over. Every entry says what the number was when it was recorded; the run prints the
+# worst ratio it sees now, so a number that drifts from the recorded one is visible.
+$acceptedBelowBar = @{
+    'Ornaments.xaml:LoftLabelStyle rail label' =
+        'OsdTextTertiary on the floor, 10 px upper-case mono. About 3.81:1 on the dark floor against the 4.5:1 text bar, and the ratio is pre-existing (3.38:1 before the Loft branch), so no colour was changed to make it pass. A decision for the design owner, not a thing to fix by nudging a hex here.'
+}
+$acceptedWorst = @{}
 
 $ErrorActionPreference = 'Stop'
 if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
@@ -162,7 +175,12 @@ $codeBehindPairs = @(
     # Neither key is ever a Foreground beside a declared Background, so the scan above could not
     # pair them, and for that reason neither had been measured against the panel beneath it.
     @{ Bg = 'OsdSurfaceBrush'; Fg = 'OsdAccent'; Where = 'OsdContent.xaml:OsdAccent on the panel' },
-    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchTrack'; Where = 'MediaWidget.xaml:NotchTrack groove on the panel' }
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchTrack'; Where = 'MediaWidget.xaml:NotchTrack groove on the panel' },
+    # The ornament ink layer. LoftLabelStyle sets a Foreground and no Background, and
+    # OrnamentTickBrush is a Stroke, so the scan above pairs neither; both sit on the panel
+    # painted by OsdContent, two files away.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OsdTextTertiary'; Where = 'Ornaments.xaml:LoftLabelStyle rail label' },
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OrnamentTickBrush'; Where = 'Ornaments.xaml:LoftTicks (OrnamentTickBrush)' }
 )
 foreach ($cb in $codeBehindPairs) {
     # The file each pair's own local-brush override (if any) would be declared under, read back
@@ -237,6 +255,12 @@ foreach ($theme in @('Dark', 'Light')) {
             $ratio = [Plith.Services.ContrastInk]::ContrastRatio($bg, $fg)
             $limit = if ($nonText.ContainsKey($p.Where)) { $NonTextThreshold } else { $Threshold }
 
+            if ($acceptedBelowBar.ContainsKey($p.Where)) {
+                $key = "$($p.Where)|$theme"
+                if (-not $acceptedWorst.ContainsKey($key) -or $ratio -lt $acceptedWorst[$key]) { $acceptedWorst[$key] = $ratio }
+                continue
+            }
+
             if ($ratio -lt $limit) {
                 $kind = if ($limit -eq $NonTextThreshold) { 'non-text' } else { 'text' }
                 $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
@@ -294,4 +318,10 @@ if ($failures.Count -gt 0) {
 Write-Host "Contrast check passed: text pairs clear ${Threshold}:1, the $($nonText.Count) listed non-text pair(s) clear ${NonTextThreshold}:1, on both themes."
 foreach ($k in $nonText.Keys | Sort-Object) { Write-Host "  non-text: $k - $($nonText[$k])" }
 foreach ($k in $unresolvable.Keys | Sort-Object) { Write-Host "  NOT MEASURED: $k - $($unresolvable[$k])" }
+foreach ($k in $acceptedBelowBar.Keys | Sort-Object) {
+    foreach ($theme in @('Dark', 'Light')) {
+        $worst = $acceptedWorst["$k|$theme"]
+        if ($null -ne $worst) { Write-Host ("  BELOW BAR, ACCEPTED: {0} ({1}): worst {2:N2}:1 - {3}" -f $k, $theme, $worst, $acceptedBelowBar[$k]) }
+    }
+}
 exit 0
