@@ -128,6 +128,42 @@ foreach ($rel in $paletteSources) {
 
 if ($accentOverride) { $app.Resources.MergedDictionaries.Add($accentOverride) }
 
+# The fonts, loaded from disk, and checked.
+#
+# Theme.xaml names the packaged fonts by pack URI (pack://application:,,,/Assets/Fonts/#...),
+# which resolves against Application.ResourceAssembly. In this harness that is pwsh, and WPF
+# refuses to reassign it, so the pack URI can never reach Plith's embedded fonts here and WPF
+# falls back to Segoe UI without a word. This block therefore loads the SAME .ttf files from
+# the checkout's own Assets\Fonts directory by file URI and overrides OsdUiFont and
+# OsdMonoFont with them.
+#
+# Which half is measured: this render proves the GLYPHS (the right faces are drawn).
+# TypographyTests proves the PACK URI (the strings in Theme.xaml are well formed). Neither
+# covers the other.
+#
+# It fails loudly: each family is resolved to a real typeface and its family name is checked,
+# because a harness that silently renders the wrong face is how this went unseen.
+$fontsDir = Join-Path $root 'src\Plith\Assets\Fonts'
+$fontsUri = ([Uri]::new((Join-Path $fontsDir '.') )).AbsoluteUri.TrimEnd('.')
+if (-not $fontsUri.EndsWith('/')) { $fontsUri += '/' }
+$fontOverride = [Windows.ResourceDictionary]::new()
+foreach ($spec in @(
+        @{ Key = 'OsdUiFont';   Family = 'Public Sans' },
+        @{ Key = 'OsdMonoFont'; Family = 'Martian Mono Std Rg' })) {
+    $family = [Windows.Media.FontFamily]::new($fontsUri + '#' + $spec.Family)
+    $glyphs = $null
+    $typeface = [Windows.Media.Typeface]::new($family, 'Normal', 'Normal', 'Normal',
+        [Windows.Media.FontFamily]::new('Arial'))
+    [void]$typeface.TryGetGlyphTypeface([ref]$glyphs)
+    $resolved = if ($glyphs) { $glyphs.Win32FamilyNames.Values -join ',' } else { '' }
+    if ($resolved -ne $spec.Family) {
+        throw "Font '$($spec.Family)' did not load from $fontsUri (resolved to '$resolved'): the render would silently show the wrong face."
+    }
+    $fontOverride.Add($spec.Key, $family)
+    "  font loaded: $($spec.Key) -> $resolved"
+}
+$app.Resources.MergedDictionaries.Add($fontOverride)
+
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
     # assigning the property from PowerShell hands over an object the tree does not then search.
@@ -142,6 +178,7 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
         $Element.Resources.MergedDictionaries.Add($d)
     }
 
+    $Element.Resources.MergedDictionaries.Add($fontOverride)
     # Last, so it wins over the palette defaults it is there to override.
     if ($accentOverride) { $Element.Resources.MergedDictionaries.Add($accentOverride) }
 }
@@ -170,6 +207,10 @@ function Save-Visual {
     # element floating on transparency.
     $host_ = [Windows.Controls.Border]::new()
     Add-Palette $host_
+    # The widgets declare no FontFamily of their own: in the app they inherit OsdUiFont from the
+    # NotchHud or WidgetFrame that holds them. Rendered bare, they would otherwise draw in the
+    # WPF default, so this host stands in for that frame.
+    [Windows.Documents.TextElement]::SetFontFamily($host_, $fontOverride['OsdUiFont'])
     # The surface the OSD is actually drawn on, not a flat colour. This is the whole reason the
     # light-theme contrast bug was invisible here for a whole branch.
     if ($osdSurfaces -and -not $PSBoundParameters.ContainsKey('Background')) {
