@@ -153,11 +153,12 @@ fixed). The startup, idle and notch-open figures predate that fix round. Four ch
 still need the physical console: the runtime theme switch, high contrast, the media page drive,
 and the hover peek.
 
-### Carried over from Phase 4 — **4c-4, open, next**
+### Carried over from Phase 4: **4c-4, open, waiting on a certificate**
 
 This document covers Phase 5+; `PLAN.md` and `README.md` own Phases 1 to 4. One Phase 4 item is
-still open and is the next job, so it is listed here rather than only in the document that
-closed around it:
+still open, so it is listed here rather than only in the document that closed around it. It is
+not the next job: it cannot start until a certificate exists, which is an application to make, not
+code to write:
 
 - **Phase 4c-4: MSIX packaging and a real signing certificate** (SignPath.io OSS path, or a paid
   certificate). Until it lands there is no auto-update: nothing in the repo checks for a new
@@ -692,7 +693,9 @@ counts only.
   has been the notch's own page since 0.3.0, and a page turn onto it hands the frame to
   `Plith.DropCatcher`, a cross-process window swap. That is a suspect to measure, not a
   finding. No instrument covers it: `measure-notch-open` times the open of the notch itself, and
-  `drive-shelf-pair` proves the handover works, not what it costs. Outside the Loft work.
+  `drive-shelf-pair` proves the handover works, not what it costs. Outside the Loft work, and
+  **the next job**: it is the only open item that is a defect in shipped behaviour rather than a
+  design question or a purchase. It needs an instrument before it needs a fix.
 - **The classic OSD card still draws cool grey text on a warm floor**: `OsdTextPrimary`,
   `OsdTextSecondary` and `OsdTextTertiary` are still the pre-Loft zinc family (`#F5F5F5`,
   `#A1A1AA`, `#71717A`) while the floor beneath them is Loft's warm one and the notch's own ink

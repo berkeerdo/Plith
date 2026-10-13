@@ -2,6 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **A ticked box means the step was taken, not that nothing deviated.** Seven tasks are done and
+> merged. What was measured and what was not is in `docs/PHASE6-VERIFICATION.md` section 24: four
+> checks still need the physical console, and a whole-branch review found five wrong-value defects
+> after the last task was ticked. Task 7 Step 2 is deliberately left unticked, with its reason.
+
 **Goal:** Move the notch off its accent-tinted surface onto praxvon-ui's Loft direction, so the accent becomes a mark rather than a flood and the surface is a fixed floor.
 
 **Architecture:** The surface colour stops being derived from the user's accent and becomes two fixed Loft floors (dark and light). The accent derives instead into four roles by an OKLCH tone walk held to contrast ratios, replacing the HSL walk that exists for the old model. Because the floor is now known at compile time, five palette keys that only existed to cope with an unpredictable surface become constants and are deleted. Typography and an ornament layer follow on top.
