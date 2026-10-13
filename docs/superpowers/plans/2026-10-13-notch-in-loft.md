@@ -716,7 +716,7 @@ each being wrong.**
    - `AccentThemeTests.cs` lines 159, 185, 216, 233, 249 and 264: six tests on the deleted
      method, which go with it.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows;
@@ -802,12 +802,12 @@ public class ThemeServiceLoftTests
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~ThemeServiceLoftTests`
 Expected: FAIL. `OsdSurfaceBrush` still carries the accent-derived gradient and `OsdAccentMark` does not exist.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `ThemeService.cs`, replace the body of `public static ResourceDictionary BuildAccentOverride(Color baseColor, bool isDark)`:
 
@@ -866,23 +866,23 @@ Add the two key constants beside the existing ones:
 
 Delete `BuildOsdSurfaceBrush`, `AccentTheme.DeriveOsdSurfaces`, the `OsdSurfaceDerived` record, and the `KeyNotchInk`, `KeyNotchInkMuted`, `KeyNotchTrack`, `KeyAccentTrack` constants. The compiler will name every remaining consumer; point each at the floor's own value (`NotchInk` becomes `floor.Foreground`, `NotchInkMuted` becomes `floor.TextSecondary`, `NotchTrack` and `AccentTrack` become `floor.Border`), declared in `OsdPalette.Dark.xaml` and `OsdPalette.Light.xaml` as static brushes rather than rebuilt per accent.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj`
 Expected: PASS, the whole suite. Existing tests that asserted the old tinted surface will fail and must be rewritten to assert the floor, not deleted: each one is a recorded decision and the rewrite says which way it went.
 
-- [ ] **Step 5: Look at it**
+- [x] **Step 5: Look at it**
 
 Run: `pwsh -STA -File scripts/render-widgets.ps1 -OutDir $env:TEMP\loft-3 -Theme Dark -Accent '#6D28D9'`
 Then: `pwsh -STA -File scripts/render-widgets.ps1 -OutDir $env:TEMP\loft-3-light -Theme Light -Accent '#6D28D9'`
 Expected: the panel is the floor in both, violet appears only in lines and text. Open `frame-page1.png` and `widget-media.png` and confirm with your eyes. A passing test here means the numbers are right; only the render shows whether the thing is right.
 
-- [ ] **Step 6: Run the contrast harness**
+- [x] **Step 6: Run the contrast harness**
 
 Run: `pwsh -File scripts/check-contrast.ps1`
 Expected: PASS on both themes and every accent.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Services/ThemeService.cs src/Plith/Services/AccentTheme.cs src/Plith/Resources/OsdPalette.Dark.xaml src/Plith/Resources/OsdPalette.Light.xaml tests/Plith.Tests/
