@@ -706,6 +706,11 @@ counts only.
   What was already measured, so it is not measured twice: the turn's DURATION (section 4, about
   340 ms end to end) and the catcher's fade against Plith's hide (`SHELF-VERIFICATION.md`
   §10.28). Smoothness is the gap, and no CPU-time stamp can see it.
+  **The console trip now collects more than this one run.** The same setting gates four other
+  behaviours, so a marquee, a settling bar, a track change and the weather's motion are all
+  unobservable over Remote Desktop, and the boxes asking for them read as defects there rather
+  than as blocked checks. The list is `PERF-VERIFICATION.md` section 13.6; it also clears two
+  checks it could have questioned, because the notch's own expansion is not gated.
 - **The classic OSD card still draws cool grey text on a warm floor**: `OsdTextPrimary`,
   `OsdTextSecondary` and `OsdTextTertiary` are still the pre-Loft zinc family (`#F5F5F5`,
   `#A1A1AA`, `#71717A`) while the floor beneath them is Loft's warm one and the notch's own ink

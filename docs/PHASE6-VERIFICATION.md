@@ -2251,6 +2251,15 @@ exactly: the first screen capture of that test succeeded and every capture after
 3. `drive-media-page`'s paging and the output switch. Needs two real audio endpoints.
 4. `measure-hover-peek.ps1`, which drives the mouse.
 
+**A fifth reason to need the console was found later and is not about screen capture.** Added
+2026-10-13: `SystemParameters.ClientAreaAnimation` is false in a remote session whatever the
+machine prefers, and five behaviours read it, so in such a session a long title never scrolls, no
+value bar settles, a track change does not slide and the weather does not move. The open boxes
+that ask for those therefore cannot be ticked over Remote Desktop, and each one reads as a defect
+there rather than as a blocked check. The list, the two checks it clears rather than questions,
+and the one fix of this review that is invisible in a remote session are in
+`PERF-VERIFICATION.md` section 13.6.
+
 **Three contrast pairs are NOT MEASURED**, each for the script's own stated reason. A reader who
 sees "passed" needs to know what was excluded:
 

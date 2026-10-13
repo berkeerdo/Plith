@@ -1053,3 +1053,103 @@ Desktop, no page slid in any of the three arrangements.** The record does not sa
 they were made in, so this is a question the record cannot answer, not a finding that it is wrong.
 It is the fourth time a console-versus-Remote-Desktop difference has bitten this repo; the first
 three are the three banded sections at the top of `SHELF-VERIFICATION.md`.
+
+### 13.6 What else that gate reaches, and what it does not
+
+Date: 2026-10-13, same day, from a Remote Desktop session. 13.5 named one claim with a question
+against it and stopped there. The gate is a shared one, so the honest next step was to ask what
+else reads it before another session trips over the same thing. No console needed for this part:
+it is a reading of the code and of what the record claims, not a measurement of motion.
+
+**Five behaviours are gated**, each verified by reading the site rather than inferring it from a
+name:
+
+| Site | What does not happen when the gate is false |
+|---|---|
+| `WidgetFrame.cs:160` `IsAnimationAllowed` | the page slide, which is 13.1 to 13.4's whole subject |
+| `SettledBorder.cs:87` `Settle` | every value bar and the notch's own HUD bars land instead of settling |
+| `MarqueeText.cs:178` `Resync` | a long title never scrolls; `MarqueeDecision.Plan` is passed `reducedMotion: true` |
+| `MediaWidget.cs:215` `AnimateTrackChange` | the 220 ms track-change slide and the art cross-fade |
+| `WeatherMark.cs:162` `StartMotion` | the sun's breathing and the rain and snow fall |
+
+**And the notch's own expansion is NOT gated**, which matters more than the list above because it
+clears two checks rather than questioning them. `OsdContent`'s `NotchExpand` and `Morph`
+animations, the panel fade and the shadow fade read nothing; they run in any session. So §1.2 and
+§8.1 of `PHASE6-VERIFICATION.md`, which are judgements of the ~340 ms grow and its deceleration,
+are **not** void the way §10.26 may be. Whatever Remote Desktop does to the frames a person
+actually sees is a separate question from whether an animation ran, and this is the second one.
+
+**What the record claims, checked rather than assumed.** No ticked box and no prose claim anywhere
+in these four documents asserts that any of the five was seen working: a grep for ticked boxes
+mentioning a scroll, a settle, a marquee, a slide, breathing, animation or smoothness returns
+nothing, and §10.26 remains the only prose claim of the kind. **So this audit found no second
+false claim**, which is the result, not a disappointment.
+
+**What it did find is a trap pointing forwards, not backwards.** Three open boxes cannot be
+ticked in a remote session, and the failure mode is the dangerous direction: each one reads as a
+DEFECT there rather than as a blocked check.
+
+- `PHASE6-VERIFICATION.md` line 1013, the notch media page: "a long title scrolls, a short one
+  does not". In a remote session neither scrolls, so the box looks half-failed when nothing is
+  wrong.
+- `PHASE6-VERIFICATION.md` line 1092, the same thing on the classic card.
+- §24's whole-branch review, defect 3: the notch HUD bars were made to settle with
+  `SettledBorder`. **That fix is invisible in a remote session**: the bar snaps with it and
+  without it, because `Settle` lands when the gate is false. Its unit tests force the gate through
+  `MotionAllowed`, which is why that override exists; the person-visible half is owed.
+
+Weather motion is already honest about this for a different reason: line 1908 says a still frame
+cannot show a sun breathing. It cannot show it in a remote session either.
+
+### 13.7 The handover reads the setting on one side only, and two dead ends on §10.26
+
+Same day, same session, still no console needed. Both halves of this came out of trying to settle
+13.5's question from the record instead of waiting for a console run.
+
+#### The two sides of the handover disagree about reduced motion
+
+`grep ClientAreaAnimation` over `src/` returns five sites and **every one of them is in
+`src/Plith`**. `Plith.DropCatcher` does not read the setting anywhere, and its arrival fade is
+started unconditionally (`ShelfWindow.xaml.cs:534` to `:554`,
+`BeginAnimation(ExpansionProperty, arrival)`). So for a person with animations off, and in any
+remote session, one gesture produces **no slide and then a real fade**: the setting is honoured
+on Plith's side of the swap and ignored on the catcher's.
+
+**Probably right, and that is the point.** The fade's own comment says what it is for: with the
+shelf as the notch's frame there is nothing to cover, so "its only job is to stop a one-frame tear
+between the two surfaces". A tear is not decoration, and a crossfade is the mildest motion there
+is. Gating it would trade a tear for a preference it barely serves. **What is missing is not the
+gate but the record**: nothing says this was decided, so the next person to grep for the setting
+finds four files honouring it and one ignoring it, with no note saying which is deliberate. This
+section is that note.
+
+#### Dead end 1: no log reaches §10.26, and the decisive one is the right file
+
+13.3's decisive signal was Plith's own page-commit line against `Shelf requested`, because
+`ReconcileShelfFrame` defers the handover by `SlideRemainingMs`. That signal lives in `plith.log`,
+and the rotation window does not reach §10.26's date of 2026-09-22:
+
+| File | Oldest line |
+|---|---|
+| `plith.log` | 2026-10-12T23:34 |
+| `plith.log.1` | 2026-10-09T03:20 |
+| `dropcatcher.log` | 2026-09-18T22:58 |
+
+`dropcatcher.log` DOES cover the date, and it is the wrong file: the catcher never learns when
+Plith committed the page, so no pair of its timestamps encodes the slide's remaining duration.
+**The witness is gone. Do not look for it again.**
+
+#### Dead end 2: §10.26's own wording pulls both ways
+
+It is tempting to mine that section's three judgements for the answer, so here is why it does not
+give one. The arrangements were: only Plith sliding, both sliding, neither sliding.
+
+- **For a slide having run:** only-Plith and neither-Plith were judged differently, and if Plith's
+  slide were a no-op those two arrangements are the same thing seen twice.
+- **Against:** the report for both-sliding was "only that widget slides", which is precisely what
+  the asymmetry above produces when the gate is false, because the catcher's page could slide
+  while Plith's frame could not. And "not smooth like the others" presupposes the other four
+  sliding, which the gate would also have stopped.
+
+So the prose contains a signal in each direction and 13.5's verdict stands unchanged: a question
+the record cannot answer. One run at the console answers it; nothing else in the repo will.
