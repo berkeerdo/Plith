@@ -61,19 +61,27 @@ $nonText = @{
     'OsdContent.xaml:OsdAccent on the panel' =
         'the accent bar fill and rail pip: a non-text mark, 3:1 by DeriveLoftRoles(...).Mark'
     'Ornaments.xaml:LoftTicks (OrnamentTickBrush)' =
-        'the ruler under the bars: a Stroke, a non-text mark, and the floor TextSecondary on both themes'
+        'the ruler under the bars: a Stroke, a non-text mark, and the floor TextTertiary on both themes'
     'SettingsTheme.xaml:ModernProgressBarStyle' =
         'the accent FILL inside its own groove - a 4 DIP bar, read as a length and not a glyph'
 }
 
 # Pairs that are MEASURED at the text bar, REPORTED with the number actually seen, and do not fail
-# the run. Different from $unresolvable (not measured at all) and from $nonText (held to a lower
-# bar): these are known misses that a colour change in this slice was deliberately not allowed to
-# paper over. Every entry says what the number was when it was recorded; the run prints the
-# worst ratio it sees now, so a number that drifts from the recorded one is visible.
+# the run AT THE RATIO THEY WERE ACCEPTED AT. Different from $unresolvable (not measured at all)
+# and from $nonText (held to a lower bar): these are known misses that a colour change in this
+# slice was deliberately not allowed to paper over.
+#
+# The exemption is keyed by PAIR AND THEME, and it carries a Floor, for two reasons the first
+# version of this table got wrong. A pair that misses on one floor usually clears on the other,
+# and exempting both hides a real pass behind an apology. And an exemption with no floor can never
+# fail again: the ratio could fall to 2:1 and the run would still print ACCEPTED and exit 0, which
+# is the one thing an instrument in this repository is not allowed to do. Floor is the ratio the
+# pair was accepted at, so a LATER change that makes it worse fails the run.
 $acceptedBelowBar = @{
-    'Ornaments.xaml:LoftLabelStyle rail label' =
-        'OsdTextTertiary on the floor, 10 px upper-case mono. About 3.81:1 on the dark floor against the 4.5:1 text bar, and the ratio is pre-existing (3.38:1 before the Loft branch), so no colour was changed to make it pass. A decision for the design owner, not a thing to fix by nudging a hex here.'
+    'Ornaments.xaml:LoftLabelStyle rail label|Dark' = @{
+        Floor = 3.75
+        Why   = 'OsdTextTertiary on the dark floor, 10 px upper-case mono, measured at 3.81:1 against the 4.5:1 text bar. The ratio is pre-existing (3.38:1 before the Loft branch), so no colour was changed to make it pass. The LIGHT floor is not exempt and clears the bar at 6.90:1. A decision for the design owner, not a thing to fix by nudging a hex here.'
+    }
 }
 $acceptedWorst = @{}
 
@@ -255,9 +263,14 @@ foreach ($theme in @('Dark', 'Light')) {
             $ratio = [Plith.Services.ContrastInk]::ContrastRatio($bg, $fg)
             $limit = if ($nonText.ContainsKey($p.Where)) { $NonTextThreshold } else { $Threshold }
 
-            if ($acceptedBelowBar.ContainsKey($p.Where)) {
-                $key = "$($p.Where)|$theme"
-                if (-not $acceptedWorst.ContainsKey($key) -or $ratio -lt $acceptedWorst[$key]) { $acceptedWorst[$key] = $ratio }
+            $acceptKey = "$($p.Where)|$theme"
+            if ($acceptedBelowBar.ContainsKey($acceptKey)) {
+                if (-not $acceptedWorst.ContainsKey($acceptKey) -or $ratio -lt $acceptedWorst[$acceptKey]) { $acceptedWorst[$acceptKey] = $ratio }
+                $floor = $acceptedBelowBar[$acceptKey].Floor
+                if ($ratio -lt $floor) {
+                    $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N2}:1  (accepted at {6}, now WORSE)" -f `
+                        $p.Where, $p.Fg, $p.Bg, $accentHex, $theme.PadRight(5), $ratio, $floor))
+                }
                 continue
             }
 
@@ -319,9 +332,11 @@ Write-Host "Contrast check passed: text pairs clear ${Threshold}:1, the $($nonTe
 foreach ($k in $nonText.Keys | Sort-Object) { Write-Host "  non-text: $k - $($nonText[$k])" }
 foreach ($k in $unresolvable.Keys | Sort-Object) { Write-Host "  NOT MEASURED: $k - $($unresolvable[$k])" }
 foreach ($k in $acceptedBelowBar.Keys | Sort-Object) {
-    foreach ($theme in @('Dark', 'Light')) {
-        $worst = $acceptedWorst["$k|$theme"]
-        if ($null -ne $worst) { Write-Host ("  BELOW BAR, ACCEPTED: {0} ({1}): worst {2:N2}:1 - {3}" -f $k, $theme, $worst, $acceptedBelowBar[$k]) }
+    $worst = $acceptedWorst[$k]
+    if ($null -ne $worst) {
+        $where, $theme = $k -split '\|', 2
+        Write-Host ("  BELOW BAR, ACCEPTED: {0} ({1}): worst {2:N2}:1, accepted at {3} - {4}" -f `
+            $where, $theme, $worst, $acceptedBelowBar[$k].Floor, $acceptedBelowBar[$k].Why)
     }
 }
 exit 0
