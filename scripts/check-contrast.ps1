@@ -315,6 +315,15 @@ foreach ($theme in @('Dark', 'Light')) {
     }
 }
 
+# An exemption that matched nothing is a stale exemption: its pair was renamed, or moved to
+# $unresolvable, or stopped being scanned. Left silent it would keep printing nothing and exiting 0
+# while exempting a pair that no longer exists, so it fails the run instead.
+foreach ($k in $acceptedBelowBar.Keys) {
+    if (-not $acceptedWorst.ContainsKey($k)) {
+        $failures.Add("  `"$k`" is in `$acceptedBelowBar but matched no measured pair (renamed, moved to `$unresolvable, or no longer scanned): remove or fix the exemption")
+    }
+}
+
 Write-Host "Measurements: $measured across $(($Accents).Count) accent(s) x 2 themes"
 
 if ($failures.Count -gt 0) {
