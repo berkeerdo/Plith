@@ -105,7 +105,7 @@ public class SettleTests
     }
 
     [StaFact]
-    public void Animation_ReleasesItsClockAtTheEnd()
+    public void Animation_UsesStopFillBehavior()
     {
         var bar = Bar(motion: true);
         bar.Target = 0.2;
@@ -116,6 +116,19 @@ public class SettleTests
         Assert.Equal(FillBehavior.Stop, animation.FillBehavior);
         Assert.Equal(0.8, animation.To);
         Assert.Equal(1, animation.RepeatBehavior.Count);
+    }
+
+    [StaFact]
+    public void ReverseToStartInsideOneFrame_LandsOnTheModelValue()
+    {
+        var bar = Bar(motion: true);
+        bar.Target = 0.2;
+        bar.Target = 0.8;
+        bar.Target = 0.2;
+
+        // The 0.8 clock must be gone and the stored value must be the model's 0.2.
+        Assert.False(IsAnimated(bar));
+        Assert.Equal(0.2, bar.Displayed);
     }
 
     [StaFact]

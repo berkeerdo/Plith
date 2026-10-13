@@ -306,6 +306,11 @@ public partial class MediaWidget : UserControl
         Bar.ValueChanged -= OnBarValueChanged;
         // Duration is positive by construction: ReadTimeline returns null otherwise, which is
         // what makes this division safe without a guard here.
+        //
+        // Deliberately NOT settled. The Loft settle ease (LoftSettleEase, 400 ms) is for discrete
+        // changes the user makes, like a volume key. This write is a continuous playback tick once
+        // a second, and an ease-out per tick would move, decelerate, stop and wait 600 ms, which
+        // is a visible stutter. The right motion for a position is none or a linear sweep.
         Bar.Value = elapsed / timeline.Duration * 100;
         Bar.ValueChanged += OnBarValueChanged;
 

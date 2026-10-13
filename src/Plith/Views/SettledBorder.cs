@@ -27,6 +27,9 @@ public class SettledBorder : Border
         nameof(Target), typeof(double), typeof(SettledBorder),
         new PropertyMetadata(0.0, OnTargetChanged));
 
+    // Deliberately NOT RegisterReadOnly: WPF refuses to animate a read-only property
+    // (IsAnimationProhibited), so the control could not drive it. The CLR wrapper is get-only and
+    // the control owns every write; bind to it one way.
     public static readonly DependencyProperty DisplayedProperty = DependencyProperty.Register(
         nameof(Displayed), typeof(double), typeof(SettledBorder), new PropertyMetadata(0.0));
 
@@ -86,15 +89,19 @@ public class SettledBorder : Border
         if (first || !allowed)
         {
             // Drop any running clock, then write the value. No animation object is created.
-            BeginAnimation(DisplayedProperty, null);
-            SetValue(DisplayedProperty, target);
-            _clock = null;
-            LastAnimation = null;
+            Land(target);
             return;
         }
 
         var current = ShownValue();
-        if (current == target) return;
+        if (current == target)
+        {
+            // Not a no-op: a clock may still be carrying the bar toward an EARLIER target (0.2,
+            // then 0.8, then 0.2 inside one frame). Returning here would leave it running and
+            // the bar would settle on 0.8 while the model says 0.2.
+            Land(target);
+            return;
+        }
 
         // Base value first, so the bar lands on the target the instant the clock is released.
         SetValue(DisplayedProperty, target);
@@ -106,7 +113,10 @@ public class SettledBorder : Border
         LastAnimation = animation;
         _from = current;
         _to = target;
-        // Replaces whatever clock was running, so there is never more than one.
+        // Removes the running clock from the time tree before replacing it. Applying a new clock
+        // alone only changes what the property reads; the old root clock would keep ticking to
+        // its own end, so a held key would pile up orphans.
+        DropClock();
         var clock = animation.CreateClock();
         // Forget the clock once it ends, so a finished animation is never asked for a value.
         clock.Completed += (sender, _) =>
@@ -115,6 +125,21 @@ public class SettledBorder : Border
         };
         _clock = clock;
         ApplyAnimationClock(DisplayedProperty, clock);
+    }
+
+    /// <summary>Stops any animation and writes the value directly. Creates no animation object.</summary>
+    private void Land(double target)
+    {
+        DropClock();
+        BeginAnimation(DisplayedProperty, null);
+        SetValue(DisplayedProperty, target);
+        LastAnimation = null;
+    }
+
+    private void DropClock()
+    {
+        _clock?.Controller?.Remove();
+        _clock = null;
     }
 
     /// <summary>
@@ -127,7 +152,9 @@ public class SettledBorder : Border
     {
         if (_clock is null) return Displayed;
 
-        // Applied but not yet ticked: the bar has not moved from where it started.
+        // Applied but not yet ticked: the bar has not moved from where it started. A null
+        // progress is also what a Stopped clock reports, but Completed clears _clock in the same
+        // tick the clock stops, so a stopped clock is never seen here.
         if (_clock.CurrentProgress is null) return _from;
         return (double)_clock.GetCurrentValue(_from, _to);
     }

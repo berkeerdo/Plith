@@ -172,42 +172,46 @@ public sealed class AudioCardViewModel : INotifyPropertyChanged
         return Application.Current?.TryFindResource(key) is Brush b ? b : fallback;
     }
 
-    public Brush GainColor
+    public Brush GainColor => GainColorAt(_gainNormalized);
+
+    /// <summary>
+    /// The fill colour for a given level. The bar passes the level it is SHOWING, which trails
+    /// <see cref="GainNormalized"/> while it settles, so the colour changes when the fill
+    /// reaches a threshold and not before.
+    /// </summary>
+    public Brush GainColorAt(double level)
     {
-        get
+        if (_muted) return _brushMuted;
+        // Thresholds OFF (the default): the volume bar is the OSD's headline surface,
+        // so it takes whichever accent the user picked in the Theme Studio. That's
+        // what makes the picker feel real. Before this, the bar stayed emerald no
+        // matter what preset was selected.
+        if (!_useColorThresholds) return _brushAccent;
+
+        // Thresholds ON: amber and red are WARNINGS, and the safe level keeps the accent.
+        //
+        // It used to replace the accent with a fixed green below 0.70, which made the mode do
+        // two things when only one of them is its purpose. The cost was reported directly:
+        // with thresholds on - and they are on by default for anyone who turns them on once -
+        // the bar showed the same green whatever colour had been chosen, so the accent looked
+        // broken rather than overridden. The safety signal is the amber and the red; the
+        // green was never part of it.
+        //
+        // Unless the accent is itself a warning colour. An amber accent under an amber
+        // caution is a warning that cannot be seen, so in that case the green comes back and
+        // the mode behaves as it did. Measured by hue distance rather than assumed - see
+        // AccentLooksLikeAWarning.
+        var safe = AccentLooksLikeAWarning() ? _brushGreen : _brushAccent;
+
+        return level switch
         {
-            if (_muted) return _brushMuted;
-            // Thresholds OFF (the default): the volume bar is the OSD's headline surface,
-            // so it takes whichever accent the user picked in the Theme Studio. That's
-            // what makes the picker feel real — before this, the bar stayed emerald no
-            // matter what preset was selected.
-            if (!_useColorThresholds) return _brushAccent;
-
-            // Thresholds ON: amber and red are WARNINGS, and the safe level keeps the accent.
-            //
-            // It used to replace the accent with a fixed green below 0.70, which made the mode do
-            // two things when only one of them is its purpose. The cost was reported directly:
-            // with thresholds on - and they are on by default for anyone who turns them on once -
-            // the bar showed the same green whatever colour had been chosen, so the accent looked
-            // broken rather than overridden. The safety signal is the amber and the red; the
-            // green was never part of it.
-            //
-            // Unless the accent is itself a warning colour. An amber accent under an amber
-            // caution is a warning that cannot be seen, so in that case the green comes back and
-            // the mode behaves as it did. Measured by hue distance rather than assumed - see
-            // AccentLooksLikeAWarning.
-            var safe = AccentLooksLikeAWarning() ? _brushGreen : _brushAccent;
-
-            return _gainNormalized switch
-            {
-                // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
-                // 0.70 ≈ -7 dB on the VM scale, 70 % on the Windows scale.
-                // 0.90 ≈  6 dB on the VM scale, 90 % on the Windows scale.
-                <= 0.70 => safe,
-                <= 0.90 => _brushAmber,
-                _       => _brushRed,
-            };
-        }
+            // Heuristic thresholds that work for both Voicemeeter dB and Windows scalar:
+            // 0.70 ≈ -7 dB on the VM scale, 70 % on the Windows scale.
+            // 0.90 ≈  6 dB on the VM scale, 90 % on the Windows scale.
+            <= 0.70 => safe,
+            <= 0.90 => _brushAmber,
+            _       => _brushRed,
+        };
     }
 
     /// <summary>
