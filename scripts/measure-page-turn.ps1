@@ -47,6 +47,12 @@
                while YOU page the notch by hand. For a Plith this shell did not start and must
                not restart, or when an anti-cheat driver is filtering injected input.
 
+               NOT AGAINST THE INSTALLED PLITH. PageTurnTrace landed on 2026-10-13 and the
+               installed build predates it, so an installed instance writes no turn line
+               however many times you page it. That silence is indistinguishable from the
+               animation gate being off, which is the one thing this instrument exists to
+               tell apart. -NoDrive is for a Debug build you started yourself.
+
   Run with: pwsh -File scripts/measure-page-turn.ps1
             pwsh -File scripts/measure-page-turn.ps1 -ExePath 'C:\Program Files\Plith\Plith.exe'
             pwsh -File scripts/measure-page-turn.ps1 -NoDrive -Laps 3
