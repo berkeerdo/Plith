@@ -2112,7 +2112,7 @@ claim is inherited rather than observed, it says so.
 |---|---|
 | `check-shared-xaml.ps1` | Passed. 3 files compiled into both Plith and the installer, none naming an assembly |
 | `check-a11y.ps1` | Passed, with two KNOWN GAPS it reports itself, both predating this branch and not fixed here: `MediaWidget.cs` sets an automation name on `OpenSourceArea`, a Border, and `WeatherWidget.cs` sets one on `Readout`, a StackPanel |
-| `check-contrast.ps1` | Passed. **360 measurements across 9 accents x 2 themes.** Three non-text pairs clear 3:1 (the ornament tick ruler joined the other two). Three pairs are NOT MEASURED (below). One accepted miss is recorded (below) |
+| `check-contrast.ps1` | Passed. **360 measurements across 9 accents x 2 themes**, from 12 pairs declared in XAML and 8 named from code-behind (6 before this work, the two ornament pairs joined them). Three non-text pairs clear 3:1 (the ornament tick ruler joined the other two). Three pairs are NOT MEASURED (below). One accepted miss is recorded (below) |
 | `dotnet test` | Passed: Failed 0, **Passed 758**, 294 ms. Run under `heavy-run.mjs` |
 
 `check-shared-xaml` and `check-a11y` passed again after the last fix, unchanged, with the same two
