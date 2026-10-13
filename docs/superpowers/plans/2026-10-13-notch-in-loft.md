@@ -1046,7 +1046,7 @@ git commit -m "feat(theme): ship Loft's fonts, tabular figures"
 
 Corner marks are drawn inside the notch's corner radius, not on it: the radius stays 8 per the spec and a `+` on a curve reads as a mistake.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows;
@@ -1114,12 +1114,12 @@ public class OrnamentTests
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~OrnamentTests`
 Expected: FAIL, `OrnamentCornerLength` is not a key.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 Add to each palette. `OsdPalette.Dark.xaml` and `OsdPalette.Light.xaml`:
 
@@ -1180,22 +1180,22 @@ So this dictionary is Plith-only, Step 5's check passes trivially and proves not
 **the catcher's shelf page gets no corner marks in this work.** If that one-page inconsistency
 reads wrong on screen, the fix is to link the dictionary into the catcher, as its own change.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~OrnamentTests`
 Expected: PASS.
 
-- [ ] **Step 5: Run the shared XAML check**
+- [x] **Step 5: Run the shared XAML check**
 
 Run: `pwsh -File scripts/check-shared-xaml.ps1`
 Expected: PASS. This check exists because its failure mode is invisible to the build and to both test suites.
 
-- [ ] **Step 6: Look at it**
+- [x] **Step 6: Look at it**
 
 Run: `pwsh -STA -File scripts/render-widgets.ps1 -OutDir $env:TEMP\loft-5`
 Expected: corner marks present and inside the radius, ticks under the volume and brightness bars, labels uppercase in the mono face.
 
-- [ ] **Step 7: Commit**
+- [x] **Step 7: Commit**
 
 ```bash
 git add src/Plith/Resources src/Plith/Views tests/Plith.Tests/OrnamentTests.cs
