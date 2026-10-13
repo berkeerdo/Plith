@@ -2,6 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
+             xmlns:local="clr-namespace:Plith.Views"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:BrightnessCardViewModel}"
@@ -27,6 +29,7 @@
             <RowDefinition Height="Auto" />
             <RowDefinition Height="10" />
             <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
         <DockPanel Grid.Row="0" LastChildFill="True">
@@ -45,29 +48,35 @@
                        VerticalAlignment="Center"
                        Text="{Binding DisplayText}" />
 
-            <TextBlock FontFamily="{StaticResource OsdUiFont}"
-                       FontSize="13"
-                       VerticalAlignment="Center"
-                       Foreground="{DynamicResource OsdTextSecondary}"
-                       TextTrimming="CharacterEllipsis"
-                       Text="Brightness" />
+            <p:LoftLabel Style="{DynamicResource LoftTitleLabelStyle}"
+                         VerticalAlignment="Center"
+                         Foreground="{DynamicResource OsdTextSecondary}"
+                         TextTrimming="CharacterEllipsis"
+                         Text="Brightness" />
         </DockPanel>
 
         <Grid Grid.Row="2" Height="6">
             <Border CornerRadius="3" Background="{DynamicResource OsdTrackBg}" />
-            <Border HorizontalAlignment="Left"
+            <local:SettledBorder HorizontalAlignment="Left"
                     CornerRadius="3"
-                    Background="{DynamicResource OsdAccent}">
+                    Background="{DynamicResource OsdAccent}"
+                    Target="{Binding Normalized}"
+                    SettleDuration="{StaticResource LoftSettleDuration}"
+                    SettleEase="{StaticResource LoftSettleEase}">
                 <Border.Width>
                     <MultiBinding>
                         <MultiBinding.Converter>
                             <vm:NormalizedToWidthConverter />
                         </MultiBinding.Converter>
-                        <Binding Path="Normalized" />
+                        <Binding Path="Displayed" RelativeSource="{RelativeSource Self}" />
                         <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
                     </MultiBinding>
                 </Border.Width>
-            </Border>
+            </local:SettledBorder>
         </Grid>
+
+        <!-- The ruler under the scale. Transparent while ornaments are off, and takes no
+             automation peer: a Path has none. -->
+        <Path Grid.Row="3" Style="{DynamicResource LoftTicks}" />
     </Grid>
 </UserControl>

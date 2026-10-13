@@ -163,7 +163,11 @@ internal sealed class AmbientNotchPresentation : IOsdPresentation
 
     /// <summary>Whether the notch is open enough to be showing content, as opposed to closed or
     /// merely peeking. Read from the live value, never from a flag.</summary>
-    public bool IsOpenEnoughToShowContent => _content.NotchExpand > NotchGeometry.PeekExpand + 0.01;
+    public bool IsOpenEnoughToShowContent => NotchGeometry.ShowsContentAt(_content.NotchExpand);
+
+    /// <summary>The shape's live expansion, 0 closed to 1 open. Read from the animated value, never
+    /// from a flag.</summary>
+    public double CurrentExpand => _content.NotchExpand;
 
     public void PrepareShow()
     {

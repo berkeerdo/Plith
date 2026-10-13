@@ -133,15 +133,24 @@ they care about.
 
 ## 6. Phase breakdown
 
-### The notch in Loft — **planned, not started**
+### The notch in Loft: **built, verified in part, unmerged**
 
 Spec: `docs/superpowers/specs/2026-10-12-notch-loft-design.md` (approved 2026-10-13).
-Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md` (seven tasks, none started).
+Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md` (seven tasks, all seven done).
 
 Moves the notch onto praxvon-ui's Loft direction. The visible change is that the accent stops
 filling the panel and becomes a mark: a user who picks purple gets a neutral panel with purple
-lines, not a purple panel. Blocked on nothing. One task needs the Public Sans and Martian Mono
-font files fetched by hand before it can run.
+lines, not a purple panel.
+
+| Item | Estimate | Actual |
+|---|---|---|
+| Seven tasks, fonts to verification | none written | seven tasks committed on `feature/notch-in-loft`, duration not recorded |
+
+What was measured and what was not is in `docs/PHASE6-VERIFICATION.md` section 24, which also
+records the whole-branch review (not mergeable on the first pass; five wrong-value defects, since
+fixed). The startup, idle and notch-open figures predate that fix round. Four checks
+still need the physical console: the runtime theme switch, high contrast, the media page drive,
+and the hover peek.
 
 ### Carried over from Phase 4 — **4c-4, open, next**
 
@@ -671,3 +680,23 @@ counts only.
 - **Store presence**: notch pivot is a strong Microsoft Store hook
   (Store featuring "notch" apps has precedent). Re-attempt Store
   submission with the new positioning post-Phase 6?
+- **Seek thumb settling (Loft, deliberately not built)**: the spec asked for the seek thumb to
+  settle like the value bars. It was not built. The thumb is written by a once-per-second
+  playback tick, so an ease-out per tick would read as a stutter, and the discrete case (track
+  change, external seek) cannot be told from a tick without a heuristic on position delta,
+  behind the drag guard and the post-write hold window. Revisit only if `RenderProgress` gains
+  a clean signal for a jump.
+- **Shelf page opening is choppy (owner report, undiagnosed)**: the owner says the shelf
+  page's opening comes in choppy and is not smooth. Nothing has measured it. Context: the shelf
+  has been the notch's own page since 0.3.0, and a page turn onto it hands the frame to
+  `Plith.DropCatcher`, a cross-process window swap. That is a suspect to measure, not a
+  finding. No instrument covers it: `measure-notch-open` times the open of the notch itself, and
+  `drive-shelf-pair` proves the handover works, not what it costs. Outside the Loft work.
+- **The classic OSD card still draws cool grey text on a warm floor**: `OsdTextPrimary`,
+  `OsdTextSecondary` and `OsdTextTertiary` are still the pre-Loft zinc family (`#F5F5F5`,
+  `#A1A1AA`, `#71717A`) while the floor beneath them is Loft's warm one and the notch's own ink
+  is Loft's (`NotchInk` `#ECE9E2`, `NotchInkMuted` `#A39E94`). So one surface draws warm on warm
+  and the other cool on warm. Contrast passes either way, so `check-contrast` will never raise
+  it and no test can. Deliberately not changed at the end of the Loft branch: six text values
+  moved without a side-by-side render is how a regression ships. Needs its own round, with the
+  before and after renders put next to each other.

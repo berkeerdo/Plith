@@ -65,7 +65,8 @@ public partial class NotchHud : UserControl
         if (_brightness is not null)
             _brightness.PropertyChanged += (_, _) => { if (Kind == NotchHudKind.Brightness) RenderBrightness(); };
 
-        Show(NotchHudKind.Volume);
+        IsOnScreen = () => IsVisible;
+        Show(NotchHudKind.Volume, freshlyShown: true);
     }
 
     public NotchHudKind Kind { get; private set; } = NotchHudKind.Volume;
@@ -78,8 +79,11 @@ public partial class NotchHud : UserControl
     /// too rather than only on the next notification: an event is the first thing the user sees,
     /// and a HUD that waited for a change would show the previous one for a frame.
     /// </summary>
-    public void Show(NotchHudKind kind)
+    /// <param name="freshlyShown">True when the HUD is coming back from rest, so the first value
+    /// lands instead of sweeping. A change of kind lands for the same reason.</param>
+    public void Show(NotchHudKind kind, bool freshlyShown = false)
     {
+        _landNext = freshlyShown || kind != Kind;
         Kind = kind;
 
         // Brightness takes the narrow shape, like volume: it is a level and a number, and the
@@ -98,6 +102,8 @@ public partial class NotchHud : UserControl
             case NotchHudKind.Brightness: RenderBrightness(); break;
             default: RenderVolume(); break;
         }
+
+        _landNext = false;
     }
 
     private void RenderVolume()
@@ -105,7 +111,7 @@ public partial class NotchHud : UserControl
         LevelText.Text = _audio.Muted ? "Muted" : _audio.GainText;
 
         var t = VolumeMath.Clamp01(_audio.GainNormalized);
-        UpdateFill(t);
+        Write(LevelFill, t);
 
         // The icon carries the state on its own, so "is my sound off?" is answered without
         // reading anything. Three shapes: crossed when muted, one wave when quiet, two when not.
@@ -131,31 +137,32 @@ public partial class NotchHud : UserControl
     private const double QuietBelow = 0.33;
 
     /// <summary>
-    /// Size the fill from the track's actual width.
+    /// Hands a level to a bar, which settles toward it, or lands on it.
     ///
-    /// Read at the point of use, never remembered: the HUD changes width between its two kinds,
-    /// and a fill sized from a width captured earlier would be drawn against the other one. If
-    /// the track has not been arranged yet the fill is left alone rather than being set to zero,
-    /// because a bar that flashes empty on every event is worse than one that arrives a frame
-    /// late.
+    /// A bar LANDS when nobody can see it move: the HUD is not on screen yet, it has just come
+    /// back from rest (the host says so through <see cref="Show"/>), or the kind just changed and
+    /// this bar was last drawn for an earlier appearance. Anything else is a key press inside a
+    /// visible HUD, which settles. Without the landing rule every press would show the bar
+    /// growing from wherever it was left, which is worse than the snap this replaced.
     /// </summary>
-    private void UpdateFill(double t) => UpdateFill(LevelFill, t);
-
-    private static void UpdateFill(Border fill, double t)
+    private void Write(SettledBorder fill, double t)
     {
-        if (fill.Parent is not FrameworkElement track) return;
-        var available = track.ActualWidth;
-        if (available <= 0) return;
-
-        fill.Width = available * t;
+        if (_landNext || !IsOnScreen()) fill.Jump(t);
+        else fill.Target = t;
     }
+
+    private bool _landNext;
+
+    /// <summary>Whether a person can see the HUD right now. A seam for tests, which have no
+    /// window; the default is the control's own IsVisible.</summary>
+    internal Func<bool> IsOnScreen { get; set; } = () => true;
 
     private void RenderBrightness()
     {
         if (_brightness is null) return;
 
         BrightnessText.Text = _brightness.DisplayText;
-        UpdateFill(BrightnessFill, _brightness.Normalized);
+        Write(BrightnessFill, VolumeMath.Clamp01(_brightness.Normalized));
 
         // On this control. See RenderVolume for why the row cannot carry it.
         AutomationProperties.SetName(this, _brightness.AccessibleSummary);
@@ -169,19 +176,5 @@ public partial class NotchHud : UserControl
 
         // On this control. See RenderVolume for why the row cannot carry it.
         AutomationProperties.SetName(this, _media.AccessibleSummary);
-    }
-
-    protected override Size ArrangeOverride(Size arrangeBounds)
-    {
-        var result = base.ArrangeOverride(arrangeBounds);
-
-        // The fill depends on a width that only exists after arrange, so it is recomputed here
-        // as well as on every change. Doing it only on change would leave the bar unpainted the
-        // first time a HUD of this width is shown - the exact class of defect that comes from
-        // reading a measurement before the tree has one.
-        if (Kind == NotchHudKind.Volume) UpdateFill(VolumeMath.Clamp01(_audio.GainNormalized));
-        else if (Kind == NotchHudKind.Brightness && _brightness is not null) UpdateFill(BrightnessFill, _brightness.Normalized);
-
-        return result;
     }
 }

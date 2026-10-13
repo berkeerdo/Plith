@@ -49,7 +49,8 @@ foreach ($rel in $paletteSources) {
 
 $base = [Plith.Services.AccentTheme]::ParseHexColor($Accent, [Windows.Media.Colors]::Gray)
 $hsl = [Plith.Services.AccentTheme]::RgbToHsl($base)
-$surfaces = [Plith.Services.AccentTheme]::DeriveOsdSurfaces($base, $false)
+$lightFloor = [Plith.Services.LoftPalette]::LightFloor
+$surfaces = [pscustomobject]@{ SurfaceStart = $lightFloor.Background; SurfaceEnd = $lightFloor.Surface }
 
 # Damp saturation, then darken until the bar clears the requested contrast against its panel.
 function Get-Accent([double]$SatCap, [double]$MinContrast) {

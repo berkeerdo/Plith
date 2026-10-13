@@ -54,10 +54,12 @@
         <StackPanel Grid.Column="0"
                     VerticalAlignment="Center">
             <TextBlock Text="{Binding ClockTime}"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="20"
                        FontWeight="SemiBold"
                        Foreground="{DynamicResource OsdTextPrimary}" />
             <TextBlock Text="{Binding ClockDate}"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="11"
                        Foreground="{DynamicResource OsdTextSecondary}" />
         </StackPanel>
@@ -74,6 +76,7 @@
                     VerticalAlignment="Center"
                     Visibility="{Binding HasWeather, Converter={StaticResource BoolToVisibilityConverter}}">
             <TextBlock Text="{Binding WeatherText}"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="13"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource OsdTextSecondary}" />
@@ -97,6 +100,7 @@
                   VerticalAlignment="Center"
                   Visibility="{Binding IsCharging, Converter={StaticResource BoolToVisibilityConverter}}" />
             <TextBlock Text="{Binding BatteryText}"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="13"
                        VerticalAlignment="Center"
                        Foreground="{DynamicResource OsdTextSecondary}" />

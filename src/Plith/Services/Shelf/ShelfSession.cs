@@ -371,33 +371,34 @@ public sealed class ShelfSession
     /// <summary>
     /// The theme, resolved the way the running notch resolves it.
     ///
-    /// Every value here is taken from the same call ThemeService.BuildAccentOverride makes for
-    /// the key beside it, rather than being derived a second way: NotchInk is PairOn(SurfaceEnd)
-    /// there and is PairOn(SurfaceEnd) here, and so on down the list. A second derivation would
-    /// drift, and the drift would show as the shelf not looking like the product it belongs to,
-    /// which is the whole reason the ANSWER crosses the wire rather than the accent.
+    /// Every value here comes from the same source ThemeService.BuildAccentOverride uses for the
+    /// key beside it: the fixed Loft floor for the surface and the inks, and DeriveLoftRoles for
+    /// the accent. A second derivation would drift, and the drift would show as the shelf not
+    /// looking like the product it belongs to, which is the whole reason the ANSWER crosses the
+    /// wire rather than the accent.
     ///
-    /// The two surfaces are sent WITHOUT the F0 alpha ThemeService applies. The catcher paints
-    /// them on its own layered window with its own opacity, and an alpha applied twice would
-    /// compound.
+    /// Field by field: SurfaceStart is the floor Background and SurfaceEnd the floor Surface (the
+    /// notch's two gradient stops); Ink, InkMuted and Track are the floor Foreground,
+    /// TextSecondary and Border, which are what NotchInk, NotchInkMuted and NotchTrack now
+    /// declare; Accent is the role Fill (a filled part); SelectionRing is the role Mark, which
+    /// clears 3:1 on both floor surfaces (a stroke is a non-text mark).
+    ///
+    /// The two surfaces are sent WITHOUT any alpha. The catcher paints them on its own layered
+    /// window with its own opacity, and an alpha applied twice would compound.
     /// </summary>
     public static ShelfPalette DerivePalette(Color baseColor, bool isDark)
     {
-        var accent = AccentTheme.Derive(baseColor, isDark).Accent;
-        var surfaces = AccentTheme.DeriveOsdSurfaces(baseColor, isDark);
-        var ink = ContrastInk.PairOn(surfaces.SurfaceEnd);
+        var floor = LoftPalette.For(isDark);
+        var roles = AccentTheme.DeriveLoftRoles(baseColor, isDark);
 
         return new ShelfPalette(
-            SurfaceStart: surfaces.SurfaceStart,
-            SurfaceEnd: surfaces.SurfaceEnd,
-            Ink: ink.Ink,
-            InkMuted: ink.Muted,
-            Track: ContrastInk.TrackOn(surfaces.SurfaceEnd),
-            Accent: accent,
-            // The DERIVED ring, never the raw accent. RingOn returns the accent untouched when it
-            // already clears 3:1 against the surface and walks its lightness when it does not; a
-            // near-white accent measured 1.25:1 sent raw.
-            SelectionRing: ContrastInk.RingOn(accent, surfaces.SurfaceEnd),
+            SurfaceStart: floor.Background,
+            SurfaceEnd: floor.Surface,
+            Ink: floor.Foreground,
+            InkMuted: floor.TextSecondary,
+            Track: floor.Border,
+            Accent: roles.Fill,
+            SelectionRing: roles.Mark,
             IsDark: isDark);
     }
 }

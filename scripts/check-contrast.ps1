@@ -1,4 +1,4 @@
-# scripts/check-contrast.ps1 — measures text contrast for every colour pair the XAML declares,
+﻿# scripts/check-contrast.ps1 — measures text contrast for every colour pair the XAML declares,
 # across both themes and a spread of accents.
 #
 # Why this exists: a user reported white text on a pink panel in the light theme and could not
@@ -49,16 +49,41 @@ param(
 # Recorded rather than quietly skipped, and rather than satisfied by inventing a constant. A gate
 # that is made to pass by writing a fake colour into the product has been turned into decoration.
 $unresolvable = @{
+    'MediaWidget.xaml:NotchTrack groove on the panel' =
+        'NotchTrack is the Loft floor Border, a hairline rule at about 1.3:1 against the panel BY INTENT (1.26:1 and 1.34:1 on dark, 1.26:1 and 1.41:1 on light, computed from the floor hexes rather than by this script, which skips the pair). Not forced to 3:1: the fill inside the groove is the OsdAccent Mark, itself 3:1 from the panel, and a groove at 3:1 as well would sit at the same luminance as the fill and swallow it (measured with BorderStrong: fill vs groove 1.2 to 1.54:1 on light). The groove is a rule; the fill carries the visible state.'
     'MediaWidget.xaml:TransportButtonStyle' =
         'the chip is translucent (#0DFFFFFF over the panel), so nothing static knows what is underneath. It used to be a chip over a near-black scrim over album artwork; that scrim is gone with the page redesign, and the chip now sits on the notch panel. Checked instead in the render harness, light and dark - see widget-media.png.'
     'MediaWidget.xaml:TrackBarStyle' =
-        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: OsdAccent on NotchTrack 1,0:1, NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, NotchInk on NotchTrack 2,6:1 - because ContrastInk.TrackOn stops as soon as it clears 3:1 against the SURFACE, leaving the ink an unpredictable distance further along the same ramp. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
+        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, and, in the TrackOn era whose NotchTrack no longer exists so these two are history and not reproducible today, OsdAccent on NotchTrack 1,0:1 and NotchInk on NotchTrack 2,6:1 - because the groove and the ink were derived independently of each other, leaving the ink an unpredictable distance from the groove. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
 }
 
 $nonText = @{
+    'OsdContent.xaml:OsdAccent on the panel' =
+        'the accent bar fill and rail pip: a non-text mark, 3:1 by DeriveLoftRoles(...).Mark'
+    'Ornaments.xaml:LoftTicks (OrnamentTickBrush)' =
+        'the ruler under the bars: a Stroke, a non-text mark, and the floor TextTertiary on both themes'
     'SettingsTheme.xaml:ModernProgressBarStyle' =
         'the accent FILL inside its own groove - a 4 DIP bar, read as a length and not a glyph'
 }
+
+# Pairs that are MEASURED at the text bar, REPORTED with the number actually seen, and do not fail
+# the run AT THE RATIO THEY WERE ACCEPTED AT. Different from $unresolvable (not measured at all)
+# and from $nonText (held to a lower bar): these are known misses that a colour change in this
+# slice was deliberately not allowed to paper over.
+#
+# The exemption is keyed by PAIR AND THEME, and it carries a Floor, for two reasons the first
+# version of this table got wrong. A pair that misses on one floor usually clears on the other,
+# and exempting both hides a real pass behind an apology. And an exemption with no floor can never
+# fail again: the ratio could fall to 2:1 and the run would still print ACCEPTED and exit 0, which
+# is the one thing an instrument in this repository is not allowed to do. Floor is the ratio the
+# pair was accepted at, so a LATER change that makes it worse fails the run.
+$acceptedBelowBar = @{
+    'Ornaments.xaml:LoftLabelStyle rail label|Dark' = @{
+        Floor = 3.75
+        Why   = 'OsdTextTertiary on the dark floor, 10 px upper-case mono, measured at 3.81:1 against the 4.5:1 text bar. The ratio is pre-existing (3.38:1 before the Loft branch), so no colour was changed to make it pass. The LIGHT floor is not exempt and clears the bar at 6.90:1. A decision for the design owner, not a thing to fix by nudging a hex here.'
+    }
+}
+$acceptedWorst = @{}
 
 $ErrorActionPreference = 'Stop'
 if ([Threading.Thread]::CurrentThread.GetApartmentState() -ne 'STA') {
@@ -132,9 +157,10 @@ foreach ($file in $xamlFiles) {
 # The shelf's tiles, whose colours are set in code. Pointed at this check, the first version
 # failed twice over and both failures were invisible in a render: NotchInkMuted on a track tile
 # measured 1.5:1 on every accent, and NotchInk on the same tile still only reached 4.0:1 with a
-# white accent. NotchTrack is built by ContrastInk.TrackOn, which targets 3:1 - a non-text
-# surface by construction. The tiles have no chip behind them now and sit on the panel, which is
-# the surface NotchInk is derived against.
+# white accent. NotchTrack is the Loft floor's Border, a hairline rule (about 1.3:1 against its
+# panel) and NOT a 3:1 surface; it used to be built by ContrastInk.TrackOn and was one. The text
+# pairs below do not depend on it: they are ink on OsdSurfaceBrush, and the tiles have no chip
+# behind them, so the ink is measured against the panel it actually sits on.
 $codeBehindPairs = @(
     @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfWidget.cs:tile label, icon and count' },
     # The line under the row saying the shelf opens on a click, and the sentence that replaces it
@@ -153,7 +179,16 @@ $codeBehindPairs = @(
     # The "Stack N" caption above each column (see BuildColumn): a sighted match for the
     # per-stack AutomationProperties.Name set on the same column's wrapping Border, and the
     # reason this pair measures shipped code rather than a colour nothing draws.
-    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfSurface.xaml.cs:stack caption' }
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfSurface.xaml.cs:stack caption' },
+    # Neither key is ever a Foreground beside a declared Background, so the scan above could not
+    # pair them, and for that reason neither had been measured against the panel beneath it.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OsdAccent'; Where = 'OsdContent.xaml:OsdAccent on the panel' },
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchTrack'; Where = 'MediaWidget.xaml:NotchTrack groove on the panel' },
+    # The ornament ink layer. LoftLabelStyle sets a Foreground and no Background, and
+    # OrnamentTickBrush is a Stroke, so the scan above pairs neither; both sit on the panel
+    # painted by OsdContent, two files away.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OsdTextTertiary'; Where = 'Ornaments.xaml:LoftLabelStyle rail label' },
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OrnamentTickBrush'; Where = 'Ornaments.xaml:LoftTicks (OrnamentTickBrush)' }
 )
 foreach ($cb in $codeBehindPairs) {
     # The file each pair's own local-brush override (if any) would be declared under, read back
@@ -228,6 +263,17 @@ foreach ($theme in @('Dark', 'Light')) {
             $ratio = [Plith.Services.ContrastInk]::ContrastRatio($bg, $fg)
             $limit = if ($nonText.ContainsKey($p.Where)) { $NonTextThreshold } else { $Threshold }
 
+            $acceptKey = "$($p.Where)|$theme"
+            if ($acceptedBelowBar.ContainsKey($acceptKey)) {
+                if (-not $acceptedWorst.ContainsKey($acceptKey) -or $ratio -lt $acceptedWorst[$acceptKey]) { $acceptedWorst[$acceptKey] = $ratio }
+                $floor = $acceptedBelowBar[$acceptKey].Floor
+                if ($ratio -lt $floor) {
+                    $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N2}:1  (accepted at {6}, now WORSE)" -f `
+                        $p.Where, $p.Fg, $p.Bg, $accentHex, $theme.PadRight(5), $ratio, $floor))
+                }
+                continue
+            }
+
             if ($ratio -lt $limit) {
                 $kind = if ($limit -eq $NonTextThreshold) { 'non-text' } else { 'text' }
                 $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
@@ -238,33 +284,43 @@ foreach ($theme in @('Dark', 'Light')) {
         # The selection ring: not a declared resource pair, so it cannot join the sweep above.
         #
         # SelectionRing has no static entry in any theme dictionary for TryFindResource to find -
-        # Plith computes it at runtime with ContrastInk.RingOn(accent, surfaceEnd) and sends the
-        # ANSWER over the wire (ShelfSession.DerivePalette, ShelfPaletteWire), specifically so the
-        # ring cannot drift from the rest of the product's contrast-derived colours. An earlier
-        # reviewer correctly flagged that as invisible to a resource-key sweep: it is a colour
-        # applied conditionally from code, and the honest fix is to make it reachable rather than
-        # to leave it exempt.
+        # Plith computes it at runtime and sends the ANSWER over the wire (ShelfSession.
+        # DerivePalette, ShelfPaletteWire), specifically so the ring cannot drift from the rest of
+        # the product's derived colours. It is a colour applied from code, so a resource-key
+        # sweep cannot see it, and the honest fix is to make it reachable rather than exempt.
         #
-        # So this calls the real function on the real derived inputs, for the same accent/theme
-        # matrix as everything above, using the exact two calls DerivePalette makes rather than a
-        # second, looser derivation of "the accent" and "the surface" that could quietly disagree
-        # with production: AccentTheme.Derive(...).Accent, not the raw parsed accent, and
-        # AccentTheme.DeriveOsdSurfaces(...).SurfaceEnd, not a resource lookup against the probe
-        # scope. RingOn's own logic (does the walk terminate, does it preserve hue) is
-        # ContrastInkTests' job on hand-picked colours; this is the integration RingOn's unit
-        # tests cannot be: whether it actually clears 3:1 for every accent this script already
-        # sweeps, on the surface colour the product actually derives for that accent and theme.
-        $derivedAccent = [Plith.Services.AccentTheme]::Derive($base, ($theme -eq 'Dark')).Accent
-        $surfaceEnd = [Plith.Services.AccentTheme]::DeriveOsdSurfaces($base, ($theme -eq 'Dark')).SurfaceEnd
-        $ring = [Plith.Services.ContrastInk]::RingOn($derivedAccent, $surfaceEnd)
+        # This MIRRORS DerivePalette, call for call, rather than a second and looser derivation
+        # that could quietly disagree with production. DerivePalette now sends:
+        #   SurfaceStart  = LoftPalette.For(isDark).Background
+        #   SurfaceEnd    = LoftPalette.For(isDark).Surface
+        #   SelectionRing = AccentTheme.DeriveLoftRoles(base, isDark).Mark
+        # so this takes the floor from LoftPalette.For and the ring from DeriveLoftRoles(...).Mark,
+        # and measures the ring against both floor surfaces at the non-text threshold. If
+        # DerivePalette changes where the ring comes from, change these lines in the same commit.
+        $isDarkTheme = ($theme -eq 'Dark')
+        $floor = [Plith.Services.LoftPalette]::For($isDarkTheme)
+        $ring = [Plith.Services.AccentTheme]::DeriveLoftRoles($base, $isDarkTheme).Mark
 
-        $measured++
-        $ringRatio = [Plith.Services.ContrastInk]::ContrastRatio($surfaceEnd, $ring)
-        if ($ringRatio -lt $NonTextThreshold) {
-            $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
-                'ShelfSession.cs:SelectionRing (ContrastInk.RingOn)', 'ring', 'OsdSurfaceBrush', `
-                $accentHex, $theme.PadRight(5), $ringRatio, $NonTextThreshold, 'non-text'))
+        foreach ($ringGround in @(
+                @{ Name = 'SurfaceStart (floor Background)'; Color = $floor.Background },
+                @{ Name = 'SurfaceEnd (floor Surface)';      Color = $floor.Surface })) {
+            $measured++
+            $ringRatio = [Plith.Services.ContrastInk]::ContrastRatio($ringGround.Color, $ring)
+            if ($ringRatio -lt $NonTextThreshold) {
+                $failures.Add(("  {0,-34} {1} on {2}  accent {3}  {4}  {5:N1}:1  (needs {6}, {7})" -f `
+                    'ShelfSession.cs:SelectionRing (Mark)', 'ring', $ringGround.Name, `
+                    $accentHex, $theme.PadRight(5), $ringRatio, $NonTextThreshold, 'non-text'))
+            }
         }
+    }
+}
+
+# An exemption that matched nothing is a stale exemption: its pair was renamed, or moved to
+# $unresolvable, or stopped being scanned. Left silent it would keep printing nothing and exiting 0
+# while exempting a pair that no longer exists, so it fails the run instead.
+foreach ($k in $acceptedBelowBar.Keys) {
+    if (-not $acceptedWorst.ContainsKey($k)) {
+        $failures.Add("  `"$k`" is in `$acceptedBelowBar but matched no measured pair (renamed, moved to `$unresolvable, or no longer scanned): remove or fix the exemption")
     }
 }
 
@@ -284,4 +340,12 @@ if ($failures.Count -gt 0) {
 Write-Host "Contrast check passed: text pairs clear ${Threshold}:1, the $($nonText.Count) listed non-text pair(s) clear ${NonTextThreshold}:1, on both themes."
 foreach ($k in $nonText.Keys | Sort-Object) { Write-Host "  non-text: $k - $($nonText[$k])" }
 foreach ($k in $unresolvable.Keys | Sort-Object) { Write-Host "  NOT MEASURED: $k - $($unresolvable[$k])" }
+foreach ($k in $acceptedBelowBar.Keys | Sort-Object) {
+    $worst = $acceptedWorst[$k]
+    if ($null -ne $worst) {
+        $where, $theme = $k -split '\|', 2
+        Write-Host ("  BELOW BAR, ACCEPTED: {0} ({1}): worst {2:N2}:1, accepted at {3} - {4}" -f `
+            $where, $theme, $worst, $acceptedBelowBar[$k].Floor, $acceptedBelowBar[$k].Why)
+    }
+}
 exit 0

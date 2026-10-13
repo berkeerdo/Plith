@@ -96,7 +96,7 @@ else { $app = [Windows.Application]::Current }
 # shorter and more certain path - and it sidesteps the fact that a ResourceDictionary reached
 # through Application.Current in PowerShell does not behave like the dictionary it wraps.
 $paletteSources = @(
-    'Resources/Theme.xaml', "Resources/Palette.$Theme.xaml",
+    'Resources/Ornaments.xaml', 'Resources/Theme.xaml', "Resources/Palette.$Theme.xaml",
     "Resources/OsdPalette.$Theme.xaml", 'Resources/PlithIcons.xaml'
 )
 
@@ -113,7 +113,8 @@ if ($Accent) {
 
 # The ground the OSD actually sits on, so a render shows the contrast a person gets.
 $osdSurfaces = if ($Accent) {
-    [Plith.Services.AccentTheme]::DeriveOsdSurfaces($baseColor, ($Theme -eq 'Dark'))
+    $floor = [Plith.Services.LoftPalette]::For(($Theme -eq 'Dark'))
+    [pscustomobject]@{ SurfaceStart = $floor.Background; SurfaceEnd = $floor.Surface }
 } else { $null }
 
 # The classic cards resolve StaticResource at CONSTRUCTION, which searches the application
@@ -127,6 +128,68 @@ foreach ($rel in $paletteSources) {
 
 if ($accentOverride) { $app.Resources.MergedDictionaries.Add($accentOverride) }
 
+# The fonts, loaded from disk, and checked.
+#
+# Theme.xaml names the packaged fonts by pack URI (pack://application:,,,/Assets/Fonts/#...),
+# which resolves against Application.ResourceAssembly. In this harness that is pwsh, and WPF
+# refuses to reassign it, so the pack URI can never reach Plith's embedded fonts here and WPF
+# falls back to Segoe UI without a word. This block therefore loads the SAME .ttf files from
+# the checkout's own Assets\Fonts directory by file URI and overrides OsdUiFont and
+# OsdMonoFont with them.
+#
+# Which half is measured: this render proves the GLYPHS (the right faces are drawn).
+# TypographyTests proves the family NAMES in Theme.xaml match the shipped .ttf files. Nothing in
+# CI or in this harness proves the pack URI resolves inside Plith.exe: that is only established
+# by launching the app.
+#
+# It fails loudly: each family is resolved to a real typeface and its family name is checked,
+# because a harness that silently renders the wrong face is how this went unseen.
+$fontsDir = Join-Path $root 'src\Plith\Assets\Fonts'
+$fontsUri = ([Uri]::new((Join-Path $fontsDir '.') )).AbsoluteUri.TrimEnd('.')
+if (-not $fontsUri.EndsWith('/')) { $fontsUri += '/' }
+$fontOverride = [Windows.ResourceDictionary]::new()
+foreach ($spec in @(
+        @{ Key = 'OsdUiFont';   Family = 'Public Sans' },
+        @{ Key = 'OsdMonoFont'; Family = 'Martian Mono Std Rg' })) {
+    $family = [Windows.Media.FontFamily]::new($fontsUri + '#' + $spec.Family)
+    $glyphs = $null
+    $typeface = [Windows.Media.Typeface]::new($family, 'Normal', 'Normal', 'Normal',
+        [Windows.Media.FontFamily]::new('Arial'))
+    [void]$typeface.TryGetGlyphTypeface([ref]$glyphs)
+    $resolved = if ($glyphs) { $glyphs.Win32FamilyNames.Values -join ',' } else { '' }
+    if ($resolved -ne $spec.Family) {
+        throw "Font '$($spec.Family)' did not load from $fontsUri (resolved to '$resolved'): the render would silently show the wrong face."
+    }
+    $fontOverride.Add($spec.Key, $family)
+    "  font loaded: $($spec.Key) -> $resolved"
+}
+$app.Resources.MergedDictionaries.Add($fontOverride)
+
+# Theme.xaml's own styles (OsdLabelStyle, OsdValueStyle and others) say
+# {StaticResource OsdUiFont}, which is resolved INSIDE that dictionary at load, so they capture
+# the pack URI version and no later override reaches them. Left alone they render in Segoe here
+# while the cards around them render in Public Sans. Their setters are sealed once loaded, so
+# each TextBlock style is replaced by a thin derived style (BasedOn the original) that sets only
+# FontFamily to the checked family. Run on each freshly loaded Theme dictionary before first use.
+$script:themeRepairs = 0
+function Repair-ThemeFonts([Windows.ResourceDictionary]$Dictionary) {
+    $count = 0
+    foreach ($key in @($Dictionary.Keys)) {
+        $style = $Dictionary[$key]
+        if ($style -isnot [Windows.Style] -or $style.TargetType -ne [Windows.Controls.TextBlock]) { continue }
+        $derived = [Windows.Style]::new([Windows.Controls.TextBlock], $style)
+        $derived.Setters.Add([Windows.Setter]::new([Windows.Controls.TextBlock]::FontFamilyProperty, $fontOverride['OsdUiFont']))
+        $Dictionary[$key] = $derived
+        $count++
+    }
+    if ($count -eq 0) { throw 'Theme.xaml has no TextBlock styles to repair: the harness fonts would be wrong.' }
+    $script:themeRepairs++
+}
+foreach ($d in $app.Resources.MergedDictionaries) {
+    if ($d.Contains('OsdValueStyle')) { Repair-ThemeFonts $d }
+}
+if ($script:themeRepairs -eq 0) { throw "No Theme dictionary was repaired at app level (no merged dictionary holds 'OsdValueStyle'): Theme styles would render in the wrong face." }
+
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
     # assigning the property from PowerShell hands over an object the tree does not then search.
@@ -138,9 +201,11 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
         # dictionary comes back with exactly one useless key. Nothing throws; everything
         # afterwards renders in WPF's defaults, which is black text on a black ground.
         $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
+        if ($rel -eq 'Resources/Theme.xaml') { Repair-ThemeFonts $d }
         $Element.Resources.MergedDictionaries.Add($d)
     }
 
+    $Element.Resources.MergedDictionaries.Add($fontOverride)
     # Last, so it wins over the palette defaults it is there to override.
     if ($accentOverride) { $Element.Resources.MergedDictionaries.Add($accentOverride) }
 }
@@ -148,7 +213,9 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
 # Proven before anything is drawn: an unresolved resource renders as WPF's default, which is
 # black text on a black ground - indistinguishable from a design fault.
 $probe = [Windows.Controls.Border]::new()
+$repairsBefore = $script:themeRepairs
 Add-Palette $probe
+if ($script:themeRepairs -eq $repairsBefore) { throw "Add-Palette did not repair the Theme dictionary (is the path in `$paletteSources spelled differently?): element-level styles would render in the wrong face." }
 foreach ($k in 'NotchInk','NotchTrack','OsdGainGreen','OsdTextPrimary','OsdUiFont') {
     $v = $probe.TryFindResource($k)
     if ($null -eq $v) { throw "Resource '$k' did not resolve - the render would be meaningless." }
@@ -169,6 +236,10 @@ function Save-Visual {
     # element floating on transparency.
     $host_ = [Windows.Controls.Border]::new()
     Add-Palette $host_
+    # The widgets declare no FontFamily of their own: in the app they inherit OsdUiFont from the
+    # NotchHud or WidgetFrame that holds them. Rendered bare, they would otherwise draw in the
+    # WPF default, so this host stands in for that frame.
+    [Windows.Documents.TextElement]::SetFontFamily($host_, $fontOverride['OsdUiFont'])
     # The surface the OSD is actually drawn on, not a flat colour. This is the whole reason the
     # light-theme contrast bug was invisible here for a whole branch.
     if ($osdSurfaces -and -not $PSBoundParameters.ContainsKey('Background')) {
@@ -605,23 +676,12 @@ Save-Visual -Element $shelfUnavailable -W $frameW -H $frameH -Name 'widget-shelf
 # from the SAME resolved colours those widgets render with, read back off the probe, so this
 # render is judged against exactly what the running app would send across the wire, not a second,
 # hand-picked palette that could drift from it.
-$surfaceBrush = $probe.TryFindResource('OsdSurfaceBrush')
-$inkBrush = $probe.TryFindResource('NotchInk')
-$inkMutedBrush = $probe.TryFindResource('NotchInkMuted')
-$trackBrush = $probe.TryFindResource('NotchTrack')
-$accentBrush = $probe.TryFindResource('Accent')
-
-# The selection ring keeps the accent when the accent already works, and only moves when it does
-# not: ContrastInk.RingOn returns the accent unchanged once it clears 3:1 against the surface, and
-# only walks its lightness (hue and saturation held fixed) when it does not. This replaced an
-# earlier attempt at ContrastInk.TrackOn, which is a function of the surface alone and threw the
-# accent's hue away every time - it fixed a near-white accent's measured 1.25:1 but also flattened
-# a lime accent's measured 8.87:1 down to 3.03:1, a dull grey-olive, for a threshold that colour
-# had already cleared. Plith sends the ANSWER across the wire rather than the accent alone, so the
-# catcher never repeats the derivation. There is no sender for this yet (that is Task 6's work),
-# so the harness derives it here the same way Task 6 will, standing in for what the real message
-# will eventually carry.
-$selectionRingColor = [Plith.Services.ContrastInk]::RingOn($accentBrush.Color, $surfaceBrush.GradientStops[1].Color)
+# The palette is the one production sends: ShelfSession.DerivePalette, called directly rather than
+# rebuilt here, so this render cannot drift from the wire. It returns Plith's own ShelfPalette
+# type, which is why its fields are read back below instead of the value being passed on.
+$wirePalette = [Plith.Services.Shelf.ShelfSession]::DerivePalette(
+    [Plith.Services.AccentTheme]::ParseHexColor($Accent, [Windows.Media.Colors]::Gray),
+    [bool]($Theme -eq 'Dark'))
 
 # ShelfPalette is not resolved as [Plith.Services.Shelf.ShelfPalette]: that name is compiled into
 # BOTH Plith.dll and Plith.DropCatcher.dll (ShelfPaletteWire.cs is LINKED into the catcher project
@@ -632,9 +692,8 @@ $selectionRingColor = [Plith.Services.ContrastInk]::RingOn($accentBrush.Color, $
 # type, so the value has to be built through THAT assembly's Type object.
 $shelfPaletteType = $dcAssembly.GetType('Plith.Services.Shelf.ShelfPalette')
 $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
-    $surfaceBrush.GradientStops[0].Color, $surfaceBrush.GradientStops[1].Color,
-    $inkBrush.Color, $inkMutedBrush.Color, $trackBrush.Color, $accentBrush.Color,
-    $selectionRingColor, [bool]($Theme -eq 'Dark')))
+    $wirePalette.SurfaceStart, $wirePalette.SurfaceEnd, $wirePalette.Ink, $wirePalette.InkMuted,
+    $wirePalette.Track, $wirePalette.Accent, $wirePalette.SelectionRing, $wirePalette.IsDark))
 
 # Seven entries across two stacks: one stack deliberately OVER the visible-rows cap (a folder
 # plus four files, so the overflow tile and a folder icon both appear in the same render) and one
@@ -856,12 +915,20 @@ $emptyPng = Join-Path $OutDir 'shelf-surface-empty.png'
 $emptyBmp = [System.Drawing.Bitmap]::FromFile($emptyPng)
 try {
     $sc = $emptyBmp.Width / $emptyFrame.Width
+    # "Lit" means different from the ground, not bright. It used to be R+G+B > 130, which was an
+    # absolute brightness chosen when the outline was #2A323C on a near-black panel. Against the
+    # Loft floor the dark outline is #2B2824 (sum 123, under that line) and on the light floor the
+    # GROUND is over it, so the old test failed the first and passed the second for the wrong
+    # reason. Distance from the floor's own mean is what the question always was.
+    $groundFloor = [Plith.Services.LoftPalette]::For(($Theme -eq 'Dark'))
+    $groundSum = ($groundFloor.Background.R + $groundFloor.Background.G + $groundFloor.Background.B +
+                  $groundFloor.Surface.R + $groundFloor.Surface.G + $groundFloor.Surface.B) / 2.0
     function Measure-Band([double]$x0, [double]$x1, [double]$y0, [double]$y1) {
         $lit = 0
         for ($x = [int]($x0 * $sc); $x -le [int]($x1 * $sc); $x++) {
             for ($y = [int]($y0 * $sc); $y -le [int]($y1 * $sc); $y++) {
                 $c = $emptyBmp.GetPixel([Math]::Min($x, $emptyBmp.Width - 1), [Math]::Min($y, $emptyBmp.Height - 1))
-                if ($c.R + $c.G + $c.B -gt 130) { $lit++ }
+                if ([Math]::Abs(($c.R + $c.G + $c.B) - $groundSum) -gt 40) { $lit++ }
             }
         }
         $lit
@@ -1414,7 +1481,24 @@ Save-Visual -Element $hud2 -W 372.0 -H 54.0 -Name 'hud-media'
 $desktop = if ($Theme -eq 'Light') { '#E9EAEC' } else { '#151A21' }
 $audioCard = [Plith.Views.AudioCardView]::new()
 $audioCard.DataContext = $audioVm
-Save-Visual -Element $audioCard -W 382.0 -H 56.0 -Name 'card-audio' -Background $desktop
+Save-Visual -Element $audioCard -W 382.0 -H 66.0 -Name 'card-audio' -Background $desktop
+
+# The brightness card and the ornament frame. The card carries the ruler under its bar, and the
+# frame is the four corner marks the notch panel wears (OsdContent lays the same style over
+# NotchSurface). Rendered at the shelf page's 356 x 164 so the marks can be judged against a real
+# panel's corners and its 8 DIP radius, which is the whole question: inside the curve, not on it.
+$brightnessVm = [Plith.ViewModels.BrightnessCardViewModel]::new()
+$brightnessVm.Percent = 62
+$brightnessCard = [Plith.Views.BrightnessCardView]::new()
+$brightnessCard.DataContext = $brightnessVm
+Save-Visual -Element $brightnessCard -W 382.0 -H 66.0 -Name 'card-brightness' -Background $desktop
+
+$notchFrame = [Windows.Controls.Control]::new()
+$notchFrame.SetResourceReference([Windows.FrameworkElement]::StyleProperty, 'LoftFrame')
+$notchPanel = [Windows.Controls.Border]::new()
+$notchPanel.CornerRadius = [Windows.CornerRadius]::new(0, 0, 8, 8)
+$notchPanel.Child = $notchFrame
+Save-Visual -Element $notchPanel -W 356.0 -H 164.0 -Name 'notch-frame'
 
 $mediaCard = [Plith.Views.MediaCardView]::new()
 $mediaCard.DataContext = $mediaVm

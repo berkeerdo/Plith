@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
     <!-- Stated once here and referenced below. It used to be typed out at each
          brush, which is not a shared value but the same value by coincidence — the kind that
@@ -14,11 +15,11 @@
     <!-- Surface alpha is higher than the dark variant (FA vs F0): light text needs a more
          opaque card so dark glyphs still read over an arbitrary underlying app. -->
     <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#FAFAFAFA" Offset="0" />
-        <GradientStop Color="#FAF0F0F0" Offset="1" />
+        <GradientStop Color="#FAE7E6E0" Offset="0" />
+        <GradientStop Color="#FAF3F2ED" Offset="1" />
     </LinearGradientBrush>
 
-    <SolidColorBrush x:Key="OsdBorder" Color="#D4D4D8" />
+    <SolidColorBrush x:Key="OsdBorder" Color="#D0CEC6" />
     <SolidColorBrush x:Key="OsdHighlight" Color="#1A000000" />
 
     <SolidColorBrush x:Key="OsdTextPrimary" Color="#18181B" />
@@ -51,13 +52,27 @@
          token. -->
     <SolidColorBrush x:Key="NotchBezelBrush" Color="#06070A" />
 
-    <!-- Ink for anything drawn ON the bezel: the widget pages and the event HUD.
+    <!-- Ink for anything drawn on the notch: the widget pages and the event HUD.
 
-         Constant across themes, exactly like the bezel under it. The theme's own text brushes
-         cannot be used here - on the light theme OsdTextPrimary is near-black, which on a
-         near-black bezel is not a contrast problem so much as an invisible panel. Splitting the
-         token is the price of the bezel being a cutout rather than a surface. -->
-    <SolidColorBrush x:Key="NotchInk" Color="#F2F5F8" />
-    <SolidColorBrush x:Key="NotchInkMuted" Color="#9AA6B2" />
-    <SolidColorBrush x:Key="NotchTrack" Color="#2A323C" />
+         The Loft floor's Foreground, TextSecondary and Border for this theme. The notch paints
+         on OsdSurfaceBrush, which is now the fixed floor and no longer moves with the accent, so
+         these are constants rather than values computed per accent. The keys stay because about
+         forty DynamicResource references consume them, and an unresolved one fails silently.
+         OsdPalette.HighContrast.xaml keeps its own system-colour versions. -->
+    <SolidColorBrush x:Key="NotchInk" Color="#161616" />
+    <SolidColorBrush x:Key="NotchInkMuted" Color="#55544F" />
+    <SolidColorBrush x:Key="NotchTrack" Color="#D0CEC6" />
+
+    <!-- Loft's ornament layer, as tokens so a theme turns it off without touching a view.
+         These override the OFF defaults in Ornaments.xaml, which App.xaml merges before this
+         palette. 9 DIP is praxvon-ui's `ornament.corner`. The tick brush is the floor's TextTertiary
+         (LoftPalette): a ruler is quiet by design. -->
+    <sys:Double x:Key="OrnamentCornerLength">9</sys:Double>
+    <sys:Double x:Key="OrnamentOutlineThickness">1</sys:Double>
+    <sys:String x:Key="OrnamentLabelCase">Upper</sys:String>
+    <SolidColorBrush x:Key="OrnamentTickBrush" Color="#77756D" />
+    <FontFamily x:Key="OrnamentLabelFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
+    <sys:Double x:Key="OrnamentLabelSize">10</sys:Double>
+    <sys:Double x:Key="OrnamentTitleLabelSize">11</sys:Double>
+    <FontCapitals x:Key="OrnamentLabelCaps">Normal</FontCapitals>
 </ResourceDictionary>

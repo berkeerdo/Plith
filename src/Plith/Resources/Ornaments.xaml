@@ -1,0 +1,115 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime"
+                    xmlns:p="clr-namespace:Plith.Views.Presentation">
+
+    <!-- Loft's ornament layer: corner marks, ruler ticks, uppercase mono labels.
+
+         MERGE ORDER IS THE DESIGN. This dictionary is merged BEFORE the OSD palette in App.xaml,
+         and the values below are the OFF defaults. OsdPalette.Dark.xaml and OsdPalette.Light.xaml
+         override them to the ON values; a later dictionary wins a duplicate key. ThemeService
+         swaps the palette in place, so it keeps its position behind this one across every theme
+         change.
+
+         High contrast says nothing about ornaments, deliberately: spec section 7 leaves
+         OsdPalette.HighContrast.xaml alone, because Loft's ornaments would be a second opinion
+         about colours Windows has already decided for the one group of users who cannot work
+         around a wrong answer. Its lookups therefore fall through to the values here, which is
+         "no ornaments". Merge this AFTER the palette and the off values win everywhere.
+
+         This file is Plith-only: it is not linked into the installer or the catcher, which is why
+         the pack URI on the label font below is acceptable (scripts/check-shared-xaml.ps1 only
+         scans files that ARE linked). Do not copy that spelling into a shared file. -->
+    <sys:Double x:Key="OrnamentCornerLength">0</sys:Double>
+    <sys:Double x:Key="OrnamentOutlineThickness">0</sys:Double>
+    <sys:String x:Key="OrnamentLabelCase">None</sys:String>
+    <SolidColorBrush x:Key="OrnamentTickBrush" Color="Transparent" />
+
+    <!-- OsdAccentMark and OsdAccentText are accent-derived and normally arrive from
+         ThemeService.BuildAccentOverride. Under high contrast that override is EMPTY, so without
+         these the corner-mark Stroke below would resolve to nothing, silently. The values are
+         the off ones: a mark that draws nothing, and the system text colour for the one place
+         that reads the text role. -->
+    <SolidColorBrush x:Key="OsdAccentMark" Color="Transparent" />
+    <SolidColorBrush x:Key="OsdAccentText" Color="{x:Static SystemColors.WindowTextColor}" />
+
+    <!-- The label treatment is part of the ornament layer too (uppercase mono labels), so high
+         contrast keeps its OLD labels whole: the UI face, the old sizes and small caps. The
+         defaults here are those old values; the Loft palettes override them to the mono face.
+         The family is spelled out rather than referenced because a resource value cannot be a
+         DynamicResource, and this file is merged before Theme.xaml; it must equal OsdUiFont.
+         OrnamentLabelSize and OrnamentLabelCaps belong to a rail label (it was 11 with small
+         caps). OrnamentTitleLabelSize belongs to a primary label (it was 13, no caps). -->
+    <FontFamily x:Key="OrnamentLabelFont">pack://application:,,,/Assets/Fonts/#Public Sans, Segoe UI Variable, Segoe UI</FontFamily>
+    <sys:Double x:Key="OrnamentLabelSize">11</sys:Double>
+    <sys:Double x:Key="OrnamentTitleLabelSize">13</sys:Double>
+    <FontCapitals x:Key="OrnamentLabelCaps">AllSmallCaps</FontCapitals>
+
+    <!-- The four corner marks. Apply to a Control laid over the panel with the panel's size.
+
+         Each mark is a '+' of OrnamentCornerLength, inset 8 from the edge. 8 is the notch's
+         corner radius: the mark begins where the curve ends, so it sits inside the shape instead
+         of on it, and a '+' drawn across a curve does not read as a mistake. If the radius
+         changes, this inset changes with it.
+
+         At length 0 or thickness 0 a Path has nothing to draw, which is the whole "off" state. -->
+    <Style x:Key="LoftFrame" TargetType="Control">
+        <Setter Property="IsHitTestVisible" Value="False" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="ClipToBounds" Value="True" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="Control">
+                    <Grid>
+                        <Grid.Resources>
+                            <Style TargetType="Path">
+                                <Setter Property="Data" Value="M0,0.5 L1,0.5 M0.5,0 L0.5,1" />
+                                <Setter Property="Stretch" Value="Fill" />
+                                <Setter Property="Margin" Value="8" />
+                                <Setter Property="Width" Value="{DynamicResource OrnamentCornerLength}" />
+                                <Setter Property="Height" Value="{DynamicResource OrnamentCornerLength}" />
+                                <Setter Property="Stroke" Value="{DynamicResource OsdAccentMark}" />
+                                <Setter Property="StrokeThickness" Value="{DynamicResource OrnamentOutlineThickness}" />
+                                <Setter Property="SnapsToDevicePixels" Value="True" />
+                            </Style>
+                        </Grid.Resources>
+                        <Path HorizontalAlignment="Left" VerticalAlignment="Top" />
+                        <Path HorizontalAlignment="Right" VerticalAlignment="Top" />
+                        <Path HorizontalAlignment="Left" VerticalAlignment="Bottom" />
+                        <Path HorizontalAlignment="Right" VerticalAlignment="Bottom" />
+                    </Grid>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- A ruler under a scale: eleven ticks, one per tenth, longer at 0, 50 and 100. The
+         geometry is unit-sized and stretched to the scale's width, so the ticks line up with the
+         bar above it at any width. Transparent while the tick brush is off. -->
+    <Style x:Key="LoftTicks" TargetType="Path">
+        <Setter Property="Data" Value="M0,0 L0,1 M0.1,0 L0.1,0.5 M0.2,0 L0.2,0.5 M0.3,0 L0.3,0.5 M0.4,0 L0.4,0.5 M0.5,0 L0.5,1 M0.6,0 L0.6,0.5 M0.7,0 L0.7,0.5 M0.8,0 L0.8,0.5 M0.9,0 L0.9,0.5 M1,0 L1,1" />
+        <Setter Property="Stretch" Value="Fill" />
+        <Setter Property="Height" Value="5" />
+        <Setter Property="Margin" Value="0,4,0,0" />
+        <Setter Property="StrokeThickness" Value="1" />
+        <Setter Property="Stroke" Value="{DynamicResource OrnamentTickBrush}" />
+        <Setter Property="SnapsToDevicePixels" Value="True" />
+        <Setter Property="IsHitTestVisible" Value="False" />
+    </Style>
+
+    <!-- The label treatment: mono and upper-cased while the ornament tokens are on, the old face,
+         size and small caps while they are off. Used on LoftLabel. -->
+    <Style x:Key="LoftLabelStyle" TargetType="p:LoftLabel">
+        <Setter Property="FontFamily" Value="{DynamicResource OrnamentLabelFont}" />
+        <Setter Property="FontSize" Value="{DynamicResource OrnamentLabelSize}" />
+        <Setter Property="Typography.Capitals" Value="{DynamicResource OrnamentLabelCaps}" />
+        <Setter Property="Foreground" Value="{DynamicResource OsdTextTertiary}" />
+        <Setter Property="Case" Value="{DynamicResource OrnamentLabelCase}" />
+    </Style>
+
+    <!-- A primary label (a title, not a rail): same face, its own size, never small caps. -->
+    <Style x:Key="LoftTitleLabelStyle" TargetType="p:LoftLabel" BasedOn="{StaticResource LoftLabelStyle}">
+        <Setter Property="FontSize" Value="{DynamicResource OrnamentTitleLabelSize}" />
+        <Setter Property="Typography.Capitals" Value="Normal" />
+    </Style>
+</ResourceDictionary>

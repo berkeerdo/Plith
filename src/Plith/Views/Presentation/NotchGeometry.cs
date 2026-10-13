@@ -60,6 +60,10 @@ public static class NotchGeometry
     /// </summary>
     public const double PeekExpand = 0.14;
 
+    /// <summary>Whether a notch drawn at <paramref name="expand"/> is open enough to be showing
+    /// content, as opposed to closed or merely peeking.</summary>
+    public static bool ShowsContentAt(double expand) => expand > PeekExpand + 0.01;
+
     /// <summary>
     /// Minimum height of the cursor target over the collapsed pill. The resting height is a
     /// user setting that goes down to 2 DIP, and a 2 DIP tall target cannot be hit

@@ -6,15 +6,16 @@ namespace Plith.Services.Shelf;
 /// <param name="SurfaceStart">Top of the panel's gradient. Two colours rather than one because
 /// OsdSurfaceBrush is a LinearGradientBrush: a single flat stand-in would be visibly not the
 /// product's surface, which is the exact drift this type exists to prevent.</param>
-/// <param name="SelectionRing">A non-text stroke for a selected tile, from ContrastInk.RingOn:
-/// the accent unchanged when it already clears 3:1 against the surface, its lightness walked
-/// toward that threshold when it does not. Sent as the raw Accent it measured 1.25:1 for a
-/// near-white accent; derived instead with ContrastInk.TrackOn, which ignores the accent's hue
-/// entirely, it fixed that case but also flattened a lime accent's 8.87:1 down to a dull 3.03:1
-/// for a threshold that colour had already cleared three times over. RingOn keeps the accent
-/// visible in the common case and only moves it in the rare one. A second copy of this
-/// derivation in the catcher would drift from Plith's, which is why the ANSWER travels here
-/// rather than the accent alone.</param>
+/// <param name="Accent">The Loft accent role Fill (AccentTheme.DeriveLoftRoles): for filled parts
+/// only, and no contrast claim against the floor. Still on the wire so FieldCount and the
+/// positional order stay put, but the catcher binds it to nothing: a mark drawn from it would
+/// not clear 3:1 on the light floor. Use SelectionRing for any mark.</param>
+/// <param name="SelectionRing">A non-text stroke for a selected tile: the Loft accent role Mark
+/// (AccentTheme.DeriveLoftRoles), the seed unchanged when it clears 3:1 against both floor
+/// surfaces and its Oklch lightness walked until it does when it does not. Sent as the raw
+/// Accent it would not clear that on the light floor. The surfaces, inks and track are the
+/// fixed Loft floor (LoftPalette.For). A second copy of the derivation in the catcher would drift
+/// from Plith's, which is why the ANSWER travels here rather than the accent alone.</param>
 /// <param name="IsDark">Carried rather than inferred from the ink. The catcher needs it for the
 /// things a contrast ratio does not answer, such as which way a shadow falls.</param>
 public readonly record struct ShelfPalette(
@@ -24,8 +25,8 @@ public readonly record struct ShelfPalette(
 /// <summary>
 /// The theme, crossing a process boundary.
 ///
-/// Plith derives its inks from the colour behind them through Services/ContrastInk.cs. A second
-/// copy of that derivation in the catcher would drift, and the drift would show as the shelf not
+/// Plith takes its surfaces and inks from the fixed Loft floor (Services/LoftPalette.cs) and its
+/// accent roles from AccentTheme.DeriveLoftRoles. A second copy of that in the catcher would drift, and the drift would show as the shelf not
 /// looking like the product it belongs to. So the catcher is told the answer rather than given
 /// the method.
 ///

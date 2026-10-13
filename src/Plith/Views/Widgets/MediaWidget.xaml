@@ -301,11 +301,13 @@
                 <w:MarqueeText x:Name="Title"
                                Height="22"
                                FontSize="16" FontWeight="SemiBold"
+                               FontFamily="{DynamicResource OsdUiFont}"
                                Foreground="{DynamicResource NotchInk}" />
                 <w:MarqueeText x:Name="Artist"
                                Height="18"
                                Margin="0,3,0,0"
                                FontSize="12"
+                               FontFamily="{DynamicResource OsdUiFont}"
                                Foreground="{DynamicResource NotchInkMuted}" />
             </StackPanel>
         </Grid>
@@ -320,6 +322,7 @@
             </Grid.ColumnDefinitions>
 
             <TextBlock x:Name="Elapsed" Grid.Column="0"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="10.5" VerticalAlignment="Center"
                        Foreground="{DynamicResource NotchInkMuted}" />
             <Slider x:Name="Bar" Grid.Column="1" Margin="8,0"
@@ -327,6 +330,7 @@
                     Style="{StaticResource TrackBarStyle}"
                     AutomationProperties.Name="Playback position" />
             <TextBlock x:Name="Remaining" Grid.Column="2"
+                       Typography.NumeralAlignment="Tabular"
                        FontSize="10.5" TextAlignment="Right" VerticalAlignment="Center"
                        Foreground="{DynamicResource NotchInkMuted}" />
         </Grid>

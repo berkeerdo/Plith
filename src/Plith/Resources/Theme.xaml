@@ -5,7 +5,8 @@
     <vm:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <vm:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
 
-    <FontFamily x:Key="OsdUiFont">Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="OsdUiFont">pack://application:,,,/Assets/Fonts/#Public Sans, Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="OsdMonoFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
 
     <!-- OSD palette brushes live in OsdPalette.Dark.xaml / OsdPalette.Light.xaml so the
          active theme can be swapped at runtime; all references below use DynamicResource. -->
@@ -49,6 +50,12 @@
     <SolidColorBrush x:Key="TextPrimary" Color="#F5F5F5" />
     <SolidColorBrush x:Key="TextSecondary" Color="#A1A1AA" />
     <SolidColorBrush x:Key="TrackBrush" Color="#22FFFFFF" />
+
+    <!-- Loft: a value settles on its mark without overshoot. praxvon-ui pairs Loft with the
+         `calm` personality, whose smooth spring is bounce 0. WPF has no spring, and an ease-out
+         cubic is the closest standard curve that cannot pass its target. -->
+    <Duration x:Key="LoftSettleDuration">0:0:0.4</Duration>
+    <CubicEase x:Key="LoftSettleEase" EasingMode="EaseOut" />
 
     <Style x:Key="CardLabelStyle" TargetType="TextBlock" BasedOn="{StaticResource OsdLabelStyle}" />
     <Style x:Key="CardValueStyle" TargetType="TextBlock" BasedOn="{StaticResource OsdValueStyle}" />

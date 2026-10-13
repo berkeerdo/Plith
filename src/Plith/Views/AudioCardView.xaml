@@ -2,6 +2,8 @@
              xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:vm="clr-namespace:Plith.ViewModels"
+             xmlns:local="clr-namespace:Plith.Views"
+             xmlns:p="clr-namespace:Plith.Views.Presentation"
              xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
              xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
              d:DataContext="{d:DesignInstance Type=vm:AudioCardViewModel}"
@@ -16,6 +18,7 @@
             <ResourceDictionary.MergedDictionaries>
                 <ResourceDictionary Source="pack://application:,,,/Plith;component/Resources/PlithIcons.xaml" />
             </ResourceDictionary.MergedDictionaries>
+            <vm:DisplayedGainBrushConverter x:Key="DisplayedGainBrush" />
         </ResourceDictionary>
     </UserControl.Resources>
 
@@ -23,6 +26,7 @@
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="10" />
+            <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
         </Grid.RowDefinitions>
 
@@ -88,41 +92,59 @@
                            Foreground="{DynamicResource OsdTextSecondary}"
                            TextTrimming="CharacterEllipsis"
                            Text="{Binding Label}" />
-                <TextBlock FontFamily="{StaticResource OsdUiFont}"
-                           FontSize="11"
-                           Margin="0,2,0,0"
-                           Typography.Capitals="AllSmallCaps"
-                           Foreground="{DynamicResource OsdTextTertiary}"
-                           TextTrimming="CharacterEllipsis"
-                           Text="{Binding BusLine}" />
+                <p:LoftLabel Style="{DynamicResource LoftLabelStyle}"
+                             Margin="0,3,0,0"
+                             TextTrimming="CharacterEllipsis"
+                             Text="{Binding BusLine}" />
             </StackPanel>
         </DockPanel>
 
         <Grid Grid.Row="2" Height="6">
             <Border CornerRadius="3" Background="{DynamicResource OsdTrackBg}" />
-            <Border HorizontalAlignment="Left"
+            <local:SettledBorder x:Name="GainFill"
+                    HorizontalAlignment="Left"
                     CornerRadius="3"
-                    Background="{Binding GainColor}">
+                    Target="{Binding GainNormalized}"
+                    SettleDuration="{StaticResource LoftSettleDuration}"
+                    SettleEase="{StaticResource LoftSettleEase}">
                 <!-- The glow is what lifts the fill off the card. Its colour follows the fill,
                      so it changes with the threshold rather than staying green over an amber
                      bar. -->
+                <local:SettledBorder.Background>
+                    <!-- The colour of the level the fill is SHOWING, so it changes when the fill
+                         reaches a threshold rather than as the model crosses it. GainColor is
+                         bound only to refresh this on theme, mute or mode changes. -->
+                    <MultiBinding Converter="{StaticResource DisplayedGainBrush}">
+                        <Binding Path="Displayed" RelativeSource="{RelativeSource Self}" />
+                        <Binding />
+                        <Binding Path="GainColor" />
+                    </MultiBinding>
+                </local:SettledBorder.Background>
                 <Border.Effect>
                     <!-- FallbackValue because GainColor is typed as Brush: every value it
                          actually returns is a SolidColorBrush, but a binding to .Color on
                          anything else would resolve to nothing and paint a black halo. -->
-                    <DropShadowEffect ShadowDepth="0" BlurRadius="9" Opacity="0.55"
-                                      Color="{Binding GainColor.Color, FallbackValue=Transparent}" />
+                    <DropShadowEffect ShadowDepth="0" BlurRadius="9" Opacity="0.55">
+                        <DropShadowEffect.Color>
+                            <MultiBinding Converter="{StaticResource DisplayedGainBrush}"
+                                          ConverterParameter="Color" FallbackValue="Transparent">
+                                <Binding Path="Displayed" ElementName="GainFill" />
+                                <Binding />
+                                <Binding Path="GainColor" />
+                            </MultiBinding>
+                        </DropShadowEffect.Color>
+                    </DropShadowEffect>
                 </Border.Effect>
                 <Border.Width>
                     <MultiBinding>
                         <MultiBinding.Converter>
                             <vm:NormalizedToWidthConverter />
                         </MultiBinding.Converter>
-                        <Binding Path="GainNormalized" />
+                        <Binding Path="Displayed" RelativeSource="{RelativeSource Self}" />
                         <Binding Path="ActualWidth" RelativeSource="{RelativeSource AncestorType=Grid}" />
                     </MultiBinding>
                 </Border.Width>
-            </Border>
+            </local:SettledBorder>
 
             <!-- The caution tick, drawn only as the level approaches it.
 
@@ -155,5 +177,9 @@
                 <Border Width="1.5" CornerRadius="1" Margin="0,-2,0,-2" Background="#47FFFFFF" />
             </StackPanel>
         </Grid>
+
+        <!-- The ruler under the scale. Transparent while ornaments are off, and takes no
+             automation peer: a Path has none. -->
+        <Path Grid.Row="3" Style="{DynamicResource LoftTicks}" />
     </Grid>
 </UserControl>

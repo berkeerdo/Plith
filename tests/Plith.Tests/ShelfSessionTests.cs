@@ -181,18 +181,66 @@ public sealed class ShelfSessionTests : IDisposable
     /// <summary>
     /// The selection ring is DERIVED, never the raw accent.
     ///
-    /// A near-white accent on the dark theme is the case that proves it: sent raw it measured
-    /// 1.25:1 against the surface, which is a ring nobody can see. RingOn walks its lightness
-    /// keeping hue and saturation, so what crosses the wire clears the 3:1 a non-text stroke
-    /// needs.
+    /// A near-white accent on the LIGHT floor is the case that proves it: sent raw it would be
+    /// close to invisible against the surface. DeriveLoftRoles' Mark walks it until it clears the
+    /// 3:1 a non-text stroke needs on both floor surfaces. (This used to use the dark theme, but
+    /// a near-white accent already reads on the dark Loft floor and is correctly left alone.)
     /// </summary>
     [Fact]
     public void DerivePalette_SendsARingThatCanBeSeen()
     {
-        var palette = ShelfSession.DerivePalette(Color.FromRgb(0xFA, 0xFA, 0xFA), isDark: true);
+        var palette = ShelfSession.DerivePalette(Color.FromRgb(0xFA, 0xFA, 0xFA), isDark: false);
 
         Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceEnd) >= 3.0);
+        Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceStart) >= 3.0);
         Assert.NotEqual(palette.Accent, palette.SelectionRing);
+    }
+
+    [Fact]
+    public void DerivePalette_CarriesTheFloorAndNotATintedSurface()
+    {
+        foreach (var isDark in new[] { true, false })
+        {
+            var floor = LoftPalette.For(isDark);
+            var palette = ShelfSession.DerivePalette(Color.FromRgb(0x6D, 0x28, 0xD9), isDark);
+
+            Assert.Equal(floor.Background, palette.SurfaceStart);
+            Assert.Equal(floor.Surface, palette.SurfaceEnd);
+            Assert.Equal(floor.Foreground, palette.Ink);
+            Assert.Equal(floor.TextSecondary, palette.InkMuted);
+            Assert.Equal(floor.Border, palette.Track);
+            Assert.Equal(isDark, palette.IsDark);
+        }
+    }
+
+    /// <summary>
+    /// The rail pip is a non-text mark, so it must be painted from the role Mark. It was once
+    /// painted from Fill, which for emerald on the light floor is 1.65:1. This picks a seed where
+    /// the two roles genuinely differ (emerald, light), proves the Mark clears 3:1 and the Fill
+    /// does not, then checks the catcher paints the pip from SelectionRing (Mark) and binds no
+    /// key to Accent (Fill). The catcher is not referenced by this project, so the second half
+    /// reads its source, the same way AppXaml_MergesOrnamentsBeforeTheOsdPalette reads App.xaml.
+    /// </summary>
+    [Fact]
+    public void RailPip_IsPaintedFromTheMarkRoleAndNotFromFill()
+    {
+        var palette = ShelfSession.DerivePalette(Color.FromRgb(0x4A, 0xD6, 0x95), isDark: false);
+
+        Assert.NotEqual(palette.Accent, palette.SelectionRing);
+        Assert.True(ContrastInk.ContrastRatio(palette.SelectionRing, palette.SurfaceStart) >= 3.0);
+        Assert.True(ContrastInk.ContrastRatio(palette.Accent, palette.SurfaceStart) < 3.0);
+
+        string? surface = null;
+        for (var d = new DirectoryInfo(AppContext.BaseDirectory); d is not null; d = d.Parent)
+        {
+            var candidate = Path.Combine(d.FullName, "src", "Plith.DropCatcher", "Shelf", "ShelfSurface.xaml.cs");
+            if (File.Exists(candidate)) { surface = candidate; break; }
+        }
+
+        Assert.NotNull(surface);
+        var text = File.ReadAllText(surface!);
+        Assert.Contains("Background = (Brush)FindResource(\"SelectionRing\"),", text);
+        Assert.DoesNotContain("palette.Accent", text.Replace("// palette.Accent is deliberately NOT bound", ""));
     }
 
     /// <summary>An accent that already clears the threshold is passed through untouched, so the

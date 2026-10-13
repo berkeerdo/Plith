@@ -5,6 +5,29 @@ namespace Plith.Tests;
 
 public class PresentationPolicyTests
 {
+    /// <summary>
+    /// A volume key arriving mid-collapse finds the HUD still on screen and shrinking, so its bar
+    /// must settle, not jump. IsAtRest answers true there (it counts an in-flight collapse), so
+    /// the landing decision is made from the live expansion instead.
+    /// </summary>
+    [Theory]
+    [InlineData(0.0, true)]
+    [InlineData(NotchGeometry.PeekExpand, true)]
+    [InlineData(0.5, false)]
+    [InlineData(1.0, false)]
+    public void HudLandsOnShow_FollowsTheLiveExpansion(double expand, bool lands)
+    {
+        Assert.Equal(lands, PresentationPolicy.HudLandsOnShow(expand));
+    }
+
+    [Fact]
+    public void HudLandsOnShow_MidCollapse_DoesNotLand()
+    {
+        // The same state IsAtRest calls "at rest": collapsing, shape still mostly open.
+        Assert.True(PresentationPolicy.IsAtRest(PresentationMode.AmbientNotch, 1.0, 1.0, isParked: true));
+        Assert.False(PresentationPolicy.HudLandsOnShow(0.6));
+    }
+
     [Fact]
     public void Classic_KeepsTheExistingEdgeMargin()
     {
