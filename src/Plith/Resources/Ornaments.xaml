@@ -23,6 +23,18 @@
     <sys:String x:Key="OrnamentLabelCase">None</sys:String>
     <SolidColorBrush x:Key="OrnamentTickBrush" Color="Transparent" />
 
+    <!-- The label treatment is part of the ornament layer too (uppercase mono labels), so high
+         contrast keeps its OLD labels whole: the UI face, the old sizes and small caps. The
+         defaults here are those old values; the Loft palettes override them to the mono face.
+         The family is spelled out rather than referenced because a resource value cannot be a
+         DynamicResource, and this file is merged before Theme.xaml; it must equal OsdUiFont.
+         OrnamentLabelSize and OrnamentLabelCaps belong to a rail label (it was 11 with small
+         caps). OrnamentTitleLabelSize belongs to a primary label (it was 13, no caps). -->
+    <FontFamily x:Key="OrnamentLabelFont">pack://application:,,,/Assets/Fonts/#Public Sans, Segoe UI Variable, Segoe UI</FontFamily>
+    <sys:Double x:Key="OrnamentLabelSize">11</sys:Double>
+    <sys:Double x:Key="OrnamentTitleLabelSize">13</sys:Double>
+    <FontCapitals x:Key="OrnamentLabelCaps">AllSmallCaps</FontCapitals>
+
     <!-- The four corner marks. Apply to a Control laid over the panel with the panel's size.
 
          Each mark is a '+' of OrnamentCornerLength, inset 8 from the edge. 8 is the notch's
@@ -75,11 +87,19 @@
         <Setter Property="IsHitTestVisible" Value="False" />
     </Style>
 
-    <!-- The mono face, upper-cased while OrnamentLabelCase says Upper. Used on LoftLabel. -->
+    <!-- The label treatment: mono and upper-cased while the ornament tokens are on, the old face,
+         size and small caps while they are off. Used on LoftLabel. -->
     <Style x:Key="LoftLabelStyle" TargetType="p:LoftLabel">
-        <Setter Property="FontFamily" Value="{DynamicResource OsdMonoFont}" />
-        <Setter Property="FontSize" Value="10" />
+        <Setter Property="FontFamily" Value="{DynamicResource OrnamentLabelFont}" />
+        <Setter Property="FontSize" Value="{DynamicResource OrnamentLabelSize}" />
+        <Setter Property="Typography.Capitals" Value="{DynamicResource OrnamentLabelCaps}" />
         <Setter Property="Foreground" Value="{DynamicResource OsdTextTertiary}" />
         <Setter Property="Case" Value="{DynamicResource OrnamentLabelCase}" />
+    </Style>
+
+    <!-- A primary label (a title, not a rail): same face, its own size, never small caps. -->
+    <Style x:Key="LoftTitleLabelStyle" TargetType="p:LoftLabel" BasedOn="{StaticResource LoftLabelStyle}">
+        <Setter Property="FontSize" Value="{DynamicResource OrnamentTitleLabelSize}" />
+        <Setter Property="Typography.Capitals" Value="Normal" />
     </Style>
 </ResourceDictionary>

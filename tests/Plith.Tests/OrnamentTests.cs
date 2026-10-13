@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Documents;
 using System.Windows.Media;
 using Plith.Views.Presentation;
 
@@ -32,6 +33,13 @@ public class OrnamentTests
         Assert.Equal(0.0, (double)stack["OrnamentOutlineThickness"]);
         Assert.Equal("None", (string)stack["OrnamentLabelCase"]);
         Assert.NotNull(stack["OrnamentTickBrush"]);
+
+        // The label treatment is an ornament too, so high contrast keeps the OLD one: the UI
+        // face, 11 with small caps for a rail label, 13 for a title.
+        Assert.Contains("Public Sans", ((FontFamily)stack["OrnamentLabelFont"]).Source);
+        Assert.Equal(11.0, (double)stack["OrnamentLabelSize"]);
+        Assert.Equal(13.0, (double)stack["OrnamentTitleLabelSize"]);
+        Assert.Equal(FontCapitals.AllSmallCaps, (FontCapitals)stack["OrnamentLabelCaps"]);
     }
 
     /// <summary>
@@ -64,6 +72,10 @@ public class OrnamentTests
             Assert.Equal(1.0, (double)palette["OrnamentOutlineThickness"]);
             Assert.Equal("Upper", (string)palette["OrnamentLabelCase"]);
             Assert.NotNull(palette["OrnamentTickBrush"]);
+            Assert.Contains("Martian Mono Std Rg", ((FontFamily)palette["OrnamentLabelFont"]).Source);
+            Assert.Equal(10.0, (double)palette["OrnamentLabelSize"]);
+            Assert.Equal(11.0, (double)palette["OrnamentTitleLabelSize"]);
+            Assert.Equal(FontCapitals.Normal, (FontCapitals)palette["OrnamentLabelCaps"]);
         }
     }
 
@@ -106,17 +118,28 @@ public class OrnamentTests
     [StaFact]
     public void LoftLabel_UppercasesOnlyWhenTheCaseTokenSaysUpper()
     {
-        var label = new LoftLabel { Text = "usb out" };
-        Assert.Equal("usb out", label.Text);
+        // Pinned to English: casing follows the machine culture by design, and on a Turkish
+        // machine "line" correctly upper-cases to a dotted capital I.
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
+            var label = new LoftLabel { Text = "usb out" };
+            Assert.Equal("usb out", label.Text);
 
-        label.Case = "Upper";
-        Assert.Equal("USB OUT", label.Text);
+            label.Case = "Upper";
+            Assert.Equal("USB OUT", label.Text);
 
-        label.Text = "line 2";
-        Assert.Equal("LINE 2", label.Text);
+            label.Text = "line 2";
+            Assert.Equal("LINE 2", label.Text);
 
-        label.Case = "None";
-        Assert.Equal("line 2", label.Text);
+            label.Case = "None";
+            Assert.Equal("line 2", label.Text);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
     }
 
     [StaFact]
@@ -125,5 +148,88 @@ public class OrnamentTests
         var mark = new DecorativeText { Text = "[" };
 
         Assert.Null(System.Windows.Automation.Peers.UIElementAutomationPeer.CreatePeerForElement(mark));
+    }
+
+    private static LoftLabel LabelOver(string palette, string style = "LoftLabelStyle")
+    {
+        var stack = new ResourceDictionary();
+        stack.MergedDictionaries.Add(Load("Ornaments.xaml"));
+        stack.MergedDictionaries.Add(Load(palette));
+        var label = new LoftLabel { Resources = stack, Text = "usb out" };
+        label.SetResourceReference(FrameworkElement.StyleProperty, style);
+        return label;
+    }
+
+    /// <summary>
+    /// The wiring, not the property: the style must read the TOKEN. Break the Case binding in
+    /// LoftLabelStyle and setting Case by hand would still pass the test above.
+    /// </summary>
+    [StaFact]
+    public void LoftLabelStyle_FollowsTheTokensOfTheActivePalette()
+    {
+        var on = LabelOver("OsdPalette.Dark.xaml");
+        Assert.Equal("USB OUT", on.Text);
+        Assert.Equal(10.0, on.FontSize);
+        Assert.Equal(FontCapitals.Normal, on.GetValue(Typography.CapitalsProperty));
+        Assert.Contains("Martian Mono", on.FontFamily.Source);
+
+        var off = LabelOver("OsdPalette.HighContrast.xaml");
+        Assert.Equal("usb out", off.Text);
+        Assert.Equal(11.0, off.FontSize);
+        Assert.Equal(FontCapitals.AllSmallCaps, off.GetValue(Typography.CapitalsProperty));
+        Assert.Contains("Public Sans", off.FontFamily.Source);
+
+        var title = LabelOver("OsdPalette.HighContrast.xaml", "LoftTitleLabelStyle");
+        Assert.Equal(13.0, title.FontSize);
+        Assert.Equal(FontCapitals.Normal, title.GetValue(Typography.CapitalsProperty));
+    }
+
+    /// <summary>
+    /// A swap that changes the token reaches a label already on screen, which is how a theme
+    /// change to high contrast arrives.
+    /// </summary>
+    [StaFact]
+    public void LoftLabelStyle_ReactsWhenThePaletteIsSwapped()
+    {
+        var label = LabelOver("OsdPalette.Dark.xaml");
+        Assert.Equal("USB OUT", label.Text);
+
+        var stack = new ResourceDictionary();
+        stack.MergedDictionaries.Add(Load("Ornaments.xaml"));
+        stack.MergedDictionaries.Add(Load("OsdPalette.HighContrast.xaml"));
+        label.Resources = stack;
+
+        Assert.Equal("usb out", label.Text);
+    }
+
+    /// <summary>
+    /// ToUpperInvariant gives "ISTANBUL" here, which a Turkish reader sees as a misspelling.
+    /// </summary>
+    [StaFact]
+    public void LoftLabel_UppercasesWithTheCurrentCulture()
+    {
+        var saved = System.Globalization.CultureInfo.CurrentCulture;
+        try
+        {
+            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("tr-TR");
+            var label = new LoftLabel { Case = "Upper", Text = "istanbul" };
+
+            Assert.Equal("ÝSTANBUL", label.Text);
+            Assert.NotEqual("istanbul".ToUpperInvariant(), label.Text);
+        }
+        finally
+        {
+            System.Globalization.CultureInfo.CurrentCulture = saved;
+        }
+    }
+
+    [StaFact]
+    public void LoftLabel_TreatsNullTextAsEmpty()
+    {
+        var label = new LoftLabel { Case = "Upper", Text = "x" };
+
+        label.Text = null!;
+
+        Assert.Equal(string.Empty, label.Text);
     }
 }

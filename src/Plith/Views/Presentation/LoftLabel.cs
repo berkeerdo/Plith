@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -34,8 +35,18 @@ public class LoftLabel : TextBlock
         set => SetValue(CaseProperty, value);
     }
 
-    private static object CoerceText(DependencyObject d, object value) =>
-        d is LoftLabel { Case: "Upper" } && value is string text
-            ? text.ToUpperInvariant()
+    // A null reaches here: BusLine is a non-nullable string, but nothing stops a caller assigning
+    // null through a binding, and OverrideMetadata replaced TextBlock's own coerce callback, so
+    // null is handled here rather than assumed away. It becomes empty text.
+    //
+    // Upper-cased with the CURRENT culture, not the invariant one: this app shows Turkish text,
+    // and ToUpperInvariant turns "i" into "I" where Turkish needs the dotted capital I.
+    private static object CoerceText(DependencyObject d, object value)
+    {
+        if (value is null) return string.Empty;
+
+        return d is LoftLabel { Case: "Upper" } && value is string text
+            ? text.ToUpper(CultureInfo.CurrentCulture)
             : value;
+    }
 }

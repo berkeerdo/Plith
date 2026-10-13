@@ -78,4 +78,8 @@
     <sys:Double x:Key="OrnamentOutlineThickness">1</sys:Double>
     <sys:String x:Key="OrnamentLabelCase">Upper</sys:String>
     <SolidColorBrush x:Key="OrnamentTickBrush" Color="#71717A" />
+    <FontFamily x:Key="OrnamentLabelFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
+    <sys:Double x:Key="OrnamentLabelSize">10</sys:Double>
+    <sys:Double x:Key="OrnamentTitleLabelSize">11</sys:Double>
+    <FontCapitals x:Key="OrnamentLabelCaps">Normal</FontCapitals>
 </ResourceDictionary>

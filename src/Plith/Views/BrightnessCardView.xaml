@@ -47,8 +47,7 @@
                        VerticalAlignment="Center"
                        Text="{Binding DisplayText}" />
 
-            <p:LoftLabel Style="{DynamicResource LoftLabelStyle}"
-                         FontSize="11"
+            <p:LoftLabel Style="{DynamicResource LoftTitleLabelStyle}"
                          VerticalAlignment="Center"
                          Foreground="{DynamicResource OsdTextSecondary}"
                          TextTrimming="CharacterEllipsis"

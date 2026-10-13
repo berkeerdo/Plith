@@ -470,7 +470,8 @@ public partial class MediaWidget : UserControl
         // ADR 0014 closed that, because a light fill at 1.14:1 against its track is not an
         // indicator at all. The brackets are decoration. The button's own name already says
         // "current output", which is what a screen reader announces, so they are kept out of the
-        // accessibility tree (WPF has no AccessibilityView, so DecorativeText creates no automation peer) rather than being read as "left bracket".
+        // accessibility tree rather than being read as "left bracket". WPF has no
+        // AccessibilityView, so DecorativeText creates no automation peer at all.
         //
         // Without ornaments (high contrast) the dot stays, because the selected state still has
         // to be visible and the brackets are among the things that theme turns off. The token is
