@@ -5,7 +5,8 @@
     <vm:BoolToVisibilityConverter x:Key="BoolToVisibilityConverter" />
     <vm:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibilityConverter" />
 
-    <FontFamily x:Key="OsdUiFont">Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="OsdUiFont">pack://application:,,,/Assets/Fonts/#Public Sans, Segoe UI Variable, Segoe UI</FontFamily>
+    <FontFamily x:Key="OsdMonoFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
 
     <!-- OSD palette brushes live in OsdPalette.Dark.xaml / OsdPalette.Light.xaml so the
          active theme can be swapped at runtime; all references below use DynamicResource. -->

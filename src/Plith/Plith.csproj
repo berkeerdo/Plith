@@ -42,6 +42,7 @@
 
   <ItemGroup>
     <Resource Include="Resources\icons\plith.ico" />
+    <Resource Include="Assets\Fonts\*.ttf" />
   </ItemGroup>
 
   <ItemGroup>

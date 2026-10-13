@@ -54,3 +54,11 @@ Techniques for hooking Windows volume events (used in Phase 3 fallback mode) are
 - License: Voicemeeter EULA (free for end-user; redistribution of `VoicemeeterRemote64.dll` is allowed within Voicemeeter installations)
 
 Plith uses the `VoicemeeterRemote64.dll` shipped with the user's Voicemeeter installation at `C:\Program Files (x86)\VB\Voicemeeter\`. Plith does **not** bundle or redistribute this DLL.
+
+
+## Fonts
+
+- **Public Sans**, by the United States Web Design System. SIL Open Font License 1.1.
+- **Martian Mono**, by Evil Martian. SIL Open Font License 1.1.
+
+Both are redistributed with Plith under the OFL, which permits bundling. Neither is modified. The licence texts ship beside the fonts in `src/Plith/Assets/Fonts/`.
