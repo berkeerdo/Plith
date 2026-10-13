@@ -164,6 +164,28 @@ foreach ($spec in @(
 }
 $app.Resources.MergedDictionaries.Add($fontOverride)
 
+# Theme.xaml's own styles (OsdLabelStyle, OsdValueStyle and others) say
+# {StaticResource OsdUiFont}, which is resolved INSIDE that dictionary at load, so they capture
+# the pack URI version and no later override reaches them. Left alone they render in Segoe here
+# while the cards around them render in Public Sans. Their setters are sealed once loaded, so
+# each TextBlock style is replaced by a thin derived style (BasedOn the original) that sets only
+# FontFamily to the checked family. Run on each freshly loaded Theme dictionary before first use.
+function Repair-ThemeFonts([Windows.ResourceDictionary]$Dictionary) {
+    $count = 0
+    foreach ($key in @($Dictionary.Keys)) {
+        $style = $Dictionary[$key]
+        if ($style -isnot [Windows.Style] -or $style.TargetType -ne [Windows.Controls.TextBlock]) { continue }
+        $derived = [Windows.Style]::new([Windows.Controls.TextBlock], $style)
+        $derived.Setters.Add([Windows.Setter]::new([Windows.Controls.TextBlock]::FontFamilyProperty, $fontOverride['OsdUiFont']))
+        $Dictionary[$key] = $derived
+        $count++
+    }
+    if ($count -eq 0) { throw 'Theme.xaml has no TextBlock styles to repair: the harness fonts would be wrong.' }
+}
+foreach ($d in $app.Resources.MergedDictionaries) {
+    if ($d.Contains('OsdValueStyle')) { Repair-ThemeFonts $d }
+}
+
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
     # assigning the property from PowerShell hands over an object the tree does not then search.
@@ -175,6 +197,7 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
         # dictionary comes back with exactly one useless key. Nothing throws; everything
         # afterwards renders in WPF's defaults, which is black text on a black ground.
         $d.psbase.Source = [Uri]::new("pack://application:,,,/Plith;component/$rel", [UriKind]::Absolute)
+        if ($rel -eq 'Resources/Theme.xaml') { Repair-ThemeFonts $d }
         $Element.Resources.MergedDictionaries.Add($d)
     }
 
