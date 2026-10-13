@@ -953,3 +953,103 @@ visible in the repo.
 3. **The hang has not happened since.** Eight clean shutdowns were watched after the watcher was
    corrected. Until a dump exists, section 12.4 stands unchanged and nothing here should be read
    as the hang being fixed or gone.
+
+## 13. The page turn has an instrument now, and the first run found the harness instead
+
+Date: 2026-10-13. Opened by the question `docs/ROADMAP.md` section 9 carried as the next job: the
+shelf page's opening comes in choppy and is not smooth, owner's report, nothing had measured it.
+
+### 13.1 What the question was not
+
+Section 4 above already says the turn onto the shelf takes about 340 ms end to end, and
+`SHELF-VERIFICATION.md` §10.28 timed the catcher's fade against Plith's own hide on hardware, four
+turns, 64 to 68 ms each. **Neither can answer this one**, and the reason is worth one sentence: a
+260 ms slide that delivers every frame and a 260 ms slide that delivers half of them take exactly
+as long. The roadmap's wording ("nothing has measured it") was therefore too broad; durations were
+measured, smoothness never was, and nothing here could see it because every stamp in this document
+is CPU time on a thread.
+
+Asked where in the gesture it reads as rough, the owner said: **during the slide, before the
+swap.** That puts it in Plith's own frame and takes the cross-process half out of scope.
+
+### 13.2 The instrument
+
+`PageTurnTrace`, with `WidgetFrame` sampling `CompositionTarget.Rendering` for the length of one
+turn and `OsdHost` writing the line. Two axes, because three defects produce the one symptom:
+
+| Axis | Columns | The defect it would show |
+|---|---|---|
+| time | `frames`, `median`, `worst`, `late` | the UI thread starved during the slide, so frames were dropped |
+| value | `travel`, `biggest step`, `still` | frames arrived on time but the animated position did not advance |
+
+The value axis is not decoration. The slide is `NotchGeometry.PageSlideDip` (14) DIP under a cubic
+ease-out, so its last frames move a fraction of a pixel, and quantization would appear there and
+in no timing column. `still` counts a frame carrying the position of the one before it, which a
+person sees as a pause and every timing column calls perfect.
+
+`CompositionTarget.Rendering` is the signal, and `NotchOpenTrace`'s docstring records that an
+earlier version of THAT instrument hung off this event and was worthless. The two are not the same
+use: the question there was "when did the first frame render", which the event cannot answer
+because it fires every frame regardless of what was laid out. Frame intervals are the one thing it
+does measure, and no other in-process signal reports them. The subscription is opened per turn and
+closed at its end, never held at rest, because section 10 of this document exists on account of a
+timer that was.
+
+`scripts/measure-page-turn.ps1` drives the real notch and tabulates. The shelf page is installed
+last (`OsdHost.BuildWidgetPages`), so the row whose target is the last index is the one under
+suspicion and every other row in the same run is its control. **A shelf number on its own says
+nothing**, which is why the script refuses to conclude without both.
+
+15 unit tests on the trace, each watched fail first. Full suite 790 passed, 0 failed.
+
+### 13.3 The first run measured the harness, not the product
+
+The run paged 15 times, committed every one, and logged **no turn at all**.
+
+Not a broken instrument and not a product that does not page. `WidgetFrame.IsAnimationAllowed`
+reads `SystemParameters.ClientAreaAnimation`, and with it false `ShowCurrentPage` runs
+`animate: false`: the page is put there with no movement, nothing arms the trace, and the trace
+correctly has nothing to say.
+
+| Measured, 2026-10-13 | |
+|---|---|
+| `SystemParameters.ClientAreaAnimation` | **False** |
+| Active session (`qwinsta`) | `rdp-tcp#0` |
+| `HKCU\...\WindowMetrics\MinAnimate` | `0` |
+| Page commit to `Shelf requested`, from Plith's own log | **9 ms** |
+
+The last row is the same fact from the other side and is the one that cannot be argued with.
+`ReconcileShelfFrame` defers the handover by `SlideRemainingMs` precisely so the gesture finishes
+in one process; it fired 9 ms after the commit, so the slide's remaining duration was zero, so no
+slide ran.
+
+**The script now refuses to run at all when the parameter is false**, naming both causes, because
+without that the finding arrives as "No page turn was logged" and reads as silence.
+
+### 13.4 Which half is measured, and which is not
+
+- **MEASURED:** the instrument exists, its logic is unit-tested, it is wired, and it correctly
+  reports nothing when nothing animates. The cause of that nothing is measured four ways above.
+- **NOT MEASURED:** the thing the owner reported. No page slide has been timed, on any build, on
+  any axis. Every figure below the line in this section is still unknown, and the shelf row has
+  never been set beside its controls.
+- **UNRESOLVED, and only the console can settle it:** Windows reports `ClientAreaAnimation` false
+  both for a remote session and for a person who turned animations off. The owner says animations
+  are on, which is a recollection rather than a measurement, and `MinAnimate=0` points weakly the
+  other way. The script measures it on startup, so **a single run at the console answers it**: if
+  it refuses there too, the setting is the machine's and the reported choppiness cannot be about
+  the slide, because no slide ever runs for them.
+
+### 13.5 What this calls into question elsewhere
+
+This document's own header says sections 1 to 4 are "a DEBUG build over Remote Desktop". Nothing
+in this repo had connected that to animations being forced off in such a session, and no
+verification document mentions `ClientAreaAnimation` at all.
+
+So one claim now has a question against it. `SHELF-VERIFICATION.md` §10.26 reports three
+arrangements of the turn onto the shelf judged on real hardware by a person, concluding that "the
+shelf's page slides exactly like the other four". **If those judgments were made over Remote
+Desktop, no page slid in any of the three arrangements.** The record does not say which session
+they were made in, so this is a question the record cannot answer, not a finding that it is wrong.
+It is the fourth time a console-versus-Remote-Desktop difference has bitten this repo; the first
+three are the three banded sections at the top of `SHELF-VERIFICATION.md`.

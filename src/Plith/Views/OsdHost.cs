@@ -156,6 +156,11 @@ public sealed class OsdHost : BandWindow
         trace?.Mark(StartupWindowPhase.Content);
 
         _widgets.PageRequested += OnWidgetPageRequested;
+
+        // One line per animated page turn. The frame measures it, because the value axis needs
+        // the sliding page's own transform; this class writes it, because it owns the log. See
+        // PageTurnTrace for what the columns mean and what they cannot see.
+        _widgets.TurnMeasured += (_, line) => _log?.Info("OsdHost", line);
         _widgets.SetPages(_pager, BuildWidgetPages());
         trace?.Mark(StartupWindowPhase.Pages);
 

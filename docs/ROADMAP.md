@@ -688,14 +688,24 @@ counts only.
   change, external seek) cannot be told from a tick without a heuristic on position delta,
   behind the drag guard and the post-write hold window. Revisit only if `RenderProgress` gains
   a clean signal for a jump.
-- **Shelf page opening is choppy (owner report, undiagnosed)**: the owner says the shelf
-  page's opening comes in choppy and is not smooth. Nothing has measured it. Context: the shelf
-  has been the notch's own page since 0.3.0, and a page turn onto it hands the frame to
-  `Plith.DropCatcher`, a cross-process window swap. That is a suspect to measure, not a
-  finding. No instrument covers it: `measure-notch-open` times the open of the notch itself, and
-  `drive-shelf-pair` proves the handover works, not what it costs. Outside the Loft work, and
-  **the next job**: it is the only open item that is a defect in shipped behaviour rather than a
-  design question or a purchase. It needs an instrument before it needs a fix.
+- **Shelf page opening is choppy (owner report, instrument built, NOT YET MEASURED)**: the owner
+  says the shelf page's opening comes in choppy and is not smooth. Asked where, they place it
+  **during the slide, before the swap**, which puts it in Plith's own frame.
+  **An instrument now exists and the measurement is still owed.** `PageTurnTrace` plus
+  `scripts/measure-page-turn.ps1` time one page turn frame by frame on two axes, timing and
+  animated value, and set the shelf turn beside the other four as controls. Full ledger in
+  `docs/PERF-VERIFICATION.md` section 13.
+  **Blocked on one thing, and it is not code:** `SystemParameters.ClientAreaAnimation` is false in
+  a Remote Desktop session, so `WidgetFrame` pages without animating and there is no slide to
+  measure. Measured 2026-10-13: 15 gestures, every page committed, no turn logged, and the
+  handover firing 9 ms after the commit where `ReconcileShelfFrame` defers it by the slide's
+  remaining duration. **The next step is one run of the script at the CONSOLE, not over RDP.**
+  That run also settles the open half: Windows reports the parameter false both for a remote
+  session and for a person who turned animations off, and if it refuses at the console too then
+  no slide ever runs on this machine and the reported choppiness is a different defect.
+  What was already measured, so it is not measured twice: the turn's DURATION (section 4, about
+  340 ms end to end) and the catcher's fade against Plith's hide (`SHELF-VERIFICATION.md`
+  §10.28). Smoothness is the gap, and no CPU-time stamp can see it.
 - **The classic OSD card still draws cool grey text on a warm floor**: `OsdTextPrimary`,
   `OsdTextSecondary` and `OsdTextTertiary` are still the pre-Loft zinc family (`#F5F5F5`,
   `#A1A1AA`, `#71717A`) while the floor beneath them is Loft's warm one and the notch's own ink

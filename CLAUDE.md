@@ -64,7 +64,7 @@ measured.** Claims inherited from another surface's notes have been wrong four t
 | `docs/PHASE5-VERIFICATION.md` | CardHost, fullscreen-video auto-hide, accessibility |
 | `docs/PHASE6-VERIFICATION.md` | The notch, its widgets, the media page, seek, the output picker, brightness |
 | `docs/SHELF-VERIFICATION.md` | The shelf end to end, including the drop catcher and every instrument defect |
-| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, down to what the first XAML load is made of, which of it has been fixed, what the launch watchdog cost once it was no longer needed, and which single timer was waking the UI thread at rest |
+| `docs/PERF-VERIFICATION.md` | What the app costs at rest, on a launch and on a notch open, where inside the launch that time goes, down to what the first XAML load is made of, which of it has been fixed, what the launch watchdog cost once it was no longer needed, which single timer was waking the UI thread at rest, and why a page turn's smoothness cannot be measured over Remote Desktop |
 | `docs/ROADMAP.md` | Phase status, estimates beside actuals, and open questions |
 
 ### The instruments
@@ -83,6 +83,7 @@ nothing else could see.
 | `scripts/measure-notch-open.ps1` | What one open of the notch costs, and whether the UI thread blocked during it |
 | `scripts/measure-startup.ps1` | What one launch costs, split ten ways, its largest phase split ten ways again, and how long it blocks the UI thread |
 | `scripts/measure-idle-cost.ps1` | What the app costs while it is doing nothing, on two axes: CPU, and how often it wakes a thread. Flags any sample that saw input, because the keyboard hook makes typing look like idle cost |
+| `scripts/measure-page-turn.ps1` | What one page turn costs frame by frame, on two axes (frame timing and animated position), with the turn onto the shelf set beside the other four as controls. Refuses to run when Windows reports animations off, because then no slide exists to measure. Drives the mouse, and needs a CONSOLE session: over RDP there is no page slide at all |
 | `scripts/measure-hover-peek.ps1` | Whether the real notch still peeks when the cursor arrives, and how long it takes. Drives the mouse, so do not use the machine while it runs |
 | `scripts/build-release.ps1` | Builds and signs the installer. Needs admin and the signing cert |
 
@@ -90,6 +91,15 @@ A Debug build runs at **medium** integrity (`app.manifest` sets `uiAccess="false
 Release swaps in the signed one), so UI Automation reads the OSD's tree and `SendInput` drives
 it, over Remote Desktop included. The premise that none of this could be driven was false for
 two whole phases.
+
+**But MOTION cannot be measured over Remote Desktop.** Windows reports
+`SystemParameters.ClientAreaAnimation` as false in a remote session, and `WidgetFrame` reads it:
+with it false every page turn runs `animate: false`, so the page **snaps and no slide exists at
+all**. Measured 2026-10-13, `docs/PERF-VERIFICATION.md` section 13. Anything about how movement
+looks or how smoothly it runs needs a **console** session, and a claim about animation taken over
+RDP is a claim about a code path the product does not use there. This is the fourth
+console-versus-RDP difference to bite this repo, after the three banded at the top of
+`docs/SHELF-VERIFICATION.md`.
 
 
 ## Stack
