@@ -246,12 +246,10 @@ public partial class ShelfSurface : UserControl
             ["NotchInkMuted"] = Solid(palette.InkMuted),
             ["NotchTrack"] = Solid(palette.Track),
             ["AccentBrush"] = Solid(palette.Accent),
-            // NOT the raw accent. Drawn as Accent, the selection ring measured 1.25:1 against the
-            // panel for a near-white accent, where this product holds a non-text surface to 3:1.
-            // Plith derives this with ContrastInk.RingOn, which keeps the accent unchanged when
-            // it already clears 3:1 and only walks its lightness when it does not - unlike
-            // ContrastInk.TrackOn, which NotchTrack uses and which ignores the accent's hue
-            // entirely, flattening an already-good accent along with a broken one. Plith sends
+            // NOT necessarily the Accent. Plith derives this as DeriveLoftRoles(...).Mark, which
+            // is the seed unchanged when it already clears 3:1 against both Loft floor surfaces
+            // and walks its lightness in Oklch when it does not, where this product holds a
+            // non-text mark to 3:1. Accent above is the role Fill, which makes no such claim. Plith sends
             // the answer rather than the accent alone, so the ring cannot drift from the rest of
             // the product's contrast-derived colours.
             ["SelectionRing"] = Solid(palette.SelectionRing),

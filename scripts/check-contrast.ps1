@@ -49,13 +49,17 @@ param(
 # Recorded rather than quietly skipped, and rather than satisfied by inventing a constant. A gate
 # that is made to pass by writing a fake colour into the product has been turned into decoration.
 $unresolvable = @{
+    'MediaWidget.xaml:NotchTrack groove on the panel' =
+        'NotchTrack is the Loft floor Border, a hairline rule at about 1.3:1 against the panel BY INTENT (measured at about 1.3:1 when this pair is run, which is why it is listed here rather than failed). Not forced to 3:1: the fill inside the groove is the OsdAccent Mark, itself 3:1 from the panel, and a groove at 3:1 as well would sit at the same luminance as the fill and swallow it (measured with BorderStrong: fill vs groove 1.2 to 1.54:1 on light). The groove is a rule; the fill carries the visible state.'
     'MediaWidget.xaml:TransportButtonStyle' =
         'the chip is translucent (#0DFFFFFF over the panel), so nothing static knows what is underneath. It used to be a chip over a near-black scrim over album artwork; that scrim is gone with the page redesign, and the chip now sits on the notch panel. Checked instead in the render harness, light and dark - see widget-media.png.'
     'MediaWidget.xaml:TrackBarStyle' =
-        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: OsdAccent on NotchTrack 1,0:1, NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, NotchInk on NotchTrack 2,6:1 - because ContrastInk.TrackOn stops as soon as it clears 3:1 against the SURFACE, leaving the ink an unpredictable distance further along the same ramp. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
+        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: OsdAccent on NotchTrack 1,0:1, NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, NotchInk on NotchTrack 2,6:1 - because the groove and the ink were derived independently of each other, leaving the ink an unpredictable distance from the groove. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
 }
 
 $nonText = @{
+    'OsdContent.xaml:OsdAccent on the panel' =
+        'the accent bar fill and rail pip: a non-text mark, 3:1 by DeriveLoftRoles(...).Mark'
     'SettingsTheme.xaml:ModernProgressBarStyle' =
         'the accent FILL inside its own groove - a 4 DIP bar, read as a length and not a glyph'
 }
@@ -132,9 +136,10 @@ foreach ($file in $xamlFiles) {
 # The shelf's tiles, whose colours are set in code. Pointed at this check, the first version
 # failed twice over and both failures were invisible in a render: NotchInkMuted on a track tile
 # measured 1.5:1 on every accent, and NotchInk on the same tile still only reached 4.0:1 with a
-# white accent. NotchTrack is built by ContrastInk.TrackOn, which targets 3:1 - a non-text
-# surface by construction. The tiles have no chip behind them now and sit on the panel, which is
-# the surface NotchInk is derived against.
+# white accent. NotchTrack is the Loft floor's Border, a hairline rule (about 1.3:1 against its
+# panel) and NOT a 3:1 surface; it used to be built by ContrastInk.TrackOn and was one. The text
+# pairs below do not depend on it: they are ink on OsdSurfaceBrush, and the tiles have no chip
+# behind them, so the ink is measured against the panel it actually sits on.
 $codeBehindPairs = @(
     @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInk'; Where = 'ShelfWidget.cs:tile label, icon and count' },
     # The line under the row saying the shelf opens on a click, and the sentence that replaces it
@@ -153,7 +158,11 @@ $codeBehindPairs = @(
     # The "Stack N" caption above each column (see BuildColumn): a sighted match for the
     # per-stack AutomationProperties.Name set on the same column's wrapping Border, and the
     # reason this pair measures shipped code rather than a colour nothing draws.
-    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfSurface.xaml.cs:stack caption' }
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchInkMuted'; Where = 'ShelfSurface.xaml.cs:stack caption' },
+    # Neither key is ever a Foreground beside a declared Background, so the scan above could not
+    # pair them, and for that reason neither had been measured against the panel beneath it.
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'OsdAccent'; Where = 'OsdContent.xaml:OsdAccent on the panel' },
+    @{ Bg = 'OsdSurfaceBrush'; Fg = 'NotchTrack'; Where = 'MediaWidget.xaml:NotchTrack groove on the panel' }
 )
 foreach ($cb in $codeBehindPairs) {
     # The file each pair's own local-brush override (if any) would be declared under, read back

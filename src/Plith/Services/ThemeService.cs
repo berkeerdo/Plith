@@ -64,7 +64,11 @@ public sealed class ThemeService : IDisposable
     // neutral measured 1.6:1 against a deep accent there.
     private const string KeyAccentTrack = "AccentTrack";
 
-    // Alpha channels match the values the base OsdPalette.*.xaml files already use.
+    // Alpha channels match the values the base OsdPalette.*.xaml files already use. The floor
+    // stops keep the OSD's long-standing slight translucency (the spec fixes the floor's colour,
+    // not its opacity); the light theme is more opaque so dark glyphs still read over any app.
+    private const byte OsdSurfaceAlphaDark = 0xF0;
+    private const byte OsdSurfaceAlphaLight = 0xFA;
     private const byte OsdTrackAlpha = 0x40;
     private const byte OsdDividerAlpha = 0x40;
 
@@ -253,8 +257,10 @@ public sealed class ThemeService : IDisposable
             [KeyAccentPressed] = FrozenBrush(derived.Pressed),
             [KeyAccentGlow]    = FrozenBrush(derived.Glow),
 
-            // The fill, for filled parts only: a primary button, a checked box. Never a panel.
-            [KeyOsdAccent]     = FrozenBrush(roles.Fill),
+            // The OSD's accent marks (bar fill, rail pip) take the Mark, which DeriveLoftRoles
+            // guarantees at 3:1 against both floor surfaces. roles.Fill makes no such claim and
+            // measured 1.05 to 2.36:1 on the light floor for five of six presets.
+            [KeyOsdAccent]     = FrozenBrush(roles.Mark),
 
             // Text on AccentBrush, the Settings primary button. It is measured against the
             // Settings accent (derived.Accent, darkened on the light theme), NOT against
@@ -269,7 +275,7 @@ public sealed class ThemeService : IDisposable
 
             // The floor. Two stops so the panel keeps the vertical modelling the tinted gradient
             // had, and both stops are fixed, which is the point of the change.
-            [KeyOsdSurface]    = BuildFloorBrush(floor),
+            [KeyOsdSurface]    = BuildFloorBrush(floor, isDark),
             [KeyOsdBorder]     = FrozenBrush(floor.Border),
             [KeyOsdTrackBg]    = FrozenBrush(WithAlpha(floor.Border, OsdTrackAlpha)),
             [KeyOsdDivider]    = FrozenBrush(WithAlpha(floor.Border, OsdDividerAlpha)),
@@ -279,15 +285,16 @@ public sealed class ThemeService : IDisposable
         };
     }
 
-    private static LinearGradientBrush BuildFloorBrush(LoftFloor floor)
+    private static LinearGradientBrush BuildFloorBrush(LoftFloor floor, bool isDark)
     {
         var brush = new LinearGradientBrush
         {
             StartPoint = new Point(0, 0),
             EndPoint = new Point(0, 1),
         };
-        brush.GradientStops.Add(new GradientStop(floor.Background, 0));
-        brush.GradientStops.Add(new GradientStop(floor.Surface, 1));
+        var alpha = isDark ? OsdSurfaceAlphaDark : OsdSurfaceAlphaLight;
+        brush.GradientStops.Add(new GradientStop(WithAlpha(floor.Background, alpha), 0));
+        brush.GradientStops.Add(new GradientStop(WithAlpha(floor.Surface, alpha), 1));
         brush.Freeze();
         return brush;
     }

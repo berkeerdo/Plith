@@ -1186,16 +1186,16 @@ public partial class ShelfWindow : Window
     /// rather than invented, so the fallback is the product's own dark theme rather than a second
     /// palette nothing else in the product uses.
     ///
-    /// SelectionRing is the accent unchanged, which is what ContrastInk.RingOn returns for this
-    /// pair: emerald on a near-black surface clears the 3:1 a non-text stroke needs several times
-    /// over. The derivation itself stays on Plith's side, as ShelfPaletteWire says it must.
+    /// SelectionRing is the accent unchanged, which is what AccentTheme.DeriveLoftRoles(...).Mark
+    /// returns for this pair: emerald on the dark Loft floor clears the 3:1 a non-text stroke
+    /// needs. The derivation itself stays on Plith's side, as ShelfPaletteWire says it must.
     /// </summary>
     private static readonly ShelfPalette BuiltInDark = new(
-        SurfaceStart: Color.FromArgb(0xF0, 0x18, 0x18, 0x18),
-        SurfaceEnd: Color.FromArgb(0xF0, 0x11, 0x11, 0x11),
-        Ink: Color.FromRgb(0xF2, 0xF5, 0xF8),
-        InkMuted: Color.FromRgb(0x9A, 0xA6, 0xB2),
-        Track: Color.FromRgb(0x2A, 0x32, 0x3C),
+        SurfaceStart: Color.FromArgb(0xF0, 0x0B, 0x0B, 0x0A),
+        SurfaceEnd: Color.FromArgb(0xF0, 0x15, 0x14, 0x12),
+        Ink: Color.FromRgb(0xEC, 0xE9, 0xE2),
+        InkMuted: Color.FromRgb(0xA3, 0x9E, 0x94),
+        Track: Color.FromRgb(0x2B, 0x28, 0x24),
         Accent: Color.FromRgb(0x4A, 0xD6, 0x95),
         SelectionRing: Color.FromRgb(0x4A, 0xD6, 0x95),
         IsDark: true);

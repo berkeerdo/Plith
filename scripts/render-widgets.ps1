@@ -606,23 +606,12 @@ Save-Visual -Element $shelfUnavailable -W $frameW -H $frameH -Name 'widget-shelf
 # from the SAME resolved colours those widgets render with, read back off the probe, so this
 # render is judged against exactly what the running app would send across the wire, not a second,
 # hand-picked palette that could drift from it.
-$surfaceBrush = $probe.TryFindResource('OsdSurfaceBrush')
-$inkBrush = $probe.TryFindResource('NotchInk')
-$inkMutedBrush = $probe.TryFindResource('NotchInkMuted')
-$trackBrush = $probe.TryFindResource('NotchTrack')
-$accentBrush = $probe.TryFindResource('Accent')
-
-# The selection ring keeps the accent when the accent already works, and only moves when it does
-# not: ContrastInk.RingOn returns the accent unchanged once it clears 3:1 against the surface, and
-# only walks its lightness (hue and saturation held fixed) when it does not. This replaced an
-# earlier attempt at ContrastInk.TrackOn, which is a function of the surface alone and threw the
-# accent's hue away every time - it fixed a near-white accent's measured 1.25:1 but also flattened
-# a lime accent's measured 8.87:1 down to 3.03:1, a dull grey-olive, for a threshold that colour
-# had already cleared. Plith sends the ANSWER across the wire rather than the accent alone, so the
-# catcher never repeats the derivation. There is no sender for this yet (that is Task 6's work),
-# so the harness derives it here the same way Task 6 will, standing in for what the real message
-# will eventually carry.
-$selectionRingColor = [Plith.Services.ContrastInk]::RingOn($accentBrush.Color, $surfaceBrush.GradientStops[1].Color)
+# The palette is the one production sends: ShelfSession.DerivePalette, called directly rather than
+# rebuilt here, so this render cannot drift from the wire. It returns Plith's own ShelfPalette
+# type, which is why its fields are read back below instead of the value being passed on.
+$wirePalette = [Plith.Services.Shelf.ShelfSession]::DerivePalette(
+    [Plith.Services.AccentTheme]::ParseHexColor($Accent, [Windows.Media.Colors]::Gray),
+    [bool]($Theme -eq 'Dark'))
 
 # ShelfPalette is not resolved as [Plith.Services.Shelf.ShelfPalette]: that name is compiled into
 # BOTH Plith.dll and Plith.DropCatcher.dll (ShelfPaletteWire.cs is LINKED into the catcher project
@@ -633,9 +622,8 @@ $selectionRingColor = [Plith.Services.ContrastInk]::RingOn($accentBrush.Color, $
 # type, so the value has to be built through THAT assembly's Type object.
 $shelfPaletteType = $dcAssembly.GetType('Plith.Services.Shelf.ShelfPalette')
 $shelfPalette = [Activator]::CreateInstance($shelfPaletteType, @(
-    $surfaceBrush.GradientStops[0].Color, $surfaceBrush.GradientStops[1].Color,
-    $inkBrush.Color, $inkMutedBrush.Color, $trackBrush.Color, $accentBrush.Color,
-    $selectionRingColor, [bool]($Theme -eq 'Dark')))
+    $wirePalette.SurfaceStart, $wirePalette.SurfaceEnd, $wirePalette.Ink, $wirePalette.InkMuted,
+    $wirePalette.Track, $wirePalette.Accent, $wirePalette.SelectionRing, $wirePalette.IsDark))
 
 # Seven entries across two stacks: one stack deliberately OVER the visible-rows cap (a folder
 # plus four files, so the overflow tile and a folder icon both appear in the same render) and one

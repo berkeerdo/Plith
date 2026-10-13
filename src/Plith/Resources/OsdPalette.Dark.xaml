@@ -9,8 +9,8 @@
     <!-- Dark OSD overlay palette — default. -->
 
     <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#0B0B0A" Offset="0" />
-        <GradientStop Color="#151412" Offset="1" />
+        <GradientStop Color="#F00B0B0A" Offset="0" />
+        <GradientStop Color="#F0151412" Offset="1" />
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="OsdBorder" Color="#2B2824" />

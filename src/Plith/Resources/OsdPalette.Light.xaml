@@ -14,8 +14,8 @@
     <!-- Surface alpha is higher than the dark variant (FA vs F0): light text needs a more
          opaque card so dark glyphs still read over an arbitrary underlying app. -->
     <LinearGradientBrush x:Key="OsdSurfaceBrush" StartPoint="0,0" EndPoint="0,1">
-        <GradientStop Color="#E7E6E0" Offset="0" />
-        <GradientStop Color="#F3F2ED" Offset="1" />
+        <GradientStop Color="#FAE7E6E0" Offset="0" />
+        <GradientStop Color="#FAF3F2ED" Offset="1" />
     </LinearGradientBrush>
 
     <SolidColorBrush x:Key="OsdBorder" Color="#D0CEC6" />

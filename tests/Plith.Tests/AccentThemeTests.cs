@@ -152,7 +152,7 @@ public class AccentThemeTests
     [InlineData(0xF5, 0xA6, 0x23)] // amber
     [InlineData(0x7A, 0xA2, 0xF7)] // sky
     [InlineData(0xFF, 0xFF, 0x00)] // the worst case: pure saturated yellow
-    public void Derive_LightBg_AccentReadsAgainstItsOwnSurface(byte r, byte g, byte b)
+    public void Derive_LightBg_AccentReadsAgainstTheLightFloor(byte r, byte g, byte b)
     {
         var baseColor = Color.FromRgb(r, g, b);
         var accent = AccentTheme.Derive(baseColor, isDarkBg: false).Accent;
