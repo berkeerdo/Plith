@@ -2094,3 +2094,153 @@ the one on screen.
 The general lesson is the second one: a log can be perfectly truthful about the wrong thing.
 When a log and a person disagree, photograph the screen before trusting either.
 
+## 24. The notch in Loft, measured on a running build (2026-10-13)
+
+Spec: `docs/superpowers/specs/2026-10-12-notch-loft-design.md`.
+Plan: `docs/superpowers/plans/2026-10-13-notch-in-loft.md`.
+
+Every figure below was produced at HEAD `4cd8a52` on `feature/notch-in-loft`, on a Debug build,
+Windows 11 Pro 26200, .NET 10. Nothing is carried in from another surface's notes. Where a claim
+is inherited rather than observed, it says so.
+
+### What is green
+
+| Instrument | Result |
+|---|---|
+| `check-shared-xaml.ps1` | Passed. 3 files compiled into both Plith and the installer, none naming an assembly |
+| `check-a11y.ps1` | Passed, with two KNOWN GAPS it reports itself, both predating this branch and not fixed here: `MediaWidget.cs` sets an automation name on `OpenSourceArea`, a Border, and `WeatherWidget.cs` sets one on `Readout`, a StackPanel |
+| `check-contrast.ps1` | Passed. **324 measurements across 9 accents x 2 themes.** 12 pairs declared in XAML, 6 named from code-behind. Two non-text pairs clear 3:1. Three pairs are NOT MEASURED (below) |
+| `dotnet test` | Passed: Failed 0, Passed 744, Skipped 0, Total 744, duration 280 ms. Run under `heavy-run.mjs` |
+
+None of that reaches a pixel. The rest of this section is what did.
+
+### What the renders show
+
+Three runs of `render-widgets.ps1`, each ending `Done.` with no failure line:
+
+| Theme | Accent | Fonts the harness loaded |
+|---|---|---|
+| Dark | `#CAFF33` (lime) | `OsdUiFont -> Public Sans`, `OsdMonoFont -> Martian Mono Std Rg` |
+| Dark | `#6D28D9` (violet) | same |
+| Light | `#C2401A` (terracotta) | same |
+
+Those are the themes and accents actually rendered. `check-contrast` covers 9 accents; the
+renders cover three of them, in two themes. Nothing here says "all accents" or "every theme".
+
+What was seen in the PNGs:
+
+- `card-audio.png`, all three combinations. The panel is the Loft floor at every one. The accent
+  appears only in the bar fill and the rail pips. `VOICEMEETER | A1` is upper-case Martian Mono;
+  the device name and the percentage are Public Sans.
+- The violet run is the one worth naming. `#6D28D9` does not paint as `#6D28D9`. It is walked up
+  to a visibly lighter violet, which is `DeriveLoftRoles` reaching 3:1 against the dark floor.
+  That is the derivation doing its job in a render rather than in an assertion.
+- `widget-media.png`, dark lime. The seek bar is ink-derived, not accent, as designed: the played
+  part is `NotchInk`, the groove the same ink at 24 per cent alpha.
+- `widget-audio.png`, light terracotta. The notch page carries no accent at all. The ornament
+  layer ships OFF by default, so there are no corner marks in any of these renders.
+
+The harness's own tree assertions passed in every run, including the ones no eye can make:
+tile-hit on all five probe points of all 8 tiles, edge gaps of 22 DIP both sides,
+tooltip-survives-render, menu-survives-render, press-to-drag, empty-outline, second-pass cache.
+
+### What it costs
+
+`measure-startup.ps1`, Debug, 5 runs. Total 855 to 996 ms. The window column 361 to 464 ms. The
+ten spans partition the column exactly on every run, so nothing is unaccounted for. Run 1 is cold.
+
+`measure-idle-cost.ps1`, two rounds, 3 clean samples between them (a sample that sees input is
+discarded, because the keyboard hook makes typing look like idle cost). **CPU 0.09 to 0.38 per
+cent of one core; context switches per second on the UI thread 132.9 to 217.8.** The script's own
+recorded baseline reads "Section 1 measured 0,81 / 0,79 / 0,15 on one build", so this branch at
+rest is at or below the historical range.
+
+This answers the open question the settle animation left. It uses `FillBehavior.Stop` and removes
+its replaced root clocks from the time tree, and the claim that it therefore leaves nothing
+running at rest was argued from the construction. It is now **measured**.
+
+`measure-notch-open.ps1`, Debug. First open 41 ms total, of which 18 ms is layout. Later opens
+3 ms on average over 3. Worst UI-thread stall 39 ms on the first open, 4 ms after it.
+**2 of the 6 runs saw no line within 5 s, so 4 samples were collected, not 6.** This is not six
+clean runs and should not be read as one.
+
+### What was NOT measured, and why
+
+**`drive-media-page.ps1` is skipped as evidence, and its one FAIL is not a defect.** It
+returned FAIL on "the notch pages to the media widget". That verdict is about the session, not
+the build. The script printed "This is a Remote Desktop session: the local devices are not
+active in it"; it saw exactly one audio endpoint, "Remote Audio", where this machine really has
+seven; and its wheel events landed on three different foreign pids, at cursor positions far from
+the notch. The drive never reached the notch.
+
+A remote session took over this machine partway through the branch. `SM_REMOTESESSION` returns 1
+while `SESSIONNAME` still reads "Console", and the primary display changed from `\\.\DISPLAY1`
+at 2560x1396, during the theme test, to `\\.\DISPLAY225` at 1800x1131. That fits the symptom
+exactly: the first screen capture of that test succeeded and every capture after it failed with
+"The handle is invalid". Four things therefore need the PHYSICAL CONSOLE and were not done:
+
+1. The runtime theme switch with the notch open.
+2. High contrast appearance. Also blocked independently: `render-widgets.ps1 -Theme` is
+   `ValidateSet('Dark','Light')` and has no high contrast mode at all.
+3. `drive-media-page`'s paging and the output switch. Needs two real audio endpoints.
+4. `measure-hover-peek.ps1`, which drives the mouse.
+
+**Three contrast pairs are NOT MEASURED**, each for the script's own stated reason. A reader who
+sees "passed" needs to know what was excluded:
+
+1. `MediaWidget.xaml:NotchTrack`, the groove on the panel. It is a hairline rule at about 1.3:1
+   BY INTENT (1.26:1 and 1.34:1 dark, 1.26:1 and 1.41:1 light, computed from the floor hexes).
+   It is not forced to 3:1 because the fill inside it is the Mark, itself 3:1 from the panel, and
+   a 3:1 groove would sit at the fill's luminance and swallow it. Measured with BorderStrong,
+   fill against groove was 1.2 to 1.54:1 on light. The groove is a rule; the fill carries the
+   visible state.
+2. `MediaWidget.xaml:TrackBarStyle`. Neither colour is declared: `MediaWidget.PaintBar` computes
+   both from `NotchInk`, the groove being the same ink at 24 per cent alpha. Every declared
+   alternative was measured and failed, and one of them drew the bar INVERTED while clearing
+   every ratio. Checked by eye in the three rendered combinations only (Dark lime, Dark violet, Light
+   terracotta).
+3. `MediaWidget.xaml:TransportButtonStyle`. The chip is translucent (`#0DFFFFFF` over the panel),
+   so nothing static knows what is underneath. Checked by eye in the three rendered combinations only (Dark lime, Dark violet, Light
+   terracotta).
+
+The two non-text pairs that ARE measured and pass are `OsdContent.xaml:OsdAccent` on the panel
+(the accent bar fill and the rail pip, 3:1 by `DeriveLoftRoles(...).Mark`) and
+`SettingsTheme.xaml:ModernProgressBarStyle` (the accent fill inside its own groove, a 4 DIP bar
+read as a length and not a glyph).
+
+**The pack URI is not proven by anything in CI.** `render-widgets.ps1` loads the shipped `.ttf`
+files by file URI and throws on a family mismatch. It cannot use the pack URI, because
+`Application.ResourceAssembly` is `pwsh` in that process and is immutable once read. So the
+render proves the glyphs, a unit test proves the family names in `Theme.xaml`, and **nothing in
+CI proves the pack URI resolves inside `Plith.exe` itself.** The gap is real and was found in
+this branch: before it was fixed, every render in this repository's history drew in Segoe, not in
+the shipped faces.
+
+### Which claims are inherited, not observed
+
+- Corner marks inside the radius, and numbers that do not shift as they change: not observed.
+  The ornament layer was off in all three renders, so none was drawn.
+- Settle animation reversal and rapid repeats with a real ticking clock: tests have no render
+  tick. The unticked `From` values are tested, and the reversal case is covered by
+  `ReverseToStartInsideOneFrame_LandsOnTheModelValue`, which fails if the early return is
+  restored.
+- The runtime theme switch and high contrast: neither was observed (see above).
+- `TrackBarStyle` and `TransportButtonStyle`: unmeasured at the other six accents and in the
+  remaining theme and accent combinations. Only the three renders cover them.
+- The pack URI resolving in the shipped exe: inferred from the family-name test and the file URI
+  render, not observed.
+
+### Deviations this work owes
+
+- **Seek thumb: the spec asked for it to settle like the bars, and it was deliberately not
+  built.** Settling is for discrete, user-initiated changes landing on a mark. The thumb is
+  written by a once-per-second playback tick, so an ease-out per tick reads as move, decelerate,
+  stop, wait 600 ms: a visible stutter. The right motion for a continuous position is none, or a
+  linear sweep, and a drag already puts the thumb under the hand. The discrete case (track
+  change, external seek) was assessed and NOT built: `RenderProgress` cannot tell a jump from a
+  tick except by a heuristic on position delta, and it sits behind the drag guard and the
+  post-write hold window, so building it would be a half measure on code that has been wrong
+  before. A comment records this at the `Bar.Value` write in `MediaWidget.RenderProgress`.
+- `GainColor` (the amber change) and the caution tick are not animated, so on a crossing the
+  colour flips before the fill arrives.
+- `SettingsPreview` keeps its own `NormConv` and does not settle.
