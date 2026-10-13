@@ -907,7 +907,7 @@ git commit -m "feat(theme): put the Loft floor under the notch"
 
 Tabular figures in WPF are a typography feature on the run, not a property of the family: `<Run Typography.NumeralAlignment="Tabular">` or `Typography.NumeralAlignment="Tabular"` on the `TextBlock`. Without it the clock's digits change width as they tick and the whole line shifts, which is the defect this fixes.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows;
@@ -950,12 +950,12 @@ public class TypographyTests
 
 `[StaFact]` comes from `xunit.StaFact`; if the test project does not already reference it, add it in this step, because WPF types cannot be constructed on the MTA threads xunit uses by default.
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~TypographyTests`
 Expected: FAIL, `OsdMonoFont` is not a key in the dictionary.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/Plith/Resources/Theme.xaml`, replace line 8 and add the mono family:
 
@@ -1011,17 +1011,17 @@ Both are redistributed with Plith under the OFL, which permits bundling. Neither
 
 On every `TextBlock` that shows a number which changes in place, add `Typography.NumeralAlignment="Tabular"`: the clock and date in `AmbientCardView.xaml`, the elapsed and remaining times in `MediaCardView.xaml`, the percentage in `AudioCardView.xaml` and `BrightnessCardView.xaml`, and the temperature in the weather widget.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~TypographyTests`
 Expected: PASS.
 
-- [ ] **Step 5: Look at it, twice**
+- [x] **Step 5: Look at it, twice**
 
 Run: `pwsh -STA -File scripts/render-widgets.ps1 -OutDir $env:TEMP\loft-4`
 Expected: the fonts actually loaded. A failed pack URI falls back to Segoe UI and renders perfectly, so compare `widget-clock.png` against Task 3's output and confirm the face changed. If it did not, the pack URI family name is wrong: the `#` name is the font's internal family name, not the file name.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add src/Plith/Assets/Fonts src/Plith/Plith.csproj src/Plith/Resources/Theme.xaml src/Plith/Views NOTICE.md tests/Plith.Tests/TypographyTests.cs
