@@ -235,6 +235,34 @@ public sealed class ThemeService : IDisposable
     }
 
     /// <summary>
+    /// Everything the notch resolves that depends on the theme, as ONE dictionary for
+    /// <see cref="Plith.Views.OsdHost"/> to mirror: the active OSD palette's keys, then the accent
+    /// override on top (last wins, the same order Application.Resources uses).
+    ///
+    /// Why the palette travels too: the notch ink (NotchInk, NotchInkMuted, NotchTrack) and the
+    /// Ornament* tokens live in OsdPalette.*.xaml and differ per theme, while OsdSurfaceBrush
+    /// arrives through the override mirror. If only the override were mirrored, a Dark to Light
+    /// switch could update the floor and leave the ink at its dark value (about 1.05:1 on the
+    /// light floor). The keys are COPIED from the palette rather than listed here, so a token
+    /// added to OsdPalette.*.xaml reaches the notch without anyone remembering to list it.
+    /// </summary>
+    public ResourceDictionary BuildOsdMirror() =>
+        BuildOsdMirror(_activeOsdPalette, BuildAccentOverride());
+
+    /// <summary>Composition half of <see cref="BuildOsdMirror()"/>, static so a test can check it
+    /// against the real palette files.</summary>
+    public static ResourceDictionary BuildOsdMirror(ResourceDictionary? palette, ResourceDictionary accentOverride)
+    {
+        var mirror = new ResourceDictionary();
+        if (palette is not null)
+        {
+            foreach (var key in palette.Keys) mirror[key] = palette[key];
+        }
+        foreach (var key in accentOverride.Keys) mirror[key] = accentOverride[key];
+        return mirror;
+    }
+
+    /// <summary>
     /// The same dictionary, from an explicit accent and theme rather than from settings.
     ///
     /// Static and public so the offscreen render harness can build exactly what the running app

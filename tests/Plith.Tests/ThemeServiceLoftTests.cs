@@ -13,6 +13,35 @@ public class ThemeServiceLoftTests
         Color.FromRgb(0x4A, 0xD6, 0x95),
     ];
 
+    /// <summary>
+    /// A runtime theme switch reaches the notch only through the dictionary OsdHost mirrors, so
+    /// every key the OSD palette defines must be reachable through it, with the palette's own
+    /// value unless the accent override deliberately supersedes it. Enumerates the real palette
+    /// files, so a token added to one is covered without editing this test.
+    /// </summary>
+    [StaTheory]
+    [InlineData("OsdPalette.Dark.xaml", true)]
+    [InlineData("OsdPalette.Light.xaml", false)]
+    public void OsdMirror_CarriesEveryKeyTheOsdPaletteDefines(string file, bool isDark)
+    {
+        var palette = (ResourceDictionary)Application.LoadComponent(
+            new Uri($"/Plith;component/Resources/{file}", UriKind.Relative));
+        var accent = ThemeService.BuildAccentOverride(Accents[1], isDark);
+
+        var mirror = ThemeService.BuildOsdMirror(palette, accent);
+
+        Assert.NotEmpty(palette.Keys);
+        foreach (var key in palette.Keys)
+        {
+            Assert.True(mirror.Contains(key), $"{key} from {file} is not reachable through the OSD mirror");
+            var expected = accent.Contains(key) ? accent[key] : palette[key];
+            Assert.Same(expected, mirror[key]);
+        }
+        foreach (var key in accent.Keys) Assert.True(mirror.Contains(key), $"{key} lost from the accent override");
+        foreach (var key in new[] { "NotchInk", "NotchInkMuted", "NotchTrack" })
+            Assert.Same(palette[key], mirror[key]);
+    }
+
     [Fact]
     public void BuildAccentOverride_SurfaceIsTheFloorAndNotTheAccent()
     {

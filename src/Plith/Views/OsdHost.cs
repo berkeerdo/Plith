@@ -92,7 +92,8 @@ public sealed class OsdHost : BandWindow
     // current value rather than a stale one from before this event.
     private bool _coversMonitor;
 
-    // Local mirror of ThemeService.BuildAccentOverride(). Lives on this ContentControl's
+    // Local mirror of ThemeService.BuildOsdMirror() (the active OSD palette plus the accent
+    // override). Lives on this ContentControl's
     // own Resources.MergedDictionaries so DynamicResource lookups inside OsdContent hit
     // it before walking up. See the comment on ThemeService.BuildAccentOverride for why
     // we can't rely on Application.Resources changes reaching an HwndSource RootVisual.
@@ -426,7 +427,7 @@ public sealed class OsdHost : BandWindow
 
     private void RefreshAccentMirror()
     {
-        var dict = _theme.BuildAccentOverride();
+        var dict = _theme.BuildOsdMirror();
         if (_accentOverride is not null)
             Resources.MergedDictionaries.Remove(_accentOverride);
         Resources.MergedDictionaries.Add(dict);
