@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Windows;
 using System.Windows.Controls;
 
@@ -39,14 +38,17 @@ public class LoftLabel : TextBlock
     // null through a binding, and OverrideMetadata replaced TextBlock's own coerce callback, so
     // null is handled here rather than assumed away. It becomes empty text.
     //
-    // Upper-cased with the CURRENT culture, not the invariant one: this app shows Turkish text,
-    // and ToUpperInvariant turns "i" into "I" where Turkish needs the dotted capital I.
+    // Upper-cased with the INVARIANT culture. What reaches this control is brand and technical
+    // identifiers (device names, bus names, fixed English words), not localized prose, and
+    // culture-aware casing would turn "Voicemeeter" into "VOİCEMEETER" on a Turkish machine.
+    // Invariant would be WRONG for Turkish prose ("Salı" becomes "SALı"), so a localized
+    // label routed through here needs its own decision.
     private static object CoerceText(DependencyObject d, object value)
     {
         if (value is null) return string.Empty;
 
         return d is LoftLabel { Case: "Upper" } && value is string text
-            ? text.ToUpper(CultureInfo.CurrentCulture)
+            ? text.ToUpperInvariant()
             : value;
     }
 }

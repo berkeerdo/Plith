@@ -118,28 +118,17 @@ public class OrnamentTests
     [StaFact]
     public void LoftLabel_UppercasesOnlyWhenTheCaseTokenSaysUpper()
     {
-        // Pinned to English: casing follows the machine culture by design, and on a Turkish
-        // machine "line" correctly upper-cases to a dotted capital I.
-        var saved = System.Globalization.CultureInfo.CurrentCulture;
-        try
-        {
-            System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("en-US");
-            var label = new LoftLabel { Text = "usb out" };
-            Assert.Equal("usb out", label.Text);
+        var label = new LoftLabel { Text = "usb out" };
+        Assert.Equal("usb out", label.Text);
 
-            label.Case = "Upper";
-            Assert.Equal("USB OUT", label.Text);
+        label.Case = "Upper";
+        Assert.Equal("USB OUT", label.Text);
 
-            label.Text = "line 2";
-            Assert.Equal("LINE 2", label.Text);
+        label.Text = "line 2";
+        Assert.Equal("LINE 2", label.Text);
 
-            label.Case = "None";
-            Assert.Equal("line 2", label.Text);
-        }
-        finally
-        {
-            System.Globalization.CultureInfo.CurrentCulture = saved;
-        }
+        label.Case = "None";
+        Assert.Equal("line 2", label.Text);
     }
 
     [StaFact]
@@ -203,19 +192,23 @@ public class OrnamentTests
     }
 
     /// <summary>
-    /// ToUpperInvariant gives "ISTANBUL" here, which a Turkish reader sees as a misspelling.
+    /// Brand names must not take Turkish casing: under tr-TR "Voicemeeter" would become
+    /// "VOİCEMEETER". Runs under tr-TR explicitly so it means the same on every machine.
     /// </summary>
     [StaFact]
-    public void LoftLabel_UppercasesWithTheCurrentCulture()
+    public void LoftLabel_UppercasesBrandNamesWithoutTurkishCasing()
     {
         var saved = System.Globalization.CultureInfo.CurrentCulture;
         try
         {
             System.Globalization.CultureInfo.CurrentCulture = new System.Globalization.CultureInfo("tr-TR");
-            var label = new LoftLabel { Case = "Upper", Text = "istanbul" };
+            var label = new LoftLabel { Case = "Upper", Text = "Voicemeeter" };
 
-            Assert.Equal("�STANBUL", label.Text);
-            Assert.NotEqual("istanbul".ToUpperInvariant(), label.Text);
+            Assert.Equal("VOICEMEETER", label.Text);
+            Assert.NotEqual("VOİCEMEETER", label.Text);
+
+            label.Text = "Logitech G733";
+            Assert.Equal("LOGITECH G733", label.Text);
         }
         finally
         {
