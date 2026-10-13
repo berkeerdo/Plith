@@ -1,5 +1,6 @@
 <ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
-                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:sys="clr-namespace:System;assembly=System.Runtime">
 
     <!-- Stated once here and referenced below. It used to be typed out at each
          brush, which is not a shared value but the same value by coincidence — the kind that
@@ -68,4 +69,13 @@
     <SolidColorBrush x:Key="NotchInk" Color="#ECE9E2" />
     <SolidColorBrush x:Key="NotchInkMuted" Color="#A39E94" />
     <SolidColorBrush x:Key="NotchTrack" Color="#2B2824" />
+
+    <!-- Loft's ornament layer, as tokens so a theme turns it off without touching a view.
+         These override the OFF defaults in Ornaments.xaml, which App.xaml merges before this
+         palette. 9 DIP is praxvon-ui's `ornament.corner`. The tick brush is the secondary-text
+         ink for this floor: a ruler is quiet by design. -->
+    <sys:Double x:Key="OrnamentCornerLength">9</sys:Double>
+    <sys:Double x:Key="OrnamentOutlineThickness">1</sys:Double>
+    <sys:String x:Key="OrnamentLabelCase">Upper</sys:String>
+    <SolidColorBrush x:Key="OrnamentTickBrush" Color="#71717A" />
 </ResourceDictionary>

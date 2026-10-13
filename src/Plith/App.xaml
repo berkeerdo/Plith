@@ -5,6 +5,11 @@
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
+                <!-- Ornament defaults, the OFF values. Merged BEFORE the OSD palette on purpose: a
+                     later dictionary wins a duplicate key, so the Loft palettes below override
+                     these to ON, and high contrast, which defines none of them, falls through to
+                     OFF. Move this after the palette and no ornament ever draws. -->
+                <ResourceDictionary Source="Resources/Ornaments.xaml" />
                 <!-- OSD overlay palette. Swapped by ThemeService between OsdPalette.Dark.xaml
                      and OsdPalette.Light.xaml at runtime. Theme.xaml references every Osd*
                      brush via DynamicResource so the swap reaches the OSD window live. -->

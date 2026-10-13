@@ -96,7 +96,7 @@ else { $app = [Windows.Application]::Current }
 # shorter and more certain path - and it sidesteps the fact that a ResourceDictionary reached
 # through Application.Current in PowerShell does not behave like the dictionary it wraps.
 $paletteSources = @(
-    'Resources/Theme.xaml', "Resources/Palette.$Theme.xaml",
+    'Resources/Ornaments.xaml', 'Resources/Theme.xaml', "Resources/Palette.$Theme.xaml",
     "Resources/OsdPalette.$Theme.xaml", 'Resources/PlithIcons.xaml'
 )
 
@@ -1481,7 +1481,24 @@ Save-Visual -Element $hud2 -W 372.0 -H 54.0 -Name 'hud-media'
 $desktop = if ($Theme -eq 'Light') { '#E9EAEC' } else { '#151A21' }
 $audioCard = [Plith.Views.AudioCardView]::new()
 $audioCard.DataContext = $audioVm
-Save-Visual -Element $audioCard -W 382.0 -H 56.0 -Name 'card-audio' -Background $desktop
+Save-Visual -Element $audioCard -W 382.0 -H 66.0 -Name 'card-audio' -Background $desktop
+
+# The brightness card and the ornament frame. The card carries the ruler under its bar, and the
+# frame is the four corner marks the notch panel wears (OsdContent lays the same style over
+# NotchSurface). Rendered at the shelf page's 356 x 164 so the marks can be judged against a real
+# panel's corners and its 8 DIP radius, which is the whole question: inside the curve, not on it.
+$brightnessVm = [Plith.ViewModels.BrightnessCardViewModel]::new()
+$brightnessVm.Percent = 62
+$brightnessCard = [Plith.Views.BrightnessCardView]::new()
+$brightnessCard.DataContext = $brightnessVm
+Save-Visual -Element $brightnessCard -W 382.0 -H 66.0 -Name 'card-brightness' -Background $desktop
+
+$notchFrame = [Windows.Controls.Control]::new()
+$notchFrame.SetResourceReference([Windows.FrameworkElement]::StyleProperty, 'LoftFrame')
+$notchPanel = [Windows.Controls.Border]::new()
+$notchPanel.CornerRadius = [Windows.CornerRadius]::new(0, 0, 8, 8)
+$notchPanel.Child = $notchFrame
+Save-Visual -Element $notchPanel -W 356.0 -H 164.0 -Name 'notch-frame'
 
 $mediaCard = [Plith.Views.MediaCardView]::new()
 $mediaCard.DataContext = $mediaVm

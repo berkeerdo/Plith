@@ -466,19 +466,40 @@ public partial class MediaWidget : UserControl
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
         row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
 
-        // The dot sits in the layout whether or not it is drawn, so a non-current label starts
+        // Loft marks the current output with [ ] around its label, not with a dot or a fill:
+        // ADR 0014 closed that, because a light fill at 1.14:1 against its track is not an
+        // indicator at all. The brackets are decoration. The button's own name already says
+        // "current output", which is what a screen reader announces, so they are kept out of the
+        // accessibility tree (WPF has no AccessibilityView, so DecorativeText creates no automation peer) rather than being read as "left bracket".
+        //
+        // Without ornaments (high contrast) the dot stays, because the selected state still has
+        // to be visible and the brackets are among the things that theme turns off. The token is
+        // read per cell, so a theme change is picked up the next time the picker opens.
+        var bracketed = TryFindResource("OrnamentCornerLength") is double length && length > 0;
+
+        // The marker sits in the layout whether or not it is drawn, so a non-current label starts
         // where a current one does and the column does not look ragged.
-        var dot = new System.Windows.Shapes.Ellipse
+        FrameworkElement lead;
+        if (bracketed)
         {
-            Width = 5,
-            Height = 5,
-            Margin = new Thickness(0, 0, 5, 0),
-            VerticalAlignment = VerticalAlignment.Center,
-            Fill = (Brush)FindResource("NotchInk"),
-            Visibility = choice.IsCurrent ? Visibility.Visible : Visibility.Hidden,
-        };
-        Grid.SetColumn(dot, 0);
-        row.Children.Add(dot);
+            var markBrush = (Brush)(TryFindResource("OsdAccentText") ?? FindResource("NotchInk"));
+            lead = Bracket("[", choice.IsCurrent, markBrush, new Thickness(0, 0, 4, 0));
+        }
+        else
+        {
+            lead = new System.Windows.Shapes.Ellipse
+            {
+                Width = 5,
+                Height = 5,
+                Margin = new Thickness(0, 0, 5, 0),
+                VerticalAlignment = VerticalAlignment.Center,
+                Fill = (Brush)FindResource("NotchInk"),
+                Visibility = choice.IsCurrent ? Visibility.Visible : Visibility.Hidden,
+            };
+        }
+
+        Grid.SetColumn(lead, 0);
+        row.Children.Add(lead);
 
         var label = new TextBlock
         {
@@ -490,6 +511,17 @@ public partial class MediaWidget : UserControl
         };
         Grid.SetColumn(label, 1);
         row.Children.Add(label);
+
+        if (bracketed)
+        {
+            // The closing bracket frames the cell's right edge, in its own Auto column, so the
+            // label's star column still gives TextTrimming a finite width.
+            var markBrush = (Brush)(TryFindResource("OsdAccentText") ?? FindResource("NotchInk"));
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var trail = Bracket("]", choice.IsCurrent, markBrush, new Thickness(4, 0, 0, 0));
+            Grid.SetColumn(trail, 2);
+            row.Children.Add(trail);
+        }
 
         var button = new Button
         {
@@ -513,6 +545,21 @@ public partial class MediaWidget : UserControl
 
         button.Click += (_, _) => Choose(choice);
         return button;
+    }
+
+    private static DecorativeText Bracket(string glyph, bool visible, Brush brush, Thickness margin)
+    {
+        var mark = new DecorativeText
+        {
+            Text = glyph,
+            FontFamily = (FontFamily)Application.Current.FindResource("OsdMonoFont"),
+            FontSize = 11,
+            Margin = margin,
+            VerticalAlignment = VerticalAlignment.Center,
+            Foreground = brush,
+            Visibility = visible ? Visibility.Visible : Visibility.Hidden,
+        };
+        return mark;
     }
 
     private void Choose(OutputChoice choice)

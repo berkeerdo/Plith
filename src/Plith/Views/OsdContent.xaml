@@ -43,6 +43,20 @@
             </Border.Effect>
         </Border>
 
+        <!-- Loft's corner marks, laid over the notch surface and sized to it. A separate element
+             because NotchSurface has no children by design (see above), so the marks cost the
+             morph nothing. Sized by binding to the surface rather than from code-behind, and
+             faded with the card content so they appear once the shape has arrived instead of
+             riding a half-grown panel. Off under high contrast through the ornament tokens. -->
+        <Control x:Name="NotchFrame"
+                 Style="{DynamicResource LoftFrame}"
+                 VerticalAlignment="Top"
+                 HorizontalAlignment="Center"
+                 Width="{Binding Width, ElementName=NotchSurface}"
+                 Height="{Binding Height, ElementName=NotchSurface}"
+                 Visibility="{Binding Visibility, ElementName=NotchSurface}"
+                 Opacity="{Binding Opacity, ElementName=SlidingRoot}" />
+
         <!-- The card content.
 
              This Grid is the file's existing outer content Grid. Its Margin="14" and
