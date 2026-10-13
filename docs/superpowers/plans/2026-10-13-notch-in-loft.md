@@ -1216,7 +1216,7 @@ git commit -m "feat(notch): add Loft's ornament layer"
 
 Loft's rule is that a value settles without overshoot, like a batten pinned by a duck. praxvon-ui pairs Loft with the `calm` personality, whose `spring.smooth` is `visualDuration 0.55, bounce 0`. WPF has no spring, so the equivalent is a `CubicEase` with `EasingMode.EaseOut` over 400 ms: bounce 0 means no overshoot, and an ease-out cubic is the closest standard curve. Reduced motion jumps, with no animation at all.
 
-- [ ] **Step 1: Write the failing test**
+- [x] **Step 1: Write the failing test**
 
 ```csharp
 using System.Windows;
@@ -1260,12 +1260,12 @@ public class SettleTests
 }
 ```
 
-- [ ] **Step 2: Run test to verify it fails**
+- [x] **Step 2: Run test to verify it fails**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~SettleTests`
 Expected: FAIL, `LoftSettleEase` is not a key.
 
-- [ ] **Step 3: Write minimal implementation**
+- [x] **Step 3: Write minimal implementation**
 
 In `src/Plith/Resources/Theme.xaml`:
 
@@ -1279,12 +1279,12 @@ In `src/Plith/Resources/Theme.xaml`:
 
 Point the volume bar, the brightness bar and the seek thumb at both keys, replacing whatever duration and easing they carry now. Where a view checks `SystemParameters.ClientAreaAnimation` or an equivalent reduced-motion flag, keep that branch and let it jump.
 
-- [ ] **Step 4: Run test to verify it passes**
+- [x] **Step 4: Run test to verify it passes**
 
 Run: `dotnet test tests/Plith.Tests/Plith.Tests.csproj --filter FullyQualifiedName~SettleTests`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add src/Plith/Resources/Theme.xaml src/Plith/Views tests/Plith.Tests/SettleTests.cs
