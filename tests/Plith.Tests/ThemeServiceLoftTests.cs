@@ -117,7 +117,7 @@ public class ThemeServiceLoftTests
                 // accent that fills it, which a general neutral was not (1.6:1 on a deep accent).
                 var derived = AccentTheme.Derive(accent, isDark).Accent;
 
-                Assert.True(ContrastInk.ContrastRatio(track.Color, derived) >= 1.5,
+                Assert.True(ContrastInk.ContrastRatio(track.Color, derived) >= 3.0,
                     $"{accent} isDark={isDark}: groove and fill nearly identical");
             }
         }

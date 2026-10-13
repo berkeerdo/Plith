@@ -17,11 +17,21 @@
          around a wrong answer. Its lookups therefore fall through to the values here, which is
          "no ornaments". Merge this AFTER the palette and the off values win everywhere.
 
-         No absolute pack URI in this file (see scripts/check-shared-xaml.ps1). -->
+         This file is Plith-only: it is not linked into the installer or the catcher, which is why
+         the pack URI on the label font below is acceptable (scripts/check-shared-xaml.ps1 only
+         scans files that ARE linked). Do not copy that spelling into a shared file. -->
     <sys:Double x:Key="OrnamentCornerLength">0</sys:Double>
     <sys:Double x:Key="OrnamentOutlineThickness">0</sys:Double>
     <sys:String x:Key="OrnamentLabelCase">None</sys:String>
     <SolidColorBrush x:Key="OrnamentTickBrush" Color="Transparent" />
+
+    <!-- OsdAccentMark and OsdAccentText are accent-derived and normally arrive from
+         ThemeService.BuildAccentOverride. Under high contrast that override is EMPTY, so without
+         these the corner-mark Stroke below would resolve to nothing, silently. The values are
+         the off ones: a mark that draws nothing, and the system text colour for the one place
+         that reads the text role. -->
+    <SolidColorBrush x:Key="OsdAccentMark" Color="Transparent" />
+    <SolidColorBrush x:Key="OsdAccentText" Color="{x:Static SystemColors.WindowTextColor}" />
 
     <!-- The label treatment is part of the ornament layer too (uppercase mono labels), so high
          contrast keeps its OLD labels whole: the UI face, the old sizes and small caps. The

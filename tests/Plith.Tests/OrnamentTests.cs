@@ -20,6 +20,19 @@ public class OrnamentTests
     /// direct key read against `OsdPalette.HighContrast.xaml` would be asserting the opposite
     /// design.
     /// </summary>
+    /// <summary>Under high contrast the accent override is empty, so the corner-mark stroke key
+    /// must still resolve from the defaults rather than to nothing.</summary>
+    [StaFact]
+    public void AccentRoleKeys_ResolveWithoutTheAccentOverride()
+    {
+        var stack = new ResourceDictionary();
+        stack.MergedDictionaries.Add(Load("Ornaments.xaml"));
+        stack.MergedDictionaries.Add(Load("OsdPalette.HighContrast.xaml"));
+
+        Assert.IsType<SolidColorBrush>(stack["OsdAccentMark"]);
+        Assert.IsType<SolidColorBrush>(stack["OsdAccentText"]);
+    }
+
     [StaFact]
     public void Ornaments_ResolveToOffUnderHighContrast()
     {

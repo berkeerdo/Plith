@@ -65,12 +65,12 @@
 
     <!-- Loft's ornament layer, as tokens so a theme turns it off without touching a view.
          These override the OFF defaults in Ornaments.xaml, which App.xaml merges before this
-         palette. 9 DIP is praxvon-ui's `ornament.corner`. The tick brush is the secondary-text
-         ink for this floor: a ruler is quiet by design. -->
+         palette. 9 DIP is praxvon-ui's `ornament.corner`. The tick brush is the floor's TextSecondary
+         (LoftPalette): a ruler is quiet by design. -->
     <sys:Double x:Key="OrnamentCornerLength">9</sys:Double>
     <sys:Double x:Key="OrnamentOutlineThickness">1</sys:Double>
     <sys:String x:Key="OrnamentLabelCase">Upper</sys:String>
-    <SolidColorBrush x:Key="OrnamentTickBrush" Color="#52525B" />
+    <SolidColorBrush x:Key="OrnamentTickBrush" Color="#55544F" />
     <FontFamily x:Key="OrnamentLabelFont">pack://application:,,,/Assets/Fonts/#Martian Mono Std Rg, Cascadia Mono, Consolas</FontFamily>
     <sys:Double x:Key="OrnamentLabelSize">10</sys:Double>
     <sys:Double x:Key="OrnamentTitleLabelSize">11</sys:Double>
