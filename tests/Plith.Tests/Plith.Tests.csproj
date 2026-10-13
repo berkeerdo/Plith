@@ -19,6 +19,12 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- The shipped fonts, copied beside the test assembly so TypographyTests can ask WPF which
+         family names they really contain. -->
+    <Content Include="..\..\src\Plith\Assets\Fonts\*.ttf" Link="Fonts\%(Filename)%(Extension)" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
+  <ItemGroup>
     <Using Include="Xunit" />
   </ItemGroup>
 

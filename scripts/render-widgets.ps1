@@ -138,8 +138,9 @@ if ($accentOverride) { $app.Resources.MergedDictionaries.Add($accentOverride) }
 # OsdMonoFont with them.
 #
 # Which half is measured: this render proves the GLYPHS (the right faces are drawn).
-# TypographyTests proves the PACK URI (the strings in Theme.xaml are well formed). Neither
-# covers the other.
+# TypographyTests proves the family NAMES in Theme.xaml match the shipped .ttf files. Nothing in
+# CI or in this harness proves the pack URI resolves inside Plith.exe: that is only established
+# by launching the app.
 #
 # It fails loudly: each family is resolved to a real typeface and its family name is checked,
 # because a harness that silently renders the wrong face is how this went unseen.
@@ -170,6 +171,7 @@ $app.Resources.MergedDictionaries.Add($fontOverride)
 # while the cards around them render in Public Sans. Their setters are sealed once loaded, so
 # each TextBlock style is replaced by a thin derived style (BasedOn the original) that sets only
 # FontFamily to the checked family. Run on each freshly loaded Theme dictionary before first use.
+$script:themeRepairs = 0
 function Repair-ThemeFonts([Windows.ResourceDictionary]$Dictionary) {
     $count = 0
     foreach ($key in @($Dictionary.Keys)) {
@@ -181,10 +183,12 @@ function Repair-ThemeFonts([Windows.ResourceDictionary]$Dictionary) {
         $count++
     }
     if ($count -eq 0) { throw 'Theme.xaml has no TextBlock styles to repair: the harness fonts would be wrong.' }
+    $script:themeRepairs++
 }
 foreach ($d in $app.Resources.MergedDictionaries) {
     if ($d.Contains('OsdValueStyle')) { Repair-ThemeFonts $d }
 }
+if ($script:themeRepairs -eq 0) { throw "No Theme dictionary was repaired at app level (no merged dictionary holds 'OsdValueStyle'): Theme styles would render in the wrong face." }
 
 function Add-Palette([Windows.FrameworkElement]$Element) {
     # Added to the element's OWN collection rather than replacing its Resources wholesale:
@@ -209,7 +213,9 @@ function Add-Palette([Windows.FrameworkElement]$Element) {
 # Proven before anything is drawn: an unresolved resource renders as WPF's default, which is
 # black text on a black ground - indistinguishable from a design fault.
 $probe = [Windows.Controls.Border]::new()
+$repairsBefore = $script:themeRepairs
 Add-Palette $probe
+if ($script:themeRepairs -eq $repairsBefore) { throw "Add-Palette did not repair the Theme dictionary (is the path in `$paletteSources spelled differently?): element-level styles would render in the wrong face." }
 foreach ($k in 'NotchInk','NotchTrack','OsdGainGreen','OsdTextPrimary','OsdUiFont') {
     $v = $probe.TryFindResource($k)
     if ($null -eq $v) { throw "Resource '$k' did not resolve - the render would be meaningless." }
