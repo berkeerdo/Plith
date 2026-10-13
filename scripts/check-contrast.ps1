@@ -1,4 +1,4 @@
-# scripts/check-contrast.ps1 — measures text contrast for every colour pair the XAML declares,
+﻿# scripts/check-contrast.ps1 — measures text contrast for every colour pair the XAML declares,
 # across both themes and a spread of accents.
 #
 # Why this exists: a user reported white text on a pink panel in the light theme and could not
@@ -50,11 +50,11 @@ param(
 # that is made to pass by writing a fake colour into the product has been turned into decoration.
 $unresolvable = @{
     'MediaWidget.xaml:NotchTrack groove on the panel' =
-        'NotchTrack is the Loft floor Border, a hairline rule at about 1.3:1 against the panel BY INTENT (measured at about 1.3:1 when this pair is run, which is why it is listed here rather than failed). Not forced to 3:1: the fill inside the groove is the OsdAccent Mark, itself 3:1 from the panel, and a groove at 3:1 as well would sit at the same luminance as the fill and swallow it (measured with BorderStrong: fill vs groove 1.2 to 1.54:1 on light). The groove is a rule; the fill carries the visible state.'
+        'NotchTrack is the Loft floor Border, a hairline rule at about 1.3:1 against the panel BY INTENT (1.26:1 and 1.34:1 on dark, 1.26:1 and 1.41:1 on light, computed from the floor hexes rather than by this script, which skips the pair). Not forced to 3:1: the fill inside the groove is the OsdAccent Mark, itself 3:1 from the panel, and a groove at 3:1 as well would sit at the same luminance as the fill and swallow it (measured with BorderStrong: fill vs groove 1.2 to 1.54:1 on light). The groove is a rule; the fill carries the visible state.'
     'MediaWidget.xaml:TransportButtonStyle' =
         'the chip is translucent (#0DFFFFFF over the panel), so nothing static knows what is underneath. It used to be a chip over a near-black scrim over album artwork; that scrim is gone with the page redesign, and the chip now sits on the notch panel. Checked instead in the render harness, light and dark - see widget-media.png.'
     'MediaWidget.xaml:TrackBarStyle' =
-        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: OsdAccent on NotchTrack 1,0:1, NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, NotchInk on NotchTrack 2,6:1 - because the groove and the ink were derived independently of each other, leaving the ink an unpredictable distance from the groove. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
+        'NEITHER colour is declared: MediaWidget.PaintBar computes both from NotchInk, the played part being the ink itself and the groove the same ink at 24 per cent alpha, so what this scan would need to measure is an alpha composite over a surface painted two files away. Every declared alternative WAS measured here first and every one failed: NotchInk on NotchBezelBrush 1,1:1, NotchInk on OsdHighlight 1,1:1, and, in the TrackOn era whose NotchTrack no longer exists so these two are history and not reproducible today, OsdAccent on NotchTrack 1,0:1 and NotchInk on NotchTrack 2,6:1 - because the groove and the ink were derived independently of each other, leaving the ink an unpredictable distance from the groove. A fill derived from the groove cleared every ratio and drew the bar INVERTED, which a ratio cannot see. Checked in the render harness instead, light and dark: see widget-media.png and widget-media-paused.png.'
 }
 
 $nonText = @{
