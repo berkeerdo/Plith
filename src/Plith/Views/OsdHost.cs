@@ -1761,10 +1761,13 @@ public sealed class OsdHost : BandWindow
             var wantsHud = !keepFrame && _presentation is AmbientNotchPresentation && _hud is not null;
             if (wantsHud)
             {
-                // At rest the window is parked, so the bar's last value belongs to an earlier
-                // appearance: land on the new one rather than sweeping from it.
-                var restOpacity = Math.Clamp(_settings.Current.OsdOpacityPercent, 50, 100) / 100.0;
-                _hud!.Show(PickHudKind(reason), freshlyShown: _presentation.IsAtRest(restOpacity));
+                // Land when no content is on screen yet, so the bar does not sweep from a value
+                // left by an earlier appearance. Not IsAtRest: that is also true mid-collapse,
+                // when the HUD is still visible and a landing would jump in full view. See
+                // PresentationPolicy.HudLandsOnShow.
+                var land = _presentation is AmbientNotchPresentation ambient
+                           && PresentationPolicy.HudLandsOnShow(ambient.CurrentExpand);
+                _hud!.Show(PickHudKind(reason), freshlyShown: land);
             }
             if (!keepFrame)
                 _content.SetPanelContent(wantsHud ? NotchPanelContent.Hud : NotchPanelContent.Cards);

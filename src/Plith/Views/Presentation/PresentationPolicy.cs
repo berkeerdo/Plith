@@ -76,4 +76,16 @@ public static class PresentationPolicy
     /// </summary>
     public static bool IsFullyHidden(PresentationMode mode, double opacity, bool isParked)
         => mode == PresentationMode.AmbientNotch ? isParked : opacity < 0.01;
+
+    /// <summary>
+    /// Whether a HUD shown now should LAND its bar rather than settle it: true when no content is
+    /// on screen at this expansion, so the bar's last value belongs to an earlier appearance and
+    /// a sweep from it would be a bar growing from nowhere.
+    ///
+    /// Read from the live expansion, not from IsAtRest (which also counts an in-flight collapse
+    /// as at rest, so a key pressed mid-collapse would make a bar that is still on screen jump)
+    /// and not from the parked flag (which a dropped Completed callback leaves wrong forever).
+    /// The window is permanently shown in this mode, so the HUD's own IsVisible cannot say it.
+    /// </summary>
+    public static bool HudLandsOnShow(double notchExpand) => !NotchGeometry.ShowsContentAt(notchExpand);
 }
