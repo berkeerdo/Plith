@@ -48,17 +48,24 @@ public partial class ShelfSurface : UserControl
     private const double Gap = NotchGeometry.ShelfGap;
 
     /// <summary>
-    /// The tile's ground, at rest and under the pointer.
+    /// The tile's ground: a brush that paints NOTHING and is still hit-tested.
     ///
-    /// White over the panel rather than a palette colour, because this panel is dark in both
-    /// themes (NotchInk is #F2F5F8 in Light as well as Dark, which the remove chip's own note
-    /// spells out) and a wash leaves the ink's contrast where it was. Frozen: every tile on every
-    /// render uses them.
+    /// It was a white wash, 6 per cent at rest and 14 under the pointer. Two things retired it,
+    /// both reported from a running build. The wash was neutral white over what Loft made a WARM
+    /// floor, so every tile read as a foreign grey box; and eight filled boxes is a different
+    /// design language from the notch's other four pages, which draw on the bare floor, so paging
+    /// here read as a whole new notch opening rather than as a page turn.
+    ///
+    /// The note that stood here also claimed this panel is dark in both themes. Loft ended that:
+    /// LoftPalette.For(false) is a light floor, and a white wash on it is invisible anyway.
+    ///
+    /// TRANSPARENT RATHER THAN NULL is the line that matters. WPF hit-tests a Transparent brush
+    /// and not a null one, so a null here takes the pointer away from everything except the
+    /// painted icon and label: measured on hardware as a click at a tile's exact centre doing
+    /// nothing at all (docs/SHELF-VERIFICATION.md 3.10). render-widgets.ps1 fails the build on
+    /// either mistake, the tile-hit check on a null ground and the floor check on a visible one.
     /// </summary>
-    private static readonly Brush TileRest = Frozen(Color.FromArgb(0x0F, 0xFF, 0xFF, 0xFF));
-
-    /// <inheritdoc cref="TileRest"/>
-    private static readonly Brush TileHover = Frozen(Color.FromArgb(0x24, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush TileGround = Frozen(Color.FromArgb(0x00, 0xFF, 0xFF, 0xFF));
 
     private static Brush Frozen(Color color)
     {
@@ -768,7 +775,11 @@ public partial class ShelfSurface : UserControl
             LineStackingStrategy = LineStackingStrategy.BlockLineHeight,
             Height = 11,
             Margin = new Thickness(0, 2, 0, 0),
-            Foreground = (Brush)FindResource("NotchInk"),
+            // MUTED AT REST, full ink under the pointer. With the tile's ground gone, hover had
+            // nothing left to colour, and this is where it went: the name of the thing you are
+            // pointing at. The cost is stated rather than hidden, because it is a real one: a
+            // resting name is dimmer than it was before Loft. check-contrast holds it to 4.5:1.
+            Foreground = (Brush)FindResource("NotchInkMuted"),
             HorizontalAlignment = HorizontalAlignment.Center,
             TextAlignment = TextAlignment.Center,
             // No trimming and no wrapping: ShelfLabel has already decided what fits, and letting
@@ -777,8 +788,38 @@ public partial class ShelfSurface : UserControl
             TextWrapping = TextWrapping.NoWrap,
         };
 
+        // THE SELECTION RING, around the picture instead of around the tile.
+        //
+        // It was the tile Border's own BorderThickness, which only reads as a ring while there is
+        // a ground to ring; with the ground gone it would have drawn a lime rectangle around
+        // nothing. Around the picture it marks the thing a person points at, and it keeps the
+        // property the old one had to be fixed for on 2026-09-20: drawn INSIDE an element that is
+        // already inset from the tile, so it cannot sit hard against the card's edge.
+        //
+        // In a cell of its own rather than inside iconHost, and the extra Grid earns its keep:
+        // RequestShellIcon swaps the fallback for the real shell icon by touching that host's
+        // children, and a ring parented there would be at the mercy of whatever that swap does.
+        // The cell is the same fixed size as the host, so it costs no layout.
+        var pictureCell = new Grid
+        {
+            Width = PreviewWidth,
+            Height = PreviewHeight,
+            HorizontalAlignment = HorizontalAlignment.Center,
+        };
+        pictureCell.Children.Add(iconHost);
+        pictureCell.Children.Add(new Border
+        {
+            CornerRadius = new CornerRadius(7),
+            // SelectionRing, the Loft role Mark, which is what the wire carries for exactly this:
+            // a non-text stroke that clears 3:1 on both floors. See Apply's own comment.
+            BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
+            BorderThickness = new Thickness(selected ? 1.5 : 0),
+            // The ring is a mark, not a target: the tile underneath answers the pointer.
+            IsHitTestVisible = false,
+        });
+
         var content = new StackPanel { VerticalAlignment = VerticalAlignment.Center };
-        content.Children.Add(iconHost);
+        content.Children.Add(pictureCell);
         content.Children.Add(label);
 
         // A Grid rather than handing content straight to the Border, so the hover-only remove
@@ -807,32 +848,18 @@ public partial class ShelfSurface : UserControl
             // unchanged, and both outer edges get the same half-gap. Symmetric by construction
             // rather than by a correction somewhere else.
             Margin = new Thickness(Gap / 2, 0, Gap / 2, Gap),
-            // SelectionRing, not the raw accent: see Apply's own comment. Drawn at a thickness
-            // that reads as a ring rather than a coincidental extra pixel.
-            BorderBrush = selected ? (Brush)FindResource("SelectionRing") : Brushes.Transparent,
-            BorderThickness = new Thickness(selected ? 1.5 : 0),
-            // A GROUND OF ITS OWN, faint, and it is what makes the grid read as a set of
-            // objects rather than as loose icons scattered on a panel. Reported from a real
-            // session: you cannot tell what this page is.
+            // No ring here any more: it is around the picture, built above. A tile with no ground
+            // has no edge for a ring to follow.
+            // INVISIBLE AND STILL HIT-TESTABLE. The whole argument is on TileGround, including
+            // the measured reason this line may never become null and the two checks in
+            // render-widgets.ps1 that fail the build on either mistake.
             //
-            // Six per cent white over the panel, which is a hint of a surface rather than a
-            // surface. A chip at track strength was tried on the notch's own shelf page and
-            // rejected there for a measured reason, NotchInk on NotchTrack coming to 4.0:1 under
-            // the 4.5 body text needs; that reason is about a chip strong enough to change what
-            // the ink sits on. This is not. Hover doubles it, which is the other half of the same
-            // report: a tile that does not answer a pointer does not look like something you can
-            // pick up.
-            //
-            // A BRUSH AT ALL is also what makes the tile answer a pointer, which is the older
-            // rule this line carried and which has not gone away. WPF hit-tests a Transparent
-            // brush but not a null one, so with no Background only the painted icon and label
-            // answered: a hover, a click and the press a drag starts from were all dead in the
-            // gaps between them, including the tile's exact centre, which is where a person aims.
-            // Measured on hardware (docs/SHELF-VERIFICATION.md 3.10) as a click at the centre
-            // doing nothing while the same click on the icon selected. render-widgets.ps1's
-            // tile-hit check fails the build if this is removed, because no other check here asks
-            // which element a POINT belongs to.
-            Background = TileRest,
+            // What the ground used to carry, and where it went: it made the grid read as a set of
+            // objects rather than loose icons ("you cannot tell what this page is", reported from
+            // a real session), and hover doubled it so a tile looked like something you could
+            // pick up. The first job now belongs to the hovered-name row and the caption under
+            // each picture, the second to the caption going from muted to full ink.
+            Background = TileGround,
             // TWO, for the same arithmetic as the label's margin above: 4 a side left a 44 DIP
             // box for 47 DIP of content and clipped the second line of every long name.
             Padding = new Thickness(2),
@@ -847,7 +874,7 @@ public partial class ShelfSurface : UserControl
         tile.MouseEnter += (_, _) =>
         {
             removeButton.Visibility = Visibility.Visible;
-            tile.Background = TileHover;
+            label.Foreground = (Brush)FindResource("NotchInk");
             // The name, in the one place there is room for exactly one of them. This is where the
             // caption under the tile went.
             ShowName(entry.IsDirectory ? $"Folder {entry.Name}" : entry.Name);
@@ -855,7 +882,7 @@ public partial class ShelfSurface : UserControl
         tile.MouseLeave += (_, _) =>
         {
             removeButton.Visibility = Visibility.Collapsed;
-            tile.Background = TileRest;
+            label.Foreground = (Brush)FindResource("NotchInkMuted");
             ShowCount();
         };
 
@@ -1026,7 +1053,9 @@ public partial class ShelfSurface : UserControl
             Height = 3,
             VerticalAlignment = VerticalAlignment.Center,
             CornerRadius = new CornerRadius(1.5),
-            Background = new SolidColorBrush(Color.FromArgb(0x26, 0xFF, 0xFF, 0xFF)),
+            // NotchTrack, which is what a groove is: the floor's own Border, warm with the floor
+            // and flipping with the theme. It was 15 per cent white, from before Loft.
+            Background = (Brush)FindResource("NotchTrack"),
         });
 
         var segment = RailWidth / _railPageCount;

@@ -59,10 +59,18 @@
              press lighten THAT rather than the tile under it. The ring around it separates the
              circle from a dark icon, the case a dark ground alone would disappear into.
 
-             The colours are literal rather than palette keys because the notch palette has no
-             scrim family, and they are dark in both themes on purpose: NotchInk is #F2F5F8 in
-             Light as well as Dark, so this surface is dark whichever theme is chosen, and a chip
-             that flipped with the theme would carry light ink on a light ground. -->
+             THE COLOURS CAME OFF THE WIRE on 2026-10-14. They were literals in a cool blue-grey
+             family (#1B2027, #3A444F, #4C5864) on the reasoning that this surface is dark in both
+             themes. Loft ended that premise: LoftPalette.For(false) is a genuinely light floor,
+             so a chip fixed dark was a dark disc on a light page, and the cool family was foreign
+             to a warm floor either way.
+
+             NotchTrack is the ground, opaque (it is the floor's Border, sent as RGB) so the
+             requirement above still holds, and the glyph on it is NotchInk, measured at 4.0:1,
+             which clears the 3:1 a non-text mark needs and is why this is a mark and not a label.
+             The STATES are carried by the ring and by opacity rather than by three more colours:
+             the wire sends answers and not a scrim family, and deriving a lift here would be the
+             second copy of a derivation that ShelfPaletteWire exists to prevent. -->
         <Style x:Key="TileRemoveButtonStyle" TargetType="Button">
             <Setter Property="Background" Value="Transparent" />
             <Setter Property="BorderThickness" Value="0" />
@@ -73,8 +81,8 @@
                     <ControlTemplate TargetType="Button">
                         <Border x:Name="Chip"
                                 CornerRadius="9"
-                                Background="#D91B2027"
-                                BorderBrush="#40FFFFFF"
+                                Background="{DynamicResource NotchTrack}"
+                                BorderBrush="{DynamicResource NotchInkMuted}"
                                 BorderThickness="1"
                                 Padding="{TemplateBinding Padding}">
                             <ContentPresenter HorizontalAlignment="Center"
@@ -82,16 +90,14 @@
                         </Border>
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
-                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource NotchInk}" />
                             </Trigger>
                             <Trigger Property="IsKeyboardFocused" Value="True">
-                                <Setter TargetName="Chip" Property="Background" Value="#F23A444F" />
-                                <Setter TargetName="Chip" Property="BorderBrush" Value="#73FFFFFF" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource NotchInk}" />
                             </Trigger>
                             <Trigger Property="IsPressed" Value="True">
-                                <Setter TargetName="Chip" Property="Background" Value="#FF4C5864" />
-                                <Setter TargetName="Chip" Property="BorderBrush" Value="#A6FFFFFF" />
+                                <Setter TargetName="Chip" Property="BorderBrush" Value="{DynamicResource NotchInk}" />
+                                <Setter TargetName="Chip" Property="Opacity" Value="0.8" />
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>

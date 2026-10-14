@@ -1369,6 +1369,82 @@ if ($hitTiles.Count -eq 0) {
     throw "tile-hit check: no ${tileW}x${tileH} tile Borders in the rendered surface."
 }
 
+# --- the floor shows through: no tile paints a ground of its own -----------------------------
+#
+# Added 2026-10-14, failing first, for the report that the shelf page "is not Loft" and "does not
+# take the colours I gave". The tile's Background must still be a BRUSH, because the check above
+# is the rule that a null one is not hit-tested at all. What it must no longer be is VISIBLE: the
+# notch's other four pages draw on the bare Loft floor, and this page drew eight filled boxes on
+# top of it, which is what made it read as a different surface opening.
+foreach ($t in $hitTiles) {
+    if ($null -eq $t.Background) {
+        throw "floor check: a tile has a NULL Background, which the tile-hit check above exists to forbid."
+    }
+    if ($t.Background.Color.A -ne 0) {
+        throw ("floor check: a tile still paints a ground of its own (alpha $($t.Background.Color.A)). " +
+               "The shelf page sits on the bare Loft floor like the notch's other four pages.")
+    }
+}
+"  floor check passed: $($hitTiles.Count) tile(s) carry a hit-testable but invisible ground"
+
+# --- nothing here is painted from a pre-Loft literal -----------------------------------------
+#
+# The Loft merge changed 19 lines in this project: a comment, one key rename and the dark
+# fallback. Every FILLED element kept the constant it had before Loft, so this page drew a
+# neutral white wash and a cool blue-grey chip family over a warm floor. These are those
+# constants, and the point of listing them is that the next person cannot reintroduce one
+# quietly.
+$retiredLiterals = @('#0FFFFFFF', '#24FFFFFF', '#26FFFFFF', '#D91B2027', '#F23A444F',
+                     '#FF4C5864', '#40FFFFFF', '#73FFFFFF', '#A6FFFFFF')
+$litNodes = @(Find-VisualDescendants -Root $shelfSurface -Predicate { param($n) $true })
+$litFound = @()
+foreach ($n in $litNodes) {
+    foreach ($prop in 'Background', 'BorderBrush', 'Fill', 'Stroke') {
+        $brush = $n.$prop
+        if ($brush -is [Windows.Media.SolidColorBrush]) {
+            $hex = '#{0:X2}{1:X2}{2:X2}{3:X2}' -f $brush.Color.A, $brush.Color.R, $brush.Color.G, $brush.Color.B
+            if ($retiredLiterals -contains $hex) { $litFound += "$($n.GetType().Name).$prop = $hex" }
+        }
+    }
+}
+if ($litFound.Count -gt 0) {
+    $litList = ($litFound | Select-Object -Unique) -join "`n  "
+    throw "literal check: $($litFound.Count) element(s) still painted from a pre-Loft constant:`n  $litList"
+}
+"  literal check passed: nothing on the shelf surface is painted from a retired constant"
+
+# --- hover is the only affordance left, so it is checked rather than assumed ------------------
+#
+# With the tile's ground gone, nothing under the pointer changes shape or fill any more: the
+# caption going from NotchInkMuted to NotchInk is the whole of it, plus the name row at the top.
+# A silent break here would not fail any other check in this file and would read, from a running
+# build, as a shelf that has stopped responding to the mouse.
+$hoverTile = $hitTiles[0]
+$hoverLabel = @(Find-VisualDescendants -Root $hoverTile -Predicate { param($n) $n -is [Windows.Controls.TextBlock] })[0]
+if (-not $hoverLabel) { throw 'hover check: a tile has no caption TextBlock to carry hover.' }
+
+$restBrush = $hoverLabel.Foreground
+
+$enterArgs = [Windows.Input.MouseEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice, 0)
+$enterArgs.RoutedEvent = [Windows.UIElement]::MouseEnterEvent
+$hoverTile.RaiseEvent($enterArgs)
+$overBrush = $hoverLabel.Foreground
+
+$leaveArgs = [Windows.Input.MouseEventArgs]::new([Windows.Input.Mouse]::PrimaryDevice, 0)
+$leaveArgs.RoutedEvent = [Windows.UIElement]::MouseLeaveEvent
+$hoverTile.RaiseEvent($leaveArgs)
+$backBrush = $hoverLabel.Foreground
+
+if ([object]::ReferenceEquals($restBrush, $overBrush)) {
+    throw 'hover check: the caption did not change under the pointer, so the tile has no hover affordance at all.'
+}
+if (-not [object]::ReferenceEquals($restBrush, $backBrush)) {
+    throw 'hover check: the caption did not return to its resting brush after the pointer left.'
+}
+$restHex = '#{0:X2}{1:X2}{2:X2}' -f $restBrush.Color.R, $restBrush.Color.G, $restBrush.Color.B
+$overHex = '#{0:X2}{1:X2}{2:X2}' -f $overBrush.Color.R, $overBrush.Color.G, $overBrush.Color.B
+"  hover check passed: caption $restHex at rest, $overHex under the pointer, back to $restHex on leave"
+
 # --- the selection ring must have room at BOTH edges of a row --------------------------------
 #
 # Reported from the running build on 2026-09-20: the ring on the leftmost and rightmost tiles

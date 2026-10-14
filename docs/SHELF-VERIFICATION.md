@@ -3282,3 +3282,93 @@ which builds Debug, and a Debug pair left running locks `Plith.exe` and `Plith.D
 `Plith.Tests failed.`, which is a lie about what happened: the tests never ran. `sudo taskkill /F
 /IM Plith.exe /T` first, because a Release install runs elevated and a plain taskkill cannot touch
 it. The same lock class cost a whole afternoon once already, from the other direction (§10.23).
+
+### 10.30 The shelf page was never moved onto Loft, and it showed (2026-10-14)
+
+REPORTED from the running build, in one sentence carrying three complaints: the shelf "does not
+take the colours I gave", it "is not Loft, the button designs", and paging onto it reads as "a
+whole new notch opening, not the same size as the others".
+
+**The size half is answered by measurement and is not a defect.** `shelf-surface.png`,
+`frame-page1.png` and `notch-frame.png` all render at **356 x 164**, and the catcher takes the
+number from `NotchGeometry.OpenFrameDip` rather than keeping its own. What differed was the design
+LANGUAGE, which is what made it read as a different surface.
+
+#### What the Loft merge actually did to this project
+
+Nineteen lines: one comment, the `AccentBrush` to `SelectionRing` rename, and the dark fallback's
+colours. The palette on the wire was correct the whole time, and `App.ResolveShelfPalette` ->
+`ShelfSession.DerivePalette` has been pure Loft (`LoftPalette.For`, `AccentTheme.DeriveLoftRoles`)
+since the merge. **The accent did arrive**: the rail pip and the selection ring were lime in the
+render before any of this was touched.
+
+What never moved were the FILLED elements, every one of them a constant older than Loft:
+
+| Site | Was | What it drew |
+|---|---|---|
+| `ShelfSurface.xaml.cs` `TileRest` | `#0FFFFFFF` | a neutral white wash on a warm floor, on all eight tiles |
+| `ShelfSurface.xaml.cs` `TileHover` | `#24FFFFFF` | the same, doubled |
+| `ShelfSurface.xaml.cs` rail groove | `#26FFFFFF` | a white groove where the floor has its own Border |
+| `ShelfSurface.xaml` remove chip | `#1B2027`, `#3A444F`, `#4C5864` | a cool blue-grey chip family |
+
+Two premises in those comments had expired without anyone noticing, and both are worth keeping
+because they are how a constant survives a redesign. The first: "white rather than a palette
+colour, because this panel is dark in both themes". `LoftPalette.For(false)` is a genuinely light
+floor, so that stopped being true at the merge. The second: a note naming `NotchInk` as `#F2F5F8`,
+the pre-Loft zinc, three weeks after it became `#ECE9E2`.
+
+#### What was changed, and what was deliberately NOT
+
+The owner chose the bare floor: no fill at rest, no fill on hover, the page drawing on the Loft
+floor like the notch's other four.
+
+- The tile's ground is `Transparent` and **still assigned**. A null one is not hit-tested, which
+  is §3.10's measured defect (a click at a tile's exact centre doing nothing), so the ground was
+  made invisible rather than removed.
+- Hover moved onto the caption, `NotchInkMuted` at rest to `NotchInk` under the pointer. The
+  resting name is dimmer than it was, which is the price of carrying hover on typography.
+- The selection ring moved from the tile's edge onto the picture, in a cell of its own so the
+  shell-icon swap cannot disturb it. It keeps the property the 2026-09-20 report forced: drawn
+  inside an element already inset from the tile, so it cannot sit against the card's edge.
+- The chip and the groove come off the wire: `NotchTrack` ground, `NotchInk` glyph,
+  `NotchInkMuted` ring, and the three hover and press states are carried by the ring and by
+  opacity. **No lift is derived in the catcher**, because a second copy of a derivation is what
+  `ShelfPaletteWire` exists to prevent.
+
+#### Measured, including the one number that could have vetoed it
+
+`check-contrast.ps1` does NOT cover this surface: its pairs come from Plith's own XAML, and the
+catcher is the one consumer in another process. The same blind spot is recorded in
+`PHASE6-VERIFICATION.md` section 24. So these were computed from the floor hexes directly:
+
+| Pair | Dark | Light | Bar |
+|---|---|---|---|
+| resting caption, TextSecondary on the floor | **6.90:1** | **6.07:1** | 4.5:1 text |
+| hovered caption, Foreground on the floor | 15.18:1 | 14.47:1 | 4.5:1 text |
+| chip glyph, Foreground on the chip's Border ground | 12.10:1 | 11.48:1 | 3:1 mark |
+| chip ground against the floor | 1.26:1 | 1.41:1 | none, it is found by its ring |
+
+The first row is the one that could have sent the design back, since muting the resting caption is
+what pays for hover. It clears comfortably on both floors.
+
+The light-theme chip was read from the PIXELS rather than by eye, because at render size the glyph
+looked white to a reader and white would have been a defect: sampling the chip gives `D0CEC6`
+ground, `55544F` ring and `161616` glyph, which is `NotchInk` and correct.
+
+#### Three checks were added to the harness, each watched fail first
+
+Nothing in the repo could see any of this: `ShelfSurface` has no unit tests at all (the test
+project compiles `ShelfModel.cs` from this project and nothing else), so the guard had to go where
+the surface is already loaded.
+
+- **floor check** - every tile's Background is non-null AND fully transparent. Failed first with
+  "alpha 15", which is the old `#0F` wash.
+- **literal check** - no element on the surface is painted from any of the nine retired constants.
+  Guards the reintroduction, which is the likelier mistake than the original.
+- **hover check** - raises `MouseEnter` and `MouseLeave` on a real tile and asserts the caption
+  brush changes and returns. With the ground gone this is the ONLY hover affordance left, and a
+  silent break would read from a running build as a shelf that stopped answering the mouse.
+
+Green: both themes render clean, `tile-hit` still passes (the trap this change could most easily
+have sprung), `check-a11y` passes, 773 + 17 tests pass. The 790 in `PERF-VERIFICATION.md` 13.2 is
+those two suites added together, which is worth stating once: a bare 773 looks like 17 lost tests.
