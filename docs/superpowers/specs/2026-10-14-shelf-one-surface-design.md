@@ -70,20 +70,37 @@ that hazard and moves it from a harness into product code.
 So: **a third assembly, `Plith.Shelf`, referenced by both processes.** It holds the shelf's UI and
 the types that cross the boundary:
 
-| Moves into `Plith.Shelf` | From |
-|---|---|
-| `ShelfSurface.xaml` and `.xaml.cs` | `Plith.DropCatcher` |
-| `ShellIcons.cs` | `Plith.DropCatcher` |
-| `ShelfModel.cs` (`ShelfModel`, `ShelfEntry`) | `Plith.DropCatcher` |
-| `ShelfPaletteWire.cs` (`ShelfPalette`, the wire format) | `Plith` |
+**Corrected while writing the plan, and the correction matters.** The catcher does not link one
+file today, it links FIVE, and `ShelfSurface` depends on three of them. A shared assembly that
+left those behind would have to link them itself, which makes a THIRD copy of each type and
+leaves the codebase worse than it started. So the shared assembly takes all of them, and every
+`<Compile Include="..\Plith\...">` link in `Plith.DropCatcher.csproj` is deleted:
+
+| Moves into `Plith.Shelf` | From | Linked into the catcher today |
+|---|---|---|
+| `NotchGeometry.cs` | `Plith` | yes |
+| `ShelfPaletteWire.cs` (`ShelfPalette`, the wire format) | `Plith` | yes |
+| `ShelfLabel.cs` | `Plith` | yes |
+| `DropChannel.cs` | `Plith` | yes |
+| `WheelDecoder.cs` | `Plith` | yes |
+| `ShelfModel.cs` (`ShelfModel`, `ShelfEntry`) | `Plith.DropCatcher` | no, its own |
+| `ShellIcons.cs` | `Plith.DropCatcher` | no, its own |
+| `ShelfSurface.xaml` and `.xaml.cs` | `Plith.DropCatcher` | no, its own |
 
 Both `Plith` and `Plith.DropCatcher` reference it. Neither references the other, so the rule that
-matters is kept: **the catcher still never depends on Plith's assembly.** The linking of
-`ShelfPaletteWire` disappears, and with it the duplicate-type hazard that exists today.
+matters is kept: **the catcher still never depends on Plith's assembly**, and the reason given for
+linking (a reference "would pull Plith's assembly into a process that must stay small") does not
+apply to a small assembly that holds only what both ends already share.
 
-`NotchGeometry` is deliberately left where it is and linked as it is today. It is used across the
-whole of Plith, moving it is a much larger change than this spec needs, and it carries no
-cross-boundary values.
+**Namespaces do not change.** `NotchGeometry` stays `Plith.Views.Presentation`, the palette stays
+`Plith.Services.Shelf`. A type moving between assemblies with its namespace intact changes no call
+site in either process, which is what keeps this a move rather than a rewrite of everything that
+touches geometry.
+
+The duplicate-type hazard disappears entirely rather than being contained: after this there is one
+`NotchGeometry`, one `ShelfPalette`, one `ShelfSurface`. `render-widgets.ps1`'s workaround for it
+(building the palette through the catcher assembly's own `Type` object) can be deleted, and that
+deletion is the cheapest proof that the hazard is gone.
 
 ### What each process does
 
