@@ -17,11 +17,14 @@ pub fn init_process() -> windows::core::Result<()> {
 }
 
 /// Names the reason the user must not be disturbed right now (an exclusive fullscreen game, a
-/// busy state or presentation mode), or `None` when it is fine to show a window.
+/// busy state or presentation mode), or `None` when it is fine to show a window. Fails closed:
+/// when the query itself fails it reports `QUNS_QUERY_FAILED`.
 #[must_use]
 pub fn user_busy() -> Option<&'static str> {
     // SAFETY: the call has no arguments and returns the state by value.
-    let state = unsafe { SHQueryUserNotificationState() }.ok()?;
+    let Ok(state) = (unsafe { SHQueryUserNotificationState() }) else {
+        return Some("QUNS_QUERY_FAILED");
+    };
     match state {
         s if s == QUNS_RUNNING_D3D_FULL_SCREEN => Some("QUNS_RUNNING_D3D_FULL_SCREEN"),
         s if s == QUNS_BUSY => Some("QUNS_BUSY"),

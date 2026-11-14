@@ -8,6 +8,47 @@ use std::time::Duration;
 const TIMEOUT: Duration = Duration::from_secs(2);
 
 #[test]
+fn concurrent_updates_never_lose_a_field() {
+    let locked = Suppression {
+        locked: true,
+        ..Suppression::default()
+    };
+    let mailbox = Arc::new(SceneMailbox::new(Scene {
+        suppression: locked,
+        ..Scene::default()
+    }));
+    let toggler = {
+        let mailbox = Arc::clone(&mailbox);
+        thread::spawn(move || {
+            for _ in 0..1000 {
+                mailbox.update(|s| Scene {
+                    expanded: !s.expanded,
+                    ..s
+                });
+            }
+        })
+    };
+    let cycler = {
+        let mailbox = Arc::clone(&mailbox);
+        thread::spawn(move || {
+            for _ in 0..1000 {
+                mailbox.update(|s| Scene {
+                    page: (s.page + 1) % 3,
+                    ..s
+                });
+            }
+        })
+    };
+    toggler.join().unwrap();
+    cycler.join().unwrap();
+    let (scene, generation) = mailbox.latest();
+    assert_eq!(scene.suppression, locked);
+    assert_eq!(generation, 2000);
+    assert!(!scene.expanded, "1000 toggles end where they began");
+    assert_eq!(scene.page, 1000 % 3, "no cycle step was lost");
+}
+
+#[test]
 fn any_suppression_reason_suppresses() {
     assert!(!Suppression::default().any());
     let display_off = Suppression {

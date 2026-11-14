@@ -90,6 +90,18 @@ impl SceneMailbox {
         generation
     }
 
+    /// Reads the scene, applies `change` and publishes the result under one lock, so no other
+    /// publisher can slip in between. Bumps the generation once and returns it.
+    pub fn update(&self, change: impl FnOnce(Scene) -> Scene) -> u64 {
+        let mut state = lock(&self.state);
+        state.scene = change(state.scene);
+        state.generation += 1;
+        let generation = state.generation;
+        drop(state);
+        self.changed.notify_all();
+        generation
+    }
+
     /// The current scene and its generation, without blocking.
     #[must_use]
     pub fn latest(&self) -> (Scene, u64) {

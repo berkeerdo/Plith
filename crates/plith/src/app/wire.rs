@@ -15,6 +15,9 @@ use std::thread::{self, JoinHandle};
 /// How long a demo or an idle check may run before the watchdog closes the window.
 pub const WATCHDOG_SECS: u64 = 75;
 
+/// Seconds the watchdog waits after asking the window to close before it ends the process.
+pub const WATCHDOG_GRACE_SECS: u64 = 5;
+
 /// Exit code when the render thread died.
 pub const EXIT_RENDER_FATAL: i32 = 1;
 /// Exit code when the user is busy (fullscreen game, presentation) and a run was skipped.
@@ -75,15 +78,13 @@ pub fn event_handler(
     let (mailbox, log) = (Arc::clone(mailbox), Arc::clone(log));
     Box::new(move |event| match event {
         ShellEvent::Click => {
-            let (scene, _) = mailbox.latest();
-            mailbox.publish(Scene {
+            mailbox.update(|scene| Scene {
                 expanded: !scene.expanded,
                 ..scene
             });
         }
         ShellEvent::Suppression(suppression) => {
-            let (scene, _) = mailbox.latest();
-            mailbox.publish(Scene {
+            mailbox.update(|scene| Scene {
                 suppression,
                 ..scene
             });
@@ -134,6 +135,11 @@ pub fn spawn_watchdog(
             log.line(&format!("watchdog: quit after {WATCHDOG_SECS} s"));
             fired.store(true, Ordering::Release);
             quit.quit();
+            if !sleep_stoppable(WATCHDOG_GRACE_SECS * 1000, &stop) {
+                return;
+            }
+            log.line("watchdog: forced exit");
+            std::process::exit(EXIT_WATCHDOG);
         }
     })
 }

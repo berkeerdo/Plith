@@ -69,8 +69,7 @@ pub fn play(script: &DemoScript, mailbox: &SceneMailbox, stop: &AtomicBool) -> b
                     return false;
                 }
             } else {
-                let (scene, _) = mailbox.latest();
-                mailbox.publish(apply(*step, scene));
+                mailbox.update(|scene| apply(*step, scene));
             }
         }
     }
