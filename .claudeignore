@@ -1,0 +1,14 @@
+target/
+bin/
+obj/
+dist/
+publish/
+release/
+build/
+coverage/
+.git/
+.env*
+.vs/
+.idea/
+.vscode/
+*.log

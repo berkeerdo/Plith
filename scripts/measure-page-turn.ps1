@@ -5,7 +5,7 @@
   shelf beside the ordinary ones.
 
 .DESCRIPTION
-  docs/ROADMAP.md section 9 carried this as the open question with no instrument behind it: the
+  docs/wpf/ROADMAP.md section 9 carried this as the open question with no instrument behind it: the
   turn onto the shelf page comes in choppy while the other four do not. Nothing in the repo could
   see it.
 

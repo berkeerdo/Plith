@@ -9,7 +9,7 @@
   perfectly and then calls something else. This asks the machine instead.
 
   It re-selects the endpoint that is ALREADY default, so a success is a real S_OK from the real
-  interface and nothing anyone is listening to moves. That is the same trick docs/ROADMAP.md
+  interface and nothing anyone is listening to moves. That is the same trick docs/wpf/ROADMAP.md
   records from the System Controls measurement, and it is the reason this can be run at any time.
 
   Run with: pwsh -File scripts/probe-output-switch.ps1

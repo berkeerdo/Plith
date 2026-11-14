@@ -7,7 +7,7 @@ namespace Plith.Services;
 /// that stuttered from a slide that was merely short of anything to look at.
 ///
 /// This exists because of a report with no instrument behind it, carried as the open question in
-/// docs/ROADMAP.md section 9: the turn onto the shelf page comes in choppy while the other four
+/// docs/wpf/ROADMAP.md section 9: the turn onto the shelf page comes in choppy while the other four
 /// do not. What had already been measured was DURATION — about 340 ms end to end, in
 /// docs/PERF-VERIFICATION.md section 4 — and duration cannot answer it. A 260 ms slide that
 /// delivers every frame and a 260 ms slide that delivers half of them take exactly as long.

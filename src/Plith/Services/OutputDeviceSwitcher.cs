@@ -7,7 +7,7 @@ namespace Plith.Services;
 ///
 /// There is NO documented API for this. Windows' own Sound control panel uses an undocumented
 /// COM interface, IPolicyConfig, and so does every application that offers the feature. The
-/// GUIDs below are the ones docs/ROADMAP.md recorded when this was first measured here, during
+/// GUIDs below are the ones docs/wpf/ROADMAP.md recorded when this was first measured here, during
 /// the System Controls work, where SetDefaultEndpoint returned S_OK. That code was never
 /// committed: searching the whole history for IPolicyConfig, PolicyConfig, 870af99c and
 /// SetDefaultEndpoint finds only prose, so this is a rewrite of something that had only ever
