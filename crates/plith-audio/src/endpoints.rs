@@ -21,7 +21,9 @@ mod write;
 pub use pin::resolve_target;
 #[cfg(windows)]
 pub use service::{EndpointService, Status};
-pub use write::{DEFAULT_ROLES, next_mute, sanitize_volume};
+#[cfg(windows)]
+pub use write::DEFAULT_ROLES;
+pub use write::{all_succeeded, next_mute, sanitize_volume};
 
 /// One active render endpoint. Both names are kept as Core Audio reports them; shortening is
 /// the UI's decision.

@@ -78,6 +78,22 @@ fn mute_flips_the_value_that_was_read() {
 }
 
 #[test]
+fn every_item_is_attempted_even_after_a_failure() {
+    let mut seen = Vec::new();
+    let all_ok = all_succeeded(&[1, 2, 3], |n| {
+        seen.push(*n);
+        *n != 1
+    });
+    assert!(!all_ok, "one failure makes the whole write a failure");
+    assert_eq!(seen, [1, 2, 3], "the later items are still attempted");
+    assert!(all_succeeded(&[1, 2], |_| true));
+    assert!(
+        all_succeeded::<u8>(&[], |_| false),
+        "nothing to write is not a failure"
+    );
+}
+
+#[test]
 fn only_console_and_multimedia_are_written() {
     assert_eq!(DEFAULT_ROLES, [eConsole, eMultimedia]);
     assert!(!DEFAULT_ROLES.contains(&eCommunications));

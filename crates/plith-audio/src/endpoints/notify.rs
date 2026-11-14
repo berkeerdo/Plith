@@ -58,6 +58,9 @@ const REPLY_TIMEOUT: Duration = Duration::from_secs(3);
 
 /// Posts a request built by `make` and waits for its reply; `None` when the thread is gone or
 /// does not answer in time.
+///
+/// A timeout does not cancel the request: it stays queued and the service thread still runs it
+/// later. `None` therefore means "no answer", not "it did not happen".
 pub(crate) fn ask<T>(tx: &Sender<Msg>, make: impl FnOnce(SyncSender<T>) -> Msg) -> Option<T> {
     let (reply_tx, reply_rx) = sync_channel(1);
     tx.send(make(reply_tx)).ok()?;

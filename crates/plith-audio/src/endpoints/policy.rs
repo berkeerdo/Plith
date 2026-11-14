@@ -9,7 +9,7 @@ use windows::Win32::System::Com::{CLSCTX_ALL, CoCreateInstance};
 use windows::core::{GUID, HRESULT, IUnknown, IUnknown_Vtbl, PCWSTR};
 use windows_core::interface;
 
-use super::write::DEFAULT_ROLES;
+use super::write::{DEFAULT_ROLES, all_succeeded};
 
 /// `CPolicyConfigClient`.
 const POLICY_CONFIG_CLSID: GUID = GUID::from_u128(0x870a_f99c_171d_4f9e_af0d_e63d_f40c_2bc9);
@@ -38,19 +38,20 @@ unsafe trait IPolicyConfig: IUnknown {
 
 /// Makes `id` the default render endpoint for the Console and Multimedia roles. `true` only
 /// when both writes succeeded. Runs on the service thread.
+///
+/// Both roles are always attempted, even when the first fails. A `false` can therefore leave a
+/// partial state (one role moved, the other not), so the caller must re-read the real default
+/// rather than assume nothing changed.
 pub(super) fn set_default_endpoint(id: &str) -> bool {
     let wide: Vec<u16> = id.encode_utf16().chain(Some(0)).collect();
-    // SAFETY: the class and interface ids are the observed pair for the policy client; `wide`
-    // is NUL terminated and outlives every call.
-    let write = || -> windows::core::Result<()> {
-        unsafe {
-            let config: IPolicyConfig = CoCreateInstance(&POLICY_CONFIG_CLSID, None, CLSCTX_ALL)?;
-            DEFAULT_ROLES.iter().try_for_each(|role| {
-                config
-                    .set_default_endpoint(PCWSTR(wide.as_ptr()), *role)
-                    .ok()
-            })
-        }
+    // SAFETY: the class and interface ids are the observed pair for the policy client.
+    let config: windows::core::Result<IPolicyConfig> =
+        unsafe { CoCreateInstance(&POLICY_CONFIG_CLSID, None, CLSCTX_ALL) };
+    let Ok(config) = config else {
+        return false;
     };
-    write().is_ok()
+    all_succeeded(&DEFAULT_ROLES, |role| {
+        // SAFETY: `wide` is NUL terminated and outlives the call; `config` is a live interface.
+        unsafe { config.set_default_endpoint(PCWSTR(wide.as_ptr()), *role) }.is_ok()
+    })
 }

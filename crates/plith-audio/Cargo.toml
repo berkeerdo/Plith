@@ -11,7 +11,7 @@ publish = false
 [dependencies]
 # The `#[implement]` macro expands to `::windows_core` paths, so the crate must be a direct
 # dependency. Same version `windows` already resolves to.
-windows-core = "0.62.2"
+windows-core = { workspace = true }
 windows = { workspace = true, features = [
     "Win32_Devices_FunctionDiscovery",
     "Win32_Foundation",

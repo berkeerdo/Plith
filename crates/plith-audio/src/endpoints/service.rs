@@ -212,9 +212,8 @@ fn serve(worker: &mut Worker, rx: &Receiver<Msg>) {
             }
             Msg::SetDefault { id, reply } => {
                 let done = set_default_endpoint(&id);
-                if done {
-                    worker.refresh();
-                }
+                // Also after a failure: one role may have moved, so the state must be re-read.
+                worker.refresh();
                 let _ = reply.send(done);
             }
             Msg::Stop => break,
@@ -269,8 +268,11 @@ impl EndpointService {
         };
         match ready_rx.recv() {
             Ok(Ok(())) => {
-                *locked(&self.control) = Some(tx);
+                *locked(&self.control) = Some(tx.clone());
                 *slot = Some(handle);
+                // A `set_pin` that landed before the control channel existed only stored the pin;
+                // the worker may already have read the old one, so ask for one more refresh.
+                let _ = tx.send(Msg::Refresh);
                 Status::Running
             }
             Ok(Err(reason)) => {
@@ -287,13 +289,17 @@ impl EndpointService {
     /// Stops the thread, which unregisters its callbacks itself, and waits for it. Safe to
     /// call twice.
     pub fn stop(&self) {
+        // The thread lock comes first: a concurrent `start` holds it until the worker is ready,
+        // so the `Stop` below always reaches a worker that exists (no join that waits forever).
+        let mut slot = locked(&self.thread);
         self.shared.stop.store(true, Ordering::Release);
         if let Some(tx) = locked(&self.control).take() {
             let _ = tx.send(Msg::Stop);
         }
-        if let Some(handle) = locked(&self.thread).take() {
+        if let Some(handle) = slot.take() {
             let _ = handle.join();
         }
+        drop(slot);
         self.shared.publish(&EndpointState::default());
     }
 
@@ -325,7 +331,8 @@ impl EndpointService {
     }
 
     /// Makes `endpoint_id` the Windows default render device for the Console and Multimedia
-    /// roles (never Communications). Returns whether both writes succeeded.
+    /// roles (never Communications). Returns whether both writes succeeded; on `false` one role
+    /// may still have moved, and the snapshot shows what Windows now reports.
     pub fn set_default_endpoint(&self, endpoint_id: &str) -> bool {
         if endpoint_id.trim().is_empty() {
             return false;

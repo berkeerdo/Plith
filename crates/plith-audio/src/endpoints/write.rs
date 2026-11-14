@@ -1,6 +1,7 @@
 //! Write paths on the attached endpoint: volume and mute. The pure decisions are separate
 //! functions and unit tested; the COM calls only run on the service thread.
 
+#[cfg(windows)]
 use windows::Win32::Media::Audio::{ERole, eConsole, eMultimedia};
 
 #[cfg(windows)]
@@ -8,7 +9,20 @@ use super::com::Attachment;
 
 /// The roles a default-device switch writes. Communications is deliberately absent: moving it
 /// would move call audio (Discord, Teams), which a plain "set default" never means.
+#[cfg(windows)]
 pub const DEFAULT_ROLES: [ERole; 2] = [eConsole, eMultimedia];
+
+/// Runs `write` for every item, stopping at none, and reports whether all of them succeeded.
+/// A failure on one item must not skip the rest (a half written default switch is worse than
+/// an attempted one).
+#[must_use]
+pub fn all_succeeded<T>(items: &[T], mut write: impl FnMut(&T) -> bool) -> bool {
+    let mut all_ok = true;
+    for item in items {
+        all_ok &= write(item);
+    }
+    all_ok
+}
 
 /// Clamps a requested master volume to 0.0..=1.0; `None` for NaN, which no clamp can place.
 #[must_use]

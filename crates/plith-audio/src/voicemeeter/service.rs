@@ -139,10 +139,14 @@ impl VoicemeeterService {
 
     /// Stops the poll thread, waits for it, then logs out. Safe to call twice.
     pub fn stop(&self) {
+        // The thread lock comes first: `start` holds it while it resets the stop flag, so a
+        // stop that raced it cannot be overwritten and leave the join waiting forever.
+        let mut slot = locked(&self.thread);
         self.shared.stop.store(true, Ordering::Release);
-        if let Some(handle) = locked(&self.thread).take() {
+        if let Some(handle) = slot.take() {
             let _ = handle.join();
         }
+        drop(slot);
         if let Some(api) = locked(&self.api).take() {
             api.logout();
         }
