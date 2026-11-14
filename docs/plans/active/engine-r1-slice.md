@@ -118,7 +118,7 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
   `clamp_min(&mut self, floor: f64)` (value below floor becomes floor, negative velocity becomes
   0), `value()`, `velocity()`, `target()`, `is_settled()`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 // tuning/tests.rs
@@ -138,12 +138,12 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 #[test] fn opacity_eps_settles_tighter()           // with_eps(0.002, 0.01): 0 -> 1 ends within 0.002
 ```
 
-- [ ] **Step 2: Run, expect FAIL** `cargo test -p plith-core` (unresolved `spring`, `tuning`).
-- [ ] **Step 3: Implement.** Force `-k (x - target) - c v`, fixed sub-step `1/240` s, `dt`
+- [x] **Step 2: Run, expect FAIL** `cargo test -p plith-core` (unresolved `spring`, `tuning`).
+- [x] **Step 3: Implement.** Force `-k (x - target) - c v`, fixed sub-step `1/240` s, `dt`
   clamped to `0..=0.1`, leftover below one sub-step carried to the next call (an accumulator),
   settled when `|x - target| < eps_value && |v| < eps_velocity`.
-- [ ] **Step 4: Run, expect PASS**, then the five checks through heavy-run.
-- [ ] **Step 5: Commit** `feat(core): add springs and tunings`, push, tick this box.
+- [x] **Step 4: Run, expect PASS**, then the five checks through heavy-run.
+- [x] **Step 5: Commit** `feat(core): add springs and tunings`, push, tick this box.
 
 ### Task 2: Island motion, geometry and surface layout (`plith-core`)
 
