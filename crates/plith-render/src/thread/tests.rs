@@ -126,6 +126,11 @@ fn unsuppress_paints_one_frame_without_clock_waits() {
         frames[20].shape, PAGES[0],
         "shows the target with no catch-up"
     );
+    let shapes = lock(&run.shapes).clone();
+    assert_eq!(
+        shapes[20].previous, PAGES[0],
+        "a snap forgets the frame before it: previous equals the shape"
+    );
     assert_eq!(run.harness.total(), 20);
     assert_eq!(run.wakes(), 1 + 20 + 1);
     assert!(run.reports.try_recv().is_err());
@@ -240,6 +245,12 @@ fn on_shape_is_called_every_painted_frame() {
     assert_eq!(shapes.len(), frames.len());
     for (i, (shape, frame)) in shapes.iter().zip(&frames).enumerate() {
         assert_eq!(shape.shape, frame.shape, "frame {i}");
+        let expected_previous = if i == 0 {
+            frame.shape
+        } else {
+            frames[i - 1].shape
+        };
+        assert_eq!(shape.previous, expected_previous, "previous of frame {i}");
         assert_eq!(shape.generation, u64::try_from(i + 1).ok().unwrap_or(0));
     }
     let _ = run.stop();

@@ -99,6 +99,8 @@ struct Engine<'a, C, P, O, N> {
     stamper: FrameStamper,
     gpu: GpuHealth,
     painted: u64,
+    /// The shape of the last frame presented; `None` at the start and after a snap.
+    last_shape: Option<IslandShape>,
     seen: u64,
 }
 
@@ -179,6 +181,7 @@ pub fn run_loop<C, P, O, N>(
         stamper: FrameStamper::default(),
         gpu: GpuHealth::default(),
         painted: 0,
+        last_shape: None,
         seen,
     };
     if engine.clocks.order.is_empty() {
@@ -379,6 +382,7 @@ where
         self.content = content_spring(scene, self.set.opacity);
         self.content_settled = true;
         self.stats = None;
+        self.last_shape = None;
     }
 
     fn is_settled(&self) -> bool {
@@ -410,8 +414,10 @@ where
         let times = match result {
             Ok(times) => {
                 self.painted += 1;
+                let previous = self.last_shape.replace(frame.shape);
                 (self.sinks.on_shape)(ShapeFrame {
                     shape: frame.shape,
+                    previous: previous.unwrap_or(frame.shape),
                     generation: self.painted,
                 });
                 Some(times)

@@ -139,6 +139,9 @@ impl SceneMailbox {
 pub struct ShapeFrame {
     /// The drawn shape.
     pub shape: IslandShape,
+    /// The shape of the frame painted before this one; equal to `shape` for the first frame
+    /// after the start or after a snap. With a frame queue the display may still show it.
+    pub previous: IslandShape,
     /// The render thread's frame counter: 1 for its first painted frame, then increasing.
     pub generation: u64,
 }

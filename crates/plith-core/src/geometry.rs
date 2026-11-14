@@ -23,6 +23,15 @@ impl IslandShape {
         self.width * self.height
     }
 
+    /// The corner radius as drawn: the declared radius limited to half the width and height.
+    #[must_use]
+    pub fn drawn_radius(&self) -> f64 {
+        self.radius
+            .min(self.width / 2.0)
+            .min(self.height / 2.0)
+            .max(0.0)
+    }
+
     /// True when the point (relative to the island's top-left) is inside the rounded rectangle.
     #[must_use]
     pub fn contains(&self, x: f64, y: f64) -> bool {
@@ -37,6 +46,18 @@ impl IslandShape {
         let dx = x - centre_coord(x, self.width, r);
         let dy = y - centre_coord(y, self.height, r);
         dx * dx + dy * dy <= r * r
+    }
+}
+
+/// A rounded rectangle that contains both `a` and `b` when each is centred horizontally and
+/// anchored at the top, as the island is: the larger width and height with the smaller drawn
+/// radius. Used for the hit region, which must also cover the frame still on screen.
+#[must_use]
+pub fn cover(a: IslandShape, b: IslandShape) -> IslandShape {
+    IslandShape {
+        width: a.width.max(b.width),
+        height: a.height.max(b.height),
+        radius: a.drawn_radius().min(b.drawn_radius()),
     }
 }
 

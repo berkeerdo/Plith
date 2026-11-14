@@ -3,7 +3,7 @@
 use super::region_px;
 use crate::handles::hwnd_of;
 use crate::window::state::Inner;
-use plith_core::geometry::IslandShape;
+use plith_core::geometry::{IslandShape, cover};
 use plith_core::shapes::REST;
 use std::time::Instant;
 use windows::Win32::Foundation::E_FAIL;
@@ -33,10 +33,16 @@ fn set_region(inner: &Inner, shape: IslandShape) -> windows::core::Result<()> {
     Ok(())
 }
 
-/// Applies the newest shape in the cell (or the resting shape when none was posted yet),
-/// recording the UI-thread cost. A failure is counted in `hit_errors`.
+/// Applies the region for the newest frame in the cell (or the resting shape when none was
+/// posted yet), recording the UI-thread cost. A failure is counted in `hit_errors`.
+///
+/// The region covers the frame before the newest one as well: with a frame queue the display
+/// can still show it when the region changes, and the region clips the drawn content (ADR 0004).
 pub(crate) fn apply_latest(inner: &Inner) {
-    let shape = inner.shapes.latest().map_or(REST, |frame| frame.shape);
+    let shape = inner
+        .shapes
+        .latest()
+        .map_or(REST, |frame| cover(frame.shape, frame.previous));
     let start = Instant::now();
     let result = set_region(inner, shape);
     let ms = start.elapsed().as_secs_f64() * 1000.0;
