@@ -1,17 +1,14 @@
 //! Thread-safe handles to the UI thread: the shape poster and the quit handle.
 
+use crate::handles::hwnd_of;
 use plith_core::scene::{ShapeCell, ShapeFrame};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use windows::Win32::Foundation::{HWND, LPARAM, WPARAM};
+use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_APP, WM_CLOSE};
 
 /// Posted to the UI thread when a new shape is waiting in the cell.
 pub(crate) const WM_APP_SHAPE: u32 = WM_APP + 1;
-
-fn hwnd_of(raw: isize) -> HWND {
-    HWND(raw as *mut core::ffi::c_void)
-}
 
 /// Lets the render thread hand a drawn shape to the UI thread. Posts are coalesced: while one
 /// message is queued, later frames only replace the cell content.

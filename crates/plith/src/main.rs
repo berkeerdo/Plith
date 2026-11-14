@@ -8,7 +8,7 @@ mod log;
 use plith_core::launch::Launch;
 
 const USAGE: &str = "usage: plith [--demo <name|script>] [--exit-after-demo] [--idle-check <secs>] \
-                     [--clock auto|dcomp|dxgi|timer] [--hit region|split|mask]";
+                     [--clock auto|dcomp|dxgi|timer]";
 
 fn main() {
     match Launch::parse(std::env::args().skip(1)) {

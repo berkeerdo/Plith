@@ -57,7 +57,7 @@ fn run_shell(
     let closing = Arc::new(AtomicBool::new(false));
     let stopper = Arc::new(OnceLock::new());
     let handler = wire::event_handler(&mailbox, log, &closing, &stopper);
-    let shell = match Shell::create(layout, launch.hit, Arc::new(ShapeCell::default()), handler) {
+    let shell = match Shell::create(layout, Arc::new(ShapeCell::default()), handler) {
         Ok(shell) => shell,
         Err(error) => {
             log.line(&format!("cannot create the window: {error}"));

@@ -1,15 +1,17 @@
 //! The event-driven topmost fight: a `WinEvent` hook reports every foreground change, the shell
-//! raises its windows at once and again on a retry timer (see `plith_core::topmost`).
+//! raises its window at once (unless a raise just happened) and again on a retry timer (see
+//! `plith_core::topmost`).
 
+use crate::handles::hwnd_of;
 use crate::window::ShellEvent;
 use crate::window::state::{Inner, current};
 use plith_core::topmost::TopmostAction;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::WindowsAndMessaging::{
-    EVENT_SYSTEM_FOREGROUND, GW_HWNDPREV, GetClassNameW, GetWindow, HWND_TOPMOST, KillTimer,
-    SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetTimer, SetWindowPos, WINEVENT_OUTOFCONTEXT,
-    WINEVENT_SKIPOWNPROCESS,
+    EVENT_SYSTEM_FOREGROUND, GW_HWNDPREV, GetClassNameW, GetWindow, HWND_TOPMOST, IsWindowVisible,
+    KillTimer, SWP_NOACTIVATE, SWP_NOMOVE, SWP_NOSIZE, SetTimer, SetWindowPos,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
 };
 
 /// Timer id of the retry timer, owned by the visual window.
@@ -18,9 +20,8 @@ pub(crate) const RETRY_TIMER_ID: usize = 1;
 /// How many windows above us to look through when naming the culprit.
 const CULPRIT_SEARCH_DEPTH: usize = 32;
 
-fn hwnd_of(raw: isize) -> HWND {
-    HWND(raw as *mut core::ffi::c_void)
-}
+/// Class name logged when the foreground window is already gone.
+const UNKNOWN_CLASS: &str = "?";
 
 /// Installs the foreground hook. It reaches the shell state through the thread-local because a
 /// `WinEvent` procedure has no user pointer; it is called on this thread from its message loop.
@@ -53,43 +54,51 @@ pub(crate) fn remove_hook(hook: isize) {
 unsafe extern "system" fn foreground_proc(
     _hook: HWINEVENTHOOK,
     _event: u32,
-    _hwnd: HWND,
+    hwnd: HWND,
     _object: i32,
     _child: i32,
     _thread: u32,
     _time: u32,
 ) {
     if let Some(inner) = current() {
-        on_foreground(&inner);
+        on_foreground(&inner, hwnd);
     }
 }
 
+/// The window class of `hwnd`, or `?` when the window is gone.
 fn class_name(hwnd: HWND) -> String {
     let mut buffer = [0_u16; 256];
-    // SAFETY: the buffer is valid for the call and the length comes from its slice.
+    // SAFETY: the buffer is valid for the call and the length comes from its slice; a stale
+    // handle only makes the call return 0.
     let len = unsafe { GetClassNameW(hwnd, &mut buffer) };
-    String::from_utf16_lossy(&buffer[..usize::try_from(len).unwrap_or(0)])
+    let name = String::from_utf16_lossy(&buffer[..usize::try_from(len).unwrap_or(0)]);
+    if name.is_empty() {
+        UNKNOWN_CLASS.to_string()
+    } else {
+        name
+    }
 }
 
-/// Records the class of the nearest window above ours that is not ours.
-fn record_culprit(inner: &Inner) {
+/// The class of the nearest visible window above ours that is not ours. Invisible windows (the
+/// default IME window, message windows) cannot cover the island, so the walk goes past them.
+fn find_culprit(inner: &Inner) -> Option<String> {
     let ours = inner.windows();
     let mut walker = hwnd_of(inner.visual.get());
-    let mut culprit = None;
     for _ in 0..CULPRIT_SEARCH_DEPTH {
         // SAFETY: GetWindow accepts any handle value and fails for a stale one.
         match unsafe { GetWindow(walker, GW_HWNDPREV) } {
             Ok(above) if !above.0.is_null() => {
-                if !ours.contains(&(above.0 as isize)) {
-                    culprit = Some(class_name(above));
-                    break;
+                // SAFETY: IsWindowVisible accepts any handle value.
+                let visible = unsafe { IsWindowVisible(above) }.as_bool();
+                if visible && !ours.contains(&(above.0 as isize)) {
+                    return Some(class_name(above));
                 }
                 walker = above;
             }
             _ => break,
         }
     }
-    *inner.culprit.borrow_mut() = culprit;
+    None
 }
 
 fn raise(inner: &Inner) {
@@ -110,30 +119,43 @@ fn raise(inner: &Inner) {
     }
 }
 
-fn apply(inner: &Inner, action: TopmostAction) {
-    let TopmostAction::Raise { retry_in_ms } = action else {
-        return;
-    };
-    raise(inner);
-    if let Some(ms) = retry_in_ms {
-        // SAFETY: the visual window belongs to this thread; no callback is used, so the timer
-        // arrives as WM_TIMER.
-        let _ = unsafe { SetTimer(Some(hwnd_of(inner.visual.get())), RETRY_TIMER_ID, ms, None) };
-    }
+fn arm_timer(inner: &Inner, ms: u32) {
+    // SAFETY: the visual window belongs to this thread; no callback is used, so the timer
+    // arrives as WM_TIMER.
+    let _ = unsafe { SetTimer(Some(hwnd_of(inner.visual.get())), RETRY_TIMER_ID, ms, None) };
 }
 
-/// A foreground change: log who sits above, raise now and restart the retry timer.
-pub(crate) fn on_foreground(inner: &Inner) {
+/// A foreground change: raise now (unless one just happened), restart the retry timer and tell
+/// the app who is in the foreground and who sat above us.
+pub(crate) fn on_foreground(inner: &Inner, foreground: HWND) {
     kill_timer(inner);
-    record_culprit(inner);
+    let now_ms = u64::try_from(inner.origin.elapsed().as_millis()).unwrap_or(u64::MAX);
     let mut fight = inner.fight.get();
-    let action = fight.on_foreground();
+    let action = fight.on_foreground(now_ms);
     inner.fight.set(fight);
-    apply(inner, action);
-    if matches!(action, TopmostAction::Raise { .. }) {
-        let culprit = inner.culprit.borrow().clone();
-        inner.emit(ShellEvent::Raised { culprit });
+    let TopmostAction::Raise {
+        retry_in_ms,
+        immediate,
+    } = action
+    else {
+        return;
+    };
+    let above = if immediate {
+        let above = find_culprit(inner);
+        raise(inner);
+        inner.culprit.borrow_mut().clone_from(&above);
+        above
+    } else {
+        None
+    };
+    if let Some(ms) = retry_in_ms {
+        arm_timer(inner, ms);
     }
+    inner.emit(ShellEvent::Raised {
+        foreground: class_name(foreground),
+        above,
+        immediate,
+    });
 }
 
 /// The retry timer fired.
@@ -142,7 +164,13 @@ pub(crate) fn on_timer(inner: &Inner) {
     let mut fight = inner.fight.get();
     let action = fight.on_timer();
     inner.fight.set(fight);
-    apply(inner, action);
+    let TopmostAction::Raise { retry_in_ms, .. } = action else {
+        return;
+    };
+    raise(inner);
+    if let Some(ms) = retry_in_ms {
+        arm_timer(inner, ms);
+    }
 }
 
 /// Stops the retry timer.

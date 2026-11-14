@@ -1,7 +1,6 @@
-//! Hit-region math for the three hit-testing candidates (see the spikes doc).
+//! Hit-region math: the island's rounded rectangle as the notch window's region (ADR 0004).
 
 pub(crate) mod apply;
-pub(crate) mod mask;
 
 use plith_core::geometry::IslandShape;
 use plith_core::layout::SurfaceLayout;

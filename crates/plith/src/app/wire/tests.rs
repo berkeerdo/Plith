@@ -18,3 +18,23 @@ fn mode_text_names_the_mode() {
     };
     assert_eq!(mode_text(&idle), "idle-check 60");
 }
+
+#[test]
+fn raised_line_names_foreground_and_culprit() {
+    assert_eq!(
+        raised_line("Chrome_WidgetWin_1", Some("Shell_TrayWnd"), true),
+        "topmost raise (foreground: Chrome_WidgetWin_1; above: Shell_TrayWnd)"
+    );
+    assert_eq!(
+        raised_line("Notepad", None, true),
+        "topmost raise (foreground: Notepad; above: none)"
+    );
+}
+
+#[test]
+fn raised_line_for_a_debounced_change_says_retry_armed() {
+    assert_eq!(
+        raised_line("?", None, false),
+        "topmost retry armed (foreground: ?)"
+    );
+}

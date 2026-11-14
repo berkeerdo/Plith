@@ -19,18 +19,6 @@ pub enum ClockRequest {
     Timer,
 }
 
-/// Which hit-testing candidate the shell uses (a spike, see the spikes doc).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum HitMode {
-    /// `SetWindowRgn` on the single window.
-    #[default]
-    Region,
-    /// A second, input-only window under the visual one.
-    Split,
-    /// A layered near-transparent alpha mask window.
-    Mask,
-}
-
 /// Parsed launch options.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
@@ -42,8 +30,6 @@ pub struct Launch {
     pub clock: ClockRequest,
     /// Exit once the demo has finished.
     pub exit_after_demo: bool,
-    /// Hit-testing candidate.
-    pub hit: HitMode,
     /// Load levers; the default is the R1 behaviour.
     pub levers: Levers,
     /// Spring tuning preset; the default is R1 until one is chosen.
@@ -94,15 +80,6 @@ fn parse_clock(value: &str) -> Option<ClockRequest> {
         "dcomp" => Some(ClockRequest::Dcomp),
         "dxgi" => Some(ClockRequest::Dxgi),
         "timer" => Some(ClockRequest::Timer),
-        _ => None,
-    }
-}
-
-fn parse_hit(value: &str) -> Option<HitMode> {
-    match value {
-        "region" => Some(HitMode::Region),
-        "split" => Some(HitMode::Split),
-        "mask" => Some(HitMode::Mask),
         _ => None,
     }
 }
@@ -165,10 +142,6 @@ impl Launch {
                 "--clock" => {
                     let text = value()?;
                     launch.clock = parse_clock(&text).ok_or_else(|| bad(text))?;
-                }
-                "--hit" => {
-                    let text = value()?;
-                    launch.hit = parse_hit(&text).ok_or_else(|| bad(text))?;
                 }
                 "--gpu-priority" => {
                     let text = value()?;

@@ -40,7 +40,7 @@ pub fn mode_text(launch: &Launch) -> String {
 pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout) -> String {
     let s = layout.surface;
     format!(
-        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, hit {}, remote {}, mode {}, levers {}, tune {}",
+        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, remote {}, mode {}, levers {}, tune {}",
         s.width,
         s.height,
         s.x,
@@ -48,7 +48,6 @@ pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout
         monitor.scale,
         monitor.hz,
         format!("{:?}", launch.clock).to_lowercase(),
-        format!("{:?}", launch.hit).to_lowercase(),
         is_remote_session(),
         mode_text(launch),
         launch.levers.describe(),
@@ -68,6 +67,19 @@ pub fn exit_code(loop_code: i32, fatal: bool, watchdog: bool, idle: Option<bool>
         i32::from(!ok)
     } else {
         loop_code
+    }
+}
+
+/// The log line for a foreground change that reached the topmost fight.
+#[must_use]
+pub fn raised_line(foreground: &str, above: Option<&str>, immediate: bool) -> String {
+    if immediate {
+        format!(
+            "topmost raise (foreground: {foreground}; above: {})",
+            above.unwrap_or("none")
+        )
+    } else {
+        format!("topmost retry armed (foreground: {foreground})")
     }
 }
 
@@ -108,10 +120,11 @@ pub fn event_handler(
             ));
         }
         ShellEvent::DisplayChanged => log.line("display changed: restart needed"),
-        ShellEvent::Raised { culprit } => match culprit {
-            Some(class) => log.line(&format!("topmost raise (above: {class})")),
-            None => log.line("topmost raise"),
-        },
+        ShellEvent::Raised {
+            foreground,
+            above,
+            immediate,
+        } => log.line(&raised_line(&foreground, above.as_deref(), immediate)),
     })
 }
 

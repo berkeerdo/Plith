@@ -1,15 +1,15 @@
 //! The notch window: class registration, creation, the window procedure and the message loop.
 //!
-//! One fixed topmost window is placed once at the surface rectangle and never moves. Depending
-//! on the hit candidate a second input window sits beside it (see `hit`).
+//! One fixed topmost window is placed once at the surface rectangle and never moves. Its window
+//! region follows the island shape, so clicks outside the shape fall through (see `hit`).
 
 pub(crate) mod state;
 
+use crate::handles::hwnd_of;
 use crate::hit::apply::apply_latest;
 use crate::poster::{QuitHandle, ShapePoster, WM_APP_SHAPE};
 use crate::suppress::{self, WM_APP_BAR};
 use crate::topmost;
-use plith_core::launch::HitMode;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::scene::{ShapeCell, Suppression};
 use state::{Inner, current, set_current};
@@ -17,22 +17,20 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use windows::Win32::Foundation::{
-    COLORREF, ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
+    ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
 };
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST,
-    IDC_ARROW, IsWindow, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage,
-    RegisterClassExW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetLayeredWindowAttributes, SetWindowPos,
-    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE,
-    WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_POWERBROADCAST, WM_TIMER,
-    WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    IDC_ARROW, IsWindow, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage, RegisterClassExW,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
+    WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE,
+    WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
+    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
 const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
-const INPUT_CLASS: PCWSTR = w!("Plith.NotchInput");
 
 /// Something the app has to react to.
 #[derive(Debug, Clone, PartialEq)]
@@ -45,21 +43,21 @@ pub enum ShellEvent {
     Closing,
     /// The suppression state changed; republish the scene with it.
     Suppression(Suppression),
-    /// The shell raised its windows after a foreground change; carries the class name of the
-    /// window that sat above ours, when one was found.
+    /// A foreground change reached the topmost fight.
     Raised {
-        /// Class name of the window above the notch, if any.
-        culprit: Option<String>,
+        /// Class name of the new foreground window, or `?` when it is already gone.
+        foreground: String,
+        /// Class name of the nearest visible window that sat above ours before the raise.
+        /// `None` when nothing visible was above, or when the change was debounced.
+        above: Option<String>,
+        /// `true` when the windows were raised now, `false` when only the retry timer re-armed.
+        immediate: bool,
     },
 }
 
-/// Handle to the notch window(s). It lives on the UI thread and is not `Send`.
+/// Handle to the notch window. It lives on the UI thread and is not `Send`.
 pub struct Shell {
     inner: Rc<Inner>,
-}
-
-fn hwnd_of(raw: isize) -> HWND {
-    HWND(raw as *mut core::ffi::c_void)
 }
 
 fn module() -> windows::core::Result<HINSTANCE> {
@@ -128,40 +126,14 @@ fn place(hwnd: HWND, rect: RectPx) -> windows::core::Result<()> {
     }
 }
 
-/// Split and mask put input on a second window, so the visual window must let clicks fall through.
-fn visual_is_click_through(mode: HitMode) -> bool {
-    matches!(mode, HitMode::Split | HitMode::Mask)
-}
-
 fn build(inner: &Inner) -> windows::core::Result<()> {
     let instance = module()?;
     register_class(VISUAL_CLASS, instance)?;
-    register_class(INPUT_CLASS, instance)?;
     let rect = inner.layout.surface;
-    let base = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
-    let click_through = visual_is_click_through(inner.hit_mode);
-    let visual_style = if click_through {
-        base | WS_EX_TRANSPARENT | WS_EX_LAYERED
-    } else {
-        base
-    };
-    let visual = create_window(VISUAL_CLASS, visual_style, rect, instance)?;
+    let style = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
+    let visual = create_window(VISUAL_CLASS, style, rect, instance)?;
     inner.visual.set(visual.0 as isize);
     place(visual, rect)?;
-    if click_through {
-        // SAFETY: `visual` is a layered window of this thread.
-        unsafe { SetLayeredWindowAttributes(visual, COLORREF(0), 255, LWA_ALPHA) }?;
-    }
-    let input_style = match inner.hit_mode {
-        HitMode::Region => None,
-        HitMode::Split => Some(base),
-        HitMode::Mask => Some(WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_LAYERED),
-    };
-    if let Some(style) = input_style {
-        let input = create_window(INPUT_CLASS, style, rect, instance)?;
-        inner.input.set(input.0 as isize);
-        place(input, rect)?;
-    }
     suppress::register(inner, visual)?;
     let hook = topmost::install_hook()?;
     inner.registrations.borrow_mut().win_event_hook = Some(hook);
@@ -170,18 +142,16 @@ fn build(inner: &Inner) -> windows::core::Result<()> {
 }
 
 impl Shell {
-    /// Creates the hidden notch window(s) for `layout` with the chosen hit candidate. The window
-    /// is not shown; call [`Shell::show`]. `on_event` runs on the UI thread only.
+    /// Creates the hidden notch window for `layout`. The window is not shown; call [`Shell::show`]. `on_event` runs on the UI thread only.
     ///
     /// # Errors
     /// Returns the Win32 error of the first call that fails; nothing is left behind.
     pub fn create(
         layout: SurfaceLayout,
-        hit: HitMode,
         shapes: Arc<ShapeCell>,
         on_event: Box<dyn FnMut(ShellEvent)>,
     ) -> windows::core::Result<Self> {
-        let inner = Rc::new(Inner::new(layout, hit, shapes, on_event));
+        let inner = Rc::new(Inner::new(layout, shapes, on_event));
         set_current(Some(Rc::clone(&inner)));
         let shell = Self { inner };
         // On failure `shell` is dropped here, which destroys whatever was created.
@@ -189,13 +159,13 @@ impl Shell {
         Ok(shell)
     }
 
-    /// The visual window, as the integer value of its `HWND`.
+    /// The notch window, as the integer value of its `HWND`.
     #[must_use]
     pub fn hwnd(&self) -> isize {
         self.inner.visual.get()
     }
 
-    /// Shows every shell window without activating it.
+    /// Shows the shell window without activating it.
     pub fn show(&self) {
         for hwnd in self.inner.windows() {
             // SAFETY: the handles are windows of this thread.
@@ -308,12 +278,6 @@ fn on_destroy(inner: &Inner, hwnd: HWND) {
         topmost::remove_hook(hook);
     }
     suppress::unregister(inner, hwnd);
-    inner.mask.borrow_mut().take();
-    let input = inner.input.replace(0);
-    if input != 0 {
-        // SAFETY: the input window belongs to this thread.
-        let _ = unsafe { DestroyWindow(hwnd_of(input)) };
-    }
     // SAFETY: posts WM_QUIT to this thread's queue.
     unsafe { PostQuitMessage(0) };
 }
