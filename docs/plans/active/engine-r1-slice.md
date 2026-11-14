@@ -528,9 +528,9 @@ Loop (the part the tests pin):
     `spawn` with sinks wired to `ShapePoster` and `LogFile`, click toggles `expanded`, demo or
     idle mode, message loop, clean shutdown (`mailbox.stop()`, join).
 
-- [ ] **Step 1: Write the failing test** `log::tests::line_has_timestamp_and_appends` (writes to
+- [x] **Step 1: Write the failing test** `log::tests::line_has_timestamp_and_appends` (writes to
   a temp dir via `LogFile::open_at(path)`).
-- [ ] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
+- [x] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
 - [ ] **Step 5: Smoke run. Approved by Berke via the master 2026-11-14, on conditions: run only
   when `SHQueryUserNotificationState` is not `QUNS_RUNNING_D3D_FULL_SCREEN`, `QUNS_BUSY` or
   `QUNS_PRESENTATION_MODE` (else skip and retry later); each run at most about 1 minute; no
@@ -539,7 +539,7 @@ Loop (the part the tests pin):
   `cargo run -p plith --release -- --idle-check 60`. Expected: 15 motion lines (`basic` has 5
   motions, `repeat 3`) and `idle 60 s: 0 render wake-ups`. If this session is not a console
   session, every motion number is labelled "not measured (RDP or background)".
-- [ ] **Step 6: Commit** `feat(app): compose the engine slice`, push, tick.
+- [x] **Step 6: Commit** `feat(app): compose the engine slice`, push, tick.
 
 ### Task 10: Console measurement with Berke (master arranges)
 

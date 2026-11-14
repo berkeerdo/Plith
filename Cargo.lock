@@ -13,6 +13,7 @@ dependencies = [
  "plith-render",
  "plith-shell",
  "plith-system",
+ "windows",
 ]
 
 [[package]]

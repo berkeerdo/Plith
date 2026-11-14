@@ -1,6 +1,7 @@
 //! The event-driven topmost fight: a `WinEvent` hook reports every foreground change, the shell
 //! raises its windows at once and again on a retry timer (see `plith_core::topmost`).
 
+use crate::window::ShellEvent;
 use crate::window::state::{Inner, current};
 use plith_core::topmost::TopmostAction;
 use windows::Win32::Foundation::HWND;
@@ -129,6 +130,10 @@ pub(crate) fn on_foreground(inner: &Inner) {
     let action = fight.on_foreground();
     inner.fight.set(fight);
     apply(inner, action);
+    if matches!(action, TopmostAction::Raise { .. }) {
+        let culprit = inner.culprit.borrow().clone();
+        inner.emit(ShellEvent::Raised { culprit });
+    }
 }
 
 /// The retry timer fired.

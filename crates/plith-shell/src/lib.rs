@@ -10,5 +10,5 @@ pub mod window;
 
 pub use monitor::{MonitorInfo, is_remote_session, primary_monitor};
 pub use poster::{QuitHandle, ShapePoster};
-pub use process::init_process;
+pub use process::{init_process, user_busy};
 pub use window::{Shell, ShellEvent, run_message_loop};

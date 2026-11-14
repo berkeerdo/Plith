@@ -35,7 +35,7 @@ const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
 const INPUT_CLASS: PCWSTR = w!("Plith.NotchInput");
 
 /// Something the app has to react to.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, PartialEq)]
 pub enum ShellEvent {
     /// The left button was released inside the island shape.
     Click,
@@ -43,6 +43,12 @@ pub enum ShellEvent {
     DisplayChanged,
     /// The suppression state changed; republish the scene with it.
     Suppression(Suppression),
+    /// The shell raised its windows after a foreground change; carries the class name of the
+    /// window that sat above ours, when one was found.
+    Raised {
+        /// Class name of the window above the notch, if any.
+        culprit: Option<String>,
+    },
 }
 
 /// Handle to the notch window(s). It lives on the UI thread and is not `Send`.
