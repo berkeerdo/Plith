@@ -34,7 +34,7 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | R1b: missed vblanks with a game behind, collapse and page durations, topmost IME skip, drop split and mask hit modes, deferred minors | `feature/engine-r1b` @ `main` | R1 merged as `1aabe4a` | writes the R1b plan first |
+| `engine` | R1b: missed vblanks with a game behind, collapse and page durations, topmost IME skip, drop split and mask hit modes, deferred minors | `feature/engine-r1b` @ `8647db1` | R1b plan approved (8 tasks; guard: no lever may cost the game, normal priority by default) | Berke for the Task 7 console session at the end |
 
 R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
-Master open items: R3 visual direction with Berke; approve the R1b plan when it arrives.
+Master open items: R3 visual direction with Berke; arrange the R1b Task 7 console session (Deadlock A/B, r1 vs brisk durations by eye).
