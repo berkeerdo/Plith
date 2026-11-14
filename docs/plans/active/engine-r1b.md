@@ -306,35 +306,83 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 
 ### Task 6: Pre-session smoke (the island shows briefly; master's yes first)
 
-- [ ] **Step 1:** `node ~/.claude/bin/heavy-run.mjs -- cargo build --release`.
-- [ ] **Step 2:** With the master's yes (the island shows for about 10 s), run
+- [x] **Step 1:** `node ~/.claude/bin/heavy-run.mjs -- cargo build --release`. Done 22:31 at 8508116.
+- [x] **Step 2:** With the master's yes (the island shows for about 10 s), run
   `target\release\plith.exe --demo basic --exit-after-demo --tune brisk --gpu-priority 7
   --sched-class high --mmcss critical` once and check the log: start line with `levers` and
   `tune`, one `lever` outcome line per lever (refused is fine), motion lines ending in
   `; dwm ...`, exit 0. Paste the lines into this task.
-- [ ] **Step 3:** Message the master the run list for Task 7 and wait for his relay.
+  **Done 23:07:29** with `--sched-class above` (master's guard: high only on his say-so); the
+  first try at 22:32 was refused by the busy guard (exit 3). `lever mmcss critical: ok`,
+  `lever sched-class above: ok`, `lever gpu-priority 7: ok`, exit 0. Lines as built:
+  `motion collapse: 191 frames, visible 342 ms, full 812 ms (235.1 fps at 240 Hz), 4 hitches,
+  worst gap 8.3 ms; draw p50 0.12 p99 2.52 ms; present p50 0.41 p99 3.70 ms; clock dcomp;
+  retargets 0; first wait 2.1 ms; dwm missed 0 dropped 0 of 1` and
+  `hitch collapse #90: gap 8.3 ms; before wait 0.5 late 0.1 draw 0.1 present 6.9; at wait 1.3
+  late 0.1 draw 0.1 present 0.1`. Deadlock was open behind (Berke: "oyun açık zaten"), so the
+  smoke already showed the game-load stall. Finding: `dwm ... of 1` is a wrong reading (fixed or
+  dropped in Task 8).
+- [x] **Step 3:** Message the master the run list for Task 7 and wait for his relay.
 
 ### Task 7: Console session with Berke and Deadlock (master arranges)
 
 Asked in one batch; every run is `--demo basic --exit-after-demo` (about 60 s, 25 motions) started
 on the desktop, then Berke alt-tabs into Deadlock (borderless). Nothing moves the mouse.
 
-- [ ] Run A, baseline: no lever flags. Expect R1's picture; the hitch lines name the phase.
-- [ ] Run B: `--gpu-priority 7`. Run C: `--sched-class high`. Run D: `--latency 2 --sync 0`.
+**Deviation found in run A:** in game the island parks (R1 fullscreen suppression), so a run
+inside Deadlock records only the motions before the alt-tab (6). The stall happens with Deadlock
+**running behind the desktop**; every later run kept Berke on the desktop with Deadlock running,
+about 22 s and 15 motions each (`basic` is 10 steps x 3). The same parking means no lever can take
+from the game in R1b: plith draws nothing while the game is in front (game-cost check moves to
+R4, when the island shows over games).
+
+- [x] Run A, baseline: no lever flags. Expect R1's picture; the hitch lines name the phase.
+  23:09:33, in game: 6 motions, 5 at 0 to 1 hitches; every hitch blamed `present` (one period).
+- [x] Run B: `--gpu-priority 7`. Run C: `--sched-class high`. Run D: `--latency 2 --sync 0`.
   Run E: `--mmcss critical`. Run F: the winners together. For every run, record the game's own
   smoothness: Berke's eye (verbatim) and the DWM missed/dropped delta of the motion lines; a run
   whose game feels or measures worse rejects its lever, whatever our hitches say. Skip a run whose lever was refused at
   start, and skip later runs if one already reaches 0 to 1 hitches on every motion twice.
-- [ ] Acceptance (G1 with a game): every motion 0 to 1 hitches, draw p99 under 1 ms. If no
+  Results (Deadlock running behind, desktop in front, 15 motions each, 23:10:57 to 23:17:40):
+
+  | Run | Flags | 0-1 hitch motions | Hitches | Present p99 max | Min fps |
+  |---|---|---|---|---|---|
+  | A2 | none | 11/15 | 21 | 4.35 ms | 227.6 |
+  | B | `--gpu-priority 7` | 10/15 | 15 | 4.19 ms | 197.1 |
+  | C | `--sched-class above` | 12/15 | 11 | 4.41 ms | 236.3 |
+  | D | `--latency 2 --sync 0` | 15/15 | 0 | 0.23 ms | 240.0 |
+  | E | `--mmcss critical` | 11/15 | 12 | 4.20 ms | 236.4 |
+  | F1 | `--latency 2 --sync 0` | 15/15 | 0 | 0.38 ms | 240.0 |
+  | F2 | `--sync 0` | 15/15 | 0 | 3.40 ms | 240.0 |
+  | F3 | `--latency 2` | 15/15 | 0 | 0.24 ms | 240.0 |
+
+  Every hitch in A2, B, C and E blamed `present` (one full period on the frame before the gap).
+  Berke on D: "herhangi bir takılma yoktu devam edelim". Master's call: default latency 2 with
+  sync 1 (F3, the smallest change); B, C and E rejected (no gain). The DWM delta could not judge
+  the game (wrong reading, see Task 6).
+- [x] Acceptance (G1 with a game): every motion 0 to 1 hitches, draw p99 under 1 ms. If no
   combination reaches it, record which phase the hitch lines blame and the DWM delta, and stop:
   the next lever (waitable swap chain or a D3D12 high-priority queue) goes to the master as a
-  decision, not into this plan.
-- [ ] Tuning by eye, no game: `--tune r1` then `--tune brisk`, `--demo basic` each; Berke's
-  verdict verbatim. The pick becomes the default.
-- [ ] Topmost: during run A, the log shows the foreground classes of one alt-tab and whether
-  anything visible sits above; record the explanation of the raises per alt-tab.
-- [ ] Close check: one run ended by Alt+F4 (Berke) mid-motion shows no `render stopped while
-  closing` line.
+  decision, not into this plan. **Met** with `--latency 2`: 60 of 60 motions in D, F1, F2 and F3
+  at 0 hitches, and 30 of 30 again in T1 and T2; draw p99 at most 0.51 ms.
+- [x] Tuning by eye, no game: `--tune r1` then `--tune brisk`, `--demo basic` each; Berke's
+  verdict verbatim. The pick becomes the default. Ran with `--latency 2` and Deadlock behind
+  (23:18:13 and 23:18:45): both 15/15 at 0 hitches. Berke: "önerin ne ise uygula işte, hepsi
+  iyiydi herhalde, anlamadım" (could not tell them apart). Master picked `brisk` (expand
+  417/592 ms, pages 346/421 ms, under Oyenza's 730 and 450). Known gap: collapse full 812 ms
+  in both sets against Oyenza's 658 (visible 346 ms).
+- [x] Topmost: during run A, the log shows the foreground classes of one alt-tab and whether
+  anything visible sits above; record the explanation of the raises per alt-tab. One alt-tab
+  gives three foreground changes in about 600 ms: `ForegroundStaging`,
+  `XamlExplorerHostIslandWindow` (the switcher), `SDL_app` (Deadlock). With the 100 ms debounce
+  that is 2 raises and 3 re-arms instead of 5 raises; the window above is
+  `ThumbnailDeviceHelperWnd` (switcher thumbnails), not the hidden IME window.
+- [x] Close check: one run ended by Alt+F4 (Berke) mid-motion shows no `render stopped while
+  closing` line. **Changed by the master:** the island takes no activation, so Alt+F4 cannot
+  reach it. Instead a script posted `WM_CLOSE` to `Plith.Notch` mid-expand (23:21:30, posted at
+  1106 ms, exit 0 at 1221 ms): no `render stopped while closing`, no motion line for the cut
+  motion, exit 0. Alt+F4 itself (`SC_CLOSE` to `WM_CLOSE`) is untested on screen. All 12 runs of
+  the session: 0 `fatal`, `backstop` or `stopped while closing` lines.
 
 ### Task 8: Make the winners default and record them
 
