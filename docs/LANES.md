@@ -35,7 +35,7 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | write the R1 plan, send it to the master | `feature/engine-slice` @ `main` | none yet | nothing |
-| `services` | write the R2 plan, send it to the master | `feature/services` @ `main` | none yet | nothing |
+| `engine` | write the R1 plan, send it to the master | `feature/engine-slice` @ `main` | started, writing plan | nothing |
+| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services` @ `556614e` | plan sent, approved; Task 8 hardware writes to be batched | Berke's yes at Task 8 |
 
 Master open items: CI run for `0155a6d` (first Rust workflow run); R3 visual direction with Berke.
