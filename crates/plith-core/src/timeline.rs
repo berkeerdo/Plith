@@ -31,6 +31,8 @@ pub struct Tick {
     /// Whole periods since the previous tick: 1 on the first anchor, the rounded gap on a
     /// resync after a long stall. `dt` derived from it can therefore be large; springs clamp it.
     pub periods: u32,
+    /// Seconds the raw wake-up came after the locked vblank (0 on a snap and on the first anchor).
+    pub late: f64,
 }
 
 /// Phase-locked estimate of the display's vblank times.
@@ -88,6 +90,7 @@ impl VsyncTimeline {
             vblank,
             period: self.period,
             periods: whole_periods(n),
+            late: (raw - vblank).max(0.0),
         })
     }
 
@@ -97,6 +100,7 @@ impl VsyncTimeline {
             vblank: raw,
             period: self.period,
             periods: 1,
+            late: 0.0,
         }
     }
 

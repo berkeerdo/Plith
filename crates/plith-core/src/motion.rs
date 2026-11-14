@@ -1,11 +1,52 @@
 //! Per-motion frame statistics and the `motion` log line.
 
+use crate::dwm::DwmDelta;
 use crate::geometry::IslandShape;
 use crate::shapes::REST;
 use std::fmt;
 
 /// A gap between frames above this many periods is a hitch.
 const HITCH_PERIODS: f64 = 1.5;
+/// Hitch details kept per motion; the hitch count itself stays exact.
+pub const MAX_HITCH_DETAILS: usize = 4;
+/// Frames reserved up front so recording never reallocates in a normal motion.
+const RESERVED_FRAMES: usize = 512;
+
+/// Where one frame's time went, in milliseconds.
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
+pub struct FramePhases {
+    /// Time blocked in the clock wait that paced the frame.
+    pub wait_ms: f64,
+    /// How long after its vblank the wait returned.
+    pub late_ms: f64,
+    /// Time spent drawing.
+    pub draw_ms: f64,
+    /// Time spent presenting.
+    pub present_ms: f64,
+}
+
+impl fmt::Display for FramePhases {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "wait {:.1} late {:.1} draw {:.1} present {:.1}",
+            self.wait_ms, self.late_ms, self.draw_ms, self.present_ms
+        )
+    }
+}
+
+/// One hitch: the frame it showed on, its gap and the phases around it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct HitchDetail {
+    /// Zero-based index of the frame that arrived after the gap.
+    pub frame: usize,
+    /// Gap since the previous frame, in milliseconds.
+    pub gap_ms: f64,
+    /// Phases of the frame before the gap.
+    pub before: FramePhases,
+    /// Phases of the frame after the gap.
+    pub at: FramePhases,
+}
 
 /// What a motion does to the island.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -78,6 +119,30 @@ pub struct MotionReport {
     pub retargets: usize,
     /// Duration of the first clock wait of the motion, in milliseconds (0 when none was noted).
     pub first_wait_ms: f64,
+    /// The first hitches of the motion (at most `MAX_HITCH_DETAILS`), in order.
+    pub hitch_details: Vec<HitchDetail>,
+    /// Compositor counters over the motion, when they could be read.
+    pub dwm: Option<DwmDelta>,
+}
+
+impl MotionReport {
+    /// One log line per kept hitch.
+    #[must_use]
+    pub fn detail_lines(&self) -> Vec<String> {
+        self.hitch_details
+            .iter()
+            .map(|d| {
+                format!(
+                    "hitch {} #{}: gap {:.1} ms; before {}; at {}",
+                    self.kind.as_str(),
+                    d.frame,
+                    d.gap_ms,
+                    d.before,
+                    d.at
+                )
+            })
+            .collect()
+    }
 }
 
 impl fmt::Display for MotionReport {
@@ -101,7 +166,15 @@ impl fmt::Display for MotionReport {
             self.clock,
             self.retargets,
             self.first_wait_ms,
-        )
+        )?;
+        match self.dwm {
+            Some(d) => write!(
+                f,
+                "; dwm missed {} dropped {} of {}",
+                d.missed, d.dropped, d.refreshes
+            ),
+            None => write!(f, "; dwm n/a"),
+        }
     }
 }
 
@@ -120,6 +193,9 @@ pub struct MotionStats {
     present: Vec<f64>,
     retargets: usize,
     first_wait_ms: Option<f64>,
+    prev_phases: FramePhases,
+    hitch_details: Vec<HitchDetail>,
+    dwm: Option<DwmDelta>,
 }
 
 impl MotionStats {
@@ -135,15 +211,18 @@ impl MotionStats {
             frames: 0,
             hitches: 0,
             worst_gap: 0.0,
-            draw: Vec::new(),
-            present: Vec::new(),
+            draw: Vec::with_capacity(RESERVED_FRAMES),
+            present: Vec::with_capacity(RESERVED_FRAMES),
             retargets: 0,
             first_wait_ms: None,
+            prev_phases: FramePhases::default(),
+            hitch_details: Vec::with_capacity(MAX_HITCH_DETAILS),
+            dwm: None,
         }
     }
 
-    /// Records one presented frame: its animation time and draw and present cost in ms.
-    pub fn record_frame(&mut self, anim_t: f64, draw_ms: f64, present_ms: f64) {
+    /// Records one presented frame: its animation time and where its time went.
+    pub fn record_frame(&mut self, anim_t: f64, phases: FramePhases) {
         if self.frames == 0 {
             self.first_anim = anim_t;
         } else {
@@ -151,12 +230,26 @@ impl MotionStats {
             self.worst_gap = self.worst_gap.max(gap);
             if gap > HITCH_PERIODS / self.hz {
                 self.hitches += 1;
+                if self.hitch_details.len() < MAX_HITCH_DETAILS {
+                    self.hitch_details.push(HitchDetail {
+                        frame: self.frames,
+                        gap_ms: gap * 1000.0,
+                        before: self.prev_phases,
+                        at: phases,
+                    });
+                }
             }
         }
         self.last_anim = anim_t;
         self.frames += 1;
-        self.draw.push(draw_ms);
-        self.present.push(present_ms);
+        self.prev_phases = phases;
+        self.draw.push(phases.draw_ms);
+        self.present.push(phases.present_ms);
+    }
+
+    /// Sets the compositor counter change over the motion.
+    pub fn set_dwm(&mut self, delta: DwmDelta) {
+        self.dwm = Some(delta);
     }
 
     /// Notes that the motion target changed while the motion was running.
@@ -199,6 +292,8 @@ impl MotionStats {
             clock: self.clock,
             retargets: self.retargets,
             first_wait_ms: self.first_wait_ms.unwrap_or(0.0),
+            hitch_details: self.hitch_details.clone(),
+            dwm: self.dwm,
         }
     }
 }

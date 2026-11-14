@@ -5,6 +5,7 @@ use super::super::{FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_lo
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
+use plith_core::dwm::DwmSample;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
@@ -40,9 +41,21 @@ pub(super) struct Harness {
     pub(super) failed: AtomicBool,
     /// How far the loop's own clock runs ahead of fake time, to model work before each wait.
     pub(super) lead: f64,
+    /// Compositor readings taken so far.
+    pub(super) dwm_reads: AtomicU64,
 }
 
 impl Harness {
+    /// The k-th reading (from 0) is `refreshes 100 k, missed k, dropped 0`.
+    pub(super) fn dwm_sample(&self) -> DwmSample {
+        let k = self.dwm_reads.fetch_add(1, Ordering::SeqCst);
+        DwmSample {
+            refreshes: 100 * k,
+            missed: k,
+            dropped: 0,
+        }
+    }
+
     pub(super) fn now(&self) -> f64 {
         *self.time.lock().unwrap_or_else(PoisonError::into_inner)
     }
@@ -195,6 +208,7 @@ pub(super) fn start(setup: Setup) -> Run {
         fail_once: setup.fail_once,
         failed: AtomicBool::new(false),
         lead: setup.lead,
+        dwm_reads: AtomicU64::new(0),
     });
     let frames = Arc::new(Mutex::new(Vec::new()));
     let shapes = Arc::new(Mutex::new(Vec::new()));
@@ -216,6 +230,7 @@ pub(super) fn start(setup: Setup) -> Run {
         let instant = setup.instant;
         thread::spawn(move || {
             let clock_harness = Arc::clone(&harness);
+            let dwm_harness = Arc::clone(&harness);
             let parts = LoopParts {
                 paint,
                 open_clock: move |kind| {
@@ -229,6 +244,7 @@ pub(super) fn start(setup: Setup) -> Run {
                 order: KINDS.to_vec(),
                 hz: 240.0,
                 layout: layout(),
+                dwm: move || Some(dwm_harness.dwm_sample()),
             };
             run_loop(parts, &mailbox, &shared, &sinks);
             let _ = done_tx.send(());

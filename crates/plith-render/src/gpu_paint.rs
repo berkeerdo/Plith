@@ -20,7 +20,7 @@ impl Stack {
     fn new(hwnd: HWND, layout: &SurfaceLayout, warp: bool) -> Result<Self> {
         let gpu = Gpu::new(warp)?;
         let target = CompositionTarget::new(&gpu, hwnd, layout)?;
-        let painter = Painter::new(gpu.context())?;
+        let painter = Painter::new(gpu.context(), gpu.d2d_factory())?;
         Ok(Self {
             gpu,
             target,

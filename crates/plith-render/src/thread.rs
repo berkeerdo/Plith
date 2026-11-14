@@ -1,6 +1,7 @@
 //! The render thread: spawn, handle, configuration and sinks. Every graphics object is created
 //! inside the thread; only `Arc`s, the sinks and plain integers (HWND, HMONITOR) cross.
 
+mod clocks;
 mod run;
 
 pub use run::{LoopParts, LoopShared, run_loop};
@@ -212,6 +213,7 @@ fn render_main(
                 order: clock_order(config.clock, config.remote),
                 hz: config.hz,
                 layout: config.layout,
+                dwm: crate::dwm::read,
             };
             run_loop(parts, mailbox, shared, sinks);
         }

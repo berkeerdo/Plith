@@ -113,3 +113,11 @@ fn turn_to_current_page_is_a_no_op() {
     assert!(turn.step(H));
     assert_eq!(turn.current(), 3);
 }
+
+#[test]
+fn layers_hold_outgoing_then_incoming_without_allocating() {
+    let mut turn = PageTurn::new(0);
+    turn.turn_to(1);
+    let pages: Vec<usize> = turn.layers().iter().map(|l| l.page).collect();
+    assert_eq!(pages, vec![0, 1]);
+}

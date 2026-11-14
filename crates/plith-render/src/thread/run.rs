@@ -2,15 +2,17 @@
 //! frame clock, phase-locks the time, steps the springs in whole periods, paints, publishes the
 //! drawn shape and writes one motion report per motion.
 
+use super::clocks::Clocks;
 use super::{FrameTimes, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
-use plith_core::clock_choice::{ClockHealth, ClockKind};
+use plith_core::clock_choice::ClockKind;
+use plith_core::dwm::DwmSample;
 use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
-use plith_core::motion::{MotionKind, MotionStats};
+use plith_core::motion::{FramePhases, MotionKind, MotionStats};
 use plith_core::page::PageTurn;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
 use plith_core::spring::Spring;
@@ -54,7 +56,7 @@ impl LoopShared {
 }
 
 /// Everything the loop owns: the painter, how to open and time clocks, and the display.
-pub struct LoopParts<P, O, N> {
+pub struct LoopParts<P, O, N, D> {
     /// Paints and presents one frame.
     pub paint: P,
     /// Opens a clock of the given kind.
@@ -67,68 +69,18 @@ pub struct LoopParts<P, O, N> {
     pub hz: f64,
     /// The surface layout, for the island origin.
     pub layout: SurfaceLayout,
-}
-
-/// The clock in use, opened lazily, and the demotion state.
-struct Clocks<C, O> {
-    open: O,
-    order: Vec<ClockKind>,
-    index: usize,
-    current: Option<C>,
-    health: ClockHealth,
-}
-
-impl<C: FrameSource, O: FnMut(ClockKind) -> Result<C, ClockError>> Clocks<C, O> {
-    fn kind(&self) -> ClockKind {
-        self.order[self.index.min(self.order.len() - 1)]
-    }
-
-    fn is_last(&self) -> bool {
-        self.index + 1 >= self.order.len()
-    }
-
-    /// Moves to the next kind; false (and no change) when this is the last one.
-    fn demote(&mut self) -> bool {
-        if self.is_last() {
-            return false;
-        }
-        self.current = None;
-        self.index += 1;
-        self.health = ClockHealth::default();
-        true
-    }
-
-    /// Back to the preferred kind with fresh health, so a transient failure in one motion
-    /// does not demote the clock for every later motion.
-    fn restart(&mut self) {
-        if self.index != 0 {
-            self.current = None;
-            self.index = 0;
-        }
-        self.health = ClockHealth::default();
-    }
-
-    /// The current source, opening kinds in order until one opens.
-    fn source(&mut self) -> Result<&mut C, String> {
-        while self.current.is_none() {
-            let kind = self.kind();
-            match (self.open)(kind) {
-                Ok(source) => self.current = Some(source),
-                Err(error) if self.demote() => drop(error),
-                Err(error) => return Err(format!("no frame clock: {} {error}", kind.as_str())),
-            }
-        }
-        self.current
-            .as_mut()
-            .ok_or_else(|| String::from("no frame clock"))
-    }
+    /// Reads the compositor's frame counters (`None` when it cannot).
+    pub dwm: D,
 }
 
 /// The loop's state between frames.
-struct Engine<'a, C, P, O, N> {
+struct Engine<'a, C, P, O, N, D> {
     paint: P,
     clocks: Clocks<C, O>,
     now: N,
+    dwm: D,
+    dwm_start: Option<DwmSample>,
+    wait_ms: f64,
     hz: f64,
     period: f64,
     layout: SurfaceLayout,
@@ -165,8 +117,8 @@ fn opacity_f32(value: f64) -> f32 {
 }
 
 /// Runs until the mailbox stops or a fatal error (reported through `sinks.on_fatal`).
-pub fn run_loop<C, P, O, N>(
-    parts: LoopParts<P, O, N>,
+pub fn run_loop<C, P, O, N, D>(
+    parts: LoopParts<P, O, N, D>,
     mailbox: &SceneMailbox,
     shared: &LoopShared,
     sinks: &RenderSinks,
@@ -175,18 +127,16 @@ pub fn run_loop<C, P, O, N>(
     P: Paint,
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
+    D: Fn() -> Option<DwmSample>,
 {
     let (scene, seen) = mailbox.latest();
     let mut engine = Engine {
         paint: parts.paint,
-        clocks: Clocks {
-            open: parts.open_clock,
-            order: parts.order,
-            index: 0,
-            current: None,
-            health: ClockHealth::default(),
-        },
+        clocks: Clocks::new(parts.open_clock, parts.order),
         now: parts.now,
+        dwm: parts.dwm,
+        dwm_start: None,
+        wait_ms: 0.0,
         hz: parts.hz,
         period: 1.0 / parts.hz,
         layout: parts.layout,
@@ -214,12 +164,13 @@ pub fn run_loop<C, P, O, N>(
     }
 }
 
-impl<C, P, O, N> Engine<'_, C, P, O, N>
+impl<C, P, O, N, D> Engine<'_, C, P, O, N, D>
 where
     C: FrameSource,
     P: Paint,
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
+    D: Fn() -> Option<DwmSample>,
 {
     /// Paints the start frame, then parks and animates until stopped.
     fn run(&mut self, mailbox: &SceneMailbox, start: Scene) -> Result<(), String> {
@@ -286,17 +237,32 @@ where
             if let Some(times) = self.paint_frame()?
                 && let Some(stats) = self.stats.as_mut()
             {
-                stats.record_frame(anim_t, times.draw_ms, times.present_ms);
+                let phases = FramePhases {
+                    wait_ms: self.wait_ms,
+                    late_ms: tick.late * 1000.0,
+                    draw_ms: times.draw_ms,
+                    present_ms: times.present_ms,
+                };
+                stats.record_frame(anim_t, phases);
             }
             if island_settled && self.pages_settled && self.content_settled {
-                if let Some(stats) = self.stats.take() {
-                    let mut report = stats.finish();
-                    report.clock = drawn_by.as_str();
-                    (self.sinks.on_motion)(report);
-                }
+                self.finish_motion(drawn_by);
                 return Ok(());
             }
         }
+    }
+
+    /// Reports the finished motion with the compositor's counter change over it.
+    fn finish_motion(&mut self, drawn_by: ClockKind) {
+        let Some(mut stats) = self.stats.take() else {
+            return;
+        };
+        if let (Some(start), Some(end)) = (self.dwm_start.take(), (self.dwm)()) {
+            stats.set_dwm(start.delta(end));
+        }
+        let mut report = stats.finish();
+        report.clock = drawn_by.as_str();
+        (self.sinks.on_motion)(report);
     }
 
     /// One clock wait. `None` when the sample is dropped because the clock was just demoted.
@@ -307,6 +273,7 @@ where
         let result = source.wait();
         self.shared.wake();
         let waited_ms = ((self.now)() - began) * 1000.0;
+        self.wait_ms = waited_ms;
         if let Some(stats) = self.stats.as_mut() {
             stats.note_first_wait(waited_ms);
         }
@@ -352,6 +319,7 @@ where
             let from: IslandShape = self.island.shape();
             let kind = MotionKind::classify(from, target, page_changed);
             self.stats = Some(MotionStats::new(kind, self.hz, self.clocks.kind().as_str()));
+            self.dwm_start = (self.dwm)();
         }
         self.island.retarget(target);
         self.content.retarget(content_target(scene), OPACITY);

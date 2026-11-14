@@ -127,7 +127,12 @@ pub fn sinks(
     let (fatal, closing) = (Arc::clone(fatal), Arc::clone(closing));
     RenderSinks {
         on_shape: Box::new(move |frame| poster.post(frame)),
-        on_motion: Box::new(move |report| motion_log.line(&report.to_string())),
+        on_motion: Box::new(move |report| {
+            motion_log.line(&report.to_string());
+            for line in report.detail_lines() {
+                motion_log.line(&line);
+            }
+        }),
         on_fatal: Box::new(move |message| {
             if closing.load(Ordering::Acquire) {
                 fatal_log.line(&format!("render stopped while closing: {message}"));

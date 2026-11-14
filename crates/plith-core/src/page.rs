@@ -68,6 +68,55 @@ impl Layer {
     }
 }
 
+/// At most two visible layers, outgoing first; `Copy`, so a frame needs no allocation.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct PageLayers {
+    slots: [Option<PageLayer>; 2],
+}
+
+impl PageLayers {
+    /// No layers.
+    #[must_use]
+    pub fn empty() -> Self {
+        Self { slots: [None; 2] }
+    }
+
+    /// Layers from `layers` (outgoing first); anything past the second is ignored.
+    #[must_use]
+    pub fn of(layers: &[PageLayer]) -> Self {
+        let mut out = Self::empty();
+        for (slot, layer) in out.slots.iter_mut().zip(layers) {
+            *slot = Some(*layer);
+        }
+        out
+    }
+
+    /// Number of layers.
+    #[must_use]
+    pub fn len(&self) -> usize {
+        self.iter().count()
+    }
+
+    /// True when no layer is visible.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.slots[0].is_none() && self.slots[1].is_none()
+    }
+
+    /// The layers, outgoing first.
+    pub fn iter(&self) -> impl Iterator<Item = &PageLayer> {
+        self.slots.iter().flatten()
+    }
+}
+
+impl std::ops::Index<usize> for PageLayers {
+    type Output = PageLayer;
+
+    fn index(&self, index: usize) -> &PageLayer {
+        self.iter().nth(index).expect("page layer index in range")
+    }
+}
+
 /// The incoming page and, while a turn is in flight, the outgoing one.
 #[derive(Debug, Clone)]
 pub struct PageTurn {
@@ -117,12 +166,13 @@ impl PageTurn {
 
     /// Visible layers, outgoing first.
     #[must_use]
-    pub fn layers(&self) -> Vec<PageLayer> {
-        self.outgoing
-            .iter()
-            .chain(std::iter::once(&self.incoming))
-            .map(Layer::snapshot)
-            .collect()
+    pub fn layers(&self) -> PageLayers {
+        PageLayers {
+            slots: [
+                self.outgoing.as_ref().map(Layer::snapshot),
+                Some(self.incoming.snapshot()),
+            ],
+        }
     }
 
     /// The page being turned to (or resting on).
