@@ -567,13 +567,23 @@ Asked through the master in one batch. Nothing here moves the mouse; Berke click
 
 | # | Builder call (spec section 11) | Proposal | Decided by |
 |---|---|---|---|
-| P1 | Frame clock source | `DCompositionWaitForCompositorClock` first, `WaitForVBlank` second, waitable timer last; demote after 3 waits under 0.15 period; MMCSS `Games` on the render thread; timer only over RDP; phase lock tracks the earliest wake-up with a nominal period (deviates from Oyenza's symmetric phase and period gains, Task 4 finding) | Task 10 clock comparison |
+| P1 | Frame clock source | `DCompositionWaitForCompositorClock` first, `WaitForVBlank` second, waitable timer last; demote after 3 tick-to-tick intervals under 0.15 period (a slow frame never demotes); each motion retries the first source; MMCSS `Games` on the render thread; timer only over RDP; phase lock tracks the earliest wake-up with a nominal period and the stamper's dt is always a whole number of periods (deviates from Oyenza's symmetric phase and period gains, Task 4 finding); `WaitForVBlank` has no timeout, so shutdown may wait one vblank; `DCompositionWaitForCompositorClock` is linked statically, so Windows 11 build 22000+ is required (accepted by the master 2026-11-14) | Task 10 clock comparison |
 | P2 | Hit-testing mechanism | One DComp window with a 1 px outset `SetWindowRgn` applied on the UI thread from a posted shape, every painted frame (Oyenza: 30 Hz, two windows) | Task 8 spike + Task 10 clicks |
 | P3 | Swap chain buffers and latency | 2 buffers, `SetMaximumFrameLatency(1)`, `Present(1, 0)` after the clock wait; 3 buffers if draw ever waits on DWM | Task 10 present p99 |
 | P4 | Scene handoff | Latest-wins mailbox (`Mutex` + `Condvar` + generation), not a channel: intermediate targets are meaningless and the render thread parks on the condvar | Task 7 tests |
 | P5 | UI layer shape | Deferred to R4 (R1 has no widgets); recorded so R4 opens with it | n/a |
 
 Service polling rates belong to lane `services`.
+
+## Decisions made during execution (accepted by the master 2026-11-14)
+
+- Content opacity is a spring (`OPACITY`), 1 when expanded and 0 at rest, and placeholders are
+  always clipped to the island: the 32 DIP resting pill otherwise showed the page bar (final
+  review finding).
+- The motion line ends with `; first wait X ms` after the Oyenza-comparable part, for the
+  Task 10 clock comparison.
+- A stall over 30 periods resyncs the grid but keeps its whole length in `periods`, so it counts
+  as a hitch.
 
 ## Not in this slice (and where it goes)
 
