@@ -57,10 +57,18 @@ source and context7), std only in `plith-core` (no new dependencies anywhere).
 5. **Remote desktop session**: the clock is the timer, the motion line says `clock timer`, and
    nothing about motion is claimed from it.
    Test: `clock_choice::tests::remote_session_uses_timer_only` (Task 7).
+6. **Display off, session lock, a fullscreen app** (added by the master): each parks the clock
+   with zero render wakes, same as at rest, even mid-motion (the motion snaps to its target and
+   its report is dropped). On return, the island shows the latest scene with no catch-up motion.
+   Tests: `scene::tests::any_suppression_reason_suppresses` (Task 5),
+   `thread::tests::suppressed_scene_parks_even_mid_motion` (Task 7); the three signals are
+   checked by hand in Task 10.
 
 ---
 
 ## Shapes for the slice (all DIP, used by tests and the demo)
+
+Placeholders approved by the master 2026-11-14; they live only in `plith-core/src/shapes.rs`.
 
 | Name | Width | Height | Radius |
 |---|---|---|---|
@@ -142,6 +150,8 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 **Files:**
 - Create: `crates/plith-core/src/island.rs` (+ `island/tests.rs`),
   `crates/plith-core/src/geometry.rs` (+ `geometry/tests.rs`),
+  `crates/plith-core/src/shapes.rs` (the one constants table: every number in "Shapes for the
+  slice" lives here and nowhere else, so R3 is a one-file change),
   `crates/plith-core/src/layout.rs` (+ `layout/tests.rs`)
 
 **Interfaces:**
@@ -149,8 +159,9 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 - Produces:
   - `geometry`: `IslandShape { width, height, radius: f64 }` (`Copy`, `PartialEq`),
     `IslandShape::area()`, `IslandShape::contains(&self, x: f64, y: f64) -> bool` (point relative
-    to the island's top-left, rounded-rect test with the drawn radius), consts `REST`,
-    `PAGES: [IslandShape; 3]`, `TOP_GAP`, `SURFACE_MARGIN`, `OVERSHOOT`.
+    to the island's top-left, rounded-rect test with the drawn radius).
+  - `shapes`: consts `REST`, `PAGES: [IslandShape; 3]`, `TOP_GAP`, `SURFACE_MARGIN`,
+    `OVERSHOOT`, `FILL` and `PLACEHOLDER` (colour, size, radius, top offset as plain numbers).
   - `island`: `IslandMotion::new(rest: IslandShape) -> IslandMotion`,
     `retarget(&mut self, target: IslandShape)`, `step(&mut self, dt: f64) -> bool`,
     `shape(&self) -> IslandShape` (radius clamped to `min(radius, height/2, width/2)`),
@@ -279,7 +290,10 @@ Line format (pinned; the log writer prefixes a local timestamp):
 
 **Interfaces:**
 - Produces:
-  - `Scene { pub expanded: bool, pub page: usize }` (`Copy`, `Default` = collapsed, page 0),
+  - `Suppression { pub display_off: bool, pub locked: bool, pub fullscreen: bool }` (`Copy`,
+    `Default` all false), `Suppression::any(&self) -> bool`.
+  - `Scene { pub expanded: bool, pub page: usize, pub suppression: Suppression }` (`Copy`,
+    `Default` = collapsed, page 0, nothing suppressed),
     `Scene::target(&self) -> IslandShape` (`REST` or `PAGES[page]`).
   - `SceneMailbox` (latest wins; `Mutex<(Scene, u64)>` + `Condvar`): `new(Scene)`,
     `publish(&self, scene: Scene) -> u64`, `latest(&self) -> (Scene, u64)`,
@@ -304,6 +318,7 @@ Built-ins (pinned):
 - [ ] **Step 1: Write the failing tests**
 
 ```rust
+#[test] fn any_suppression_reason_suppresses()             // each of the three flags alone makes any() true
 #[test] fn wait_newer_wakes_on_publish_from_another_thread()
 #[test] fn latest_wins_when_two_scenes_are_published_before_a_read()
 #[test] fn stop_releases_a_blocked_waiter()
@@ -414,6 +429,7 @@ Loop (the part the tests pin):
 
 ```rust
 #[test] fn parks_at_rest_with_no_clock_waits()           // no scene published: 200 ms later clock waits == 0, wakes == 0
+#[test] fn suppressed_scene_parks_even_mid_motion()      // expand, 20 frames, publish suppressed: no more clock waits, no report
 #[test] fn one_expand_produces_one_motion_report()       // kind Expand, frames > 100, then parks
 #[test] fn retarget_mid_motion_is_one_report_with_retargets_1()
 #[test] fn first_frame_after_rest_advances_one_period()
@@ -448,7 +464,12 @@ Loop (the part the tests pin):
     FnMut(ShellEvent)>) -> windows::core::Result<Shell>`, `Shell::hwnd(&self) -> isize`,
     `Shell::shape_poster(&self) -> ShapePoster` (`Send + Clone`; `post(ShapeFrame)` stores into
     the cell and `PostMessageW(WM_APP_SHAPE)`, coalesced by generation),
-    `run_message_loop() -> i32`, `ShellEvent { Click, DisplayChanged }`.
+    `run_message_loop() -> i32`, `ShellEvent { Click, DisplayChanged, Suppression(Suppression) }`.
+  - Suppression signals, all event driven (no polling): display state via
+    `RegisterPowerSettingNotification(GUID_CONSOLE_DISPLAY_STATE)`, lock via
+    `WTSRegisterSessionNotification` (`WTS_SESSION_LOCK` / `UNLOCK`), fullscreen via an AppBar
+    registration that never calls `ABM_SETPOS` (`ABN_FULLSCREENAPP`). The app republishes the
+    scene with the new `Suppression`.
   - Window: `WS_POPUP`, `WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE |
     WS_EX_NOREDIRECTIONBITMAP`, placed once at `layout.surface`, never moved during a morph.
   - core `TopmostFight`: `on_foreground(&mut self) -> TopmostAction`, `on_timer(&mut self) ->
@@ -505,7 +526,8 @@ Loop (the part the tests pin):
 - [ ] **Step 1: Write the failing test** `log::tests::line_has_timestamp_and_appends` (writes to
   a temp dir via `LogFile::open_at(path)`).
 - [ ] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
-- [ ] **Step 5: Smoke run (needs the master's yes, batched with Task 10):**
+- [ ] **Step 5: Smoke run. Before the first on-screen run, message the master and wait for
+  Berke's relayed yes (not approved as of 2026-11-14):**
   `cargo run -p plith --release -- --demo basic --exit-after-demo` then
   `cargo run -p plith --release -- --idle-check 60`. Expected: 15 motion lines (`basic` has 5
   motions, `repeat 3`) and `idle 60 s: 0 render wake-ups`. If this session is not a console
@@ -521,6 +543,9 @@ Asked through the master in one batch. Nothing here moves the mouse; Berke click
 - [ ] G1: every motion line at 238+ fps at 240 Hz, 0 to 1 hitches, draw p99 under 1 ms;
   expand 600 to 900 ms, collapse 500 to 800 ms, page 300 to 600 ms. Paste the lines here.
 - [ ] G2: `--idle-check 60` prints 0 render wake-ups.
+- [ ] Review Focus 6: during `--demo basic`, Berke locks the session (Win+L), turns the display
+  off, and starts a fullscreen app; the log shows the motion cut short with no report and no
+  wakes until return.
 - [ ] Hit testing per candidate (`--hit region|split|mask`): Berke clicks just outside the
   corner arc and outside the island during `--demo interrupt` (reaches the window beneath), and
   inside (toggles); pen and touch if this PC has them, else recorded as untested (ADR P2).
@@ -547,4 +572,5 @@ Service polling rates belong to lane `services`.
 
 Offscreen content layers with group opacity (R4, when text exists), hover dwell and hover lift
 (R4), a named-pipe demo command (R4 if `--demo` is not enough), multi-monitor choice and
-settings (R7), fullscreen hiding (R4), OLE drop target (R5).
+settings (R7), fullscreen hiding of the window itself (R4; R1 only parks the clock), OLE drop
+target (R5).
