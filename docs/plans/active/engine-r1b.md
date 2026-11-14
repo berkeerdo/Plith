@@ -1,5 +1,9 @@
 # R1b Engine Under Load Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations and rulings are in the task notes, the Task 6 and 7 records and "Handoff" at the
+> end; ADR amendment drafts are in their own section.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The island keeps 0 to 1 hitches per motion with a borderless game behind, its motion
@@ -398,7 +402,7 @@ R4, when the island shows over games).
 - [x] **Step 2:** Draft the ADR amendments below for the master (0003 clock and priorities, 0005
   latency and sync if changed): decision, the Task 7 numbers copied from the log.
 - [x] **Step 3:** Five checks green, commit `perf(engine): default to measured levers`.
-- [ ] **Step 4:** `project-docs` handoff on this branch, plan banner, message the master.
+- [x] **Step 4:** `project-docs` handoff on this branch, plan banner, message the master.
 
 ## ADR amendment drafts (filled in Task 8; the master files them)
 
@@ -435,3 +439,58 @@ A waitable swap chain or a D3D12 queue (only if Task 7 says priorities are not e
 decision), PresentMon captures (needs an install and elevation; ask first), a second borderless
 game (deferred by the master), relayout on display change (R4), L3 `WaitForVBlank` timeout, L6
 end-session handling, L7, L9, L11 to L14 (R4 wiring).
+
+## Handoff (2026-11-14, lane `engine`)
+
+R1b is done; the branch is ready for the master's merge review. Commits on
+`feature/engine-r1b` since `main` (6d25b23): T1 `1143cc9`, T2 `a3c2436`, T3 `759037d`, T4
+`74e11d1`, T5 `6e48ac2` + `0c3738d`, T8 `eaf15e1` + `dbbbf65`, final review fixes `028d9d0`,
+plus docs commits. Every task had a spec and quality review (T5 needed one fix round); the
+final whole-branch review (opus) said "ready after fixes" with 0 Critical, and its fixes are in
+`028d9d0` (re-reviewed).
+
+**Measured (console session 23:07 to 23:21, release build, RTX 5080, 240 Hz, Deadlock running
+behind the desktop):** with the R1 setting 11 of 15 motions at 0 to 1 hitches (21 hitches); with
+`SetMaximumFrameLatency(2)` 90 of 90 motions at 0 hitches, 240.0 fps, draw p99 at most 0.51 ms.
+Berke: "herhangi bir takılma yoktu". Defaults now: latency 2, sync 1, tune `brisk`.
+
+**For the master at merge:**
+- File the ADR 0005 and 0003 amendments (drafts above). Until then main's ADR 0005 says
+  latency 1 while the code runs 2 (the final review's one Important item).
+- Move this plan to `docs/plans/done/` and rewrite STATUS (lane does not touch them).
+
+**Not measured (state it in STATUS):**
+- What reaches the screen: the log measures our cadence and present time only. DWM counters
+  are unusable on this build (removed) and PresentMon was not run, so the extra queued frame
+  (up to 4.2 ms when the GPU is behind) and on-screen vblank landing rest on Berke's eye.
+- Game cost of any lever: plith parks while a game is in front, so nothing was drawn over a
+  game; this check moves to R4.
+- One game (Deadlock), one PC, one refresh rate. Alt+F4 on screen (a posted `WM_CLOSE` was
+  tested instead). The panic paths, the 3 s backstop and the watchdog forced exit run only in
+  unit tests. No lever was ever refused; `--sched-class high` never ran. No G2 idle check was
+  run on this branch.
+
+**Known gaps:** collapse full 812 ms against Oyenza's 658 (visible 346 ms; the radius tail behind
+the height clamp). Topmost: within one 100 ms burst a later grab waits for the 500 ms retry
+(not seen on screen, the island parks in game).
+
+**Deferred minors** (triaged "later" by the final review; ledger copy in this list): `needs_clip`
+has no direct test; `PageLayers` `Index` with `expect` used only by tests; no test for lever
+notes after `recover`; `--mmcss` logs nothing when `join_mmcss` itself fails; no render test of
+`visible_ms` across retarget or snap; redundant `is_visual` guards and the unread `culprit`
+state in the shell; the latency fatal rule is tied to the default value and untested;
+`tests/durations.rs` re-implements the engine's stepping order; `close_render`'s exit path has no
+subprocess test.
+
+**Traps that live nowhere else:**
+- The game-load stall reproduces with the game running **behind the desktop**; inside the game
+  the island parks, so a run inside the game records only the motions before the alt-tab.
+- `--demo basic` is 10 steps x 3, about 22 s and 15 motions, not 60 s.
+- One alt-tab is three foreground changes (`ForegroundStaging`, `XamlExplorerHostIslandWindow`,
+  then the game); the visible window above is `ThumbnailDeviceHelperWnd`.
+- The island never takes activation, so Alt+F4 cannot close it; post `WM_CLOSE` to the
+  `Plith.Notch` window class instead (no input synthesis).
+
+**Next engine job (proposal; the master decides):** R4 opens with the review's L11 to L14 (a
+generic UI wake message, no present per duplicate scene, content in the scene, app wiring),
+and a PresentMon capture with Berke's yes to measure on-screen delivery at latency 2.
