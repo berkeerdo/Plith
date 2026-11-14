@@ -19,6 +19,21 @@ pub fn panel_id(instance: &str) -> String {
     format!("Internal panel {instance}")
 }
 
+/// The display name of a built-in panel: "Built-in display", plus the short model id when the
+/// instance name has one (`DISPLAY\AUS27FD\5&efad&0&UID4353_0` gives `AUS27FD`).
+#[must_use]
+pub fn panel_name(instance: &str) -> String {
+    let model = instance
+        .split('\\')
+        .nth(1)
+        .map(str::trim)
+        .filter(|segment| !segment.is_empty());
+    match model {
+        Some(model) => format!("Built-in display ({model})"),
+        None => "Built-in display".to_owned(),
+    }
+}
+
 /// Query for the current level of one panel.
 #[must_use]
 pub fn read_query(instance: &str) -> String {

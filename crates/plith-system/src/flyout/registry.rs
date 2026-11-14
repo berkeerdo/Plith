@@ -31,13 +31,22 @@ impl HiddenRegistry {
         self.hidden.is_empty()
     }
 
-    /// Hides `hwnd` through `hide`, which returns whether the window was visible until now
-    /// (what `ShowWindow` returns). Only a real visible to hidden transition is recorded: a
-    /// window somebody else hid is not ours to show.
-    pub fn hide(&mut self, hwnd: isize, hide: impl FnOnce(isize) -> bool) {
-        if hide(hwnd) {
-            self.hidden.insert(hwnd);
+    /// Hides `hwnd`: only a window that `is_visible` reports visible right now is hidden, and it
+    /// is recorded only when `post_hide` reports the request was accepted. `post_hide` is an
+    /// asynchronous request (`ShowWindowAsync`), so its result says nothing about the previous
+    /// visibility; that is what `is_visible` is for. A window somebody else hid is not ours to
+    /// show. Returns whether the window is now owed a restore.
+    pub fn hide(
+        &mut self,
+        hwnd: isize,
+        is_visible: impl FnOnce(isize) -> bool,
+        post_hide: impl FnOnce(isize) -> bool,
+    ) -> bool {
+        if !is_visible(hwnd) || !post_hide(hwnd) {
+            return false;
         }
+        self.hidden.insert(hwnd);
+        true
     }
 
     /// Calls `show` once for every recorded window, then forgets them all (a destroyed handle

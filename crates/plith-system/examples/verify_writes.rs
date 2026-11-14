@@ -16,6 +16,10 @@
 //!                printed; after the stop each one is checked to be visible again. A volume key
 //!                press changes the volume by one step: press the opposite key afterwards.
 //!
+//! Ctrl+C is turned into a flag: the flyout wait loop ends early and falls through to the stop,
+//! which restores every hidden window. Do not press it anyway; if the run is killed, restart
+//! Explorer.
+//!
 //! The original brightness is restored from a drop guard, so a failed step or a panic still
 //! writes it back; the suppressor restores its windows when it is dropped.
 
@@ -26,14 +30,30 @@ mod imp {
     use plith_system::{
         BrightnessService, DeviceLevel, FlyoutSuppressor, Mode, Status, VolumeKeyHook,
     };
+    use std::sync::atomic::{AtomicBool, Ordering};
+
     use windows::Win32::Foundation::HWND;
+    use windows::Win32::System::Console::SetConsoleCtrlHandler;
     use windows::Win32::UI::WindowsAndMessaging::{IsWindow, IsWindowVisible};
+    use windows::core::BOOL;
 
     const WRITE_WAIT: Duration = Duration::from_secs(5);
     const FLYOUT_RUN: Duration = Duration::from_secs(20);
     const BRIGHTNESS_STEP: u8 = 5;
     /// DDC raw values do not always round trip to the same percent.
     const PERCENT_TOLERANCE: u8 = 1;
+
+    static INTERRUPTED: AtomicBool = AtomicBool::new(false);
+
+    unsafe extern "system" fn on_ctrl(_kind: u32) -> BOOL {
+        INTERRUPTED.store(true, Ordering::SeqCst);
+        // Handled: the process keeps running so the restore paths can run.
+        BOOL(1)
+    }
+
+    fn interrupted() -> bool {
+        INTERRUPTED.load(Ordering::SeqCst)
+    }
 
     enum Verdict {
         Pass,
@@ -158,6 +178,9 @@ mod imp {
             println!("WOULD: set every display to {target}%, then back to {original}%");
             return Verdict::Planned;
         }
+        if interrupted() {
+            return Verdict::Skipped("interrupted before the write".into());
+        }
         let mut guard = Guard::new(|| {
             let _ = service.set_percent(original);
             wait_levels(&service, original);
@@ -212,7 +235,7 @@ mod imp {
             Ok(s) => s,
             Err(why) => return Verdict::Skipped(format!("suppressor unavailable: {why}")),
         };
-        let (keys_owner, keys) = match VolumeKeyHook::start() {
+        let (keys_owner, keys) = match VolumeKeyHook::start(Some(suppressor.suppression_window())) {
             Ok(pair) => pair,
             Err(why) => return Verdict::Skipped(format!("key hook unavailable: {why}")),
         };
@@ -220,10 +243,9 @@ mod imp {
         let started = Instant::now();
         let (mut presses, mut hidden) = (0, Vec::new());
         let mut reported = 0;
-        while started.elapsed() < FLYOUT_RUN {
+        while started.elapsed() < FLYOUT_RUN && !interrupted() {
             if keys.recv_timeout(Duration::from_millis(5)).is_ok() {
                 presses += 1;
-                suppressor.open_window();
                 println!("[{:5.2}s] volume key seen", started.elapsed().as_secs_f64());
             }
             for m in suppressor.matches().try_iter() {
@@ -241,6 +263,9 @@ mod imp {
                     hidden.push(m.hwnd);
                 }
             }
+        }
+        if interrupted() {
+            println!("interrupted: stopping now and restoring the hidden windows");
         }
         drop(keys_owner);
         let stopped = suppressor.stop();
@@ -288,12 +313,22 @@ mod imp {
                 "DRY PLAN (no --yes): nothing is written"
             }
         );
+        if args.yes {
+            println!(
+                "do not press Ctrl+C; if interrupted, restart Explorer and set the default \
+                 device back by hand"
+            );
+            // SAFETY: `on_ctrl` is a valid handler routine that only stores to a static atomic.
+            if unsafe { SetConsoleCtrlHandler(Some(on_ctrl), true) }.is_err() {
+                println!("warning: could not install the Ctrl+C handler");
+            }
+        }
         let mut results = Vec::new();
         if args.brightness {
             println!("\n== brightness ==");
             results.push(("brightness", brightness(args.yes)));
         }
-        if args.flyout {
+        if args.flyout && !interrupted() {
             println!("\n== flyout ==");
             results.push(("flyout", flyout(args.yes)));
         }

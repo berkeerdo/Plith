@@ -17,6 +17,8 @@ pub mod volume_keys;
 
 #[cfg(windows)]
 mod hook_thread;
+#[cfg(windows)]
+mod waker;
 
 #[cfg(windows)]
 pub use flyout::FlyoutSuppressor;

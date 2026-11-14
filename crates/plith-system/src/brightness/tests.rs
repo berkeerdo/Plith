@@ -3,8 +3,9 @@
 use std::sync::{Arc, Mutex, OnceLock};
 
 use super::discovery::{apply_event, apply_write};
+use super::run_token::RunTokens;
 use super::step::{percent_to_raw, raw_to_percent};
-use super::wql::{escape_wql, methods_query, panel_id, read_query};
+use super::wql::{escape_wql, methods_query, panel_id, panel_name, read_query};
 use super::writer::{Job, Observer, Runner};
 use super::{
     BrightnessDevice, CoalescingWriter, DeviceLevel, WriteOutcome, keep_answering, step_level,
@@ -329,4 +330,30 @@ fn refusing_device_is_tried_again_on_the_next_value_and_blocks_no_one() {
     let outcomes = seen.lock().unwrap();
     assert_eq!(outcomes.len(), 2);
     assert!(outcomes.iter().all(|o| o.failed == ["a".to_owned()]));
+}
+
+#[test]
+fn panel_name_uses_the_model_segment() {
+    assert_eq!(
+        panel_name(r"DISPLAY\AUS27FD\5&efad&0&UID4353_0"),
+        "Built-in display (AUS27FD)"
+    );
+    assert_eq!(panel_name("no-separators"), "Built-in display");
+    assert_eq!(panel_name(r"DISPLAY\"), "Built-in display");
+    assert_eq!(panel_name(""), "Built-in display");
+}
+
+#[test]
+fn only_the_newest_run_token_is_current() {
+    let tokens = RunTokens::default();
+    let first = tokens.begin();
+    assert!(tokens.is_current(first));
+    let second = tokens.begin();
+    assert_ne!(first, second);
+    assert!(
+        !tokens.is_current(first),
+        "a zombie run is no longer current"
+    );
+    assert!(tokens.is_current(second));
+    assert_eq!(tokens.latest(), second);
 }

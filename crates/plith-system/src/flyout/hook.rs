@@ -18,8 +18,8 @@ use windows::Win32::System::Threading::{
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::WindowsAndMessaging::{
     EVENT_OBJECT_CREATE, EVENT_OBJECT_LOCATIONCHANGE, EVENT_OBJECT_SHOW, GetClassNameW,
-    GetWindowThreadProcessId, OBJID_WINDOW, SW_HIDE, SW_SHOWNA, ShowWindow, WINEVENT_OUTOFCONTEXT,
-    WINEVENT_SKIPOWNPROCESS,
+    GetWindowThreadProcessId, IsWindowVisible, OBJID_WINDOW, SW_HIDE, SW_SHOWNA, ShowWindowAsync,
+    WINEVENT_OUTOFCONTEXT, WINEVENT_SKIPOWNPROCESS,
 };
 use windows::core::{BOOL, PWSTR, s, w};
 
@@ -49,9 +49,11 @@ impl Drop for State {
     /// Runs on the hook thread when it ends, also when it panics: give back what was hidden.
     fn drop(&mut self) {
         self.registry.restore_all(|hwnd| {
-            // SAFETY: `ShowWindow` on a possibly dead handle fails harmlessly. SHOWNA, never
-            // SHOW: the shell parks this window and must not lose or gain activation.
-            let _ = unsafe { ShowWindow(HWND(hwnd as *mut _), SW_SHOWNA) };
+            // SAFETY: `ShowWindowAsync` on a possibly dead handle fails harmlessly. It posts the
+            // request to the window's own thread, so a hung Explorer cannot block this thread
+            // (and with it `stop`). SHOWNA, never SHOW: the shell parks this window and must not
+            // lose or gain activation.
+            let _ = unsafe { ShowWindowAsync(HWND(hwnd as *mut _), SW_SHOWNA) };
         });
     }
 }
@@ -162,15 +164,16 @@ impl State {
             return;
         }
         let key = hwnd.0 as isize;
-        let mut hidden = false;
-        if self.mode == Mode::Hide {
-            // SAFETY: `ShowWindow(SW_HIDE)` on a window handle from an event; the return value
-            // is the previous visibility, which the registry uses to record only real hides.
-            self.registry.hide(key, |h| {
-                hidden = unsafe { ShowWindow(HWND(h as *mut _), SW_HIDE) }.as_bool();
-                hidden
-            });
-        }
+        let hidden = self.mode == Mode::Hide
+            && self.registry.hide(
+                key,
+                // SAFETY: a plain visibility query on a handle from an event.
+                |h| unsafe { IsWindowVisible(HWND(h as *mut _)) }.as_bool(),
+                // SAFETY: `ShowWindowAsync(SW_HIDE)` only posts the request to the window's
+                // thread, so it cannot block on a hung process; the registry records the window
+                // only when it was visible just before.
+                |h| unsafe { ShowWindowAsync(HWND(h as *mut _), SW_HIDE) }.as_bool(),
+            );
         let _ = self.matches.try_send(Match {
             hwnd: key,
             facts,
@@ -264,6 +267,13 @@ impl FlyoutSuppressor {
             matches,
             thread,
         })
+    }
+
+    /// The shared suppression window, for [`VolumeKeyHook::start`](crate::VolumeKeyHook::start):
+    /// the key hook opens it inline, so no consumer thread sits between a key and the window.
+    #[must_use]
+    pub fn suppression_window(&self) -> Arc<SuppressionWindow> {
+        Arc::clone(&self.window)
     }
 
     /// Opens the suppression window from now (call when a volume key was seen).

@@ -66,10 +66,13 @@ fn window_expires_after_400ms() {
 #[test]
 fn restore_all_restores_each_once() {
     let mut registry = HiddenRegistry::new();
-    registry.hide(7, |_| true);
-    registry.hide(7, |_| true);
-    registry.hide(9, |_| true);
-    registry.hide(11, |_| false);
+    assert!(registry.hide(7, |_| true, |_| true));
+    assert!(registry.hide(7, |_| true, |_| true));
+    assert!(registry.hide(9, |_| true, |_| true));
+    // Already hidden by somebody else: not ours to show.
+    assert!(!registry.hide(11, |_| false, |_| panic!("must not hide")));
+    // The request was not accepted: nothing is owed.
+    assert!(!registry.hide(13, |_| true, |_| false));
     assert_eq!(registry.len(), 2);
     let mut shown = Vec::new();
     registry.restore_all(|h| shown.push(h));
@@ -79,7 +82,7 @@ fn restore_all_restores_each_once() {
 #[test]
 fn restore_after_stop_is_empty() {
     let mut registry = HiddenRegistry::new();
-    registry.hide(7, |_| true);
+    registry.hide(7, |_| true, |_| true);
     registry.restore_all(|_| {});
     assert!(registry.is_empty());
     let mut calls = 0;

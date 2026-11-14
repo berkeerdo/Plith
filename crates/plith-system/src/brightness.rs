@@ -5,6 +5,7 @@
 //! `ddc` (dxva2, external monitors), `wmi` (built-in panels) and `service` (worker thread).
 
 pub mod discovery;
+pub mod run_token;
 pub mod step;
 pub mod wql;
 pub mod writer;
@@ -19,6 +20,7 @@ mod tests;
 mod wmi;
 
 pub use discovery::{Discovered, keep_answering};
+pub use run_token::RunTokens;
 #[cfg(windows)]
 pub use service::BrightnessService;
 pub use step::step_level;

@@ -51,7 +51,7 @@ const FLYOUT_BANDS: [u32; 4] = [0x4, 0x10, 0x11, 0x12];
 pub enum Mode {
     /// Only report the window; nothing is hidden. Used by probes.
     DryRun,
-    /// Hide the window with `SW_HIDE` and restore it on stop.
+    /// Hide the window with an asynchronous `SW_HIDE` and restore it on stop.
     Hide,
 }
 
@@ -73,7 +73,8 @@ pub struct Match {
     pub hwnd: isize,
     /// What identified it.
     pub facts: WindowFacts,
-    /// Whether it was actually hidden (always `false` in [`Mode::DryRun`]).
+    /// Whether a hide request was posted for it (it was visible just before; always `false`
+    /// in [`Mode::DryRun`]). The request is asynchronous, so the window disappears a moment later.
     pub hidden: bool,
 }
 

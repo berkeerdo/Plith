@@ -1,7 +1,9 @@
 //! `VolumeKeyHook`: the `WH_KEYBOARD_LL` hook and the thread that pumps for it.
 
 use std::cell::OnceCell;
+use std::sync::Arc;
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
+use std::time::Instant;
 
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -9,6 +11,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 
 use super::handle_key_event;
+use crate::flyout::SuppressionWindow;
 use crate::hook_thread::HookThread;
 
 /// Signals queued before a slow consumer starts dropping new ones.
@@ -17,6 +20,8 @@ const QUEUE: usize = 8;
 thread_local! {
     /// The sender the proc uses; set once on the hook thread, read without a lock.
     static SENDER: OnceCell<SyncSender<()>> = const { OnceCell::new() };
+    /// The suppression window the proc opens inline, if the owner gave one.
+    static WINDOW: OnceCell<Arc<SuppressionWindow>> = const { OnceCell::new() };
 }
 
 /// The installed hook; unhooks on drop, on the thread that installed it.
@@ -37,7 +42,16 @@ unsafe extern "system" fn proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) ->
         let vk = unsafe { (*(l_param.0 as *const KBDLLHOOKSTRUCT)).vkCode };
         SENDER.with(|cell| {
             if let Some(tx) = cell.get() {
-                handle_key_event(n_code, w_param.0, vk, tx);
+                WINDOW.with(|window| {
+                    handle_key_event(
+                        n_code,
+                        w_param.0,
+                        vk,
+                        tx,
+                        window.get().map(Arc::as_ref),
+                        Instant::now,
+                    );
+                });
             }
         });
     }
@@ -53,16 +67,23 @@ pub struct VolumeKeyHook {
 
 impl VolumeKeyHook {
     /// Installs the hook on a new message thread. The receiver gets one `()` per volume key
-    /// down (mute, down, up); keys are never swallowed.
+    /// down (mute, down, up); keys are never swallowed. With a `window` (from
+    /// [`FlyoutSuppressor::suppression_window`](crate::FlyoutSuppressor::suppression_window))
+    /// the hook proc opens it inline on every volume key, before the signal is queued.
     ///
     /// # Errors
     /// The text says why the thread or the hook could not start.
-    pub fn start() -> Result<(Self, Receiver<()>), String> {
+    pub fn start(window: Option<Arc<SuppressionWindow>>) -> Result<(Self, Receiver<()>), String> {
         let (tx, rx) = sync_channel(QUEUE);
         let thread = HookThread::spawn("plith-volume-keys", move || {
             SENDER.with(|cell| {
                 let _ = cell.set(tx);
             });
+            if let Some(window) = window {
+                WINDOW.with(|cell| {
+                    let _ = cell.set(window);
+                });
+            }
             // SAFETY: `proc` has the HOOKPROC signature; a global low level hook needs no
             // module handle and thread id 0.
             unsafe { SetWindowsHookExW(WH_KEYBOARD_LL, Some(proc), None, 0) }

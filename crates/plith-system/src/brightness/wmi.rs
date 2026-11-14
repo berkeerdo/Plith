@@ -25,7 +25,7 @@ use windows::Win32::System::Wmi::{
 use windows::core::{BSTR, PCWSTR, w};
 
 use super::BrightnessDevice;
-use super::wql::{NAMESPACE, methods_query, panel_id, read_query};
+use super::wql::{NAMESPACE, methods_query, panel_id, panel_name, read_query};
 
 /// Longest wait on one WMI enumerator step.
 const QUERY_WAIT_MS: i32 = 1000;
@@ -156,11 +156,16 @@ fn query(services: &IWbemServices, wql: &str) -> windows::core::Result<Vec<IWbem
 struct WmiPanel {
     instance: String,
     id: String,
+    name: String,
 }
 
 impl BrightnessDevice for WmiPanel {
     fn id(&self) -> &str {
         &self.id
+    }
+
+    fn name(&self) -> &str {
+        &self.name
     }
 
     fn read(&mut self) -> Option<u8> {
@@ -232,6 +237,7 @@ pub(super) fn enumerate() -> Vec<Box<dyn BrightnessDevice>> {
         .map(|instance| {
             Box::new(WmiPanel {
                 id: panel_id(&instance),
+                name: panel_name(&instance),
                 instance,
             }) as Box<dyn BrightnessDevice>
         })

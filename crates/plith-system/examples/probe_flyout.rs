@@ -17,7 +17,7 @@ fn main() {
             return;
         }
     };
-    let (keys_owner, keys) = match VolumeKeyHook::start() {
+    let (keys_owner, keys) = match VolumeKeyHook::start(Some(suppressor.suppression_window())) {
         Ok(pair) => pair,
         Err(why) => {
             println!("key hook unavailable: {why}");
@@ -32,9 +32,8 @@ fn main() {
         match keys.recv_timeout(Duration::from_millis(5)) {
             Ok(()) => {
                 presses += 1;
-                suppressor.open_window();
                 println!(
-                    "[{:5.2}s] volume key, window opened",
+                    "[{:5.2}s] volume key (the hook opened the window inline)",
                     started.elapsed().as_secs_f64()
                 );
             }

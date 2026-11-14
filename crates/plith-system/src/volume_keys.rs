@@ -11,6 +11,9 @@ mod hook;
 mod tests;
 
 use std::sync::mpsc::SyncSender;
+use std::time::Instant;
+
+use crate::flyout::SuppressionWindow;
 
 #[cfg(windows)]
 pub use hook::VolumeKeyHook;
@@ -27,12 +30,24 @@ const WM_KEYDOWN: usize = 0x0100;
 /// `WM_SYSKEYDOWN`.
 const WM_SYSKEYDOWN: usize = 0x0104;
 
-/// The whole decision of the hook proc. Sends one `()` when `n_code` is a real hook code, the
-/// message is a key down and `vk` is a volume key. It never blocks: a full or disconnected
-/// channel just drops the signal.
-pub fn handle_key_event(n_code: i32, w_param: usize, vk: u32, tx: &SyncSender<()>) {
+/// The whole decision of the hook proc. For a real hook code, a key down and a volume key it
+/// opens `window` (when given) from `now()` and sends one `()`. The window open is one relaxed
+/// atomic store and the send never blocks (a full or disconnected channel just drops the
+/// signal), so the proc stays enqueue-only: no allocation, lock, log or I/O. `now` is only
+/// called for a volume key, so other keystrokes never read the clock.
+pub fn handle_key_event(
+    n_code: i32,
+    w_param: usize,
+    vk: u32,
+    tx: &SyncSender<()>,
+    window: Option<&SuppressionWindow>,
+    now: impl FnOnce() -> Instant,
+) {
     let key_down = w_param == WM_KEYDOWN || w_param == WM_SYSKEYDOWN;
     if n_code >= 0 && key_down && matches!(vk, VK_VOLUME_MUTE | VK_VOLUME_DOWN | VK_VOLUME_UP) {
+        if let Some(window) = window {
+            window.open(now());
+        }
         let _ = tx.try_send(());
     }
 }
