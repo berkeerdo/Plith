@@ -1,6 +1,7 @@
 //! Composes the engine slice: process setup, monitor, shell window, render thread, the demo or
 //! idle-check driver, the message loop and a clean shutdown.
 
+mod backstop;
 mod wire;
 
 use crate::log::LogFile;
@@ -56,8 +57,10 @@ fn run_shell(
     let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
     let closing = Arc::new(AtomicBool::new(false));
     let stopper = Arc::new(OnceLock::new());
+    let fatal = Arc::new(AtomicBool::new(false));
     let handler = wire::event_handler(&mailbox, log, &closing, &stopper);
-    let shell = match Shell::create(layout, launch.hit, Arc::new(ShapeCell::default()), handler) {
+    let on_panic = wire::on_panic(log, &fatal, &stopper);
+    let shell = match Shell::create(layout, Arc::new(ShapeCell::default()), handler, on_panic) {
         Ok(shell) => shell,
         Err(error) => {
             log.line(&format!("cannot create the window: {error}"));
@@ -66,7 +69,6 @@ fn run_shell(
     };
     shell.show();
     let quit = shell.quit_handle();
-    let fatal = Arc::new(AtomicBool::new(false));
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -74,6 +76,8 @@ fn run_shell(
         clock: launch.clock,
         remote: is_remote_session(),
         hz: monitor.hz,
+        levers: launch.levers,
+        tune: launch.tune,
     };
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
@@ -96,9 +100,11 @@ fn run_shell(
         quit,
     };
     let (loop_code, idle_ok) = drive(&helpers);
-    // The window may already be destroyed: stop and join the renderer before the `Shell` drops,
-    // and treat a failure from here on as part of the close.
+    // The `Closing` handler normally joined the renderer already (this call is then a no-op).
+    // Otherwise the window may already be gone: join before the `Shell` drops, and treat a
+    // failure from here on as part of the close.
     closing.store(true, Ordering::Release);
+    backstop::close_render(log, &render.stop_handle());
     render.shutdown();
     log.line(&wire::hit_line(&shell));
     wire::exit_code(

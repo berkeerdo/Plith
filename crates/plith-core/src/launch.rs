@@ -1,6 +1,8 @@
 //! Command-line launch options.
 
 use crate::demo::{DemoError, DemoScript};
+use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::tuning::TuningSet;
 use std::fmt;
 
 /// Which frame clock the render thread should use.
@@ -17,20 +19,8 @@ pub enum ClockRequest {
     Timer,
 }
 
-/// Which hit-testing candidate the shell uses (a spike, see the spikes doc).
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub enum HitMode {
-    /// `SetWindowRgn` on the single window.
-    #[default]
-    Region,
-    /// A second, input-only window under the visual one.
-    Split,
-    /// A layered near-transparent alpha mask window.
-    Mask,
-}
-
 /// Parsed launch options.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
     /// Demo script to run instead of waiting for input.
     pub demo: Option<DemoScript>,
@@ -40,8 +30,10 @@ pub struct Launch {
     pub clock: ClockRequest,
     /// Exit once the demo has finished.
     pub exit_after_demo: bool,
-    /// Hit-testing candidate.
-    pub hit: HitMode,
+    /// Load levers; the default is the measured R1b pick.
+    pub levers: Levers,
+    /// Spring tuning preset; the default is BRISK (R1 stays as `--tune r1`).
+    pub tune: TuningSet,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -92,13 +84,30 @@ fn parse_clock(value: &str) -> Option<ClockRequest> {
     }
 }
 
-fn parse_hit(value: &str) -> Option<HitMode> {
+fn parse_sched(value: &str) -> Option<SchedClass> {
     match value {
-        "region" => Some(HitMode::Region),
-        "split" => Some(HitMode::Split),
-        "mask" => Some(HitMode::Mask),
+        "normal" => Some(SchedClass::Normal),
+        "above" => Some(SchedClass::AboveNormal),
+        "high" => Some(SchedClass::High),
         _ => None,
     }
+}
+
+fn parse_mmcss(value: &str) -> Option<MmcssPriority> {
+    match value {
+        "normal" => Some(MmcssPriority::Normal),
+        "high" => Some(MmcssPriority::High),
+        "critical" => Some(MmcssPriority::Critical),
+        _ => None,
+    }
+}
+
+/// Parses `text` as an integer inside `range`.
+fn parse_in<T: std::str::FromStr + PartialOrd>(
+    text: &str,
+    range: std::ops::RangeInclusive<T>,
+) -> Option<T> {
+    text.parse().ok().filter(|n| range.contains(n))
 }
 
 impl Launch {
@@ -128,15 +137,38 @@ impl Launch {
                 }
                 "--idle-check" => {
                     let text = value()?;
-                    launch.idle_check_secs = Some(text.parse().map_err(|_| bad(text))?);
+                    // Above 70 s the run would outlive the 75 s watchdog.
+                    launch.idle_check_secs =
+                        Some(parse_in(&text, 0..=70).ok_or_else(|| bad(text))?);
                 }
                 "--clock" => {
                     let text = value()?;
                     launch.clock = parse_clock(&text).ok_or_else(|| bad(text))?;
                 }
-                "--hit" => {
+                "--gpu-priority" => {
                     let text = value()?;
-                    launch.hit = parse_hit(&text).ok_or_else(|| bad(text))?;
+                    launch.levers.gpu_priority =
+                        parse_in(&text, -7..=7).ok_or_else(|| bad(text))?;
+                }
+                "--sched-class" => {
+                    let text = value()?;
+                    launch.levers.sched_class = parse_sched(&text).ok_or_else(|| bad(text))?;
+                }
+                "--latency" => {
+                    let text = value()?;
+                    launch.levers.latency = parse_in(&text, 1..=3).ok_or_else(|| bad(text))?;
+                }
+                "--sync" => {
+                    let text = value()?;
+                    launch.levers.sync = parse_in(&text, 0..=1).ok_or_else(|| bad(text))?;
+                }
+                "--mmcss" => {
+                    let text = value()?;
+                    launch.levers.mmcss = parse_mmcss(&text).ok_or_else(|| bad(text))?;
+                }
+                "--tune" => {
+                    let text = value()?;
+                    launch.tune = TuningSet::by_name(&text).ok_or_else(|| bad(text))?;
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

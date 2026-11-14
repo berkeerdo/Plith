@@ -1,5 +1,6 @@
 mod harness;
 
+use super::{Fatal, RenderHandle};
 use harness::*;
 use plith_core::clock_choice::ClockKind;
 use plith_core::geometry::IslandShape;
@@ -7,6 +8,7 @@ use plith_core::island::IslandMotion;
 use plith_core::motion::MotionKind;
 use plith_core::scene::{Scene, Suppression};
 use plith_core::shapes::{PAGES, REST};
+use plith_core::tuning::R1;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,10 +21,30 @@ fn expanded(page: usize) -> Scene {
 }
 
 fn one_period_from(from: IslandShape, to: IslandShape) -> IslandShape {
-    let mut motion = IslandMotion::new(from);
+    let mut motion = IslandMotion::new(from, R1);
     motion.retarget(to);
     motion.step(PERIOD);
     motion.shape()
+}
+
+#[test]
+fn collapse_report_has_a_visible_duration_shorter_than_the_full_one() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let _ = run.report();
+    run.mailbox.publish(Scene::default());
+    let report = run.report();
+    assert_eq!(report.kind, MotionKind::Collapse);
+    assert!(report.visible_ms > 100.0, "visible {}", report.visible_ms);
+    assert!(
+        report.visible_ms < report.duration_ms - 100.0,
+        "visible {} vs full {}",
+        report.visible_ms,
+        report.duration_ms
+    );
+    assert!(report.to_string().contains(", visible "), "{report}");
+    let _ = run.stop();
 }
 
 #[test]
@@ -103,6 +125,11 @@ fn unsuppress_paints_one_frame_without_clock_waits() {
     assert_eq!(
         frames[20].shape, PAGES[0],
         "shows the target with no catch-up"
+    );
+    let shapes = lock(&run.shapes).clone();
+    assert_eq!(
+        shapes[20].previous, PAGES[0],
+        "a snap forgets the frame before it: previous equals the shape"
     );
     assert_eq!(run.harness.total(), 20);
     assert_eq!(run.wakes(), 1 + 20 + 1);
@@ -218,6 +245,12 @@ fn on_shape_is_called_every_painted_frame() {
     assert_eq!(shapes.len(), frames.len());
     for (i, (shape, frame)) in shapes.iter().zip(&frames).enumerate() {
         assert_eq!(shape.shape, frame.shape, "frame {i}");
+        let expected_previous = if i == 0 {
+            frame.shape
+        } else {
+            frames[i - 1].shape
+        };
+        assert_eq!(shape.previous, expected_previous, "previous of frame {i}");
         assert_eq!(shape.generation, u64::try_from(i + 1).ok().unwrap_or(0));
     }
     let _ = run.stop();
@@ -290,8 +323,8 @@ fn failed_recover_ends_the_thread_with_a_fatal_message() {
         recover_fails: true,
         ..Setup::default()
     });
-    let message = run.fatal.recv_timeout(BOUND).expect("a fatal message");
-    assert!(!message.is_empty());
+    let fatal = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    assert!(matches!(fatal, Fatal::Error(ref text) if !text.is_empty()));
     run.done
         .recv_timeout(BOUND)
         .expect("the loop ends by itself");
@@ -358,4 +391,49 @@ fn a_recovered_paint_repaints_the_same_frame() {
     assert_eq!(run.harness.total(), 0, "no clock wait for the repaint");
     assert_eq!(run.wakes(), 0);
     let _ = run.stop();
+}
+
+#[test]
+fn panic_in_paint_reaches_on_fatal() {
+    let run = start(Setup {
+        panic_at: Some(2),
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let fatal = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    assert!(
+        matches!(fatal, Fatal::Panic(_)),
+        "a panic is its own variant: {fatal:?}"
+    );
+    let message = fatal.message();
+    assert!(message.contains("panicked"), "{message}");
+    assert!(message.contains("fake paint blew up"), "{message}");
+    run.done
+        .recv_timeout(BOUND)
+        .expect("the guarded loop returns instead of unwinding");
+    run.join
+        .join()
+        .expect("the panic did not escape the thread");
+}
+
+#[test]
+fn stop_and_join_is_idempotent() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    let Run {
+        mailbox,
+        shared,
+        done,
+        join,
+        ..
+    } = run;
+    let handle = RenderHandle::new(mailbox, shared, join);
+    let other = handle.stop_handle();
+    handle.stop_handle().stop_and_join();
+    // The thread sends `done` before it exits, so a join that only requested the stop fails here.
+    done.try_recv()
+        .expect("the thread had ended when the first join returned");
+    other.stop_and_join();
+    handle.shutdown();
 }

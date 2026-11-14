@@ -172,10 +172,12 @@ fn shape_cell_starts_empty_and_returns_the_latest_frame() {
     assert_eq!(cell.latest(), None);
     let a = ShapeFrame {
         shape: REST,
+        previous: REST,
         generation: 1,
     };
     let b = ShapeFrame {
         shape: PAGES[0],
+        previous: REST,
         generation: 2,
     };
     cell.publish(a);

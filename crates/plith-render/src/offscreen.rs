@@ -60,7 +60,7 @@ pub fn render_offscreen(
         ctx.SetTarget(&target);
         ctx.SetDpi(dpi, dpi);
     }
-    Painter::new(ctx)?.paint(ctx, frame)?;
+    Painter::new(ctx, gpu.d2d_factory())?.paint(ctx, frame)?;
     let staging = make_bitmap(
         ctx,
         width_px,

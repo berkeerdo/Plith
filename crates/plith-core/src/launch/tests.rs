@@ -1,5 +1,7 @@
 use super::*;
 use crate::demo::{DemoScript, DemoStep};
+use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::tuning::{BRISK, R1};
 
 fn parse(args: &[&str]) -> Result<Launch, LaunchError> {
     Launch::parse(args.iter().map(|a| (*a).to_string()))
@@ -94,25 +96,95 @@ fn errors_display_the_offending_text() {
 }
 
 #[test]
-fn hit_defaults_to_region() {
-    assert_eq!(parse(&[]).unwrap().hit, HitMode::Region);
-}
-
-#[test]
-fn hit_parses_all_modes() {
-    assert_eq!(parse(&["--hit", "region"]).unwrap().hit, HitMode::Region);
-    assert_eq!(parse(&["--hit", "split"]).unwrap().hit, HitMode::Split);
-    assert_eq!(parse(&["--hit", "mask"]).unwrap().hit, HitMode::Mask);
-}
-
-#[test]
-fn hit_rejects_unknown_and_missing_values() {
+fn hit_flag_is_unknown() {
+    assert_eq!(
+        parse(&["--hit", "region"]),
+        Err(LaunchError::UnknownFlag("--hit".to_string()))
+    );
     assert!(matches!(
-        parse(&["--hit", "wide"]),
+        parse(&["--hit"]),
+        Err(LaunchError::UnknownFlag(_))
+    ));
+}
+
+#[test]
+fn parses_every_lever_flag() {
+    let launch = parse(&[
+        "--gpu-priority",
+        "-7",
+        "--sched-class",
+        "above",
+        "--latency",
+        "3",
+        "--sync",
+        "0",
+        "--mmcss",
+        "critical",
+    ])
+    .unwrap();
+    assert_eq!(launch.levers.gpu_priority, -7);
+    assert_eq!(launch.levers.sched_class, SchedClass::AboveNormal);
+    assert_eq!(launch.levers.latency, 3);
+    assert_eq!(launch.levers.sync, 0);
+    assert_eq!(launch.levers.mmcss, MmcssPriority::Critical);
+    assert_eq!(parse(&[]).unwrap().levers, Levers::default());
+    assert_eq!(
+        parse(&["--sched-class", "high", "--mmcss", "high"])
+            .unwrap()
+            .levers
+            .sched_class,
+        SchedClass::High
+    );
+}
+
+#[test]
+fn rejects_gpu_priority_8_and_latency_0() {
+    for (flag, value) in [
+        ("--gpu-priority", "8"),
+        ("--gpu-priority", "-8"),
+        ("--latency", "0"),
+        ("--latency", "4"),
+        ("--sync", "2"),
+        ("--sched-class", "realtime"),
+        ("--mmcss", "low"),
+    ] {
+        assert_eq!(
+            parse(&[flag, value]),
+            Err(LaunchError::BadValue {
+                flag: flag.to_string(),
+                value: value.to_string()
+            }),
+            "{flag} {value}"
+        );
+    }
+}
+
+#[test]
+fn tune_flag_picks_a_preset_and_defaults_to_brisk() {
+    assert_eq!(parse(&[]).unwrap().tune, BRISK);
+    assert_eq!(parse(&["--tune", "r1"]).unwrap().tune, R1);
+    assert_eq!(parse(&["--tune", "brisk"]).unwrap().tune, BRISK);
+    assert!(matches!(
+        parse(&["--tune", "fast"]),
         Err(LaunchError::BadValue { .. })
     ));
     assert!(matches!(
-        parse(&["--hit"]),
+        parse(&["--tune"]),
         Err(LaunchError::MissingValue(_))
     ));
+}
+
+#[test]
+fn idle_check_over_70_is_rejected() {
+    assert_eq!(
+        parse(&["--idle-check", "70"]).unwrap().idle_check_secs,
+        Some(70)
+    );
+    assert_eq!(
+        parse(&["--idle-check", "71"]),
+        Err(LaunchError::BadValue {
+            flag: "--idle-check".to_string(),
+            value: "71".to_string()
+        })
+    );
 }

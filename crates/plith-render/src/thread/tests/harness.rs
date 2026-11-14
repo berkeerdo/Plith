@@ -1,13 +1,14 @@
 //! Fakes and the run harness for the render loop tests: a fake clock on shared fake time, a
 //! recording painter and a loop runner with bounded waits.
 
-use super::super::{FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_loop};
+use super::super::{Fatal, FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_guarded};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
+use plith_core::tuning::R1;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -101,10 +102,16 @@ pub(super) struct FakePaint {
     pub(super) fail: Arc<AtomicU32>,
     pub(super) recovers: Arc<Mutex<Vec<bool>>>,
     pub(super) recover_fails: bool,
+    /// Panics when asked to paint this frame number (1 is the start frame).
+    pub(super) panic_at: Option<usize>,
 }
 
 impl Paint for FakePaint {
     fn paint(&mut self, frame: &PaintFrame) -> windows::core::Result<FrameTimes> {
+        assert!(
+            self.panic_at != Some(lock(&self.frames).len() + 1),
+            "fake paint blew up"
+        );
         let left = self.fail.load(Ordering::SeqCst);
         if left > 0 {
             self.fail.store(left - 1, Ordering::SeqCst);
@@ -140,6 +147,7 @@ pub(super) struct Setup {
     pub(super) delay: Option<Duration>,
     pub(super) fail_once: Option<ClockKind>,
     pub(super) lead: f64,
+    pub(super) panic_at: Option<usize>,
 }
 
 pub(super) struct Run {
@@ -150,7 +158,7 @@ pub(super) struct Run {
     pub(super) shapes: Arc<Mutex<Vec<ShapeFrame>>>,
     pub(super) recovers: Arc<Mutex<Vec<bool>>>,
     pub(super) reports: Receiver<MotionReport>,
-    pub(super) fatal: Receiver<String>,
+    pub(super) fatal: Receiver<Fatal>,
     pub(super) done: Receiver<()>,
     pub(super) join: JoinHandle<()>,
 }
@@ -167,7 +175,7 @@ pub(super) fn layout() -> SurfaceLayout {
 
 pub(super) fn sinks(
     shapes: Arc<Mutex<Vec<ShapeFrame>>>,
-) -> (RenderSinks, Receiver<MotionReport>, Receiver<String>) {
+) -> (RenderSinks, Receiver<MotionReport>, Receiver<Fatal>) {
     let (report_tx, reports) = mpsc::channel();
     let (fatal_tx, fatal) = mpsc::channel();
     let sinks = RenderSinks {
@@ -178,6 +186,7 @@ pub(super) fn sinks(
         on_fatal: Box::new(move |message| {
             let _ = fatal_tx.send(message);
         }),
+        on_note: Box::new(|_| {}),
     };
     (sinks, reports, fatal)
 }
@@ -205,6 +214,7 @@ pub(super) fn start(setup: Setup) -> Run {
         fail: Arc::new(AtomicU32::new(setup.fail)),
         recovers: Arc::clone(&recovers),
         recover_fails: setup.recover_fails,
+        panic_at: setup.panic_at,
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
@@ -229,8 +239,9 @@ pub(super) fn start(setup: Setup) -> Run {
                 order: KINDS.to_vec(),
                 hz: 240.0,
                 layout: layout(),
+                tune: R1,
             };
-            run_loop(parts, &mailbox, &shared, &sinks);
+            run_guarded(parts, &mailbox, &shared, &sinks, || {});
             let _ = done_tx.send(());
         })
     };

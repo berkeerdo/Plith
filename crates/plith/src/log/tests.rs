@@ -50,3 +50,64 @@ fn line_has_timestamp_and_appends() {
     fs::remove_file(&path).unwrap();
     fs::remove_dir(&dir).unwrap();
 }
+
+#[test]
+fn lines_keep_order_and_flush_on_drop() {
+    let dir = std::env::temp_dir().join(format!("plith-log-order-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plith.log");
+    {
+        let log = std::sync::Arc::new(LogFile::open_at(&path).unwrap());
+        let other = std::sync::Arc::clone(&log);
+        let helper = std::thread::spawn(move || {
+            for n in 0..200 {
+                other.line(&format!("helper {n}"));
+            }
+        });
+        for n in 0..200 {
+            log.line(&format!("main {n}"));
+        }
+        helper.join().unwrap();
+        log.line("exit 0");
+    }
+    let text = fs::read_to_string(&path).unwrap();
+    let lines: Vec<&str> = text.lines().map(|line| &line[24..]).collect();
+    assert_eq!(lines.len(), 401, "every line is on disk after the drop");
+    assert_eq!(lines.last(), Some(&"exit 0"));
+    for who in ["main", "helper"] {
+        let own: Vec<&&str> = lines.iter().filter(|l| l.starts_with(who)).collect();
+        for (n, line) in own.iter().enumerate() {
+            assert_eq!(**line, format!("{who} {n}"), "order within one thread");
+        }
+    }
+    fs::remove_file(&path).unwrap();
+    fs::remove_dir(&dir).unwrap();
+}
+
+#[test]
+fn flush_writes_queued_lines_before_returning() {
+    let dir = std::env::temp_dir().join(format!("plith-log-flush-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plith.log");
+    let log = LogFile::open_at(&path).unwrap();
+    for n in 0..50 {
+        log.line(&format!("queued {n}"));
+    }
+    log.line("watchdog: forced exit");
+    log.flush();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines().count(),
+        51,
+        "flush returns after the writer caught up"
+    );
+    assert!(
+        text.lines()
+            .last()
+            .unwrap()
+            .ends_with("watchdog: forced exit")
+    );
+    drop(log);
+    fs::remove_file(&path).unwrap();
+    fs::remove_dir(&dir).unwrap();
+}

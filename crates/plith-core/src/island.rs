@@ -1,8 +1,9 @@
 //! Three-axis spring morph of the island: width, height and corner radius.
 
 use crate::geometry::IslandShape;
+use crate::shapes::REST;
 use crate::spring::Spring;
-use crate::tuning::{GROW_H, GROW_W, RADIUS_GROW, RADIUS_SHRINK, SHRINK_H, SHRINK_W, Tuning};
+use crate::tuning::{Tuning, TuningSet};
 
 /// One spring plus the lowest value it may ever show.
 #[derive(Debug, Clone)]
@@ -42,25 +43,38 @@ pub struct IslandMotion {
     width: Axis,
     height: Axis,
     radius: Axis,
+    set: TuningSet,
+    target: IslandShape,
 }
 
 impl IslandMotion {
-    /// Creates a settled motion at `rest`; each axis floor starts at its rest value.
+    /// Creates a settled motion at `rest` under `set`; each axis floor starts at its rest value.
     #[must_use]
-    pub fn new(rest: IslandShape) -> Self {
+    pub fn new(rest: IslandShape, set: TuningSet) -> Self {
         Self {
-            width: Axis::new(rest.width, GROW_W),
-            height: Axis::new(rest.height, GROW_H),
-            radius: Axis::new(rest.radius, RADIUS_GROW),
+            width: Axis::new(rest.width, set.grow_w),
+            height: Axis::new(rest.height, set.grow_h),
+            radius: Axis::new(rest.radius, set.radius_grow),
+            set,
+            target: rest,
         }
     }
 
-    /// Aims every axis at `target`, retuning each from its own direction.
+    /// Aims every axis at `target`, retuning each from its own direction. A growing width or
+    /// height uses the card-to-card tunings when neither the old nor the new target is `REST`.
     pub fn retarget(&mut self, target: IslandShape) {
-        self.width.retarget(target.width, GROW_W, SHRINK_W);
-        self.height.retarget(target.height, GROW_H, SHRINK_H);
+        let set = self.set;
+        let card = target != REST && self.target != REST;
+        let (grow_w, grow_h) = if card {
+            (set.card_grow_w, set.card_grow_h)
+        } else {
+            (set.grow_w, set.grow_h)
+        };
+        self.width.retarget(target.width, grow_w, set.shrink_w);
+        self.height.retarget(target.height, grow_h, set.shrink_h);
         self.radius
-            .retarget(target.radius, RADIUS_GROW, RADIUS_SHRINK);
+            .retarget(target.radius, set.radius_grow, set.radius_shrink);
+        self.target = target;
     }
 
     /// Advances all axes by `dt` seconds; true when every axis is settled.

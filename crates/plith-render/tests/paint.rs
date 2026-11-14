@@ -2,16 +2,16 @@
 //! Offscreen painter tests on WARP: no window, CI-safe.
 
 use plith_core::geometry::IslandShape;
-use plith_core::page::PageLayer;
+use plith_core::page::{PageLayer, PageLayers};
 use plith_core::shapes::{PAGES, PLACEHOLDER, REST};
 use plith_render::paint::PaintFrame;
 use plith_render::render_offscreen;
 
-fn frame(shape: IslandShape, origin: (f64, f64), pages: Vec<PageLayer>) -> PaintFrame {
+fn frame(shape: IslandShape, origin: (f64, f64), pages: &[PageLayer]) -> PaintFrame {
     PaintFrame {
         shape,
         origin,
-        pages,
+        pages: PageLayers::of(pages),
         content_opacity: 1.0,
     }
 }
@@ -25,7 +25,7 @@ fn pixel(buf: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 fn island_pixels_are_opaque_black_and_outside_is_transparent() {
     let shape = PAGES[2];
     let origin = (10.0, 10.0);
-    let buf = render_offscreen(520, 220, 1.0, &frame(shape, origin, vec![])).unwrap();
+    let buf = render_offscreen(520, 220, 1.0, &frame(shape, origin, &[])).unwrap();
     assert_eq!(buf.len(), 520 * 220 * 4);
     let centre = pixel(&buf, 520, 250, 100);
     assert_eq!(centre, [0, 0, 0, 255]);
@@ -44,7 +44,7 @@ fn island_pixels_are_opaque_black_and_outside_is_transparent() {
 fn scale_1_5_draws_the_same_shape_larger() {
     let shape = PAGES[2];
     let origin = (10.0, 10.0);
-    let buf = render_offscreen(780, 330, 1.5, &frame(shape, origin, vec![])).unwrap();
+    let buf = render_offscreen(780, 330, 1.5, &frame(shape, origin, &[])).unwrap();
     // Island spans px x 15..735, y 15..285 at scale 1.5.
     assert_eq!(pixel(&buf, 780, 375, 150), [0, 0, 0, 255]);
     assert_eq!(pixel(&buf, 780, 730, 150)[3], 255);
@@ -63,7 +63,7 @@ fn page_placeholder_is_lighter_than_the_fill() {
         offset: 0.0,
         opacity: 1.0,
     };
-    let buf = render_offscreen(520, 220, 1.0, &frame(shape, origin, vec![layer])).unwrap();
+    let buf = render_offscreen(520, 220, 1.0, &frame(shape, origin, &[layer])).unwrap();
     let cx = 10.0 + shape.width / 2.0;
     let cy = 10.0 + PLACEHOLDER.top + PLACEHOLDER.height / 2.0;
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -79,7 +79,7 @@ fn bleeding_frame() -> PaintFrame {
         offset: 240.0,
         opacity: 1.0,
     };
-    frame(PAGES[2], (10.0, 10.0), vec![layer])
+    frame(PAGES[2], (10.0, 10.0), &[layer])
 }
 
 fn check_clip(scale: f64) {
@@ -112,7 +112,7 @@ fn resting_island_with_hidden_content_shows_nothing_but_the_fill() {
         offset: 0.0,
         opacity: 1.0,
     };
-    let mut f = frame(REST, origin, vec![layer]);
+    let mut f = frame(REST, origin, &[layer]);
     f.content_opacity = 0.0;
     let buf = render_offscreen(w, h, 1.0, &f).unwrap();
     let bottom = (origin.1 + REST.height) as u32;

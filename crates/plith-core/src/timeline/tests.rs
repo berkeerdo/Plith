@@ -93,14 +93,14 @@ fn a_200_ms_stall_reports_its_whole_gap_and_is_a_hitch() {
         crate::motion::MotionStats::new(crate::motion::MotionKind::Expand, NOMINAL, "dcomp");
     let first = tl.lock(1.0).expect("anchor");
     let (t, _) = stamper.stamp(first);
-    stats.record_frame(t, 0.3, 0.1);
+    stats.record_frame(t, crate::motion::FramePhases::default());
     let raw = 1.0 + 0.2;
     let tick = tl.lock(raw).expect("resync tick");
     assert_eq!(tick.periods, 48);
     assert!(bits_eq(tick.vblank, raw));
     let (t, dt) = stamper.stamp(tick);
     assert!((dt - 0.2).abs() < 1e-9);
-    stats.record_frame(t, 0.3, 0.1);
+    stats.record_frame(t, crate::motion::FramePhases::default());
     let report = stats.finish();
     assert_eq!(report.hitches, 1);
     assert!(
@@ -162,6 +162,7 @@ fn tick_at(k: f64, periods: u32) -> Tick {
         vblank: k * period(),
         period: period(),
         periods,
+        late: 0.0,
     }
 }
 
@@ -195,4 +196,23 @@ fn every_step_is_a_whole_number_of_periods() {
         assert!((anim_t - last_anim - dt).abs() < 1e-12);
         last_anim = anim_t;
     }
+}
+
+#[test]
+fn late_is_raw_minus_locked_vblank() {
+    let mut tl = VsyncTimeline::new(NOMINAL);
+    let anchor = tl.lock(1.0).expect("anchor");
+    assert!(anchor.late.abs() < f64::EPSILON);
+    let raw = 1.0 + period() + 0.001;
+    let tick = tl.lock(raw).expect("tick");
+    assert!((tick.late - (raw - tick.vblank)).abs() < 1e-12);
+    assert!((tick.late - 0.001).abs() < 1e-4, "late {}", tick.late);
+}
+
+#[test]
+fn late_is_zero_on_a_snap_to_an_early_wakeup() {
+    let mut tl = VsyncTimeline::new(NOMINAL);
+    tl.lock(1.0).expect("anchor");
+    let tick = tl.lock(1.0 + period() - 0.0005).expect("tick");
+    assert!(tick.late.abs() < f64::EPSILON, "late {}", tick.late);
 }

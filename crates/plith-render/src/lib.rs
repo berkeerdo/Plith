@@ -4,6 +4,7 @@
 pub mod clock;
 pub mod device;
 pub mod gpu_paint;
+pub mod levers;
 pub mod offscreen;
 pub mod paint;
 pub mod target;
@@ -16,5 +17,6 @@ pub use offscreen::render_offscreen;
 pub use paint::{PaintFrame, Painter};
 pub use target::CompositionTarget;
 pub use thread::{
-    FrameTimes, Paint, RenderConfig, RenderError, RenderHandle, RenderSinks, StopHandle, spawn,
+    Fatal, FrameTimes, Paint, RenderConfig, RenderError, RenderHandle, RenderSinks, StopHandle,
+    spawn,
 };
