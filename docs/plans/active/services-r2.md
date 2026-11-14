@@ -230,3 +230,17 @@ Deviations and findings:
   only at stop, Standard-bus fallback label unverified, DDC ids shift if a monitor stops answering.
 - Task 8 (hardware writes): examples built (`verify_audio_writes`, `verify_system_writes`,
   `verify_media_writes`), none run with `--yes`; waiting for Berke's yes via the master.
+
+### Task 8 results (2026-11-14, Berke present, relayed approval)
+
+- PASS with restore: endpoint volume 0.50 to 0.52 and back (event yes), endpoint mute (event yes), mic mute
+  (event yes), default endpoint Console+Multimedia to Steam Streaming Speakers and back, brightness 30 to 35 and
+  back (DDC). Voicemeeter gain SKIPPED (not installed).
+- Flyout Hide mode PASS on this build: 143 windows matched, 137 hidden, 0 left hidden after stop.
+- **R4 design note:** the flyout run counted 135 volume key events for what was meant as one press: the
+  low-level hook sees key auto-repeat. A held key must not be counted as 135 presses for the OSD (collapse
+  repeats, or use the previous-key-state bit in `KBDLLHOOKSTRUCT` flags). Those presses also raised the
+  endpoint volume from 50% to 100%; set back to exactly 0.50 afterwards (read back 0.5).
+- Media transport PASS: play/pause toggled twice and restored (Spotify was playing), seek +5 s and back, events
+  seen. Item 8 (manual volume change during the 10 s probe window) saw no change event; live callbacks are
+  however proven by items 1 to 3 (event: yes). Task 8 complete.
