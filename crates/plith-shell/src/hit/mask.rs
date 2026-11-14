@@ -44,6 +44,9 @@ impl MaskBuffer {
         let mut bits: *mut core::ffi::c_void = core::ptr::null_mut();
         // SAFETY: a null source DC asks for a memory DC compatible with the screen.
         let dc = unsafe { CreateCompatibleDC(None) };
+        if dc.is_invalid() {
+            return Err(windows::core::Error::from_thread());
+        }
         // SAFETY: `info` and `bits` are valid for the call; with no file mapping the system
         // allocates the pixel memory and returns it through `bits`.
         let bitmap = unsafe {

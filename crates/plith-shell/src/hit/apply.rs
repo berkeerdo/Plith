@@ -17,6 +17,9 @@ fn set_region(inner: &Inner, hwnd: isize, shape: IslandShape) -> windows::core::
     let r = region_px(shape, &inner.layout, OUTSET_PX);
     // SAFETY: plain GDI call returning a new region handle.
     let rgn = unsafe { CreateRoundRectRgn(r.left, r.top, r.right, r.bottom, r.ellipse, r.ellipse) };
+    if rgn.is_invalid() {
+        return Err(windows::core::Error::from_thread());
+    }
     let hwnd = HWND(hwnd as *mut core::ffi::c_void);
     // SAFETY: `hwnd` is a window of this thread. On success the system owns `rgn`.
     if unsafe { SetWindowRgn(hwnd, Some(rgn), false) } == 0 {

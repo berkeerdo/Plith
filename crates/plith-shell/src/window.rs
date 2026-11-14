@@ -120,13 +120,19 @@ fn place(hwnd: HWND, rect: RectPx) -> windows::core::Result<()> {
     }
 }
 
+/// Split and mask put input on a second window, so the visual window must let clicks fall through.
+fn visual_is_click_through(mode: HitMode) -> bool {
+    matches!(mode, HitMode::Split | HitMode::Mask)
+}
+
 fn build(inner: &Inner) -> windows::core::Result<()> {
     let instance = module()?;
     register_class(VISUAL_CLASS, instance)?;
     register_class(INPUT_CLASS, instance)?;
     let rect = inner.layout.surface;
     let base = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
-    let visual_style = if inner.hit_mode == HitMode::Split {
+    let click_through = visual_is_click_through(inner.hit_mode);
+    let visual_style = if click_through {
         base | WS_EX_TRANSPARENT | WS_EX_LAYERED
     } else {
         base
@@ -134,7 +140,7 @@ fn build(inner: &Inner) -> windows::core::Result<()> {
     let visual = create_window(VISUAL_CLASS, visual_style, rect, instance)?;
     inner.visual.set(visual.0 as isize);
     place(visual, rect)?;
-    if inner.hit_mode == HitMode::Split {
+    if click_through {
         // SAFETY: `visual` is a layered window of this thread.
         unsafe { SetLayeredWindowAttributes(visual, COLORREF(0), 255, LWA_ALPHA) }?;
     }
@@ -321,7 +327,7 @@ unsafe extern "system" fn window_proc(
             on_click(&inner, lparam);
             return LRESULT(0);
         }
-        WM_DPICHANGED | WM_DISPLAYCHANGE => {
+        WM_DPICHANGED | WM_DISPLAYCHANGE if is_visual => {
             inner.emit(ShellEvent::DisplayChanged);
             return LRESULT(0);
         }
