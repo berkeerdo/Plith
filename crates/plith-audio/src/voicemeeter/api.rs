@@ -90,7 +90,8 @@ impl Api {
             .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
-    /// `VBVMR_Login`: 0 engine already running, 1 engine launched, negative on failure.
+    /// `VBVMR_Login`: 0 logged in with the application running, 1 logged in but the Voicemeeter
+    /// application is NOT launched (the API attaches when it starts), negative on failure.
     pub(super) fn login(&self) -> i32 {
         let _gate = self.lock();
         // SAFETY: resolved export with no arguments.

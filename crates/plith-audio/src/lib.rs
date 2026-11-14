@@ -3,3 +3,4 @@
 pub mod endpoints;
 pub mod microphone;
 pub mod voicemeeter;
+mod waker;

@@ -6,7 +6,7 @@ use std::sync::mpsc::Sender;
 use windows::Win32::Devices::FunctionDiscovery::{
     PKEY_Device_FriendlyName, PKEY_DeviceInterface_FriendlyName,
 };
-use windows::Win32::Foundation::{E_FAIL, PROPERTYKEY};
+use windows::Win32::Foundation::{E_FAIL, PROPERTYKEY, RPC_E_CHANGED_MODE};
 use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioEndpointVolumeCallback};
 use windows::Win32::Media::Audio::{
     DEVICE_STATE_ACTIVE, EDataFlow, ERole, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
@@ -23,21 +23,33 @@ use super::{AttachedState, Endpoint};
 
 /// Holds the thread's COM initialization; dropping it uninitializes. Declare it before any COM
 /// object so those are released first.
-pub(crate) struct ComGuard;
+pub(crate) struct ComGuard {
+    /// Whether this guard owns an initialization that `Drop` must balance.
+    owned: bool,
+}
 
 impl ComGuard {
     /// Joins the multithreaded apartment.
     pub(crate) fn init() -> Result<Self> {
-        // SAFETY: plain apartment initialization on the calling thread, balanced by `Drop`.
-        unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok()?;
-        Ok(Self)
+        // SAFETY: plain apartment initialization on the calling thread, balanced by `Drop` when
+        // it succeeded.
+        let result = unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) };
+        if result == RPC_E_CHANGED_MODE {
+            // The thread already joined a single-threaded apartment (a UI thread). Core Audio
+            // works there too; this guard did not initialize COM, so it must not uninitialize.
+            return Ok(Self { owned: false });
+        }
+        result.ok()?;
+        Ok(Self { owned: true })
     }
 }
 
 impl Drop for ComGuard {
     fn drop(&mut self) {
-        // SAFETY: balances the successful `CoInitializeEx` in `init`.
-        unsafe { CoUninitialize() };
+        if self.owned {
+            // SAFETY: balances the successful `CoInitializeEx` in `init`.
+            unsafe { CoUninitialize() };
+        }
     }
 }
 

@@ -104,6 +104,20 @@ fn rc1_uses_long_grace() {
 }
 
 #[test]
+fn login_code_one_is_not_running_until_a_snapshot_exists() {
+    assert_eq!(Readiness::from_login(1, false), Readiness::AppNotRunning);
+    assert_eq!(Readiness::from_login(1, true), Readiness::Ready);
+    assert_eq!(Readiness::from_login(0, false), Readiness::Ready);
+    assert_eq!(Readiness::from_login(0, true), Readiness::Ready);
+}
+
+#[test]
+fn not_running_app_keeps_its_session_instead_of_flapping() {
+    assert!(Readiness::AppNotRunning.keeps_session_on_gone());
+    assert!(!Readiness::Ready.keeps_session_on_gone());
+}
+
+#[test]
 fn level_to_db_floor() {
     assert!((level_to_db(0.0) - LEVEL_FLOOR_DB).abs() < f32::EPSILON);
     assert!(level_to_db(1.0).abs() < 1e-4);

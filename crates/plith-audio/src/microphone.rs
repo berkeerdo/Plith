@@ -11,6 +11,8 @@ mod service;
 mod tests;
 
 #[cfg(windows)]
+pub use crate::endpoints::Status;
+#[cfg(windows)]
 pub use service::MicrophoneService;
 
 use crate::endpoints::AttachedState;

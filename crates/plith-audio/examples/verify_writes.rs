@@ -34,7 +34,7 @@ mod cli {
 
     use crate::devices::{mic_mute, voicemeeter_gain};
     use crate::endpoint::{default_endpoint, endpoint_mute, endpoint_volume};
-    use crate::support::Verdict;
+    use crate::support::{DO_NOT_INTERRUPT, Verdict, install_ctrl_handler, interrupted};
 
     #[derive(Clone, Copy, PartialEq, Eq)]
     enum Section {
@@ -179,14 +179,18 @@ mod cli {
                 "DRY PLAN (no --yes): nothing is written"
             }
         );
+        if args.yes {
+            println!("{DO_NOT_INTERRUPT}");
+            install_ctrl_handler();
+        }
         let mut results = Results::new();
         endpoint_sections(&args, &mut results);
-        if args.has(Section::MicMute) {
+        if args.has(Section::MicMute) && !interrupted() {
             println!("\n== mic mute ==");
             let verdict = start_mic().map_or_else(Verdict::Skipped, |s| mic_mute(&s, args.yes));
             results.push(("mic-mute", verdict));
         }
-        if args.has(Section::VoicemeeterGain) {
+        if args.has(Section::VoicemeeterGain) && !interrupted() {
             println!("\n== voicemeeter gain ==");
             let verdict = voicemeeter_gain(&VoicemeeterService::new(), args.yes);
             results.push(("voicemeeter-gain", verdict));

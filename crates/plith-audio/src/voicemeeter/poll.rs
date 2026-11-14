@@ -8,7 +8,7 @@ use std::time::{Duration, Instant};
 use super::api::Api;
 use super::service::{Shared, Status};
 use super::{
-    ChannelSnapshot, DirtyOutcome, LoginSession, Rail, VmKind, VmLevels, VmSnapshot,
+    ChannelSnapshot, DirtyOutcome, LoginSession, Rail, Readiness, VmKind, VmLevels, VmSnapshot,
     fallback_label, level_channel, level_type, param_name,
 };
 
@@ -79,6 +79,14 @@ pub(super) fn read_levels(api: &Api, kind: VmKind) -> VmLevels {
     }
 }
 
+/// The status that goes with a readiness verdict.
+pub(super) fn status_for(readiness: Readiness) -> Status {
+    match readiness {
+        Readiness::Ready => Status::Running,
+        Readiness::AppNotRunning => Status::Unavailable("Voicemeeter is not running".into()),
+    }
+}
+
 /// Mutable state of the loop.
 struct Poller {
     api: Arc<Api>,
@@ -86,6 +94,8 @@ struct Poller {
     session: LoginSession,
     connected: bool,
     need_snapshot: bool,
+    /// Logged in but the application is not launched; cleared by the first built snapshot.
+    awaiting_app: bool,
     kind: Option<VmKind>,
     tick: u32,
 }
@@ -110,7 +120,9 @@ impl Poller {
             self.session = LoginSession::on_login(rc, Instant::now());
             self.connected = true;
             self.need_snapshot = true;
-            self.shared.set_status(Status::Running);
+            let readiness = Readiness::from_login(rc, false);
+            self.awaiting_app = readiness.keeps_session_on_gone();
+            self.shared.set_status(status_for(readiness));
         }
     }
 
@@ -118,6 +130,11 @@ impl Poller {
         let outcome = self.session.on_dirty(self.api.is_dirty(), Instant::now());
         match outcome {
             DirtyOutcome::Dirty => self.need_snapshot = true,
+            DirtyOutcome::EngineGone if self.awaiting_app => {
+                // The application was never launched: the API attaches when it starts, so
+                // re-arm the grace instead of a Logout/Login cycle.
+                self.session = LoginSession::on_login(1, Instant::now());
+            }
             DirtyOutcome::EngineGone => return self.on_gone(),
             DirtyOutcome::Clean | DirtyOutcome::Transient => {}
         }
@@ -126,6 +143,10 @@ impl Poller {
         {
             self.need_snapshot = false;
             self.kind = Some(snapshot.kind);
+            if self.awaiting_app {
+                self.awaiting_app = false;
+                self.shared.set_status(Status::Running);
+            }
             self.shared.publish(Some(&snapshot));
         }
         if let Some(kind) = self.kind
@@ -146,13 +167,14 @@ impl Poller {
 }
 
 /// Thread body: polls until the stop flag is set. Never calls Logout (see the service).
-pub(super) fn run(api: Arc<Api>, shared: Arc<Shared>, session: LoginSession) {
+pub(super) fn run(api: Arc<Api>, shared: Arc<Shared>, session: LoginSession, readiness: Readiness) {
     let mut poller = Poller {
         api,
         shared,
         session,
         connected: true,
         need_snapshot: true,
+        awaiting_app: readiness.keeps_session_on_gone(),
         kind: None,
         tick: 0,
     };

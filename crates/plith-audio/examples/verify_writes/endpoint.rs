@@ -2,7 +2,9 @@
 
 use plith_audio::endpoints::{DefaultRoles, EndpointService, read_default_roles};
 
-use crate::support::{Guard, Verdict, close, drain, event_arrived, judge, planned, yes_no};
+use crate::support::{
+    Guard, MuteTrack, Verdict, close, drain, event_arrived, interrupted, judge, planned, yes_no,
+};
 
 const VOLUME_STEP: f32 = 0.02;
 const VOLUME_TOLERANCE: f32 = 0.001;
@@ -28,6 +30,9 @@ pub fn endpoint_volume(service: &EndpointService, yes: bool) -> Verdict {
         let _ = service.set_volume(original);
     });
     drain(&events);
+    if interrupted() {
+        return Verdict::Skipped("interrupted before the write".into());
+    }
     let written = service.set_volume(target);
     let arrived = event_arrived(&events, |s| {
         s.attached
@@ -69,34 +74,35 @@ pub fn endpoint_mute(service: &EndpointService, yes: bool) -> Verdict {
     }
     let events = service.subscribe();
     let muted_now = || service.snapshot().attached.map(|a| a.muted);
-    let mut guard = Guard::new(|| {
-        if muted_now().is_some_and(|m| m != original) {
-            let _ = service.toggle_mute();
-        }
-    });
+    let track = MuteTrack::new(original);
+    let mut guard = Guard::new(|| track.restore(|| service.toggle_mute(), muted_now));
     drain(&events);
-    let toggled = service.toggle_mute();
+    if interrupted() {
+        return Verdict::Skipped("interrupted before the write".into());
+    }
+    let toggled = track.toggle(|| service.toggle_mute());
     let arrived = event_arrived(&events, |s| {
         s.attached.as_ref().is_some_and(|a| a.muted != original)
     });
     println!(
-        "AFTER-CHANGE: toggle returned {toggled:?}, muted={:?} (wanted {}), event: {}",
+        "AFTER-CHANGE: toggle returned {toggled:?} (wanted {:?}), snapshot muted={:?}, event: {}",
+        Some(!original),
         muted_now(),
-        !original,
         yes_no(arrived)
     );
-    let changed = muted_now() == Some(!original);
+    let changed = toggled == Some(!original);
     drain(&events);
     guard.restore_now();
     let arrived = event_arrived(&events, |s| {
         s.attached.as_ref().is_some_and(|a| a.muted == original)
     });
     println!(
-        "AFTER-RESTORE: muted={:?} (original {original}), event: {}",
+        "AFTER-RESTORE: toggle returned {:?} (original {original}), snapshot muted={:?}, event: {}",
+        track.reported(),
         muted_now(),
         yes_no(arrived)
     );
-    judge(changed, muted_now() == Some(original))
+    judge(changed, track.settled(muted_now()))
 }
 
 pub fn describe(roles: Option<&DefaultRoles>) -> String {
@@ -155,6 +161,9 @@ pub fn default_endpoint(service: &EndpointService, to: &str, yes: bool) -> Verdi
         let _ = force_default(service, &original, 3);
     });
     drain(&events);
+    if interrupted() {
+        return Verdict::Skipped("interrupted before the write".into());
+    }
     let done = service.set_default_endpoint(&target);
     let arrived = event_arrived(&events, |s| {
         s.default_id

@@ -10,9 +10,10 @@ use windows::Win32::Media::Audio::{
 };
 
 use super::MicSnapshot;
-use crate::endpoints::Status;
 use crate::endpoints::com::{Attachment, ComGuard, create_enumerator, default_endpoint};
 use crate::endpoints::notify::{DeviceEvents, Msg, ask};
+use crate::endpoints::{Status, worker_status};
+use crate::waker::{Waker, publish_with};
 
 type Snapshot = Option<MicSnapshot>;
 
@@ -21,6 +22,7 @@ struct Shared {
     stop: AtomicBool,
     snapshot: Mutex<Snapshot>,
     subscribers: Mutex<Vec<Sender<Snapshot>>>,
+    waker: Waker,
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -29,14 +31,13 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 
 impl Shared {
     fn publish(&self, next: &Snapshot) {
-        {
-            let mut current = locked(&self.snapshot);
+        publish_with(&self.snapshot, &self.subscribers, &self.waker, |current| {
             if *current == *next {
-                return;
+                return false;
             }
             current.clone_from(next);
-        }
-        locked(&self.subscribers).retain(|tx| tx.send(next.clone()).is_ok());
+            true
+        });
     }
 }
 
@@ -203,6 +204,7 @@ impl MicrophoneService {
                 stop: AtomicBool::new(false),
                 snapshot: Mutex::new(None),
                 subscribers: Mutex::new(Vec::new()),
+                waker: Waker::default(),
             }),
             control: Mutex::new(None),
             thread: Mutex::new(None),
@@ -211,6 +213,9 @@ impl MicrophoneService {
 
     /// Starts the service thread and waits for the first reading. Calling it while running
     /// returns [`Status::Running`].
+    ///
+    /// Blocks until the worker has initialized COM and read the first state (short, normally
+    /// well under a second), so call it off the UI thread.
     pub fn start(&self) -> Status {
         let mut slot = locked(&self.thread);
         if slot.is_some() {
@@ -261,6 +266,23 @@ impl MicrophoneService {
         self.shared.publish(&None);
     }
 
+    /// Whether the worker thread is up. A thread that ended without `stop` reports
+    /// unavailable, never running.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        match self.thread.try_lock() {
+            Ok(slot) => worker_status(slot.as_ref().map(JoinHandle::is_finished)),
+            Err(_) => Status::Unavailable("starting or stopping".into()),
+        }
+    }
+
+    /// Registers a callback run on the publishing thread after every published change, outside
+    /// every lock. It must not block; use it to post a message to a UI thread. Replaces any
+    /// earlier callback.
+    pub fn set_waker(&self, waker: Box<dyn Fn() + Send + Sync>) {
+        self.shared.waker.set(waker);
+    }
+
     /// Latest reading; `None` means no capture device (or not started) and must not be shown
     /// as unmuted.
     #[must_use]
@@ -287,5 +309,37 @@ impl MicrophoneService {
 impl Drop for MicrophoneService {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn waker_fires_per_distinct_publish_only() {
+        let shared = Shared {
+            stop: AtomicBool::new(false),
+            snapshot: Mutex::new(None),
+            subscribers: Mutex::new(Vec::new()),
+            waker: Waker::default(),
+        };
+        let count = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&count);
+        shared.waker.set(Box::new(move || {
+            seen.fetch_add(1, Ordering::SeqCst);
+        }));
+        let mic = Some(MicSnapshot {
+            id: "m".into(),
+            name: "Mic".into(),
+            muted: false,
+            volume: 0.5,
+        });
+        shared.publish(&mic);
+        shared.publish(&mic);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        shared.publish(&None);
+        assert_eq!(count.load(Ordering::SeqCst), 2);
     }
 }

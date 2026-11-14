@@ -14,6 +14,7 @@ use super::com::{Attachment, ComGuard, create_enumerator, default_id, list_activ
 use super::notify::{DeviceEvents, Msg, ask};
 use super::policy::set_default_endpoint;
 use super::{AttachedState, EndpointState, resolve_target};
+use crate::waker::{Waker, publish_with};
 
 /// Whether the Core Audio stack could be used.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -24,6 +25,16 @@ pub enum Status {
     Unavailable(String),
 }
 
+/// Status of a service from its worker thread: `None` when there is no thread, otherwise
+/// whether it has ended. A worker that ended without `stop` must not look like `Running`.
+pub(crate) fn worker_status(worker: Option<bool>) -> Status {
+    match worker {
+        Some(false) => Status::Running,
+        Some(true) => Status::Unavailable("the service thread stopped unexpectedly".into()),
+        None => Status::Unavailable("not running".into()),
+    }
+}
+
 /// State shared between the handle and the service thread. Every lock is held only for a
 /// plain read or write, never across a COM call.
 struct Shared {
@@ -31,6 +42,7 @@ struct Shared {
     state: Mutex<EndpointState>,
     pin: Mutex<Option<String>>,
     subscribers: Mutex<Vec<Sender<EndpointState>>>,
+    waker: Waker,
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -44,19 +56,20 @@ impl Shared {
             state: Mutex::new(EndpointState::default()),
             pin: Mutex::new(None),
             subscribers: Mutex::new(Vec::new()),
+            waker: Waker::default(),
         }
     }
 
-    /// Stores `next` and, when it differs from the current state, sends it to subscribers.
+    /// Stores `next` and, when it differs from the current state, sends it to subscribers and
+    /// wakes the consumer.
     fn publish(&self, next: &EndpointState) {
-        {
-            let mut current = locked(&self.state);
+        publish_with(&self.state, &self.subscribers, &self.waker, |current| {
             if *current == *next {
-                return;
+                return false;
             }
             current.clone_from(next);
-        }
-        locked(&self.subscribers).retain(|tx| tx.send(next.clone()).is_ok());
+            true
+        });
     }
 
     fn current(&self) -> EndpointState {
@@ -250,6 +263,9 @@ impl EndpointService {
 
     /// Starts the service thread and waits until the first state is published. Calling it
     /// while running returns [`Status::Running`].
+    ///
+    /// Blocks until the worker has initialized COM and read the first state (short, normally
+    /// well under a second), so call it off the UI thread.
     pub fn start(&self) -> Status {
         let mut slot = locked(&self.thread);
         if slot.is_some() {
@@ -301,6 +317,23 @@ impl EndpointService {
         }
         drop(slot);
         self.shared.publish(&EndpointState::default());
+    }
+
+    /// Whether the worker thread is up. A thread that ended without `stop` reports
+    /// unavailable, never running.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        match self.thread.try_lock() {
+            Ok(slot) => worker_status(slot.as_ref().map(JoinHandle::is_finished)),
+            Err(_) => Status::Unavailable("starting or stopping".into()),
+        }
+    }
+
+    /// Registers a callback run on the publishing thread after every published change, outside
+    /// every lock. It must not block; use it to post a message to a UI thread. Replaces any
+    /// earlier callback.
+    pub fn set_waker(&self, waker: Box<dyn Fn() + Send + Sync>) {
+        self.shared.waker.set(waker);
     }
 
     /// Latest state; empty before `start`, after `stop` and without an audio stack.
@@ -360,5 +393,37 @@ impl EndpointService {
 impl Drop for EndpointService {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::sync::atomic::AtomicUsize;
+
+    #[test]
+    fn waker_fires_per_distinct_publish_only() {
+        let shared = Shared::new();
+        let count = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&count);
+        shared.waker.set(Box::new(move || {
+            seen.fetch_add(1, Ordering::SeqCst);
+        }));
+        let state = EndpointState {
+            default_id: Some("a".into()),
+            ..EndpointState::default()
+        };
+        shared.publish(&state);
+        shared.publish(&state);
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        shared.publish(&EndpointState::default());
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn dead_worker_is_not_running() {
+        assert_eq!(worker_status(Some(false)), Status::Running);
+        assert!(matches!(worker_status(Some(true)), Status::Unavailable(_)));
+        assert!(matches!(worker_status(None), Status::Unavailable(_)));
     }
 }

@@ -5,7 +5,9 @@ use std::time::{Duration, Instant};
 use plith_audio::microphone::MicrophoneService;
 use plith_audio::voicemeeter::{self, Rail, VmSnapshot, VoicemeeterService};
 
-use crate::support::{Guard, Verdict, close, drain, event_arrived, judge, planned, yes_no};
+use crate::support::{
+    Guard, MuteTrack, Verdict, close, drain, event_arrived, interrupted, judge, planned, yes_no,
+};
 
 const GAIN_STEP_DB: f32 = 0.5;
 const GAIN_TOLERANCE_DB: f32 = 0.01;
@@ -26,30 +28,31 @@ pub fn mic_mute(service: &MicrophoneService, yes: bool) -> Verdict {
     }
     let events = service.subscribe();
     let muted_now = || service.snapshot().map(|m| m.muted);
-    let mut guard = Guard::new(|| {
-        if muted_now().is_some_and(|m| m != original) {
-            let _ = service.toggle_mute();
-        }
-    });
+    let track = MuteTrack::new(original);
+    let mut guard = Guard::new(|| track.restore(|| service.toggle_mute(), muted_now));
     drain(&events);
-    let toggled = service.toggle_mute();
+    if interrupted() {
+        return Verdict::Skipped("interrupted before the write".into());
+    }
+    let toggled = track.toggle(|| service.toggle_mute());
     let arrived = event_arrived(&events, |s| s.as_ref().is_some_and(|m| m.muted != original));
     println!(
-        "AFTER-CHANGE: toggle returned {toggled:?}, muted={:?} (wanted {}), event: {}",
+        "AFTER-CHANGE: toggle returned {toggled:?} (wanted {:?}), snapshot muted={:?}, event: {}",
+        Some(!original),
         muted_now(),
-        !original,
         yes_no(arrived)
     );
-    let changed = muted_now() == Some(!original);
+    let changed = toggled == Some(!original);
     drain(&events);
     guard.restore_now();
     let arrived = event_arrived(&events, |s| s.as_ref().is_some_and(|m| m.muted == original));
     println!(
-        "AFTER-RESTORE: muted={:?} (original {original}), event: {}",
+        "AFTER-RESTORE: toggle returned {:?} (original {original}), snapshot muted={:?}, event: {}",
+        track.reported(),
         muted_now(),
         yes_no(arrived)
     );
-    judge(changed, muted_now() == Some(original))
+    judge(changed, track.settled(muted_now()))
 }
 
 pub fn wait_snapshot(service: &VoicemeeterService) -> Option<VmSnapshot> {
@@ -95,6 +98,9 @@ pub fn voicemeeter_gain(service: &VoicemeeterService, yes: bool) -> Verdict {
         let _ = service.set_gain(Rail::Strip, 0, original);
     });
     drain(&events);
+    if interrupted() {
+        return Verdict::Skipped("interrupted before the write".into());
+    }
     let written = service.set_gain(Rail::Strip, 0, target);
     let hit = |want: f32| {
         move |s: &Option<VmSnapshot>| {

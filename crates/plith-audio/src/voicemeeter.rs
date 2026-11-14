@@ -22,7 +22,7 @@ pub use decode::{
 pub use layout::{fallback_label, param_name};
 #[cfg(windows)]
 pub use service::{Status, VoicemeeterService};
-pub use session::{DirtyOutcome, LoginSession};
+pub use session::{DirtyOutcome, LoginSession, Readiness};
 
 /// Lowest gain the Remote API accepts, in dB.
 pub const MIN_GAIN_DB: f32 = -60.0;

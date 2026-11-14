@@ -8,7 +8,8 @@ use std::time::Instant;
 
 use super::api::Api;
 use super::poll;
-use super::{LoginSession, Rail, VmLevels, VmSnapshot, clamp_gain, param_name};
+use super::{LoginSession, Rail, Readiness, VmLevels, VmSnapshot, clamp_gain, param_name};
+use crate::waker::{Waker, publish_with};
 
 /// Whether the Voicemeeter engine can be used right now.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -26,6 +27,7 @@ pub(super) struct Shared {
     levels: Mutex<VmLevels>,
     status: Mutex<Status>,
     subscribers: Mutex<Vec<Sender<Option<VmSnapshot>>>>,
+    waker: Waker,
 }
 
 fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -40,6 +42,7 @@ impl Shared {
             levels: Mutex::new(VmLevels::default()),
             status: Mutex::new(Status::Unavailable("not started".into())),
             subscribers: Mutex::new(Vec::new()),
+            waker: Waker::default(),
         }
     }
 
@@ -51,16 +54,16 @@ impl Shared {
         *locked(&self.levels) = levels;
     }
 
-    /// Stores a new snapshot and, when it differs, sends it to every subscriber.
+    /// Stores a new snapshot and, when it differs, sends it to every subscriber and wakes the
+    /// consumer (see [`VoicemeeterService::set_waker`]).
     pub(super) fn publish(&self, snapshot: Option<&VmSnapshot>) {
-        {
-            let mut current = locked(&self.snapshot);
+        publish_with(&self.snapshot, &self.subscribers, &self.waker, |current| {
             if current.as_ref() == snapshot {
-                return;
+                return false;
             }
             *current = snapshot.cloned();
-        }
-        locked(&self.subscribers).retain(|tx| tx.send(snapshot.cloned()).is_ok());
+            true
+        });
     }
 }
 
@@ -93,6 +96,12 @@ impl VoicemeeterService {
 
     /// Loads the DLL, logs in and starts the poll thread. Never panics: any problem comes back
     /// as [`Status::Unavailable`]. Calling it while running returns the current status.
+    ///
+    /// Blocks while the DLL loads and the login call runs (short, normally well under a
+    /// second), so call it off the UI thread. When the API logs in but the Voicemeeter
+    /// application is not launched (login code 1) it returns
+    /// `Unavailable("Voicemeeter is not running")` and keeps polling; the status becomes
+    /// [`Status::Running`] once the first snapshot is built.
     pub fn start(&self) -> Status {
         // Held for the whole start so two concurrent starts cannot both load and log in.
         let mut slot = locked(&self.thread);
@@ -110,17 +119,19 @@ impl VoicemeeterService {
             return self.fail(format!("VBVMR_Login failed with code {rc}"));
         }
         let session = LoginSession::on_login(rc, Instant::now());
+        let readiness = Readiness::from_login(rc, false);
         self.shared.stop.store(false, Ordering::Release);
-        self.shared.set_status(Status::Running);
+        let initial = poll::status_for(readiness);
+        self.shared.set_status(initial.clone());
         *locked(&self.api) = Some(Arc::clone(&api));
         let (shared, worker_api) = (Arc::clone(&self.shared), api);
         let spawned = thread::Builder::new()
             .name("plith-voicemeeter".into())
-            .spawn(move || poll::run(worker_api, shared, session));
+            .spawn(move || poll::run(worker_api, shared, session, readiness));
         match spawned {
             Ok(handle) => {
                 *slot = Some(handle);
-                Status::Running
+                initial
             }
             Err(err) => {
                 if let Some(api) = locked(&self.api).take() {
@@ -156,10 +167,25 @@ impl VoicemeeterService {
             .set_status(Status::Unavailable("stopped".into()));
     }
 
-    /// Current status.
+    /// Current status. A poll thread that ended without `stop` shows as unavailable, never as
+    /// running.
     #[must_use]
     pub fn status(&self) -> Status {
+        let died = self
+            .thread
+            .try_lock()
+            .is_ok_and(|slot| slot.as_ref().is_some_and(JoinHandle::is_finished));
+        if died {
+            return Status::Unavailable("the Voicemeeter poll thread stopped unexpectedly".into());
+        }
         locked(&self.shared.status).clone()
+    }
+
+    /// Registers a callback run on the publishing thread after every published change (also
+    /// the `None` that means the engine went away), outside every lock. It must not block; use
+    /// it to post a message to a UI thread. Replaces any earlier callback.
+    pub fn set_waker(&self, waker: Box<dyn Fn() + Send + Sync>) {
+        self.shared.waker.set(waker);
     }
 
     /// Latest snapshot, `None` before the first read or while the engine is unavailable.
@@ -217,5 +243,38 @@ impl VoicemeeterService {
 impl Drop for VoicemeeterService {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::voicemeeter::VmKind;
+    use std::sync::atomic::AtomicUsize;
+
+    fn snapshot(kind: VmKind) -> VmSnapshot {
+        VmSnapshot {
+            kind,
+            strips: Vec::new(),
+            buses: Vec::new(),
+        }
+    }
+
+    #[test]
+    fn waker_fires_per_distinct_publish_only() {
+        let shared = Shared::new();
+        let count = Arc::new(AtomicUsize::new(0));
+        let seen = Arc::clone(&count);
+        shared.waker.set(Box::new(move || {
+            seen.fetch_add(1, Ordering::SeqCst);
+        }));
+        let banana = snapshot(VmKind::Banana);
+        shared.publish(Some(&banana));
+        shared.publish(Some(&banana));
+        assert_eq!(count.load(Ordering::SeqCst), 1);
+        shared.publish(None);
+        assert_eq!(count.load(Ordering::SeqCst), 2);
+        shared.publish(None);
+        assert_eq!(count.load(Ordering::SeqCst), 2);
     }
 }
