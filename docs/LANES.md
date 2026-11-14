@@ -37,5 +37,4 @@ Updated 2026-11-14.
 | `engine` | R1b: missed vblanks with a game behind, collapse and page durations, topmost IME skip, drop split and mask hit modes, deferred minors | `feature/engine-r1b` @ `main` | R1 merged as `1aabe4a` | writes the R1b plan first |
 
 R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
-Master open items: R3 visual direction with Berke; delete merged branches `feature/engine-slice`,
-`feature/engine-slice-reworded`, `feature/services-reworded` after Berke's yes.
+Master open items: R3 visual direction with Berke; approve the R1b plan when it arrives.
