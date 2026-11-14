@@ -48,6 +48,7 @@ impl Spring {
     pub fn retarget(&mut self, target: f64, tuning: Tuning) {
         self.target = target;
         self.tuning = tuning;
+        self.leftover = 0.0;
     }
 
     /// Advances by `dt` seconds (clamped to 0..=0.1); true when settled.
@@ -61,6 +62,7 @@ impl Spring {
         while self.leftover >= SUBSTEP - SLACK {
             self.leftover = (self.leftover - SUBSTEP).max(0.0);
             if self.is_settled() {
+                self.leftover = 0.0;
                 break;
             }
             let force = -self.tuning.stiffness * (self.value - self.target)
@@ -71,6 +73,7 @@ impl Spring {
         if self.is_settled() {
             self.value = self.target;
             self.velocity = 0.0;
+            self.leftover = 0.0;
             return true;
         }
         false

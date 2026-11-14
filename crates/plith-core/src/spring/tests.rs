@@ -105,3 +105,20 @@ fn opacity_eps_settles_tighter() {
 fn assert_bits(left: f64, right: f64) {
     assert_eq!(left.to_bits(), right.to_bits(), "{left} != {right}");
 }
+
+#[test]
+fn settled_spring_does_not_bank_stale_time() {
+    let mut a = Spring::new(0.0, GROW_W);
+    a.retarget(100.0, GROW_W);
+    run(&mut a, 5.0);
+    for _ in 0..10 {
+        a.step(0.1);
+    }
+    let mut b = Spring::new(100.0, GROW_W);
+    a.retarget(0.0, GROW_W);
+    b.retarget(0.0, GROW_W);
+    a.step(H);
+    b.step(H);
+    assert!((a.value() - b.value()).abs() < 1e-12);
+    assert!((a.value() - 100.0).abs() < 1.0, "moved {}", a.value());
+}
