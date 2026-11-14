@@ -13,6 +13,7 @@ dependencies = [
  "plith-render",
  "plith-shell",
  "plith-system",
+ "windows",
 ]
 
 [[package]]
@@ -52,6 +53,8 @@ name = "plith-render"
 version = "0.1.0"
 dependencies = [
  "plith-core",
+ "windows",
+ "windows-numerics",
 ]
 
 [[package]]
@@ -59,6 +62,7 @@ name = "plith-shell"
 version = "0.1.0"
 dependencies = [
  "plith-core",
+ "windows",
 ]
 
 [[package]]
