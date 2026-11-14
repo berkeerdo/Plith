@@ -1,6 +1,6 @@
 mod harness;
 
-use super::RenderHandle;
+use super::{Fatal, RenderHandle};
 use harness::*;
 use plith_core::clock_choice::ClockKind;
 use plith_core::geometry::IslandShape;
@@ -328,8 +328,8 @@ fn failed_recover_ends_the_thread_with_a_fatal_message() {
         recover_fails: true,
         ..Setup::default()
     });
-    let message = run.fatal.recv_timeout(BOUND).expect("a fatal message");
-    assert!(!message.is_empty());
+    let fatal = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    assert!(matches!(fatal, Fatal::Error(ref text) if !text.is_empty()));
     run.done
         .recv_timeout(BOUND)
         .expect("the loop ends by itself");
@@ -406,7 +406,12 @@ fn panic_in_paint_reaches_on_fatal() {
     });
     run.wait_frames(1);
     run.mailbox.publish(expanded(0));
-    let message = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    let fatal = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    assert!(
+        matches!(fatal, Fatal::Panic(_)),
+        "a panic is its own variant: {fatal:?}"
+    );
+    let message = fatal.message();
     assert!(message.contains("panicked"), "{message}");
     assert!(message.contains("fake paint blew up"), "{message}");
     run.done
@@ -431,8 +436,9 @@ fn stop_and_join_is_idempotent() {
     let handle = RenderHandle::new(mailbox, shared, join);
     let other = handle.stop_handle();
     handle.stop_handle().stop_and_join();
-    done.recv_timeout(BOUND)
-        .expect("the thread has ended once the first join returned");
+    // The thread sends `done` before it exits, so a join that only requested the stop fails here.
+    done.try_recv()
+        .expect("the thread had ended when the first join returned");
     other.stop_and_join();
     handle.shutdown();
 }

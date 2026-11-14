@@ -1,7 +1,7 @@
 //! Fakes and the run harness for the render loop tests: a fake clock on shared fake time, a
 //! recording painter and a loop runner with bounded waits.
 
-use super::super::{FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_guarded};
+use super::super::{Fatal, FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_guarded};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
@@ -171,7 +171,7 @@ pub(super) struct Run {
     pub(super) shapes: Arc<Mutex<Vec<ShapeFrame>>>,
     pub(super) recovers: Arc<Mutex<Vec<bool>>>,
     pub(super) reports: Receiver<MotionReport>,
-    pub(super) fatal: Receiver<String>,
+    pub(super) fatal: Receiver<Fatal>,
     pub(super) done: Receiver<()>,
     pub(super) join: JoinHandle<()>,
 }
@@ -188,7 +188,7 @@ pub(super) fn layout() -> SurfaceLayout {
 
 pub(super) fn sinks(
     shapes: Arc<Mutex<Vec<ShapeFrame>>>,
-) -> (RenderSinks, Receiver<MotionReport>, Receiver<String>) {
+) -> (RenderSinks, Receiver<MotionReport>, Receiver<Fatal>) {
     let (report_tx, reports) = mpsc::channel();
     let (fatal_tx, fatal) = mpsc::channel();
     let sinks = RenderSinks {

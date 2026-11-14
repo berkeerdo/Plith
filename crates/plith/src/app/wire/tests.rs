@@ -38,3 +38,42 @@ fn raised_line_for_a_debounced_change_says_retry_armed() {
         "topmost retry armed (foreground: ?)"
     );
 }
+
+fn temp_log(name: &str) -> (std::path::PathBuf, LogFile) {
+    let dir = std::env::temp_dir().join(format!("plith-wire-{name}-{}", std::process::id()));
+    let path = dir.join("plith.log");
+    let log = LogFile::open_at(&path).unwrap();
+    (dir, log)
+}
+
+#[test]
+fn a_panic_while_closing_still_sets_fatal_and_logs_render_fatal() {
+    let (dir, log) = temp_log("panic");
+    let fatal = AtomicBool::new(false);
+    let reason = Fatal::Panic(String::from("render thread panicked: boom"));
+    assert!(handle_fatal(&reason, true, &log, &fatal));
+    assert!(fatal.load(Ordering::Acquire));
+    log.flush();
+    let text = std::fs::read_to_string(dir.join("plith.log")).unwrap();
+    assert!(
+        text.contains("render fatal: render thread panicked: boom"),
+        "{text}"
+    );
+    drop(log);
+    std::fs::remove_file(dir.join("plith.log")).unwrap();
+    std::fs::remove_dir(&dir).unwrap();
+}
+
+#[test]
+fn a_plain_error_while_closing_is_a_clean_close() {
+    let (dir, log) = temp_log("error");
+    let fatal = AtomicBool::new(false);
+    let reason = Fatal::Error(String::from("present failed"));
+    assert!(!handle_fatal(&reason, true, &log, &fatal));
+    assert!(!fatal.load(Ordering::Acquire));
+    assert!(handle_fatal(&reason, false, &log, &fatal));
+    assert!(fatal.load(Ordering::Acquire));
+    drop(log);
+    std::fs::remove_file(dir.join("plith.log")).unwrap();
+    std::fs::remove_dir(&dir).unwrap();
+}

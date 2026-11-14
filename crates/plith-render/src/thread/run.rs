@@ -3,7 +3,7 @@
 //! drawn shape and writes one motion report per motion.
 
 use super::clocks::Clocks;
-use super::{FrameTimes, Paint, RenderSinks};
+use super::{Fatal, FrameTimes, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
@@ -145,7 +145,7 @@ pub fn run_guarded<C, P, O, N, D>(
     cleanup();
     if let Err(payload) = outcome {
         let text = payload_text(&*payload);
-        (sinks.on_fatal)(format!("render thread panicked: {text}"));
+        (sinks.on_fatal)(Fatal::Panic(format!("render thread panicked: {text}")));
     }
 }
 
@@ -191,11 +191,11 @@ pub fn run_loop<C, P, O, N, D>(
         seen,
     };
     if engine.clocks.order.is_empty() {
-        (sinks.on_fatal)(String::from("no frame clock kinds to try"));
+        (sinks.on_fatal)(Fatal::Error(String::from("no frame clock kinds to try")));
         return;
     }
     if let Err(message) = engine.run(mailbox, scene) {
-        (sinks.on_fatal)(message);
+        (sinks.on_fatal)(Fatal::Error(message));
     }
 }
 

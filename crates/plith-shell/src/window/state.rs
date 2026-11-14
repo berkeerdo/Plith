@@ -13,7 +13,7 @@ use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
-use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, PostQuitMessage, WM_CLOSE};
 
 /// Running cost of applying a shape to the hit candidate, in milliseconds.
 #[derive(Debug, Clone, Copy, Default)]
@@ -106,7 +106,11 @@ impl Inner {
         }
         (self.on_panic)(message);
         let visual = self.visual.get();
-        if visual != 0 {
+        if visual == 0 {
+            // No window exists to close, so end the message loop directly.
+            // SAFETY: posts WM_QUIT to this thread's queue.
+            unsafe { PostQuitMessage(1) };
+        } else {
             // SAFETY: PostMessageW accepts any handle value; a stale one only makes it fail.
             let _ = unsafe { PostMessageW(Some(hwnd_of(visual)), WM_CLOSE, WPARAM(0), LPARAM(0)) };
         }

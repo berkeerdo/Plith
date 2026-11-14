@@ -83,3 +83,31 @@ fn lines_keep_order_and_flush_on_drop() {
     fs::remove_file(&path).unwrap();
     fs::remove_dir(&dir).unwrap();
 }
+
+#[test]
+fn flush_writes_queued_lines_before_returning() {
+    let dir = std::env::temp_dir().join(format!("plith-log-flush-{}", std::process::id()));
+    fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("plith.log");
+    let log = LogFile::open_at(&path).unwrap();
+    for n in 0..50 {
+        log.line(&format!("queued {n}"));
+    }
+    log.line("watchdog: forced exit");
+    log.flush();
+    let text = fs::read_to_string(&path).unwrap();
+    assert_eq!(
+        text.lines().count(),
+        51,
+        "flush returns after the writer caught up"
+    );
+    assert!(
+        text.lines()
+            .last()
+            .unwrap()
+            .ends_with("watchdog: forced exit")
+    );
+    drop(log);
+    fs::remove_file(&path).unwrap();
+    fs::remove_dir(&dir).unwrap();
+}

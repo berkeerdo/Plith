@@ -1,12 +1,13 @@
 //! The small pieces `app::run` is made of: the shell event handler, the render sinks, the
 //! watchdog and the startup and exit lines.
 
+use super::backstop::close_render;
 use crate::demo::sleep_stoppable;
 use crate::log::LogFile;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox};
-use plith_render::{RenderSinks, StopHandle};
+use plith_render::{Fatal, RenderSinks, StopHandle};
 use plith_shell::{MonitorInfo, QuitHandle, ShapePoster, Shell, ShellEvent, is_remote_session};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, OnceLock};
@@ -101,7 +102,7 @@ pub fn event_handler(
         ShellEvent::Closing => {
             closing.store(true, Ordering::Release);
             if let Some(stop) = stopper.get() {
-                stop.stop_and_join();
+                close_render(&log, stop);
             }
         }
         ShellEvent::Click => {
@@ -129,6 +130,22 @@ pub fn event_handler(
     })
 }
 
+/// Logs why the render thread ended and sets `fatal`. Returns true when the window should be
+/// asked to close. A plain error while the window is already closing is part of a clean close
+/// and changes nothing else; a panic always counts, closing or not.
+pub fn handle_fatal(reason: &Fatal, closing: bool, log: &LogFile, fatal: &AtomicBool) -> bool {
+    if closing && matches!(reason, Fatal::Error(_)) {
+        log.line(&format!(
+            "render stopped while closing: {}",
+            reason.message()
+        ));
+        return false;
+    }
+    log.line(&format!("render fatal: {}", reason.message()));
+    fatal.store(true, Ordering::Release);
+    true
+}
+
 /// The render thread's callbacks: shapes to the UI thread, motion reports and a fatal error to
 /// the log (a fatal error also closes the window and sets `fatal`, unless the window is already
 /// closing: a present that fails on a window being destroyed is part of a clean close).
@@ -150,14 +167,10 @@ pub fn sinks(
             }
         }),
         on_note: Box::new(move |line| note_log.line(&line)),
-        on_fatal: Box::new(move |message| {
-            if closing.load(Ordering::Acquire) {
-                fatal_log.line(&format!("render stopped while closing: {message}"));
-                return;
+        on_fatal: Box::new(move |reason| {
+            if handle_fatal(&reason, closing.load(Ordering::Acquire), &fatal_log, &fatal) {
+                quit.quit();
             }
-            fatal_log.line(&format!("render fatal: {message}"));
-            fatal.store(true, Ordering::Release);
-            quit.quit();
         }),
     }
 }
@@ -175,7 +188,7 @@ pub fn on_panic(
         log.line(&format!("ui fatal: {message}"));
         fatal.store(true, Ordering::Release);
         if let Some(stop) = stopper.get() {
-            stop.stop_and_join();
+            close_render(&log, stop);
         }
     })
 }
@@ -197,6 +210,8 @@ pub fn spawn_watchdog(
                 return;
             }
             log.line("watchdog: forced exit");
+            // `exit` skips destructors, so the queued lines would be lost without this.
+            log.flush();
             std::process::exit(EXIT_WATCHDOG);
         }
     })

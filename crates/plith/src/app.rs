@@ -1,6 +1,7 @@
 //! Composes the engine slice: process setup, monitor, shell window, render thread, the demo or
 //! idle-check driver, the message loop and a clean shutdown.
 
+mod backstop;
 mod wire;
 
 use crate::log::LogFile;

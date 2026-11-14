@@ -57,6 +57,26 @@ pub trait Paint {
     }
 }
 
+/// Why the render thread ended. A panic is told apart structurally, so the app can treat it as
+/// a failure even while the window is closing.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Fatal {
+    /// An unrecoverable error (clock, device recovery).
+    Error(String),
+    /// The loop panicked; the text is `render thread panicked: <payload>`.
+    Panic(String),
+}
+
+impl Fatal {
+    /// The message text.
+    #[must_use]
+    pub fn message(&self) -> &str {
+        match self {
+            Self::Error(text) | Self::Panic(text) => text,
+        }
+    }
+}
+
 /// Callbacks the render thread calls from its own thread.
 pub struct RenderSinks {
     /// After every painted frame, with the drawn shape and a per-thread frame counter.
@@ -64,7 +84,7 @@ pub struct RenderSinks {
     /// Once per finished motion.
     pub on_motion: Box<dyn Fn(MotionReport) + Send>,
     /// Once, when the thread ends on an unrecoverable error.
-    pub on_fatal: Box<dyn Fn(String) + Send>,
+    pub on_fatal: Box<dyn Fn(Fatal) + Send>,
     /// A non-fatal log line from the render thread (for example a lever outcome).
     pub on_note: Box<dyn Fn(String) + Send>,
 }
