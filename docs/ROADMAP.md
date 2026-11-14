@@ -5,10 +5,10 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 
 | Phase | Scope | Owner | Estimate | Status |
 |---|---|---|---|---|
-| R0 Setup | Docs layout, ADRs, design doc, workspace, lints, structure check, CI | master | 1 session | 🔄 docs done, workspace next |
-| R1 Engine slice | Empty island, spring morph, frame clock, hit testing, motion log, demo driver; measured on console at 240 Hz | lane `engine` | 4 to 6 sessions | ⬜ waiting on R0 workspace |
-| R2 Services | `plith-audio`, `plith-media`, `plith-system`, headless, each with a hardware probe | lane `services` | 3 to 5 sessions | ⬜ waiting on R0 workspace |
-| R3 Visual direction | Resting pill, tab bar, four pages, type, icons (praxvon-direction, impeccable) | master + Berke | 2 sessions | ⬜ waiting on R0 workspace |
+| R0 Setup | Docs layout, ADRs, design doc, workspace, lints, structure check, CI | master | 1 session | ✅ done, 1 session (CI green on 0155a6d) |
+| R1 Engine slice | Empty island, spring morph, frame clock, hit testing, motion log, demo driver; measured on console at 240 Hz | lane `engine` | 4 to 6 sessions | 🔄 lane open 2026-11-14 |
+| R2 Services | `plith-audio`, `plith-media`, `plith-system`, headless, each with a hardware probe | lane `services` | 3 to 5 sessions | 🔄 lane open 2026-11-14 |
+| R3 Visual direction | Resting pill, tab bar, four pages, type, icons (praxvon-direction, impeccable) | master + Berke | 2 sessions | ⬜ next |
 | R4 Pages | Tab bar, audio, media, system on the engine | ⬜ | 4 sessions | ⬜ waiting on R1, R2, R3 |
 | R5 Shelf | In-process OLE drag in and out | ⬜ | 2 sessions | ⬜ waiting on R4 |
 | R6 OSD helper | UIAccess band window, pipe, signing | ⬜ | 2 to 3 sessions | ⬜ waiting on R1 |
