@@ -26,3 +26,7 @@ windows = { workspace = true, features = [
 
 [lints]
 workspace = true
+
+[[example]]
+name = "verify_system_writes"
+path = "examples/verify_writes.rs"

@@ -27,3 +27,7 @@ windows = { workspace = true, features = [
 
 [lints]
 workspace = true
+
+[[example]]
+name = "verify_audio_writes"
+path = "examples/verify_writes.rs"

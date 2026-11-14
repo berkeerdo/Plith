@@ -12,6 +12,7 @@ pub(crate) mod notify;
 mod pin;
 #[cfg(windows)]
 mod policy;
+mod roles;
 #[cfg(windows)]
 mod service;
 #[cfg(test)]
@@ -19,6 +20,9 @@ mod tests;
 mod write;
 
 pub use pin::resolve_target;
+pub use roles::DefaultRoles;
+#[cfg(windows)]
+pub use roles::read_default_roles;
 #[cfg(windows)]
 pub use service::{EndpointService, Status};
 #[cfg(windows)]

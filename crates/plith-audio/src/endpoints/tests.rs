@@ -98,3 +98,25 @@ fn only_console_and_multimedia_are_written() {
     assert_eq!(DEFAULT_ROLES, [eConsole, eMultimedia]);
     assert!(!DEFAULT_ROLES.contains(&eCommunications));
 }
+
+#[test]
+fn default_roles_all_are_ignores_case_and_needs_both() {
+    let both = DefaultRoles {
+        console: Some("{ABC}".into()),
+        multimedia: Some("{abc}".into()),
+    };
+    assert!(both.all_are("{aBc}"));
+    assert!(both.agree());
+    let split = DefaultRoles {
+        console: Some("{abc}".into()),
+        multimedia: Some("{def}".into()),
+    };
+    assert!(!split.all_are("{abc}"));
+    assert!(!split.agree());
+    let missing = DefaultRoles {
+        console: Some("{abc}".into()),
+        multimedia: None,
+    };
+    assert!(!missing.all_are("{abc}"));
+    assert!(!missing.agree());
+}
