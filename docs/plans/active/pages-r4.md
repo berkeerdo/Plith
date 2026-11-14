@@ -96,9 +96,9 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
 **Files:**
 - Create: `docs/plans/active/pages-r4-adr-drafts.md`
 
-- [ ] **Step 1:** Write the P5 draft from the section above (decision, the comparison table,
+- [x] **Step 1:** Write the P5 draft from the section above (decision, the comparison table,
   consequences: display list types in core, page bitmaps, live nodes, ambient tick at `hz / 4`).
-- [ ] **Step 2:** Commit `docs(pages): draft the UI layer ADR`; push the branch.
+- [x] **Step 2:** Commit `docs(pages): draft the UI layer ADR`; push the branch.
 
 ### Task 2: Generic UI wake (L11)
 
@@ -566,4 +566,6 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
 
 ## Progress log
 
-- 2026-11-15: plan written, waiting on the master's approval and answers.
+- 2026-11-15: plan written; the master approved Tasks 1 to 8 and answered Q4 to Q9, Q12, Q13;
+  Q1, Q2, Q3, Q10, Q11 go to Berke and gate Task 9 onward. Page radius stays 40 until Q1.
+- 2026-11-15: Task 1 done (P5 draft in `pages-r4-adr-drafts.md`).
