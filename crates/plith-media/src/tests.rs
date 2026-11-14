@@ -1,9 +1,10 @@
 //! Unit tests for the pure layer: timeline, snapshot assembly and the generation counter.
 
-use std::time::{Duration, SystemTime};
+use std::sync::Arc;
+use std::time::{Duration, Instant, SystemTime};
 
-use crate::coalesce::Generation;
-use crate::snapshot::{MediaSnapshot, PlaybackFacts, TrackFacts};
+use crate::coalesce::{Generation, expired};
+use crate::snapshot::{MediaSnapshot, PlaybackFacts, TrackFacts, keep_last_good};
 use crate::timeline::{
     Timeline, datetime_to_system_time, normalize, position_at, ticks_to_duration,
 };
@@ -93,7 +94,7 @@ fn track() -> TrackFacts {
     TrackFacts {
         title: "Song".into(),
         artist: "Band".into(),
-        thumbnail: Some(vec![1, 2, 3]),
+        thumbnail: Some(Arc::from(vec![1, 2, 3])),
     }
 }
 
@@ -113,7 +114,7 @@ fn assemble_combines_all_reads() {
     assert!(got.has_session);
     assert_eq!(got.source_id, "app.id");
     assert_eq!(got.title, "Song");
-    assert_eq!(got.thumbnail, Some(vec![1, 2, 3]));
+    assert_eq!(got.thumbnail.as_deref(), Some(&[1u8, 2, 3][..]));
     assert!(got.playing && got.can_seek && got.can_next && !got.can_prev);
     assert_eq!(got.timeline, Some(t));
 }
@@ -148,4 +149,30 @@ fn stale_read_is_detected() {
     generation.bump();
     assert!(!generation.is_current(seen));
     assert!(generation.is_current(generation.current()));
+}
+
+#[test]
+fn failed_read_keeps_previous_value() {
+    assert_eq!(keep_last_good(Some(track()), None), Some(track()));
+    assert_eq!(keep_last_good(Some(1), Some(2)), Some(2));
+    assert_eq!(keep_last_good::<u8>(None, None), None);
+}
+
+#[test]
+fn snapshot_clone_shares_the_thumbnail() {
+    let snapshot = MediaSnapshot::assemble("app.id", Some(track()), None, None);
+    let copy = snapshot.clone();
+    let (a, b) = (
+        snapshot.thumbnail.expect("art"),
+        copy.thumbnail.expect("art"),
+    );
+    assert!(Arc::ptr_eq(&a, &b));
+}
+
+#[test]
+fn command_past_its_deadline_is_expired() {
+    let now = Instant::now();
+    assert!(!expired(now + secs(1), now));
+    assert!(!expired(now, now));
+    assert!(expired(now, now + secs(1)));
 }

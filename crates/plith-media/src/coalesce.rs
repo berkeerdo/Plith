@@ -28,3 +28,8 @@ impl Generation {
         self.current() == seen
     }
 }
+
+/// Whether a queued request outlived its caller's deadline and must be dropped, not run late.
+pub(crate) fn expired(deadline: std::time::Instant, now: std::time::Instant) -> bool {
+    now > deadline
+}

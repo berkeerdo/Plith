@@ -9,7 +9,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 use windows::Foundation::TypedEventHandler;
 use windows::Media::Control::{
@@ -18,9 +18,11 @@ use windows::Media::Control::{
 };
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
-use crate::coalesce::Generation;
+use crate::coalesce::{Generation, expired};
 use crate::session::{self, Command};
-use crate::snapshot::{MediaSnapshot, PlaybackFacts, SessionInfo, Status, TrackFacts};
+use crate::snapshot::{
+    MediaSnapshot, PlaybackFacts, SessionInfo, Status, TrackFacts, keep_last_good,
+};
 use crate::timeline::Timeline;
 
 /// How long a caller waits for the worker to answer a command or a session list.
@@ -62,14 +64,20 @@ enum Msg {
     Playback,
     /// The position moved (about once a second on some sources).
     Timeline,
-    Sessions(Sender<Vec<SessionInfo>>),
-    Command(Command, Sender<bool>),
+    /// A session list request; dropped unanswered once its caller's deadline passed.
+    Sessions(Sender<Vec<SessionInfo>>, Instant),
+    /// A transport command; dropped (answered `false`) once its caller's deadline passed, so one
+    /// that waited behind a slow read is never executed late.
+    Command(Command, Sender<bool>, Instant),
     Stop,
 }
 
 /// Which reads a batch of messages calls for.
 #[derive(Default)]
-#[allow(clippy::struct_excessive_bools)] // independent flags that mirror SMTC
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags that mirror SMTC"
+)]
 struct Pending {
     session: bool,
     properties: bool,
@@ -126,16 +134,26 @@ impl Worker {
             return;
         };
         let (shared, tx) = (&self.shared, &self.tx);
-        let tokens = (|| {
-            Ok::<_, windows::core::Error>([
-                session.MediaPropertiesChanged(&poster(shared, tx, || Msg::Properties))?,
-                session.PlaybackInfoChanged(&poster(shared, tx, || Msg::Playback))?,
-                session.TimelinePropertiesChanged(&poster(shared, tx, || Msg::Timeline))?,
-            ])
-        })();
-        if let Ok(tokens) = tokens {
-            self.attached = Some(Attached { session, tokens });
-        }
+        // A failure part way removes what was registered so far: no leaked handler tokens.
+        let Ok(props) = session.MediaPropertiesChanged(&poster(shared, tx, || Msg::Properties))
+        else {
+            return;
+        };
+        let Ok(playback) = session.PlaybackInfoChanged(&poster(shared, tx, || Msg::Playback))
+        else {
+            let _ = session.RemoveMediaPropertiesChanged(props);
+            return;
+        };
+        let Ok(timeline) = session.TimelinePropertiesChanged(&poster(shared, tx, || Msg::Timeline))
+        else {
+            let _ = session.RemoveMediaPropertiesChanged(props);
+            let _ = session.RemovePlaybackInfoChanged(playback);
+            return;
+        };
+        self.attached = Some(Attached {
+            session,
+            tokens: [props, playback, timeline],
+        });
     }
 
     fn detach_current(&mut self) {
@@ -151,14 +169,17 @@ impl Worker {
             Msg::Playback => pending.playback = true,
             Msg::Timeline => pending.timeline = true,
             Msg::Stop => pending.stop = true,
-            Msg::Sessions(reply) => {
-                let _ = reply.send(session::list_sessions(&self.manager));
+            Msg::Sessions(reply, deadline) => {
+                if !expired(deadline, Instant::now()) {
+                    let _ = reply.send(session::list_sessions(&self.manager));
+                }
             }
-            Msg::Command(command, reply) => {
-                let done = self
-                    .attached
-                    .as_ref()
-                    .is_some_and(|a| session::run_command(&a.session, command));
+            Msg::Command(command, reply, deadline) => {
+                let done = !expired(deadline, Instant::now())
+                    && self
+                        .attached
+                        .as_ref()
+                        .is_some_and(|a| session::run_command(&a.session, command));
                 let _ = reply.send(done);
             }
         }
@@ -176,11 +197,13 @@ impl Worker {
         let fresh = pending.session;
         if let Some(attached) = &self.attached {
             let session = &attached.session;
+            // A failed or timed-out read keeps the last good value (a new session starts empty).
             if fresh || pending.properties {
-                self.track = session::read_track(session);
+                self.track = keep_last_good(self.track.take(), session::read_track(session));
             }
             if fresh || pending.properties || pending.playback {
-                self.playback = session::read_playback(session);
+                self.playback =
+                    keep_last_good(self.playback.take(), session::read_playback(session));
             }
             // Position follows any change: a pause or seek moves it without a timeline event.
             self.timeline = session::read_timeline(session);
@@ -407,15 +430,16 @@ impl MediaService {
     }
 
     fn command(&self, command: Command) -> bool {
-        self.ask(|reply| Msg::Command(command, reply))
+        self.ask(|reply, deadline| Msg::Command(command, reply, deadline))
             .unwrap_or(false)
     }
 
     /// Sends a request that carries a reply channel and waits for the answer.
-    fn ask<T>(&self, build: impl FnOnce(Sender<T>) -> Msg) -> Option<T> {
+    /// The request carries the caller's deadline, so the worker drops it if it queued too long.
+    fn ask<T>(&self, build: impl FnOnce(Sender<T>, Instant) -> Msg) -> Option<T> {
         let tx = locked(&self.control).clone()?;
         let (reply_tx, reply_rx) = channel();
-        tx.send(build(reply_tx)).ok()?;
+        tx.send(build(reply_tx, Instant::now() + ASK_CAP)).ok()?;
         reply_rx.recv_timeout(ASK_CAP).ok()
     }
 }

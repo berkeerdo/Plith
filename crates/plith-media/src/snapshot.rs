@@ -1,5 +1,7 @@
 //! The data model: one whole reading of the media state, assembled from independent reads.
 
+use std::sync::Arc;
+
 use crate::timeline::Timeline;
 
 /// Whether SMTC can be used right now.
@@ -19,12 +21,15 @@ pub struct TrackFacts {
     /// Artist; empty when the source gives none.
     pub artist: String,
     /// Encoded artwork bytes (PNG or JPEG as the source supplies them); `None` when absent.
-    pub thumbnail: Option<Vec<u8>>,
+    pub thumbnail: Option<Arc<[u8]>>,
 }
 
 /// Playback state and what the source accepts.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
-#[allow(clippy::struct_excessive_bools)] // independent flags that mirror SMTC
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags that mirror SMTC"
+)]
 pub struct PlaybackFacts {
     /// Whether the session reports Playing.
     pub playing: bool,
@@ -47,9 +52,18 @@ pub struct SessionInfo {
     pub playing: bool,
 }
 
+/// A failed or timed-out read must not erase a good value: keeps `previous` unless `read` has one.
+#[must_use]
+pub fn keep_last_good<T>(previous: Option<T>, read: Option<T>) -> Option<T> {
+    read.or(previous)
+}
+
 /// Everything known about the current media session at one moment.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
-#[allow(clippy::struct_excessive_bools)] // independent flags that mirror SMTC
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent flags that mirror SMTC"
+)]
 pub struct MediaSnapshot {
     /// Whether there is a current session at all.
     pub has_session: bool,
@@ -60,7 +74,7 @@ pub struct MediaSnapshot {
     /// Artist.
     pub artist: String,
     /// Encoded artwork bytes.
-    pub thumbnail: Option<Vec<u8>>,
+    pub thumbnail: Option<Arc<[u8]>>,
     /// Whether the session reports Playing.
     pub playing: bool,
     /// Whether a seek is both accepted by the source and meaningful (there is a timeline).

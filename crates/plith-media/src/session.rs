@@ -2,6 +2,7 @@
 //! returns `None` or `false`, never panics. Async `WinRT` operations are waited on here with a
 //! cap, and only ever from the service's worker thread.
 
+use std::sync::Arc;
 use std::sync::mpsc::channel;
 use std::time::{Duration, SystemTime};
 
@@ -20,6 +21,9 @@ use crate::timeline::{Timeline, datetime_to_system_time, normalize, ticks_to_dur
 
 /// How long a worker waits for any one `WinRT` operation.
 pub(crate) const OP_CAP: Duration = Duration::from_secs(2);
+
+/// Cap per session when listing all sessions, so a few slow ones cannot blank the whole list.
+const LIST_CAP: Duration = Duration::from_millis(500);
 
 /// Largest artwork read; anything bigger is dropped rather than copied.
 const MAX_THUMBNAIL_BYTES: u64 = 8 * 1024 * 1024;
@@ -104,7 +108,7 @@ pub(crate) fn read_track(session: &Session) -> Option<TrackFacts> {
     })
 }
 
-fn read_thumbnail(reference: &IRandomAccessStreamReference) -> Option<Vec<u8>> {
+fn read_thumbnail(reference: &IRandomAccessStreamReference) -> Option<Arc<[u8]>> {
     let stream = wait(&reference.OpenReadAsync().ok()?, OP_CAP)?;
     let size = stream.Size().ok()?;
     if size == 0 || size > MAX_THUMBNAIL_BYTES {
@@ -115,7 +119,7 @@ fn read_thumbnail(reference: &IRandomAccessStreamReference) -> Option<Vec<u8>> {
     let loaded = wait(&reader.LoadAsync(size).ok()?, OP_CAP)?;
     let mut bytes = vec![0u8; usize::try_from(loaded).ok()?];
     reader.ReadBytes(&mut bytes).ok()?;
-    (!bytes.is_empty()).then_some(bytes)
+    (!bytes.is_empty()).then(|| Arc::from(bytes))
 }
 
 /// Every session with its source, title and playing state.
@@ -137,7 +141,7 @@ fn read_track_title(session: &Session) -> String {
     session
         .TryGetMediaPropertiesAsync()
         .ok()
-        .and_then(|op| wait(&op, OP_CAP))
+        .and_then(|op| wait(&op, LIST_CAP))
         .and_then(|props| props.Title().ok())
         .map(|title| title.to_string())
         .unwrap_or_default()
