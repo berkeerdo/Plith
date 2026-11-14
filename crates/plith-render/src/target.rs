@@ -1,12 +1,13 @@
 //! The DirectComposition swap chain bound to the notch window.
 
 use plith_core::layout::SurfaceLayout;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{E_INVALIDARG, HWND};
 use windows::Win32::Graphics::Direct2D::Common::{
     D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_TARGET, D2D1_BITMAP_PROPERTIES1,
+    ID2D1Image,
 };
 use windows::Win32::Graphics::DirectComposition::{IDCompositionTarget, IDCompositionVisual};
 use windows::Win32::Graphics::Dxgi::Common::{
@@ -16,7 +17,7 @@ use windows::Win32::Graphics::Dxgi::{
     DXGI_PRESENT, DXGI_SCALING_STRETCH, DXGI_SWAP_CHAIN_DESC1, DXGI_SWAP_EFFECT_FLIP_SEQUENTIAL,
     DXGI_USAGE_RENDER_TARGET_OUTPUT, IDXGIDevice1, IDXGISurface, IDXGISwapChain1,
 };
-use windows::core::{Interface, Result};
+use windows::core::{Error, Interface, Result};
 
 use crate::device::Gpu;
 
@@ -61,9 +62,15 @@ impl CompositionTarget {
     /// # Errors
     /// Returns the first failing Windows call.
     pub fn new(gpu: &Gpu, hwnd: HWND, layout: &SurfaceLayout) -> Result<Self> {
+        let (Ok(width @ 1..), Ok(height @ 1..)) = (
+            u32::try_from(layout.surface.width),
+            u32::try_from(layout.surface.height),
+        ) else {
+            return Err(Error::from(E_INVALIDARG));
+        };
         let desc = DXGI_SWAP_CHAIN_DESC1 {
-            Width: u32::try_from(layout.surface.width).unwrap_or(1),
-            Height: u32::try_from(layout.surface.height).unwrap_or(1),
+            Width: width,
+            Height: height,
             Format: DXGI_FORMAT_B8G8R8A8_UNORM,
             SampleDesc: DXGI_SAMPLE_DESC {
                 Count: 1,
@@ -100,6 +107,13 @@ impl CompositionTarget {
             _target: target,
             _visual: visual,
         })
+    }
+
+    /// Drops the context's reference to the back buffer. Call it before `ResizeBuffers` or
+    /// before recreating the device: a swap chain cannot resize while a target still holds it.
+    pub fn release_target(&self, gpu: &Gpu) {
+        // SAFETY: clearing the target of a live context is always valid.
+        unsafe { gpu.context().SetTarget(None::<&ID2D1Image>) };
     }
 
     /// Presents the back buffer, waiting for one vertical blank.

@@ -6,7 +6,7 @@ use plith_core::shapes::{FILL, PLACEHOLDER};
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_LAYER_OPTIONS1_NONE, D2D1_LAYER_PARAMETERS1,
-    D2D1_ROUNDED_RECT, ID2D1DeviceContext, ID2D1Layer, ID2D1SolidColorBrush,
+    D2D1_ROUNDED_RECT, ID2D1DeviceContext, ID2D1Geometry, ID2D1Layer, ID2D1SolidColorBrush,
 };
 use windows::core::Result;
 use windows_numerics::Matrix3x2;
@@ -78,6 +78,12 @@ impl Painter {
         let shape = frame.shape;
         let island = rounded(ox, oy, shape.width, shape.height, shape.radius);
         let clear = color([0.0; 4], 1.0);
+        // Built before BeginDraw so a failure here cannot leave the context mid-draw.
+        let clip = if frame.clip {
+            Some(Self::clip_geometry(ctx, &island)?)
+        } else {
+            None
+        };
         // SAFETY: draw calls between BeginDraw and EndDraw on a live context with a target.
         unsafe {
             ctx.BeginDraw();
@@ -86,8 +92,8 @@ impl Painter {
             self.brush.SetColor(&raw const fill);
             ctx.FillRoundedRectangle(&raw const island, &self.brush);
         }
-        if frame.clip {
-            Self::push_clip(ctx, &island)?;
+        if let Some(geometry) = clip.clone() {
+            Self::push_clip(ctx, geometry);
         }
         for layer in &frame.pages {
             let x = ox + (shape.width - PLACEHOLDER.width) / 2.0 + layer.offset;
@@ -107,20 +113,30 @@ impl Painter {
         }
         // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
         unsafe {
-            if frame.clip {
+            if clip.is_some() {
                 ctx.PopLayer();
             }
             ctx.EndDraw(None, None)
         }
     }
 
-    /// Pushes a layer clipped to the island geometry.
-    fn push_clip(ctx: &ID2D1DeviceContext, island: &D2D1_ROUNDED_RECT) -> Result<()> {
-        // SAFETY: the factory and geometry are live; the geometry is moved into the layer
-        // parameters and released by the explicit drop below, after PushLayer took its own ref.
+    /// Builds the island's rounded-rect geometry.
+    fn clip_geometry(
+        ctx: &ID2D1DeviceContext,
+        island: &D2D1_ROUNDED_RECT,
+    ) -> Result<ID2D1Geometry> {
+        // SAFETY: the factory is live and `island` is valid for the call.
         unsafe {
             let factory = ctx.GetFactory()?;
-            let geometry = factory.CreateRoundedRectangleGeometry(island)?;
+            Ok(factory.CreateRoundedRectangleGeometry(island)?.into())
+        }
+    }
+
+    /// Pushes a layer clipped to `geometry`.
+    fn push_clip(ctx: &ID2D1DeviceContext, geometry: ID2D1Geometry) {
+        // SAFETY: the geometry is moved into the layer parameters and released by the explicit
+        // drop below, after PushLayer took its own reference.
+        unsafe {
             let params = D2D1_LAYER_PARAMETERS1 {
                 contentBounds: D2D_RECT_F {
                     left: f32::NEG_INFINITY,
@@ -128,7 +144,7 @@ impl Painter {
                     right: f32::INFINITY,
                     bottom: f32::INFINITY,
                 },
-                geometricMask: std::mem::ManuallyDrop::new(Some(geometry.into())),
+                geometricMask: std::mem::ManuallyDrop::new(Some(geometry)),
                 maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
                 maskTransform: Matrix3x2::identity(),
                 opacity: 1.0,
@@ -138,6 +154,5 @@ impl Painter {
             ctx.PushLayer(&raw const params, None::<&ID2D1Layer>);
             drop(std::mem::ManuallyDrop::into_inner(params.geometricMask));
         }
-        Ok(())
     }
 }
