@@ -364,7 +364,7 @@ Built-ins (pinned):
   - `plith-core::gpu_health::GpuHealth`: `record(&mut self, ok: bool) -> GpuAction` with
     `GpuAction { None, Recreate, FallBackToWarp }`; failure count resets after 600 good frames.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 // crates/plith-render/tests/paint.rs (runs on WARP, CI-safe)
