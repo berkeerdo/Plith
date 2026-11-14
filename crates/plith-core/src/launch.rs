@@ -17,6 +17,18 @@ pub enum ClockRequest {
     Timer,
 }
 
+/// Which hit-testing candidate the shell uses (a spike, see the spikes doc).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum HitMode {
+    /// `SetWindowRgn` on the single window.
+    #[default]
+    Region,
+    /// A second, input-only window under the visual one.
+    Split,
+    /// A layered near-transparent alpha mask window.
+    Mask,
+}
+
 /// Parsed launch options.
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Launch {
@@ -28,6 +40,8 @@ pub struct Launch {
     pub clock: ClockRequest,
     /// Exit once the demo has finished.
     pub exit_after_demo: bool,
+    /// Hit-testing candidate.
+    pub hit: HitMode,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -78,6 +92,15 @@ fn parse_clock(value: &str) -> Option<ClockRequest> {
     }
 }
 
+fn parse_hit(value: &str) -> Option<HitMode> {
+    match value {
+        "region" => Some(HitMode::Region),
+        "split" => Some(HitMode::Split),
+        "mask" => Some(HitMode::Mask),
+        _ => None,
+    }
+}
+
 impl Launch {
     /// Parses the arguments, without the program name.
     ///
@@ -110,6 +133,10 @@ impl Launch {
                 "--clock" => {
                     let text = value()?;
                     launch.clock = parse_clock(&text).ok_or_else(|| bad(text))?;
+                }
+                "--hit" => {
+                    let text = value()?;
+                    launch.hit = parse_hit(&text).ok_or_else(|| bad(text))?;
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

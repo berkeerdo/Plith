@@ -92,3 +92,27 @@ fn errors_display_the_offending_text() {
     let text = LaunchError::UnknownFlag("--bogus".to_string()).to_string();
     assert!(text.contains("--bogus"));
 }
+
+#[test]
+fn hit_defaults_to_region() {
+    assert_eq!(parse(&[]).unwrap().hit, HitMode::Region);
+}
+
+#[test]
+fn hit_parses_all_modes() {
+    assert_eq!(parse(&["--hit", "region"]).unwrap().hit, HitMode::Region);
+    assert_eq!(parse(&["--hit", "split"]).unwrap().hit, HitMode::Split);
+    assert_eq!(parse(&["--hit", "mask"]).unwrap().hit, HitMode::Mask);
+}
+
+#[test]
+fn hit_rejects_unknown_and_missing_values() {
+    assert!(matches!(
+        parse(&["--hit", "wide"]),
+        Err(LaunchError::BadValue { .. })
+    ));
+    assert!(matches!(
+        parse(&["--hit"]),
+        Err(LaunchError::MissingValue(_))
+    ));
+}
