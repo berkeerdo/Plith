@@ -4,7 +4,7 @@
 mod clocks;
 mod run;
 
-pub use run::{LoopParts, LoopShared, run_loop};
+pub use run::{LoopParts, LoopShared, run_guarded, run_loop};
 
 use crate::clock::{open_clock, seconds_since};
 use crate::gpu_paint::GpuPaint;
@@ -18,8 +18,8 @@ use plith_core::motion::MotionReport;
 use plith_core::scene::{SceneMailbox, ShapeFrame};
 use plith_core::tuning::TuningSet;
 use std::fmt;
-use std::sync::Arc;
 use std::sync::mpsc::{self, SyncSender};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::Instant;
 use windows::Win32::Foundation::{HANDLE, HWND};
@@ -115,16 +115,16 @@ impl std::error::Error for RenderError {}
 
 /// Owns the running render thread; dropping it stops and joins the thread.
 pub struct RenderHandle {
-    mailbox: Arc<SceneMailbox>,
-    shared: Arc<LoopShared>,
-    join: Option<JoinHandle<()>>,
+    stop: StopHandle,
 }
 
-/// Asks the render thread to stop without joining it; usable from any thread.
+/// Stops (and joins) the render thread; usable from any thread. All clones share one join
+/// handle, so only the first join does anything.
 #[derive(Clone)]
 pub struct StopHandle {
     mailbox: Arc<SceneMailbox>,
     shared: Arc<LoopShared>,
+    join: Arc<Mutex<Option<JoinHandle<()>>>>,
 }
 
 impl StopHandle {
@@ -133,22 +133,44 @@ impl StopHandle {
         self.shared.request_stop();
         self.mailbox.stop();
     }
+
+    /// Requests the stop and waits until the render thread has ended. A second call (from any
+    /// clone, or from the handle's drop) is a no-op once the first has finished.
+    ///
+    /// Deadlock invariant: the render thread only ever posts to the UI thread (`PostMessage`
+    /// through the shape poster and the quit handle, never `SendMessage`) and never takes this
+    /// lock, so a UI thread that joins here while the render thread reports a fatal error
+    /// cannot wait on itself.
+    pub fn stop_and_join(&self) {
+        self.request();
+        let mut slot = self.join.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(join) = slot.take() {
+            let _ = join.join();
+        }
+    }
 }
 
 impl RenderHandle {
-    /// A handle that can request the stop while another owner keeps the join.
+    fn new(mailbox: Arc<SceneMailbox>, shared: Arc<LoopShared>, join: JoinHandle<()>) -> Self {
+        Self {
+            stop: StopHandle {
+                mailbox,
+                shared,
+                join: Arc::new(Mutex::new(Some(join))),
+            },
+        }
+    }
+
+    /// A handle that can stop and join the thread while another owner keeps the render handle.
     #[must_use]
     pub fn stop_handle(&self) -> StopHandle {
-        StopHandle {
-            mailbox: Arc::clone(&self.mailbox),
-            shared: Arc::clone(&self.shared),
-        }
+        self.stop.clone()
     }
 
     /// Returns from any wait (mailbox or clock) so far; zero growth means parked.
     #[must_use]
     pub fn wake_count(&self) -> u64 {
-        self.shared.wakes()
+        self.stop.shared.wakes()
     }
 
     /// Stops the mailbox and joins the thread. A thread inside a clock wait ends after that
@@ -160,11 +182,7 @@ impl RenderHandle {
 
 impl Drop for RenderHandle {
     fn drop(&mut self) {
-        self.shared.request_stop();
-        self.mailbox.stop();
-        if let Some(join) = self.join.take() {
-            let _ = join.join();
-        }
+        self.stop.stop_and_join();
     }
 }
 
@@ -190,11 +208,7 @@ pub fn spawn(
     // so this receive is finite. On failure the thread has already returned: join it without
     // stopping the caller's mailbox.
     match ready_rx.recv() {
-        Ok(Ok(())) => Ok(RenderHandle {
-            mailbox,
-            shared,
-            join: Some(join),
-        }),
+        Ok(Ok(())) => Ok(RenderHandle::new(mailbox, shared, join)),
         Ok(Err(error)) => {
             let _ = join.join();
             Err(RenderError::Init(error))
@@ -236,14 +250,21 @@ fn render_main(
                 dwm: crate::dwm::read,
                 tune: config.tune,
             };
-            run_loop(parts, mailbox, shared, sinks);
+            // The revert runs before a panic is reported, as before any other fatal exit.
+            run_guarded(parts, mailbox, shared, sinks, || revert_mmcss(mmcss));
         }
         Err(error) => {
             let _ = ready.send(Err(error));
+            revert_mmcss(mmcss);
         }
     }
+}
+
+/// Leaves the MMCSS task joined by [`join_mmcss`], if any.
+fn revert_mmcss(mmcss: Option<HANDLE>) {
     if let Some(handle) = mmcss {
-        // SAFETY: `handle` came from `AvSetMmThreadCharacteristicsW` on this thread.
+        // SAFETY: `handle` came from `AvSetMmThreadCharacteristicsW` on this thread and is
+        // reverted once, by the thread that joined the task.
         let _ = unsafe { AvRevertMmThreadCharacteristics(handle) };
     }
 }

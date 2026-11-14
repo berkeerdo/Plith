@@ -6,6 +6,7 @@ use crate::window::state::Inner;
 use plith_core::geometry::IslandShape;
 use plith_core::shapes::REST;
 use std::time::Instant;
+use windows::Win32::Foundation::E_FAIL;
 use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, HGDIOBJ, SetWindowRgn};
 
 /// Outset that keeps the anti-aliased edge of the island inside the hit region. At 1 px the
@@ -15,17 +16,19 @@ const OUTSET_PX: i32 = 3;
 
 fn set_region(inner: &Inner, shape: IslandShape) -> windows::core::Result<()> {
     let r = region_px(shape, &inner.layout, OUTSET_PX);
-    // SAFETY: plain GDI call returning a new region handle.
+    // SAFETY: every argument is a plain integer, so no pointer is read; the call returns a new region that we own until SetWindowRgn takes it.
     let rgn = unsafe { CreateRoundRectRgn(r.left, r.top, r.right, r.bottom, r.ellipse, r.ellipse) };
     if rgn.is_invalid() {
-        return Err(windows::core::Error::from_thread());
+        // CreateRoundRectRgn documents no GetLastError, so the thread error may be stale.
+        return Err(windows::core::Error::from(E_FAIL));
     }
     let hwnd = hwnd_of(inner.visual.get());
     // SAFETY: `hwnd` is a window of this thread. On success the system owns `rgn`.
     if unsafe { SetWindowRgn(hwnd, Some(rgn), false) } == 0 {
         // SAFETY: the call failed, so we still own `rgn` and delete it once.
         let _ = unsafe { DeleteObject(HGDIOBJ(rgn.0)) };
-        return Err(windows::core::Error::from_thread());
+        // SetWindowRgn documents no GetLastError, so the thread error may be stale.
+        return Err(windows::core::Error::from(E_FAIL));
     }
     Ok(())
 }

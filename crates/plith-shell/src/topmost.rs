@@ -3,10 +3,10 @@
 //! `plith_core::topmost`).
 
 use crate::handles::hwnd_of;
-use crate::window::ShellEvent;
 use crate::window::state::{Inner, current};
+use crate::window::{ShellEvent, guard};
 use plith_core::topmost::TopmostAction;
-use windows::Win32::Foundation::HWND;
+use windows::Win32::Foundation::{E_FAIL, HWND};
 use windows::Win32::UI::Accessibility::{HWINEVENTHOOK, SetWinEventHook, UnhookWinEvent};
 use windows::Win32::UI::WindowsAndMessaging::{
     EVENT_SYSTEM_FOREGROUND, GW_HWNDPREV, GetClassNameW, GetWindow, HWND_TOPMOST, IsWindowVisible,
@@ -40,14 +40,15 @@ pub(crate) fn install_hook() -> windows::core::Result<isize> {
         )
     };
     if hook.0.is_null() {
-        return Err(windows::core::Error::from_thread());
+        // SetWinEventHook documents no GetLastError, so the thread error may be stale.
+        return Err(windows::core::Error::from(E_FAIL));
     }
     Ok(hook.0 as isize)
 }
 
 /// Removes the foreground hook.
 pub(crate) fn remove_hook(hook: isize) {
-    // SAFETY: `hook` came from `SetWinEventHook` on this thread and is removed once.
+    // SAFETY: `hook` came from `SetWinEventHook` on this thread and is removed once, so it is a live hook handle.
     let _ = unsafe { UnhookWinEvent(HWINEVENTHOOK(hook as *mut core::ffi::c_void)) };
 }
 
@@ -60,16 +61,18 @@ unsafe extern "system" fn foreground_proc(
     _thread: u32,
     _time: u32,
 ) {
-    if let Some(inner) = current() {
-        on_foreground(&inner, hwnd);
+    if let Some(inner) = current()
+        && let Err(message) = guard("foreground hook", || on_foreground(&inner, hwnd))
+    {
+        inner.fail(message);
     }
 }
 
 /// The window class of `hwnd`, or `?` when the window is gone.
 fn class_name(hwnd: HWND) -> String {
     let mut buffer = [0_u16; 256];
-    // SAFETY: the buffer is valid for the call and the length comes from its slice; a stale
-    // handle only makes the call return 0.
+    // SAFETY: the buffer is writable for the call and its length comes from the slice, so the
+    // API cannot write past it; a stale handle only makes the call return 0.
     let len = unsafe { GetClassNameW(hwnd, &mut buffer) };
     let name = String::from_utf16_lossy(&buffer[..usize::try_from(len).unwrap_or(0)]);
     if name.is_empty() {
@@ -85,10 +88,10 @@ fn find_culprit(inner: &Inner) -> Option<String> {
     let ours = inner.windows();
     let mut walker = hwnd_of(inner.visual.get());
     for _ in 0..CULPRIT_SEARCH_DEPTH {
-        // SAFETY: GetWindow accepts any handle value and fails for a stale one.
+        // SAFETY: GetWindow reads no memory of ours and accepts any handle value; a stale one fails.
         match unsafe { GetWindow(walker, GW_HWNDPREV) } {
             Ok(above) if !above.0.is_null() => {
-                // SAFETY: IsWindowVisible accepts any handle value.
+                // SAFETY: IsWindowVisible reads no memory of ours and accepts any handle value.
                 let visible = unsafe { IsWindowVisible(above) }.as_bool();
                 if visible && !ours.contains(&(above.0 as isize)) {
                     return Some(class_name(above));
@@ -175,6 +178,6 @@ pub(crate) fn on_timer(inner: &Inner) {
 
 /// Stops the retry timer.
 pub(crate) fn kill_timer(inner: &Inner) {
-    // SAFETY: the visual window belongs to this thread; failing because no timer runs is fine.
+    // SAFETY: the visual window belongs to this thread, so KillTimer's handle is valid; failing because no timer runs is fine.
     let _ = unsafe { KillTimer(Some(hwnd_of(inner.visual.get())), RETRY_TIMER_ID) };
 }

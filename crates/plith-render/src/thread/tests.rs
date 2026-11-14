@@ -1,5 +1,6 @@
 mod harness;
 
+use super::RenderHandle;
 use harness::*;
 use plith_core::clock_choice::ClockKind;
 use plith_core::geometry::IslandShape;
@@ -395,4 +396,43 @@ fn a_recovered_paint_repaints_the_same_frame() {
     assert_eq!(run.harness.total(), 0, "no clock wait for the repaint");
     assert_eq!(run.wakes(), 0);
     let _ = run.stop();
+}
+
+#[test]
+fn panic_in_paint_reaches_on_fatal() {
+    let run = start(Setup {
+        panic_at: Some(2),
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let message = run.fatal.recv_timeout(BOUND).expect("a fatal message");
+    assert!(message.contains("panicked"), "{message}");
+    assert!(message.contains("fake paint blew up"), "{message}");
+    run.done
+        .recv_timeout(BOUND)
+        .expect("the guarded loop returns instead of unwinding");
+    run.join
+        .join()
+        .expect("the panic did not escape the thread");
+}
+
+#[test]
+fn stop_and_join_is_idempotent() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    let Run {
+        mailbox,
+        shared,
+        done,
+        join,
+        ..
+    } = run;
+    let handle = RenderHandle::new(mailbox, shared, join);
+    let other = handle.stop_handle();
+    handle.stop_handle().stop_and_join();
+    done.recv_timeout(BOUND)
+        .expect("the thread has ended once the first join returned");
+    other.stop_and_join();
+    handle.shutdown();
 }

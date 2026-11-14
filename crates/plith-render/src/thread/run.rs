@@ -14,11 +14,13 @@ use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
 use plith_core::motion::{FramePhases, MotionKind, MotionStats};
 use plith_core::page::PageTurn;
+use plith_core::panic_text::payload_text;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
 use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::{Tuning, TuningSet};
 use plith_core::visible::{DrawnState, visibly_differs};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// State shared between the render loop and its owner: the wake counter and the stop flag.
@@ -119,6 +121,32 @@ fn content_target(scene: Scene) -> f64 {
 #[allow(clippy::cast_possible_truncation)]
 fn opacity_f32(value: f64) -> f32 {
     value.clamp(0.0, 1.0) as f32
+}
+
+/// Runs [`run_loop`] and turns a panic anywhere in it (the painter, a clock, a sink) into
+/// `on_fatal("render thread panicked: ...")`. `cleanup` runs after the loop ends, whichever way,
+/// and before a panic is reported.
+pub fn run_guarded<C, P, O, N, D>(
+    parts: LoopParts<P, O, N, D>,
+    mailbox: &SceneMailbox,
+    shared: &LoopShared,
+    sinks: &RenderSinks,
+    cleanup: impl FnOnce(),
+) where
+    C: FrameSource,
+    P: Paint,
+    O: FnMut(ClockKind) -> Result<C, ClockError>,
+    N: Fn() -> f64,
+    D: Fn() -> Option<DwmSample>,
+{
+    let outcome = catch_unwind(AssertUnwindSafe(|| {
+        run_loop(parts, mailbox, shared, sinks);
+    }));
+    cleanup();
+    if let Err(payload) = outcome {
+        let text = payload_text(&*payload);
+        (sinks.on_fatal)(format!("render thread panicked: {text}"));
+    }
 }
 
 /// Runs until the mailbox stops or a fatal error (reported through `sinks.on_fatal`).

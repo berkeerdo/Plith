@@ -137,7 +137,9 @@ impl Launch {
                 }
                 "--idle-check" => {
                     let text = value()?;
-                    launch.idle_check_secs = Some(text.parse().map_err(|_| bad(text))?);
+                    // Above 70 s the run would outlive the 75 s watchdog.
+                    launch.idle_check_secs =
+                        Some(parse_in(&text, 0..=70).ok_or_else(|| bad(text))?);
                 }
                 "--clock" => {
                     let text = value()?;

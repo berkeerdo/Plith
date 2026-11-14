@@ -1,6 +1,7 @@
 //! State shared by the window procedure, the `WinEvent` hook and the `Shell` handle. Everything
 //! here lives on the UI thread, so plain `Cell` and `RefCell` are enough.
 
+use crate::handles::hwnd_of;
 use crate::window::ShellEvent;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{ShapeCell, Suppression};
@@ -11,6 +12,8 @@ use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::time::Instant;
+use windows::Win32::Foundation::{LPARAM, WPARAM};
+use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, WM_CLOSE};
 
 /// Running cost of applying a shape to the hit candidate, in milliseconds.
 #[derive(Debug, Clone, Copy, Default)]
@@ -43,6 +46,8 @@ pub(crate) struct Inner {
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
     on_event: RefCell<Box<dyn FnMut(ShellEvent)>>,
+    on_panic: Box<dyn Fn(String)>,
+    panicked: Cell<bool>,
     queue: RefCell<VecDeque<ShellEvent>>,
     draining: Cell<bool>,
 }
@@ -52,6 +57,7 @@ impl Inner {
         layout: SurfaceLayout,
         shapes: Arc<ShapeCell>,
         on_event: Box<dyn FnMut(ShellEvent)>,
+        on_panic: Box<dyn Fn(String)>,
     ) -> Self {
         Self {
             layout,
@@ -66,6 +72,8 @@ impl Inner {
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),
             on_event: RefCell::new(on_event),
+            on_panic,
+            panicked: Cell::new(false),
             queue: RefCell::new(VecDeque::new()),
             draining: Cell::new(false),
         }
@@ -73,7 +81,11 @@ impl Inner {
 
     /// Delivers an event to the app callback. If the callback itself triggers another event
     /// (a nested message), the event is queued and delivered after the callback returns.
+    /// After a panic the app handler is never entered again.
     pub(crate) fn emit(&self, event: ShellEvent) {
+        if self.panicked.get() {
+            return;
+        }
         self.queue.borrow_mut().push_back(event);
         if self.draining.replace(true) {
             return;
@@ -84,6 +96,20 @@ impl Inner {
             (self.on_event.borrow_mut())(event);
         }
         self.draining.set(false);
+    }
+
+    /// Records a caught panic: reports it once through `on_panic`, mutes the app handler and
+    /// asks the window to close. Later panics are already covered by the first report.
+    pub(crate) fn fail(&self, message: String) {
+        if self.panicked.replace(true) {
+            return;
+        }
+        (self.on_panic)(message);
+        let visual = self.visual.get();
+        if visual != 0 {
+            // SAFETY: PostMessageW accepts any handle value; a stale one only makes it fail.
+            let _ = unsafe { PostMessageW(Some(hwnd_of(visual)), WM_CLOSE, WPARAM(0), LPARAM(0)) };
+        }
     }
 
     /// The window handles that belong to the shell.

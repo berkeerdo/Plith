@@ -11,8 +11,10 @@ use crate::poster::{QuitHandle, ShapePoster, WM_APP_SHAPE};
 use crate::suppress::{self, WM_APP_BAR};
 use crate::topmost;
 use plith_core::layout::{RectPx, SurfaceLayout};
+use plith_core::panic_text::payload_text;
 use plith_core::scene::{ShapeCell, Suppression};
 use state::{Inner, current, set_current};
+use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
@@ -55,18 +57,29 @@ pub enum ShellEvent {
     },
 }
 
+/// Runs `f` and turns a panic into `Err("<label> panicked: <payload>")`. The window procedure
+/// and the foreground hook run every callback through it: a panic must not unwind out of an
+/// `extern "system"` function.
+///
+/// # Errors
+/// Returns the formatted panic message when `f` panics.
+pub fn guard(label: &str, f: impl FnOnce()) -> Result<(), String> {
+    catch_unwind(AssertUnwindSafe(f))
+        .map_err(|payload| format!("{label} panicked: {}", payload_text(&*payload)))
+}
+
 /// Handle to the notch window. It lives on the UI thread and is not `Send`.
 pub struct Shell {
     inner: Rc<Inner>,
 }
 
 fn module() -> windows::core::Result<HINSTANCE> {
-    // SAFETY: a null name asks for the handle of the running executable.
+    // SAFETY: a null name asks for the handle of the running executable; no pointer is read.
     Ok(unsafe { GetModuleHandleW(None) }?.into())
 }
 
 fn register_class(name: PCWSTR, instance: HINSTANCE) -> windows::core::Result<()> {
-    // SAFETY: the stock arrow cursor needs no instance.
+    // SAFETY: the stock arrow cursor is a system resource, so a null instance and a predefined id are valid.
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW) }?;
     let class = WNDCLASSEXW {
         cbSize: u32::try_from(size_of::<WNDCLASSEXW>()).unwrap_or(0),
@@ -76,9 +89,9 @@ fn register_class(name: PCWSTR, instance: HINSTANCE) -> windows::core::Result<()
         lpszClassName: name,
         ..WNDCLASSEXW::default()
     };
-    // SAFETY: `class` is fully initialised and `name` is a static string.
+    // SAFETY: `class` is fully initialised (cbSize set) and `name` is a static NUL-terminated string that outlives the class.
     let atom = unsafe { RegisterClassExW(&raw const class) };
-    // SAFETY: reads the calling thread's last error.
+    // SAFETY: GetLastError has no preconditions; RegisterClassExW just failed on this thread.
     if atom == 0 && unsafe { GetLastError() } != ERROR_CLASS_ALREADY_EXISTS {
         return Err(windows::core::Error::from_thread());
     }
@@ -112,7 +125,7 @@ fn create_window(
 }
 
 fn place(hwnd: HWND, rect: RectPx) -> windows::core::Result<()> {
-    // SAFETY: `hwnd` was just created on this thread. This is the only placement ever made.
+    // SAFETY: `hwnd` was just created on this thread and is still alive; the call only repositions it.
     unsafe {
         SetWindowPos(
             hwnd,
@@ -142,7 +155,10 @@ fn build(inner: &Inner) -> windows::core::Result<()> {
 }
 
 impl Shell {
-    /// Creates the hidden notch window for `layout`. The window is not shown; call [`Shell::show`]. `on_event` runs on the UI thread only.
+    /// Creates the hidden notch window for `layout`. The window is not shown; call [`Shell::show`].
+    /// `on_event` runs on the UI thread only. `on_panic` is called once, on the UI thread, with
+    /// the message of a panic caught in a window callback; the shell then closes the window and
+    /// never enters `on_event` again.
     ///
     /// # Errors
     /// Returns the Win32 error of the first call that fails; nothing is left behind.
@@ -150,8 +166,9 @@ impl Shell {
         layout: SurfaceLayout,
         shapes: Arc<ShapeCell>,
         on_event: Box<dyn FnMut(ShellEvent)>,
+        on_panic: Box<dyn Fn(String)>,
     ) -> windows::core::Result<Self> {
-        let inner = Rc::new(Inner::new(layout, shapes, on_event));
+        let inner = Rc::new(Inner::new(layout, shapes, on_event, on_panic));
         set_current(Some(Rc::clone(&inner)));
         let shell = Self { inner };
         // On failure `shell` is dropped here, which destroys whatever was created.
@@ -168,7 +185,7 @@ impl Shell {
     /// Shows the shell window without activating it.
     pub fn show(&self) {
         for hwnd in self.inner.windows() {
-            // SAFETY: the handles are windows of this thread.
+            // SAFETY: the handles are live windows of this thread, so ShowWindow's window argument is valid.
             let _ = unsafe { ShowWindow(hwnd_of(hwnd), SW_SHOWNOACTIVATE) };
         }
     }
@@ -240,13 +257,13 @@ impl Drop for Shell {
 pub fn run_message_loop() -> i32 {
     let mut msg = MSG::default();
     loop {
-        // SAFETY: `msg` is a valid MSG for the call.
+        // SAFETY: `msg` is a valid, writable MSG for the whole call.
         let got = unsafe { GetMessageW(&raw mut msg, None, 0, 0) };
         match got.0 {
             0 => return i32::try_from(msg.wParam.0).unwrap_or(0),
             -1 => return -1,
             _ => {
-                // SAFETY: `msg` was filled by GetMessageW.
+                // SAFETY: `msg` was filled by GetMessageW just above and is not modified before dispatch.
                 unsafe {
                     let _ = TranslateMessage(&raw const msg);
                     DispatchMessageW(&raw const msg);
@@ -278,8 +295,17 @@ fn on_destroy(inner: &Inner, hwnd: HWND) {
         topmost::remove_hook(hook);
     }
     suppress::unregister(inner, hwnd);
+    // Runs only from WM_DESTROY, so a window was created and is being destroyed: a failed
+    // `CreateWindowExW` never reaches this call.
     // SAFETY: posts WM_QUIT to this thread's queue.
     unsafe { PostQuitMessage(0) };
+}
+
+/// Calls the default window procedure.
+fn default_proc(hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
+    // SAFETY: the four values are exactly what the system passed to our window procedure for
+    // this window, which is what DefWindowProcW requires.
+    unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
 }
 
 unsafe extern "system" fn window_proc(
@@ -289,39 +315,64 @@ unsafe extern "system" fn window_proc(
     lparam: LPARAM,
 ) -> LRESULT {
     let Some(inner) = current() else {
-        // SAFETY: forwards the unhandled message unchanged.
-        return unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) };
+        return default_proc(hwnd, msg, wparam, lparam);
     };
+    let mut handled = None;
+    let outcome = guard("window procedure", || {
+        handled = dispatch(&inner, hwnd, msg, wparam, lparam);
+    });
+    if let Err(message) = outcome {
+        inner.fail(message);
+        if msg == WM_DESTROY {
+            // The panic skipped `on_destroy`, so nothing else would end the message loop.
+            // SAFETY: posts WM_QUIT to this thread's queue.
+            unsafe { PostQuitMessage(1) };
+        }
+    }
+    // After a panic the message still gets its default handling (for WM_CLOSE: destruction).
+    handled.unwrap_or_else(|| default_proc(hwnd, msg, wparam, lparam))
+}
+
+/// Handles one message; `None` means the default procedure should see it too.
+fn dispatch(
+    inner: &Inner,
+    hwnd: HWND,
+    msg: u32,
+    wparam: WPARAM,
+    lparam: LPARAM,
+) -> Option<LRESULT> {
     let is_visual = hwnd.0 as isize == inner.visual.get();
     match msg {
-        WM_MOUSEACTIVATE => return LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0)),
+        WM_MOUSEACTIVATE => return Some(LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0))),
         WM_LBUTTONUP => {
-            on_click(&inner, lparam);
-            return LRESULT(0);
+            on_click(inner, lparam);
+            return Some(LRESULT(0));
         }
         WM_DPICHANGED | WM_DISPLAYCHANGE if is_visual => {
             inner.emit(ShellEvent::DisplayChanged);
-            return LRESULT(0);
+            return Some(LRESULT(0));
         }
         WM_APP_SHAPE if is_visual => {
             inner.pending.store(false, Ordering::Release);
-            apply_latest(&inner);
-            return LRESULT(0);
+            apply_latest(inner);
+            return Some(LRESULT(0));
         }
         WM_TIMER if is_visual && wparam.0 == topmost::RETRY_TIMER_ID => {
-            topmost::on_timer(&inner);
-            return LRESULT(0);
+            topmost::on_timer(inner);
+            return Some(LRESULT(0));
         }
-        WM_POWERBROADCAST if is_visual => suppress::on_power(&inner, wparam, lparam),
-        WM_WTSSESSION_CHANGE if is_visual => suppress::on_session(&inner, wparam),
-        WM_APP_BAR if is_visual => suppress::on_appbar(&inner, wparam, lparam),
+        WM_POWERBROADCAST if is_visual => suppress::on_power(inner, wparam, lparam),
+        WM_WTSSESSION_CHANGE if is_visual => suppress::on_session(inner, wparam),
+        WM_APP_BAR if is_visual => suppress::on_appbar(inner, wparam, lparam),
         WM_CLOSE if is_visual => inner.emit(ShellEvent::Closing),
         WM_DESTROY if is_visual => {
-            on_destroy(&inner, hwnd);
-            return LRESULT(0);
+            on_destroy(inner, hwnd);
+            return Some(LRESULT(0));
         }
         _ => {}
     }
-    // SAFETY: forwards the unhandled message unchanged.
-    unsafe { DefWindowProcW(hwnd, msg, wparam, lparam) }
+    None
 }
+
+#[cfg(test)]
+mod tests;

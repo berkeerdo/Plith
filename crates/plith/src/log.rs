@@ -1,9 +1,10 @@
 //! The log file `%LOCALAPPDATA%\Plith\plith.log`: one timestamped line per call, append only.
 
-use std::fs::{self, File, OpenOptions};
+use std::fs::{self, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
-use std::sync::{Mutex, PoisonError};
+use std::sync::mpsc::{self, Sender};
+use std::thread::{self, JoinHandle};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
@@ -64,9 +65,13 @@ fn default_path() -> io::Result<PathBuf> {
     Ok(PathBuf::from(folder).join("Plith").join("plith.log"))
 }
 
-/// An append-only log file that any thread may write to.
+/// An append-only log file that any thread may write to. A `plith-log` thread owns the file, so
+/// a caller (the render thread included) never waits on disk I/O. Dropping the log closes the
+/// channel and joins the writer: every line sent before the drop is on disk afterwards.
 pub struct LogFile {
-    file: Mutex<File>,
+    /// `Option` so `drop` can close the channel before joining. `Sender` is `Sync`.
+    lines: Option<Sender<String>>,
+    writer: Option<JoinHandle<()>>,
 }
 
 impl LogFile {
@@ -86,17 +91,39 @@ impl LogFile {
         if let Some(folder) = path.parent() {
             fs::create_dir_all(folder)?;
         }
-        let file = OpenOptions::new().create(true).append(true).open(path)?;
+        let mut file = OpenOptions::new().create(true).append(true).open(path)?;
+        let (lines, received) = mpsc::channel::<String>();
+        let writer = thread::Builder::new()
+            .name(String::from("plith-log"))
+            .spawn(move || {
+                for line in received {
+                    let _ = file.write_all(line.as_bytes());
+                }
+            })?;
         Ok(Self {
-            file: Mutex::new(file),
+            lines: Some(lines),
+            writer: Some(writer),
         })
     }
 
-    /// Appends `text` with the current local time in front. Write errors are ignored.
+    /// Queues `text` with the current local time in front (taken on the calling thread, so the
+    /// stamp is the moment of the call). Write errors are ignored, and so is a line sent after
+    /// the writer has ended.
     pub fn line(&self, text: &str) {
         let line = format!("{} {text}\n", format_stamp(now()));
-        let mut file = self.file.lock().unwrap_or_else(PoisonError::into_inner);
-        let _ = file.write_all(line.as_bytes());
+        if let Some(lines) = &self.lines {
+            let _ = lines.send(line);
+        }
+    }
+}
+
+impl Drop for LogFile {
+    fn drop(&mut self) {
+        // Closing the channel ends the writer's loop once it has written what is queued.
+        drop(self.lines.take());
+        if let Some(writer) = self.writer.take() {
+            let _ = writer.join();
+        }
     }
 }
 

@@ -11,11 +11,12 @@ use std::time::Instant;
 use windows::Win32::Foundation::{E_UNEXPECTED, HWND};
 use windows::core::{Error, Result};
 
-/// The objects rebuilt together on recovery.
+/// The objects rebuilt together on recovery. Fields drop in declaration order, so the painter
+/// (which holds views of the device) goes first and the device last.
 struct Stack {
-    gpu: Gpu,
-    target: CompositionTarget,
     painter: Painter,
+    target: CompositionTarget,
+    gpu: Gpu,
 }
 
 impl Stack {
@@ -36,9 +37,9 @@ impl Stack {
         let painter = Painter::new(gpu.context(), gpu.d2d_factory())?;
         Ok((
             Self {
-                gpu,
-                target,
                 painter,
+                target,
+                gpu,
             },
             notes,
         ))

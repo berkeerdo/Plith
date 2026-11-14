@@ -86,8 +86,9 @@ pub fn raised_line(foreground: &str, above: Option<&str>, immediate: bool) -> St
 /// The shell event handler. It runs on the UI thread and reads the current scene from the
 /// mailbox, so a demo step in between is not overwritten.
 ///
-/// On `Closing` (`WM_CLOSE`, before the window is destroyed) it sets `closing` and asks the
-/// render thread to stop, because that thread presents to the window being destroyed.
+/// On `Closing` (`WM_CLOSE`, before the window is destroyed) it sets `closing`, then stops and
+/// joins the render thread, because that thread presents to the window being destroyed: it has
+/// ended before `DefWindowProc` destroys the window.
 pub fn event_handler(
     mailbox: &Arc<SceneMailbox>,
     log: &Arc<LogFile>,
@@ -100,7 +101,7 @@ pub fn event_handler(
         ShellEvent::Closing => {
             closing.store(true, Ordering::Release);
             if let Some(stop) = stopper.get() {
-                stop.request();
+                stop.stop_and_join();
             }
         }
         ShellEvent::Click => {
@@ -159,6 +160,24 @@ pub fn sinks(
             quit.quit();
         }),
     }
+}
+
+/// What happens when a window callback panics: the payload is logged as `ui fatal`, the same
+/// `fatal` flag the render sink uses is set (so the exit code is 1) and the render thread is
+/// stopped and joined, because the shell is about to close the window. Runs on the UI thread.
+pub fn on_panic(
+    log: &Arc<LogFile>,
+    fatal: &Arc<AtomicBool>,
+    stopper: &Arc<OnceLock<StopHandle>>,
+) -> Box<dyn Fn(String)> {
+    let (log, fatal, stopper) = (Arc::clone(log), Arc::clone(fatal), Arc::clone(stopper));
+    Box::new(move |message| {
+        log.line(&format!("ui fatal: {message}"));
+        fatal.store(true, Ordering::Release);
+        if let Some(stop) = stopper.get() {
+            stop.stop_and_join();
+        }
+    })
 }
 
 /// Closes the window after [`WATCHDOG_SECS`] unless `stop` ends the wait first.

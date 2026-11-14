@@ -173,3 +173,18 @@ fn tune_flag_picks_a_preset_and_defaults_to_r1() {
         Err(LaunchError::MissingValue(_))
     ));
 }
+
+#[test]
+fn idle_check_over_70_is_rejected() {
+    assert_eq!(
+        parse(&["--idle-check", "70"]).unwrap().idle_check_secs,
+        Some(70)
+    );
+    assert_eq!(
+        parse(&["--idle-check", "71"]),
+        Err(LaunchError::BadValue {
+            flag: "--idle-check".to_string(),
+            value: "71".to_string()
+        })
+    );
+}
