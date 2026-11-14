@@ -377,13 +377,17 @@ impl MediaService {
     /// Stops the worker, which removes its event registrations itself, and waits for it. Safe
     /// to call twice.
     pub fn stop(&self) {
+        // The thread lock comes first: a concurrent `start` holds it until the worker is ready,
+        // so the `Stop` below always reaches a worker that exists (no join that waits forever).
+        let mut slot = locked(&self.thread);
         self.shared.stop.store(true, Ordering::Release);
         if let Some(tx) = locked(&self.control).take() {
             let _ = tx.send(Msg::Stop);
         }
-        if let Some(handle) = locked(&self.thread).take() {
+        if let Some(handle) = slot.take() {
             let _ = handle.join();
         }
+        drop(slot);
         self.shared.publish(&MediaSnapshot::none());
     }
 
