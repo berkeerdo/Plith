@@ -70,25 +70,25 @@ rendering, signing); ADR 0002 (integrity split), 0005 and 0008 (swap chain: 2 bu
 unset embeds `'false'` (dev runs and `cargo test` keep working). Output
 `target\release\plith-osd.exe`. Install path `C:\Program Files\Plith\osd\plith-osd.exe` (a new
 subfolder; the WPF files beside it are not touched).
-- [ ] **Step 1:** `plith-osd.manifest`: PerMonitorV2 DPI, Windows 10/11 `supportedOS`,
+- [x] **Step 1:** `plith-osd.manifest`: PerMonitorV2 DPI, Windows 10/11 `supportedOS`,
   `longPathAware`, no `trustInfo` (the linker writes it). `build.rs` emits
   `cargo:rerun-if-env-changed=PLITH_OSD_UIACCESS`, `cargo:rerun-if-changed=plith-osd.manifest`
   and, for MSVC targets only, `cargo:rustc-link-arg-bins=` `/MANIFEST:EMBED`,
   `/MANIFESTINPUT:<abs path>`, `/MANIFESTUAC:level='asInvoker' uiAccess='<true|false>'`.
-- [ ] **Step 2:** Verify: build twice (with and without the env), extract with
+- [x] **Step 2:** Verify: build twice (with and without the env), extract with
   `mt.exe -inputresource:target\release\plith-osd.exe;#1 -out:<job tmp>\m.xml`; expected
   `uiAccess="true"` and `"false"` respectively, PerMonitorV2 present in both.
-- [ ] **Step 3:** `build-osd.ps1`: sets the env, runs `cargo build --release -p plith-osd` through
+- [x] **Step 3:** `build-osd.ps1`: sets the env, runs `cargo build --release -p plith-osd` through
   heavy-run, finds the cert by subject (`CN=Plith Self-Signed`, valid, has private key; **fails**
   instead of creating one), finds signtool as `sign-plith.ps1` does, signs with
   `/fd SHA256 /tr http://timestamp.digicert.com /td SHA256`, then checks
   `Get-AuthenticodeSignature` is `Valid`. Prints the exe path and thumbprint.
-- [ ] **Step 4:** `install-osd.ps1 [-Yes]`: without `-Yes` prints the copy it would make and
+- [x] **Step 4:** `install-osd.ps1 [-Yes]`: without `-Yes` prints the copy it would make and
   exits 0. With `-Yes` (run under `sudo`, only after the master's yes): stops a running
   `plith-osd` (by process name, from that exact path only), copies the exe, re-checks the
   signature at the destination. `-Uninstall -Yes` removes only `...\Plith\osd\plith-osd.exe` and
   the empty `osd` folder (literal paths).
-- [ ] **Step 5:** Run `build-osd.ps1` (no install). Five checks green, commit
+- [x] **Step 5:** Run `build-osd.ps1` (no install). Five checks green, commit
   `build(osd): uiaccess manifest, sign, install`.
 
 ### Task 2: Spike: DComp swap chain in a UIAccess band window
