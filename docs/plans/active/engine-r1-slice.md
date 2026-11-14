@@ -581,3 +581,8 @@ Offscreen content layers with group opacity (R4, when text exists), hover dwell 
 (R4), a named-pipe demo command (R4 if `--demo` is not enough), multi-monitor choice and
 settings (R7), fullscreen hiding of the window itself (R4; R1 only parks the clock), OLE drop
 target (R5).
+
+Known gaps, not bugs:
+- In a borderless game the island stays topmost but parked (fullscreen suppression), so it does
+  not react until the game exits; hiding it is R4.
+- Display changes are logged only; relayout and render restart are R4.
