@@ -17,6 +17,7 @@ fn expanded(page: usize) -> Scene {
         expanded: true,
         page,
         suppression: Suppression::default(),
+        ..Scene::default()
     }
 }
 

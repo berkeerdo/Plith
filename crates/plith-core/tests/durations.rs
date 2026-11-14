@@ -1,6 +1,7 @@
 //! Full and visible motion durations, simulated at 1/240 s the way the render loop steps.
 //! Expected full values come from the R1b plan simulation (2026-11-14), tolerance one frame.
 
+use plith_core::geometry::IslandShape;
 use plith_core::island::IslandMotion;
 use plith_core::page::PageTurn;
 use plith_core::scene::{Scene, Suppression};
@@ -11,11 +12,36 @@ use plith_core::visible::{DrawnState, visibly_differs};
 const H: f64 = 1.0 / 240.0;
 const FRAME_MS: f64 = 1000.0 / 240.0;
 
+/// The page shapes the R1 log was measured with; the durations are pinned to these sizes.
+const R1_SHAPES: [IslandShape; 4] = [
+    IslandShape {
+        width: 620.0,
+        height: 216.0,
+        radius: 40.0,
+    },
+    IslandShape {
+        width: 620.0,
+        height: 320.0,
+        radius: 40.0,
+    },
+    IslandShape {
+        width: 480.0,
+        height: 180.0,
+        radius: 40.0,
+    },
+    IslandShape {
+        width: 480.0,
+        height: 180.0,
+        radius: 40.0,
+    },
+];
+
 fn scene(expanded: bool, page: usize) -> Scene {
     Scene {
         expanded,
         page,
         suppression: Suppression::default(),
+        shapes: R1_SHAPES,
     }
 }
 

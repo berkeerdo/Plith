@@ -3,9 +3,16 @@
 
 use plith_core::geometry::IslandShape;
 use plith_core::page::{PageLayer, PageLayers};
-use plith_core::shapes::{PAGES, PLACEHOLDER, REST};
+use plith_core::shapes::{PLACEHOLDER, REST};
 use plith_render::paint::PaintFrame;
 use plith_render::render_offscreen;
+
+/// The 480 x 180 shape these pixel checks were written for.
+const SHAPE: IslandShape = IslandShape {
+    width: 480.0,
+    height: 180.0,
+    radius: 40.0,
+};
 
 fn frame(shape: IslandShape, origin: (f64, f64), pages: &[PageLayer]) -> PaintFrame {
     PaintFrame {
@@ -23,7 +30,7 @@ fn pixel(buf: &[u8], width: u32, x: u32, y: u32) -> [u8; 4] {
 
 #[test]
 fn island_pixels_are_opaque_black_and_outside_is_transparent() {
-    let shape = PAGES[2];
+    let shape = SHAPE;
     let origin = (10.0, 10.0);
     let buf = render_offscreen(520, 220, 1.0, &frame(shape, origin, &[])).unwrap();
     assert_eq!(buf.len(), 520 * 220 * 4);
@@ -42,7 +49,7 @@ fn island_pixels_are_opaque_black_and_outside_is_transparent() {
 
 #[test]
 fn scale_1_5_draws_the_same_shape_larger() {
-    let shape = PAGES[2];
+    let shape = SHAPE;
     let origin = (10.0, 10.0);
     let buf = render_offscreen(780, 330, 1.5, &frame(shape, origin, &[])).unwrap();
     // Island spans px x 15..735, y 15..285 at scale 1.5.
@@ -56,7 +63,7 @@ fn scale_1_5_draws_the_same_shape_larger() {
 
 #[test]
 fn page_placeholder_is_lighter_than_the_fill() {
-    let shape = PAGES[2];
+    let shape = SHAPE;
     let origin = (10.0, 10.0);
     let layer = PageLayer {
         page: 2,
@@ -79,7 +86,7 @@ fn bleeding_frame() -> PaintFrame {
         offset: 240.0,
         opacity: 1.0,
     };
-    frame(PAGES[2], (10.0, 10.0), &[layer])
+    frame(SHAPE, (10.0, 10.0), &[layer])
 }
 
 fn check_clip(scale: f64) {

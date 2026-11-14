@@ -14,7 +14,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::motion::{FramePhases, MotionKind, MotionStats};
 use plith_core::page::PageTurn;
 use plith_core::panic_text::payload_text;
-use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
+use plith_core::scene::{Scene, SceneMailbox, ShapeFrame, Snapshot};
 use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::{Tuning, TuningSet};
@@ -157,7 +157,11 @@ pub fn run_loop<C, P, O, N>(
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
 {
-    let (scene, seen) = mailbox.latest();
+    let Snapshot {
+        scene,
+        generation: seen,
+        ..
+    } = mailbox.latest();
     let mut engine = Engine {
         paint: parts.paint,
         clocks: Clocks::new(parts.open_clock, parts.order),
@@ -208,7 +212,10 @@ where
         loop {
             let next = mailbox.wait_newer(self.seen);
             self.shared.wake();
-            let Some((scene, generation)) = next else {
+            let Some(Snapshot {
+                scene, generation, ..
+            }) = next
+            else {
                 return Ok(());
             };
             self.seen = generation;
@@ -249,7 +256,9 @@ where
             };
             // `needs_rate_reread` is ignored in R1: a display change restarts the thread (Task 9).
             let (anim_t, dt) = self.stamper.stamp(tick);
-            let (scene, generation) = mailbox.latest();
+            let Snapshot {
+                scene, generation, ..
+            } = mailbox.latest();
             if generation != self.seen {
                 self.seen = generation;
                 if scene.suppression.any() {

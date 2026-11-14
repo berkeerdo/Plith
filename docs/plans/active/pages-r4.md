@@ -148,13 +148,13 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   620 x 214, system 620 x 178, page radius from the master's answer to open item 1 (24 proposed);
   `PAGE_MAX_HEIGHT: f64 = 420.0`; `SurfaceLayout` sizes for 620 x `PAGE_MAX_HEIGHT`.
 
-- [ ] **Step 1: Failing tests** `update_same_scene_returns_none` (no generation bump),
+- [x] **Step 1: Failing tests** `update_same_scene_returns_none` (no generation bump),
   `publish_same_content_does_not_bump`, `publish_new_content_bumps_and_wakes` (a waiter thread
   returns), `target_reads_scene_shapes`, `surface_fits_max_page`.
-- [ ] **Step 2:** Run `cargo test -p plith-core scene layout`; expect failures.
-- [ ] **Step 3:** Implement. The demo `page` step accepts 0..=3. Callers that ignored the
+- [x] **Step 2:** Run `cargo test -p plith-core scene layout`; expect failures.
+- [x] **Step 3:** Implement. The demo `page` step accepts 0..=3. Callers that ignored the
   returned generation keep compiling with `let _ =` only where the value is truly unused.
-- [ ] **Step 4:** Five checks green, commit `feat(core): carry page content in the mailbox`.
+- [x] **Step 4:** Five checks green, commit `feat(core): carry page content in the mailbox`.
 
 ### Task 4: UI-thread `App` and an STA UI thread (L14)
 

@@ -85,7 +85,7 @@ impl FrameSource for FakeClock {
         }
         for (at, scene) in &self.harness.script {
             if *at == call {
-                self.harness.mailbox.publish(*scene);
+                let _ = self.harness.mailbox.publish(*scene);
             }
         }
         Ok(self.harness.now())
@@ -192,7 +192,7 @@ pub(super) fn sinks(
 }
 
 pub(super) fn start(setup: Setup) -> Run {
-    let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
+    let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let shared = Arc::new(LoopShared::new());
     let harness = Arc::new(Harness {
         time: Mutex::new(0.0),

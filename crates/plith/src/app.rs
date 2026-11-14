@@ -54,7 +54,7 @@ fn run_shell(
     monitor: &MonitorInfo,
     layout: SurfaceLayout,
 ) -> i32 {
-    let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
+    let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let closing = Arc::new(AtomicBool::new(false));
     let stopper = Arc::new(OnceLock::new());
     let fatal = Arc::new(AtomicBool::new(false));

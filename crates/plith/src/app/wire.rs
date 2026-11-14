@@ -107,13 +107,13 @@ pub fn event_handler(
             }
         }
         ShellEvent::Click => {
-            mailbox.update(|scene| Scene {
+            let _ = mailbox.update(|scene| Scene {
                 expanded: !scene.expanded,
                 ..scene
             });
         }
         ShellEvent::Suppression(suppression) => {
-            mailbox.update(|scene| Scene {
+            let _ = mailbox.update(|scene| Scene {
                 suppression,
                 ..scene
             });

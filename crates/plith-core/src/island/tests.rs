@@ -124,14 +124,14 @@ fn reference(from: f64, to: f64, tuning: Tuning, steps: usize) -> f64 {
 
 #[test]
 fn card_to_card_growth_uses_the_card_tunings() {
-    let mut m = IslandMotion::new(PAGES[0], BRISK);
-    m.retarget(PAGES[1]);
+    let mut m = IslandMotion::new(PAGES[1], BRISK);
+    m.retarget(PAGES[0]);
     for _ in 0..30 {
         m.step(H);
     }
-    let want = reference(PAGES[0].height, PAGES[1].height, BRISK.card_grow_h, 30);
+    let want = reference(PAGES[1].height, PAGES[0].height, BRISK.card_grow_h, 30);
     assert!((m.height.spring.value() - want).abs() < 1e-9);
-    let plain = reference(PAGES[0].height, PAGES[1].height, BRISK.grow_h, 30);
+    let plain = reference(PAGES[1].height, PAGES[0].height, BRISK.grow_h, 30);
     assert!((want - plain).abs() > 0.1, "the two tunings must differ");
 }
 
@@ -145,15 +145,15 @@ fn growth_from_or_to_rest_keeps_the_plain_grow_tunings() {
     let want = reference(REST.height, PAGES[0].height, BRISK.grow_h, 30);
     assert!((m.height.spring.value() - want).abs() < 1e-9);
     // Mid-collapse the current target is REST, so a retarget up is not card to card.
-    let mut back = IslandMotion::new(PAGES[0], BRISK);
+    let mut back = IslandMotion::new(PAGES[1], BRISK);
     back.retarget(REST);
     back.step(H);
-    back.retarget(PAGES[1]);
+    back.retarget(PAGES[0]);
     back.step(H);
-    let mut s = Spring::new(PAGES[0].height, BRISK.shrink_h);
+    let mut s = Spring::new(PAGES[1].height, BRISK.shrink_h);
     s.retarget(REST.height, BRISK.shrink_h);
     s.step(H);
-    s.retarget(PAGES[1].height, BRISK.grow_h);
+    s.retarget(PAGES[0].height, BRISK.grow_h);
     s.step(H);
     assert!((back.height.spring.value() - s.value()).abs() < 1e-9);
 }

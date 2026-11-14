@@ -10,6 +10,7 @@ fn scene(expanded: bool, page: usize) -> Scene {
             locked: true,
             ..Suppression::default()
         },
+        ..Scene::default()
     }
 }
 
@@ -39,10 +40,10 @@ fn empty_script_ends_at_once_with_huge_repeat() {
         steps: Vec::new(),
         repeat: u32::MAX,
     };
-    let mailbox = SceneMailbox::new(Scene::default());
+    let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
     let stop = AtomicBool::new(false);
     assert!(play(&script, &mailbox, &stop));
-    assert_eq!(mailbox.latest().1, 0, "nothing is published");
+    assert_eq!(mailbox.latest().generation, 0, "nothing is published");
 }
 
 #[test]
@@ -51,12 +52,12 @@ fn play_publishes_each_step_every_round() {
         steps: vec![DemoStep::Expand, DemoStep::Wait(0), DemoStep::Page(1)],
         repeat: 2,
     };
-    let mailbox = SceneMailbox::new(Scene::default());
+    let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
     let stop = AtomicBool::new(false);
     assert!(play(&script, &mailbox, &stop));
-    let (last, generation) = mailbox.latest();
-    assert_eq!(generation, 4);
-    assert_eq!((last.expanded, last.page), (true, 1));
+    let latest = mailbox.latest();
+    assert_eq!(latest.generation, 2, "the second round changes nothing");
+    assert_eq!((latest.scene.expanded, latest.scene.page), (true, 1));
 }
 
 #[test]
@@ -65,10 +66,10 @@ fn play_reads_the_latest_scene_so_a_click_is_respected() {
         steps: vec![DemoStep::Expand],
         repeat: 1,
     };
-    let mailbox = SceneMailbox::new(scene(false, 2));
+    let mailbox = SceneMailbox::new(scene(false, 2), Arc::default());
     let stop = AtomicBool::new(false);
     assert!(play(&script, &mailbox, &stop));
-    assert_eq!(mailbox.latest().0, scene(true, 2));
+    assert_eq!(mailbox.latest().scene, scene(true, 2));
 }
 
 #[test]
@@ -77,7 +78,7 @@ fn a_set_stop_flag_ends_play_and_sleep() {
         steps: vec![DemoStep::Expand, DemoStep::Wait(60_000)],
         repeat: 1,
     };
-    let mailbox = SceneMailbox::new(Scene::default());
+    let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
     let stop = AtomicBool::new(true);
     assert!(!play(&script, &mailbox, &stop));
     stop.store(true, Ordering::Relaxed);

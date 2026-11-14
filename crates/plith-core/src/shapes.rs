@@ -9,24 +9,34 @@ pub const REST: IslandShape = IslandShape {
     radius: 16.0,
 };
 
-/// The three pages of the slice.
-pub const PAGES: [IslandShape; 3] = [
+/// The four pages: audio, media, shelf and system.
+pub const PAGES: [IslandShape; 4] = [
     IslandShape {
         width: 620.0,
-        height: 216.0,
+        height: 300.0,
         radius: 40.0,
     },
     IslandShape {
         width: 620.0,
-        height: 320.0,
+        height: 232.0,
         radius: 40.0,
     },
     IslandShape {
-        width: 480.0,
-        height: 180.0,
+        width: 620.0,
+        height: 214.0,
+        radius: 40.0,
+    },
+    IslandShape {
+        width: 620.0,
+        height: 178.0,
         radius: 40.0,
     },
 ];
+
+/// The widest page, in DIP; the surface is sized for it.
+pub const PAGE_MAX_WIDTH: f64 = 620.0;
+/// The tallest page the surface has room for, in DIP.
+pub const PAGE_MAX_HEIGHT: f64 = 420.0;
 
 /// Gap between the work-area top and the island, in DIP.
 pub const TOP_GAP: f64 = 8.0;
