@@ -11,3 +11,16 @@ pub use brightness::BrightnessService;
 pub use brightness::{
     BrightnessDevice, CoalescingWriter, DeviceLevel, Status, WriteOutcome, step_level,
 };
+
+pub mod flyout;
+pub mod volume_keys;
+
+#[cfg(windows)]
+mod hook_thread;
+
+#[cfg(windows)]
+pub use flyout::FlyoutSuppressor;
+pub use flyout::{HiddenRegistry, Match, Mode, SuppressionWindow, WindowFacts, should_hide};
+#[cfg(windows)]
+pub use volume_keys::VolumeKeyHook;
+pub use volume_keys::handle_key_event;
