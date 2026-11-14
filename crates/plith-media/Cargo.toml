@@ -9,6 +9,15 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+# Names `IAsyncOperation` and its completion handler, which `windows` does not re-export. Same
+# version `windows` already resolves to.
+windows-future = "0.3.2"
+windows = { workspace = true, features = [
+    "Foundation",
+    "Media_Control",
+    "Storage_Streams",
+    "Win32_System_Com",
+] }
 
 [lints]
 workspace = true
