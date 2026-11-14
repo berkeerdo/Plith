@@ -208,12 +208,14 @@ fn percentile(sorted: &[f64], p: f64) -> f64 {
 }
 
 /// Frame counts are far below 2^52, so the conversion is exact.
+// Allowed: counts stay far below 2^52.
 #[allow(clippy::cast_precision_loss)]
 fn frames_f64(n: usize) -> f64 {
     n as f64
 }
 
 /// Turns a 1-based, non-negative rank into a 0-based index.
+// Allowed: rank is a ceiled, non-negative count that fits usize.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn rank_to_index(rank: f64) -> usize {
     (rank as usize).saturating_sub(1)

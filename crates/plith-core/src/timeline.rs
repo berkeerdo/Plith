@@ -1,22 +1,20 @@
-//! Vsync timeline: snaps jittery vblank-wait wake-ups to a phase-locked period grid, and stamps
+//! Vsync timeline: snaps jittery vblank-wait wake-ups to a period grid that tracks the earliest
+//! wake-up (a vblank wait only returns late), and stamps
 //! animation time to the vblank a frame will be shown on.
 
-/// Phase correction applied to the grid per locked step.
-const PHASE_GAIN: f64 = 0.1;
-/// Period correction applied per locked step.
-const PERIOD_GAIN: f64 = 0.02;
-/// Allowed deviation of the period from nominal, as a fraction.
-const PERIOD_TOLERANCE: f64 = 0.03;
+/// Fraction of a late wake-up's lateness the grid follows per step (it tracks the earliest).
+const LATE_GAIN: f64 = 0.02;
 /// A wake-up later than this many periods resynchronises the grid.
 const RESYNC_PERIODS: f64 = 30.0;
 /// Fraction of a period a wake-up may be late and still belong to its vblank.
 const LATE_ALLOWANCE: f64 = 0.25;
-/// Phase error, as a fraction of a period, beyond which a step counts as off-rhythm.
-const OFF_RHYTHM_ERROR: f64 = 0.25;
+/// Lateness, as a fraction of a period, beyond which a step counts as off-rhythm.
+const OFF_RHYTHM_LATENESS: f64 = 0.5;
 /// Off-rhythm score above which the display rate should be read again.
 const REREAD_SCORE: u32 = 20;
 
 /// Converts a whole, non-negative period count (here always 1..=30) to `u32`.
+// Allowed: `n` is a floored value known to be in 1..=30.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn whole_periods(n: f64) -> u32 {
     n as u32
@@ -27,7 +25,7 @@ fn whole_periods(n: f64) -> u32 {
 pub struct Tick {
     /// Time of the vblank on the phase-locked grid.
     pub vblank: f64,
-    /// Current estimate of the vblank period.
+    /// Vblank period (always nominal).
     pub period: f64,
     /// Whole periods since the previous tick (1 on anchor and resync).
     pub periods: u32,
@@ -36,7 +34,6 @@ pub struct Tick {
 /// Phase-locked estimate of the display's vblank times.
 #[derive(Debug, Clone)]
 pub struct VsyncTimeline {
-    nominal: f64,
     period: f64,
     last: Option<f64>,
     off_rhythm: u32,
@@ -48,7 +45,6 @@ impl VsyncTimeline {
     pub fn new(nominal_hz: f64) -> Self {
         let period = 1.0 / nominal_hz;
         Self {
-            nominal: period,
             period,
             last: None,
             off_rhythm: 0,
@@ -65,20 +61,23 @@ impl VsyncTimeline {
             return None;
         }
         if n > RESYNC_PERIODS {
-            self.period = self.nominal;
             return Some(self.anchor(raw));
         }
         let predicted = last + n * self.period;
         let error = raw - predicted;
-        if error.abs() > OFF_RHYTHM_ERROR * self.period {
+        // Missed vblanks (n > 1) count too: a rate mismatch skips vblanks on a regular
+        // pattern with modest lateness, which lateness alone cannot tell from jitter.
+        if error > OFF_RHYTHM_LATENESS * self.period || n > 1.0 {
             self.off_rhythm += 1;
         } else {
             self.off_rhythm = self.off_rhythm.saturating_sub(1);
         }
-        let vblank = predicted + PHASE_GAIN * error;
-        let low = self.nominal * (1.0 - PERIOD_TOLERANCE);
-        let high = self.nominal * (1.0 + PERIOD_TOLERANCE);
-        self.period = (self.period + PERIOD_GAIN * error / n).clamp(low, high);
+        // A vblank wait only returns late: snap to an early wake-up, follow a late one slowly.
+        let vblank = if error < 0.0 {
+            raw
+        } else {
+            predicted + LATE_GAIN * error
+        };
         self.last = Some(vblank);
         Some(Tick {
             vblank,
@@ -104,8 +103,7 @@ impl VsyncTimeline {
 
     /// Switches to a new nominal refresh rate and resets the grid.
     pub fn set_nominal(&mut self, hz: f64) {
-        self.nominal = 1.0 / hz;
-        self.period = self.nominal;
+        self.period = 1.0 / hz;
         self.reset();
     }
 

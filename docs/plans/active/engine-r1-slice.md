@@ -277,9 +277,13 @@ Line format (pinned; the log writer prefixes a local timestamp):
 
 - [x] **Step 2: Run, expect FAIL.**
 - [x] **Step 3: Implement** the research doc section 1 algorithm: `n = floor(elapsed/period +
-  0.25)`; resync when the gap exceeds 30 periods; phase gain 0.1, period gain 0.02, period
-  clamped to nominal +-3 %; off-rhythm score +1 when `|phase error| > 0.25 period`, -1 (floor 0)
-  otherwise, `needs_rate_reread` when it passes 20. Stamp `anim_t = vblank + period`; `dt` is one
+  0.25)`; resync when the gap exceeds 30 periods. **Amended 2026-11-14 (Task 4 finding):** a
+  vblank wait only returns late, never early, so the grid tracks the earliest wake-up, not the
+  mean: phase error `e < 0` snaps the grid to `raw`, `e >= 0` moves it by `0.02 * e`; the
+  period stays at the nominal rate (no period estimator; small nominal error is absorbed by the
+  snaps). Symmetric gain 0.1 parked the grid at the mean lateness and dropped valid early
+  wake-ups as spurious. Off-rhythm score +1 when `e > 0.5 period`, -1 (floor 0) otherwise,
+  `needs_rate_reread` when it passes 20. Stamp `anim_t = vblank + period`; `dt` is one
   period after `reset`. Duration = `last_anim - first_anim + period`; hitch = gap > 1.5 periods.
 - [x] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
   `feat(core): add vsync timeline and motion stats`, push, tick.
@@ -560,7 +564,7 @@ Asked through the master in one batch. Nothing here moves the mouse; Berke click
 
 | # | Builder call (spec section 11) | Proposal | Decided by |
 |---|---|---|---|
-| P1 | Frame clock source | `DCompositionWaitForCompositorClock` first, `WaitForVBlank` second, waitable timer last; demote after 3 waits under 0.15 period; MMCSS `Games` on the render thread; timer only over RDP | Task 10 clock comparison |
+| P1 | Frame clock source | `DCompositionWaitForCompositorClock` first, `WaitForVBlank` second, waitable timer last; demote after 3 waits under 0.15 period; MMCSS `Games` on the render thread; timer only over RDP; phase lock tracks the earliest wake-up with a nominal period (deviates from Oyenza's symmetric phase and period gains, Task 4 finding) | Task 10 clock comparison |
 | P2 | Hit-testing mechanism | One DComp window with a 1 px outset `SetWindowRgn` applied on the UI thread from a posted shape, every painted frame (Oyenza: 30 Hz, two windows) | Task 8 spike + Task 10 clicks |
 | P3 | Swap chain buffers and latency | 2 buffers, `SetMaximumFrameLatency(1)`, `Present(1, 0)` after the clock wait; 3 buffers if draw ever waits on DWM | Task 10 present p99 |
 | P4 | Scene handoff | Latest-wins mailbox (`Mutex` + `Condvar` + generation), not a channel: intermediate targets are meaningless and the render thread parks on the condvar | Task 7 tests |

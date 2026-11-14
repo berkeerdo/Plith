@@ -10,28 +10,33 @@ fn bits_eq(a: f64, b: f64) -> bool {
     a.to_bits() == b.to_bits()
 }
 
-/// Deterministic jitter pattern in `0..0.9 ms`: about 0.2 of a period. The grid settles at the
-/// mean lateness, and a wakeup more than 0.25 period earlier than that looks spurious, so a
-/// wider spread can make a legitimate wakeup return `None`.
-fn jitter(k: u32) -> f64 {
-    const PATTERN: [f64; 7] = [0.0, 0.0006, 0.0002, 0.0009, 0.0004, 0.0, 0.0007];
-    PATTERN[(k % 7) as usize]
+/// Deterministic uniform jitter in `0..3 ms` from a small LCG.
+struct Jitter(u32);
+
+impl Jitter {
+    fn next(&mut self) -> f64 {
+        self.0 = self.0.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+        f64::from(self.0 >> 8) / f64::from(1_u32 << 24) * 0.003
+    }
 }
 
 #[test]
 fn jittered_wakeups_snap_to_the_period_grid() {
     let mut tl = VsyncTimeline::new(NOMINAL);
+    let mut jit = Jitter(7);
     let mut prev: Option<f64> = None;
-    for k in 0..500_u32 {
-        let raw = 1.0 + f64::from(k) * period() + jitter(k);
+    for k in 0..1000_u32 {
+        let raw = 1.0 + f64::from(k) * period() + jit.next();
         let tick = tl
             .lock(raw)
             .unwrap_or_else(|| panic!("wakeup {k} is a new vblank"));
         assert_eq!(tick.periods, 1, "k = {k}");
-        if let Some(p) = prev {
+        // The grid needs a warm-up to settle on the earliest wakeup. Afterwards a snap to a new
+        // earliest wakeup moves a delta by up to about 0.19 period (measured, gain 0.02).
+        if let (Some(p), true) = (prev, k >= 100) {
             let steps = (tick.vblank - p) / tick.period;
             assert!(
-                (steps - steps.round()).abs() < 0.1,
+                (steps - steps.round()).abs() < 0.2,
                 "k = {k}, steps = {steps}"
             );
             assert!(steps.round() >= 1.0, "k = {k}");
@@ -48,7 +53,7 @@ fn a_wakeup_up_to_three_quarters_late_belongs_to_its_vblank() {
     let tick = tl.lock(raw).expect("late wakeup is not spurious");
     assert_eq!(tick.periods, 1);
     let late = tl
-        .lock(tick.vblank + period() * 2.76)
+        .lock(tick.vblank + period() * 2.74)
         .expect("two periods on");
     assert_eq!(late.periods, 2);
 }
@@ -81,21 +86,14 @@ fn gap_over_30_periods_resyncs() {
 }
 
 #[test]
-fn period_stays_within_3_percent_of_nominal() {
+fn period_is_always_nominal() {
     let mut tl = VsyncTimeline::new(NOMINAL);
-    let mut last = 0.0;
     for k in 0..2000_u32 {
         let raw = 1.0 + f64::from(k) * period() * 1.05;
         if let Some(tick) = tl.lock(raw) {
-            assert!(tick.period <= period() * 1.03 + 1e-12, "k = {k}");
-            assert!(tick.period >= period() * 0.97 - 1e-12, "k = {k}");
-            last = tick.period;
+            assert!(bits_eq(tick.period, period()), "k = {k}");
         }
     }
-    assert!(
-        last > period() * 1.02,
-        "period should reach the clamp, got {last}"
-    );
 }
 
 #[test]
@@ -108,18 +106,30 @@ fn set_nominal_rebases_period() {
 }
 
 #[test]
-fn off_rhythm_wakeups_request_a_rate_reread() {
+fn off_rhythm_raises_rate_reread() {
     let mut tl = VsyncTimeline::new(NOMINAL);
     assert!(!tl.needs_rate_reread());
-    let mut grid = tl.lock(1.0).expect("anchor").vblank;
-    for _ in 0..40 {
-        // Each wakeup lands 0.4 periods away from the grid point it should hit.
-        let tick = tl.lock(grid + period() * 1.4).expect("wakeup");
-        grid = tick.vblank;
+    let mut raw = 1.0;
+    let mut raised = false;
+    for _ in 0..200 {
+        // The display really runs at 144 Hz while the nominal rate is 240 Hz.
+        raw += 1.0 / 144.0;
+        let _ = tl.lock(raw);
+        raised |= tl.needs_rate_reread();
     }
-    assert!(tl.needs_rate_reread());
+    assert!(raised);
     tl.reset();
     assert!(!tl.needs_rate_reread());
+}
+
+#[test]
+fn jitter_does_not_raise_rate_reread() {
+    let mut tl = VsyncTimeline::new(NOMINAL);
+    let mut jit = Jitter(99);
+    for k in 0..1000_u32 {
+        let _ = tl.lock(1.0 + f64::from(k) * period() + jit.next());
+        assert!(!tl.needs_rate_reread(), "k = {k}");
+    }
 }
 
 fn tick_at(k: f64, periods: u32) -> Tick {
