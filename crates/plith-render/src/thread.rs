@@ -106,7 +106,7 @@ pub struct RenderConfig {
     pub hz: f64,
     /// The spring tuning preset.
     pub tune: TuningSet,
-    /// The load levers (the default is the R1 behaviour).
+    /// The load levers (the default is the R1b pick).
     pub levers: Levers,
 }
 

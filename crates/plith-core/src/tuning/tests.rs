@@ -48,5 +48,5 @@ fn presets_are_found_by_name() {
     assert_eq!(TuningSet::by_name("r1"), Some(R1));
     assert_eq!(TuningSet::by_name("brisk"), Some(BRISK));
     assert_eq!(TuningSet::by_name("fast"), None);
-    assert_eq!(TuningSet::default(), R1);
+    assert_eq!(TuningSet::default(), BRISK);
 }

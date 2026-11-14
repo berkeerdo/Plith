@@ -1,7 +1,7 @@
 //! Applies the load levers to the OS. A refusal is an outcome, never an error: the caller logs
 //! it with `outcome_line` and keeps running with the default.
 
-use plith_core::levers::{LeverOutcome, MmcssPriority, SchedClass};
+use plith_core::levers::{LeverOutcome, Levers, MmcssPriority, SchedClass};
 use windows::Wdk::Graphics::Direct3D::{
     D3DKMT_SCHEDULINGPRIORITYCLASS, D3DKMT_SCHEDULINGPRIORITYCLASS_ABOVE_NORMAL,
     D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH, D3DKMTSetProcessSchedulingPriorityClass,
@@ -39,18 +39,20 @@ pub fn apply_gpu_priority(device: &IDXGIDevice, priority: i8) -> Option<LeverOut
     Some(outcome("gpu-priority", priority.to_string(), result))
 }
 
-/// `IDXGIDevice1::SetMaximumFrameLatency`; `None` at the default 1 only when it succeeds, so a
-/// failing default keeps its R1 meaning (an error the caller propagates).
+/// `IDXGIDevice1::SetMaximumFrameLatency`. The outcome is always returned for the log; a failing
+/// call is fatal only for the default (`Levers::default().latency`), any other value is just
+/// reported as refused.
 ///
 /// # Errors
-/// Returns the failing call when `latency` is the default 1.
+/// Returns the failing call when `latency` is the default.
 pub fn apply_latency(device: &IDXGIDevice, latency: u8) -> Result<Option<LeverOutcome>> {
     let device1 = device.cast::<IDXGIDevice1>()?;
     // SAFETY: a plain COM call on a live device.
     let result = unsafe { device1.SetMaximumFrameLatency(u32::from(latency)) };
-    if latency == 1 {
-        result?;
-        return Ok(None);
+    if latency == Levers::default().latency
+        && let Err(error) = &result
+    {
+        return Err(error.clone());
     }
     Ok(Some(outcome("latency", latency.to_string(), result)))
 }

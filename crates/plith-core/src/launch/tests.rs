@@ -160,8 +160,8 @@ fn rejects_gpu_priority_8_and_latency_0() {
 }
 
 #[test]
-fn tune_flag_picks_a_preset_and_defaults_to_r1() {
-    assert_eq!(parse(&[]).unwrap().tune, R1);
+fn tune_flag_picks_a_preset_and_defaults_to_brisk() {
+    assert_eq!(parse(&[]).unwrap().tune, BRISK);
     assert_eq!(parse(&["--tune", "r1"]).unwrap().tune, R1);
     assert_eq!(parse(&["--tune", "brisk"]).unwrap().tune, BRISK);
     assert!(matches!(

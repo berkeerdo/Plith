@@ -1,5 +1,5 @@
 //! Load levers: opt-in launch settings that trade our own frame pacing against load on the
-//! machine. The defaults are the R1 behaviour and never raise a priority.
+//! machine. The defaults are the measured R1b picks and never raise a priority.
 
 /// The GPU scheduling class of this process (`D3DKMTSetProcessSchedulingPriorityClass`).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -49,7 +49,7 @@ impl MmcssPriority {
     }
 }
 
-/// The five load levers; `Default` is the R1 behaviour.
+/// The five load levers; `Default` is the R1b pick (latency 2).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct Levers {
     /// DXGI GPU thread priority, -7 to 7.
@@ -69,7 +69,7 @@ impl Default for Levers {
         Self {
             gpu_priority: 0,
             sched_class: SchedClass::Normal,
-            latency: 1,
+            latency: 2,
             sync: 1,
             mmcss: MmcssPriority::Normal,
         }

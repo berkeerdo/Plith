@@ -121,7 +121,7 @@ impl CompositionTarget {
         unsafe { gpu.context().SetTarget(None::<&ID2D1Image>) };
     }
 
-    /// The outcome of the latency lever, once (`None` at the default or after it was taken).
+    /// The outcome of the latency lever, once (`None` after it was taken).
     pub fn take_outcome(&mut self) -> Option<LeverOutcome> {
         self.latency_outcome.take()
     }

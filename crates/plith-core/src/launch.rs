@@ -30,9 +30,9 @@ pub struct Launch {
     pub clock: ClockRequest,
     /// Exit once the demo has finished.
     pub exit_after_demo: bool,
-    /// Load levers; the default is the R1 behaviour.
+    /// Load levers; the default is the measured R1b pick.
     pub levers: Levers,
-    /// Spring tuning preset; the default is R1 until one is chosen.
+    /// Spring tuning preset; the default is BRISK (R1 stays as `--tune r1`).
     pub tune: TuningSet,
 }
 

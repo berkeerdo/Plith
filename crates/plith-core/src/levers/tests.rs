@@ -1,11 +1,11 @@
 use super::*;
 
 #[test]
-fn default_is_r1_behaviour() {
+fn default_is_the_r1b_pick() {
     let levers = Levers::default();
     assert_eq!(levers.gpu_priority, 0);
     assert_eq!(levers.sched_class, SchedClass::Normal);
-    assert_eq!(levers.latency, 1);
+    assert_eq!(levers.latency, 2);
     assert_eq!(levers.sync, 1);
     assert_eq!(levers.mmcss, MmcssPriority::Normal);
 }
@@ -14,7 +14,7 @@ fn default_is_r1_behaviour() {
 fn describe_lists_all_five() {
     assert_eq!(
         Levers::default().describe(),
-        "gpu-priority 0, sched-class normal, latency 1, sync 1, mmcss normal"
+        "gpu-priority 0, sched-class normal, latency 2, sync 1, mmcss normal"
     );
     let levers = Levers {
         gpu_priority: -3,

@@ -105,7 +105,7 @@ impl TuningSet {
 
 impl Default for TuningSet {
     fn default() -> Self {
-        R1
+        BRISK
     }
 }
 
