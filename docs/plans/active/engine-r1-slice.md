@@ -320,7 +320,7 @@ Built-ins (pinned):
 - `basic`: `expand; wait 1500; page 1; wait 1200; page 2; wait 1200; page 0; wait 1200; collapse; wait 1500; repeat 3`
 - `interrupt`: `expand; wait 200; collapse; wait 150; expand; wait 1500; page 1; wait 120; page 0; wait 1500; collapse; wait 100; expand; wait 1500; collapse; wait 1500; repeat 3`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test] fn any_suppression_reason_suppresses()             // each of the three flags alone makes any() true
@@ -334,7 +334,7 @@ Built-ins (pinned):
 ```
 
 - [ ] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
-- [ ] **Step 5: Commit** `feat(core): add scene handoff and demo scripts`, push, tick.
+- [x] **Step 5: Commit** `feat(core): add scene handoff and demo scripts`, push, tick.
 
 ### Task 6: Device, composition target and painter (`plith-render`)
 
@@ -531,8 +531,10 @@ Loop (the part the tests pin):
 - [ ] **Step 1: Write the failing test** `log::tests::line_has_timestamp_and_appends` (writes to
   a temp dir via `LogFile::open_at(path)`).
 - [ ] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
-- [ ] **Step 5: Smoke run. Before the first on-screen run, message the master and wait for
-  Berke's relayed yes (not approved as of 2026-11-14):**
+- [ ] **Step 5: Smoke run. Approved by Berke via the master 2026-11-14, on conditions: run only
+  when `SHQueryUserNotificationState` is not `QUNS_RUNNING_D3D_FULL_SCREEN`, `QUNS_BUSY` or
+  `QUNS_PRESENTATION_MODE` (else skip and retry later); each run at most about 1 minute; no
+  mouse or keys; afterwards confirm no `plith.exe` is left running:**
   `cargo run -p plith --release -- --demo basic --exit-after-demo` then
   `cargo run -p plith --release -- --idle-check 60`. Expected: 15 motion lines (`basic` has 5
   motions, `repeat 3`) and `idle 60 s: 0 render wake-ups`. If this session is not a console
