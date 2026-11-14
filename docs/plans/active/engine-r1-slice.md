@@ -531,7 +531,7 @@ Loop (the part the tests pin):
 - [x] **Step 1: Write the failing test** `log::tests::line_has_timestamp_and_appends` (writes to
   a temp dir via `LogFile::open_at(path)`).
 - [x] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
-- [ ] **Step 5: Smoke run. Approved by Berke via the master 2026-11-14, on conditions: run only
+- [x] **Step 5: Smoke run. Approved by Berke via the master 2026-11-14, on conditions: run only
   when `SHQueryUserNotificationState` is not `QUNS_RUNNING_D3D_FULL_SCREEN`, `QUNS_BUSY` or
   `QUNS_PRESENTATION_MODE` (else skip and retry later); each run at most about 1 minute; no
   mouse or keys; afterwards confirm no `plith.exe` is left running:**
@@ -539,6 +539,21 @@ Loop (the part the tests pin):
   `cargo run -p plith --release -- --idle-check 60`. Expected: 15 motion lines (`basic` has 5
   motions, `repeat 3`) and `idle 60 s: 0 render wake-ups`. If this session is not a console
   session, every motion number is labelled "not measured (RDP or background)".
+  **Result 2026-11-14 20:23 to 20:25, console session 1, release build at 99d2954, 240 Hz,
+  clock auto (dcomp every motion), hit region, nobody watching the screen** (attempts from
+  19:20 to 20:18 were skipped by the busy guard, `QUNS_BUSY`). Measured: the log lines only.
+  Not measured: what the island looks like, clicks, topmost (Task 10).
+  - `basic`: 15 motions, 14 at 240.0 fps with 0 hitches; the first expand after start 238.8 fps,
+    1 hitch, worst gap 8.3 ms. Draw p99 0.22 to 0.30 ms, present p99 0.28 to 0.35 ms.
+    Expand 800 ms, collapse 812 ms, page 421 to 775 ms; first wait 0.1 to 4.1 ms.
+  - `interrupt`: 12 motions, all 240.0 fps, 0 hitches, worst gap 4.2 ms; retargets counted (an
+    expand interrupted twice: 1154 ms, retargets 2). Draw p99 at most 0.32 ms.
+  - `--idle-check 60`: `0 render wake-ups, 62.5 ms process CPU` (G2 met).
+  - Hit region on the UI thread: 2462 updates, mean 0.61 ms, max 1.48 ms, 0 errors.
+  - Every run exited 0 and left no `plith.exe`.
+  - Against the spec durations (expand ~730, collapse ~660 ms) ours run longer: collapse by
+    about 150 ms. The content-opacity tail and the settle epsilon are the suspects; Berke's
+    feel in Task 10 decides whether to retune.
 - [x] **Step 6: Commit** `feat(app): compose the engine slice`, push, tick.
 
 ### Task 10: Console measurement with Berke (master arranges)

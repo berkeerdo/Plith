@@ -30,7 +30,7 @@ Outside and inside: does a click, pen tap or touch land on the right window.
 
 | Candidate | Count | Mean ms | Max ms | Edge clipped | Mouse outside | Mouse inside | Pen outside | Pen inside | Touch outside | Touch inside |
 |-----------|-------|---------|--------|--------------|---------------|--------------|-------------|------------|---------------|--------------|
-| region    |       |         |        |              |               |              |             |            |               |              |
+| region    | 2462  | 0.611   | 1.484  |              |               |              |             |            |               |              |
 | split     |       |         |        |              |               |              |             |            |               |              |
 | mask      |       |         |        |              |               |              |             |            |               |              |
 
