@@ -9,7 +9,8 @@ use windows::Win32::Devices::FunctionDiscovery::{
 use windows::Win32::Foundation::{E_FAIL, PROPERTYKEY};
 use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioEndpointVolumeCallback};
 use windows::Win32::Media::Audio::{
-    DEVICE_STATE_ACTIVE, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator, eMultimedia, eRender,
+    DEVICE_STATE_ACTIVE, EDataFlow, ERole, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
+    eMultimedia, eRender,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
@@ -22,11 +23,11 @@ use super::{AttachedState, Endpoint};
 
 /// Holds the thread's COM initialization; dropping it uninitializes. Declare it before any COM
 /// object so those are released first.
-pub(super) struct ComGuard;
+pub(crate) struct ComGuard;
 
 impl ComGuard {
     /// Joins the multithreaded apartment.
-    pub(super) fn init() -> Result<Self> {
+    pub(crate) fn init() -> Result<Self> {
         // SAFETY: plain apartment initialization on the calling thread, balanced by `Drop`.
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok()?;
         Ok(Self)
@@ -41,7 +42,7 @@ impl Drop for ComGuard {
 }
 
 /// Creates the device enumerator.
-pub(super) fn create_enumerator() -> Result<IMMDeviceEnumerator> {
+pub(crate) fn create_enumerator() -> Result<IMMDeviceEnumerator> {
     // SAFETY: `MMDeviceEnumerator` is the documented class id for `IMMDeviceEnumerator`.
     unsafe { CoCreateInstance(&MMDeviceEnumerator, None, CLSCTX_ALL) }
 }
@@ -80,7 +81,7 @@ fn read_endpoint(device: &IMMDevice) -> Option<Endpoint> {
 }
 
 /// Every active render endpoint that could be read completely; empty when the stack fails.
-pub(super) fn list_active(en: &IMMDeviceEnumerator) -> Vec<Endpoint> {
+pub(crate) fn list_active(en: &IMMDeviceEnumerator) -> Vec<Endpoint> {
     // SAFETY: enumeration on a live enumerator; results are owned interface pointers.
     unsafe {
         let Ok(devices) = en.EnumAudioEndpoints(eRender, DEVICE_STATE_ACTIVE) else {
@@ -95,25 +96,36 @@ pub(super) fn list_active(en: &IMMDeviceEnumerator) -> Vec<Endpoint> {
 }
 
 /// Id of the default render endpoint (Multimedia role); `None` when there is none.
-pub(super) fn default_id(en: &IMMDeviceEnumerator) -> Option<String> {
+pub(crate) fn default_id(en: &IMMDeviceEnumerator) -> Option<String> {
     // SAFETY: lookup on a live enumerator.
     let device = unsafe { en.GetDefaultAudioEndpoint(eRender, eMultimedia) }.ok()?;
     device_id(&device).ok()
 }
 
+/// The default endpoint of `flow` for `role`, read completely; `None` when there is none.
+pub(crate) fn default_endpoint(
+    en: &IMMDeviceEnumerator,
+    flow: EDataFlow,
+    role: ERole,
+) -> Option<Endpoint> {
+    // SAFETY: lookup on a live enumerator.
+    let device = unsafe { en.GetDefaultAudioEndpoint(flow, role) }.ok()?;
+    read_endpoint(&device)
+}
+
 /// The endpoint volume interface of one device plus the callback registered on it.
-pub(super) struct Attachment {
+pub(crate) struct Attachment {
     /// Endpoint id this attachment follows.
-    pub(super) id: String,
+    pub(crate) id: String,
     /// Identifies this attachment in volume messages.
-    pub(super) generation: u64,
-    volume: IAudioEndpointVolume,
+    pub(crate) generation: u64,
+    pub(super) volume: IAudioEndpointVolume,
     callback: IAudioEndpointVolumeCallback,
 }
 
 impl Attachment {
     /// Opens `id`, registers the volume callback and reads the current state.
-    pub(super) fn attach(
+    pub(crate) fn attach(
         en: &IMMDeviceEnumerator,
         id: &str,
         generation: u64,
@@ -146,7 +158,7 @@ impl Attachment {
     }
 
     /// Current volume and mute; `None` when the endpoint no longer answers.
-    pub(super) fn read_state(&self) -> Option<AttachedState> {
+    pub(crate) fn read_state(&self) -> Option<AttachedState> {
         // SAFETY: plain getters on a live interface.
         let (volume, muted) = unsafe {
             (
@@ -163,7 +175,7 @@ impl Attachment {
 
     /// Unregisters the callback. Called from the service thread with no lock held: the call
     /// waits for an in-flight callback, and callbacks never wait for anything.
-    pub(super) fn detach(self) {
+    pub(crate) fn detach(self) {
         // SAFETY: `callback` is the one registered in `attach`. A failure leaves nothing to do.
         let _ = unsafe { self.volume.UnregisterControlChangeNotify(&self.callback) };
     }

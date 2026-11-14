@@ -2,21 +2,26 @@
 //! volume and mute, and change notifications.
 //!
 //! The decision of which endpoint to attach to is pure ([`resolve_target`]) and unit tested.
-//! The COM side lives on one service thread; this slice is read only (writes come later).
+//! The COM side lives on one service thread, which also performs the writes (volume, mute,
+//! default endpoint) so every COM call stays on the thread that owns the attachment.
 
 #[cfg(windows)]
-mod com;
+pub(crate) mod com;
 #[cfg(windows)]
-mod notify;
+pub(crate) mod notify;
 mod pin;
+#[cfg(windows)]
+mod policy;
 #[cfg(windows)]
 mod service;
 #[cfg(test)]
 mod tests;
+mod write;
 
 pub use pin::resolve_target;
 #[cfg(windows)]
 pub use service::{EndpointService, Status};
+pub use write::{DEFAULT_ROLES, next_mute, sanitize_volume};
 
 /// One active render endpoint. Both names are kept as Core Audio reports them; shortening is
 /// the UI's decision.

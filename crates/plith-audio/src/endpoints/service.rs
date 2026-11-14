@@ -6,10 +6,13 @@ use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 
-use windows::Win32::Media::Audio::{IMMDeviceEnumerator, IMMNotificationClient};
+use windows::Win32::Media::Audio::{
+    IMMDeviceEnumerator, IMMNotificationClient, eMultimedia, eRender,
+};
 
 use super::com::{Attachment, ComGuard, create_enumerator, default_id, list_active};
-use super::notify::{DeviceEvents, Msg};
+use super::notify::{DeviceEvents, Msg, ask};
+use super::policy::set_default_endpoint;
 use super::{AttachedState, EndpointState, resolve_target};
 
 /// Whether the Core Audio stack could be used.
@@ -155,7 +158,12 @@ fn run(
             return;
         }
     };
-    let client: IMMNotificationClient = DeviceEvents { tx: tx.clone() }.into();
+    let client: IMMNotificationClient = DeviceEvents {
+        tx: tx.clone(),
+        flow: eRender,
+        role: eMultimedia,
+    }
+    .into();
     // SAFETY: `client` lives until it is unregistered below.
     if let Err(err) = unsafe { en.RegisterEndpointNotificationCallback(&client) } {
         let _ = ready.send(Err(format!("could not register for device events: {err}")));
@@ -191,6 +199,24 @@ fn serve(worker: &mut Worker, rx: &Receiver<Msg>) {
                 volume,
                 muted,
             } => worker.on_volume(generation, volume, muted),
+            Msg::SetVolume { value, reply } => {
+                let _ = reply.send(
+                    worker
+                        .attachment
+                        .as_ref()
+                        .is_some_and(|a| a.set_volume(value)),
+                );
+            }
+            Msg::ToggleMute { reply } => {
+                let _ = reply.send(worker.attachment.as_ref().and_then(Attachment::toggle_mute));
+            }
+            Msg::SetDefault { id, reply } => {
+                let done = set_default_endpoint(&id);
+                if done {
+                    worker.refresh();
+                }
+                let _ = reply.send(done);
+            }
             Msg::Stop => break,
         }
     }
@@ -283,6 +309,35 @@ impl EndpointService {
         let (tx, rx) = channel();
         locked(&self.shared.subscribers).push(tx);
         rx
+    }
+
+    /// Sets the attached endpoint's master volume. The value is clamped to 0.0..=1.0; NaN is
+    /// refused. Returns whether a value was written (`false` with nothing attached).
+    pub fn set_volume(&self, value: f32) -> bool {
+        self.request(|reply| Msg::SetVolume { value, reply })
+            .unwrap_or(false)
+    }
+
+    /// Reads the attached endpoint's mute and writes the opposite. Returns the new state, or
+    /// `None` when nothing is attached or the write failed.
+    pub fn toggle_mute(&self) -> Option<bool> {
+        self.request(|reply| Msg::ToggleMute { reply }).flatten()
+    }
+
+    /// Makes `endpoint_id` the Windows default render device for the Console and Multimedia
+    /// roles (never Communications). Returns whether both writes succeeded.
+    pub fn set_default_endpoint(&self, endpoint_id: &str) -> bool {
+        if endpoint_id.trim().is_empty() {
+            return false;
+        }
+        let id = endpoint_id.to_owned();
+        self.request(|reply| Msg::SetDefault { id, reply })
+            .unwrap_or(false)
+    }
+
+    fn request<T>(&self, make: impl FnOnce(SyncSender<T>) -> Msg) -> Option<T> {
+        let tx = locked(&self.control).clone()?;
+        ask(&tx, make)
     }
 
     /// Pins the service to one endpoint id, or `None` to follow the Windows default again.

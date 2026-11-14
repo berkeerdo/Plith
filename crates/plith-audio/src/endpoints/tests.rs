@@ -1,6 +1,7 @@
 //! Unit tests for the pure endpoint layer.
 
 use super::*;
+use windows::Win32::Media::Audio::{eCommunications, eConsole, eMultimedia};
 
 fn endpoint(id: &str) -> Endpoint {
     Endpoint {
@@ -52,4 +53,32 @@ fn state_default_is_empty() {
     assert!(state.active.is_empty());
     assert_eq!(state.default_id, None);
     assert_eq!(state.attached, None);
+}
+
+#[test]
+fn volume_is_clamped_to_unit_range() {
+    assert_eq!(sanitize_volume(0.5), Some(0.5));
+    assert_eq!(sanitize_volume(0.0), Some(0.0));
+    assert_eq!(sanitize_volume(1.0), Some(1.0));
+    assert_eq!(sanitize_volume(-0.3), Some(0.0));
+    assert_eq!(sanitize_volume(7.0), Some(1.0));
+    assert_eq!(sanitize_volume(f32::NEG_INFINITY), Some(0.0));
+    assert_eq!(sanitize_volume(f32::INFINITY), Some(1.0));
+}
+
+#[test]
+fn nan_volume_is_rejected() {
+    assert_eq!(sanitize_volume(f32::NAN), None);
+}
+
+#[test]
+fn mute_flips_the_value_that_was_read() {
+    assert!(next_mute(false));
+    assert!(!next_mute(true));
+}
+
+#[test]
+fn only_console_and_multimedia_are_written() {
+    assert_eq!(DEFAULT_ROLES, [eConsole, eMultimedia]);
+    assert!(!DEFAULT_ROLES.contains(&eCommunications));
 }

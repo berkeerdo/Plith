@@ -4,7 +4,8 @@
 // The `#[implement]` expansion trips these pedantic lints; the code it generates is not ours.
 #![allow(clippy::ref_as_ptr, clippy::inline_always)]
 
-use std::sync::mpsc::Sender;
+use std::sync::mpsc::{Sender, SyncSender, sync_channel};
+use std::time::Duration;
 
 use windows::Win32::Foundation::PROPERTYKEY;
 use windows::Win32::Media::Audio::Endpoints::{
@@ -12,12 +13,12 @@ use windows::Win32::Media::Audio::Endpoints::{
 };
 use windows::Win32::Media::Audio::{
     AUDIO_VOLUME_NOTIFICATION_DATA, DEVICE_STATE, EDataFlow, ERole, IMMNotificationClient,
-    IMMNotificationClient_Impl, eMultimedia, eRender,
+    IMMNotificationClient_Impl,
 };
 use windows::core::{PCWSTR, Result, implement};
 
 /// A message for the service thread.
-pub(super) enum Msg {
+pub(crate) enum Msg {
     /// The device list, the default or a device state changed: re-read and re-resolve.
     Refresh,
     /// The attached endpoint reported a volume or mute change.
@@ -29,14 +30,48 @@ pub(super) enum Msg {
         /// Mute flag.
         muted: bool,
     },
+    /// Set the attached endpoint's master volume; replies whether it was written.
+    SetVolume {
+        /// Requested scalar; sanitized on the service thread.
+        value: f32,
+        /// Where the outcome goes.
+        reply: SyncSender<bool>,
+    },
+    /// Flip the attached endpoint's mute; replies with the new state.
+    ToggleMute {
+        /// Where the outcome goes.
+        reply: SyncSender<Option<bool>>,
+    },
+    /// Make an endpoint the default render device; replies whether both roles were written.
+    SetDefault {
+        /// Core Audio endpoint id.
+        id: String,
+        /// Where the outcome goes.
+        reply: SyncSender<bool>,
+    },
     /// Shut the thread down.
     Stop,
 }
 
+/// How long a caller waits for the service thread to answer a write.
+const REPLY_TIMEOUT: Duration = Duration::from_secs(3);
+
+/// Posts a request built by `make` and waits for its reply; `None` when the thread is gone or
+/// does not answer in time.
+pub(crate) fn ask<T>(tx: &Sender<Msg>, make: impl FnOnce(SyncSender<T>) -> Msg) -> Option<T> {
+    let (reply_tx, reply_rx) = sync_channel(1);
+    tx.send(make(reply_tx)).ok()?;
+    reply_rx.recv_timeout(REPLY_TIMEOUT).ok()
+}
+
 /// Device-level events: default changed, state changed, added, removed.
 #[implement(IMMNotificationClient)]
-pub(super) struct DeviceEvents {
-    pub(super) tx: Sender<Msg>,
+pub(crate) struct DeviceEvents {
+    pub(crate) tx: Sender<Msg>,
+    /// Data flow whose default-device changes matter.
+    pub(crate) flow: EDataFlow,
+    /// Role whose default-device changes matter.
+    pub(crate) role: ERole,
 }
 
 impl DeviceEvents {
@@ -62,7 +97,7 @@ impl IMMNotificationClient_Impl for DeviceEvents_Impl {
     }
 
     fn OnDefaultDeviceChanged(&self, flow: EDataFlow, role: ERole, _id: &PCWSTR) -> Result<()> {
-        if flow == eRender && role == eMultimedia {
+        if flow == self.flow && role == self.role {
             return self.post();
         }
         Ok(())
@@ -76,9 +111,9 @@ impl IMMNotificationClient_Impl for DeviceEvents_Impl {
 
 /// Volume and mute events of one attached endpoint.
 #[implement(IAudioEndpointVolumeCallback)]
-pub(super) struct VolumeEvents {
-    pub(super) tx: Sender<Msg>,
-    pub(super) generation: u64,
+pub(crate) struct VolumeEvents {
+    pub(crate) tx: Sender<Msg>,
+    pub(crate) generation: u64,
 }
 
 impl IAudioEndpointVolumeCallback_Impl for VolumeEvents_Impl {
