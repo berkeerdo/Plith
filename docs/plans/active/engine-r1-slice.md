@@ -492,7 +492,7 @@ Loop (the part the tests pin):
   - `mask`: Oyenza's layered 1/255 alpha mask window, updated every frame (not 30 Hz).
   Record per candidate in `engine-r1-spikes.md`: UI-thread cost per update (ms), whether the
   edge is clipped, and the Task 10 click results. Default to `region` until Task 10 decides.
-- [ ] **Step 2: Write the failing core tests**
+- [x] **Step 2: Write the failing core tests**
 
 ```rust
 #[test] fn foreground_change_raises_now_and_schedules_four_retries()
@@ -500,10 +500,10 @@ Loop (the part the tests pin):
 #[test] fn a_new_foreground_change_restarts_the_count()
 ```
 
-- [ ] **Step 3: FAIL. Step 4: Implement**; `WM_DPICHANGED` and `WM_DISPLAYCHANGE` raise
+- [x] **Step 3: FAIL. Step 4: Implement**; `WM_DPICHANGED` and `WM_DISPLAYCHANGE` raise
   `DisplayChanged` and the app relays the surface at rest only; `WM_LBUTTONUP` inside the shape
   raises `Click`; `WM_MOUSEACTIVATE` returns `MA_NOACTIVATE`.
-- [ ] **Step 5: PASS**, five checks.  **Step 6: Commit**
+- [x] **Step 5: PASS**, five checks.  **Step 6: Commit**
   `feat(shell): add notch window and hit testing`, push, tick.
 
 ### Task 9: App composition, log, demo driver and idle check (`crates/plith`)
