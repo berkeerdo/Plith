@@ -16,14 +16,15 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSession as Session,
     GlobalSystemMediaTransportControlsSessionManager as Manager,
 };
-use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use crate::coalesce::{Generation, expired};
+use crate::com::ComGuard;
 use crate::session::{self, Command};
 use crate::snapshot::{
     MediaSnapshot, PlaybackFacts, SessionInfo, Status, TrackFacts, keep_last_good,
 };
 use crate::timeline::Timeline;
+use crate::waker::{Waker, publish_with};
 
 /// How long a caller waits for the worker to answer a command or a session list.
 const ASK_CAP: Duration = Duration::from_secs(6);
@@ -38,19 +39,20 @@ struct Shared {
     generation: Generation,
     snapshot: Mutex<MediaSnapshot>,
     subscribers: Mutex<Vec<Sender<MediaSnapshot>>>,
+    waker: Waker,
 }
 
 impl Shared {
-    /// Stores a new snapshot and, when it differs, sends it to every subscriber.
+    /// Stores a new snapshot and, when it differs, sends it to every subscriber and wakes the
+    /// consumer.
     fn publish(&self, next: &MediaSnapshot) {
-        {
-            let mut current = locked(&self.snapshot);
+        publish_with(&self.snapshot, &self.subscribers, &self.waker, |current| {
             if *current == *next {
-                return;
+                return false;
             }
             current.clone_from(next);
-        }
-        locked(&self.subscribers).retain(|tx| tx.send(next.clone()).is_ok());
+            true
+        });
     }
 }
 
@@ -226,24 +228,6 @@ impl Worker {
     }
 }
 
-/// Owns COM for the worker thread; dropped last.
-struct ComGuard;
-
-impl ComGuard {
-    fn init() -> windows::core::Result<Self> {
-        // SAFETY: plain apartment initialization on the calling thread, balanced by `Drop`.
-        unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok()?;
-        Ok(Self)
-    }
-}
-
-impl Drop for ComGuard {
-    fn drop(&mut self) {
-        // SAFETY: balances the successful `CoInitializeEx` in `init`.
-        unsafe { CoUninitialize() };
-    }
-}
-
 fn run(shared: Arc<Shared>, tx: Sender<Msg>, rx: &Receiver<Msg>, ready: &SyncSender<Status>) {
     let _com = match ComGuard::init() {
         Ok(guard) => guard,
@@ -333,6 +317,7 @@ impl MediaService {
                 generation: Generation::default(),
                 snapshot: Mutex::new(MediaSnapshot::none()),
                 subscribers: Mutex::new(Vec::new()),
+                waker: Waker::default(),
             }),
             control: Mutex::new(None),
             thread: Mutex::new(None),
@@ -341,6 +326,10 @@ impl MediaService {
 
     /// Starts the worker and waits for the first reading. Calling it while running returns
     /// [`Status::Running`].
+    ///
+    /// Blocks until the first reading is done: COM and the SMTC manager request (each capped
+    /// at 2 s) plus the first track read with its artwork, so about 8 s in the worst case. Call
+    /// it off the UI thread.
     pub fn start(&self) -> Status {
         let mut slot = locked(&self.thread);
         if slot.is_some() {
@@ -391,7 +380,30 @@ impl MediaService {
         self.shared.publish(&MediaSnapshot::none());
     }
 
-    /// The latest reading; `has_session: false` when nothing is playing or not started.
+    /// Whether the worker thread is up. A worker that ended without `stop` reports unavailable,
+    /// never running.
+    #[must_use]
+    pub fn status(&self) -> Status {
+        match self.thread.try_lock() {
+            Ok(slot) => match slot.as_ref().map(JoinHandle::is_finished) {
+                Some(false) => Status::Running,
+                Some(true) => Status::Unavailable("the worker thread stopped unexpectedly".into()),
+                None => Status::Unavailable("not running".into()),
+            },
+            Err(_) => Status::Unavailable("starting or stopping".into()),
+        }
+    }
+
+    /// Registers a callback run on the worker thread after every published change, outside
+    /// every lock. It must not block; use it to post a message to a UI thread. Replaces any
+    /// earlier callback.
+    pub fn set_waker(&self, waker: Box<dyn Fn() + Send + Sync>) {
+        self.shared.waker.set(waker);
+    }
+
+    /// The latest reading; `has_session: false` when nothing is playing or not started. After a
+    /// failed or timed-out read the previous title and artist can stay for a moment (the last
+    /// good value is kept so the display does not blank), until the next successful read.
     #[must_use]
     pub fn snapshot(&self) -> MediaSnapshot {
         locked(&self.shared.snapshot).clone()

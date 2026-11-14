@@ -6,6 +6,8 @@
 
 pub mod coalesce;
 #[cfg(windows)]
+mod com;
+#[cfg(windows)]
 mod service;
 #[cfg(windows)]
 mod session;
@@ -13,6 +15,8 @@ pub mod snapshot;
 #[cfg(test)]
 mod tests;
 pub mod timeline;
+#[cfg(windows)]
+mod waker;
 
 pub use coalesce::Generation;
 #[cfg(windows)]

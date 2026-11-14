@@ -53,6 +53,8 @@ pub struct SessionInfo {
 }
 
 /// A failed or timed-out read must not erase a good value: keeps `previous` unless `read` has one.
+/// The price is that after a failed read the previous title can stay briefly, even when the
+/// source has already moved on, until the next read succeeds.
 #[must_use]
 pub fn keep_last_good<T>(previous: Option<T>, read: Option<T>) -> Option<T> {
     read.or(previous)

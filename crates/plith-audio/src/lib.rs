@@ -3,4 +3,5 @@
 pub mod endpoints;
 pub mod microphone;
 pub mod voicemeeter;
+#[cfg(windows)]
 mod waker;
