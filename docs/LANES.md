@@ -36,6 +36,6 @@ Updated 2026-11-14.
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
 | `engine` | execute `engine-r1-slice.md` (10 tasks, approved) | `feature/engine-slice` @ `c87bd1a` | plan approved; 5 proposed ADRs for the master after Task 10 | nothing (smoke runs allowed 2026-11-14 when not gaming, QUNS check first) |
-| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services` @ `797ab84` | Tasks 1, 2 done; Voicemeeter DLL renamed to .del on this PC, live checks unverified | Berke at Task 8: writes list, Voicemeeter installed? |
+| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services` @ `82dab67` | Tasks 1-7 done and reviewed (opus whole-branch review, fixes in); Task 8 batch sent to Berke | Berke's yes on Task 8 writes (9 items incl. media transport) |
 
 Master open items: R3 visual direction with Berke; file engine ADRs P1 to P5 after Task 10.
