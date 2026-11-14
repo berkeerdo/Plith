@@ -21,7 +21,7 @@ const LEVEL_DIVISOR: u32 = 2;
 const RECONNECT_EVERY: u32 = 60;
 
 /// Reads one strip or bus. `None` when the gain cannot be read yet (engine still starting).
-fn read_channel(api: &Api, rail: Rail, index: usize) -> Option<ChannelSnapshot> {
+fn read_channel(api: &Api, kind: VmKind, rail: Rail, index: usize) -> Option<ChannelSnapshot> {
     let gain_db = api.get_float(&param_name(rail, index, "Gain"))?;
     let muted = api
         .get_float(&param_name(rail, index, "Mute"))
@@ -29,7 +29,7 @@ fn read_channel(api: &Api, rail: Rail, index: usize) -> Option<ChannelSnapshot> 
     let label = api
         .get_string(&param_name(rail, index, "Label"))
         .filter(|l| !l.trim().is_empty())
-        .unwrap_or_else(|| fallback_label(rail, index));
+        .unwrap_or_else(|| fallback_label(kind, rail, index));
     Some(ChannelSnapshot {
         rail,
         index,
@@ -43,10 +43,10 @@ fn read_channel(api: &Api, rail: Rail, index: usize) -> Option<ChannelSnapshot> 
 pub(super) fn build_snapshot(api: &Api) -> Option<VmSnapshot> {
     let kind = VmKind::from_api(api.voicemeeter_type()?)?;
     let strips = (0..kind.strip_count())
-        .map(|i| read_channel(api, Rail::Strip, i))
+        .map(|i| read_channel(api, kind, Rail::Strip, i))
         .collect::<Option<Vec<_>>>()?;
     let buses = (0..kind.bus_count())
-        .map(|i| read_channel(api, Rail::Bus, i))
+        .map(|i| read_channel(api, kind, Rail::Bus, i))
         .collect::<Option<Vec<_>>>()?;
     Some(VmSnapshot {
         kind,

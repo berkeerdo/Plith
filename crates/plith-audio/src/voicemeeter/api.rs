@@ -12,12 +12,12 @@ use super::dll::load_remote_dll;
 
 type NoArgFn = unsafe extern "system" fn() -> i32;
 type GetFloatFn = unsafe extern "system" fn(*const c_char, *mut f32) -> i32;
-type GetStringFn = unsafe extern "system" fn(*const c_char, *mut u8) -> i32;
+type GetStringFn = unsafe extern "system" fn(*const c_char, *mut u16) -> i32;
 type SetFloatFn = unsafe extern "system" fn(*const c_char, f32) -> i32;
 type GetTypeFn = unsafe extern "system" fn(*mut i32) -> i32;
 type GetLevelFn = unsafe extern "system" fn(i32, i32, *mut f32) -> i32;
 
-/// Size the API requires for string results.
+/// Elements the API requires for string results.
 const STRING_BUFFER: usize = 512;
 
 /// Resolved exports plus the module handle that keeps them valid.
@@ -76,7 +76,7 @@ impl Api {
             logout: resolve!(module, "VBVMR_Logout", NoArgFn),
             is_dirty: resolve!(module, "VBVMR_IsParametersDirty", NoArgFn),
             get_float: resolve!(module, "VBVMR_GetParameterFloat", GetFloatFn),
-            get_string: resolve!(module, "VBVMR_GetParameterStringA", GetStringFn),
+            get_string: resolve!(module, "VBVMR_GetParameterStringW", GetStringFn),
             set_float: resolve!(module, "VBVMR_SetParameterFloat", SetFloatFn),
             get_type: resolve!(module, "VBVMR_GetVoicemeeterType", GetTypeFn),
             get_level: resolve!(module, "VBVMR_GetLevel", GetLevelFn),
@@ -130,12 +130,28 @@ impl Api {
         (rc == 0).then_some(value)
     }
 
-    /// `VBVMR_GetParameterStringA` decoded to a `String`; `None` when the call fails.
+    /// Flips a 0/1 parameter (reads the real state, writes the opposite) while holding the gate
+    /// across both calls. Returns the new state, `None` when the read or the write failed.
+    pub(super) fn toggle_float(&self, name: &str) -> Option<bool> {
+        let name = CString::new(name).ok()?;
+        let _gate = self.lock();
+        let mut current = 0f32;
+        // SAFETY: `name` is NUL terminated and `current` is a valid out pointer.
+        if unsafe { (self.get_float)(name.as_ptr(), &raw mut current) } != 0 {
+            return None;
+        }
+        let next = current < 0.5;
+        let value = if next { 1.0 } else { 0.0 };
+        // SAFETY: `name` is NUL terminated.
+        (unsafe { (self.set_float)(name.as_ptr(), value) } == 0).then_some(next)
+    }
+
+    /// `VBVMR_GetParameterStringW` decoded to a `String`; `None` when the call fails.
     pub(super) fn get_string(&self, name: &str) -> Option<String> {
         let name = CString::new(name).ok()?;
         let _gate = self.lock();
-        let mut buffer = [0u8; STRING_BUFFER];
-        // SAFETY: `name` is NUL terminated; the API requires a buffer of at least 512 bytes
+        let mut buffer = [0u16; STRING_BUFFER];
+        // SAFETY: `name` is NUL terminated; the API requires a buffer of at least 512 elements
         // and `buffer` is exactly that.
         let rc = unsafe { (self.get_string)(name.as_ptr(), buffer.as_mut_ptr()) };
         (rc == 0).then(|| decode_label(&buffer))

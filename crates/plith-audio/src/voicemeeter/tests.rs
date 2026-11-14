@@ -30,15 +30,24 @@ fn param_name_format() {
 }
 
 #[test]
-fn fallback_labels() {
-    assert_eq!(fallback_label(Rail::Strip, 0), "Strip 1");
-    assert_eq!(fallback_label(Rail::Strip, 7), "Strip 8");
-    assert_eq!(fallback_label(Rail::Bus, 0), "A1");
-    assert_eq!(fallback_label(Rail::Bus, 4), "A5");
-    assert_eq!(fallback_label(Rail::Bus, 5), "B1");
-    assert_eq!(fallback_label(Rail::Bus, 7), "B3");
+fn fallback_labels_strips() {
+    assert_eq!(fallback_label(VmKind::Banana, Rail::Strip, 0), "Strip 1");
+    assert_eq!(fallback_label(VmKind::Potato, Rail::Strip, 7), "Strip 8");
 }
 
+fn bus_labels(kind: VmKind) -> Vec<String> {
+    (0..kind.bus_count())
+        .map(|i| fallback_label(kind, Rail::Bus, i))
+        .collect()
+}
+
+#[test]
+fn fallback_labels_buses_per_kind() {
+    assert_eq!(bus_labels(VmKind::Standard), ["A1", "A2"]);
+    assert_eq!(bus_labels(VmKind::Banana), ["A1", "A2", "A3", "B1", "B2"]);
+    let potato = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
+    assert_eq!(bus_labels(VmKind::Potato), potato);
+}
 fn secs(n: u64) -> Duration {
     Duration::from_secs(n)
 }
@@ -122,22 +131,47 @@ fn uninstall_string_to_directory() {
     assert_eq!(install_dir_from_uninstall("setup.exe"), None);
 }
 
-#[test]
-fn label_decode_stops_at_nul() {
-    assert_eq!(decode_label(b"Mic\0garbage"), "Mic");
-    assert_eq!(decode_label(b"\0"), "");
-    assert_eq!(decode_label(b""), "");
-    assert_eq!(decode_label(b"No terminator"), "No terminator");
+fn wide(text: &str) -> Vec<u16> {
+    text.encode_utf16().collect()
 }
 
 #[test]
-fn label_decode_utf8_then_latin1() {
+fn label_decode_stops_at_nul() {
+    assert_eq!(decode_label(&wide("Mic\0garbage")), "Mic");
+    assert_eq!(decode_label(&[0]), "");
+    assert_eq!(decode_label(&[]), "");
+    assert_eq!(decode_label(&wide("No terminator")), "No terminator");
+}
+
+#[test]
+fn label_decode_keeps_turkish_and_replaces_bad_surrogates() {
     assert_eq!(
-        decode_label("Kulakl\u{131}k\0".as_bytes()),
-        "Kulakl\u{131}k"
+        decode_label(&wide("Kulakl\u{131}k \u{15f}\u{11f}\0")),
+        "Kulakl\u{131}k \u{15f}\u{11f}"
     );
-    // 0xE9 alone is invalid UTF-8, so it is read as Latin-1 (e with acute).
-    assert_eq!(decode_label(&[b'C', b'a', b'f', 0xE9, 0]), "Caf\u{e9}");
+    assert_eq!(decode_label(&[0x41, 0xD800, 0x42, 0]), "A\u{fffd}B");
+}
+
+#[test]
+fn candidate_paths_are_absolute_only() {
+    let dll = "VoicemeeterRemote64.dll";
+    let default = r"C:\Program Files (x86)\VB\Voicemeeter";
+    let dirs = vec![
+        r"D:\Audio\VB".to_owned(),
+        "relative\\dir".to_owned(),
+        r"\\server\share\VB".to_owned(),
+        r"D:\Audio\VB".to_owned(),
+    ];
+    assert_eq!(
+        candidate_paths(&dirs, default, dll),
+        [
+            r"D:\Audio\VB\VoicemeeterRemote64.dll",
+            r"\\server\share\VB\VoicemeeterRemote64.dll",
+            r"C:\Program Files (x86)\VB\Voicemeeter\VoicemeeterRemote64.dll",
+        ]
+    );
+    // Never a bare name, even with nothing registered.
+    assert_eq!(candidate_paths(&[], default, dll).len(), 1);
 }
 
 #[test]

@@ -94,7 +94,9 @@ impl VoicemeeterService {
     /// Loads the DLL, logs in and starts the poll thread. Never panics: any problem comes back
     /// as [`Status::Unavailable`]. Calling it while running returns the current status.
     pub fn start(&self) -> Status {
-        if locked(&self.thread).is_some() {
+        // Held for the whole start so two concurrent starts cannot both load and log in.
+        let mut slot = locked(&self.thread);
+        if slot.is_some() {
             return self.status();
         }
         let api = match Api::load() {
@@ -117,11 +119,13 @@ impl VoicemeeterService {
             .spawn(move || poll::run(worker_api, shared, session));
         match spawned {
             Ok(handle) => {
-                *locked(&self.thread) = Some(handle);
+                *slot = Some(handle);
                 Status::Running
             }
             Err(err) => {
-                self.stop();
+                if let Some(api) = locked(&self.api).take() {
+                    api.logout();
+                }
                 self.fail(format!("could not start the poll thread: {err}"))
             }
         }
@@ -202,10 +206,7 @@ impl VoicemeeterService {
         if !self.in_range(rail, index) {
             return None;
         }
-        let name = param_name(rail, index, "Mute");
-        let next = api.get_float(&name)? < 0.5;
-        api.set_float(&name, if next { 1.0 } else { 0.0 })
-            .then_some(next)
+        api.toggle_float(&param_name(rail, index, "Mute"))
     }
 }
 

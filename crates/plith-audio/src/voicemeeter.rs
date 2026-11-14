@@ -16,7 +16,9 @@ mod session;
 #[cfg(test)]
 mod tests;
 
-pub use decode::{decode_label, install_dir_from_uninstall, level_channel, level_type};
+pub use decode::{
+    candidate_paths, decode_label, install_dir_from_uninstall, level_channel, level_type,
+};
 pub use layout::{fallback_label, param_name};
 #[cfg(windows)]
 pub use service::{Status, VoicemeeterService};

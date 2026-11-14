@@ -32,16 +32,41 @@ pub fn install_dir_from_uninstall(uninstall: &str) -> Option<String> {
     }
 }
 
-/// Decodes the ANSI buffer `VBVMR_GetParameterStringA` filled: stops at the first NUL, reads
-/// UTF-8 when valid and falls back to Latin-1 otherwise.
+/// Decodes the UTF-16 buffer `VBVMR_GetParameterStringW` filled: stops at the first NUL and
+/// replaces unpaired surrogates. UTF-16 avoids the ANSI code page problem of the `A` variant.
 #[must_use]
-pub fn decode_label(buffer: &[u8]) -> String {
-    let end = buffer.iter().position(|&b| b == 0).unwrap_or(buffer.len());
-    let bytes = &buffer[..end];
-    match std::str::from_utf8(bytes) {
-        Ok(text) => text.to_owned(),
-        Err(_) => bytes.iter().map(|&b| char::from(b)).collect(),
+pub fn decode_label(buffer: &[u16]) -> String {
+    let end = buffer.iter().position(|&u| u == 0).unwrap_or(buffer.len());
+    String::from_utf16_lossy(&buffer[..end])
+}
+
+/// True for drive paths (`X:` then a backslash) and UNC paths (two leading backslashes).
+fn is_absolute(path: &str) -> bool {
+    let bytes = path.as_bytes();
+    let drive =
+        bytes.len() >= 3 && bytes[0].is_ascii_alphabetic() && bytes[1] == b':' && bytes[2] == b'\\';
+    drive || path.starts_with(r"\\")
+}
+
+/// Full DLL paths to try, in order: each registry directory, then the default one. Relative
+/// directories are dropped and duplicates removed, so the result never contains a bare name.
+#[must_use]
+pub fn candidate_paths(registry_dirs: &[String], default_dir: &str, dll_name: &str) -> Vec<String> {
+    let mut found: Vec<String> = Vec::new();
+    for dir in registry_dirs
+        .iter()
+        .map(String::as_str)
+        .chain([default_dir])
+    {
+        if !is_absolute(dir) {
+            continue;
+        }
+        let path = format!("{}\\{dll_name}", dir.trim_end_matches('\\'));
+        if !found.contains(&path) {
+            found.push(path);
+        }
     }
+    found
 }
 
 /// Number of two-channel hardware strips before the wide virtual strips.
