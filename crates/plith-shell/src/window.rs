@@ -24,10 +24,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST,
     IDC_ARROW, IsWindow, LWA_ALPHA, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage,
     RegisterClassExW, SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetLayeredWindowAttributes, SetWindowPos,
-    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED,
-    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW,
-    WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST,
-    WS_EX_TRANSPARENT, WS_POPUP,
+    ShowWindow, TranslateMessage, WINDOW_EX_STYLE, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE,
+    WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_POWERBROADCAST, WM_TIMER,
+    WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_LAYERED, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
@@ -41,6 +41,8 @@ pub enum ShellEvent {
     Click,
     /// The DPI or the display configuration changed; relay the surface when the island is at rest.
     DisplayChanged,
+    /// The window is about to be destroyed (`WM_CLOSE`): stop anything that presents to it.
+    Closing,
     /// The suppression state changed; republish the scene with it.
     Suppression(Suppression),
     /// The shell raised its windows after a foreground change; carries the class name of the
@@ -349,6 +351,7 @@ unsafe extern "system" fn window_proc(
         WM_POWERBROADCAST if is_visual => suppress::on_power(&inner, wparam, lparam),
         WM_WTSSESSION_CHANGE if is_visual => suppress::on_session(&inner, wparam),
         WM_APP_BAR if is_visual => suppress::on_appbar(&inner, wparam, lparam),
+        WM_CLOSE if is_visual => inner.emit(ShellEvent::Closing),
         WM_DESTROY if is_visual => {
             on_destroy(&inner, hwnd);
             return LRESULT(0);

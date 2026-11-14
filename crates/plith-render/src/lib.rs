@@ -15,4 +15,6 @@ pub use gpu_paint::GpuPaint;
 pub use offscreen::render_offscreen;
 pub use paint::{PaintFrame, Painter};
 pub use target::CompositionTarget;
-pub use thread::{FrameTimes, Paint, RenderConfig, RenderError, RenderHandle, RenderSinks, spawn};
+pub use thread::{
+    FrameTimes, Paint, RenderConfig, RenderError, RenderHandle, RenderSinks, StopHandle, spawn,
+};

@@ -6,10 +6,10 @@ use crate::log::LogFile;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox};
-use plith_render::RenderSinks;
+use plith_render::{RenderSinks, StopHandle};
 use plith_shell::{MonitorInfo, QuitHandle, ShapePoster, Shell, ShellEvent, is_remote_session};
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 
 /// How long a demo or an idle check may run before the watchdog closes the window.
@@ -71,12 +71,24 @@ pub fn exit_code(loop_code: i32, fatal: bool, watchdog: bool, idle: Option<bool>
 
 /// The shell event handler. It runs on the UI thread and reads the current scene from the
 /// mailbox, so a demo step in between is not overwritten.
+///
+/// On `Closing` (`WM_CLOSE`, before the window is destroyed) it sets `closing` and asks the
+/// render thread to stop, because that thread presents to the window being destroyed.
 pub fn event_handler(
     mailbox: &Arc<SceneMailbox>,
     log: &Arc<LogFile>,
+    closing: &Arc<AtomicBool>,
+    stopper: &Arc<OnceLock<StopHandle>>,
 ) -> Box<dyn FnMut(ShellEvent)> {
     let (mailbox, log) = (Arc::clone(mailbox), Arc::clone(log));
+    let (closing, stopper) = (Arc::clone(closing), Arc::clone(stopper));
     Box::new(move |event| match event {
+        ShellEvent::Closing => {
+            closing.store(true, Ordering::Release);
+            if let Some(stop) = stopper.get() {
+                stop.request();
+            }
+        }
         ShellEvent::Click => {
             mailbox.update(|scene| Scene {
                 expanded: !scene.expanded,
@@ -102,19 +114,25 @@ pub fn event_handler(
 }
 
 /// The render thread's callbacks: shapes to the UI thread, motion reports and a fatal error to
-/// the log (a fatal error also closes the window and sets `fatal`).
+/// the log (a fatal error also closes the window and sets `fatal`, unless the window is already
+/// closing: a present that fails on a window being destroyed is part of a clean close).
 pub fn sinks(
     poster: ShapePoster,
     log: &Arc<LogFile>,
     quit: QuitHandle,
     fatal: &Arc<AtomicBool>,
+    closing: &Arc<AtomicBool>,
 ) -> RenderSinks {
     let (motion_log, fatal_log) = (Arc::clone(log), Arc::clone(log));
-    let fatal = Arc::clone(fatal);
+    let (fatal, closing) = (Arc::clone(fatal), Arc::clone(closing));
     RenderSinks {
         on_shape: Box::new(move |frame| poster.post(frame)),
         on_motion: Box::new(move |report| motion_log.line(&report.to_string())),
         on_fatal: Box::new(move |message| {
+            if closing.load(Ordering::Acquire) {
+                fatal_log.line(&format!("render stopped while closing: {message}"));
+                return;
+            }
             fatal_log.line(&format!("render fatal: {message}"));
             fatal.store(true, Ordering::Release);
             quit.quit();

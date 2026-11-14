@@ -105,7 +105,31 @@ pub struct RenderHandle {
     join: Option<JoinHandle<()>>,
 }
 
+/// Asks the render thread to stop without joining it; usable from any thread.
+#[derive(Clone)]
+pub struct StopHandle {
+    mailbox: Arc<SceneMailbox>,
+    shared: Arc<LoopShared>,
+}
+
+impl StopHandle {
+    /// Requests the stop: a moving loop ends at its next frame, a parked one is released.
+    pub fn request(&self) {
+        self.shared.request_stop();
+        self.mailbox.stop();
+    }
+}
+
 impl RenderHandle {
+    /// A handle that can request the stop while another owner keeps the join.
+    #[must_use]
+    pub fn stop_handle(&self) -> StopHandle {
+        StopHandle {
+            mailbox: Arc::clone(&self.mailbox),
+            shared: Arc::clone(&self.shared),
+        }
+    }
+
     /// Returns from any wait (mailbox or clock) so far; zero growth means parked.
     #[must_use]
     pub fn wake_count(&self) -> u64 {

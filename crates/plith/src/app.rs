@@ -13,8 +13,8 @@ use plith_shell::{
     MonitorInfo, QuitHandle, Shell, init_process, is_remote_session, primary_monitor,
     run_message_loop, user_busy,
 };
-use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, OnceLock};
 use std::thread;
 
 /// Runs the app until its window closes and returns the process exit code.
@@ -54,7 +54,9 @@ fn run_shell(
     layout: SurfaceLayout,
 ) -> i32 {
     let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
-    let handler = wire::event_handler(&mailbox, log);
+    let closing = Arc::new(AtomicBool::new(false));
+    let stopper = Arc::new(OnceLock::new());
+    let handler = wire::event_handler(&mailbox, log, &closing, &stopper);
     let shell = match Shell::create(layout, launch.hit, Arc::new(ShapeCell::default()), handler) {
         Ok(shell) => shell,
         Err(error) => {
@@ -73,7 +75,7 @@ fn run_shell(
         remote: is_remote_session(),
         hz: monitor.hz,
     };
-    let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal);
+    let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
         Ok(render) => render,
         Err(error) => {
@@ -81,6 +83,7 @@ fn run_shell(
             return 1;
         }
     };
+    let _ = stopper.set(render.stop_handle());
     let stop = Arc::new(AtomicBool::new(false));
     let fired = Arc::new(AtomicBool::new(false));
     let helpers = Helpers {
@@ -93,6 +96,9 @@ fn run_shell(
         quit,
     };
     let (loop_code, idle_ok) = drive(&helpers);
+    // The window may already be destroyed: stop and join the renderer before the `Shell` drops,
+    // and treat a failure from here on as part of the close.
+    closing.store(true, Ordering::Release);
     render.shutdown();
     log.line(&wire::hit_line(&shell));
     wire::exit_code(
