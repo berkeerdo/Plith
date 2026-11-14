@@ -1,0 +1,318 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Plith R3 Ray Paneli</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=block" rel="stylesheet">
+<style>
+  /* Loft dark floor and the R3 Ray Paneli roles. Lime means "sound flows here now", nothing else. */
+  :root {
+    --floor-top: #0B0B0A; --floor-bottom: #151412; --border: #2B2824;
+    --ink: #ECE9E2; --ink-muted: #A39E94; --ink-faint: #7A756C;
+    --track: #4A463F; --track-faint: #2E2B27; --lime: #CAFF33;
+    --desk: #1B1D21;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101113; color: var(--ink); font-family: "Public Sans", sans-serif; padding: 40px; width: 1500px; }
+  h1 { font: 500 13px "Martian Mono", monospace; letter-spacing: .08em; color: var(--ink-muted); margin-bottom: 6px; }
+  p.lede { font-size: 13px; color: var(--ink-faint); margin-bottom: 28px; max-width: 900px; }
+  .grid { display: grid; grid-template-columns: 680px 680px; gap: 36px 48px; }
+  .cell { background: var(--desk); padding: 0 30px 30px; border-radius: 4px; position: relative; }
+  .cell .edge { height: 2px; background: #000; margin: 0 -30px; }
+  .cap { font: 400 10px "Martian Mono", monospace; letter-spacing: .08em; color: var(--ink-faint); text-transform: uppercase; position: absolute; bottom: 10px; left: 30px; }
+  .island { margin: 0 auto; background: linear-gradient(var(--floor-top), var(--floor-bottom)); border: 1px solid var(--border); border-top: none; position: relative; }
+  .island svg { display: block; }
+  .row { display: flex; gap: 40px; align-items: flex-start; justify-content: center; }
+  text { font-family: "Public Sans", sans-serif; }
+  .mono { font-family: "Martian Mono", monospace; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>PLITH R3 · RAY PANELİ · LOFT DARK · 1:1 DIP</h1>
+<p class="lede">Ses sayfası bir hat diyagramı: kaynaklar solda, çıkışlar sağda, sesin şu an gittiği yol lime yanar. Hap ve OSD sabit yuvalı tek mühür. Kırpılan an yanan hatta lime çentik olarak 8 saniye kalır.</p>
+<div class="grid" id="grid"></div>
+<script>
+// A theme changes only colours: floor, ink tones, tracks and the one "flow" colour (key `lime`).
+const THEMES = {
+  gece: { title: 'Gece · Loft koyu, lime akış', floorTop: '#0B0B0A', floorBottom: '#151412', border: '#2B2824', desk: '#1B1D21',
+    ink: '#ECE9E2', muted: '#A39E94', faint: '#7A756C', track: '#4A463F', trackFaint: '#2E2B27', lime: '#CAFF33' },
+  kagit: { title: 'Kağıt · Loft açık, koyu yeşil akış', floorTop: '#F3F2ED', floorBottom: '#E7E6E0', border: '#CFCBC2', desk: '#C9CDD3',
+    ink: '#1A1916', muted: '#55514A', faint: '#7F7A71', track: '#B3AEA4', trackFaint: '#D6D2C9', lime: '#3F6E00' },
+  york: { title: 'York · 1951 NX paneli, lamba beyazı akış', floorTop: '#1C2420', floorBottom: '#222B26', border: '#34403A', desk: '#14181A',
+    ink: '#E4EAE4', muted: '#9EAAA2', faint: '#71807A', track: '#46534D', trackFaint: '#2C3631', lime: '#FFE9A8' },
+  sodyum: { title: 'Sodyum · siyah zemin, amber akış', floorTop: '#09090A', floorBottom: '#111113', border: '#26262A', desk: '#1A1A1D',
+    ink: '#EDEDEF', muted: '#A2A2A8', faint: '#74747B', track: '#45454B', trackFaint: '#2A2A2E', lime: '#FFB224' },
+};
+let C = { ...THEMES.gece, floor: THEMES.gece.floorTop };
+function useTheme(key) { C = { ...THEMES[key], floor: THEMES[key].floorTop }; }
+const W = 620;
+
+function el(tag, attrs, text) {
+  const n = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+function station(svg, x, y, state) {
+  // state: lit, ink, hollow, candidate
+  const s = state === 'lit' || state === 'ink' ? 7 : 7;
+  const fill = state === 'lit' ? C.lime : state === 'ink' ? C.ink : C.floor;
+  const stroke = state === 'lit' ? C.lime : state === 'ink' ? C.ink : state === 'candidate' ? C.lime : C.faint;
+  svg.appendChild(el('rect', { x: x - s / 2, y: y - s / 2, width: s, height: s, fill, stroke, 'stroke-width': 1 }));
+}
+function label(svg, x, y, txt, o = {}) {
+  svg.appendChild(el('text', {
+    x, y, fill: o.fill || C.ink, 'font-size': o.size || 13, 'font-weight': o.weight || 400,
+    'text-anchor': o.anchor || 'start', class: o.mono ? 'mono' : '',
+    'letter-spacing': o.mono ? '0.06em' : '0'
+  }, txt));
+}
+function line(svg, pts, o = {}) {
+  svg.appendChild(el('polyline', {
+    points: pts.map(p => p.join(',')).join(' '), fill: 'none',
+    stroke: o.stroke || C.track, 'stroke-width': o.w || 1, 'stroke-dasharray': o.dash || '',
+    'stroke-linejoin': 'miter'
+  }));
+}
+// Rail route: horizontal, 45 degree diagonal at xa, horizontal into the station.
+function route(x0, y0, xa, y1, x1) {
+  const dy = Math.abs(y1 - y0);
+  return y0 === y1 ? [[x0, y0], [x1, y1]] : [[x0, y0], [xa, y0], [xa + dy, y1], [x1, y1]];
+}
+function tabs(svg, active) {
+  const names = ['SES', 'MEDYA', 'RAF', 'SİSTEM'];
+  const y = 34, x0 = 30, step = 112;
+  line(svg, [[x0, y], [x0 + step * 3 + 120, y]], { stroke: C.trackFaint });
+  names.forEach((n, i) => {
+    const x = x0 + i * step;
+    station(svg, x, y, i === active ? 'ink' : 'hollow');
+    label(svg, x - 3, y - 12, n, { mono: true, size: 10, fill: i === active ? C.ink : C.faint });
+  });
+  station(svg, x0 + step * 3 + 120, y, 'hollow');
+  label(svg, W - 24, y + 4, '21:47', { mono: true, size: 12, anchor: 'end', fill: C.muted });
+}
+// The last 8 seconds of a level, drawn as a quiet trace; a clip stays as a lime notch.
+function trace(svg, x, y, seed, clipAt) {
+  const w = 64, pts = [];
+  let v = 0.5;
+  for (let i = 0; i <= 32; i++) {
+    v = Math.max(0.1, Math.min(0.95, v + Math.sin(seed * 7 + i * 1.7) * 0.22));
+    pts.push([x + (i / 32) * w, y + 7 - v * 14]);
+  }
+  line(svg, [[x, y + 7], [x + w, y + 7]], { stroke: C.trackFaint });
+  line(svg, pts, { stroke: C.faint });
+  if (clipAt !== undefined) svg.appendChild(el('rect', { x: x + clipAt * w - 1, y: y - 8, width: 2, height: 16, fill: C.lime }));
+}
+function island(w, h, r) {
+  const d = document.createElement('div');
+  d.className = 'island';
+  d.style.background = `linear-gradient(${C.floorTop}, ${C.floorBottom})`;
+  d.style.borderColor = C.border;
+  d.style.width = w + 'px'; d.style.height = h + 'px';
+  d.style.borderRadius = `0 0 ${r}px ${r}px`;
+  const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+  d.appendChild(svg);
+  return [d, svg];
+}
+function cell(caption, nodes, stacked) {
+  const c = document.createElement('div');
+  c.className = 'cell';
+  c.style.background = C.desk;
+  const e = document.createElement('div'); e.className = 'edge'; c.appendChild(e);
+  const row = document.createElement('div'); row.className = 'row';
+  if (stacked) { row.style.flexDirection = 'column'; row.style.alignItems = 'center'; row.style.gap = '24px'; }
+  nodes.forEach(n => row.appendChild(n));
+  c.appendChild(row);
+  c.style.paddingBottom = '48px';
+  const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = caption; c.appendChild(cap);
+  document.getElementById('grid').appendChild(c);
+}
+
+// ---- Audio page: the track diagram ----
+const SOURCES = [
+  { name: 'Mikrofon', sub: 'HW 1 · SHURE MV7', y: 86, seed: 1, clip: 0.62 },
+  { name: 'Hat girişi', sub: 'HW 2', y: 136, seed: 2, muted: true },
+  { name: 'Windows', sub: 'VAIO · OYUN, TARAYICI', y: 186, seed: 3 },
+  { name: 'Discord', sub: 'AUX', y: 236, seed: 4 },
+];
+const OUTPUTS = [
+  { bus: 'A1', name: 'Logitech G733', vol: '62', y: 86, lit: true },
+  { bus: 'A2', name: 'Edifier R1280', vol: '40', y: 136 },
+  { bus: 'B1', name: 'Discord mikrofonu', vol: '0 dB', y: 186, lit: true },
+  { bus: 'B2', name: 'Kullanılmıyor', vol: '', y: 236, idle: true },
+];
+const XS = 252, XO = 452;
+function audioPage(mode) {
+  const [d, svg] = island(W, 300, 24);
+  tabs(svg, 0);
+  SOURCES.forEach(s => {
+    const sel = mode === 'pick' && s.name === 'Mikrofon';
+    label(svg, 30, s.y, sel ? '[ Mikrofon ]' : s.name, { fill: sel ? C.lime : s.muted ? C.faint : C.ink });
+    label(svg, 30, s.y + 15, s.sub, { mono: true, size: 9, fill: C.faint });
+    if (!s.muted) trace(svg, 168, s.y - 3, s.seed, s.clip);
+  });
+  OUTPUTS.forEach(o => {
+    label(svg, XO + 14, o.y + 1, o.bus, { mono: true, size: 10, fill: C.faint });
+    label(svg, XO + 38, o.y + 1, o.name, { fill: o.idle ? C.faint : C.ink, size: 12 });
+    if (o.vol) label(svg, W - 24, o.y + 16, o.vol, { mono: true, size: 10, anchor: 'end', fill: C.muted });
+  });
+  const lit = { stroke: C.lime, w: 2 };
+  // Lit routes: Windows and Discord join A1, the microphone runs to B1.
+  line(svg, route(XS, 186, 300, 86, XO), lit);
+  line(svg, route(XS, 236, 280, 86, XO), lit);
+  line(svg, route(XS, 86, 330, 186, XO), lit);
+  // Muted source: the line is cut and says so.
+  line(svg, [[XS, 133], [290, 133]], { stroke: C.track });
+  label(svg, 300, 137, 'SESSİZ', { mono: true, size: 9, fill: C.faint });
+  station(svg, 290, 133, 'hollow');
+  if (mode === 'pick') {
+    // Picking a route for the microphone: every output it can reach shows as a candidate.
+    line(svg, route(XS + 8, 92, XO - 44 - 12, 136, XO), { stroke: C.lime, dash: '3 4' });
+    line(svg, route(XS + 8, 92, XO - 144 - 12, 236, XO), { stroke: C.lime, dash: '3 4' });
+    line(svg, [[XS + 8, 92], [XO, 92]], { stroke: C.lime, dash: '3 4' });
+  }
+  SOURCES.forEach(s => station(svg, XS, s.muted ? 133 : s.y - 3, s.muted ? 'ink' : 'lit'));
+  OUTPUTS.forEach(o => station(svg, XO, o.y - 3, o.lit ? 'lit' : mode === 'pick' ? 'candidate' : 'hollow'));
+  label(svg, 30, 284, mode === 'pick' ? 'ÇIKIŞA DOKUN: YOL KURULUR · ESC VAZGEÇER' : 'KAYNAĞA, SONRA ÇIKIŞA DOKUN', { mono: true, size: 9, fill: C.faint });
+  return d;
+}
+
+// ---- Media page ----
+function mediaPage() {
+  const h = 232;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 1);
+  // Cover art placeholder (the real art is the album image).
+  svg.appendChild(el('rect', { x: 30, y: 62, width: 96, height: 96, fill: '#3A3631' }));
+  for (let i = 0; i < 12; i++) line(svg, [[30 + i * 8, 158], [30 + i * 8 + 8, 62 + 0]], { stroke: '#4A453E' });
+  label(svg, 146, 82, 'Midnight City', { size: 16, weight: 600 });
+  label(svg, 146, 102, 'M83 · Hurry Up, We’re Dreaming', { size: 12, fill: C.muted });
+  // Seek on a ruler: played part is lit because sound is flowing.
+  const x0 = 146, x1 = W - 30, y = 128, f = 0.42;
+  line(svg, [[x0, y], [x1, y]], { stroke: C.track });
+  for (let i = 0; i <= 20; i++) { const x = x0 + (x1 - x0) * i / 20; line(svg, [[x, y + 4], [x, y + (i % 5 ? 7 : 10)]], { stroke: C.faint }); }
+  line(svg, [[x0, y], [x0 + (x1 - x0) * f, y]], { stroke: C.lime, w: 2 });
+  station(svg, x0 + (x1 - x0) * f, y, 'lit');
+  label(svg, x0, y + 26, '1:42', { mono: true, size: 10, fill: C.muted });
+  label(svg, x1, y + 26, '4:03', { mono: true, size: 10, fill: C.muted, anchor: 'end' });
+  // Transport.
+  const cx = (x0 + x1) / 2, ty = 150;
+  svg.appendChild(el('path', { d: `M${cx - 50} ${ty - 6}v12M${cx - 38} ${ty - 6}l-10 6 10 6z`, stroke: C.ink, fill: C.ink }));
+  svg.appendChild(el('path', { d: `M${cx - 5} ${ty - 7}h3v14h-3zM${cx + 3} ${ty - 7}h3v14h-3z`, fill: C.ink }));
+  svg.appendChild(el('path', { d: `M${cx + 50} ${ty - 6}v12M${cx + 38} ${ty - 6}l10 6 -10 6z`, stroke: C.ink, fill: C.ink }));
+  // Output picker as the route: Spotify -> A1 lit; Edifier is a reachable station.
+  const ry = 196;
+  label(svg, 30, ry + 4, 'SPOTIFY', { mono: true, size: 10, fill: C.muted });
+  line(svg, [[96, ry], [380, ry]], { stroke: C.lime, w: 2 });
+  line(svg, [[300, ry], [320, ry + 20], [470, ry + 20]], { stroke: C.track });
+  station(svg, 96, ry, 'lit'); station(svg, 380, ry, 'lit'); station(svg, 470, ry + 20, 'hollow');
+  label(svg, 392, ry + 4, 'A1 · G733', { mono: true, size: 10 });
+  label(svg, 482, ry + 24, 'A2 · EDIFIER', { mono: true, size: 10, fill: C.faint });
+  return d;
+}
+
+// ---- Shelf page: a siding, files are wagons waiting ----
+function shelfPage() {
+  const h = 214;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 2);
+  const files = [['PNG', 'Proje görseli', 'assets final.png'], ['MP4', 'Klip kesit', '2026-11-14.mp4'], ['PDF', 'Fatura Kasım', 'Natro.pdf'], ['ZIP', 'Voicemeeter', 'ayarlar.zip']];
+  const ty = 170, ww = 104, gap = 12;
+  line(svg, [[30, ty], [W - 30, ty]], { stroke: C.track });
+  files.forEach((f, i) => {
+    const x = 30 + i * (ww + gap);
+    svg.appendChild(el('rect', { x, y: 62, width: ww, height: 92, fill: 'none', stroke: C.track }));
+    label(svg, x + 10, 80, f[0], { mono: true, size: 9, fill: C.faint });
+    label(svg, x + 10, 124, f[1], { size: 12 });
+    label(svg, x + 10, 140, f[2], { size: 12, fill: C.muted });
+    station(svg, x + 20, ty, 'ink'); station(svg, x + ww - 20, ty, 'ink');
+  });
+  const x = 30 + 4 * (ww + gap);
+  svg.appendChild(el('rect', { x, y: 62, width: W - 30 - x, height: 92, fill: 'none', stroke: C.faint, 'stroke-dasharray': '3 4' }));
+  label(svg, x + (W - 30 - x) / 2, 112, 'BIRAK', { mono: true, size: 9, fill: C.faint, anchor: 'middle' });
+  station(svg, W - 30, ty, 'hollow');
+  label(svg, 30, h - 18, '4 DOSYA · SÜRÜKLE, BIRAK, GERİ AL', { mono: true, size: 9, fill: C.faint });
+  return d;
+}
+
+// ---- System page ----
+function systemPage(micMuted) {
+  const h = 178;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 3);
+  label(svg, 30, 82, 'Parlaklık', {});
+  label(svg, 30, 97, 'DELL AW2725DF', { mono: true, size: 9, fill: C.faint });
+  const x0 = 200, x1 = W - 70, y = 80, f = 0.7;
+  line(svg, [[x0, y], [x1, y]], { stroke: C.track });
+  for (let i = 0; i <= 10; i++) { const x = x0 + (x1 - x0) * i / 10; line(svg, [[x, y + 4], [x, y + (i % 5 ? 7 : 11)]], { stroke: C.faint }); }
+  line(svg, [[x0, y], [x0 + (x1 - x0) * f, y]], { stroke: C.ink, w: 2 });
+  station(svg, x0 + (x1 - x0) * f, y, 'ink');
+  label(svg, W - 30, y + 4, '70', { mono: true, size: 12, anchor: 'end' });
+  // Microphone route: lit to B1, or cut and labelled.
+  const my = 132;
+  label(svg, 30, my + 2, 'Mikrofon', {});
+  label(svg, 30, my + 17, 'HW 1 · SHURE MV7', { mono: true, size: 9, fill: C.faint });
+  station(svg, x0, my, micMuted ? 'ink' : 'lit');
+  if (micMuted) {
+    line(svg, [[x0, my], [x0 + 120, my]], { stroke: C.track });
+    line(svg, [[x0 + 170, my], [x1, my]], { stroke: C.track });
+    label(svg, x0 + 145, my + 4, 'KAPALI', { mono: true, size: 9, fill: C.ink, anchor: 'middle' });
+    station(svg, x1, my, 'hollow');
+  } else {
+    line(svg, [[x0, my], [x1, my]], { stroke: C.lime, w: 2 });
+    station(svg, x1, my, 'lit');
+  }
+  label(svg, W - 30, my + 4, 'B1', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+  return d;
+}
+
+// ---- Pill and game OSD: one seal, three fixed slots (output, route, value) ----
+function seal(w, h, out, value, state, outW = 52) {
+  const [d, svg] = island(w, h, h / 2);
+  const y = h / 2;
+  label(svg, 16, y + 4, out, { mono: true, size: 10, fill: C.ink });
+  const xa = 16 + outW, xb = w - 64;
+  if (state === 'muted') {
+    line(svg, [[xa, y], [xa + (xb - xa) * 0.4, y]], { stroke: C.track });
+    line(svg, [[xa + (xb - xa) * 0.6, y], [xb, y]], { stroke: C.track });
+    station(svg, xa, y, 'ink'); station(svg, xb, y, 'hollow');
+  } else if (state === 'osd') {
+    line(svg, [[xa, y], [xb, y]], { stroke: C.track });
+    for (let i = 0; i <= 10; i++) { const x = xa + (xb - xa) * i / 10; line(svg, [[x, y + 4], [x, y + (i % 5 ? 6 : 8)]], { stroke: C.faint }); }
+    line(svg, [[xa, y], [xa + (xb - xa) * 0.62, y]], { stroke: C.lime, w: 2 });
+    station(svg, xa + (xb - xa) * 0.62, y, 'lit');
+  } else if (state === 'idle') {
+    line(svg, [[xa, y], [xb, y]], { stroke: C.track });
+    station(svg, xa, y, 'hollow'); station(svg, xb, y, 'hollow');
+  } else {
+    line(svg, [[xa, y], [xb, y]], { stroke: C.lime, w: 2 });
+    station(svg, xa, y, 'lit'); station(svg, xb, y, 'lit');
+  }
+  label(svg, w - 14, y + 4, value, { mono: true, size: 10, anchor: 'end', fill: state === 'muted' ? C.faint : C.ink });
+  return d;
+}
+
+if (location.hash === '#themes') {
+  document.querySelector('h1').textContent = 'PLITH R3 · RAY PANELİ · DÖRT TEMA · 1:1 DIP';
+  document.querySelector('p.lede').textContent = 'Dil aynı: hat diyagramı, istasyonlar, tek akış rengi. Tema yalnız zemini, mürekkebi ve akış rengini değiştirir.';
+  for (const key of Object.keys(THEMES)) {
+    useTheme(key);
+    const pills = document.createElement('div');
+    pills.style.display = 'flex'; pills.style.gap = '24px';
+    [seal(200, 32, 'G733', '62', 'live'), seal(300, 40, 'A1 G733', '62', 'osd', 76)].forEach(n => pills.appendChild(n));
+    cell(THEMES[key].title, [audioPage('rest'), mediaPage(), pills], true);
+  }
+} else {
+cell('Ses · hat diyagramı (yanan yol = ses şu an buradan akıyor)', [audioPage('rest')]);
+cell('Ses · yol kurma: Mikrofon seçildi, ulaşabildiği çıkışlar aday', [audioPage('pick')]);
+cell('Medya · çıkış seçici = yolu değiştir', [mediaPage()]);
+cell('Raf · yan hat, dosyalar bekleyen vagonlar', [shelfPage()]);
+cell('Sistem · parlaklık ve mikrofon hattı (açık)', [systemPage(false)]);
+cell('Sistem · mikrofon kapalı: hat kesik', [systemPage(true)]);
+cell('Hap 200x32 · çalıyor / sessiz / boşta (yuvalar sabit)', [seal(200, 32, 'G733', '62', 'live'), seal(200, 32, 'G733', 'KAPALI', 'muted'), seal(200, 32, 'G733', '62', 'idle')]);
+cell('Oyun üstü OSD · aynı mühür, ses tuşunda', [seal(300, 40, 'A1 G733', '62', 'osd', 76)]);
+}
+</script>
+</body>
+</html>

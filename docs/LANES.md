@@ -34,7 +34,7 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | R1b: missed vblanks with a game behind, collapse and page durations, topmost IME skip, drop split and mask hit modes, deferred minors | `feature/engine-r1b` @ `8647db1` | R1b plan approved (8 tasks; guard: no lever may cost the game, normal priority by default) | Berke for the Task 7 console session at the end |
+| `engine` | R1b: Tasks 1 to 5 done and reviewed (hitch detail, lever flags, visible/full durations with `--tune r1/brisk`, region-only hit and quiet topmost, panic guard and close order); next Task 6 smoke, Task 7 console | `feature/engine-r1b` @ `8508116` (pushed) | 2026-11-14: T1 to T5 done; ASK 1 smoke run (~10 s, island visible, no game), ASK 2 console session A to F with Deadlock + tune r1/brisk by eye + one Alt+F4 | Berke: yes to ASK 1; a ~15 min Deadlock slot for ASK 2 |
 
 R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
 Master open items: R3 visual direction with Berke; arrange the R1b Task 7 console session (Deadlock A/B, r1 vs brisk durations by eye).

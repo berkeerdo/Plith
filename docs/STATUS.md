@@ -10,8 +10,12 @@ Updated 2026-11-14. Rewritten, not appended; old content goes to `journal/`.
   handoff. UI layer shape (P5) is decided at the start of R4.
 - Reviews before merge: `quality/2026-11-14-services-review.md` and
   `quality/2026-11-14-engine-review.md`, 0 blocking, 24 later items between them.
+- R3 direction picked 2026-11-14: **Ray Paneli** (audio page as a signal box track diagram, lime
+  only where sound flows now), spec `specs/2026-11-14-r3-visual-direction.md`, first render
+  `design/r3/renders-3/sheet.png`, no `+` corners. Themes (ADR 0007): Gece, Kağıt, York,
+  Sodyum all ship (Berke), default Gece; renders in `renders-3/themes.png`.
 - **Next:** R1b in lane `engine` (missed vblanks with a game behind, durations, topmost IME
-  skip), and R3 visual direction with Berke in the master.
+  skip; Task 2 committed `a3c2436`), and in the master the R3 `impeccable` pass on the mock.
 
 ## Open risks
 - G1 under game load: with Deadlock behind, 13 of 25 motions missed 1 or 2 vblanks (worst 8.3 ms);

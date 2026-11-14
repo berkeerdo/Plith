@@ -15,7 +15,8 @@ a game runs fullscreen.
 
 ## What it is not
 - A toolbox. No prayer times, stocks, mascots or add-on tabs.
-- A theme engine. One visual language, done well.
+- A theme engine. One visual language, done well; a few fixed themes change only its colours
+  (ADR 0007).
 - Cross-platform. Windows 11 only.
 
 ## Who it is for
