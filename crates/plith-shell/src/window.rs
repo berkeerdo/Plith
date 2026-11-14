@@ -7,8 +7,8 @@ pub(crate) mod state;
 
 use crate::handles::hwnd_of;
 use crate::hit::apply::apply_latest;
-use crate::poster::{QuitHandle, ShapePoster, WM_APP_SHAPE};
-use crate::suppress::{self, WM_APP_BAR};
+use crate::poster::{QuitHandle, ShapePoster, UiWaker, WM_APP_BAR, WM_APP_SHAPE, WM_APP_WAKE};
+use crate::suppress;
 use crate::topmost;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::panic_text::payload_text;
@@ -17,7 +17,6 @@ use state::{Inner, current, set_current};
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use windows::Win32::Foundation::{
     ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
 };
@@ -45,6 +44,8 @@ pub enum ShellEvent {
     Closing,
     /// The suppression state changed; republish the scene with it.
     Suppression(Suppression),
+    /// A service thread called [`UiWaker::wake`]; re-read whatever the services published.
+    Wake,
     /// A foreground change reached the topmost fight.
     Raised {
         /// Class name of the new foreground window, or `?` when it is already gone.
@@ -197,6 +198,15 @@ impl Shell {
             hwnd: self.hwnd(),
             cell: Arc::clone(&self.inner.shapes),
             pending: Arc::clone(&self.inner.pending),
+        }
+    }
+
+    /// A handle for service threads to wake the UI thread; see [`UiWaker`].
+    #[must_use]
+    pub fn ui_waker(&self) -> UiWaker {
+        UiWaker {
+            hwnd: self.hwnd(),
+            pending: Arc::clone(&self.inner.wake),
         }
     }
 
@@ -353,8 +363,13 @@ fn dispatch(
             return Some(LRESULT(0));
         }
         WM_APP_SHAPE if is_visual => {
-            inner.pending.store(false, Ordering::Release);
+            inner.pending.clear();
             apply_latest(inner);
+            return Some(LRESULT(0));
+        }
+        WM_APP_WAKE if is_visual => {
+            inner.wake.clear();
+            inner.emit(ShellEvent::Wake);
             return Some(LRESULT(0));
         }
         WM_TIMER if is_visual && wparam.0 == topmost::RETRY_TIMER_ID => {

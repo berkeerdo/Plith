@@ -122,6 +122,7 @@ pub fn event_handler(
                 suppression.display_off, suppression.locked, suppression.fullscreen
             ));
         }
+        ShellEvent::Wake => {}
         ShellEvent::DisplayChanged => log.line("display changed: restart needed"),
         ShellEvent::Raised {
             foreground,

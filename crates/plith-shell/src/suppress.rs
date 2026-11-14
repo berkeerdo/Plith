@@ -1,6 +1,7 @@
 //! Event-driven suppression signals: display on/off, session lock and fullscreen apps. Nothing
 //! here polls; each signal arrives as a window message.
 
+use crate::poster::WM_APP_BAR;
 use crate::window::ShellEvent;
 use crate::window::state::Inner;
 use plith_core::scene::Suppression;
@@ -17,12 +18,8 @@ use windows::Win32::UI::Shell::{
     ABM_NEW, ABM_REMOVE, ABN_FULLSCREENAPP, APPBARDATA, SHAppBarMessage,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    DEVICE_NOTIFY_WINDOW_HANDLE, PBT_POWERSETTINGCHANGE, WM_APP, WTS_SESSION_LOCK,
-    WTS_SESSION_UNLOCK,
+    DEVICE_NOTIFY_WINDOW_HANDLE, PBT_POWERSETTINGCHANGE, WTS_SESSION_LOCK, WTS_SESSION_UNLOCK,
 };
-
-/// Callback message of the `AppBar` registration (which never positions an edge).
-pub(crate) const WM_APP_BAR: u32 = WM_APP + 2;
 
 fn appbar_data(hwnd: HWND) -> APPBARDATA {
     APPBARDATA {

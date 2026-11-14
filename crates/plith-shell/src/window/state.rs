@@ -2,6 +2,7 @@
 //! here lives on the UI thread, so plain `Cell` and `RefCell` are enough.
 
 use crate::handles::hwnd_of;
+use crate::poster::Coalesce;
 use crate::window::ShellEvent;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{ShapeCell, Suppression};
@@ -10,7 +11,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, PostQuitMessage, WM_CLOSE};
@@ -35,7 +35,9 @@ pub(crate) struct Registrations {
 pub(crate) struct Inner {
     pub layout: SurfaceLayout,
     pub shapes: Arc<ShapeCell>,
-    pub pending: Arc<AtomicBool>,
+    pub pending: Arc<Coalesce>,
+    /// Coalescer of the generic UI wake; cleared when `WM_APP_WAKE` is handled.
+    pub wake: Arc<Coalesce>,
     pub visual: Cell<isize>,
     pub fight: Cell<TopmostFight>,
     pub culprit: RefCell<Option<String>>,
@@ -62,7 +64,8 @@ impl Inner {
         Self {
             layout,
             shapes,
-            pending: Arc::new(AtomicBool::new(false)),
+            pending: Arc::new(Coalesce::default()),
+            wake: Arc::new(Coalesce::default()),
             visual: Cell::new(0),
             fight: Cell::new(TopmostFight::default()),
             culprit: RefCell::new(None),
