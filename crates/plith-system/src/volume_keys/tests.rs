@@ -57,3 +57,24 @@ fn handler_is_cheap_per_call() {
     println!("mean per call: {mean:?}");
     assert!(mean.as_micros() < 5, "mean {mean:?} per call");
 }
+
+/// Installs the hook, stops it and proves the thread joined (stop is `Ok`) and the receiver
+/// disconnected. Only listens; it injects no keys.
+#[cfg(windows)]
+#[test]
+fn start_stop_joins_and_disconnects() {
+    use std::sync::mpsc::TryRecvError;
+
+    use super::VolumeKeyHook;
+
+    let (mut hook, rx) = VolumeKeyHook::start().expect("hook installs");
+    assert_eq!(hook.stop(), Ok(()));
+    assert_eq!(hook.stop(), Ok(()), "stopping twice is fine");
+    let end = loop {
+        match rx.try_recv() {
+            Ok(()) => {}
+            Err(err) => break err,
+        }
+    };
+    assert_eq!(end, TryRecvError::Disconnected);
+}

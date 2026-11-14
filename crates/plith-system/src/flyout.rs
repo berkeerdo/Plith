@@ -31,6 +31,15 @@ const HOST_CLASSES: [&str; 5] = [
     "XamlExplorerHostIslandWindow",
 ];
 
+/// Whether a window class name, as UTF-16 straight from `GetClassNameW`, is one of
+/// [`HOST_CLASSES`]. Compares in place: no allocation, so the event callback can run it first.
+#[must_use]
+pub fn is_host_class(class: &[u16]) -> bool {
+    HOST_CLASSES
+        .iter()
+        .any(|name| class.iter().copied().eq(name.encode_utf16()))
+}
+
 /// Owning process names (no extension) the flyout has been seen under.
 const SHELL_PROCESSES: [&str; 3] = ["ShellExperienceHost", "Explorer", "WindowsInputExperience"];
 

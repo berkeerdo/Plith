@@ -73,13 +73,16 @@ impl VolumeKeyHook {
     }
 
     /// Unhooks and joins the thread. Safe to call twice.
-    pub fn stop(&mut self) {
-        self.thread.stop();
+    ///
+    /// # Errors
+    /// The thread could not be told to quit and is still running; it was not joined.
+    pub fn stop(&mut self) -> Result<(), String> {
+        self.thread.stop()
     }
 }
 
 impl Drop for VolumeKeyHook {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }

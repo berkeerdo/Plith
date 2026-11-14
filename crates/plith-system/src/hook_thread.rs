@@ -70,18 +70,32 @@ impl HookThread {
 
     /// Posts `WM_QUIT` and joins; the thread unhooks (and restores) on its way out.
     /// Safe to call twice.
-    pub(crate) fn stop(&mut self) {
-        if let Some(join) = self.join.take() {
-            // SAFETY: plain message post to a thread id this struct owns.
-            let _ = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) };
-            let _ = join.join();
+    ///
+    /// # Errors
+    /// The post failed and the thread is still running (nothing would ever wake it), so it is
+    /// not joined; the handle is kept and a later call tries again.
+    pub(crate) fn stop(&mut self) -> Result<(), String> {
+        let Some(join) = self.join.take() else {
+            return Ok(());
+        };
+        // SAFETY: plain message post to a thread id this struct owns.
+        let posted = unsafe { PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0)) };
+        match posted {
+            Err(err) if !join.is_finished() => {
+                self.join = Some(join);
+                Err(format!("could not post WM_QUIT to the hook thread: {err}"))
+            }
+            _ => {
+                let _ = join.join();
+                Ok(())
+            }
         }
     }
 }
 
 impl Drop for HookThread {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }
 

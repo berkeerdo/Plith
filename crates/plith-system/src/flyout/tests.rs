@@ -2,7 +2,7 @@
 
 use std::time::{Duration, Instant};
 
-use super::{HiddenRegistry, SuppressionWindow, WindowFacts, should_hide};
+use super::{HiddenRegistry, SuppressionWindow, WindowFacts, is_host_class, should_hide};
 
 fn facts(class: &str, process: &str, band: Option<u32>) -> WindowFacts {
     WindowFacts {
@@ -85,4 +85,41 @@ fn restore_after_stop_is_empty() {
     let mut calls = 0;
     registry.restore_all(|_| calls += 1);
     assert_eq!(calls, 0);
+}
+
+#[test]
+fn host_class_check_matches_exactly_without_allocating() {
+    let utf16 = |s: &str| s.encode_utf16().collect::<Vec<u16>>();
+    for class in super::HOST_CLASSES {
+        assert!(is_host_class(&utf16(class)), "{class}");
+    }
+    assert!(!is_host_class(&utf16("Notepad")));
+    assert!(!is_host_class(&utf16("NativeHWNDHos")));
+    assert!(!is_host_class(&utf16("NativeHWNDHostX")));
+    assert!(
+        !is_host_class(&utf16("nativehwndhost")),
+        "class names are case sensitive"
+    );
+    assert!(!is_host_class(&[]));
+}
+
+/// Starts a dry run suppressor, stops it and proves the thread joined (stop is `Ok`) and the
+/// channel closed (the state with the sender died on that thread). Never hides anything.
+#[cfg(windows)]
+#[test]
+fn dry_run_start_stop_joins_and_disconnects() {
+    use std::sync::mpsc::TryRecvError;
+
+    use super::{FlyoutSuppressor, Mode};
+
+    let mut suppressor = FlyoutSuppressor::start(Mode::DryRun).expect("hooks install");
+    assert_eq!(suppressor.stop(), Ok(()));
+    assert_eq!(suppressor.stop(), Ok(()), "stopping twice is fine");
+    let end = loop {
+        match suppressor.matches().try_recv() {
+            Ok(_) => {}
+            Err(err) => break err,
+        }
+    };
+    assert_eq!(end, TryRecvError::Disconnected);
 }

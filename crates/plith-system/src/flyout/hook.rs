@@ -23,7 +23,9 @@ use windows::Win32::UI::WindowsAndMessaging::{
 };
 use windows::core::{BOOL, PWSTR, s, w};
 
-use super::{HiddenRegistry, Match, Mode, SuppressionWindow, WindowFacts, should_hide};
+use super::{
+    HiddenRegistry, Match, Mode, SuppressionWindow, WindowFacts, is_host_class, should_hide,
+};
 use crate::hook_thread::HookThread;
 
 /// Matches queued for the owner before new ones are dropped.
@@ -82,11 +84,14 @@ fn resolve_band_fn() -> Option<GetWindowBand> {
     proc.map(|f| unsafe { std::mem::transmute::<_, GetWindowBand>(f) })
 }
 
-fn class_name(hwnd: HWND) -> String {
-    let mut buf = [0u16; 128];
+/// Longest class name read; the host classes are all shorter.
+const CLASS_BUF: usize = 128;
+
+/// Reads the class name into `buf` and returns how many UTF-16 units it holds (0 on failure).
+fn class_name_into(hwnd: HWND, buf: &mut [u16; CLASS_BUF]) -> usize {
     // SAFETY: `buf` is a valid writable buffer.
-    let len = unsafe { GetClassNameW(hwnd, &mut buf) };
-    usize::try_from(len).map_or_else(|_| String::new(), |n| String::from_utf16_lossy(&buf[..n]))
+    let len = unsafe { GetClassNameW(hwnd, buf) };
+    usize::try_from(len).unwrap_or(0)
 }
 
 fn process_name(pid: u32) -> String {
@@ -118,7 +123,8 @@ fn process_name(pid: u32) -> String {
 }
 
 impl State {
-    fn facts(&mut self, hwnd: HWND) -> WindowFacts {
+    /// Process and band lookups; called only for a window whose class already matched.
+    fn facts(&mut self, hwnd: HWND, class: String) -> WindowFacts {
         let mut pid = 0u32;
         // SAFETY: `pid` is a valid out pointer.
         unsafe { GetWindowThreadProcessId(hwnd, Some(&raw mut pid)) };
@@ -137,14 +143,21 @@ impl State {
             (ok && band != u32::MAX).then_some(band)
         });
         WindowFacts {
-            class: class_name(hwnd),
+            class,
             process,
             band,
         }
     }
 
     fn on_event(&mut self, hwnd: HWND) {
-        let facts = self.facts(hwnd);
+        // The class check is a stack buffer and a non-allocating compare; the process and band
+        // lookups (OpenProcess, a String) only run for the few windows that pass it.
+        let mut buf = [0u16; CLASS_BUF];
+        let len = class_name_into(hwnd, &mut buf);
+        if !is_host_class(&buf[..len]) {
+            return;
+        }
+        let facts = self.facts(hwnd, String::from_utf16_lossy(&buf[..len]));
         if !should_hide(&facts, true) {
             return;
         }
@@ -265,13 +278,16 @@ impl FlyoutSuppressor {
     }
 
     /// Unhooks, restores every hidden window and joins the thread. Safe to call twice.
-    pub fn stop(&mut self) {
-        self.thread.stop();
+    ///
+    /// # Errors
+    /// The thread could not be told to quit and is still running; it was not joined.
+    pub fn stop(&mut self) -> Result<(), String> {
+        self.thread.stop()
     }
 }
 
 impl Drop for FlyoutSuppressor {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
 }

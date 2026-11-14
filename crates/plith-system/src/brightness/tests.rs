@@ -297,3 +297,36 @@ fn queries_carry_the_escaped_instance() {
     );
     assert_eq!(panel_id(name), r"Internal panel DISPLAY\X\1_0");
 }
+
+#[test]
+fn refusing_device_is_tried_again_on_the_next_value_and_blocks_no_one() {
+    // Retry policy: a refusal is never retried for the same value, but the device stays in the
+    // set, so the next distinct value is offered to it again; other devices are never skipped.
+    let log = new_log();
+    let (runner, jobs) = deferred();
+    let (observer, seen) = collecting();
+    let mut refusing = Fake::new("a", Some(1), &log);
+    refusing.accept = false;
+    let working = Fake::new("b", Some(1), &log);
+    let writer = CoalescingWriter::new(
+        vec![Box::new(refusing), Box::new(working)],
+        runner,
+        observer,
+    );
+    writer.request(70);
+    run_queued(&jobs);
+    writer.request(80);
+    run_queued(&jobs);
+    assert_eq!(
+        written(&log),
+        vec![
+            entry("a", 70),
+            entry("b", 70),
+            entry("a", 80),
+            entry("b", 80)
+        ]
+    );
+    let outcomes = seen.lock().unwrap();
+    assert_eq!(outcomes.len(), 2);
+    assert!(outcomes.iter().all(|o| o.failed == ["a".to_owned()]));
+}

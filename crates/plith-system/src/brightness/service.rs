@@ -6,7 +6,7 @@
 //! `WmiMonitorBrightnessEvent` when a built-in panel exists and forwards the new level.
 
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, SyncSender, channel, sync_channel};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, SyncSender, channel, sync_channel};
 use std::sync::{Arc, Mutex, MutexGuard, PoisonError};
 use std::thread::{self, JoinHandle};
 use std::time::Duration;
@@ -237,11 +237,16 @@ impl BrightnessService {
                 let _ = handle.join();
                 unavailable
             }
-            Err(_) => {
+            Err(RecvTimeoutError::Timeout) => {
                 // The worker is stuck in a driver call; let it end on its own.
                 self.shared.stop.store(true, Ordering::Release);
                 let _ = tx.send(Msg::Stop);
                 Status::Unavailable("display discovery did not finish in time".into())
+            }
+            Err(RecvTimeoutError::Disconnected) => {
+                // The worker ended (a panic) before it reported; it is already gone.
+                let _ = handle.join();
+                Status::Unavailable("the worker thread ended before discovery finished".into())
             }
         }
     }
