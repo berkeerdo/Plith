@@ -104,6 +104,7 @@ fn run_shell(
     // Otherwise the window may already be gone: join before the `Shell` drops, and treat a
     // failure from here on as part of the close.
     closing.store(true, Ordering::Release);
+    backstop::close_render(log, &render.stop_handle());
     render.shutdown();
     log.line(&wire::hit_line(&shell));
     wire::exit_code(

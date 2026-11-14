@@ -51,16 +51,32 @@ fn a_fresh_fight_is_idle() {
 }
 
 #[test]
-fn second_foreground_within_100_ms_only_rearms() {
+fn second_foreground_within_100_ms_does_not_raise_now() {
     let mut fight = TopmostFight::default();
     assert_eq!(fight.on_foreground(1_000), RETRY);
+    // 99 ms in: one millisecond of the window is left.
     assert_eq!(
         fight.on_foreground(1_000 + DEBOUNCE_MS - 1),
         TopmostAction::Raise {
-            retry_in_ms: Some(RETRY_MS),
+            retry_in_ms: Some(1),
             immediate: false
         }
     );
+}
+
+#[test]
+fn debounced_change_raises_at_the_end_of_the_window() {
+    let mut fight = TopmostFight::default();
+    assert_eq!(fight.on_foreground(0), RETRY);
+    assert_eq!(
+        fight.on_foreground(30),
+        TopmostAction::Raise {
+            retry_in_ms: Some(70),
+            immediate: false
+        }
+    );
+    // The timer tick is the trailing-edge raise; retries then continue at the usual delay.
+    assert_eq!(fight.on_timer(), RETRY);
 }
 
 #[test]

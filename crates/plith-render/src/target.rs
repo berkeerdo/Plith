@@ -126,7 +126,10 @@ impl CompositionTarget {
         self.latency_outcome.take()
     }
 
-    /// Presents the back buffer, waiting for one vertical blank (or none with `--sync 0`).
+    /// Presents the back buffer with the configured sync interval. With frame latency 2 it
+    /// returns at once unless two frames are already queued. With 2 flip-sequential buffers the
+    /// second queued frame waits on the GPU for a back buffer, a wait that neither `draw_ms`
+    /// nor `present_ms` shows.
     ///
     /// # Errors
     /// Returns the `Present` HRESULT when it is a failure (for example device removed).

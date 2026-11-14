@@ -100,19 +100,50 @@ pub struct LeverOutcome {
     pub setting: String,
     /// `Ok` when applied; the error code as hex text when refused.
     pub result: Result<(), String>,
+    /// What was set instead after a refusal, if the caller tried a fallback.
+    pub fallback: Option<LeverFallback>,
 }
 
-/// The log line of an outcome: `lever gpu-priority 7: ok` or `... : refused 0x80070005`.
+/// The default a refused lever fell back to.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LeverFallback {
+    /// The fallback setting, for example `2`.
+    pub setting: String,
+    /// `Ok` when applied; the error code as hex text when that was refused too.
+    pub result: Result<(), String>,
+}
+
+/// The log line of an outcome: `lever gpu-priority 7: ok` or `... : refused 0x80070005`, with
+/// `, using 2` or `, fallback failed 0x...` when a fallback was tried.
 #[must_use]
 pub fn outcome_line(outcome: &LeverOutcome) -> String {
     let LeverOutcome {
         name,
         setting,
         result,
+        fallback,
     } = outcome;
-    match result {
-        Ok(()) => format!("lever {name} {setting}: ok"),
-        Err(code) => format!("lever {name} {setting}: refused {code}"),
+    match (result, fallback) {
+        (Ok(()), _) => format!("lever {name} {setting}: ok"),
+        (Err(code), None) => format!("lever {name} {setting}: refused {code}"),
+        (
+            Err(code),
+            Some(LeverFallback {
+                setting: to,
+                result: Ok(()),
+            }),
+        ) => {
+            format!("lever {name} {setting}: refused {code}, using {to}")
+        }
+        (
+            Err(code),
+            Some(LeverFallback {
+                result: Err(failed),
+                ..
+            }),
+        ) => {
+            format!("lever {name} {setting}: refused {code}, fallback failed {failed}")
+        }
     }
 }
 

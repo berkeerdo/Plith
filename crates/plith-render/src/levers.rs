@@ -1,7 +1,7 @@
 //! Applies the load levers to the OS. A refusal is an outcome, never an error: the caller logs
 //! it with `outcome_line` and keeps running with the default.
 
-use plith_core::levers::{LeverOutcome, Levers, MmcssPriority, SchedClass};
+use plith_core::levers::{LeverFallback, LeverOutcome, Levers, MmcssPriority, SchedClass};
 use windows::Wdk::Graphics::Direct3D::{
     D3DKMT_SCHEDULINGPRIORITYCLASS, D3DKMT_SCHEDULINGPRIORITYCLASS_ABOVE_NORMAL,
     D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH, D3DKMTSetProcessSchedulingPriorityClass,
@@ -25,6 +25,7 @@ fn outcome(name: &'static str, setting: String, result: Result<()>) -> LeverOutc
         name,
         setting,
         result: result.map_err(|error| hex(error.code().0)),
+        fallback: None,
     }
 }
 
@@ -40,8 +41,8 @@ pub fn apply_gpu_priority(device: &IDXGIDevice, priority: i8) -> Option<LeverOut
 }
 
 /// `IDXGIDevice1::SetMaximumFrameLatency`. The outcome is always returned for the log; a failing
-/// call is fatal only for the default (`Levers::default().latency`), any other value is just
-/// reported as refused.
+/// call is fatal only for the default (`Levers::default().latency`). Any other value that is
+/// refused falls back to the default, and the outcome says what happened to the fallback.
 ///
 /// # Errors
 /// Returns the failing call when `latency` is the default.
@@ -49,12 +50,23 @@ pub fn apply_latency(device: &IDXGIDevice, latency: u8) -> Result<Option<LeverOu
     let device1 = device.cast::<IDXGIDevice1>()?;
     // SAFETY: a plain COM call on a live device.
     let result = unsafe { device1.SetMaximumFrameLatency(u32::from(latency)) };
-    if latency == Levers::default().latency
+    let default = Levers::default().latency;
+    if latency == default
         && let Err(error) = &result
     {
         return Err(error.clone());
     }
-    Ok(Some(outcome("latency", latency.to_string(), result)))
+    let refused = result.is_err();
+    let mut applied = outcome("latency", latency.to_string(), result);
+    if refused {
+        // SAFETY: a plain COM call on a live device.
+        let again = unsafe { device1.SetMaximumFrameLatency(u32::from(default)) };
+        applied.fallback = Some(LeverFallback {
+            setting: default.to_string(),
+            result: again.map_err(|error| hex(error.code().0)),
+        });
+    }
+    Ok(Some(applied))
 }
 
 /// `D3DKMTSetProcessSchedulingPriorityClass` on this process; `None` for `Normal`. It is
@@ -77,6 +89,7 @@ pub fn apply_sched_class(class: SchedClass) -> Option<LeverOutcome> {
         name: "sched-class",
         setting: class.as_str().to_string(),
         result,
+        fallback: None,
     })
 }
 
