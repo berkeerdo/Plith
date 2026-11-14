@@ -225,10 +225,10 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 #[test] fn turn_to_current_page_is_a_no_op()
 ```
 
-- [ ] **Step 2: Run, expect FAIL.**  **Step 3: Implement.** Opacity springs use
+- [x] **Step 2: Run, expect FAIL.**  **Step 3: Implement.** Opacity springs use
   `with_eps(0.002, 0.01)`. A turn to the page that is outgoing swaps the two layers and retargets
   both, keeping their springs.
-- [ ] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
+- [x] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
   `feat(core): add page-turn springs`, push, tick.
 
 ### Task 4: Vsync timeline, frame stamping and motion stats (`plith-core`)
