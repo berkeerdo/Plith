@@ -38,12 +38,15 @@ impl DrawnState {
 
 /// True when a viewer could tell `a` from `b`: width, height, drawn radius or a page offset
 /// more than 0.5 DIP apart, or any opacity more than half an 8-bit step apart. A layer present
-/// in one state and absent in the other differs when its opacity is above that step.
+/// in one state and absent in the other differs when its opacity is above that step. Pages are
+/// drawn multiplied by the content opacity, so while both states have content under that step
+/// the page layers are invisible and are not compared.
 #[must_use]
 pub fn visibly_differs(a: &DrawnState, b: &DrawnState) -> bool {
+    let pages_hidden = a.content < OPACITY_EPS && b.content < OPACITY_EPS;
     shape_differs(&a.shape, &b.shape)
         || (a.content - b.content).abs() > OPACITY_EPS
-        || layers_differ(&a.pages, &b.pages)
+        || (!pages_hidden && layers_differ(&a.pages, &b.pages))
 }
 
 fn shape_differs(a: &IslandShape, b: &IslandShape) -> bool {

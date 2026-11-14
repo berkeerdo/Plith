@@ -13,7 +13,7 @@ pub const CLOSE_BACKSTOP_MS: u64 = 3000;
 
 /// Runs `work` with a timer beside it. If `work` has not returned after `timeout`, `on_timeout`
 /// runs (once) while `work` keeps going; when `work` returns in time the timer is released at
-/// once and `on_timeout` never runs.
+/// once (also when `work` panics) and `on_timeout` never runs.
 pub fn with_backstop<R>(
     timeout: Duration,
     on_timeout: impl FnOnce() + Send,
@@ -22,13 +22,14 @@ pub fn with_backstop<R>(
     let (release, released) = mpsc::channel::<()>();
     thread::scope(|scope| {
         scope.spawn(move || {
+            // A send or a disconnect (the work returned or unwound) both mean "released".
             if released.recv_timeout(timeout) == Err(RecvTimeoutError::Timeout) {
                 on_timeout();
             }
         });
-        let result = work();
-        let _ = release.send(());
-        result
+        // Owned by a guard so an unwind of `work` drops it and disconnects the channel at once.
+        let _release = release;
+        work()
     })
 }
 

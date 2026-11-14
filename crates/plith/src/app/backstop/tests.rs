@@ -35,3 +35,25 @@ fn work_that_overruns_calls_the_exit_closure() {
     assert_eq!(value, "done");
     assert!(fired.load(Ordering::SeqCst), "the exit closure was called");
 }
+
+#[test]
+fn a_panicking_work_releases_the_timer_at_once() {
+    let fired = AtomicBool::new(false);
+    let started = std::time::Instant::now();
+    let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        with_backstop(
+            Duration::from_secs(30),
+            || fired.store(true, Ordering::SeqCst),
+            || -> u32 { panic!("work failed") },
+        )
+    }));
+    assert!(outcome.is_err(), "the panic propagates");
+    assert!(
+        started.elapsed() < Duration::from_secs(5),
+        "the timer is released by the unwind, not after its timeout"
+    );
+    assert!(
+        !fired.load(Ordering::SeqCst),
+        "the exit closure is not called"
+    );
+}

@@ -101,17 +101,20 @@ fn drift_is_compared_with_the_final_state_not_the_previous_frame() {
 fn each_channel_has_its_own_threshold() {
     let rest = collapsed_rest();
     let differs = |s: DrawnState| visibly_differs(&s, &rest);
-    assert!(!differs(state(REST, 0.0, layer(0.4, 1.0))));
-    assert!(differs(state(REST, 0.0, layer(0.6, 1.0))));
     assert!(!differs(state(REST, 0.001, layer(0.0, 1.0))));
     assert!(differs(state(REST, 0.01, layer(0.0, 1.0))));
-    assert!(!differs(state(REST, 0.0, layer(0.0, 0.999))));
-    assert!(differs(state(REST, 0.0, layer(0.0, 0.99))));
+    // Page layers only count while the content is visible, so compare against an open rest.
+    let open = DrawnState::at_rest(REST, true, 0);
+    let differs_open = |s: DrawnState| visibly_differs(&s, &open);
+    assert!(!differs_open(state(REST, 1.0, layer(0.4, 1.0))));
+    assert!(differs_open(state(REST, 1.0, layer(0.6, 1.0))));
+    assert!(!differs_open(state(REST, 1.0, layer(0.0, 0.999))));
+    assert!(differs_open(state(REST, 1.0, layer(0.0, 0.99))));
 }
 
 #[test]
 fn an_extra_layer_differs_only_while_it_is_visible() {
-    let rest = collapsed_rest();
+    let rest = DrawnState::at_rest(REST, true, 0);
     let outgoing = |opacity| PageLayer {
         page: 1,
         offset: -5.0,
@@ -124,6 +127,16 @@ fn an_extra_layer_differs_only_while_it_is_visible() {
     };
     let faint = PageLayers::of(&[outgoing(0.001), incoming]);
     let clear = PageLayers::of(&[outgoing(0.2), incoming]);
-    assert!(!visibly_differs(&state(REST, 0.0, faint), &rest));
-    assert!(visibly_differs(&state(REST, 0.0, clear), &rest));
+    assert!(!visibly_differs(&state(REST, 1.0, faint), &rest));
+    assert!(visibly_differs(&state(REST, 1.0, clear), &rest));
+}
+
+#[test]
+fn pages_do_not_count_while_content_is_hidden() {
+    let a = state(REST, 0.0, layer(0.0, 1.0));
+    let b = state(REST, 0.0, layer(20.0, 0.3));
+    assert!(!visibly_differs(&a, &b), "hidden content hides the pages");
+    let a = state(REST, 1.0, layer(0.0, 1.0));
+    let b = state(REST, 1.0, layer(20.0, 0.3));
+    assert!(visibly_differs(&a, &b), "visible content shows the pages");
 }

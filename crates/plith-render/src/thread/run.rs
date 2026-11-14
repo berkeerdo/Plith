@@ -274,6 +274,8 @@ where
                     stats.note_visible(anim_t);
                 }
             }
+            // The wait belongs to the frame it paced: a repaint without a wait reports 0.
+            self.wait_ms = 0.0;
             if island_settled && self.pages_settled && self.content_settled {
                 self.finish_motion(drawn_by);
                 return Ok(());

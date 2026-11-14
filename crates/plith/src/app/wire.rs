@@ -57,7 +57,8 @@ pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout
 }
 
 /// Which exit code wins: a dead renderer, then the watchdog, then the idle verdict, then the
-/// message loop's own code.
+/// message loop's own code. When the render join hangs after a watchdog quit, the 3 s close
+/// backstop fires before the watchdog's 5 s grace, so the exit code is 1 (render fatal), not 4.
 #[must_use]
 pub fn exit_code(loop_code: i32, fatal: bool, watchdog: bool, idle: Option<bool>) -> i32 {
     if fatal {
@@ -146,9 +147,11 @@ pub fn handle_fatal(reason: &Fatal, closing: bool, log: &LogFile, fatal: &Atomic
     true
 }
 
-/// The render thread's callbacks: shapes to the UI thread, motion reports and a fatal error to
-/// the log (a fatal error also closes the window and sets `fatal`, unless the window is already
-/// closing: a present that fails on a window being destroyed is part of a clean close).
+/// The render thread's callbacks: shapes to the UI thread, motion reports and a fatal end to
+/// the log. A fatal end closes the window and sets `fatal`, with one exception: a `Fatal::Error`
+/// while the window is already closing is a clean close (a present that fails on a window being
+/// destroyed) and only logs `render stopped while closing:`. A `Fatal::Panic` always logs
+/// `render fatal:` and sets `fatal`, so the exit code is 1.
 pub fn sinks(
     poster: ShapePoster,
     log: &Arc<LogFile>,
