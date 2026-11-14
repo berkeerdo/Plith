@@ -1,5 +1,6 @@
 use super::*;
 use crate::demo::{DemoScript, DemoStep};
+use crate::levers::{Levers, MmcssPriority, SchedClass};
 
 fn parse(args: &[&str]) -> Result<Launch, LaunchError> {
     Launch::parse(args.iter().map(|a| (*a).to_string()))
@@ -115,4 +116,56 @@ fn hit_rejects_unknown_and_missing_values() {
         parse(&["--hit"]),
         Err(LaunchError::MissingValue(_))
     ));
+}
+
+#[test]
+fn parses_every_lever_flag() {
+    let launch = parse(&[
+        "--gpu-priority",
+        "-7",
+        "--sched-class",
+        "above",
+        "--latency",
+        "3",
+        "--sync",
+        "0",
+        "--mmcss",
+        "critical",
+    ])
+    .unwrap();
+    assert_eq!(launch.levers.gpu_priority, -7);
+    assert_eq!(launch.levers.sched_class, SchedClass::AboveNormal);
+    assert_eq!(launch.levers.latency, 3);
+    assert_eq!(launch.levers.sync, 0);
+    assert_eq!(launch.levers.mmcss, MmcssPriority::Critical);
+    assert_eq!(parse(&[]).unwrap().levers, Levers::default());
+    assert_eq!(
+        parse(&["--sched-class", "high", "--mmcss", "high"])
+            .unwrap()
+            .levers
+            .sched_class,
+        SchedClass::High
+    );
+}
+
+#[test]
+fn rejects_gpu_priority_8_and_latency_0() {
+    for (flag, value) in [
+        ("--gpu-priority", "8"),
+        ("--gpu-priority", "-8"),
+        ("--latency", "0"),
+        ("--latency", "4"),
+        ("--sync", "2"),
+        ("--sched-class", "realtime"),
+        ("--mmcss", "low"),
+    ] {
+        assert_eq!(
+            parse(&[flag, value]),
+            Err(LaunchError::BadValue {
+                flag: flag.to_string(),
+                value: value.to_string()
+            }),
+            "{flag} {value}"
+        );
+    }
 }

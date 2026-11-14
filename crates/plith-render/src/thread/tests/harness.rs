@@ -191,6 +191,7 @@ pub(super) fn sinks(
         on_fatal: Box::new(move |message| {
             let _ = fatal_tx.send(message);
         }),
+        on_note: Box::new(|_| {}),
     };
     (sinks, reports, fatal)
 }

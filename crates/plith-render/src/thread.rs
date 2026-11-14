@@ -8,10 +8,12 @@ pub use run::{LoopParts, LoopShared, run_loop};
 
 use crate::clock::{open_clock, seconds_since};
 use crate::gpu_paint::GpuPaint;
+use crate::levers::{apply_mmcss, apply_sched_class};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::clock_order;
 use plith_core::launch::ClockRequest;
 use plith_core::layout::SurfaceLayout;
+use plith_core::levers::{Levers, MmcssPriority, outcome_line};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{SceneMailbox, ShapeFrame};
 use std::fmt;
@@ -47,6 +49,11 @@ pub trait Paint {
     /// # Errors
     /// Returns the failing creation call; the render thread then ends.
     fn recover(&mut self, warp: bool) -> windows::core::Result<()>;
+
+    /// Log lines about levers applied since the last call (at start and after a rebuild).
+    fn take_notes(&mut self) -> Vec<String> {
+        Vec::new()
+    }
 }
 
 /// Callbacks the render thread calls from its own thread.
@@ -57,6 +64,8 @@ pub struct RenderSinks {
     pub on_motion: Box<dyn Fn(MotionReport) + Send>,
     /// Once, when the thread ends on an unrecoverable error.
     pub on_fatal: Box<dyn Fn(String) + Send>,
+    /// A non-fatal log line from the render thread (for example a lever outcome).
+    pub on_note: Box<dyn Fn(String) + Send>,
 }
 
 /// What the render thread needs to start.
@@ -74,6 +83,8 @@ pub struct RenderConfig {
     pub remote: bool,
     /// Nominal refresh rate of the notch monitor.
     pub hz: f64,
+    /// The load levers (the default is the R1 behaviour).
+    pub levers: Levers,
 }
 
 /// Why the render thread did not start.
@@ -200,11 +211,17 @@ fn render_main(
     sinks: &RenderSinks,
     ready: &SyncSender<windows::core::Result<()>>,
 ) {
-    let mmcss = join_mmcss();
+    let mmcss = join_mmcss(config.levers.mmcss, sinks);
+    if let Some(outcome) = apply_sched_class(config.levers.sched_class) {
+        (sinks.on_note)(outcome_line(&outcome));
+    }
     let origin = Instant::now();
     let hwnd = HWND(config.hwnd as *mut core::ffi::c_void);
-    match GpuPaint::new(hwnd, config.layout, false) {
-        Ok(paint) => {
+    match GpuPaint::new(hwnd, config.layout, false, config.levers) {
+        Ok(mut paint) => {
+            for line in paint.take_notes() {
+                (sinks.on_note)(line);
+            }
             let _ = ready.send(Ok(()));
             let parts = LoopParts {
                 paint,
@@ -227,11 +244,15 @@ fn render_main(
     }
 }
 
-/// Joins the MMCSS "Games" task; failure is ignored (R1 logs nowhere).
-fn join_mmcss() -> Option<HANDLE> {
+/// Joins the MMCSS "Games" task (failure is ignored) and applies the priority lever to it.
+fn join_mmcss(priority: MmcssPriority, sinks: &RenderSinks) -> Option<HANDLE> {
     let mut index = 0_u32;
     // SAFETY: the task name is a static wide string; `index` is a live local.
-    unsafe { AvSetMmThreadCharacteristicsW(w!("Games"), &raw mut index) }.ok()
+    let task = unsafe { AvSetMmThreadCharacteristicsW(w!("Games"), &raw mut index) }.ok()?;
+    if let Some(outcome) = apply_mmcss(task, priority) {
+        (sinks.on_note)(outcome_line(&outcome));
+    }
+    Some(task)
 }
 
 #[cfg(test)]

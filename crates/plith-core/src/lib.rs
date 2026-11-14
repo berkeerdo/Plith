@@ -8,6 +8,7 @@ pub mod gpu_health;
 pub mod island;
 pub mod launch;
 pub mod layout;
+pub mod levers;
 pub mod motion;
 pub mod page;
 pub mod scene;

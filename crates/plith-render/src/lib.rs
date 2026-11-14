@@ -5,6 +5,7 @@ pub mod clock;
 pub mod device;
 pub mod dwm;
 pub mod gpu_paint;
+pub mod levers;
 pub mod offscreen;
 pub mod paint;
 pub mod target;

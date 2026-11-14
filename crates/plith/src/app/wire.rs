@@ -40,7 +40,7 @@ pub fn mode_text(launch: &Launch) -> String {
 pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout) -> String {
     let s = layout.surface;
     format!(
-        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, hit {}, remote {}, mode {}",
+        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, hit {}, remote {}, mode {}, levers {}",
         s.width,
         s.height,
         s.x,
@@ -51,6 +51,7 @@ pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout
         format!("{:?}", launch.hit).to_lowercase(),
         is_remote_session(),
         mode_text(launch),
+        launch.levers.describe(),
     )
 }
 
@@ -123,7 +124,7 @@ pub fn sinks(
     fatal: &Arc<AtomicBool>,
     closing: &Arc<AtomicBool>,
 ) -> RenderSinks {
-    let (motion_log, fatal_log) = (Arc::clone(log), Arc::clone(log));
+    let (motion_log, fatal_log, note_log) = (Arc::clone(log), Arc::clone(log), Arc::clone(log));
     let (fatal, closing) = (Arc::clone(fatal), Arc::clone(closing));
     RenderSinks {
         on_shape: Box::new(move |frame| poster.post(frame)),
@@ -133,6 +134,7 @@ pub fn sinks(
                 motion_log.line(&line);
             }
         }),
+        on_note: Box::new(move |line| note_log.line(&line)),
         on_fatal: Box::new(move |message| {
             if closing.load(Ordering::Acquire) {
                 fatal_log.line(&format!("render stopped while closing: {message}"));

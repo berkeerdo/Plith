@@ -1,6 +1,7 @@
 //! Command-line launch options.
 
 use crate::demo::{DemoError, DemoScript};
+use crate::levers::{Levers, MmcssPriority, SchedClass};
 use std::fmt;
 
 /// Which frame clock the render thread should use.
@@ -42,6 +43,8 @@ pub struct Launch {
     pub exit_after_demo: bool,
     /// Hit-testing candidate.
     pub hit: HitMode,
+    /// Load levers; the default is the R1 behaviour.
+    pub levers: Levers,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -101,6 +104,32 @@ fn parse_hit(value: &str) -> Option<HitMode> {
     }
 }
 
+fn parse_sched(value: &str) -> Option<SchedClass> {
+    match value {
+        "normal" => Some(SchedClass::Normal),
+        "above" => Some(SchedClass::AboveNormal),
+        "high" => Some(SchedClass::High),
+        _ => None,
+    }
+}
+
+fn parse_mmcss(value: &str) -> Option<MmcssPriority> {
+    match value {
+        "normal" => Some(MmcssPriority::Normal),
+        "high" => Some(MmcssPriority::High),
+        "critical" => Some(MmcssPriority::Critical),
+        _ => None,
+    }
+}
+
+/// Parses `text` as an integer inside `range`.
+fn parse_in<T: std::str::FromStr + PartialOrd>(
+    text: &str,
+    range: std::ops::RangeInclusive<T>,
+) -> Option<T> {
+    text.parse().ok().filter(|n| range.contains(n))
+}
+
 impl Launch {
     /// Parses the arguments, without the program name.
     ///
@@ -137,6 +166,27 @@ impl Launch {
                 "--hit" => {
                     let text = value()?;
                     launch.hit = parse_hit(&text).ok_or_else(|| bad(text))?;
+                }
+                "--gpu-priority" => {
+                    let text = value()?;
+                    launch.levers.gpu_priority =
+                        parse_in(&text, -7..=7).ok_or_else(|| bad(text))?;
+                }
+                "--sched-class" => {
+                    let text = value()?;
+                    launch.levers.sched_class = parse_sched(&text).ok_or_else(|| bad(text))?;
+                }
+                "--latency" => {
+                    let text = value()?;
+                    launch.levers.latency = parse_in(&text, 1..=3).ok_or_else(|| bad(text))?;
+                }
+                "--sync" => {
+                    let text = value()?;
+                    launch.levers.sync = parse_in(&text, 0..=1).ok_or_else(|| bad(text))?;
+                }
+                "--mmcss" => {
+                    let text = value()?;
+                    launch.levers.mmcss = parse_mmcss(&text).ok_or_else(|| bad(text))?;
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

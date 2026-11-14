@@ -385,6 +385,9 @@ where
         self.paint
             .recover(warp)
             .map_err(|error| format!("GPU recovery failed (warp {warp}): {error}"))?;
+        for line in self.paint.take_notes() {
+            (self.sinks.on_note)(line);
+        }
         Ok((times, true))
     }
 }
