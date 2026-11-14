@@ -171,7 +171,7 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
     `surface: RectPx`, `scale: f64`, `island_origin(&self, shape: IslandShape) -> (f64, f64)`
     (DIP, relative to the surface: centred, `TOP_GAP` from the top).
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 // island/tests.rs, helper run(m, secs) steps 1/240 and collects shapes
@@ -194,13 +194,13 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 #[test] fn layout_scales_with_dpi()                            // scale 1.5: surface px = DIP * 1.5, rounded up to even
 ```
 
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement.** Retune per axis at retarget time from that axis's direction
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement.** Retune per axis at retarget time from that axis's direction
   (`target < current value` is shrinking). Floor landing: a shrinking axis sets
   `floor = target`; a growing axis keeps its previous floor; after every step each axis calls
   `clamp_min(floor)`. Radius uses `RADIUS_GROW` when its target grows, else `RADIUS_SHRINK`.
-- [ ] **Step 4: Run, expect PASS**, five checks.
-- [ ] **Step 5: Commit** `feat(core): add island motion and layout`, push, tick.
+- [x] **Step 4: Run, expect PASS**, five checks.
+- [x] **Step 5: Commit** `feat(core): add island motion and layout`, push, tick.
 
 ### Task 3: Page-turn springs (`plith-core`)
 
