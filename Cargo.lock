@@ -64,6 +64,9 @@ dependencies = [
 [[package]]
 name = "plith-system"
 version = "0.1.0"
+dependencies = [
+ "windows",
+]
 
 [[package]]
 name = "proc-macro2"
