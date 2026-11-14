@@ -9,3 +9,6 @@ SetMaximumFrameLatency(1)`, `Present(1, 0)` after the clock wait, no waitable ob
 **Measured:** present p99 0.27 to 0.41 ms with dcomp and dxgi in every clean run; draw never
 waited on DWM in a way the log shows. 3 buffers were not needed. Revisit together with the
 P1 game-load gap.
+
+**Superseded in part (2026-11-14):** the latency line is replaced by ADR 0008
+(`SetMaximumFrameLatency(2)`); buffers, swap effect and Present are unchanged.

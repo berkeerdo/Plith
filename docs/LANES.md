@@ -30,11 +30,11 @@ path, never from their worktree. Skills: `parallel-lanes`, `project-docs`, `prax
 
 ## State (rewritten by the master)
 
-Updated 2026-11-14.
+Updated 2026-11-15.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | R1b Task 8: defaults latency 2 + sync 1 and tune brisk, ADR 0003/0005 amendment drafts, close check via posted WM_CLOSE, handoff | `feature/engine-r1b` @ `8508116`+ | 2026-11-14 23:20: Task 7 done with Berke. Smoke + A to F + T1/T2: latency 2 removes the Present stall (60 motions, 0 hitches, Deadlock behind); B, C, E rejected; Berke saw no stutter on D; tune: "hepsi iyiydi, anlamadım", master picked brisk. Collapse 812 ms still over Oyenza 658 | branch ready message, then master review and merge |
+| `engine` | none: R1b merged as `e20201c` | `feature/engine-r1b` @ `fe48b18` (merged) | 2026-11-14: merge review round done (I1 two-shape hit cover, M1/M3/M4/M6/M9) | master: stop the lane, remove the worktree |
 
 R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
-Master open items: R3 visual direction with Berke; arrange the R1b Task 7 console session (Deadlock A/B, r1 vs brisk durations by eye).
+Master open items: stop lane `engine` and remove its worktree after it deletes `.superpowers/sdd/engine-r1b`; decide lanes for R4 and R6 at the next session start.

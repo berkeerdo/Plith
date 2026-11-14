@@ -1,46 +1,44 @@
 # Status
 
-Updated 2026-11-14. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-15. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
-- R0, R1 and R2 are done and merged (`1aabe4a`): engine slice and headless services, 235 tests.
-  Console session with Berke 2026-11-14: "aşırı akıcıydı", 240 fps and 0 hitches without a game,
-  0 render wake-ups at rest, parks on lock, display off and fullscreen. Decisions: ADR 0003 frame
-  clock (DComp), 0004 hit testing (region 3 px outside the shape), 0005 swap chain, 0006 scene
-  handoff. UI layer shape (P5) is decided at the start of R4.
-- Reviews before merge: `quality/2026-11-14-services-review.md` and
-  `quality/2026-11-14-engine-review.md`, 0 blocking, 24 later items between them.
-- R3 direction picked 2026-11-14: **Ray Paneli** (audio page as a signal box track diagram, lime
-  only where sound flows now), spec `specs/2026-11-14-r3-visual-direction.md`, first render
-  `design/r3/renders-3/sheet.png`, no `+` corners. Themes (ADR 0007): Gece, Kağıt, York,
-  Sodyum all ship (Berke), default Gece; renders in `renders-3/themes.png`.
-- **Next:** R1b in lane `engine` (missed vblanks with a game behind, durations, topmost IME
-  skip; Task 2 committed `a3c2436`), and in the master the R3 `impeccable` pass on the mock.
+- R0, R1, R1b, R2 and R3 are done. R1b merged as `e20201c` (288 tests); R3 is a mock, not code.
+- Engine: frame latency 2 removes the game-load stall (90 of 90 motions clean with Deadlock
+  behind, ADR 0008); tune `brisk` is the default; priority levers measured and rejected. Plan and
+  handoff: `plans/done/engine-r1b.md`; reviews `quality/2026-11-14-engine-review.md` and
+  `quality/2026-11-14-engine-r1b-review.md`.
+- R3 direction: **Ray Paneli**, spec `specs/2026-11-14-r3-visual-direction.md`, mock
+  `design/r3/ray-paneli.html` (open with `#themes` for the theme sheet), renders
+  `design/r3/renders-6/`. Four themes ship (ADR 0007), default Gece.
+- **Next:** R4 Pages on the engine (tab bar, audio, media, system in Ray Paneli) and R6 OSD
+  helper. They own disjoint crates; the master decides lanes at the start (skill `parallel-lanes`).
+  R4 opens with the UI layer shape (P5), review items L11 to L14 and a Scene that carries page
+  content.
 
 ## Open risks
-- G1 under game load: with Deadlock behind, 13 of 25 motions missed 1 or 2 vblanks (worst 8.3 ms);
-  collapse 812 ms and page turns up to 775 ms, slower than Oyenza (660 ms). R1b.
-- Engine review: the render thread has no `catch_unwind` (a panic freezes the island while the
-  idle check still passes); GPU recovery never run on hardware; R4 needs a generic wake message
-  for `set_waker` and a Scene that carries page content.
-- Not tested: pen and touch, a second borderless game, the split and mask hit modes (dropped).
-- Two `main` commit subjects are 52 and 53 chars (5887b06, 36ee2b3); left as pushed.
-- Services contract notes for `crates/plith` (from lane services, 2026-11-14): every service has
-  new/start/stop/status/snapshot/subscribe/set_waker; `start()` blocks (brightness up to 15 s,
-  media about 8 s), so call it off the UI thread; `set_waker` posts one WM_APP message;
-  `subscribe()` never replays, so subscribe first, then `snapshot()`.
-- G5 gap: brightness flyout suppression needs `crates/plith` to call `open_window` on
-  `WmiMonitorBrightnessEvent` (R4).
-- Unverified on hardware: Voicemeeter (not installed here), WMI brightness (desktop), a second
-  monitor's DDC mapping.
-- Review L8: the keyboard and WinEvent hook procs have no `catch_unwind`; a panic aborts and leaves
-  the shell volume flyout hidden. Fix before R4 ships suppression on by default.
-- Key auto-repeat: one held volume key gave 135 events; the OSD must collapse repeats (R4).
-- Branch `feature/shelf-one-surface` (worktree `.claude/worktrees/shelf-one-surface`) holds WPF
-  shelf work the rewrite makes obsolete; it is not merged.
-- Branch `feature/notch-in-loft` (worktree `C:\Projects\plith-notch-loft`) holds the Loft palette
-  that R3 starts from.
+- Not measured on screen: what reaches the display at latency 2 (no DWM counters, PresentMon not
+  run); the hit-region cover during collapses with a game behind (Berke's look owed, record in
+  ADR 0004 or 0008); the game cost of anything (the island parks while a game is in front, so
+  this moves to R4 and R6).
+- Collapse full 812 ms against Oyenza's 658 ms (visible 346 ms).
+- Panic paths, the 3 s close backstop and the forced exit run only in unit tests; Alt+F4 cannot
+  reach the island (it never takes activation), a posted `WM_CLOSE` was tested instead.
+- One game, one PC, one refresh rate; pen and touch untested.
+- Services contract for `crates/plith`: `start()` blocks (brightness up to 15 s, media about
+  8 s), call it off the UI thread; `subscribe()` never replays, so subscribe first, then
+  `snapshot()`; `set_waker` posts one WM_APP message.
+- G5: brightness flyout suppression needs `open_window` on `WmiMonitorBrightnessEvent` (R4).
+- Review L8 and M7: hook procs have no `catch_unwind`, and forced exits skip cleanup, so a crash
+  could leave the Windows volume flyout hidden. Fix before suppression ships on by default.
+- Key auto-repeat: one held volume key gave 135 events; the OSD must collapse repeats.
+- Unverified on hardware: Voicemeeter (not installed here), WMI brightness, a second monitor.
+- R3 open items 1 to 6 in the spec (radius, Potato density, levels API, route writes).
+- Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
 
 ## Recent decisions
-- ADR 0001 Rewrite in Rust, in this repo
-- ADR 0002 Medium-integrity notch, UIAccess OSD helper
+- ADR 0008 Frame latency 2, no priority levers
+- ADR 0007 Themes are palettes over one visual language
+- ADR 0006 Scene handoff between threads
+- ADR 0005 Swap chain (latency line superseded by 0008)
+- ADR 0004 Hit testing

@@ -34,3 +34,6 @@ to 1.73 ms, so it stays the last resort.
 **Known gap:** with a borderless game running behind (Deadlock), 13 of 25 motions showed 1 or 2
 single missed vblanks (worst gap 8.3 ms, 235 to 240 fps) while draw p99 stayed at or under
 about 0.9 ms. Every run without a game: 0 hitches. First item of the next engine job.
+
+**See also ADR 0008 (2026-11-14):** the game-load gap was closed by frame latency 2, not by the
+clock; priority levers were measured and rejected.
