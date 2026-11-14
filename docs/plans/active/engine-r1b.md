@@ -36,6 +36,10 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 - Anything on Berke's screen: guarded runs of at most about 70 s, started only after the master
   relays that he is looking; game runs need him to alt-tab into the game.
 - New `windows` features go in the owning crate's `Cargo.toml` only; the root file is add-only.
+- **No lever may win by taking from the game** (master, 2026-11-14): Berke games on this PC. The
+  process priority class stays normal by default (never HIGH or REALTIME as a default); Task 7
+  records the game's own smoothness per lever, and a lever that costs the game is rejected even
+  if it fixes our hitches.
 
 ## Review Focus
 
@@ -45,10 +49,10 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 2. **A hitch line flood** (a stalled GPU gives dozens of hitches in one motion): at most
    `MAX_HITCH_DETAILS = 4` detail lines per motion, the count stays exact.
    Test: `motion::tests::hitch_details_are_capped_and_count_is_exact` (Task 1).
-3. **Visible settling must not cut a visible motion**: the radius may snap only when width and
-   height are settled and the drawn (clamped) radius already equals the target's. A turnaround
-   mid-collapse still animates.
-   Test: `island::tests::radius_snaps_only_when_clamped_radius_is_on_target` (Task 3).
+3. **The visible duration must not end before the last visible change**: a turnaround
+   mid-collapse moves the visible end to after the turnaround; a sub-threshold drift that adds up
+   to 0.5 DIP from the final shape still counts (compare with the final state, not the previous
+   frame). Test: `visible::tests::turnaround_moves_the_visible_end` (Task 3).
 4. **A panic inside the render loop or a window callback**: the process logs the payload and
    quits with exit 1, never a frozen island or a silent abort.
    Tests: `thread::tests::panic_in_paint_reaches_on_fatal` (Task 5); the window-proc guard is
@@ -70,7 +74,7 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 - A spring simulation of the R1 tunings reproduces the logged durations to the frame (800, 813,
   775, 421, 563 ms). **Collapse's last 400 ms is the radius spring (`RADIUS_SHRINK`, k 150)
   settling behind `min(radius, height / 2)`: invisible.** Visible change ends by about 333 ms
-  (0.5 DIP); with visible settling collapse reports about 417 ms (the content fade). Expand and
+  (0.5 DIP); the content fade ends at about 417 ms. Expand and
   the 775 ms page turn are the `GROW_H` (k 250, zeta 0.73) tail.
 - Topmost: every alt-tab logs 5 raises within about 140 ms, each "above: IME". Raises fire once
   per `EVENT_SYSTEM_FOREGROUND`; an alt-tab produces several foreground changes (switcher, then
@@ -199,22 +203,33 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 - Values: `R1` = today's constants, `card_grow_*` = `GROW_W`, `GROW_H`. `BRISK` = R1 except
   `grow_h = (320, 29)` (zeta 0.81, keeps a small overshoot) and `card_grow_w = card_grow_h =
   (500, 40)` (zeta 0.89).
-- Visible settling (both sets): after stepping, if width and height are settled and
-  `min(radius, h/2, w/2)` is within the spring's `value_eps` of `min(target_r, target_h/2,
-  target_w/2)`, the radius spring snaps to its target (`Spring::snap(&mut self)`, new).
+- Visible duration (master, 2026-11-14): the springs are not changed or snapped; the motion still
+  runs to full settle so the full duration stays comparable with Oyenza. New
+  `crates/plith-core/src/visible.rs`: `DrawnState { shape: IslandShape, content: f64, pages:
+  PageLayers }`, `DrawnState::at_rest(scene_target: IslandShape, expanded: bool, page: usize)`,
+  `fn visibly_differs(a: &DrawnState, b: &DrawnState) -> bool` (any of width, height, drawn
+  radius, page offset over 0.5 DIP apart, or any opacity over 0.5/255 apart; a layer present in
+  one and absent in the other differs when its opacity is over 0.5/255).
+  `MotionStats::note_visible(anim_t)` marks the last frame that still differs from the rest state
+  of the current target; `MotionReport.visible_ms` = that frame's `anim_t` minus the first plus
+  one period (0 when no frame differed). The line reads
+  `motion collapse: 194 frames, visible 333 ms, full 813 ms (238.8 fps at 240 Hz), ...`: fps over
+  the full duration as before.
 
 - [ ] **Step 1: Failing tests** (simulated at 1/240 s until all of island, pages and content
   report settled; durations in ms as frames * 1000/240; tolerance one frame, 4.2 ms):
 
 ```rust
 // tests/durations.rs, expected values from the plan's simulation, 2026-11-14
-#[test] fn r1_collapse_settles_visibly_at_417() {}   // was 813 before visible settling
-#[test] fn r1_expand_stays_800() {}                  // 800: no feel change in R1
-#[test] fn r1_page_0_to_1_stays_775() {}
-#[test] fn brisk_expand_592() {}
-#[test] fn brisk_pages_421() {}                      // 0->1, 1->2, 2->0 all 421 (content fade)
-// island/tests.rs
-#[test] fn radius_snaps_only_when_clamped_radius_is_on_target() {} // mid-collapse turnaround: no snap, shape continuous
+// full durations (all springs settled), expected values from the plan's simulation, 2026-11-14
+#[test] fn r1_full_durations_match_r1_log() {}  // expand 800, collapse 813, page 0->1 775, 1->2 421, 2->0 563
+#[test] fn brisk_full_durations() {}            // expand 592, collapse 813, pages 0->1, 1->2, 2->0 all 421
+// visible durations: the test prints the table and asserts visible <= full for every motion and
+// r1 collapse visible <= 450 (the radius tail is not counted); report the table to the master
+#[test] fn visible_durations_are_shorter_where_a_tail_hides() {}
+// visible/tests.rs
+#[test] fn turnaround_moves_the_visible_end() {}
+#[test] fn clamped_radius_tail_is_not_visible() {} // radius 16.3 under height 32: no difference
 // tuning/tests.rs
 #[test] fn brisk_zetas_match_the_plan() {} // grow_h 0.81, card 0.89, within 0.006
 ```
@@ -223,7 +238,7 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   If a simulated value differs from the plan by more than one frame, stop and report it to the
   master with the simulated table; do not adjust the test to match.
 - [ ] **Step 5: Start line gains `tune r1|brisk`.** Five checks green, commit
-  `feat(engine): visible settling and tuning presets`.
+  `feat(engine): visible duration, tuning presets`.
 
 ### Task 4: Topmost explained and debounced; region-only hit testing
 
@@ -306,7 +321,9 @@ on the desktop, then Berke alt-tabs into Deadlock (borderless). Nothing moves th
 
 - [ ] Run A, baseline: no lever flags. Expect R1's picture; the hitch lines name the phase.
 - [ ] Run B: `--gpu-priority 7`. Run C: `--sched-class high`. Run D: `--latency 2 --sync 0`.
-  Run E: `--mmcss critical`. Run F: the winners together. Skip a run whose lever was refused at
+  Run E: `--mmcss critical`. Run F: the winners together. For every run, record the game's own
+  smoothness: Berke's eye (verbatim) and the DWM missed/dropped delta of the motion lines; a run
+  whose game feels or measures worse rejects its lever, whatever our hitches say. Skip a run whose lever was refused at
   start, and skip later runs if one already reaches 0 to 1 hitches on every motion twice.
 - [ ] Acceptance (G1 with a game): every motion 0 to 1 hitches, draw p99 under 1 ms. If no
   combination reaches it, record which phase the hitch lines blame and the DWM delta, and stop:
@@ -324,7 +341,7 @@ on the desktop, then Berke alt-tabs into Deadlock (borderless). Nothing moves th
 **Files:** `crates/plith-core/src/levers.rs`, `crates/plith-core/src/tuning.rs`,
 `crates/plith-core/src/launch.rs` and their tests, this plan.
 
-- [ ] **Step 1:** Change `Levers::default()` and the default `TuningSet` to the Task 7 picks;
+- [ ] **Step 1:** Change `Levers::default()` (never a HIGH or REALTIME default) and the default `TuningSet` to the Task 7 picks;
   update `levers::tests::default_is_r1_behaviour` to `default_is_the_r1b_pick` with the picked
   values; `tests/durations.rs` keeps both sets.
 - [ ] **Step 2:** Draft the ADR amendments below for the master (0003 clock and priorities, 0005
