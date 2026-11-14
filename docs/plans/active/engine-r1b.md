@@ -297,12 +297,12 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   `PostQuitMessage` on a failed create (`window.rs:318`) only when the window was created; thin
   `SAFETY` comments in `hit/apply.rs` and `topmost.rs` name the invariant.
 
-- [ ] **Step 1: Failing tests:** `thread::tests::panic_in_paint_reaches_on_fatal` (a fake `Paint`
+- [x] **Step 1: Failing tests:** `thread::tests::panic_in_paint_reaches_on_fatal` (a fake `Paint`
   that panics on its second frame; `on_fatal` receives a message containing `panicked`, the join
   returns), `thread::tests::stop_and_join_is_idempotent`, `window::tests::guard_turns_panic_into_logged_error`,
   `log::tests::lines_keep_order_and_flush_on_drop`, `launch::tests::idle_check_over_70_is_rejected`.
-- [ ] **Step 2: Run, expect failures.** **Step 3: Implement.** **Step 4: Run, expect pass.**
-- [ ] **Step 5: Five checks green, commit** `fix(engine): panic guard and join before destroy`.
+- [x] **Step 2: Run, expect failures.** **Step 3: Implement.** **Step 4: Run, expect pass.**
+- [x] **Step 5: Five checks green, commit** `fix(engine): panic guard and join before destroy`.
 
 ### Task 6: Pre-session smoke (the island shows briefly; master's yes first)
 
