@@ -28,22 +28,6 @@ fn one_period_from(from: IslandShape, to: IslandShape) -> IslandShape {
 }
 
 #[test]
-fn motion_report_carries_the_dwm_delta_between_start_and_finish() {
-    let run = start(Setup::default());
-    run.wait_frames(1);
-    run.mailbox.publish(expanded(0));
-    let report = run.report();
-    let dwm = report.dwm.expect("a compositor delta");
-    assert_eq!((dwm.refreshes, dwm.missed, dwm.dropped), (100, 1, 0));
-    assert!(
-        report
-            .to_string()
-            .ends_with("; dwm missed 1 dropped 0 of 100")
-    );
-    let _ = run.stop();
-}
-
-#[test]
 fn collapse_report_has_a_visible_duration_shorter_than_the_full_one() {
     let run = start(Setup::default());
     run.wait_frames(1);

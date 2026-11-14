@@ -1,5 +1,4 @@
 use super::*;
-use crate::dwm::DwmDelta;
 use crate::shapes::{PAGES, REST};
 
 const HZ: f64 = 240.0;
@@ -37,7 +36,7 @@ fn report_line_matches_the_pinned_format() {
         line,
         "motion expand: 240 frames, visible 421 ms, full 1000 ms (240.0 fps at 240 Hz), 0 hitches, \
          worst gap 4.2 ms; draw p50 0.31 p99 0.31 ms; present p50 0.10 p99 0.10 ms; \
-         clock dcomp; retargets 0; first wait 0.0 ms; dwm n/a"
+         clock dcomp; retargets 0; first wait 0.0 ms"
     );
 }
 
@@ -52,7 +51,7 @@ fn first_wait_is_noted_once_with_one_decimal() {
     assert!(
         report
             .to_string()
-            .contains("retargets 0; first wait 12.3 ms; dwm"),
+            .ends_with("retargets 0; first wait 12.3 ms"),
         "{report}"
     );
 }
@@ -168,24 +167,6 @@ fn hitch_details_are_capped_and_count_is_exact() {
     assert_eq!(report.hitches, 10);
     assert_eq!(report.hitch_details.len(), MAX_HITCH_DETAILS);
     assert_eq!(report.detail_lines().len(), MAX_HITCH_DETAILS);
-}
-
-#[test]
-fn report_line_ends_with_dwm_delta() {
-    let mut s = MotionStats::new(MotionKind::Expand, HZ, "dcomp");
-    s.record_frame(0.0, FramePhases::default());
-    assert!(s.finish().to_string().ends_with("; dwm n/a"));
-    s.set_dwm(DwmDelta {
-        refreshes: 190,
-        missed: 2,
-        dropped: 1,
-    });
-    let line = s.finish().to_string();
-    assert!(line.ends_with("; dwm missed 2 dropped 1 of 190"), "{line}");
-    assert!(
-        line.contains("first wait 0.0 ms; dwm"),
-        "prefix must stay put: {line}"
-    );
 }
 
 #[test]

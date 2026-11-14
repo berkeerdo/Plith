@@ -267,7 +267,6 @@ fn render_main(
                 order: clock_order(config.clock, config.remote),
                 hz: config.hz,
                 layout: config.layout,
-                dwm: crate::dwm::read,
                 tune: config.tune,
             };
             // The revert runs before a panic is reported, as before any other fatal exit.

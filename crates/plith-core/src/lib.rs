@@ -2,7 +2,6 @@
 
 pub mod clock_choice;
 pub mod demo;
-pub mod dwm;
 pub mod geometry;
 pub mod gpu_health;
 pub mod island;

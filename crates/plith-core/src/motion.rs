@@ -1,6 +1,5 @@
 //! Per-motion frame statistics and the `motion` log line.
 
-use crate::dwm::DwmDelta;
 use crate::geometry::IslandShape;
 use crate::shapes::REST;
 use std::fmt;
@@ -123,8 +122,6 @@ pub struct MotionReport {
     pub first_wait_ms: f64,
     /// The first hitches of the motion (at most `MAX_HITCH_DETAILS`), in order.
     pub hitch_details: Vec<HitchDetail>,
-    /// Compositor counters over the motion, when they could be read.
-    pub dwm: Option<DwmDelta>,
 }
 
 impl MotionReport {
@@ -169,15 +166,7 @@ impl fmt::Display for MotionReport {
             self.clock,
             self.retargets,
             self.first_wait_ms,
-        )?;
-        match self.dwm {
-            Some(d) => write!(
-                f,
-                "; dwm missed {} dropped {} of {}",
-                d.missed, d.dropped, d.refreshes
-            ),
-            None => write!(f, "; dwm n/a"),
-        }
+        )
     }
 }
 
@@ -199,7 +188,6 @@ pub struct MotionStats {
     first_wait_ms: Option<f64>,
     prev_phases: FramePhases,
     hitch_details: Vec<HitchDetail>,
-    dwm: Option<DwmDelta>,
 }
 
 impl MotionStats {
@@ -222,7 +210,6 @@ impl MotionStats {
             first_wait_ms: None,
             prev_phases: FramePhases::default(),
             hitch_details: Vec::with_capacity(MAX_HITCH_DETAILS),
-            dwm: None,
         }
     }
 
@@ -250,11 +237,6 @@ impl MotionStats {
         self.prev_phases = phases;
         self.draw.push(phases.draw_ms);
         self.present.push(phases.present_ms);
-    }
-
-    /// Sets the compositor counter change over the motion.
-    pub fn set_dwm(&mut self, delta: DwmDelta) {
-        self.dwm = Some(delta);
     }
 
     /// Marks the frame at `anim_t` as still differing from the rest state of the current
@@ -308,7 +290,6 @@ impl MotionStats {
             retargets: self.retargets,
             first_wait_ms: self.first_wait_ms.unwrap_or(0.0),
             hitch_details: self.hitch_details.clone(),
-            dwm: self.dwm,
         }
     }
 }

@@ -7,7 +7,6 @@ use super::{Fatal, FrameTimes, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
-use plith_core::dwm::DwmSample;
 use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
@@ -59,7 +58,7 @@ impl LoopShared {
 }
 
 /// Everything the loop owns: the painter, how to open and time clocks, and the display.
-pub struct LoopParts<P, O, N, D> {
+pub struct LoopParts<P, O, N> {
     /// Paints and presents one frame.
     pub paint: P,
     /// Opens a clock of the given kind.
@@ -72,19 +71,15 @@ pub struct LoopParts<P, O, N, D> {
     pub hz: f64,
     /// The surface layout, for the island origin.
     pub layout: SurfaceLayout,
-    /// Reads the compositor's frame counters (`None` when it cannot).
-    pub dwm: D,
     /// The spring tuning preset.
     pub tune: TuningSet,
 }
 
 /// The loop's state between frames.
-struct Engine<'a, C, P, O, N, D> {
+struct Engine<'a, C, P, O, N> {
     paint: P,
     clocks: Clocks<C, O>,
     now: N,
-    dwm: D,
-    dwm_start: Option<DwmSample>,
     wait_ms: f64,
     hz: f64,
     period: f64,
@@ -126,8 +121,8 @@ fn opacity_f32(value: f64) -> f32 {
 /// Runs [`run_loop`] and turns a panic anywhere in it (the painter, a clock, a sink) into
 /// `on_fatal("render thread panicked: ...")`. `cleanup` runs after the loop ends, whichever way,
 /// and before a panic is reported.
-pub fn run_guarded<C, P, O, N, D>(
-    parts: LoopParts<P, O, N, D>,
+pub fn run_guarded<C, P, O, N>(
+    parts: LoopParts<P, O, N>,
     mailbox: &SceneMailbox,
     shared: &LoopShared,
     sinks: &RenderSinks,
@@ -137,7 +132,6 @@ pub fn run_guarded<C, P, O, N, D>(
     P: Paint,
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
-    D: Fn() -> Option<DwmSample>,
 {
     let outcome = catch_unwind(AssertUnwindSafe(|| {
         run_loop(parts, mailbox, shared, sinks);
@@ -150,8 +144,8 @@ pub fn run_guarded<C, P, O, N, D>(
 }
 
 /// Runs until the mailbox stops or a fatal error (reported through `sinks.on_fatal`).
-pub fn run_loop<C, P, O, N, D>(
-    parts: LoopParts<P, O, N, D>,
+pub fn run_loop<C, P, O, N>(
+    parts: LoopParts<P, O, N>,
     mailbox: &SceneMailbox,
     shared: &LoopShared,
     sinks: &RenderSinks,
@@ -160,15 +154,12 @@ pub fn run_loop<C, P, O, N, D>(
     P: Paint,
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
-    D: Fn() -> Option<DwmSample>,
 {
     let (scene, seen) = mailbox.latest();
     let mut engine = Engine {
         paint: parts.paint,
         clocks: Clocks::new(parts.open_clock, parts.order),
         now: parts.now,
-        dwm: parts.dwm,
-        dwm_start: None,
         wait_ms: 0.0,
         hz: parts.hz,
         period: 1.0 / parts.hz,
@@ -199,13 +190,12 @@ pub fn run_loop<C, P, O, N, D>(
     }
 }
 
-impl<C, P, O, N, D> Engine<'_, C, P, O, N, D>
+impl<C, P, O, N> Engine<'_, C, P, O, N>
 where
     C: FrameSource,
     P: Paint,
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
-    D: Fn() -> Option<DwmSample>,
 {
     /// Paints the start frame, then parks and animates until stopped.
     fn run(&mut self, mailbox: &SceneMailbox, start: Scene) -> Result<(), String> {
@@ -302,14 +292,11 @@ where
         visibly_differs(&drawn, &rest)
     }
 
-    /// Reports the finished motion with the compositor's counter change over it.
+    /// Reports the finished motion.
     fn finish_motion(&mut self, drawn_by: ClockKind) {
-        let Some(mut stats) = self.stats.take() else {
+        let Some(stats) = self.stats.take() else {
             return;
         };
-        if let (Some(start), Some(end)) = (self.dwm_start.take(), (self.dwm)()) {
-            stats.set_dwm(start.delta(end));
-        }
         let mut report = stats.finish();
         report.clock = drawn_by.as_str();
         (self.sinks.on_motion)(report);
@@ -369,7 +356,6 @@ where
             let from: IslandShape = self.island.shape();
             let kind = MotionKind::classify(from, target, page_changed);
             self.stats = Some(MotionStats::new(kind, self.hz, self.clocks.kind().as_str()));
-            self.dwm_start = (self.dwm)();
         }
         self.island.retarget(target);
         self.content
