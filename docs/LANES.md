@@ -34,7 +34,7 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | R1b: Tasks 1 to 5 done and reviewed (hitch detail, lever flags, visible/full durations with `--tune r1/brisk`, region-only hit and quiet topmost, panic guard and close order); next Task 6 smoke, Task 7 console | `feature/engine-r1b` @ `8508116` (pushed) | 2026-11-14: T1 to T5 done; ASK 1 smoke run (~10 s, island visible, no game), ASK 2 console session A to F with Deadlock + tune r1/brisk by eye + one Alt+F4 | Berke: yes to ASK 1; a ~15 min Deadlock slot for ASK 2 |
+| `engine` | R1b Task 8: defaults latency 2 + sync 1 and tune brisk, ADR 0003/0005 amendment drafts, close check via posted WM_CLOSE, handoff | `feature/engine-r1b` @ `8508116`+ | 2026-11-14 23:20: Task 7 done with Berke. Smoke + A to F + T1/T2: latency 2 removes the Present stall (60 motions, 0 hitches, Deadlock behind); B, C, E rejected; Berke saw no stutter on D; tune: "hepsi iyiydi, anlamadım", master picked brisk. Collapse 812 ms still over Oyenza 658 | branch ready message, then master review and merge |
 
 R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
 Master open items: R3 visual direction with Berke; arrange the R1b Task 7 console session (Deadlock A/B, r1 vs brisk durations by eye).
