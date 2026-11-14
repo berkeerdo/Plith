@@ -139,7 +139,7 @@ impl SceneMailbox {
 pub struct ShapeFrame {
     /// The drawn shape.
     pub shape: IslandShape,
-    /// The scene generation this frame was drawn for.
+    /// The render thread's frame counter: 1 for its first painted frame, then increasing.
     pub generation: u64,
 }
 

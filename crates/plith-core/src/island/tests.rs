@@ -21,15 +21,15 @@ fn per_axis_tuning_follows_each_axis_direction() {
     m.retarget(PAGES[1]);
     // Step until the width is already past the next page's width while the height lags below it.
     let mut guard = 0;
-    while !(m.shape().width > 485.0 && m.shape().height < 178.0) {
+    while !(m.shape().width > PAGES[2].width + 5.0 && m.shape().height < PAGES[2].height - 2.0) {
         m.step(H);
         guard += 1;
         assert!(guard < 2400, "never reached the mixed-direction moment");
     }
     m.retarget(PAGES[2]);
     let samples = run(&mut m, 4.0);
-    assert!(samples.iter().all(|s| s.width >= 480.0 - 1e-9));
-    assert!(samples.iter().any(|s| s.height > 180.0));
+    assert!(samples.iter().all(|s| s.width >= PAGES[2].width - 1e-9));
+    assert!(samples.iter().any(|s| s.height > PAGES[2].height));
 }
 
 #[test]
