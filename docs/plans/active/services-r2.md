@@ -60,11 +60,11 @@ otherwise. Voicemeeter DLL loaded at run time (`LoadLibraryW` + `GetProcAddress`
   Grace 5 s when rc 0, 30 s when rc 1; EngineGone after 5 consecutive negatives past grace; never
   asks for Logout when declaring death.
 - `fn level_to_db(f32) -> f32` (VB level is linear amplitude; 0 -> `-inf` clamped to `-90.0`).
-- [ ] Step 1: tests: `kind_counts`, `clamp_gain_range_and_nan`, `param_name_format`,
+- [x] Step 1: tests: `kind_counts`, `clamp_gain_range_and_nan`, `param_name_format`,
   `fallback_labels`, `grace_blocks_early_negatives`, `five_negatives_after_grace_is_gone`,
   `success_resets_streak`, `rc1_uses_long_grace`, `level_to_db_floor`. Run, expect compile FAIL.
-- [ ] Step 2: implement the signatures above. Run tests, expect PASS.
-- [ ] Step 3: checks green, commit `feat(audio): add Voicemeeter pure layer`, push, tick.
+- [x] Step 2: implement the signatures above. Run tests, expect PASS.
+- [x] Step 3: checks green, commit `feat(audio): add Voicemeeter pure layer`, push, tick.
 
 ### Task 2: `plith-audio` Voicemeeter client and probe
 **Files:** Create `src/voicemeeter/dll.rs` (discovery + `LoadLibraryW`), `voicemeeter/api.rs`
@@ -73,17 +73,17 @@ otherwise. Voicemeeter DLL loaded at run time (`LoadLibraryW` + `GetProcAddress`
 (`Status::{Running, Unavailable(reason)}`), `snapshot() -> Option<VmSnapshot>`,
 `subscribe()`, `levels() -> VmLevels` (peak per strip/bus channel pair, read-only),
 `set_gain(Rail, usize, f32) -> bool`, `toggle_mute(Rail, usize) -> Option<bool>` (read then write).
-- [ ] Step 1: tests for the pure parts (registry uninstall string to directory, UTF-8/Latin-1 label
+- [x] Step 1: tests for the pure parts (registry uninstall string to directory, UTF-8/Latin-1 label
   decode with NUL, `VBVMR_GetLevel` channel index mapping per kind) in `voicemeeter/tests.rs`. FAIL, then pass.
-- [ ] Step 2: DLL discovery: HKLM uninstall key `VB:Voicemeeter {17359A74-1236-5467}` (64 and WOW6432
+- [x] Step 2: DLL discovery: HKLM uninstall key `VB:Voicemeeter {17359A74-1236-5467}` (64 and WOW6432
   views), fallback `C:\Program Files (x86)\VB\Voicemeeter`, then default search. Resolve
   `VBVMR_Login`, `Logout`, `IsParametersDirty`, `GetParameterFloat`, `GetParameterStringA`
   (512 byte buffer), `SetParameterFloat`, `GetVoicemeeterType`, `GetLevel`. Use `stdcall`
   (`extern "system"`).
-- [ ] Step 3: poll thread (50 ms dirty check, level read at its own divisor), defensive Logout before
+- [x] Step 3: poll thread (50 ms dirty check, level read at its own divisor), defensive Logout before
   Login only, drives `LoginSession`; snapshot rebuilt when dirty. Stop joins the thread, then Logout.
-- [ ] Step 4: probe prints type, every strip and bus (label, gain, mute), then levels for 3 s. Read only.
-- [ ] Step 5: run the probe on this PC (Banana), paste output into the record; checks green; commit
+- [x] Step 4: probe prints type, every strip and bus (label, gain, mute), then levels for 3 s. Read only.
+- [x] Step 5: run the probe on this PC (Banana), paste output into the record; checks green; commit
   `feat(audio): add Voicemeeter client and probe`; push; tick.
 
 ### Task 3: `plith-audio` Core Audio endpoints (read side)
@@ -96,16 +96,16 @@ attached: Option<AttachedState> }`, `struct AttachedState { id, volume: f32, mut
 `fn resolve_target(pinned: Option<&str>, active: &[Endpoint], default_id: Option<&str>) -> Option<String>`
 (pinned if active, else default), `EndpointService::start()`, `snapshot()`, `subscribe()`,
 `set_pin(Option<String>)`.
-- [ ] Step 1: tests: `pin_wins_when_active`, `pin_falls_back_when_missing`, `no_default_no_pin_is_none`,
+- [x] Step 1: tests: `pin_wins_when_active`, `pin_falls_back_when_missing`, `no_default_no_pin_is_none`,
   `pin_ids_compare_case_insensitively`. FAIL, implement, PASS.
-- [ ] Step 2: COM side: `MMDeviceEnumerator`, `IMMNotificationClient` (default changed for
+- [x] Step 2: COM side: `MMDeviceEnumerator`, `IMMNotificationClient` (default changed for
   Render/Multimedia, state changed, added, removed), `IAudioEndpointVolumeCallback` on the attached
   endpoint. Callbacks only post a message to the service thread; **no lock held across
   `UnregisterEndpointNotificationCallback`**, the service thread owns attach/detach (removes the WPF
   deadlock by construction). Read each device fully before adding it to a list.
-- [ ] Step 3: probe lists endpoints, marks default and attached, prints volume and mute, then prints
+- [x] Step 3: probe lists endpoints, marks default and attached, prints volume and mute, then prints
   change events for 10 s while Berke changes things by hand. Read only.
-- [ ] Step 4: run on this PC, record output; checks; commit `feat(audio): add endpoint service`; push; tick.
+- [x] Step 4: run on this PC, record output; checks; commit `feat(audio): add endpoint service`; push; tick.
 
 ### Task 4: `plith-audio` default-endpoint switch, mic mute, write paths
 **Files:** Create `endpoints/policy.rs` (IPolicyConfig), `src/microphone.rs`, `microphone/tests.rs`,
@@ -114,14 +114,14 @@ attached: Option<AttachedState> }`, `struct AttachedState { id, volume: f32, mut
 attached endpoint; `set_default_endpoint(id) -> bool` (Console and Multimedia only, never
 Communications); `MicrophoneService::start()`, `snapshot() -> Option<MicSnapshot { id, name, muted,
 volume }>` (None = no capture device), `subscribe()`, `toggle_mute() -> Option<bool>`.
-- [ ] Step 1: tests on pure helpers: volume clamp (NaN, negative, >1), `MicSnapshot` None when no
+- [x] Step 1: tests on pure helpers: volume clamp (NaN, negative, >1), `MicSnapshot` None when no
   device. FAIL, implement, PASS.
-- [ ] Step 2: IPolicyConfig `{f8679f50-850a-41cf-9c72-430f290290c8}`, CLSID
+- [x] Step 2: IPolicyConfig `{f8679f50-850a-41cf-9c72-430f290290c8}`, CLSID
   `{870af99c-171d-4f9e-af0d-e63df40c2bc9}`, **ten** reserved vtable slots before `SetDefaultEndpoint`
   (measured in WPF: nine landed on SetPropertyValue, 0x800706F4). Capture default uses
   Communications role (as WPF).
-- [ ] Step 3: probe reads mic state only. Write functions are NOT called by any probe.
-- [ ] Step 4: checks; commit `feat(audio): add mic mute and endpoint writes`; push; tick.
+- [x] Step 3: probe reads mic state only. Write functions are NOT called by any probe.
+- [x] Step 4: checks; commit `feat(audio): add mic mute and endpoint writes`; push; tick.
 
 ### Task 5: `plith-media` SMTC
 **Files:** Create `src/timeline.rs` (pure), `src/snapshot.rs`, `src/session.rs` (windows),
@@ -134,15 +134,15 @@ volume }>` (None = no capture device), `subscribe()`, `toggle_mute() -> Option<b
 can_seek, can_next, can_prev, timeline: Option<Timeline> }`; `struct SessionInfo { source_id, title,
 playing }`; `MediaService::start()`, `snapshot()`, `subscribe()`, `sessions() -> Vec<SessionInfo>`,
 async-free commands: `toggle_play_pause`, `next`, `previous`, `seek(Duration)` each `-> bool`.
-- [ ] Step 1: tests: `zero_duration_is_none`, `start_time_subtracted`, `missing_stamp_uses_now`,
+- [x] Step 1: tests: `zero_duration_is_none`, `start_time_subtracted`, `missing_stamp_uses_now`,
   `position_interpolates_only_when_playing`, `position_clamped_to_duration`. FAIL, implement, PASS.
-- [ ] Step 2: SMTC through `windows::Media::Control`. Traps: re-read bursts coalesced with a
+- [x] Step 2: SMTC through `windows::Media::Control`. Traps: re-read bursts coalesced with a
   generation counter so a stale read never overwrites a newer one; thumbnails re-read only on
   media-properties change, never on the ~1 Hz timeline event (separate `timeline` event path);
   `IsPlaybackPositionEnabled` asked, not assumed; every read tolerates a dead session (None).
   Commands block on the WinRT op with a 2 s cap on a worker thread.
-- [ ] Step 3: probe prints sessions, current track, timeline, capabilities, then 15 s of events. Read only.
-- [ ] Step 4: run on this PC with something playing (Berke starts it), record; checks; commit
+- [x] Step 3: probe prints sessions, current track, timeline, capabilities, then 15 s of events. Read only.
+- [x] Step 4: run on this PC with something playing (Berke starts it), record; checks; commit
   `feat(media): add SMTC service and probe`; push; tick.
 
 ### Task 6: `plith-system` brightness
@@ -155,16 +155,16 @@ coalescing), `brightness/ddc.rs` (dxva2), `brightness/wmi.rs`, `brightness/tests
 and never retried, never stop the other devices; injectable runner for tests);
 `BrightnessService::start()`, `snapshot() -> Vec<DeviceLevel { id, name, percent }>`,
 `subscribe()`, `set_percent(u8)`.
-- [ ] Step 1: tests: `step_saturates_at_bounds`, `writer_keeps_only_latest_pending`,
+- [x] Step 1: tests: `step_saturates_at_bounds`, `writer_keeps_only_latest_pending`,
   `writer_one_in_flight`, `failed_device_does_not_block_others`, `discovery_keeps_only_answering`.
-- [ ] Step 2: DDC through dxva2 `GetNumberOfPhysicalMonitorsFromHMONITOR` + `GetMonitorBrightness`
+- [x] Step 2: DDC through dxva2 `GetNumberOfPhysicalMonitorsFromHMONITOR` + `GetMonitorBrightness`
   (a read is the capability test; do NOT gate on `GetMonitorCapabilities`, measured false on a
   working monitor); handle opened once and kept; internal panel first. WMI
   (`WmiMonitorBrightness`, `WmiMonitorBrightnessMethods.WmiSetBrightness`, namespace `root\wmi`,
   1 s timeout, backslash-escaped instance names) via the `windows` WMI/COM, event listener for
   `WmiMonitorBrightnessEvent` (internal panels only).
-- [ ] Step 3: probe reads each device's level only.
-- [ ] Step 4: run on this PC; checks; commit `feat(system): add brightness service`; push; tick.
+- [x] Step 3: probe reads each device's level only.
+- [x] Step 4: run on this PC; checks; commit `feat(system): add brightness service`; push; tick.
 
 ### Task 7: `plith-system` flyout suppression and volume key hook
 **Files:** Create `src/flyout.rs` (pure decision), `flyout/hook.rs` (WinEvent hooks),
@@ -178,15 +178,15 @@ open 400 ms window); `struct SuppressionWindow` (injectable clock, `open(now)`, 
 `FlyoutSuppressor::start(mode: Mode::{DryRun, Hide})`, `stop()` restores every hidden window with
 `SW_SHOWNA`; `VolumeKeyHook::start() -> Receiver<()>` (WH_KEYBOARD_LL, only observes
 VK 0xAD/0xAE/0xAF, always `CallNextHookEx`, handler does nothing but a channel send).
-- [ ] Step 1: tests: `class_process_band_all_required`, `unknown_band_allowed`, `closed_window_hides_nothing`,
+- [x] Step 1: tests: `class_process_band_all_required`, `unknown_band_allowed`, `closed_window_hides_nothing`,
   `window_expires_after_400ms`, `restore_all_restores_each_once`, `restore_after_stop_is_empty`. FAIL, PASS.
-- [ ] Step 2: hooks on SHOW, CREATE, LOCATIONCHANGE with `OUTOFCONTEXT | SKIPOWNPROCESS`; cheapest
+- [x] Step 2: hooks on SHOW, CREATE, LOCATIONCHANGE with `OUTOFCONTEXT | SKIPOWNPROCESS`; cheapest
   filter first (window open) because LOCATIONCHANGE fires thousands of times per second; pid to
   process-name cache; `GetWindowBand` resolved with `GetProcAddress`, absence tolerated.
   Both hooks need a message-pumping thread owned by the service.
-- [ ] Step 3: probe runs `DryRun`: installs the hook, logs what it **would** hide when Berke presses a
+- [x] Step 3: probe runs `DryRun`: installs the hook, logs what it **would** hide when Berke presses a
   volume key by hand, hides nothing. Read only.
-- [ ] Step 4: checks; commit `feat(system): add flyout suppression and key hook`; push; tick.
+- [x] Step 4: checks; commit `feat(system): add flyout suppression and key hook`; push; tick.
 
 ### Task 8: hardware write verification (needs Berke's yes via master)
 **Files:** Create `examples/verify_writes.rs` in each crate, each requiring `--yes` and printing what
@@ -209,3 +209,24 @@ list) T5; system (brightness, flyout suppression) T6-7; probes in every crate; n
 Output picker data = `EndpointState.active` plus `sessions()`. Names used across tasks
 (`Rail`, `VmSnapshot`, `Endpoint`, `Timeline`, `DeviceLevel`) are defined once, in the task that
 produces them.
+
+## Record (2026-11-14)
+
+A ticked box means the step was taken, not that nothing deviated.
+
+Deviations and findings:
+- Task 2 step 5 / Voicemeeter: not installed on this PC (DLL renamed to `.del`, uninstall keys absent), so
+  login, snapshot, levels, reconnect and the `GetLevel` channel map are **unverified on hardware**.
+- API shape: `new()` then `start(&self) -> Status`, `stop()`, `status()`, `subscribe()`, `set_waker()` on every
+  service; `subscribe()` never replays the current value (subscribe first, then `snapshot()`).
+  Voicemeeter subscribers get `Option<VmSnapshot>`.
+- Extra direct deps added to the root `[workspace.dependencies]` (add-only): `windows-core`, `windows-future`.
+- Voicemeeter DLL loads only from absolute install paths (`LoadLibraryExW`, DLL dir plus System32).
+- G5 gap, deferred: brightness flyout suppression. The suppressor opens its window on volume keys only; the
+  consumer must call `open_window` on `WmiMonitorBrightnessEvent`. Not verifiable on this desktop.
+- Not measured live: volume/mute/default-change callbacks, media play/pause/track change/commands, WMI read and
+  write, DDC write, flyout class and band on this Windows build.
+- Deferred minors: brightness never re-discovers displays (`WM_DISPLAYCHANGE`), hidden flyout windows are restored
+  only at stop, Standard-bus fallback label unverified, DDC ids shift if a monitor stops answering.
+- Task 8 (hardware writes): examples built (`verify_audio_writes`, `verify_system_writes`,
+  `verify_media_writes`), none run with `--yes`; waiting for Berke's yes via the master.
