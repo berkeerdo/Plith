@@ -13,8 +13,9 @@ const OFF_RHYTHM_LATENESS: f64 = 0.5;
 /// Off-rhythm score above which the display rate should be read again.
 const REREAD_SCORE: u32 = 20;
 
-/// Converts a whole, non-negative period count (here always 1..=30) to `u32`.
-// Allowed: `n` is a floored value known to be in 1..=30.
+/// Converts a whole, non-negative period count to `u32`, saturating (a resync can span any
+/// number of periods).
+// Allowed: `n` is a whole, non-negative value; a float to int cast saturates.
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn whole_periods(n: f64) -> u32 {
     n as u32
@@ -27,7 +28,8 @@ pub struct Tick {
     pub vblank: f64,
     /// Vblank period (always nominal).
     pub period: f64,
-    /// Whole periods since the previous tick (1 on anchor and resync).
+    /// Whole periods since the previous tick: 1 on the first anchor, the rounded gap on a
+    /// resync after a long stall. `dt` derived from it can therefore be large; springs clamp it.
     pub periods: u32,
 }
 
@@ -61,7 +63,11 @@ impl VsyncTimeline {
             return None;
         }
         if n > RESYNC_PERIODS {
-            return Some(self.anchor(raw));
+            // A long stall: re-anchor the grid, but report the whole gap so it shows as a hitch.
+            let gap = ((raw - last) / self.period).round().max(1.0);
+            let mut tick = self.anchor(raw);
+            tick.periods = whole_periods(gap);
+            return Some(tick);
         }
         let predicted = last + n * self.period;
         let error = raw - predicted;

@@ -80,9 +80,34 @@ fn gap_over_30_periods_resyncs() {
     tl.lock(1.0).expect("anchor");
     let raw = 1.0 + period() * 40.0;
     let tick = tl.lock(raw).expect("resync tick");
-    assert_eq!(tick.periods, 1);
+    assert_eq!(tick.periods, 40);
     assert!(bits_eq(tick.vblank, raw));
     assert!(bits_eq(tick.period, period()));
+}
+
+#[test]
+fn a_200_ms_stall_reports_its_whole_gap_and_is_a_hitch() {
+    let mut tl = VsyncTimeline::new(NOMINAL);
+    let mut stamper = FrameStamper::default();
+    let mut stats =
+        crate::motion::MotionStats::new(crate::motion::MotionKind::Expand, NOMINAL, "dcomp");
+    let first = tl.lock(1.0).expect("anchor");
+    let (t, _) = stamper.stamp(first);
+    stats.record_frame(t, 0.3, 0.1);
+    let raw = 1.0 + 0.2;
+    let tick = tl.lock(raw).expect("resync tick");
+    assert_eq!(tick.periods, 48);
+    assert!(bits_eq(tick.vblank, raw));
+    let (t, dt) = stamper.stamp(tick);
+    assert!((dt - 0.2).abs() < 1e-9);
+    stats.record_frame(t, 0.3, 0.1);
+    let report = stats.finish();
+    assert_eq!(report.hitches, 1);
+    assert!(
+        (report.worst_gap_ms - 200.0).abs() < 1.0,
+        "{}",
+        report.worst_gap_ms
+    );
 }
 
 #[test]
