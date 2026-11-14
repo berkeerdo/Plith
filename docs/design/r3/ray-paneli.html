@@ -9,7 +9,7 @@
   /* Loft dark floor and the R3 Ray Paneli roles. Lime means "sound flows here now", nothing else. */
   :root {
     --floor-top: #0B0B0A; --floor-bottom: #151412; --border: #2B2824;
-    --ink: #ECE9E2; --ink-muted: #A39E94; --ink-faint: #7A756C;
+    --ink: #ECE9E2; --ink-muted: #A39E94; --ink-faint: #8A847A;
     --track: #4A463F; --track-faint: #2E2B27; --lime: #CAFF33;
     --desk: #1B1D21;
   }
@@ -36,13 +36,13 @@
 // A theme changes only colours: floor, ink tones, tracks and the one "flow" colour (key `lime`).
 const THEMES = {
   gece: { title: 'Gece · Loft koyu, lime akış', floorTop: '#0B0B0A', floorBottom: '#151412', border: '#2B2824', desk: '#1B1D21',
-    ink: '#ECE9E2', muted: '#A39E94', faint: '#7A756C', track: '#4A463F', trackFaint: '#2E2B27', lime: '#CAFF33' },
+    ink: '#ECE9E2', muted: '#A39E94', faint: '#8A847A', track: '#4A463F', trackFaint: '#2E2B27', lime: '#CAFF33' },
   kagit: { title: 'Kağıt · Loft açık, koyu yeşil akış', floorTop: '#F3F2ED', floorBottom: '#E7E6E0', border: '#CFCBC2', desk: '#C9CDD3',
-    ink: '#1A1916', muted: '#55514A', faint: '#7F7A71', track: '#B3AEA4', trackFaint: '#D6D2C9', lime: '#3F6E00' },
+    ink: '#1A1916', muted: '#55514A', faint: '#6B665E', track: '#B3AEA4', trackFaint: '#D6D2C9', lime: '#3F6E00' },
   york: { title: 'York · 1951 NX paneli, lamba beyazı akış', floorTop: '#1C2420', floorBottom: '#222B26', border: '#34403A', desk: '#14181A',
-    ink: '#E4EAE4', muted: '#9EAAA2', faint: '#71807A', track: '#46534D', trackFaint: '#2C3631', lime: '#FFE9A8' },
+    ink: '#E4EAE4', muted: '#9EAAA2', faint: '#86958E', track: '#46534D', trackFaint: '#2C3631', lime: '#FFE9A8' },
   sodyum: { title: 'Sodyum · siyah zemin, amber akış', floorTop: '#09090A', floorBottom: '#111113', border: '#26262A', desk: '#1A1A1D',
-    ink: '#EDEDEF', muted: '#A2A2A8', faint: '#74747B', track: '#45454B', trackFaint: '#2A2A2E', lime: '#FFB224' },
+    ink: '#EDEDEF', muted: '#A2A2A8', faint: '#86868D', track: '#45454B', trackFaint: '#2A2A2E', lime: '#FFB224' },
 };
 let C = { ...THEMES.gece, floor: THEMES.gece.floorTop };
 function useTheme(key) { C = { ...THEMES[key], floor: THEMES[key].floorTop }; }
@@ -83,13 +83,13 @@ function route(x0, y0, xa, y1, x1) {
 function tabs(svg, active) {
   const names = ['SES', 'MEDYA', 'RAF', 'SİSTEM'];
   const y = 34, x0 = 30, step = 112;
-  line(svg, [[x0, y], [x0 + step * 3 + 120, y]], { stroke: C.trackFaint });
+  // The line runs only between stations: four tabs, no fifth terminus.
+  line(svg, [[x0, y], [x0 + step * 3, y]], { stroke: C.trackFaint });
   names.forEach((n, i) => {
     const x = x0 + i * step;
     station(svg, x, y, i === active ? 'ink' : 'hollow');
     label(svg, x - 3, y - 12, n, { mono: true, size: 10, fill: i === active ? C.ink : C.faint });
   });
-  station(svg, x0 + step * 3 + 120, y, 'hollow');
   label(svg, W - 24, y + 4, '21:47', { mono: true, size: 12, anchor: 'end', fill: C.muted });
 }
 // The last 8 seconds of a level, drawn as a quiet trace; a clip stays as a lime notch.
@@ -139,7 +139,7 @@ const SOURCES = [
 const OUTPUTS = [
   { bus: 'A1', name: 'Logitech G733', vol: '62', y: 86, lit: true },
   { bus: 'A2', name: 'Edifier R1280', vol: '40', y: 136 },
-  { bus: 'B1', name: 'Discord mikrofonu', vol: '0 dB', y: 186, lit: true },
+  { bus: 'B1', name: 'Discord', vol: '0 dB', y: 186, lit: true },
   { bus: 'B2', name: 'Kullanılmıyor', vol: '', y: 236, idle: true },
 ];
 const XS = 252, XO = 452;
@@ -149,13 +149,13 @@ function audioPage(mode) {
   SOURCES.forEach(s => {
     const sel = mode === 'pick' && s.name === 'Mikrofon';
     label(svg, 30, s.y, sel ? '[ Mikrofon ]' : s.name, { fill: sel ? C.lime : s.muted ? C.faint : C.ink });
-    label(svg, 30, s.y + 15, s.sub, { mono: true, size: 9, fill: C.faint });
+    label(svg, 30, s.y + 15, s.sub, { mono: true, size: 10, fill: C.faint });
     if (!s.muted) trace(svg, 168, s.y - 3, s.seed, s.clip);
   });
   OUTPUTS.forEach(o => {
     label(svg, XO + 14, o.y + 1, o.bus, { mono: true, size: 10, fill: C.faint });
     label(svg, XO + 38, o.y + 1, o.name, { fill: o.idle ? C.faint : C.ink, size: 12 });
-    if (o.vol) label(svg, W - 24, o.y + 16, o.vol, { mono: true, size: 10, anchor: 'end', fill: C.muted });
+    if (o.vol) label(svg, W - 24, o.y + 1, o.vol, { mono: true, size: 10, anchor: 'end', fill: C.muted });
   });
   const lit = { stroke: C.lime, w: 2 };
   // Lit routes: Windows and Discord join A1, the microphone runs to B1.
@@ -164,7 +164,7 @@ function audioPage(mode) {
   line(svg, route(XS, 86, 330, 186, XO), lit);
   // Muted source: the line is cut and says so.
   line(svg, [[XS, 133], [290, 133]], { stroke: C.track });
-  label(svg, 300, 137, 'SESSİZ', { mono: true, size: 9, fill: C.faint });
+  label(svg, 300, 137, 'SESSİZ', { mono: true, size: 10, fill: C.faint });
   station(svg, 290, 133, 'hollow');
   if (mode === 'pick') {
     // Picking a route for the microphone: every output it can reach shows as a candidate.
@@ -174,7 +174,7 @@ function audioPage(mode) {
   }
   SOURCES.forEach(s => station(svg, XS, s.muted ? 133 : s.y - 3, s.muted ? 'ink' : 'lit'));
   OUTPUTS.forEach(o => station(svg, XO, o.y - 3, o.lit ? 'lit' : mode === 'pick' ? 'candidate' : 'hollow'));
-  label(svg, 30, 284, mode === 'pick' ? 'ÇIKIŞA DOKUN: YOL KURULUR · ESC VAZGEÇER' : 'KAYNAĞA, SONRA ÇIKIŞA DOKUN', { mono: true, size: 9, fill: C.faint });
+  label(svg, 30, 284, mode === 'pick' ? 'ÇIKIŞA TIKLA: YOL KURULUR · ESC VAZGEÇER' : 'KAYNAĞA, SONRA ÇIKIŞA TIKLA', { mono: true, size: 10, fill: C.faint });
   return d;
 }
 
@@ -184,8 +184,11 @@ function mediaPage() {
   const [d, svg] = island(W, h, 24);
   tabs(svg, 1);
   // Cover art placeholder (the real art is the album image).
-  svg.appendChild(el('rect', { x: 30, y: 62, width: 96, height: 96, fill: '#3A3631' }));
-  for (let i = 0; i < 12; i++) line(svg, [[30 + i * 8, 158], [30 + i * 8 + 8, 62 + 0]], { stroke: '#4A453E' });
+  const art = el('linearGradient', { id: 'art', x1: 0, y1: 0, x2: 1, y2: 1 });
+  art.appendChild(el('stop', { offset: 0, 'stop-color': '#3B2F5C' }));
+  art.appendChild(el('stop', { offset: 1, 'stop-color': '#B0476B' }));
+  const defs = el('defs', {}); defs.appendChild(art); svg.appendChild(defs);
+  svg.appendChild(el('rect', { x: 30, y: 62, width: 96, height: 96, fill: 'url(#art)' }));
   label(svg, 146, 82, 'Midnight City', { size: 16, weight: 600 });
   label(svg, 146, 102, 'M83 · Hurry Up, We’re Dreaming', { size: 12, fill: C.muted });
   // Seek on a ruler: played part is lit because sound is flowing.
@@ -223,41 +226,49 @@ function shelfPage() {
   files.forEach((f, i) => {
     const x = 30 + i * (ww + gap);
     svg.appendChild(el('rect', { x, y: 62, width: ww, height: 92, fill: 'none', stroke: C.track }));
-    label(svg, x + 10, 80, f[0], { mono: true, size: 9, fill: C.faint });
+    label(svg, x + 10, 80, f[0], { mono: true, size: 10, fill: C.faint });
     label(svg, x + 10, 124, f[1], { size: 12 });
     label(svg, x + 10, 140, f[2], { size: 12, fill: C.muted });
     station(svg, x + 20, ty, 'ink'); station(svg, x + ww - 20, ty, 'ink');
   });
   const x = 30 + 4 * (ww + gap);
   svg.appendChild(el('rect', { x, y: 62, width: W - 30 - x, height: 92, fill: 'none', stroke: C.faint, 'stroke-dasharray': '3 4' }));
-  label(svg, x + (W - 30 - x) / 2, 112, 'BIRAK', { mono: true, size: 9, fill: C.faint, anchor: 'middle' });
+  label(svg, x + (W - 30 - x) / 2, 112, 'BIRAK', { mono: true, size: 10, fill: C.faint, anchor: 'middle' });
   station(svg, W - 30, ty, 'hollow');
-  label(svg, 30, h - 18, '4 DOSYA · SÜRÜKLE, BIRAK, GERİ AL', { mono: true, size: 9, fill: C.faint });
+  label(svg, 30, h - 18, '4 DOSYA · SÜRÜKLE, BIRAK, GERİ AL', { mono: true, size: 10, fill: C.faint });
   return d;
 }
 
 // ---- System page ----
-function systemPage(micMuted) {
+function systemPage(micMuted, noBrightness) {
   const h = 178;
   const [d, svg] = island(W, h, 24);
   tabs(svg, 3);
-  label(svg, 30, 82, 'Parlaklık', {});
-  label(svg, 30, 97, 'DELL AW2725DF', { mono: true, size: 9, fill: C.faint });
+  label(svg, 30, 82, 'Parlaklık', { fill: noBrightness ? C.faint : C.ink });
+  label(svg, 30, 97, 'DELL AW2725DF', { mono: true, size: 10, fill: C.faint });
   const x0 = 200, x1 = W - 70, y = 80, f = 0.7;
+  if (noBrightness) {
+    label(svg, x0, y + 4, 'DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI', { mono: true, size: 10, fill: C.faint });
+    return micRow(svg, d, x0, x1, micMuted);
+  }
   line(svg, [[x0, y], [x1, y]], { stroke: C.track });
   for (let i = 0; i <= 10; i++) { const x = x0 + (x1 - x0) * i / 10; line(svg, [[x, y + 4], [x, y + (i % 5 ? 7 : 11)]], { stroke: C.faint }); }
   line(svg, [[x0, y], [x0 + (x1 - x0) * f, y]], { stroke: C.ink, w: 2 });
   station(svg, x0 + (x1 - x0) * f, y, 'ink');
   label(svg, W - 30, y + 4, '70', { mono: true, size: 12, anchor: 'end' });
-  // Microphone route: lit to B1, or cut and labelled.
+  return micRow(svg, d, x0, x1, micMuted);
+}
+
+// Microphone route: lit to B1, or cut and labelled.
+function micRow(svg, d, x0, x1, micMuted) {
   const my = 132;
   label(svg, 30, my + 2, 'Mikrofon', {});
-  label(svg, 30, my + 17, 'HW 1 · SHURE MV7', { mono: true, size: 9, fill: C.faint });
+  label(svg, 30, my + 17, 'HW 1 · SHURE MV7', { mono: true, size: 10, fill: C.faint });
   station(svg, x0, my, micMuted ? 'ink' : 'lit');
   if (micMuted) {
     line(svg, [[x0, my], [x0 + 120, my]], { stroke: C.track });
     line(svg, [[x0 + 170, my], [x1, my]], { stroke: C.track });
-    label(svg, x0 + 145, my + 4, 'KAPALI', { mono: true, size: 9, fill: C.ink, anchor: 'middle' });
+    label(svg, x0 + 145, my + 4, 'KAPALI', { mono: true, size: 10, fill: C.ink, anchor: 'middle' });
     station(svg, x1, my, 'hollow');
   } else {
     line(svg, [[x0, my], [x1, my]], { stroke: C.lime, w: 2 });
@@ -267,12 +278,52 @@ function systemPage(micMuted) {
   return d;
 }
 
+// ---- Empty and degraded states ----
+function audioNoVoicemeeter() {
+  const h = 196;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 0);
+  label(svg, 30, 86, 'Windows', {});
+  label(svg, 30, 101, 'VARSAYILAN ÇIKIŞ', { mono: true, size: 10, fill: C.faint });
+  trace(svg, 168, 83, 3);
+  line(svg, route(XS, 83, 300, 83, XO), { stroke: C.lime, w: 2 });
+  line(svg, route(XS, 83, 320, 133, XO), { stroke: C.track });
+  station(svg, XS, 83, 'lit'); station(svg, XO, 83, 'lit'); station(svg, XO, 133, 'hollow');
+  label(svg, XO + 14, 87, 'Logitech G733', { size: 12 });
+  label(svg, W - 24, 87, '62', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+  label(svg, XO + 14, 137, 'Edifier R1280', { size: 12, fill: C.muted });
+  label(svg, 30, h - 22, 'VOICEMEETER ÇALIŞMIYOR · ÇIKIŞA TIKLA: VARSAYILAN OLUR', { mono: true, size: 10, fill: C.faint });
+  return d;
+}
+function mediaEmpty() {
+  const h = 150;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 1);
+  label(svg, 30, 86, 'Çalan bir şey yok', { size: 14, weight: 600 });
+  label(svg, 30, 106, 'Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.', { size: 12, fill: C.muted });
+  line(svg, [[96, 124], [380, 124]], { stroke: C.track });
+  station(svg, 96, 124, 'hollow'); station(svg, 380, 124, 'hollow');
+  label(svg, 392, 128, 'A1 · G733', { mono: true, size: 10, fill: C.faint });
+  return d;
+}
+function shelfEmpty() {
+  const h = 170;
+  const [d, svg] = island(W, h, 24);
+  tabs(svg, 2);
+  svg.appendChild(el('rect', { x: 30, y: 58, width: W - 60, height: 70, fill: 'none', stroke: C.faint, 'stroke-dasharray': '3 4' }));
+  label(svg, W / 2, 90, 'Dosyaları buraya sürükle', { size: 13, anchor: 'middle' });
+  label(svg, W / 2, 108, 'RAFTA BEKLER, İSTEDİĞİN YERE GERİ SÜRÜKLERSİN', { mono: true, size: 10, anchor: 'middle', fill: C.faint });
+  line(svg, [[30, 146], [W - 30, 146]], { stroke: C.track });
+  station(svg, 30, 146, 'hollow'); station(svg, W - 30, 146, 'hollow');
+  return d;
+}
+
 // ---- Pill and game OSD: one seal, three fixed slots (output, route, value) ----
 function seal(w, h, out, value, state, outW = 52) {
   const [d, svg] = island(w, h, h / 2);
   const y = h / 2;
   label(svg, 16, y + 4, out, { mono: true, size: 10, fill: C.ink });
-  const xa = 16 + outW, xb = w - 64;
+  const xa = 16 + outW, xb = w - (state === 'muted' ? 76 : 64);
   if (state === 'muted') {
     line(svg, [[xa, y], [xa + (xb - xa) * 0.4, y]], { stroke: C.track });
     line(svg, [[xa + (xb - xa) * 0.6, y], [xb, y]], { stroke: C.track });
@@ -312,6 +363,10 @@ cell('Sistem · parlaklık ve mikrofon hattı (açık)', [systemPage(false)]);
 cell('Sistem · mikrofon kapalı: hat kesik', [systemPage(true)]);
 cell('Hap 200x32 · çalıyor / sessiz / boşta (yuvalar sabit)', [seal(200, 32, 'G733', '62', 'live'), seal(200, 32, 'G733', 'KAPALI', 'muted'), seal(200, 32, 'G733', '62', 'idle')]);
 cell('Oyun üstü OSD · aynı mühür, ses tuşunda', [seal(300, 40, 'A1 G733', '62', 'osd', 76)]);
+cell('Ses · Voicemeeter çalışmıyor: yalnız Windows çıkışları', [audioNoVoicemeeter()]);
+cell('Medya · çalan bir şey yok', [mediaEmpty()]);
+cell('Raf · boş', [shelfEmpty()]);
+cell('Sistem · monitör parlaklığı desteklemiyor', [systemPage(false, true)]);
 }
 </script>
 </body>

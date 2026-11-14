@@ -11,7 +11,7 @@ stops), border, ink, muted, faint, track, faint track, and the one **flow** colo
 spacing, station marks, ruler ticks and the Ray Paneli rule ("the flow colour means sound flows
 here now, nothing else") are the same in every theme. No free colour picker.
 
-**Candidates rendered** (`docs/design/r3/renders-3/themes.png`): Gece (Loft dark, lime
+**Candidates rendered** (`docs/design/r3/renders-6/themes.png`): Gece (Loft dark, lime
 `#CAFF33`), Kağıt (Loft light, dark green `#3F6E00`), York (1951 NX panel green-grey, lamp white
 `#FFE9A8`), Sodyum (black, amber `#FFB224`). Berke picked all four (2026-11-14). Default: Gece,
 the Loft palette the direction was built on (not stated by Berke; change it if he says so).

@@ -1,7 +1,7 @@
 # R3 visual direction: Ray Paneli
 
 Date: 2026-11-14. Status: picked by Berke 2026-11-14 ("önerin ne ise onu uygula"), before any
-render. First render: `docs/design/r3/renders-3/sheet.png` (source `docs/design/r3/ray-paneli.html`,
+render. First render: `docs/design/r3/renders-6/sheet.png` (source `docs/design/r3/ray-paneli.html`,
 HTML mock at 1:1 DIP, not the engine). Process: skill `praxvon-direction`, logged in its taste log.
 
 ## Concept
@@ -25,11 +25,11 @@ art colour bleed, bouncing EQ bars, a giant percentage, fader strips, RGB, scanl
 
 ## Language (Loft, praxvon-ui ADR 0014)
 - Floor `#0B0B0A` to `#151412`, border `#2B2824`, ink `#ECE9E2`, muted `#A39E94`, faint
-  `#7A756C`, track `#4A463F`, lime `#CAFF33` (dark only for now).
+  `#8A847A`, track `#4A463F`, lime `#CAFF33` (dark only for now).
 - Public Sans for names and titles, Martian Mono (tabular) for labels and every changing number.
   Uppercase mono labels at 9 to 10 px, ruler ticks under every scale. No `+` corner marks
   (Berke, 2026-11-14: they do not look good on the island).
-- Themes (ADR 0007): colours only, rendered in `docs/design/r3/renders-3/themes.png`: Gece,
+- Themes (ADR 0007): colours only, rendered in `docs/design/r3/renders-6/themes.png`: Gece,
   Kağıt, York, Sodyum. The palette above is Gece.
 - Lines: 1 px track, 2 px lit route. Every line ends on a 7 px station square: filled lime = live,
   filled ink = selected or a muted source, hollow = reachable or idle. Routes run horizontal and
@@ -52,6 +52,18 @@ Motion: values settle without overshoot (Loft `spring.smooth`); a route lights f
 exit in about 180 ms; reduced motion jumps. Nothing draws at rest (G2): the 8 s traces and meters
 run only while the island is open.
 
+## Quality pass (impeccable, 2026-11-14)
+- Contrast measured per theme against both floor stops: the faint tone failed 4.5:1 in all four
+  (3.4 to 4.1). Raised to Gece `#8A847A`, Kağıt `#6B665E`, York `#86958E`, Sodyum `#86868D`
+  (4.6 to 5.2). Track lines stay at about 1.9:1: they are rails, every state they carry also has
+  a label or a station mark that passes.
+- Smallest text is 10 px (labels were 9). Desktop copy: "tıkla", not "dokun". The tab line runs
+  only between the four stations. Output values share the name's row.
+- Empty and degraded states drawn: no Voicemeeter (Windows endpoints only, a click sets the
+  default), nothing playing, empty shelf, a monitor without DDC/CI brightness.
+- Not covered by a mock: keyboard focus (the island takes no activation; decide in R4), long
+  device names (truncate in the middle), RTL is out of scope.
+
 ## Open items (decide in R4 or with Berke)
 1. Bottom radius: 24 (mock) or the engine's 40.
 2. Density: Voicemeeter Potato has 8 strips and 8 buses; draw only lit routes plus the picked
@@ -59,5 +71,5 @@ run only while the island is open.
 3. Pill at 200 wide is tight when the value is `KAPALI`; a mute glyph may replace the word.
 4. Meter data per strip and the 8 s trace need the Voicemeeter levels API from the audio service.
 5. Setting a route writes Voicemeeter parameters: hardware writes need Berke's yes when tested.
-6. Light theme and high contrast are not drawn yet (high contrast keeps its own palette, as in WPF).
-7. Next design step: `impeccable` quality pass on the mock, then R4 builds it on the engine.
+6. High contrast is not drawn (it keeps the Windows scheme, as in WPF).
+7. Next: R4 builds it on the engine; the mock stays the visual reference.
