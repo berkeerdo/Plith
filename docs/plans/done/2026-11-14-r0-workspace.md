@@ -104,5 +104,5 @@ GitHub Actions `windows-latest`.
 ### Task 4: Record and open lanes
 
 - [x] **Step 1:** ROADMAP R0 to `✅ done, <actual>`; STATUS next = lanes running and R3.
-- [ ] **Step 2:** `docs/LANES.md` (rules and state) and the two opening prompts in project
+- [x] **Step 2:** `docs/LANES.md` (rules and state) and the two opening prompts in project
   memory; open `engine` (opus) and `services` (sonnet) with `lanes open`, start `lanes watch`.
