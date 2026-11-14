@@ -11,6 +11,8 @@ repository = "https://github.com/berkeerdo/Plith"
 
 [workspace.dependencies]
 windows = "0.62.2"
+windows-future = "0.3.2"
+windows-core = "0.62.2"
 plith-core = { path = "crates/plith-core" }
 plith-render = { path = "crates/plith-render" }
 plith-shell = { path = "crates/plith-shell" }

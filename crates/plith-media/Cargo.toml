@@ -9,6 +9,21 @@ repository.workspace = true
 publish = false
 
 [dependencies]
+# Names `IAsyncOperation` and its completion handler, which `windows` does not re-export. Same
+# version `windows` already resolves to.
+windows-future = { workspace = true }
+windows = { workspace = true, features = [
+    "Foundation",
+    "Media_Control",
+    "Storage_Streams",
+    "Win32_System_Com",
+    "Win32_System_Console",
+] }
 
 [lints]
 workspace = true
+
+[[example]]
+name = "verify_media_writes"
+path = "examples/verify_media_writes.rs"
+test = true
