@@ -36,6 +36,6 @@ Updated 2026-11-14.
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
 | `engine` | Tasks 1-9 done; smoke run passed 20:23 (27 motions, 26 at 240.0 fps 0 hitches, idle 0 wakes); Task 10 next | `feature/engine-slice` @ `6922d3c` | expand 800 ms, collapse 812 ms vs Oyenza 730/660: retune after Berke's feel | Berke at the PC for Task 10 (about 20 min) |
-| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services` @ `82dab67` | Tasks 1-7 done and reviewed (opus whole-branch review, fixes in); Task 8 batch sent to Berke | Berke's yes on Task 8 writes (9 items incl. media transport) |
+| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services-reworded` merged as `4b50e83` | R2 done, lane stopped | none |
 
 Master open items: R3 visual direction with Berke; file engine ADRs P1 to P5 after Task 10.

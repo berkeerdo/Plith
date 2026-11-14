@@ -8,8 +8,10 @@ Updated 2026-11-14. Rewritten, not appended; old content goes to `journal/`.
 - R0 done: docs layout, ADR 0001 and 0002, design doc
   `specs/2026-11-14-rust-rewrite-design.md` (approved by Berke 2026-11-14), Cargo workspace with
   nine crates, `scripts/check-deps.mjs`, CI `.github/workflows/rust.yml` (green on 0155a6d).
-- Lanes `engine` (R1, opus) and `services` (R2, sonnet) run per `LANES.md`; each writes its
-  plan first and waits for the master's approval.
+- R2 done and merged (`4b50e83`): audio, media, system crates, 105 tests, hardware writes
+  verified except Voicemeeter (not installed) and WMI brightness (desktop). Pre-merge review:
+  `quality/2026-11-14-services-review.md`, 0 blocking, 10 later items for R4 wiring.
+- Lane `engine` (R1) is in Task 10, the console session with Berke.
 - **Next (master):** R3 visual direction with Berke (praxvon-direction), starting from the Loft
   palette on branch `feature/notch-in-loft`.
 
@@ -20,8 +22,11 @@ Updated 2026-11-14. Rewritten, not appended; old content goes to `journal/`.
   `subscribe()` never replays, so subscribe first, then `snapshot()`.
 - G5 gap: brightness flyout suppression needs `crates/plith` to call `open_window` on
   `WmiMonitorBrightnessEvent` (R4).
-- Unverified on hardware until Task 8: Voicemeeter (not installed here), audio change callbacks,
-  media events, DDC write, flyout window class; WMI brightness cannot be tested on this desktop.
+- Unverified on hardware: Voicemeeter (not installed here), WMI brightness (desktop), a second
+  monitor's DDC mapping.
+- Review L8: the keyboard and WinEvent hook procs have no `catch_unwind`; a panic aborts and leaves
+  the shell volume flyout hidden. Fix before R4 ships suppression on by default.
+- Key auto-repeat: one held volume key gave 135 events; the OSD must collapse repeats (R4).
 - Branch `feature/shelf-one-surface` (worktree `.claude/worktrees/shelf-one-surface`) holds WPF
   shelf work the rewrite makes obsolete; it is not merged.
 - Branch `feature/notch-in-loft` (worktree `C:\Projects\plith-notch-loft`) holds the Loft palette
