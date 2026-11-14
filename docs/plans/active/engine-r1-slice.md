@@ -255,7 +255,7 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
 Line format (pinned; the log writer prefixes a local timestamp):
 `motion expand: 175 frames in 731 ms (239.4 fps at 240 Hz), 0 hitches, worst gap 4.4 ms; draw p50 0.31 p99 0.62 ms; present p50 0.10 p99 0.22 ms; clock dcomp; retargets 0`
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 // timeline/tests.rs
@@ -275,13 +275,13 @@ Line format (pinned; the log writer prefixes a local timestamp):
 #[test] fn classify_covers_the_four_kinds()
 ```
 
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement** the research doc section 1 algorithm: `n = floor(elapsed/period +
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement** the research doc section 1 algorithm: `n = floor(elapsed/period +
   0.25)`; resync when the gap exceeds 30 periods; phase gain 0.1, period gain 0.02, period
   clamped to nominal +-3 %; off-rhythm score +1 when `|phase error| > 0.25 period`, -1 (floor 0)
   otherwise, `needs_rate_reread` when it passes 20. Stamp `anim_t = vblank + period`; `dt` is one
   period after `reset`. Duration = `last_anim - first_anim + period`; hitch = gap > 1.5 periods.
-- [ ] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
+- [x] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
   `feat(core): add vsync timeline and motion stats`, push, tick.
 
 ### Task 5: Scene handoff, launch args and demo scripts (`plith-core`)
