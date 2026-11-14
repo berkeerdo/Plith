@@ -109,7 +109,7 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   `DwmSample::delta(self, later: DwmSample) -> DwmDelta` (saturating), `MotionStats::set_dwm(DwmDelta)`;
   `LoopParts.dwm: D` with `D: Fn() -> Option<DwmSample>` (tests pass `|| None`).
 
-- [ ] **Step 1: Failing tests in `plith-core`**
+- [x] **Step 1: Failing tests in `plith-core`**
 
 ```rust
 // page/tests.rs
@@ -129,11 +129,11 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 #[test] fn delta_saturates_on_counter_reset() { /* later < earlier gives 0, never panics */ }
 ```
 
-- [ ] **Step 2: Run them, expect compile failures** (`cargo test -p plith-core`).
-- [ ] **Step 3: Implement the core side.** `PageLayers` is `[Option<PageLayer>; 2]` inside a
+- [x] **Step 2: Run them, expect compile failures** (`cargo test -p plith-core`).
+- [x] **Step 3: Implement the core side.** `PageLayers` is `[Option<PageLayer>; 2]` inside a
   newtype. Existing `motion` line text stays byte-identical up to `first wait X ms`, then
   `; dwm ...` is appended (Oyenza-comparable part first).
-- [ ] **Step 4: Render side.** In `run.rs` measure `wait_ms` around `source.wait()`, take
+- [x] **Step 4: Render side.** In `run.rs` measure `wait_ms` around `source.wait()`, take
   `late_ms` from the tick, pass `FramePhases`; read `(parts.dwm)()` in `aim` when a motion
   starts and again when it finishes, and `set_dwm` the delta. `render/src/dwm.rs` wraps
   `DwmGetCompositionTimingInfo(HWND::default(), &mut info)` (`cbSize` set; on Windows 8.1+ only a
@@ -142,9 +142,9 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   `Gpu`) and skips the clip layer when every placeholder bar lies inside the island's straight
   band (`PLACEHOLDER.top >= shape.radius` and the bar's x span inside `[ox, ox + width]`).
   `MotionStats::new` reserves 512 frames.
-- [ ] **Step 5: Sinks log detail lines.** `on_motion` in `crates/plith/src/app/wire.rs` writes the
+- [x] **Step 5: Sinks log detail lines.** `on_motion` in `crates/plith/src/app/wire.rs` writes the
   report line, then each `detail_lines()` entry.
-- [ ] **Step 6: Five checks green, commit** `perf(engine): hitch detail and frame cleanup`.
+- [x] **Step 6: Five checks green, commit** `perf(engine): hitch detail and frame cleanup`.
 
 ### Task 2: Load levers behind launch flags
 
