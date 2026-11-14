@@ -9,6 +9,9 @@ use windows::Win32::Graphics::Dxgi::{
 };
 
 /// Waits for the vertical blank of one output.
+///
+/// `WaitForVBlank` takes no timeout, so a shutdown requested during a wait can take up to one
+/// vblank of this output; it blocks longer only if the output stops producing vblanks.
 #[derive(Debug)]
 pub struct DxgiClock {
     output: IDXGIOutput,

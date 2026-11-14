@@ -1,287 +1,14 @@
-use super::*;
-use crate::clock::{ClockError, FrameSource};
+mod harness;
+
+use harness::*;
 use plith_core::clock_choice::ClockKind;
 use plith_core::geometry::IslandShape;
 use plith_core::island::IslandMotion;
-use plith_core::layout::RectPx;
-use plith_core::motion::{MotionKind, MotionReport};
-use plith_core::scene::{Scene, SceneMailbox, ShapeFrame, Suppression};
+use plith_core::motion::MotionKind;
+use plith_core::scene::{Scene, Suppression};
 use plith_core::shapes::{PAGES, REST};
-use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
-use std::sync::mpsc::{self, Receiver};
-use std::sync::{Arc, Mutex, PoisonError};
-use std::thread::{self, JoinHandle};
+use std::thread;
 use std::time::{Duration, Instant};
-use windows::Win32::Foundation::E_FAIL;
-
-const PERIOD: f64 = 1.0 / 240.0;
-const BOUND: Duration = Duration::from_millis(300);
-const QUIET: Duration = Duration::from_millis(50);
-const KINDS: [ClockKind; 3] = [ClockKind::Dcomp, ClockKind::Dxgi, ClockKind::Timer];
-
-fn index(kind: ClockKind) -> usize {
-    match kind {
-        ClockKind::Dcomp => 0,
-        ClockKind::Dxgi => 1,
-        ClockKind::Timer => 2,
-    }
-}
-
-/// Shared fake time, per-kind call counters and scenes published at given call numbers.
-struct Harness {
-    time: Mutex<f64>,
-    total: AtomicU64,
-    calls: [AtomicU64; 3],
-    script: Vec<(u64, Scene)>,
-    mailbox: Arc<SceneMailbox>,
-    delay: Option<Duration>,
-}
-
-impl Harness {
-    fn now(&self) -> f64 {
-        *self.time.lock().unwrap_or_else(PoisonError::into_inner)
-    }
-
-    fn advance(&self, secs: f64) {
-        *self.time.lock().unwrap_or_else(PoisonError::into_inner) += secs;
-    }
-
-    fn total(&self) -> u64 {
-        self.total.load(Ordering::SeqCst)
-    }
-
-    fn calls(&self, kind: ClockKind) -> u64 {
-        self.calls[index(kind)].load(Ordering::SeqCst)
-    }
-}
-
-/// Returns `k / 240` on the k-th call, or the unchanged time when `instant`.
-struct FakeClock {
-    kind: ClockKind,
-    instant: bool,
-    harness: Arc<Harness>,
-}
-
-impl FrameSource for FakeClock {
-    fn wait(&mut self) -> Result<f64, ClockError> {
-        if let Some(delay) = self.harness.delay {
-            thread::sleep(delay);
-        }
-        if !self.instant {
-            self.harness.advance(PERIOD);
-        }
-        let call = self.harness.total.fetch_add(1, Ordering::SeqCst) + 1;
-        self.harness.calls[index(self.kind)].fetch_add(1, Ordering::SeqCst);
-        for (at, scene) in &self.harness.script {
-            if *at == call {
-                self.harness.mailbox.publish(*scene);
-            }
-        }
-        Ok(self.harness.now())
-    }
-
-    fn kind(&self) -> ClockKind {
-        self.kind
-    }
-}
-
-/// Records painted frames; fails the first `fail` paints; records every `recover` call.
-struct FakePaint {
-    frames: Arc<Mutex<Vec<PaintFrame>>>,
-    fail: Arc<AtomicU32>,
-    recovers: Arc<Mutex<Vec<bool>>>,
-    recover_fails: bool,
-}
-
-impl Paint for FakePaint {
-    fn paint(&mut self, frame: &PaintFrame) -> windows::core::Result<FrameTimes> {
-        let left = self.fail.load(Ordering::SeqCst);
-        if left > 0 {
-            self.fail.store(left - 1, Ordering::SeqCst);
-            return Err(E_FAIL.into());
-        }
-        lock(&self.frames).push(frame.clone());
-        Ok(FrameTimes {
-            draw_ms: 1.0,
-            present_ms: 0.5,
-        })
-    }
-
-    fn recover(&mut self, warp: bool) -> windows::core::Result<()> {
-        lock(&self.recovers).push(warp);
-        if self.recover_fails {
-            Err(E_FAIL.into())
-        } else {
-            Ok(())
-        }
-    }
-}
-
-fn lock<T>(m: &Mutex<T>) -> std::sync::MutexGuard<'_, T> {
-    m.lock().unwrap_or_else(PoisonError::into_inner)
-}
-
-#[derive(Default)]
-struct Setup {
-    instant: Vec<ClockKind>,
-    fail: u32,
-    recover_fails: bool,
-    script: Vec<(u64, Scene)>,
-    delay: Option<Duration>,
-}
-
-struct Run {
-    mailbox: Arc<SceneMailbox>,
-    shared: Arc<LoopShared>,
-    harness: Arc<Harness>,
-    frames: Arc<Mutex<Vec<PaintFrame>>>,
-    shapes: Arc<Mutex<Vec<ShapeFrame>>>,
-    recovers: Arc<Mutex<Vec<bool>>>,
-    reports: Receiver<MotionReport>,
-    fatal: Receiver<String>,
-    done: Receiver<()>,
-    join: JoinHandle<()>,
-}
-
-fn layout() -> SurfaceLayout {
-    let monitor = RectPx {
-        x: 0,
-        y: 0,
-        width: 1920,
-        height: 1080,
-    };
-    SurfaceLayout::new(monitor, 0, 1.0)
-}
-
-fn sinks(
-    shapes: Arc<Mutex<Vec<ShapeFrame>>>,
-) -> (RenderSinks, Receiver<MotionReport>, Receiver<String>) {
-    let (report_tx, reports) = mpsc::channel();
-    let (fatal_tx, fatal) = mpsc::channel();
-    let sinks = RenderSinks {
-        on_shape: Box::new(move |frame| lock(&shapes).push(frame)),
-        on_motion: Box::new(move |report| {
-            let _ = report_tx.send(report);
-        }),
-        on_fatal: Box::new(move |message| {
-            let _ = fatal_tx.send(message);
-        }),
-    };
-    (sinks, reports, fatal)
-}
-
-fn start(setup: Setup) -> Run {
-    let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
-    let shared = Arc::new(LoopShared::new());
-    let harness = Arc::new(Harness {
-        time: Mutex::new(0.0),
-        total: AtomicU64::new(0),
-        calls: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
-        script: setup.script,
-        mailbox: Arc::clone(&mailbox),
-        delay: setup.delay,
-    });
-    let frames = Arc::new(Mutex::new(Vec::new()));
-    let shapes = Arc::new(Mutex::new(Vec::new()));
-    let recovers = Arc::new(Mutex::new(Vec::new()));
-    let (sinks, reports, fatal) = sinks(Arc::clone(&shapes));
-    let paint = FakePaint {
-        frames: Arc::clone(&frames),
-        fail: Arc::new(AtomicU32::new(setup.fail)),
-        recovers: Arc::clone(&recovers),
-        recover_fails: setup.recover_fails,
-    };
-    let (done_tx, done) = mpsc::channel();
-    let join = {
-        let (mailbox, shared, harness) = (
-            Arc::clone(&mailbox),
-            Arc::clone(&shared),
-            Arc::clone(&harness),
-        );
-        let instant = setup.instant;
-        thread::spawn(move || {
-            let clock_harness = Arc::clone(&harness);
-            let parts = LoopParts {
-                paint,
-                open_clock: move |kind| {
-                    Ok::<_, ClockError>(FakeClock {
-                        kind,
-                        instant: instant.contains(&kind),
-                        harness: Arc::clone(&clock_harness),
-                    })
-                },
-                now: move || harness.now(),
-                order: KINDS.to_vec(),
-                hz: 240.0,
-                layout: layout(),
-            };
-            run_loop(parts, &mailbox, &shared, &sinks);
-            let _ = done_tx.send(());
-        })
-    };
-    Run {
-        mailbox,
-        shared,
-        harness,
-        frames,
-        shapes,
-        recovers,
-        reports,
-        fatal,
-        done,
-        join,
-    }
-}
-
-impl Run {
-    fn frames(&self) -> Vec<PaintFrame> {
-        lock(&self.frames).clone()
-    }
-
-    fn report(&self) -> MotionReport {
-        self.reports
-            .recv_timeout(BOUND)
-            .expect("a motion report within the bound")
-    }
-
-    fn wait_frames(&self, n: usize) {
-        let deadline = Instant::now() + BOUND;
-        while lock(&self.frames).len() < n {
-            assert!(Instant::now() < deadline, "expected {n} painted frames");
-            thread::sleep(Duration::from_millis(1));
-        }
-    }
-
-    fn wait_calls(&self, n: u64) {
-        let deadline = Instant::now() + BOUND;
-        while self.harness.total() < n {
-            assert!(Instant::now() < deadline, "expected {n} clock waits");
-            thread::sleep(Duration::from_millis(1));
-        }
-    }
-
-    /// Asserts that no clock wait happens for a while: the thread is parked.
-    fn assert_parked(&self) {
-        let before = self.harness.total();
-        thread::sleep(QUIET);
-        assert_eq!(self.harness.total(), before, "clock waits while parked");
-    }
-
-    fn wakes(&self) -> u64 {
-        self.shared.wakes()
-    }
-
-    /// Stops the loop within the bound and hands back the reports channel.
-    fn stop(self) -> Receiver<MotionReport> {
-        self.shared.request_stop();
-        self.mailbox.stop();
-        self.done
-            .recv_timeout(BOUND)
-            .expect("the render loop ends within the bound");
-        self.join.join().expect("the render loop does not panic");
-        self.reports
-    }
-}
 
 fn expanded(page: usize) -> Scene {
     Scene {
@@ -476,10 +203,10 @@ fn three_fast_returns_demote_the_clock() {
     assert_eq!(run.harness.calls(ClockKind::Timer), 0);
     run.assert_parked();
     assert_eq!(run.wakes(), 1 + run.harness.total());
-    // The demoted clock stays demoted for the next motion.
+    // The next motion starts on the preferred clock again and demotes it again.
     run.mailbox.publish(Scene::default());
     assert_eq!(run.report().clock, "dxgi");
-    assert_eq!(run.harness.calls(ClockKind::Dcomp), 3);
+    assert_eq!(run.harness.calls(ClockKind::Dcomp), 6);
     let _ = run.stop();
 }
 
@@ -496,9 +223,11 @@ fn failed_paints_recreate_then_fall_back_to_warp() {
     }
     run.mailbox.publish(expanded(0));
     let report = run.report();
+    // Start frame: fail, recover, repaint fails, recover. First motion frame: fail, WARP
+    // fallback, repaint succeeds. Every clock wait ends in a painted frame.
     assert_eq!(*lock(&run.recovers), vec![false, false, true]);
     assert_eq!(
-        report.frames + 2,
+        report.frames,
         usize::try_from(run.harness.total()).unwrap_or(0)
     );
     assert_eq!(run.frames().len(), report.frames);
@@ -534,4 +263,50 @@ fn stop_mid_motion_ends_the_loop_without_a_report() {
         reports.try_recv().is_err(),
         "a stopped motion is not reported"
     );
+}
+
+#[test]
+fn a_failed_clock_is_retried_on_the_next_motion() {
+    let run = start(Setup {
+        fail_once: Some(ClockKind::Dcomp),
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let expand = run.report();
+    assert_eq!(expand.clock, "dxgi", "the failing wait demotes the motion");
+    assert_eq!(run.harness.calls(ClockKind::Dcomp), 1);
+    run.assert_parked();
+    run.mailbox.publish(Scene::default());
+    let collapse = run.report();
+    assert_eq!(
+        collapse.clock, "dcomp",
+        "the next motion starts on the first source"
+    );
+    assert_eq!(
+        run.harness.calls(ClockKind::Dcomp),
+        1 + u64::try_from(collapse.frames).unwrap_or(0)
+    );
+    assert_eq!(run.wakes(), 2 + run.harness.total());
+    let _ = run.stop();
+}
+
+#[test]
+fn a_recovered_paint_repaints_the_same_frame() {
+    let run = start(Setup {
+        fail: 1,
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.assert_parked();
+    assert_eq!(*lock(&run.recovers), vec![false]);
+    let frames = run.frames();
+    assert_eq!(frames.len(), 1);
+    assert_eq!(frames[0].shape, REST);
+    let shapes = lock(&run.shapes).clone();
+    assert_eq!(shapes.len(), 1, "on_shape for the repainted frame");
+    assert_eq!(shapes[0].generation, 1);
+    assert_eq!(run.harness.total(), 0, "no clock wait for the repaint");
+    assert_eq!(run.wakes(), 0);
+    let _ = run.stop();
 }

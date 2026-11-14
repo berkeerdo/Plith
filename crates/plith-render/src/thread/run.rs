@@ -96,6 +96,16 @@ impl<C: FrameSource, O: FnMut(ClockKind) -> Result<C, ClockError>> Clocks<C, O> 
         true
     }
 
+    /// Back to the preferred kind with fresh health, so a transient failure in one motion
+    /// does not demote the clock for every later motion.
+    fn restart(&mut self) {
+        if self.index != 0 {
+            self.current = None;
+            self.index = 0;
+        }
+        self.health = ClockHealth::default();
+    }
+
     /// The current source, opening kinds in order until one opens.
     fn source(&mut self) -> Result<&mut C, String> {
         while self.current.is_none() {
@@ -210,6 +220,7 @@ where
                 self.paint_frame()?;
                 continue;
             }
+            self.clocks.restart();
             self.timeline.reset();
             self.stamper.reset();
             self.animate(mailbox)?;
@@ -318,7 +329,8 @@ where
         self.island.is_settled() && self.pages_settled
     }
 
-    /// Paints the current state; publishes the shape on success and feeds `GpuHealth`.
+    /// Paints the current state. After a failed paint and a successful `recover`, the same
+    /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
     fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
         let shape = self.island.shape();
         let frame = PaintFrame {
@@ -327,13 +339,23 @@ where
             pages: self.pages.layers(),
             clip: !self.is_settled(),
         };
-        let result = self.paint.paint(&frame);
+        let (times, recovered) = self.paint_once(&frame)?;
+        if times.is_none() && recovered {
+            return Ok(self.paint_once(&frame)?.0);
+        }
+        Ok(times)
+    }
+
+    /// One paint: publishes the shape on success, feeds `GpuHealth` and runs its action.
+    /// Returns the frame times (on success) and whether `recover` ran.
+    fn paint_once(&mut self, frame: &PaintFrame) -> Result<(Option<FrameTimes>, bool), String> {
+        let result = self.paint.paint(frame);
         let action = self.gpu.record(result.is_ok());
         let times = match result {
             Ok(times) => {
                 self.painted += 1;
                 (self.sinks.on_shape)(ShapeFrame {
-                    shape,
+                    shape: frame.shape,
                     generation: self.painted,
                 });
                 Some(times)
@@ -341,13 +363,13 @@ where
             Err(_) => None,
         };
         let warp = match action {
-            GpuAction::None => return Ok(times),
+            GpuAction::None => return Ok((times, false)),
             GpuAction::Recreate => false,
             GpuAction::FallBackToWarp => true,
         };
         self.paint
             .recover(warp)
             .map_err(|error| format!("GPU recovery failed (warp {warp}): {error}"))?;
-        Ok(times)
+        Ok((times, true))
     }
 }
