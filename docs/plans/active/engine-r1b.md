@@ -85,6 +85,9 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 
 ### Task 1: Frame cleanup and hitch instrumentation
 
+> Superseded in part (Task 8, `dbbbf65`): the DWM delta below was built and then removed; the
+> counters do not track refreshes on this Windows 11 build (Task 6 finding, probe in Task 8).
+
 **Files:**
 - Modify: `crates/plith-core/src/page.rs` (layers without a `Vec`), `crates/plith-core/src/timeline.rs`
   (`Tick.late`), `crates/plith-core/src/motion.rs` (phases, hitch details, DWM delta)
@@ -320,8 +323,8 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   retargets 0; first wait 2.1 ms; dwm missed 0 dropped 0 of 1` and
   `hitch collapse #90: gap 8.3 ms; before wait 0.5 late 0.1 draw 0.1 present 6.9; at wait 1.3
   late 0.1 draw 0.1 present 0.1`. Deadlock was open behind (Berke: "oyun açık zaten"), so the
-  smoke already showed the game-load stall. Finding: `dwm ... of 1` is a wrong reading (fixed or
-  dropped in Task 8).
+  smoke already showed the game-load stall. Finding: `dwm ... of 1` is a wrong reading (removed in
+  Task 8, `dbbbf65`).
 - [x] **Step 3:** Message the master the run list for Task 7 and wait for his relay.
 
 ### Task 7: Console session with Berke and Deadlock (master arranges)
@@ -389,20 +392,42 @@ R4, when the island shows over games).
 **Files:** `crates/plith-core/src/levers.rs`, `crates/plith-core/src/tuning.rs`,
 `crates/plith-core/src/launch.rs` and their tests, this plan.
 
-- [ ] **Step 1:** Change `Levers::default()` (never a HIGH or REALTIME default) and the default `TuningSet` to the Task 7 picks;
+- [x] **Step 1:** Change `Levers::default()` (never a HIGH or REALTIME default) and the default `TuningSet` to the Task 7 picks;
   update `levers::tests::default_is_r1_behaviour` to `default_is_the_r1b_pick` with the picked
   values; `tests/durations.rs` keeps both sets.
-- [ ] **Step 2:** Draft the ADR amendments below for the master (0003 clock and priorities, 0005
+- [x] **Step 2:** Draft the ADR amendments below for the master (0003 clock and priorities, 0005
   latency and sync if changed): decision, the Task 7 numbers copied from the log.
-- [ ] **Step 3:** Five checks green, commit `perf(engine): default to measured levers`.
+- [x] **Step 3:** Five checks green, commit `perf(engine): default to measured levers`.
 - [ ] **Step 4:** `project-docs` handoff on this branch, plan banner, message the master.
 
 ## ADR amendment drafts (filled in Task 8; the master files them)
 
-| ADR | Change | Numbers |
-|---|---|---|
-| 0003 | (Task 7) | (Task 7) |
-| 0005 | (Task 7) | (Task 7) |
+**0005 Swap chain buffers and latency, amendment (2026-11-14, R1b):** `SetMaximumFrameLatency(2)`
+replaces 1; still 2 buffers, `FLIP_SEQUENTIAL`, `Present(1, 0)` after the clock wait. With latency
+1, Present waits until the previous frame has left the GPU; with a borderless game running behind
+(Deadlock) that wait took a whole period and every hitch was that wait. Measured, release build,
+RTX 5080, 240 Hz, Deadlock running behind the desktop, `basic` demo, 15 motions per run:
+
+| Setting | 0-1 hitch motions | Hitches | Present p99 max | Min fps |
+|---|---|---|---|---|
+| latency 1, sync 1 (R1) | 11/15 | 21 | 4.35 ms | 227.6 |
+| latency 2, sync 1 | 15/15 (and 30/30 in two tune runs) | 0 | 0.24 to 1.56 ms | 240.0 |
+| latency 2, sync 0 | 30/30 (two runs) | 0 | 0.23 to 0.38 ms | 240.0 |
+| latency 1, sync 0 | 15/15 | 0 | 3.40 ms | 240.0 |
+
+Sync 0 hides the wait but keeps it (present up to 3.4 ms); latency 2 removes it, so sync stays 1.
+Cost: when the GPU is behind, one more frame (4.2 ms at 240 Hz) may queue. Berke on the run:
+"herhangi bir takılma yoktu".
+
+**0003 Frame clock source, amendment (2026-11-14, R1b):** the known gap (13 of 25 motions missing
+1 or 2 vblanks with a game behind) is closed by ADR 0005's latency 2, not by the clock. Priority
+levers were measured and rejected (no gain, and the rule that plith never takes from the game):
+`IDXGIDevice::SetGPUThreadPriority(7)` 10/15 motions clean, 15 hitches;
+`D3DKMTSetProcessSchedulingPriorityClass(ABOVE_NORMAL)` 12/15, 11; MMCSS `AvSetMmThreadPriority
+(CRITICAL)` 11/15, 12 (baseline 11/15, 21). All three were accepted by Windows without elevation.
+They stay as launch flags (`--gpu-priority`, `--sched-class`, `--mmcss`) for later measurement;
+defaults stay normal. `DwmGetCompositionTimingInfo` counters do not track refreshes on this
+Windows 11 build (each advances about 1 per second), so the motion line carries no DWM delta.
 
 ## Not in this plan
 
