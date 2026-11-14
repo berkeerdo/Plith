@@ -1,5 +1,6 @@
 //! Pure logic with no Windows dependency: springs, the vsync timeline, motion statistics, the island state machine, geometry and page layout.
 
+pub mod clock_choice;
 pub mod demo;
 pub mod geometry;
 pub mod gpu_health;

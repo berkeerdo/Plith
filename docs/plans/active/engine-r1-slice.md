@@ -429,7 +429,7 @@ Loop (the part the tests pin):
    that drew the motion (no separate clock line in R1).
 6. The thread joins MMCSS `"Games"` (`AvSetMmThreadCharacteristicsW`); recorded in ADR P1.
 
-- [ ] **Step 1: Write the failing tests** (fakes: a `FakeClock` returning `k/240` with a
+- [x] **Step 1: Write the failing tests** (fakes: a `FakeClock` returning `k/240` with a
   counter, a `FakePaint` recording frames)
 
 ```rust
@@ -446,9 +446,9 @@ Loop (the part the tests pin):
 #[test] fn named_request_goes_first()
 ```
 
-- [ ] **Step 2: FAIL.** **Step 3: Implement.** Thread name `plith-render`. All graphics objects
+- [x] **Step 2: FAIL.** **Step 3: Implement.** Thread name `plith-render`. All graphics objects
   are created inside the thread; only `Arc`s and the HWND value cross.
-- [ ] **Step 4: PASS**, five checks.  **Step 5: Commit**
+- [x] **Step 4: PASS**, five checks.  **Step 5: Commit**
   `feat(render): add frame clock and render thread`, push, tick.
 
 ### Task 8: Notch window, hit testing and the topmost fight (`plith-shell`)
