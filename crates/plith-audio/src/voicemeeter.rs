@@ -2,12 +2,24 @@
 //!
 //! Nothing here touches Windows or the Voicemeeter DLL, so it is fully unit tested.
 
+#[cfg(windows)]
+mod api;
+mod decode;
+#[cfg(windows)]
+mod dll;
 mod layout;
+#[cfg(windows)]
+mod poll;
+#[cfg(windows)]
+mod service;
 mod session;
 #[cfg(test)]
 mod tests;
 
+pub use decode::{decode_label, install_dir_from_uninstall, level_channel, level_type};
 pub use layout::{fallback_label, param_name};
+#[cfg(windows)]
+pub use service::{Status, VoicemeeterService};
 pub use session::{DirtyOutcome, LoginSession};
 
 /// Lowest gain the Remote API accepts, in dB.
@@ -94,6 +106,16 @@ pub struct VmSnapshot {
     pub strips: Vec<ChannelSnapshot>,
     /// Output buses.
     pub buses: Vec<ChannelSnapshot>,
+}
+
+/// Peak levels (linear, 0.0 to 1.0 and above on clipping) of the left and right channel of
+/// every strip and bus. Read only; all zero while nothing is playing or Voicemeeter is absent.
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct VmLevels {
+    /// Left and right peak per input strip.
+    pub strips: Vec<[f32; 2]>,
+    /// Left and right peak per output bus.
+    pub buses: Vec<[f32; 2]>,
 }
 
 /// Clamps a gain to the accepted range; NaN becomes the minimum.

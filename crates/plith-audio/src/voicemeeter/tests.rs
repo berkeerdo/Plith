@@ -102,3 +102,79 @@ fn level_to_db_floor() {
     assert!((level_to_db(1e-9) - LEVEL_FLOOR_DB).abs() < f32::EPSILON);
     assert!((level_to_db(f32::NAN) - LEVEL_FLOOR_DB).abs() < f32::EPSILON);
 }
+
+#[test]
+fn uninstall_string_to_directory() {
+    let dir = r"C:\Program Files (x86)\VB\Voicemeeter";
+    let quoted = r#""C:\Program Files (x86)\VB\Voicemeeter\voicemeeterprosetup.exe""#;
+    assert_eq!(install_dir_from_uninstall(quoted), Some(dir.to_owned()));
+    let bare = r"C:\Program Files (x86)\VB\Voicemeeter\voicemeeterprosetup.exe";
+    assert_eq!(install_dir_from_uninstall(bare), Some(dir.to_owned()));
+    let quoted_args = r#""C:\Program Files (x86)\VB\Voicemeeter\setup.exe" /u"#;
+    assert_eq!(
+        install_dir_from_uninstall(quoted_args),
+        Some(dir.to_owned())
+    );
+    let bare_args = r"C:\Program Files (x86)\VB\Voicemeeter\setup.exe /u";
+    assert_eq!(install_dir_from_uninstall(bare_args), Some(dir.to_owned()));
+    assert_eq!(install_dir_from_uninstall(""), None);
+    assert_eq!(install_dir_from_uninstall("   "), None);
+    assert_eq!(install_dir_from_uninstall("setup.exe"), None);
+}
+
+#[test]
+fn label_decode_stops_at_nul() {
+    assert_eq!(decode_label(b"Mic\0garbage"), "Mic");
+    assert_eq!(decode_label(b"\0"), "");
+    assert_eq!(decode_label(b""), "");
+    assert_eq!(decode_label(b"No terminator"), "No terminator");
+}
+
+#[test]
+fn label_decode_utf8_then_latin1() {
+    assert_eq!(
+        decode_label("Kulakl\u{131}k\0".as_bytes()),
+        "Kulakl\u{131}k"
+    );
+    // 0xE9 alone is invalid UTF-8, so it is read as Latin-1 (e with acute).
+    assert_eq!(decode_label(&[b'C', b'a', b'f', 0xE9, 0]), "Caf\u{e9}");
+}
+
+#[test]
+fn level_channels_per_kind() {
+    let strips = |k: VmKind| -> Vec<Option<usize>> {
+        (0..=k.strip_count())
+            .map(|i| level_channel(k, Rail::Strip, i))
+            .collect()
+    };
+    assert_eq!(strips(VmKind::Standard), [Some(0), Some(2), Some(4), None]);
+    let banana = [Some(0), Some(2), Some(4), Some(6), Some(14), None];
+    assert_eq!(strips(VmKind::Banana), banana);
+    let potato = [
+        Some(0),
+        Some(2),
+        Some(4),
+        Some(6),
+        Some(8),
+        Some(10),
+        Some(18),
+        Some(26),
+        None,
+    ];
+    assert_eq!(strips(VmKind::Potato), potato);
+}
+
+#[test]
+fn level_channels_for_buses() {
+    assert_eq!(level_channel(VmKind::Standard, Rail::Bus, 1), Some(8));
+    assert_eq!(level_channel(VmKind::Standard, Rail::Bus, 2), None);
+    assert_eq!(level_channel(VmKind::Banana, Rail::Bus, 4), Some(32));
+    assert_eq!(level_channel(VmKind::Banana, Rail::Bus, 5), None);
+    assert_eq!(level_channel(VmKind::Potato, Rail::Bus, 7), Some(56));
+}
+
+#[test]
+fn level_type_per_rail() {
+    assert_eq!(level_type(Rail::Strip), 1);
+    assert_eq!(level_type(Rail::Bus), 3);
+}
