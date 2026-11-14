@@ -491,6 +491,30 @@ subprocess test.
 - The island never takes activation, so Alt+F4 cannot close it; post `WM_CLOSE` to the
   `Plith.Notch` window class instead (no input synthesis).
 
+**Merge review round (master's review `docs/quality/2026-11-14-engine-r1b-review.md`):** I1 fixed
+in `6405f33`: the hit region is the cover of the presented shape and the one before it (larger
+width and height, smaller drawn radius), because with latency 2 the region could lead the
+picture by one frame and clip a collapsing island. Not confirmed on screen: Berke watching
+collapses with a game behind is still owed (record it in ADR 0004 or 0008); the cover assumes the screen lags the region by at most one frame, while two queued frames could make it two. Trade: during a
+collapse, a click within one frame of travel outside the latest shape is caught by the window
+and ignored instead of reaching the window beneath. M1, M3, M4, M6 and the M9 usage text are in
+`1f01148`.
+
+**R4 items from that review (no code on this branch):**
+- M2: a `Closing` queued while `emit` drains runs after `DefWindowProc` destroyed the window;
+  live once a handler pumps messages. For `WM_CLOSE` while draining, re-post it or destroy after
+  the drain.
+- M5: hitches are measured on submission cadence; with up to two frames in flight a varying queue
+  depth can judder on screen while the log shows clean gaps. PresentMon is the acceptance check
+  for ADR 0008.
+- M7: forced exits (backstop, watchdog) skip every `Drop`; R4's flyout suppressor needs a restore
+  on those paths.
+- M8: `refused_lever_is_logged_not_fatal` checks only the line format; the window panic test
+  leaves a `WM_QUIT` in the test thread's queue.
+- M9 rest: `topmost` lines on every foreground change need gating or rate limiting before
+  all-day runs; size `RESERVED_FRAMES` from `hz` (360 Hz panels); wrap the `on_panic` call in
+  `catch_unwind`.
+
 **Next engine job (proposal; the master decides):** R4 opens with the review's L11 to L14 (a
 generic UI wake message, no present per duplicate scene, content in the scene, app wiring),
 and a PresentMon capture with Berke's yes to measure on-screen delivery at latency 2.
