@@ -1,5 +1,8 @@
 # R2 Services (headless) Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, deliberate omissions and decisions are in the Record section below and in STATUS.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 

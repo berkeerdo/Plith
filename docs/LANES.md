@@ -7,8 +7,7 @@ path, never from their worktree. Skills: `parallel-lanes`, `project-docs`, `prax
 
 | Lane | Work | Branch (base `main`) | Model | Owns | Must not touch |
 |---|---|---|---|---|---|
-| `engine` | R1 engine slice | `feature/engine-slice` | opus | `crates/plith-core`, `crates/plith-render`, `crates/plith-shell`, `crates/plith`, `docs/plans/active/engine-*.md` | service crates, `plith-ipc`, `plith-osd`, other docs |
-| `services` | R2 services, headless | `feature/services` | sonnet | `crates/plith-audio`, `crates/plith-media`, `crates/plith-system`, `docs/plans/active/services-*.md` | engine crates, `crates/plith`, `plith-ipc`, `plith-osd`, other docs |
+| `engine` | R1b engine under load | `feature/engine-r1b` | opus | `crates/plith-core`, `crates/plith-render`, `crates/plith-shell`, `crates/plith`, `docs/plans/active/engine-*.md` | service crates, `plith-ipc`, `plith-osd`, other docs |
 
 - Design: `docs/specs/2026-11-14-rust-rewrite-design.md`. Project rules: `CLAUDE.md`. Read the
   stack reference `~/.claude/skills/praxvon-structure/references/rust-tauri.md` before the first
@@ -35,7 +34,8 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | Tasks 1-9 done; smoke run passed 20:23 (27 motions, 26 at 240.0 fps 0 hitches, idle 0 wakes); Task 10 next | `feature/engine-slice` @ `6922d3c` | expand 800 ms, collapse 812 ms vs Oyenza 730/660: retune after Berke's feel | Berke at the PC for Task 10 (about 20 min) |
-| `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services-reworded` merged as `4b50e83` | R2 done, lane stopped | none |
+| `engine` | R1b: missed vblanks with a game behind, collapse and page durations, topmost IME skip, drop split and mask hit modes, deferred minors | `feature/engine-r1b` @ `main` | R1 merged as `1aabe4a` | writes the R1b plan first |
 
-Master open items: R3 visual direction with Berke; file engine ADRs P1 to P5 after Task 10.
+R2 (`services`) merged as `4b50e83`; lane stopped, worktree removed.
+Master open items: R3 visual direction with Berke; delete merged branches `feature/engine-slice`,
+`feature/engine-slice-reworded`, `feature/services-reworded` after Berke's yes.
