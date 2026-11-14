@@ -49,15 +49,16 @@ pub fn clock_order(request: ClockRequest, remote: bool) -> Vec<ClockKind> {
         .collect()
 }
 
-/// Watches wait durations for a clock that returns without waiting for a vblank.
+/// Watches tick intervals for a clock that returns without waiting for a vblank.
 #[derive(Debug, Clone, Copy, Default)]
 pub struct ClockHealth {
     fast: u32,
 }
 
 impl ClockHealth {
-    /// Records one wait of `waited` seconds on a display with `period`; true means demote
-    /// (the third consecutive wait under 0.15 period). The streak restarts after a demotion.
+    /// Records one tick interval of `waited` seconds (raw wake to the previous raw wake of the
+    /// same source) on a display with `period`; true means demote
+    /// (the third consecutive interval under 0.15 period). The streak restarts after a demotion.
     pub fn observe(&mut self, waited: f64, period: f64) -> bool {
         if waited < FAST_FRACTION * period {
             self.fast += 1;

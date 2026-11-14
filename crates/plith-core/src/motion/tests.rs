@@ -29,7 +29,23 @@ fn report_line_matches_the_pinned_format() {
         line,
         "motion expand: 240 frames in 1000 ms (240.0 fps at 240 Hz), 0 hitches, \
          worst gap 4.2 ms; draw p50 0.31 p99 0.31 ms; present p50 0.10 p99 0.10 ms; \
-         clock dcomp; retargets 0"
+         clock dcomp; retargets 0; first wait 0.0 ms"
+    );
+}
+
+#[test]
+fn first_wait_is_noted_once_with_one_decimal() {
+    let mut s = MotionStats::new(MotionKind::Expand, HZ, "dcomp");
+    s.note_first_wait(12.34);
+    s.note_first_wait(99.0);
+    s.record_frame(0.0, 0.3, 0.1);
+    let report = s.finish();
+    assert!((report.first_wait_ms - 12.34).abs() < 1e-9);
+    assert!(
+        report
+            .to_string()
+            .ends_with("retargets 0; first wait 12.3 ms"),
+        "{report}"
     );
 }
 
@@ -42,7 +58,10 @@ fn retargets_and_hitches_keep_their_plural_words() {
     let line = s.finish().to_string();
     assert!(line.starts_with("motion page: 2 frames"), "{line}");
     assert!(line.contains(", 1 hitches, "), "{line}");
-    assert!(line.contains("clock dxgi; retargets 1"), "{line}");
+    assert!(
+        line.contains("clock dxgi; retargets 1; first wait"),
+        "{line}"
+    );
 }
 
 #[test]

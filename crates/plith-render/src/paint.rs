@@ -20,8 +20,8 @@ pub struct PaintFrame {
     pub origin: (f64, f64),
     /// Visible page layers, outgoing first.
     pub pages: Vec<PageLayer>,
-    /// Clip the placeholders to the island while the shape is unsettled.
-    pub clip: bool,
+    /// Opacity of the page placeholders (0 hides them); the island clips them always.
+    pub content_opacity: f32,
 }
 
 /// Draws frames onto the target set on a Direct2D device context.
@@ -79,7 +79,7 @@ impl Painter {
         let island = rounded(ox, oy, shape.width, shape.height, shape.radius);
         let clear = color([0.0; 4], 1.0);
         // Built before BeginDraw so a failure here cannot leave the context mid-draw.
-        let clip = if frame.clip {
+        let clip = if frame.content_opacity > 0.0 && !frame.pages.is_empty() {
             Some(Self::clip_geometry(ctx, &island)?)
         } else {
             None
@@ -92,9 +92,24 @@ impl Painter {
             self.brush.SetColor(&raw const fill);
             ctx.FillRoundedRectangle(&raw const island, &self.brush);
         }
-        if let Some(geometry) = clip.clone() {
+        let clipped = clip.is_some();
+        if let Some(geometry) = clip {
             Self::push_clip(ctx, geometry);
+            self.draw_pages(ctx, frame);
         }
+        // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
+        unsafe {
+            if clipped {
+                ctx.PopLayer();
+            }
+            ctx.EndDraw(None, None)
+        }
+    }
+
+    /// Draws one placeholder bar per page layer, faded by the content opacity.
+    fn draw_pages(&self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) {
+        let (ox, oy) = frame.origin;
+        let shape = frame.shape;
         for layer in &frame.pages {
             let x = ox + (shape.width - PLACEHOLDER.width) / 2.0 + layer.offset;
             let bar = rounded(
@@ -104,19 +119,12 @@ impl Painter {
                 PLACEHOLDER.height,
                 PLACEHOLDER.radius,
             );
-            let tint = color(PLACEHOLDER.rgba, f(layer.opacity));
-            // SAFETY: as above.
+            let tint = color(PLACEHOLDER.rgba, f(layer.opacity) * frame.content_opacity);
+            // SAFETY: draw calls inside the BeginDraw/EndDraw of `paint` on a live context.
             unsafe {
                 self.brush.SetColor(&raw const tint);
                 ctx.FillRoundedRectangle(&raw const bar, &self.brush);
             }
-        }
-        // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
-        unsafe {
-            if clip.is_some() {
-                ctx.PopLayer();
-            }
-            ctx.EndDraw(None, None)
         }
     }
 

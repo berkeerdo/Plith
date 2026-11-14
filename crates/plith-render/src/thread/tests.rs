@@ -35,7 +35,7 @@ fn parks_at_rest_with_no_clock_waits() {
     let frames = run.frames();
     assert_eq!(frames.len(), 1, "exactly one rest frame at start");
     assert_eq!(frames[0].shape, REST);
-    assert!(!frames[0].clip);
+    assert!(frames[0].content_opacity.abs() < f32::EPSILON);
     assert!(
         run.reports.try_recv().is_err(),
         "the start frame is no motion"
@@ -121,6 +121,11 @@ fn one_expand_produces_one_motion_report() {
     assert_eq!(report.retargets, 0);
     assert_eq!(report.clock, "dcomp");
     assert_eq!(report.hitches, 0);
+    assert!(
+        (report.first_wait_ms - PERIOD * 1000.0).abs() < 1e-6,
+        "first wait {}",
+        report.first_wait_ms
+    );
     run.assert_parked();
     let calls = run.harness.total();
     assert_eq!(u64::try_from(report.frames).ok(), Some(calls));
@@ -129,8 +134,38 @@ fn one_expand_produces_one_motion_report() {
     assert_eq!(frames.len(), 1 + report.frames);
     let last = frames.last().expect("frames");
     assert_eq!(last.shape, PAGES[0]);
-    assert!(!last.clip, "the settled last frame is not clipped");
+    assert!((last.content_opacity - 1.0).abs() < f32::EPSILON);
     assert!(run.reports.recv_timeout(QUIET).is_err(), "only one report");
+    let _ = run.stop();
+}
+
+#[test]
+fn a_settled_collapse_ends_with_hidden_content() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let _ = run.report();
+    run.assert_parked();
+    let opened = run.frames();
+    let open_last = opened.last().expect("frames");
+    assert!((open_last.content_opacity - 1.0).abs() < f32::EPSILON);
+    run.mailbox.publish(Scene::default());
+    let _ = run.report();
+    run.assert_parked();
+    let frames = run.frames();
+    let last = frames.last().expect("frames");
+    assert_eq!(last.shape, REST);
+    assert!(
+        last.content_opacity.abs() < f32::EPSILON,
+        "content opacity {}",
+        last.content_opacity
+    );
+    assert!(
+        frames[opened.len()..]
+            .iter()
+            .all(|f| f.content_opacity < 1.0),
+        "the collapse fades the content out"
+    );
     let _ = run.stop();
 }
 
@@ -159,7 +194,6 @@ fn first_frame_after_rest_advances_one_period() {
     let expand = run.report();
     let frames = run.frames();
     assert_eq!(frames[1].shape, one_period_from(REST, PAGES[0]));
-    assert!(frames[1].clip);
     assert_eq!(frames[1].origin, layout().island_origin(frames[1].shape));
     run.assert_parked();
     // A rest gap of 12 periods: without a timeline and stamper reset the first step would be 13.
@@ -199,14 +233,29 @@ fn three_fast_returns_demote_the_clock() {
     run.mailbox.publish(expanded(0));
     let report = run.report();
     assert_eq!(report.clock, "dxgi");
-    assert_eq!(run.harness.calls(ClockKind::Dcomp), 3);
+    // The first wait has no previous tick to measure against; the next three are fast.
+    assert_eq!(run.harness.calls(ClockKind::Dcomp), 4);
     assert_eq!(run.harness.calls(ClockKind::Timer), 0);
     run.assert_parked();
     assert_eq!(run.wakes(), 1 + run.harness.total());
     // The next motion starts on the preferred clock again and demotes it again.
     run.mailbox.publish(Scene::default());
     assert_eq!(run.report().clock, "dxgi");
-    assert_eq!(run.harness.calls(ClockKind::Dcomp), 6);
+    assert_eq!(run.harness.calls(ClockKind::Dcomp), 8);
+    let _ = run.stop();
+}
+
+#[test]
+fn short_waits_between_regular_ticks_never_demote_the_clock() {
+    let run = start(Setup {
+        lead: 0.9 * PERIOD,
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let report = run.report();
+    assert_eq!(report.clock, "dcomp");
+    assert_eq!(run.harness.calls(ClockKind::Dxgi), 0);
     let _ = run.stop();
 }
 

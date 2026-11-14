@@ -3,7 +3,7 @@
 
 use plith_core::geometry::IslandShape;
 use plith_core::page::PageLayer;
-use plith_core::shapes::{PAGES, PLACEHOLDER};
+use plith_core::shapes::{PAGES, PLACEHOLDER, REST};
 use plith_render::paint::PaintFrame;
 use plith_render::render_offscreen;
 
@@ -12,7 +12,7 @@ fn frame(shape: IslandShape, origin: (f64, f64), pages: Vec<PageLayer>) -> Paint
         shape,
         origin,
         pages,
-        clip: false,
+        content_opacity: 1.0,
     }
 }
 
@@ -73,28 +73,24 @@ fn page_placeholder_is_lighter_than_the_fill() {
 }
 
 /// A placeholder pushed 240 DIP right of centre: it spans x 430..550 DIP, the island ends at 490.
-fn bleeding_frame(clip: bool) -> PaintFrame {
+fn bleeding_frame() -> PaintFrame {
     let layer = PageLayer {
         page: 2,
         offset: 240.0,
         opacity: 1.0,
     };
-    let mut f = frame(PAGES[2], (10.0, 10.0), vec![layer]);
-    f.clip = clip;
-    f
+    frame(PAGES[2], (10.0, 10.0), vec![layer])
 }
 
 fn check_clip(scale: f64) {
     let w = (700.0 * scale) as u32;
     let h = (220.0 * scale) as u32;
     let at = |dip: f64| (dip * scale) as u32;
-    let clipped = render_offscreen(w, h, scale, &bleeding_frame(true)).unwrap();
-    let open = render_offscreen(w, h, scale, &bleeding_frame(false)).unwrap();
-    // Inside the island the bar is lighter than the fill in both cases.
+    let clipped = render_offscreen(w, h, scale, &bleeding_frame()).unwrap();
+    // Inside the island the bar is lighter than the fill.
     assert!(pixel(&clipped, w, at(450.0), at(40.0))[0] > 10);
-    // Outside the island (x = 520 DIP) the clip keeps alpha 0, the open frame bleeds.
+    // Outside the island (x = 520 DIP) the clip keeps alpha 0.
     assert_eq!(pixel(&clipped, w, at(520.0), at(40.0))[3], 0);
-    assert!(pixel(&open, w, at(520.0), at(40.0))[3] > 0);
 }
 
 #[test]
@@ -105,4 +101,33 @@ fn clip_keeps_a_crossing_placeholder_inside_the_island() {
 #[test]
 fn clip_keeps_a_crossing_placeholder_inside_the_island_at_scale_1_5() {
     check_clip(1.5);
+}
+
+#[test]
+fn resting_island_with_hidden_content_shows_nothing_but_the_fill() {
+    let (w, h) = (260_u32, 80_u32);
+    let origin = (30.0, 10.0);
+    let layer = PageLayer {
+        page: 0,
+        offset: 0.0,
+        opacity: 1.0,
+    };
+    let mut f = frame(REST, origin, vec![layer]);
+    f.content_opacity = 0.0;
+    let buf = render_offscreen(w, h, 1.0, &f).unwrap();
+    let bottom = (origin.1 + REST.height) as u32;
+    for y in 0..h {
+        for x in 0..w {
+            let p = pixel(&buf, w, x, y);
+            assert_eq!(&p[..3], &[0, 0, 0], "lighter than the fill at ({x}, {y})");
+            if y > bottom {
+                assert_eq!(p[3], 0, "drawn outside the island at ({x}, {y})");
+            }
+        }
+    }
+    // The same frame with visible content does show the bar, so the test can fail.
+    f.content_opacity = 1.0;
+    let lit = render_offscreen(w, h, 1.0, &f).unwrap();
+    let cy = (origin.1 + PLACEHOLDER.top + 4.0) as u32;
+    assert!(pixel(&lit, w, 130, cy)[0] > 10);
 }

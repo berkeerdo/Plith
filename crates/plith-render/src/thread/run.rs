@@ -13,7 +13,9 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::motion::{MotionKind, MotionStats};
 use plith_core::page::PageTurn;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
+use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
+use plith_core::tuning::OPACITY;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// State shared between the render loop and its owner: the wake counter and the stop flag.
@@ -135,12 +137,31 @@ struct Engine<'a, C, P, O, N> {
     island: IslandMotion,
     pages: PageTurn,
     pages_settled: bool,
+    content: Spring,
+    content_settled: bool,
+    prev_raw: Option<(ClockKind, f64)>,
     stats: Option<MotionStats>,
     timeline: VsyncTimeline,
     stamper: FrameStamper,
     gpu: GpuHealth,
     painted: u64,
     seen: u64,
+}
+
+/// The content opacity spring, resting at 1 for an expanded scene and 0 for a collapsed one.
+fn content_spring(scene: Scene) -> Spring {
+    Spring::new(content_target(scene), OPACITY).with_eps(0.002, 0.01)
+}
+
+fn content_target(scene: Scene) -> f64 {
+    if scene.expanded { 1.0 } else { 0.0 }
+}
+
+/// Narrows an opacity in 0..=1 (clamped) for the painter.
+// Allowed: the value is clamped to 0..=1, well inside f32 range and precision.
+#[allow(clippy::cast_possible_truncation)]
+fn opacity_f32(value: f64) -> f32 {
+    value.clamp(0.0, 1.0) as f32
 }
 
 /// Runs until the mailbox stops or a fatal error (reported through `sinks.on_fatal`).
@@ -174,6 +195,9 @@ pub fn run_loop<C, P, O, N>(
         island: IslandMotion::new(scene.target()),
         pages: PageTurn::new(scene.page),
         pages_settled: true,
+        content: content_spring(scene),
+        content_settled: true,
+        prev_raw: None,
         stats: None,
         timeline: VsyncTimeline::new(parts.hz),
         stamper: FrameStamper::default(),
@@ -221,6 +245,7 @@ where
                 continue;
             }
             self.clocks.restart();
+            self.prev_raw = None;
             self.timeline.reset();
             self.stamper.reset();
             self.animate(mailbox)?;
@@ -256,13 +281,14 @@ where
             }
             let island_settled = self.island.step(dt);
             self.pages_settled = self.pages.step(dt);
+            self.content_settled = self.content.step(dt);
             let drawn_by = self.clocks.kind();
             if let Some(times) = self.paint_frame()?
                 && let Some(stats) = self.stats.as_mut()
             {
                 stats.record_frame(anim_t, times.draw_ms, times.present_ms);
             }
-            if island_settled && self.pages_settled {
+            if island_settled && self.pages_settled && self.content_settled {
                 if let Some(stats) = self.stats.take() {
                     let mut report = stats.finish();
                     report.clock = drawn_by.as_str();
@@ -275,13 +301,17 @@ where
 
     /// One clock wait. `None` when the sample is dropped because the clock was just demoted.
     fn wait_clock(&mut self) -> Result<Option<f64>, String> {
-        let before = (self.now)();
+        let began = (self.now)();
         let source = self.clocks.source()?;
         let kind = source.kind();
         let result = source.wait();
         self.shared.wake();
+        let waited_ms = ((self.now)() - began) * 1000.0;
+        if let Some(stats) = self.stats.as_mut() {
+            stats.note_first_wait(waited_ms);
+        }
         let demote = match &result {
-            Ok(raw) => self.clocks.health.observe(raw - before, self.period),
+            Ok(raw) => self.observe_tick(kind, *raw),
             Err(_) => true,
         };
         match result {
@@ -292,10 +322,23 @@ where
             }
             _ => {
                 self.clocks.demote();
+                self.prev_raw = None;
                 // A new source has its own phase: lock afresh, keep the animation time running.
                 self.timeline.reset();
                 Ok(None)
             }
+        }
+    }
+
+    /// Feeds the clock health the interval since the previous wake of the same source; true
+    /// means demote. The first wake of a source has nothing to measure against.
+    fn observe_tick(&mut self, kind: ClockKind, raw: f64) -> bool {
+        let previous = self.prev_raw.replace((kind, raw));
+        match previous {
+            Some((prev_kind, prev)) if prev_kind == kind => {
+                self.clocks.health.observe(raw - prev, self.period)
+            }
+            _ => false,
         }
     }
 
@@ -311,6 +354,8 @@ where
             self.stats = Some(MotionStats::new(kind, self.hz, self.clocks.kind().as_str()));
         }
         self.island.retarget(target);
+        self.content.retarget(content_target(scene), OPACITY);
+        self.content_settled = self.content.is_settled();
         if page_changed {
             self.pages.turn_to(scene.page);
             self.pages_settled = false;
@@ -322,11 +367,13 @@ where
         self.island = IslandMotion::new(scene.target());
         self.pages = PageTurn::new(scene.page);
         self.pages_settled = true;
+        self.content = content_spring(scene);
+        self.content_settled = true;
         self.stats = None;
     }
 
     fn is_settled(&self) -> bool {
-        self.island.is_settled() && self.pages_settled
+        self.island.is_settled() && self.pages_settled && self.content_settled
     }
 
     /// Paints the current state. After a failed paint and a successful `recover`, the same
@@ -337,7 +384,7 @@ where
             shape,
             origin: self.layout.island_origin(shape),
             pages: self.pages.layers(),
-            clip: !self.is_settled(),
+            content_opacity: opacity_f32(self.content.value()),
         };
         let (times, recovered) = self.paint_once(&frame)?;
         if times.is_none() && recovered {

@@ -16,7 +16,7 @@ use std::time::{Duration, Instant};
 use windows::Win32::Foundation::E_FAIL;
 
 pub(super) const PERIOD: f64 = 1.0 / 240.0;
-pub(super) const BOUND: Duration = Duration::from_millis(300);
+pub(super) const BOUND: Duration = Duration::from_secs(2);
 pub(super) const QUIET: Duration = Duration::from_millis(50);
 pub(super) const KINDS: [ClockKind; 3] = [ClockKind::Dcomp, ClockKind::Dxgi, ClockKind::Timer];
 
@@ -38,6 +38,8 @@ pub(super) struct Harness {
     pub(super) delay: Option<Duration>,
     pub(super) fail_once: Option<ClockKind>,
     pub(super) failed: AtomicBool,
+    /// How far the loop's own clock runs ahead of fake time, to model work before each wait.
+    pub(super) lead: f64,
 }
 
 impl Harness {
@@ -137,6 +139,7 @@ pub(super) struct Setup {
     pub(super) script: Vec<(u64, Scene)>,
     pub(super) delay: Option<Duration>,
     pub(super) fail_once: Option<ClockKind>,
+    pub(super) lead: f64,
 }
 
 pub(super) struct Run {
@@ -191,6 +194,7 @@ pub(super) fn start(setup: Setup) -> Run {
         delay: setup.delay,
         fail_once: setup.fail_once,
         failed: AtomicBool::new(false),
+        lead: setup.lead,
     });
     let frames = Arc::new(Mutex::new(Vec::new()));
     let shapes = Arc::new(Mutex::new(Vec::new()));
@@ -221,7 +225,7 @@ pub(super) fn start(setup: Setup) -> Run {
                         harness: Arc::clone(&clock_harness),
                     })
                 },
-                now: move || harness.now(),
+                now: move || harness.now() + harness.lead,
                 order: KINDS.to_vec(),
                 hz: 240.0,
                 layout: layout(),

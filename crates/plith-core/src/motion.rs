@@ -76,6 +76,8 @@ pub struct MotionReport {
     pub clock: &'static str,
     /// Times the motion target changed mid-flight.
     pub retargets: usize,
+    /// Duration of the first clock wait of the motion, in milliseconds (0 when none was noted).
+    pub first_wait_ms: f64,
 }
 
 impl fmt::Display for MotionReport {
@@ -84,7 +86,7 @@ impl fmt::Display for MotionReport {
             f,
             "motion {}: {} frames in {:.0} ms ({:.1} fps at {:.0} Hz), {} hitches, \
              worst gap {:.1} ms; draw p50 {:.2} p99 {:.2} ms; \
-             present p50 {:.2} p99 {:.2} ms; clock {}; retargets {}",
+             present p50 {:.2} p99 {:.2} ms; clock {}; retargets {}; first wait {:.1} ms",
             self.kind.as_str(),
             self.frames,
             self.duration_ms,
@@ -98,6 +100,7 @@ impl fmt::Display for MotionReport {
             self.present_p99,
             self.clock,
             self.retargets,
+            self.first_wait_ms,
         )
     }
 }
@@ -116,6 +119,7 @@ pub struct MotionStats {
     draw: Vec<f64>,
     present: Vec<f64>,
     retargets: usize,
+    first_wait_ms: Option<f64>,
 }
 
 impl MotionStats {
@@ -134,6 +138,7 @@ impl MotionStats {
             draw: Vec::new(),
             present: Vec::new(),
             retargets: 0,
+            first_wait_ms: None,
         }
     }
 
@@ -157,6 +162,11 @@ impl MotionStats {
     /// Notes that the motion target changed while the motion was running.
     pub fn note_retarget(&mut self) {
         self.retargets += 1;
+    }
+
+    /// Notes the duration of the motion's first clock wait; later calls are ignored.
+    pub fn note_first_wait(&mut self, ms: f64) {
+        self.first_wait_ms.get_or_insert(ms);
     }
 
     /// Summarises the frames recorded so far.
@@ -188,6 +198,7 @@ impl MotionStats {
             present_p99: percentile(&present, 99.0),
             clock: self.clock,
             retargets: self.retargets,
+            first_wait_ms: self.first_wait_ms.unwrap_or(0.0),
         }
     }
 }
