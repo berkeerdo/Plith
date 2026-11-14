@@ -213,7 +213,7 @@ outgoing page fades to 0 and slides to `-dir * PAGE_SLIDE`.
   `step(&mut self, dt: f64) -> bool`, `layers(&self) -> Vec<PageLayer>` (outgoing first),
   `current(&self) -> usize`, const `PAGE_SLIDE = 20.0`.
 
-- [ ] **Step 1: Write the failing tests**
+- [x] **Step 1: Write the failing tests**
 
 ```rust
 #[test] fn turn_forward_slides_in_from_the_right_and_fades_in()  // first step: offset > 0, opacity < 0.2

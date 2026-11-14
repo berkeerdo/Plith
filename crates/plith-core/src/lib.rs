@@ -3,6 +3,7 @@
 pub mod geometry;
 pub mod island;
 pub mod layout;
+pub mod page;
 pub mod shapes;
 pub mod spring;
 pub mod tuning;
