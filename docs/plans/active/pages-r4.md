@@ -113,13 +113,13 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   `fn arm(&self) -> bool` (true = caller must post) and `fn clear(&self)`, shared by
   `ShapePoster` and `UiWaker`.
 
-- [ ] **Step 1: Failing tests** `arm_once_until_cleared` (arm true, arm false, clear, arm true),
+- [x] **Step 1: Failing tests** `arm_once_until_cleared` (arm true, arm false, clear, arm true),
   `failed_post_clears` (a post closure returning false leaves the coalescer clear).
-- [ ] **Step 2:** Run `cargo test -p plith-shell poster`; expect a compile failure.
-- [ ] **Step 3:** Implement `Coalesce`, `UiWaker` (post `WM_APP_WAKE`, clear on failure),
+- [x] **Step 2:** Run `cargo test -p plith-shell poster`; expect a compile failure.
+- [x] **Step 3:** Implement `Coalesce`, `UiWaker` (post `WM_APP_WAKE`, clear on failure),
   dispatch `WM_APP_WAKE` to `clear` + `emit(ShellEvent::Wake)`. Doc comment on `UiWaker`: the
   invariant that render and service threads only post, never send.
-- [ ] **Step 4:** Five checks green (LANES.md "Done"), commit `feat(shell): add a generic UI wake`.
+- [x] **Step 4:** Five checks green (LANES.md "Done"), commit `feat(shell): add a generic UI wake`.
 
 ### Task 3: Mailbox that carries content and skips no-op publishes (L12, L13)
 
