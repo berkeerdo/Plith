@@ -35,7 +35,7 @@ Updated 2026-11-14.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `engine` | write the R1 plan, send it to the master | `feature/engine-slice` @ `main` | started, writing plan | nothing |
+| `engine` | execute `engine-r1-slice.md` (10 tasks, approved) | `feature/engine-slice` @ `c87bd1a` | plan approved; 5 proposed ADRs for the master after Task 10 | Berke's yes for on-screen smoke runs (Task 9) |
 | `services` | execute `services-r2.md` (9 tasks, approved) | `feature/services` @ `556614e` | plan sent, approved; Task 8 hardware writes to be batched | Berke's yes at Task 8 |
 
-Master open items: CI run for `0155a6d` (first Rust workflow run); R3 visual direction with Berke.
+Master open items: ask Berke about engine smoke runs (black island on screen about 1 min, not while gaming); R3 visual direction with Berke; file engine ADRs P1 to P5 after Task 10.
