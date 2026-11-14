@@ -261,11 +261,11 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   unknown flag; the start line drops `hit ...`. One shared `hwnd_of` in `plith-shell`
   (`crates/plith-shell/src/handles.rs`), used by `poster`, `topmost`, `window`.
 
-- [ ] **Step 1: Failing tests:** `topmost::tests::second_foreground_within_100_ms_only_rearms`,
+- [x] **Step 1: Failing tests:** `topmost::tests::second_foreground_within_100_ms_only_rearms`,
   `topmost::tests::foreground_after_100_ms_raises`, `launch::tests::hit_flag_is_unknown`.
-- [ ] **Step 2: Run, expect failures.** **Step 3: Implement**, removing the split and mask code
+- [x] **Step 2: Run, expect failures.** **Step 3: Implement**, removing the split and mask code
   paths and their tests in `hit/tests.rs`. **Step 4: Run, expect pass.**
-- [ ] **Step 5: Five checks green, commit** `refactor(shell): region hit only, quiet topmost`.
+- [x] **Step 5: Five checks green, commit** `refactor(shell): region hit only, quiet topmost`.
 
 ### Task 5: Panics, close order and the review minors
 
