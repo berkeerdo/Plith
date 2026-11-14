@@ -14,6 +14,14 @@ Updated 2026-11-14. Rewritten, not appended; old content goes to `journal/`.
   palette on branch `feature/notch-in-loft`.
 
 ## Open risks
+- Services contract notes for `crates/plith` (from lane services, 2026-11-14): every service has
+  new/start/stop/status/snapshot/subscribe/set_waker; `start()` blocks (brightness up to 15 s,
+  media about 8 s), so call it off the UI thread; `set_waker` posts one WM_APP message;
+  `subscribe()` never replays, so subscribe first, then `snapshot()`.
+- G5 gap: brightness flyout suppression needs `crates/plith` to call `open_window` on
+  `WmiMonitorBrightnessEvent` (R4).
+- Unverified on hardware until Task 8: Voicemeeter (not installed here), audio change callbacks,
+  media events, DDC write, flyout window class; WMI brightness cannot be tested on this desktop.
 - Branch `feature/shelf-one-surface` (worktree `.claude/worktrees/shelf-one-surface`) holds WPF
   shelf work the rewrite makes obsolete; it is not merged.
 - Branch `feature/notch-in-loft` (worktree `C:\Projects\plith-notch-loft`) holds the Loft palette

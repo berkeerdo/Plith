@@ -32,7 +32,7 @@ export const DEFAULT_LIMITS = { source: 500, test: 800, entry: 150 };
 const CODE_EXT = /\.(ts|tsx|js|jsx|mjs|cjs|vue|svelte|astro|go|cs|rs|py|dart|swift|kt|php)$/;
 const DOC_EXT = /\.(md|mdx|txt)$/;
 const EM_DASH = /\u2014/g;
-const TEST = /(\.(test|spec)\.[cm]?[jt]sx?$|_test\.go$|Tests?\.cs$|(^|\/)test_[^/]*\.py$|_test\.py$|(^|\/)(__tests__|tests?|e2e)\/)/;
+const TEST = /(\.(test|spec)\.[cm]?[jt]sx?$|_test\.go$|Tests?\.cs$|(^|\/)test_[^/]*\.py$|_test\.py$|(^|\/)tests\.rs$|(^|\/)(__tests__|tests?|e2e)\/)/;
 const GENERATED_PATH = /(\.gen\.|\.generated\.|\.g\.cs$|\.g\.i\.cs$|\.designer\.cs$|\.d\.ts$|ModelSnapshot\.cs$|(^|\/)(migrations|generated|__generated__|drizzle)\/)/i;
 // Copied component kits: their size is the upstream's, split there, not here.
 const KIT_MARKERS = { pui: 'pui.json', ui: 'components.json' };
