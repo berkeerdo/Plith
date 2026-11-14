@@ -379,10 +379,10 @@ Built-ins (pinned):
 #[test] fn failures_reset_after_600_good_frames()
 ```
 
-- [ ] **Step 2: FAIL.** **Step 3: Implement**, checking each `windows` call in the 0.62.2
+- [x] **Step 2: FAIL.** **Step 3: Implement**, checking each `windows` call in the 0.62.2
   source (`~/.cargo/registry/src/*/windows-0.62.2/src/Windows/Win32/...`) and context7
   `/microsoft/windows-rs` before use. Every `unsafe` block has a `// SAFETY:` line.
-- [ ] **Step 4: PASS**, five checks.  **Step 5: Commit** `feat(render): add device and painter`,
+- [x] **Step 4: PASS**, five checks.  **Step 5: Commit** `feat(render): add device and painter`,
   push, tick.
 
 ### Task 7: Frame clock and render thread (`plith-render`, opus)
