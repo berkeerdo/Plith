@@ -173,15 +173,15 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   `join_mmcss` applies `AvSetMmThreadPriority` when not `Normal`. Verify each signature and its
   privilege note with context7 before writing it; a refusal is an outcome, never an error.
 
-- [ ] **Step 1: Failing tests:** `launch::tests::parses_every_lever_flag`,
+- [x] **Step 1: Failing tests:** `launch::tests::parses_every_lever_flag`,
   `launch::tests::rejects_gpu_priority_8_and_latency_0`, `levers::tests::default_is_r1_behaviour`,
   `levers::tests::describe_lists_all_five`, `levers::tests::refused_lever_is_logged_not_fatal`
   (`outcome_line` of an `Err("0x80070005")` contains `refused 0x80070005`).
-- [ ] **Step 2: Run, expect failures.** **Step 3: Implement core.** **Step 4: Run, expect pass.**
-- [ ] **Step 5: Render and app wiring.** The start line gains `levers <describe>`; each lever the
+- [x] **Step 2: Run, expect failures.** **Step 3: Implement core.** **Step 4: Run, expect pass.**
+- [x] **Step 5: Render and app wiring.** The start line gains `levers <describe>`; each lever the
   render thread applies sends one `outcome_line` through `on_note` at start and after every
   `recover`. `Present(sync, 0)`; `SetMaximumFrameLatency(latency)`.
-- [ ] **Step 6: Five checks green, commit** `feat(engine): launch flags for load levers`.
+- [x] **Step 6: Five checks green, commit** `feat(engine): launch flags for load levers`.
 
 ### Task 3: Honest durations and tuning presets
 
