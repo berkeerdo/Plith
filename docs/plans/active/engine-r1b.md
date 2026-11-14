@@ -216,7 +216,7 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
   `motion collapse: 194 frames, visible 333 ms, full 813 ms (238.8 fps at 240 Hz), ...`: fps over
   the full duration as before.
 
-- [ ] **Step 1: Failing tests** (simulated at 1/240 s until all of island, pages and content
+- [x] **Step 1: Failing tests** (simulated at 1/240 s until all of island, pages and content
   report settled; durations in ms as frames * 1000/240; tolerance one frame, 4.2 ms):
 
 ```rust
@@ -234,10 +234,10 @@ Inputs: `docs/plans/done/engine-r1-slice.md` (Task 10, Handoff), ADR 0003 to 000
 #[test] fn brisk_zetas_match_the_plan() {} // grow_h 0.81, card 0.89, within 0.006
 ```
 
-- [ ] **Step 2: Run, expect failures.** **Step 3: Implement.** **Step 4: Run, expect pass.**
+- [x] **Step 2: Run, expect failures.** **Step 3: Implement.** **Step 4: Run, expect pass.**
   If a simulated value differs from the plan by more than one frame, stop and report it to the
   master with the simulated table; do not adjust the test to match.
-- [ ] **Step 5: Start line gains `tune r1|brisk`.** Five checks green, commit
+- [x] **Step 5: Start line gains `tune r1|brisk`.** Five checks green, commit
   `feat(engine): visible duration, tuning presets`.
 
 ### Task 4: Topmost explained and debounced; region-only hit testing
