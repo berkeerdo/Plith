@@ -30,10 +30,17 @@ Outside and inside: does a click, pen tap or touch land on the right window.
 
 | Candidate | Count | Mean ms | Max ms | Edge clipped | Mouse outside | Mouse inside | Pen outside | Pen inside | Touch outside | Touch inside |
 |-----------|-------|---------|--------|--------------|---------------|--------------|-------------|------------|---------------|--------------|
-| region    | 2462  | 0.611   | 1.484  |              |               |              |             |            |               |              |
-| split     |       |         |        |              |               |              |             |            |               |              |
-| mask      |       |         |        |              |               |              |             |            |               |              |
+| region 1 px | 2573 | 0.700 | 2.167 | yes (Berke: corners not smooth) | reaches window below | toggles | untested | untested | untested | untested |
+| region 3 px | 1873 | 0.600 | 1.539 | no (Berke: corners smooth) | reaches window below | toggles | untested | untested | untested | untested |
+| split     | 2 | 0.431 | 0.520 | n/a | not seen | not seen | untested | untested | untested | untested |
+| mask      | not run | | | | | | | | | |
+
+Region rows are from Task 10 on 2026-11-14 (21:05 and 21:14), mouse clicks by Berke. Split ran
+once (21:06:55 to 21:07:59); Berke saw no island, but the run may have closed before he looked
+(relay lag), so it is unverified. Mask shares the split's layered visual window and was not run.
 
 ## Decision
 
-Pending (ADR proposal P2).
+Region with a 3 px outset, chosen by the master after Task 10 (draft ADR P2 in
+`engine-r1-adr-drafts.md`). Split and mask remain in the code behind `--hit`; removing them is
+proposed for the next engine job.

@@ -1,5 +1,9 @@
 # R1 Engine Slice Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, rulings and the open items are in "Decisions made during execution", the Task 10
+> notes and "Handoff" at the end; ADR drafts in `engine-r1-adr-drafts.md`.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to
 > implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
@@ -483,7 +487,7 @@ Loop (the part the tests pin):
     WINEVENT_OUTOFCONTEXT)` plus `SetTimer`, `SetWindowPos(HWND_TOPMOST, NOMOVE | NOSIZE |
     NOACTIVATE)`; the first raise per foreground change logs the class of the window above.
 
-- [ ] **Step 1: Hit-testing spike** (ADR proposal P2). Build three candidates behind a
+- [x] **Step 1: Hit-testing spike** (ADR proposal P2). Build three candidates behind a
   `--hit <region|mask|split>` debug flag, each fed by `WM_APP_SHAPE` on the UI thread:
   - `region`: `SetWindowRgn` on the single DComp window, rounded region outset by 1 px so the
     anti-aliased edge is not clipped.
@@ -560,21 +564,39 @@ Loop (the part the tests pin):
 
 Asked through the master in one batch. Nothing here moves the mouse; Berke clicks by hand.
 
-- [ ] Clock comparison: `--demo basic --clock dcomp`, then `dxgi`, then `timer`; pick the
-  default by motion lines (ADR P1).
+- [x] Clock comparison: `--demo basic --clock dcomp`, then `dxgi`, then `timer`; pick the
+  default by motion lines (ADR P1). Done 21:04: all three 240.0 fps, 0 hitches; timer present
+  p99 up to 1.73 ms; dcomp stays default (draft P1 in `engine-r1-adr-drafts.md`).
 - [ ] G1: every motion line at 238+ fps at 240 Hz, 0 to 1 hitches, draw p99 under 1 ms;
   expand 600 to 900 ms, collapse 500 to 800 ms, page 300 to 600 ms. Paste the lines here.
-- [ ] G2: `--idle-check 60` prints 0 render wake-ups.
-- [ ] Review Focus 6: during `--demo basic`, Berke locks the session (Win+L), turns the display
+  **Not fully met.** Without a game: 160 motion lines from 20:23 to 21:30, all 238+ fps and
+  0 to 1 hitches; draw p99 at most 0.90 ms. With Deadlock running behind: 13 of 25 motions had
+  1 or 2 hitches (worst gap 8.3 ms, down to 235.2 fps); two lines had 2 hitches. Durations:
+  expand 800 ms (in range), collapse 812 ms (12 ms over), page 421 to 775 ms (the 775 ms turn
+  also grows the height from `PAGES[0]` to `PAGES[1]`). Berke on feel: "aşırı akıcıydı baya
+  iyidi hiç takılma yoktu" (extremely fluid, no hitch at all), no complaint about speed.
+- [x] G2: `--idle-check 60` prints 0 render wake-ups. Done 20:24: `0 render wake-ups, 62.5 ms
+  process CPU`.
+- [x] Review Focus 6: during `--demo basic`, Berke locks the session (Win+L), turns the display
   off, and starts a fullscreen app; the log shows the motion cut short with no report and no
-  wakes until return.
+  wakes until return. Done: fullscreen (Deadlock alt-tabs and a flash at 21:04:17), display off
+  (21:24:02, 3.6 s, `SC_MONITORPOWER` with Berke's OK), lock (21:29:11, 18.5 s); each parked
+  with no motion line until return.
 - [ ] Hit testing per candidate (`--hit region|split|mask`): Berke clicks just outside the
   corner arc and outside the island during `--demo interrupt` (reaches the window beneath), and
   inside (toggles); pen and touch if this PC has them, else recorded as untested (ADR P2).
+  **Partly:** region tested by mouse (1 px outset: jagged corners; 3 px: smooth, all clicks
+  right; the master chose region + 3 px). Split: one unverified run, dropped. Mask: not run
+  (same layered visual as split). Pen and touch: untested.
 - [ ] Topmost over two borderless games Berke names: island stays above for 2 minutes each;
-  the log shows the raise lines (spec section 10).
-- [ ] Interrupted motion feel: Berke's verdict on `--demo interrupt` recorded verbatim.
-- [ ] Handoff: `project-docs` handoff on this branch, plan banner, message the master.
+  the log shows the raise lines (spec section 10). **Partly:** one game, Deadlock, about 1 min
+  (runs are capped at about 1 min): "oyun açıkkende gözüküyor", "oyunda takılma olmadı"
+  (visible while the game is open, no stutter); raise lines on every alt-tab. Game 2 deferred
+  by the master.
+- [x] Interrupted motion feel: Berke's verdict on `--demo interrupt` recorded verbatim. The
+  step 1 loop (21:02) mixed `basic` and `interrupt`; verdict as in the G1 line above, the
+  grey bar noted as expected placeholder.
+- [x] Handoff: `project-docs` handoff on this branch, plan banner, message the master.
 
 ---
 
@@ -583,7 +605,7 @@ Asked through the master in one batch. Nothing here moves the mouse; Berke click
 | # | Builder call (spec section 11) | Proposal | Decided by |
 |---|---|---|---|
 | P1 | Frame clock source | `DCompositionWaitForCompositorClock` first, `WaitForVBlank` second, waitable timer last; demote after 3 tick-to-tick intervals under 0.15 period (a slow frame never demotes); each motion retries the first source; MMCSS `Games` on the render thread; timer only over RDP; phase lock tracks the earliest wake-up with a nominal period and the stamper's dt is always a whole number of periods (deviates from Oyenza's symmetric phase and period gains, Task 4 finding); `WaitForVBlank` has no timeout, so shutdown may wait one vblank; `DCompositionWaitForCompositorClock` is linked statically, so Windows 11 build 22000+ is required (accepted by the master 2026-11-14) | Task 10 clock comparison |
-| P2 | Hit-testing mechanism | One DComp window with a 1 px outset `SetWindowRgn` applied on the UI thread from a posted shape, every painted frame (Oyenza: 30 Hz, two windows) | Task 8 spike + Task 10 clicks |
+| P2 | Hit-testing mechanism | One DComp window with a **3 px** outset `SetWindowRgn` applied on the UI thread from a posted shape, every painted frame (Oyenza: 30 Hz, two windows); 1 px clipped the anti-aliased corner (Task 10) | Task 8 spike + Task 10 clicks: decided, region + 3 px |
 | P3 | Swap chain buffers and latency | 2 buffers, `SetMaximumFrameLatency(1)`, `Present(1, 0)` after the clock wait; 3 buffers if draw ever waits on DWM | Task 10 present p99 |
 | P4 | Scene handoff | Latest-wins mailbox (`Mutex` + `Condvar` + generation), not a channel: intermediate targets are meaningless and the render thread parks on the condvar | Task 7 tests |
 | P5 | UI layer shape | Deferred to R4 (R1 has no widgets); recorded so R4 opens with it | n/a |
@@ -611,3 +633,34 @@ Known gaps, not bugs:
 - In a borderless game the island stays topmost but parked (fullscreen suppression), so it does
   not react until the game exits; hiding it is R4.
 - Display changes are logged only; relayout and render restart are R4.
+
+## Handoff (2026-11-14, lane `engine`)
+
+R1 is done apart from the partly met Task 10 items above; the branch is ready for the master's
+merge review. Measured: log lines from the console session with Berke and his own words. Not
+measured: pen and touch, a second game, split and mask in a fair run.
+
+Next engine job, in order (proposals; the master decides):
+1. Hitches under game load (P1 gap): 13 of 25 motions missed one vblank while Deadlock ran
+   behind. Look at render thread and GPU priority (`IDXGIDevice::SetGPUThreadPriority`),
+   present timing against the compositor clock, and the per-frame allocations the final review
+   listed.
+2. Collapse 812 ms and page turns up to 775 ms run longer than the spec's ranges; the content
+   opacity tail and the settle epsilon are the suspects. Retune only with Berke's eye.
+3. Topmost culprit is always `IME` (a hidden IME window); skip invisible windows. One
+   alt-tab gives about 5 raise bursts; check it is not fighting itself.
+4. Remove `--hit split|mask` and their code if P2 is filed as region only.
+5. Deferred minors from the reviews (ledger triage in the final review): `Error::from_thread`
+   after a null handle, a few thin `SAFETY` comments, duplicated `hwnd_of`, stray
+   `PostQuitMessage` on a failed create, the watchdog backstop not covering a render join that
+   blocks in `WaitForVBlank`, motion log written on the render thread.
+
+Traps that live nowhere else:
+- plith refuses to start in demo or idle mode while a game or fullscreen app is in front
+  (`QUNS_BUSY`, exit 3). For game tests start it on the desktop, then alt-tab into the game.
+- Relayed instructions arrive 10 to 30 s late, and every demo or idle run ends by itself within
+  75 s; start a run only after the master relays that Berke is looking.
+- Smoke runs used `target\release\plith.exe --demo <name|script> --exit-after-demo` and
+  `--idle-check 60`; results are appended to `%LOCALAPPDATA%\Plith\plith.log`.
+- Display off for testing: `SendMessage`-free `PostMessage(HWND_BROADCAST, WM_SYSCOMMAND,
+  SC_MONITORPOWER, 2)`, only with Berke's OK; moving the mouse wakes the screen.
