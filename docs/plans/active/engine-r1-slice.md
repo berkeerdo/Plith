@@ -333,7 +333,7 @@ Built-ins (pinned):
 #[test] fn repeat_must_be_last_and_page_index_must_exist() // "repeat 2; expand" and "page 3" are errors
 ```
 
-- [ ] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
+- [x] **Step 2: FAIL. Step 3: Implement. Step 4: PASS**, five checks.
 - [x] **Step 5: Commit** `feat(core): add scene handoff and demo scripts`, push, tick.
 
 ### Task 6: Device, composition target and painter (`plith-render`)
