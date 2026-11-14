@@ -32,11 +32,11 @@ fn jittered_wakeups_snap_to_the_period_grid() {
             .unwrap_or_else(|| panic!("wakeup {k} is a new vblank"));
         assert_eq!(tick.periods, 1, "k = {k}");
         // The grid needs a warm-up to settle on the earliest wakeup. Afterwards a snap to a new
-        // earliest wakeup moves a delta by up to about 0.19 period (measured, gain 0.02).
+        // earliest wakeup moves a delta by by a small fraction of a period (gain 0.005).
         if let (Some(p), true) = (prev, k >= 100) {
             let steps = (tick.vblank - p) / tick.period;
             assert!(
-                (steps - steps.round()).abs() < 0.2,
+                (steps - steps.round()).abs() < 0.1,
                 "k = {k}, steps = {steps}"
             );
             assert!(steps.round() >= 1.0, "k = {k}");
@@ -157,10 +157,17 @@ fn every_step_is_a_whole_number_of_periods() {
     let mut st = FrameStamper::default();
     st.stamp(tick_at(0.0, 1));
     let mut k = 0.0;
-    for periods in [1_u32, 1, 2, 1, 3, 1, 1, 2] {
+    let mut last_anim = period();
+    for (i, periods) in [1_u32, 1, 2, 1, 3, 1, 1, 2].into_iter().enumerate() {
         k += f64::from(periods);
-        let (_, dt) = st.stamp(tick_at(k, periods));
-        let steps = dt / period();
-        assert!((steps - f64::from(periods)).abs() < 1e-9, "steps = {steps}");
+        // Grid noise: the vblank is off its whole-period position by 0.19 period.
+        let noise = if i % 2 == 0 { 0.19 } else { -0.19 };
+        let (anim_t, dt) = st.stamp(tick_at(k + noise, periods));
+        assert!(
+            (dt - f64::from(periods) * period()).abs() < 1e-12,
+            "dt = {dt}"
+        );
+        assert!((anim_t - last_anim - dt).abs() < 1e-12);
+        last_anim = anim_t;
     }
 }

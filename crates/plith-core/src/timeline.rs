@@ -3,7 +3,7 @@
 //! animation time to the vblank a frame will be shown on.
 
 /// Fraction of a late wake-up's lateness the grid follows per step (it tracks the earliest).
-const LATE_GAIN: f64 = 0.02;
+const LATE_GAIN: f64 = 0.005;
 /// A wake-up later than this many periods resynchronises the grid.
 const RESYNC_PERIODS: f64 = 30.0;
 /// Fraction of a period a wake-up may be late and still belong to its vblank.
@@ -65,8 +65,7 @@ impl VsyncTimeline {
         }
         let predicted = last + n * self.period;
         let error = raw - predicted;
-        // Missed vblanks (n > 1) count too: a rate mismatch skips vblanks on a regular
-        // pattern with modest lateness, which lateness alone cannot tell from jitter.
+        // Missed vblanks (n > 1) count too: a rate mismatch skips vblanks with modest lateness.
         if error > OFF_RHYTHM_LATENESS * self.period || n > 1.0 {
             self.off_rhythm += 1;
         } else {
@@ -121,11 +120,17 @@ pub struct FrameStamper {
 }
 
 impl FrameStamper {
-    /// Returns `(anim_t, dt)`: the frame is shown one period after the vblank it was drawn
-    /// for. `dt` is one period for the first stamp after default or reset.
+    /// Returns `(anim_t, dt)`. The first stamp after default or reset anchors at the frame's
+    /// shown time (one period after its vblank) with `dt` of one period. Later steps are
+    /// exactly `periods * period`, never a vblank difference, so grid snaps cannot reach physics.
     pub fn stamp(&mut self, tick: Tick) -> (f64, f64) {
-        let anim_t = tick.vblank + tick.period;
-        let dt = self.last_anim.map_or(tick.period, |last| anim_t - last);
+        let (anim_t, dt) = match self.last_anim {
+            None => (tick.vblank + tick.period, tick.period),
+            Some(last) => {
+                let dt = f64::from(tick.periods) * tick.period;
+                (last + dt, dt)
+            }
+        };
         self.last_anim = Some(anim_t);
         (anim_t, dt)
     }

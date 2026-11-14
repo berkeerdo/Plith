@@ -279,12 +279,13 @@ Line format (pinned; the log writer prefixes a local timestamp):
 - [x] **Step 3: Implement** the research doc section 1 algorithm: `n = floor(elapsed/period +
   0.25)`; resync when the gap exceeds 30 periods. **Amended 2026-11-14 (Task 4 finding):** a
   vblank wait only returns late, never early, so the grid tracks the earliest wake-up, not the
-  mean: phase error `e < 0` snaps the grid to `raw`, `e >= 0` moves it by `0.02 * e`; the
+  mean: phase error `e < 0` snaps the grid to `raw`, `e >= 0` moves it by `0.005 * e`; the
   period stays at the nominal rate (no period estimator; small nominal error is absorbed by the
   snaps). Symmetric gain 0.1 parked the grid at the mean lateness and dropped valid early
-  wake-ups as spurious. Off-rhythm score +1 when `e > 0.5 period`, -1 (floor 0) otherwise,
-  `needs_rate_reread` when it passes 20. Stamp `anim_t = vblank + period`; `dt` is one
-  period after `reset`. Duration = `last_anim - first_anim + period`; hitch = gap > 1.5 periods.
+  wake-ups as spurious. Late gain is 0.005. Off-rhythm score +1 when `e > 0.5 period` or
+  `n > 1` (a missed vblank), -1 (floor 0) otherwise, `needs_rate_reread` when it passes 20.
+  Stamp: the first stamp after `reset` anchors `anim_t = vblank + period` with `dt` one period;
+  after that `dt = periods * period` and `anim_t = last_anim + dt` (never a vblank difference). Duration = `last_anim - first_anim + period`; hitch = gap > 1.5 periods.
 - [x] **Step 4: Run, expect PASS**, five checks.  **Step 5: Commit**
   `feat(core): add vsync timeline and motion stats`, push, tick.
 
