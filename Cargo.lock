@@ -44,8 +44,10 @@ dependencies = [
 name = "plith-osd"
 version = "0.1.0"
 dependencies = [
+ "plith-core",
  "plith-ipc",
  "plith-render",
+ "windows",
 ]
 
 [[package]]
