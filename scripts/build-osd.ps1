@@ -1,4 +1,4 @@
-# scripts/build-osd.ps1 - Builds plith-osd.exe with uiAccess='true' and signs it with the
+# scripts/build-osd.ps1: builds plith-osd.exe with uiAccess='true' and signs it with the
 # developer's self-signed certificate. Never creates or imports a certificate.
 
 [CmdletBinding()]

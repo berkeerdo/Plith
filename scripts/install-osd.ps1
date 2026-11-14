@@ -1,4 +1,4 @@
-# scripts/install-osd.ps1 - Installs the signed plith-osd.exe under Program Files.
+# scripts/install-osd.ps1: installs the signed plith-osd.exe under Program Files.
 # Without -Yes it only prints what it would do. With -Yes, run it under sudo.
 # -Uninstall -Yes removes only the installed exe and the empty osd folder.
 
@@ -14,6 +14,13 @@ $repoRoot = Resolve-Path (Join-Path $PSScriptRoot '..')
 $source = Join-Path $repoRoot 'target\release\plith-osd.exe'
 $destDir = 'C:\Program Files\Plith\osd'
 $dest = 'C:\Program Files\Plith\osd\plith-osd.exe'
+
+if ($Yes) {
+    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
+    if (-not $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
+        throw 'install-osd.ps1 -Yes needs an elevated process: run under sudo.'
+    }
+}
 
 function Stop-InstalledOsd {
     # Only the process whose image is exactly the installed path.
@@ -57,7 +64,18 @@ if ($srcSig.Status -ne 'Valid') { throw "Source signature is $($srcSig.Status), 
 
 Stop-InstalledOsd
 New-Item -ItemType Directory -Path $destDir -Force | Out-Null
-Copy-Item -LiteralPath $source -Destination $dest -Force
+
+# Copy to a temp name, verify there, then rename over the final name.
+$temp = 'C:\Program Files\Plith\osd\plith-osd.exe.new'
+try {
+    Copy-Item -LiteralPath $source -Destination $temp -Force
+    $tempSig = Get-AuthenticodeSignature -LiteralPath $temp
+    if ($tempSig.Status -ne 'Valid') { throw "Installed signature is $($tempSig.Status), expected Valid." }
+    Move-Item -LiteralPath $temp -Destination $dest -Force
+} catch {
+    if (Test-Path -LiteralPath $temp) { Remove-Item -LiteralPath $temp -Force }
+    throw
+}
 
 $sig = Get-AuthenticodeSignature -LiteralPath $dest
 if ($sig.Status -ne 'Valid') { throw "Installed signature is $($sig.Status), expected Valid." }
