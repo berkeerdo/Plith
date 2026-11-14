@@ -204,6 +204,10 @@ fn main() {
     if !cli::run() {
         std::process::exit(1);
     }
+    if support::interrupted() {
+        // Conventional code of a run ended by Ctrl+C (128 + SIGINT), after the restores ran.
+        std::process::exit(130);
+    }
 }
 
 #[cfg(not(windows))]

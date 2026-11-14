@@ -33,6 +33,19 @@ fn locked<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
     mutex.lock().unwrap_or_else(PoisonError::into_inner)
 }
 
+/// Reaps a worker that ended without `stop`: joins it and empties the slot. Returns true only
+/// while a live worker occupies the slot, so a dead one never looks `Running` and `start` can
+/// begin a fresh worker.
+pub(crate) fn slot_alive(slot: &mut Option<JoinHandle<()>>) -> bool {
+    if slot.as_ref().is_some_and(|handle| !handle.is_finished()) {
+        return true;
+    }
+    if let Some(handle) = slot.take() {
+        let _ = handle.join();
+    }
+    false
+}
+
 /// State shared between the handle and the worker.
 struct Shared {
     stop: AtomicBool,
@@ -332,9 +345,10 @@ impl MediaService {
     /// it off the UI thread.
     pub fn start(&self) -> Status {
         let mut slot = locked(&self.thread);
-        if slot.is_some() {
+        if slot_alive(&mut slot) {
             return Status::Running;
         }
+        *locked(&self.control) = None;
         self.shared.stop.store(false, Ordering::Release);
         let (tx, rx) = channel();
         let (ready_tx, ready_rx) = sync_channel(1);
@@ -463,5 +477,29 @@ impl MediaService {
 impl Drop for MediaService {
     fn drop(&mut self) {
         self.stop();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn slot_alive_reaps_a_finished_worker() {
+        let mut empty: Option<JoinHandle<()>> = None;
+        assert!(!slot_alive(&mut empty));
+        let (release_tx, release_rx) = std::sync::mpsc::channel::<()>();
+        let mut live = Some(thread::spawn(move || {
+            let _ = release_rx.recv();
+        }));
+        assert!(slot_alive(&mut live));
+        assert!(live.is_some());
+        let _ = release_tx.send(());
+        let mut dead = live.take();
+        while dead.as_ref().is_some_and(|h| !h.is_finished()) {
+            thread::yield_now();
+        }
+        assert!(!slot_alive(&mut dead));
+        assert!(dead.is_none());
     }
 }

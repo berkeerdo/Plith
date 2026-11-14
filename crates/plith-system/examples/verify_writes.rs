@@ -51,7 +51,7 @@ mod imp {
         BOOL(1)
     }
 
-    fn interrupted() -> bool {
+    pub(super) fn interrupted() -> bool {
         INTERRUPTED.load(Ordering::SeqCst)
     }
 
@@ -223,6 +223,19 @@ mod imp {
         }
     }
 
+    /// The restore is a posted `ShowWindowAsync`, so a window may take a moment to reappear:
+    /// polls up to 500 ms before judging it still hidden.
+    fn settled_state(hwnd: isize) -> &'static str {
+        let deadline = Instant::now() + Duration::from_millis(500);
+        loop {
+            let state = window_state(hwnd);
+            if state != "STILL HIDDEN" || Instant::now() >= deadline {
+                return state;
+            }
+            std::thread::sleep(Duration::from_millis(25));
+        }
+    }
+
     fn flyout(yes: bool) -> Verdict {
         if !yes {
             println!(
@@ -272,7 +285,7 @@ mod imp {
         println!("stop: {stopped:?}");
         let mut still_hidden = 0;
         for hwnd in &hidden {
-            let state = window_state(*hwnd);
+            let state = settled_state(*hwnd);
             still_hidden += usize::from(state == "STILL HIDDEN");
             println!("  after stop 0x{hwnd:X}: {state}");
         }
@@ -315,8 +328,8 @@ mod imp {
         );
         if args.yes {
             println!(
-                "do not press Ctrl+C; if interrupted, restart Explorer and set the default \
-                 device back by hand"
+                "do not press Ctrl+C; if interrupted, restore the brightness by hand if it \
+                 changed, and restart Explorer if a shell flyout stays hidden"
             );
             // SAFETY: `on_ctrl` is a valid handler routine that only stores to a static atomic.
             if unsafe { SetConsoleCtrlHandler(Some(on_ctrl), true) }.is_err() {
@@ -353,6 +366,10 @@ mod imp {
 fn main() {
     if !imp::run() {
         std::process::exit(1);
+    }
+    if imp::interrupted() {
+        // Conventional code of a run ended by Ctrl+C (128 + SIGINT), after the restores ran.
+        std::process::exit(130);
     }
 }
 

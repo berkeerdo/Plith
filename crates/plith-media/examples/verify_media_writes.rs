@@ -36,7 +36,7 @@ mod cli {
         BOOL(1)
     }
 
-    fn interrupted() -> bool {
+    pub(super) fn interrupted() -> bool {
         INTERRUPTED.load(Ordering::SeqCst)
     }
 
@@ -320,6 +320,10 @@ mod cli {
 fn main() {
     if !cli::run() {
         std::process::exit(1);
+    }
+    if cli::interrupted() {
+        // Conventional code of a run ended by Ctrl+C (128 + SIGINT), after the restores ran.
+        std::process::exit(130);
     }
 }
 

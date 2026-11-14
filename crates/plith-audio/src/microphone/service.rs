@@ -12,7 +12,7 @@ use windows::Win32::Media::Audio::{
 use super::MicSnapshot;
 use crate::endpoints::com::{Attachment, ComGuard, create_enumerator, default_endpoint};
 use crate::endpoints::notify::{DeviceEvents, Msg, ask};
-use crate::endpoints::{Status, worker_status};
+use crate::endpoints::{Status, slot_alive, worker_status};
 use crate::waker::{Waker, publish_with};
 
 type Snapshot = Option<MicSnapshot>;
@@ -218,9 +218,10 @@ impl MicrophoneService {
     /// well under a second), so call it off the UI thread.
     pub fn start(&self) -> Status {
         let mut slot = locked(&self.thread);
-        if slot.is_some() {
+        if slot_alive(&mut slot) {
             return Status::Running;
         }
+        *locked(&self.control) = None;
         self.shared.stop.store(false, Ordering::Release);
         let (tx, rx) = channel();
         let (ready_tx, ready_rx) = sync_channel(1);

@@ -24,9 +24,9 @@ pub use roles::DefaultRoles;
 #[cfg(windows)]
 pub use roles::read_default_roles;
 #[cfg(windows)]
-pub(crate) use service::worker_status;
-#[cfg(windows)]
 pub use service::{EndpointService, Status};
+#[cfg(windows)]
+pub(crate) use service::{slot_alive, worker_status};
 #[cfg(windows)]
 pub use write::DEFAULT_ROLES;
 pub use write::{all_succeeded, next_mute, sanitize_volume};
