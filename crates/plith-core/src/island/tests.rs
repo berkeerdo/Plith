@@ -1,5 +1,7 @@
 use super::*;
 use crate::shapes::{PAGES, REST};
+use crate::spring::Spring;
+use crate::tuning::{BRISK, R1, Tuning};
 
 const H: f64 = 1.0 / 240.0;
 
@@ -17,7 +19,7 @@ fn run(m: &mut IslandMotion, secs: f64) -> Vec<IslandShape> {
 
 #[test]
 fn per_axis_tuning_follows_each_axis_direction() {
-    let mut m = IslandMotion::new(REST);
+    let mut m = IslandMotion::new(REST, R1);
     m.retarget(PAGES[1]);
     // Step until the width is already past the next page's width while the height lags below it.
     let mut guard = 0;
@@ -34,7 +36,7 @@ fn per_axis_tuning_follows_each_axis_direction() {
 
 #[test]
 fn retarget_keeps_velocity_on_every_axis() {
-    let mut m = IslandMotion::new(REST);
+    let mut m = IslandMotion::new(REST, R1);
     m.retarget(PAGES[0]);
     run(&mut m, 0.1);
     let before = (
@@ -56,7 +58,7 @@ fn retarget_keeps_velocity_on_every_axis() {
 
 #[test]
 fn shrinking_axis_never_goes_below_target() {
-    let mut m = IslandMotion::new(PAGES[0]);
+    let mut m = IslandMotion::new(PAGES[0], R1);
     m.retarget(REST);
     let s = run(&mut m, 3.0);
     for x in &s {
@@ -68,7 +70,7 @@ fn shrinking_axis_never_goes_below_target() {
 
 #[test]
 fn reversal_mid_collapse_is_continuous_and_above_rest() {
-    let mut m = IslandMotion::new(PAGES[0]);
+    let mut m = IslandMotion::new(PAGES[0], R1);
     m.retarget(REST);
     let mut all = run(&mut m, 0.1);
     m.retarget(PAGES[0]);
@@ -87,7 +89,7 @@ fn reversal_mid_collapse_is_continuous_and_above_rest() {
 
 #[test]
 fn expand_settles_between_0_6_and_0_9_s() {
-    let mut m = IslandMotion::new(REST);
+    let mut m = IslandMotion::new(REST, R1);
     m.retarget(PAGES[0]);
     let mut t = 0.0;
     while !m.step(H) {
@@ -99,7 +101,7 @@ fn expand_settles_between_0_6_and_0_9_s() {
 
 #[test]
 fn radius_never_exceeds_half_height() {
-    let mut m = IslandMotion::new(PAGES[0]);
+    let mut m = IslandMotion::new(PAGES[0], R1);
     m.retarget(REST);
     let mut all = run(&mut m, 2.0);
     m.retarget(PAGES[1]);
@@ -108,4 +110,50 @@ fn radius_never_exceeds_half_height() {
         assert!(x.radius <= x.height / 2.0 + 1e-9);
         assert!(x.radius <= x.width / 2.0 + 1e-9);
     }
+}
+
+/// Value of a spring that went from `from` to `to` under `tuning`, after `steps` frames.
+fn reference(from: f64, to: f64, tuning: Tuning, steps: usize) -> f64 {
+    let mut s = Spring::new(from, tuning);
+    s.retarget(to, tuning);
+    for _ in 0..steps {
+        s.step(H);
+    }
+    s.value()
+}
+
+#[test]
+fn card_to_card_growth_uses_the_card_tunings() {
+    let mut m = IslandMotion::new(PAGES[0], BRISK);
+    m.retarget(PAGES[1]);
+    for _ in 0..30 {
+        m.step(H);
+    }
+    let want = reference(PAGES[0].height, PAGES[1].height, BRISK.card_grow_h, 30);
+    assert!((m.height.spring.value() - want).abs() < 1e-9);
+    let plain = reference(PAGES[0].height, PAGES[1].height, BRISK.grow_h, 30);
+    assert!((want - plain).abs() > 0.1, "the two tunings must differ");
+}
+
+#[test]
+fn growth_from_or_to_rest_keeps_the_plain_grow_tunings() {
+    let mut m = IslandMotion::new(REST, BRISK);
+    m.retarget(PAGES[0]);
+    for _ in 0..30 {
+        m.step(H);
+    }
+    let want = reference(REST.height, PAGES[0].height, BRISK.grow_h, 30);
+    assert!((m.height.spring.value() - want).abs() < 1e-9);
+    // Mid-collapse the current target is REST, so a retarget up is not card to card.
+    let mut back = IslandMotion::new(PAGES[0], BRISK);
+    back.retarget(REST);
+    back.step(H);
+    back.retarget(PAGES[1]);
+    back.step(H);
+    let mut s = Spring::new(PAGES[0].height, BRISK.shrink_h);
+    s.retarget(REST.height, BRISK.shrink_h);
+    s.step(H);
+    s.retarget(PAGES[1].height, BRISK.grow_h);
+    s.step(H);
+    assert!((back.height.spring.value() - s.value()).abs() < 1e-9);
 }

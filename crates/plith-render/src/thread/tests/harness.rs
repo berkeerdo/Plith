@@ -9,6 +9,7 @@ use plith_core::dwm::DwmSample;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
+use plith_core::tuning::R1;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -246,6 +247,7 @@ pub(super) fn start(setup: Setup) -> Run {
                 hz: 240.0,
                 layout: layout(),
                 dwm: move || Some(dwm_harness.dwm_sample()),
+                tune: R1,
             };
             run_loop(parts, &mailbox, &shared, &sinks);
             let _ = done_tx.send(());

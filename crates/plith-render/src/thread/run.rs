@@ -17,7 +17,8 @@ use plith_core::page::PageTurn;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
 use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
-use plith_core::tuning::OPACITY;
+use plith_core::tuning::{Tuning, TuningSet};
+use plith_core::visible::{DrawnState, visibly_differs};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
 /// State shared between the render loop and its owner: the wake counter and the stop flag.
@@ -71,6 +72,8 @@ pub struct LoopParts<P, O, N, D> {
     pub layout: SurfaceLayout,
     /// Reads the compositor's frame counters (`None` when it cannot).
     pub dwm: D,
+    /// The spring tuning preset.
+    pub tune: TuningSet,
 }
 
 /// The loop's state between frames.
@@ -86,6 +89,8 @@ struct Engine<'a, C, P, O, N, D> {
     layout: SurfaceLayout,
     sinks: &'a RenderSinks,
     shared: &'a LoopShared,
+    set: TuningSet,
+    scene: Scene,
     island: IslandMotion,
     pages: PageTurn,
     pages_settled: bool,
@@ -101,8 +106,8 @@ struct Engine<'a, C, P, O, N, D> {
 }
 
 /// The content opacity spring, resting at 1 for an expanded scene and 0 for a collapsed one.
-fn content_spring(scene: Scene) -> Spring {
-    Spring::new(content_target(scene), OPACITY).with_eps(0.002, 0.01)
+fn content_spring(scene: Scene, opacity: Tuning) -> Spring {
+    Spring::new(content_target(scene), opacity).with_eps(0.002, 0.01)
 }
 
 fn content_target(scene: Scene) -> f64 {
@@ -142,10 +147,12 @@ pub fn run_loop<C, P, O, N, D>(
         layout: parts.layout,
         sinks,
         shared,
-        island: IslandMotion::new(scene.target()),
-        pages: PageTurn::new(scene.page),
+        set: parts.tune,
+        scene,
+        island: IslandMotion::new(scene.target(), parts.tune),
+        pages: PageTurn::new(scene.page, parts.tune),
         pages_settled: true,
-        content: content_spring(scene),
+        content: content_spring(scene, parts.tune.opacity),
         content_settled: true,
         prev_raw: None,
         stats: None,
@@ -234,6 +241,7 @@ where
             self.pages_settled = self.pages.step(dt);
             self.content_settled = self.content.step(dt);
             let drawn_by = self.clocks.kind();
+            let visible = self.differs_from_rest();
             if let Some(times) = self.paint_frame()?
                 && let Some(stats) = self.stats.as_mut()
             {
@@ -244,12 +252,26 @@ where
                     present_ms: times.present_ms,
                 };
                 stats.record_frame(anim_t, phases);
+                if visible {
+                    stats.note_visible(anim_t);
+                }
             }
             if island_settled && self.pages_settled && self.content_settled {
                 self.finish_motion(drawn_by);
                 return Ok(());
             }
         }
+    }
+
+    /// True when the drawn state still differs from the rest state of the scene aimed at.
+    fn differs_from_rest(&self) -> bool {
+        let drawn = DrawnState {
+            shape: self.island.shape(),
+            content: self.content.value(),
+            pages: self.pages.layers(),
+        };
+        let rest = DrawnState::at_rest(self.scene.target(), self.scene.expanded, self.scene.page);
+        visibly_differs(&drawn, &rest)
     }
 
     /// Reports the finished motion with the compositor's counter change over it.
@@ -322,7 +344,9 @@ where
             self.dwm_start = (self.dwm)();
         }
         self.island.retarget(target);
-        self.content.retarget(content_target(scene), OPACITY);
+        self.content
+            .retarget(content_target(scene), self.set.opacity);
+        self.scene = scene;
         self.content_settled = self.content.is_settled();
         if page_changed {
             self.pages.turn_to(scene.page);
@@ -332,10 +356,11 @@ where
 
     /// Jumps to `scene` with no motion and drops the running motion unreported.
     fn snap(&mut self, scene: Scene) {
-        self.island = IslandMotion::new(scene.target());
-        self.pages = PageTurn::new(scene.page);
+        self.island = IslandMotion::new(scene.target(), self.set);
+        self.scene = scene;
+        self.pages = PageTurn::new(scene.page, self.set);
         self.pages_settled = true;
-        self.content = content_spring(scene);
+        self.content = content_spring(scene, self.set.opacity);
         self.content_settled = true;
         self.stats = None;
     }

@@ -95,9 +95,11 @@ pub struct MotionReport {
     pub kind: MotionKind,
     /// Frames recorded.
     pub frames: usize,
-    /// Duration in milliseconds.
+    /// Full duration in milliseconds: until every spring has settled.
     pub duration_ms: f64,
-    /// Frames per second over the duration.
+    /// Visible duration in milliseconds: until the last frame that still differs from rest.
+    pub visible_ms: f64,
+    /// Frames per second over the full duration.
     pub fps: f64,
     /// Display refresh rate.
     pub hz: f64,
@@ -149,11 +151,12 @@ impl fmt::Display for MotionReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "motion {}: {} frames in {:.0} ms ({:.1} fps at {:.0} Hz), {} hitches, \
+            "motion {}: {} frames, visible {:.0} ms, full {:.0} ms ({:.1} fps at {:.0} Hz), {} hitches, \
              worst gap {:.1} ms; draw p50 {:.2} p99 {:.2} ms; \
              present p50 {:.2} p99 {:.2} ms; clock {}; retargets {}; first wait {:.1} ms",
             self.kind.as_str(),
             self.frames,
+            self.visible_ms,
             self.duration_ms,
             self.fps,
             self.hz,
@@ -186,6 +189,7 @@ pub struct MotionStats {
     clock: &'static str,
     first_anim: f64,
     last_anim: f64,
+    last_visible: Option<f64>,
     frames: usize,
     hitches: usize,
     worst_gap: f64,
@@ -208,6 +212,7 @@ impl MotionStats {
             clock,
             first_anim: 0.0,
             last_anim: 0.0,
+            last_visible: None,
             frames: 0,
             hitches: 0,
             worst_gap: 0.0,
@@ -252,6 +257,12 @@ impl MotionStats {
         self.dwm = Some(delta);
     }
 
+    /// Marks the frame at `anim_t` as still differing from the rest state of the current
+    /// target; the last such frame ends the visible duration.
+    pub fn note_visible(&mut self, anim_t: f64) {
+        self.last_visible = Some(anim_t);
+    }
+
     /// Notes that the motion target changed while the motion was running.
     pub fn note_retarget(&mut self) {
         self.retargets += 1;
@@ -270,6 +281,9 @@ impl MotionStats {
         } else {
             self.last_anim - self.first_anim + 1.0 / self.hz
         };
+        let visible = self
+            .last_visible
+            .map_or(0.0, |t| t - self.first_anim + 1.0 / self.hz);
         let fps = if duration > 0.0 {
             frames_f64(self.frames) / duration
         } else {
@@ -281,6 +295,7 @@ impl MotionStats {
             kind: self.kind,
             frames: self.frames,
             duration_ms: duration * 1000.0,
+            visible_ms: visible * 1000.0,
             fps,
             hz: self.hz,
             hitches: self.hitches,

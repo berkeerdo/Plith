@@ -17,3 +17,4 @@ pub mod spring;
 pub mod timeline;
 pub mod topmost;
 pub mod tuning;
+pub mod visible;

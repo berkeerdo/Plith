@@ -1,7 +1,7 @@
 //! Page turns as springs, so an interrupted turn keeps its velocity.
 
 use crate::spring::Spring;
-use crate::tuning::{OPACITY, PAGE_OFFSET};
+use crate::tuning::TuningSet;
 
 /// Distance in DIP a page slides while it enters or leaves.
 pub const PAGE_SLIDE: f64 = 20.0;
@@ -25,32 +25,32 @@ struct Layer {
 }
 
 impl Layer {
-    fn resting(page: usize) -> Self {
+    fn resting(page: usize, set: TuningSet) -> Self {
         Self {
             page,
-            offset: Spring::new(0.0, PAGE_OFFSET),
-            opacity: Spring::new(1.0, OPACITY).with_eps(0.002, 0.01),
+            offset: Spring::new(0.0, set.page_offset),
+            opacity: Spring::new(1.0, set.opacity).with_eps(0.002, 0.01),
         }
     }
 
-    fn entering(page: usize, dir: f64) -> Self {
+    fn entering(page: usize, dir: f64, set: TuningSet) -> Self {
         let mut layer = Self {
             page,
-            offset: Spring::new(dir * PAGE_SLIDE, PAGE_OFFSET),
-            opacity: Spring::new(0.0, OPACITY).with_eps(0.002, 0.01),
+            offset: Spring::new(dir * PAGE_SLIDE, set.page_offset),
+            opacity: Spring::new(0.0, set.opacity).with_eps(0.002, 0.01),
         };
-        layer.show();
+        layer.show(set);
         layer
     }
 
-    fn show(&mut self) {
-        self.offset.retarget(0.0, PAGE_OFFSET);
-        self.opacity.retarget(1.0, OPACITY);
+    fn show(&mut self, set: TuningSet) {
+        self.offset.retarget(0.0, set.page_offset);
+        self.opacity.retarget(1.0, set.opacity);
     }
 
-    fn hide(&mut self, dir: f64) {
-        self.offset.retarget(-dir * PAGE_SLIDE, PAGE_OFFSET);
-        self.opacity.retarget(0.0, OPACITY);
+    fn hide(&mut self, dir: f64, set: TuningSet) {
+        self.offset.retarget(-dir * PAGE_SLIDE, set.page_offset);
+        self.opacity.retarget(0.0, set.opacity);
     }
 
     fn step(&mut self, dt: f64) -> bool {
@@ -122,14 +122,16 @@ impl std::ops::Index<usize> for PageLayers {
 pub struct PageTurn {
     incoming: Layer,
     outgoing: Option<Layer>,
+    set: TuningSet,
 }
 
 impl PageTurn {
     /// Starts at rest on `page`.
     #[must_use]
-    pub fn new(page: usize) -> Self {
+    pub fn new(page: usize, set: TuningSet) -> Self {
         Self {
-            incoming: Layer::resting(page),
+            incoming: Layer::resting(page, set),
+            set,
             outgoing: None,
         }
     }
@@ -142,13 +144,14 @@ impl PageTurn {
         let dir = if page > self.incoming.page { 1.0 } else { -1.0 };
         let back_to_outgoing = self.outgoing.as_ref().is_some_and(|o| o.page == page);
         if back_to_outgoing && let Some(mut returning) = self.outgoing.take() {
-            returning.show();
-            self.incoming.hide(dir);
+            returning.show(self.set);
+            self.incoming.hide(dir, self.set);
             self.outgoing = Some(std::mem::replace(&mut self.incoming, returning));
             return;
         }
-        let mut leaving = std::mem::replace(&mut self.incoming, Layer::entering(page, dir));
-        leaving.hide(dir);
+        let mut leaving =
+            std::mem::replace(&mut self.incoming, Layer::entering(page, dir, self.set));
+        leaving.hide(dir, self.set);
         self.outgoing = Some(leaving);
     }
 

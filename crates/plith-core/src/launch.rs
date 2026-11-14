@@ -2,6 +2,7 @@
 
 use crate::demo::{DemoError, DemoScript};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::tuning::TuningSet;
 use std::fmt;
 
 /// Which frame clock the render thread should use.
@@ -31,7 +32,7 @@ pub enum HitMode {
 }
 
 /// Parsed launch options.
-#[derive(Debug, Clone, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
     /// Demo script to run instead of waiting for input.
     pub demo: Option<DemoScript>,
@@ -45,6 +46,8 @@ pub struct Launch {
     pub hit: HitMode,
     /// Load levers; the default is the R1 behaviour.
     pub levers: Levers,
+    /// Spring tuning preset; the default is R1 until one is chosen.
+    pub tune: TuningSet,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -187,6 +190,10 @@ impl Launch {
                 "--mmcss" => {
                     let text = value()?;
                     launch.levers.mmcss = parse_mmcss(&text).ok_or_else(|| bad(text))?;
+                }
+                "--tune" => {
+                    let text = value()?;
+                    launch.tune = TuningSet::by_name(&text).ok_or_else(|| bad(text))?;
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

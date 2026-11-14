@@ -40,7 +40,7 @@ pub fn mode_text(launch: &Launch) -> String {
 pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout) -> String {
     let s = layout.surface;
     format!(
-        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, hit {}, remote {}, mode {}, levers {}",
+        "start: {}x{} px at ({},{}), scale {}, {} Hz, clock request {}, hit {}, remote {}, mode {}, levers {}, tune {}",
         s.width,
         s.height,
         s.x,
@@ -52,6 +52,7 @@ pub fn start_line(launch: &Launch, monitor: &MonitorInfo, layout: &SurfaceLayout
         is_remote_session(),
         mode_text(launch),
         launch.levers.describe(),
+        launch.tune.name,
     )
 }
 

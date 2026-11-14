@@ -16,6 +16,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, MmcssPriority, outcome_line};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{SceneMailbox, ShapeFrame};
+use plith_core::tuning::TuningSet;
 use std::fmt;
 use std::sync::Arc;
 use std::sync::mpsc::{self, SyncSender};
@@ -83,6 +84,8 @@ pub struct RenderConfig {
     pub remote: bool,
     /// Nominal refresh rate of the notch monitor.
     pub hz: f64,
+    /// The spring tuning preset.
+    pub tune: TuningSet,
     /// The load levers (the default is the R1 behaviour).
     pub levers: Levers,
 }
@@ -231,6 +234,7 @@ fn render_main(
                 hz: config.hz,
                 layout: config.layout,
                 dwm: crate::dwm::read,
+                tune: config.tune,
             };
             run_loop(parts, mailbox, shared, sinks);
         }

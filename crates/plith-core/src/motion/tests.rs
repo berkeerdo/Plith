@@ -31,10 +31,11 @@ fn report_line_matches_the_pinned_format() {
     for i in 0..240 {
         s.record_frame(f64::from(i) / HZ, phases(0.0, 0.0, 0.31, 0.10));
     }
+    s.note_visible(100.0 / HZ);
     let line = s.finish().to_string();
     assert_eq!(
         line,
-        "motion expand: 240 frames in 1000 ms (240.0 fps at 240 Hz), 0 hitches, \
+        "motion expand: 240 frames, visible 421 ms, full 1000 ms (240.0 fps at 240 Hz), 0 hitches, \
          worst gap 4.2 ms; draw p50 0.31 p99 0.31 ms; present p50 0.10 p99 0.10 ms; \
          clock dcomp; retargets 0; first wait 0.0 ms; dwm n/a"
     );
@@ -203,5 +204,28 @@ fn detail_line_format() {
             "hitch expand #57: gap 8.3 ms; before wait 3.9 late 0.1 draw 0.2 present 3.1; \
              at wait 0.4 late 4.2 draw 0.2 present 0.3"
         )]
+    );
+}
+
+#[test]
+fn visible_duration_ends_at_the_last_visible_frame() {
+    let mut s = MotionStats::new(MotionKind::Collapse, HZ, "dcomp");
+    for i in 0..200 {
+        s.record_frame(f64::from(i) / HZ, CALM);
+    }
+    assert!(s.finish().visible_ms.abs() < 1e-9, "no visible frame yet");
+    s.note_visible(79.0 / HZ);
+    let report = s.finish();
+    assert!((report.visible_ms - 80.0 * 1000.0 / HZ).abs() < 1e-6);
+    assert!((report.duration_ms - 200.0 * 1000.0 / HZ).abs() < 1e-6);
+    assert!(
+        (report.fps - 240.0).abs() < 1e-6,
+        "fps stays over the full duration"
+    );
+    assert!(
+        report
+            .to_string()
+            .starts_with("motion collapse: 200 frames, visible 333 ms, full 833 ms (240.0 fps"),
+        "{report}"
     );
 }

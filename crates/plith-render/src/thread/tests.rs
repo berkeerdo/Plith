@@ -7,6 +7,7 @@ use plith_core::island::IslandMotion;
 use plith_core::motion::MotionKind;
 use plith_core::scene::{Scene, Suppression};
 use plith_core::shapes::{PAGES, REST};
+use plith_core::tuning::R1;
 use std::thread;
 use std::time::{Duration, Instant};
 
@@ -19,7 +20,7 @@ fn expanded(page: usize) -> Scene {
 }
 
 fn one_period_from(from: IslandShape, to: IslandShape) -> IslandShape {
-    let mut motion = IslandMotion::new(from);
+    let mut motion = IslandMotion::new(from, R1);
     motion.retarget(to);
     motion.step(PERIOD);
     motion.shape()
@@ -38,6 +39,26 @@ fn motion_report_carries_the_dwm_delta_between_start_and_finish() {
             .to_string()
             .ends_with("; dwm missed 1 dropped 0 of 100")
     );
+    let _ = run.stop();
+}
+
+#[test]
+fn collapse_report_has_a_visible_duration_shorter_than_the_full_one() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let _ = run.report();
+    run.mailbox.publish(Scene::default());
+    let report = run.report();
+    assert_eq!(report.kind, MotionKind::Collapse);
+    assert!(report.visible_ms > 100.0, "visible {}", report.visible_ms);
+    assert!(
+        report.visible_ms < report.duration_ms - 100.0,
+        "visible {} vs full {}",
+        report.visible_ms,
+        report.duration_ms
+    );
+    assert!(report.to_string().contains(", visible "), "{report}");
     let _ = run.stop();
 }
 

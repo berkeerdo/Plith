@@ -1,4 +1,5 @@
 use super::*;
+use crate::tuning::R1;
 
 const H: f64 = 1.0 / 240.0;
 
@@ -16,7 +17,7 @@ fn run_for(turn: &mut PageTurn, seconds: f64) {
 
 #[test]
 fn turn_forward_slides_in_from_the_right_and_fades_in() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     turn.step(H);
     let layers = turn.layers();
@@ -30,7 +31,7 @@ fn turn_forward_slides_in_from_the_right_and_fades_in() {
 
 #[test]
 fn turn_backward_slides_in_from_the_left() {
-    let mut turn = PageTurn::new(2);
+    let mut turn = PageTurn::new(2, R1);
     turn.turn_to(1);
     turn.step(H);
     let layers = turn.layers();
@@ -40,7 +41,7 @@ fn turn_backward_slides_in_from_the_left() {
 
 #[test]
 fn outgoing_layer_is_dropped_once_invisible() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     run_for(&mut turn, 2.0);
     let layers = turn.layers();
@@ -52,7 +53,7 @@ fn outgoing_layer_is_dropped_once_invisible() {
 
 #[test]
 fn reversal_mid_turn_keeps_velocity() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     run_for(&mut turn, 0.1);
     let before = turn.layers();
@@ -78,7 +79,7 @@ fn reversal_mid_turn_keeps_velocity() {
 
 #[test]
 fn turn_to_third_page_makes_incoming_outgoing_and_drops_older() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     run_for(&mut turn, 0.05);
     let mid = turn.layers()[1];
@@ -94,7 +95,7 @@ fn turn_to_third_page_makes_incoming_outgoing_and_drops_older() {
 
 #[test]
 fn turn_settles_under_0_6_s() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     let mut t = 0.0;
     let mut settled = false;
@@ -107,7 +108,7 @@ fn turn_settles_under_0_6_s() {
 
 #[test]
 fn turn_to_current_page_is_a_no_op() {
-    let mut turn = PageTurn::new(3);
+    let mut turn = PageTurn::new(3, R1);
     turn.turn_to(3);
     assert_eq!(turn.layers().len(), 1);
     assert!(turn.step(H));
@@ -116,7 +117,7 @@ fn turn_to_current_page_is_a_no_op() {
 
 #[test]
 fn layers_hold_outgoing_then_incoming_without_allocating() {
-    let mut turn = PageTurn::new(0);
+    let mut turn = PageTurn::new(0, R1);
     turn.turn_to(1);
     let pages: Vec<usize> = turn.layers().iter().map(|l| l.page).collect();
     assert_eq!(pages, vec![0, 1]);

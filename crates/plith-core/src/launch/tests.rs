@@ -1,6 +1,7 @@
 use super::*;
 use crate::demo::{DemoScript, DemoStep};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::tuning::{BRISK, R1};
 
 fn parse(args: &[&str]) -> Result<Launch, LaunchError> {
     Launch::parse(args.iter().map(|a| (*a).to_string()))
@@ -168,4 +169,19 @@ fn rejects_gpu_priority_8_and_latency_0() {
             "{flag} {value}"
         );
     }
+}
+
+#[test]
+fn tune_flag_picks_a_preset_and_defaults_to_r1() {
+    assert_eq!(parse(&[]).unwrap().tune, R1);
+    assert_eq!(parse(&["--tune", "r1"]).unwrap().tune, R1);
+    assert_eq!(parse(&["--tune", "brisk"]).unwrap().tune, BRISK);
+    assert!(matches!(
+        parse(&["--tune", "fast"]),
+        Err(LaunchError::BadValue { .. })
+    ));
+    assert!(matches!(
+        parse(&["--tune"]),
+        Err(LaunchError::MissingValue(_))
+    ));
 }

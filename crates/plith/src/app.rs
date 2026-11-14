@@ -75,6 +75,7 @@ fn run_shell(
         remote: is_remote_session(),
         hz: monitor.hz,
         levers: launch.levers,
+        tune: launch.tune,
     };
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
