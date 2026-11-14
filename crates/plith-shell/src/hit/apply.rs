@@ -10,8 +10,10 @@ use std::time::Instant;
 use windows::Win32::Foundation::HWND;
 use windows::Win32::Graphics::Gdi::{CreateRoundRectRgn, DeleteObject, HGDIOBJ, SetWindowRgn};
 
-/// Outset that keeps the anti-aliased edge of the island inside the hit region.
-const OUTSET_PX: i32 = 1;
+/// Outset that keeps the anti-aliased edge of the island inside the hit region. At 1 px the
+/// region (a GDI approximation of the arc) clipped the drawn edge and Berke saw jagged corners
+/// (Task 10, 2026-11-14); 3 px keeps the region boundary outside the anti-aliasing ramp.
+const OUTSET_PX: i32 = 3;
 
 fn set_region(inner: &Inner, hwnd: isize, shape: IslandShape) -> windows::core::Result<()> {
     let r = region_px(shape, &inner.layout, OUTSET_PX);
