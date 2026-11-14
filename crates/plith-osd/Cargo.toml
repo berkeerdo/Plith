@@ -1,0 +1,16 @@
+[package]
+name = "plith-osd"
+description = "The UIAccess helper that draws the volume, brightness and mute OSD over exclusive fullscreen games."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+plith-render.workspace = true
+plith-ipc.workspace = true
+
+[lints]
+workspace = true

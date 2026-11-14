@@ -1,0 +1,21 @@
+[package]
+name = "plith"
+description = "The Plith app: composes the engine, the shell and the services."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+plith-core.workspace = true
+plith-render.workspace = true
+plith-shell.workspace = true
+plith-audio.workspace = true
+plith-media.workspace = true
+plith-system.workspace = true
+plith-ipc.workspace = true
+
+[lints]
+workspace = true

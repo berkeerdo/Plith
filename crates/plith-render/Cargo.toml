@@ -1,0 +1,15 @@
+[package]
+name = "plith-render"
+description = "The renderer: D3D11, Direct2D, DirectWrite and DirectComposition on a dedicated render thread with a vblank frame clock."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+plith-core.workspace = true
+
+[lints]
+workspace = true

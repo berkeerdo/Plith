@@ -1,0 +1,14 @@
+[package]
+name = "plith-ipc"
+description = "The named pipe protocol between the notch process and the UIAccess OSD helper."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+
+[lints]
+workspace = true

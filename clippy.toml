@@ -1,0 +1,4 @@
+too-many-lines-threshold = 80
+cognitive-complexity-threshold = 20
+too-many-arguments-threshold = 6
+doc-valid-idents = ["UIAccess", "DirectComposition", "DirectWrite", "Direct2D", "D3D11", "Voicemeeter", ".."]
