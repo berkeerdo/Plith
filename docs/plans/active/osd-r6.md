@@ -242,13 +242,13 @@ key was not already held; `WM_KEYUP`/`WM_SYSKEYUP` clears it. `VolumeKeyHook::st
 the WMI listener callback opens it inline (before the send) on every `WmiMonitorBrightnessEvent`.
 A listener that fails to start (COM or `wmi::listen`) sets `listener_error() -> Option<String>`
 instead of returning silently.
-- [ ] **Step 1 (TDD):** extract the listener's per-event decision as
+- [x] **Step 1 (TDD):** extract the listener's per-event decision as
   `fn on_panel_event(window: Option<&SuppressionWindow>, now: Instant, send: impl FnOnce())`;
   tests `panel_event_opens_the_window_then_sends`, `no_window_still_sends`.
-- [ ] **Step 2:** implement; `probe_flyout` gains `--brightness` (dry run: wires the service's
+- [x] **Step 2:** implement; `probe_flyout` gains `--brightness` (dry run: wires the service's
   events to the suppressor, logs matches, hides nothing). Unverifiable here (no built-in panel):
   say so in the README and the handoff.
-- [ ] **Step 3:** five checks; commit `feat(system): brightness flyout suppression`.
+- [x] **Step 3:** five checks; commit `feat(system): brightness flyout suppression`.
 
 ### Task 8: The OSD app on the chosen path
 **Files:** Create `crates/plith-osd/src/model.rs` (+ `model/tests.rs`), `src/paint.rs`,
