@@ -5,7 +5,11 @@ use crate::draw::{DisplayList, Rect};
 use crate::geometry::IslandShape;
 
 pub mod audio;
+mod kit;
 pub mod media;
+pub mod pill;
+pub mod shelf;
+pub mod system;
 pub mod tabbar;
 
 /// Page width in DIP.
@@ -76,6 +80,20 @@ pub enum Action {
     Seek(f64),
     /// A press on a seek ruler: `hit` turns it into `Seek` with the fraction at the click.
     SeekRuler(Rect),
+    /// Pick the source at this audio row index as a route entrance.
+    PickSource(usize),
+    /// Set a route from the picked source to the output at this row index.
+    PickOutput(usize),
+    /// Leave pick mode without setting a route.
+    CancelPick,
+    /// Make the Windows endpoint with this id the default output.
+    SetDefaultEndpoint(String),
+    /// Set the brightness of the system monitor to this percentage (0 to 100).
+    SetBrightness(u8),
+    /// A press on the brightness ruler: `hit` turns it into `SetBrightness` at the click.
+    BrightnessRuler(Rect),
+    /// Mute or unmute the capture device.
+    ToggleMic,
 }
 
 /// A built page: what to draw, where to click and how big the island is.
@@ -115,6 +133,9 @@ pub fn hit(targets: &[HitTarget], x: f64, y: f64) -> Option<Action> {
         })
         .map(|t| match &t.action {
             Action::SeekRuler(ruler) => Action::Seek(seek_fraction(*ruler, x)),
+            Action::BrightnessRuler(ruler) => {
+                Action::SetBrightness(system::brightness_at(*ruler, x))
+            }
             other => other.clone(),
         })
 }

@@ -468,12 +468,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   Option<u8>, state: PillState (Live | Muted | Idle) }`: three fixed slots (name left, route
   segment middle, value right); muted shows the cut segment and `KAPALI` (question 3).
 
-- [ ] **Step 1: Failing tests:** `brightness_ruler_is_ink_not_flow`, `brightness_unsupported`,
+- [x] **Step 1: Failing tests:** `brightness_ruler_is_ink_not_flow`, `brightness_unsupported`,
   `muted_mic_is_cut_with_kapali`, `no_mic_hides_mic_row`, `system_page_is_178_high`,
   `pill_slots_do_not_move_between_states`, `shelf_empty_is_214_high`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(core): add system, shelf and pill`.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(core): add system, shelf and pill`.
 
 ### Task 15: Offscreen renders of every page against the mock
 
