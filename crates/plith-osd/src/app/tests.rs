@@ -174,3 +174,21 @@ fn placement_follows_the_monitor_size_and_scale() {
         "never cut off"
     );
 }
+
+#[test]
+fn a_panic_on_the_server_thread_asks_the_renderer_to_quit() {
+    let (events, inbox) = sync_channel(4);
+    let worker = std::thread::spawn(move || {
+        let _guard = QuitOnPanic(&events);
+        std::panic::resume_unwind(Box::new("server failure"));
+    });
+    assert!(worker.join().is_err(), "the thread panicked");
+    assert!(matches!(inbox.try_recv(), Ok(Event::Quit)));
+}
+
+#[test]
+fn a_normal_server_exit_sends_no_quit_from_the_guard() {
+    let (events, inbox) = sync_channel(4);
+    drop(QuitOnPanic(&events));
+    assert!(inbox.try_recv().is_err());
+}

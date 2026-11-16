@@ -298,7 +298,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   and a cancel event; a new connection or a disconnect drops the old one (cancel and join). The
   pid comes from `Connected { pid }` only. Test: dropping a watcher of a live process returns
   at once and sends nothing.
-- [ ] **F5 (M4), a server-thread panic quits the helper:** a drop guard in the server thread
+- [x] **F5 (M4), a server-thread panic quits the helper:** a drop guard in the server thread
   sends `Event::Quit` while panicking. Test: a panicking thread holding the guard delivers Quit.
 - [ ] **F6 (M5), log hardening:** folder from `SHGetKnownFolderPath(LocalAppData)`; refuse a
   reparse-point folder or file and a handle whose final path is not the expected one; control

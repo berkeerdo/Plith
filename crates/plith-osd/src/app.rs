@@ -93,12 +93,14 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
     stopper.stop();
     // Blocks only while the render thread still runs and drains; fails at once once it ended.
     let _ = events.send(Event::Quit);
-    if let Err(error) = join(server) {
+    let server_end = join(server);
+    if let Err(error) = &server_end {
         log.line(&format!("osd server: {error}"));
     }
     let result = join(renderer);
     drop(window);
-    result
+    // A render failure wins; else a failed or panicked server thread fails the run.
+    result.and(server_end.map_err(|error| format!("server thread: {error}")))
 }
 
 fn spawn(
@@ -276,9 +278,24 @@ fn forward(events: &SyncSender<Event>, event: Event) -> Flow {
     }
 }
 
+/// Sends [`Event::Quit`] when the server thread unwinds, so a panic in `serve` ends the
+/// helper (the render thread quits, the UI thread follows) and the notch can relaunch it,
+/// instead of leaving a High-integrity process with no pipe.
+struct QuitOnPanic<'a>(&'a SyncSender<Event>);
+
+impl Drop for QuitOnPanic<'_> {
+    fn drop(&mut self) {
+        if thread::panicking() {
+            // Blocks only while the render thread runs; fails at once once it ended.
+            let _ = self.0.send(Event::Quit);
+        }
+    }
+}
+
 /// The server thread: serves clients until stopped. A server failure asks the render thread
 /// to quit (waiting for room in the channel), which ends the app.
 fn serve(server: &OsdServer, events: &SyncSender<Event>, log: &Arc<Log>) -> Result<(), String> {
+    let _quit_on_panic = QuitOnPanic(events);
     let mut state = Served::default();
     let result = server.serve(|event| state.on(event, events, log));
     if result.is_err() {
