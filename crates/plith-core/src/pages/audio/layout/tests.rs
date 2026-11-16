@@ -245,7 +245,7 @@ fn long_endpoint_name_truncates_in_middle() {
         panic!("endpoint name missing");
     };
     assert_eq!(*trim, Trim::Middle);
-    assert_eq!(*style, TextStyle::Name);
+    assert_eq!(*style, TextStyle::Body);
     assert!(rect.x + rect.w <= VALUE_RIGHT);
 }
 
@@ -618,7 +618,7 @@ fn many_endpoints_cap_at_ten_slots_and_keep_the_default() {
     let Some(Node::Text { rect, .. }) = text_node(n, "Out 12") else {
         panic!("default endpoint hidden");
     };
-    assert_eq!(rect.y, slot_y(8.0) - 13.0);
+    assert_eq!(rect.y, slot_y(8.0) - 10.0);
     let Some(Node::Text {
         rect, ink, style, ..
     }) = text_node(n, "+5")

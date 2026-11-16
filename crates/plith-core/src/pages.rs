@@ -5,6 +5,7 @@ use crate::draw::{DisplayList, Rect};
 use crate::geometry::IslandShape;
 
 pub mod audio;
+pub mod fixtures;
 mod kit;
 pub mod media;
 pub mod pill;

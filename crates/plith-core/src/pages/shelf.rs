@@ -36,7 +36,7 @@ pub fn shelf_page(clock: &str) -> PageBuild {
         dashed: true,
     });
     nodes.push(text(
-        rect(BOX_X, 75.0, right - BOX_X, 16.0),
+        rect(BOX_X, 78.0, right - BOX_X, 16.0),
         "Dosyalar\u{131} buraya s\u{fc}r\u{fc}kle",
         TextStyle::Name,
         Ink::Ink,
@@ -54,8 +54,8 @@ pub fn shelf_page(clock: &str) -> PageBuild {
         1.0,
         Ink::Track,
     ));
-    nodes.push(station(BOX_X, SIDING_Y, StationMark::Hollow, Ink::Track));
-    nodes.push(station(right, SIDING_Y, StationMark::Hollow, Ink::Track));
+    nodes.push(station(BOX_X, SIDING_Y, StationMark::Hollow, Ink::Faint));
+    nodes.push(station(right, SIDING_Y, StationMark::Hollow, Ink::Faint));
     let mut shape = shapes::PAGES[PageId::Shelf.index()];
     shape.width = PAGE_W;
     shape.height = HEIGHT;

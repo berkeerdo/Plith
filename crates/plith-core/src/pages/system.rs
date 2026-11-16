@@ -95,7 +95,7 @@ fn brightness_row(
         Ink::Faint
     };
     nodes.push(text(
-        rect(30.0, 67.0, 160.0, 16.0),
+        rect(30.0, 70.0, 160.0, 16.0),
         "Parlakl\u{131}k",
         TextStyle::Name,
         name_ink,
@@ -133,9 +133,9 @@ fn brightness_row(
     nodes.push(line(vec![(X0, RULER_Y), (at, RULER_Y)], 2.0, Ink::Ink));
     nodes.push(station(at, RULER_Y, StationMark::Filled, Ink::Ink));
     nodes.push(text(
-        rect(RIGHT - 60.0, RULER_Y - 9.0, 60.0, 14.0),
+        rect(RIGHT - 60.0, RULER_Y - 8.0, 60.0, 14.0),
         &percent.to_string(),
-        TextStyle::Value,
+        TextStyle::Clock,
         Ink::Ink,
         Align::End,
     ));
@@ -152,7 +152,7 @@ fn brightness_row(
 
 fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
     nodes.push(text(
-        rect(30.0, MIC_Y - 13.0, 160.0, 16.0),
+        rect(30.0, MIC_Y - 10.0, 160.0, 16.0),
         "Mikrofon",
         TextStyle::Name,
         Ink::Ink,
@@ -185,7 +185,7 @@ fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &m
             Ink::Ink,
             Align::Center,
         ));
-        nodes.push(station(X1, MIC_Y, StationMark::Hollow, Ink::Track));
+        nodes.push(station(X1, MIC_Y, StationMark::Hollow, Ink::Faint));
     } else {
         nodes.push(station(X0, MIC_Y, StationMark::Filled, Ink::Flow));
         nodes.push(line(vec![(X0, MIC_Y), (X1, MIC_Y)], 2.0, Ink::Flow));

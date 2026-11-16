@@ -19,6 +19,8 @@ pub const PITCH_DENSE: f64 = 40.0;
 pub const PITCH_MIN: f64 = 32.0;
 /// Row count (sources or outputs, whichever is more) above which the pitch is dense.
 pub const DENSE_ABOVE: usize = 5;
+/// The name of a bus with no label and no route.
+pub const UNUSED_NAME: &str = "Kullanılmıyor";
 /// Most output rows the page shows, the `+N` line for the hidden rest included.
 pub const MAX_OUTPUT_SLOTS: usize = 10;
 

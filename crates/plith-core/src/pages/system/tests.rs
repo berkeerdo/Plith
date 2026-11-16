@@ -56,7 +56,7 @@ fn brightness_ruler_is_ink_not_flow() {
     });
     assert!(ink_station);
     let t = texts(&page.list.nodes);
-    assert!(t.contains(&("70".into(), TextStyle::Value, Ink::Ink)));
+    assert!(t.contains(&("70".into(), TextStyle::Clock, Ink::Ink)));
     assert!(t.contains(&("Parlaklık".into(), TextStyle::Name, Ink::Ink)));
     assert!(t.contains(&("DELL AW2725DF".into(), TextStyle::Sub, Ink::Faint)));
 }

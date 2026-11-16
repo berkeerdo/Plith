@@ -104,12 +104,12 @@ fn route(nodes: &mut Vec<Node>, state: PillState, xa: f64, xb: f64, y: f64) {
                 Ink::Track,
             ));
             nodes.push(station(xa, y, StationMark::Filled, Ink::Ink));
-            nodes.push(station(xb, y, StationMark::Hollow, Ink::Track));
+            nodes.push(station(xb, y, StationMark::Hollow, Ink::Faint));
         }
         PillState::Idle => {
             nodes.push(line(vec![(xa, y), (xb, y)], 1.0, Ink::Track));
-            nodes.push(station(xa, y, StationMark::Hollow, Ink::Track));
-            nodes.push(station(xb, y, StationMark::Hollow, Ink::Track));
+            nodes.push(station(xa, y, StationMark::Hollow, Ink::Faint));
+            nodes.push(station(xb, y, StationMark::Hollow, Ink::Faint));
         }
     }
 }

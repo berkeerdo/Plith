@@ -201,6 +201,13 @@ pub enum Node {
         /// Whether the line is dashed.
         dashed: bool,
     },
+    /// A filled polygon (closed implicitly), such as a transport triangle.
+    Polygon {
+        /// The vertices.
+        points: Vec<(f64, f64)>,
+        /// The colour role.
+        ink: Ink,
+    },
     /// A station marker.
     Station {
         /// Centre x.
@@ -312,16 +319,19 @@ pub struct StyleSpec {
     pub tracking_em: f32,
 }
 
+/// Letter spacing of every mono role, in em (the mock's `letter-spacing: 0.06em`).
+const MONO_TRACKING: f32 = 0.06;
+
 /// The font, size, weight and tracking of a text role.
 #[must_use]
 pub fn style_spec(style: TextStyle) -> StyleSpec {
     let (family, size_dip, weight, uppercase, tracking_em) = match style {
         TextStyle::Title => (Family::Sans, 16.0, 600, false, 0.0),
-        TextStyle::Name => (Family::Sans, 14.0, 400, false, 0.0),
-        TextStyle::Sub => (Family::Mono, 10.0, 400, true, 0.0),
-        TextStyle::Label => (Family::Mono, 10.0, 400, true, 0.08),
-        TextStyle::Value => (Family::Mono, 12.0, 400, false, 0.0),
-        TextStyle::Clock => (Family::Mono, 14.0, 500, false, 0.0),
+        TextStyle::Name => (Family::Sans, 13.0, 400, false, 0.0),
+        // Sub and Label share the mock's look; the roles stay apart for their callers.
+        TextStyle::Sub | TextStyle::Label => (Family::Mono, 10.0, 400, true, MONO_TRACKING),
+        TextStyle::Value => (Family::Mono, 10.0, 400, false, MONO_TRACKING),
+        TextStyle::Clock => (Family::Mono, 12.0, 400, false, MONO_TRACKING),
         TextStyle::Body => (Family::Sans, 12.0, 400, false, 0.0),
         TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
     };

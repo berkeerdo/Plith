@@ -2,7 +2,7 @@
 
 use super::{
     AudioFacts, AudioView, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode, Route,
-    RouteState, SourceRow, VmFacts, row_pitch,
+    RouteState, SourceRow, UNUSED_NAME, VmFacts, row_pitch,
 };
 
 /// Peak level above which a strip counts as carrying signal.
@@ -160,12 +160,18 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
     } else if used {
         tag.clone()
     } else {
-        "Kullanılmıyor".to_string()
+        UNUSED_NAME.to_string()
+    };
+    // The mock shows no value on an unused, unnamed bus.
+    let value = if name == UNUSED_NAME {
+        OutputValue::None
+    } else {
+        OutputValue::Db(bus.gain_db)
     };
     OutputRow {
         tag: Some(tag),
         name,
-        value: OutputValue::Db(bus.gain_db),
+        value,
         live: false,
         muted: bus.muted,
         id: None,

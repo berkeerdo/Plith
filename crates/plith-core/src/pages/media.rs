@@ -38,6 +38,9 @@ pub struct MediaFacts {
     pub timeline: Option<SeekTimeline>,
     /// The output route text after the arrow (for example `A1 · G733`).
     pub output: Option<String>,
+    /// Another output the source could move to, drawn as a branch with a hollow station (for
+    /// example `A2 · EDIFIER`).
+    pub reachable: Option<String>,
 }
 
 /// The ruler rectangle, used for the seek hit area and the seek fraction.
@@ -59,8 +62,8 @@ const DIVISIONS: u8 = 20;
 const SEEK_GROW: f64 = 6.0;
 /// Transport centre y (mock `ty = 150`).
 const TRANSPORT_Y: f64 = 150.0;
-/// Transport glyph stroke width.
-const GLYPH_W: f64 = 1.5;
+/// Transport bar and outline width (the mock's default 1 DIP stroke).
+const GLYPH_W: f64 = 1.0;
 /// Route row y with a session (mock `ry = 196`).
 const ROUTE_Y: f64 = 196.0;
 /// Route row y with no session (mock: 124).
@@ -68,6 +71,10 @@ const ROUTE_Y_EMPTY: f64 = 124.0;
 /// Route line start x and end x (mock 96 and 380).
 const ROUTE_X0: f64 = 96.0;
 const ROUTE_X1: f64 = 380.0;
+/// The reachable branch: leaves the route at x 300, drops 20 at 45 degrees, ends at x 470.
+const BRANCH_X: f64 = 300.0;
+const BRANCH_DROP: f64 = 20.0;
+const BRANCH_END_X: f64 = 470.0;
 
 /// `m:ss`, or `h:mm:ss` from one hour.
 #[must_use]
@@ -135,7 +142,7 @@ fn route_row(nodes: &mut Vec<Node>, y: f64, source: Option<&str>, output: &str, 
     let (mark, ink) = if lit {
         (StationMark::Filled, Ink::Flow)
     } else {
-        (StationMark::Hollow, Ink::Track)
+        (StationMark::Hollow, Ink::Faint)
     };
     nodes.push(station(ROUTE_X0, y, mark, ink));
     nodes.push(station(ROUTE_X1, y, mark, ink));
@@ -151,7 +158,7 @@ fn route_row(nodes: &mut Vec<Node>, y: f64, source: Option<&str>, output: &str, 
 
 fn empty_body(facts: &MediaFacts, nodes: &mut Vec<Node>) {
     nodes.push(text(
-        rect(30.0, 68.0, 560.0, 20.0),
+        rect(30.0, 73.0, 560.0, 20.0),
         "\u{c7}alan bir \u{15f}ey yok",
         TextStyle::Strong,
         Ink::Ink,
@@ -188,7 +195,7 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
         &facts.title
     };
     nodes.push(text(
-        rect(146.0, 64.0, 444.0, 22.0),
+        rect(146.0, 67.5, 444.0, 22.0),
         title,
         TextStyle::Title,
         Ink::Ink,
@@ -196,7 +203,7 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
     ));
     if !facts.artist.is_empty() {
         nodes.push(text(
-            rect(146.0, 92.0, 444.0, 12.0),
+            rect(146.0, 90.5, 444.0, 16.0),
             &facts.artist,
             TextStyle::Body,
             Ink::Muted,
@@ -218,7 +225,29 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
             output,
             facts.playing,
         );
+        if let Some(reachable) = &facts.reachable {
+            reachable_branch(nodes, ROUTE_Y, reachable);
+        }
     }
+}
+
+/// Another output the source can move to: a track branch leaving the route at x 300 at 45
+/// degrees, a hollow station and a faint label (mock `mediaPage()`, `ry + 20`).
+fn reachable_branch(nodes: &mut Vec<Node>, y: f64, label: &str) {
+    let (y2, end) = (y + BRANCH_DROP, BRANCH_END_X);
+    nodes.push(line(
+        vec![(BRANCH_X, y), (BRANCH_X + BRANCH_DROP, y2), (end, y2)],
+        1.0,
+        Ink::Track,
+    ));
+    nodes.push(station(end, y2, StationMark::Hollow, Ink::Faint));
+    nodes.push(text(
+        rect(end + 12.0, y2 - 6.0, PAGE_W - 30.0 - end - 12.0, 12.0),
+        label,
+        TextStyle::Label,
+        Ink::Faint,
+        Align::Start,
+    ));
 }
 
 fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> Option<HitTarget> {
@@ -261,6 +290,15 @@ fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> O
     })
 }
 
+/// A filled triangle with a 1 DIP outline of the same ink, like the mock's filled and stroked
+/// paths.
+fn glyph(nodes: &mut Vec<Node>, points: Vec<(f64, f64)>, ink: Ink) {
+    let mut outline = points.clone();
+    outline.push(points[0]);
+    nodes.push(Node::Polygon { points, ink });
+    nodes.push(line(outline, GLYPH_W, ink));
+}
+
 /// Previous, play or pause, next, centred under the ruler (mock `cx`, `ty`).
 fn transport(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
     let cx = RULER.x + RULER.w / 2.0;
@@ -274,16 +312,11 @@ fn transport(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<HitTar
             GLYPH_W,
             ink(on),
         ));
-        nodes.push(line(
-            vec![
-                (base, ty - 6.0),
-                (bar, ty),
-                (base, ty + 6.0),
-                (base, ty - 6.0),
-            ],
-            GLYPH_W,
+        glyph(
+            nodes,
+            vec![(base, ty - 6.0), (cx + dir * 48.0, ty), (base, ty + 6.0)],
             ink(on),
-        ));
+        );
     };
     skip(-1.0, facts.can_prev, nodes);
     skip(1.0, facts.can_next, nodes);
@@ -296,16 +329,11 @@ fn transport(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<HitTar
             });
         }
     } else {
-        nodes.push(line(
-            vec![
-                (cx - 5.0, ty - 7.0),
-                (cx + 6.0, ty),
-                (cx - 5.0, ty + 7.0),
-                (cx - 5.0, ty - 7.0),
-            ],
-            GLYPH_W,
+        glyph(
+            nodes,
+            vec![(cx - 5.0, ty - 7.0), (cx + 6.0, ty), (cx - 5.0, ty + 7.0)],
             Ink::Ink,
-        ));
+        );
     }
     let mut add = |x: f64, w: f64, action: Action| {
         targets.push(HitTarget {

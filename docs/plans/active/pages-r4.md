@@ -482,12 +482,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   uniquely named folder under `%TEMP%`), `crates/plith-core/src/pages/fixtures.rs` (the mock's
   data: Banana with G733, Edifier, Discord; Potato; no Voicemeeter; nothing playing; DDC/CI off)
 
-- [ ] **Step 1:** Render all states in Gece plus one audio page per theme at scale 2.
-- [ ] **Step 2:** Compare each PNG with `docs/design/r3/renders-6/sheet.png` by eye; list
+- [x] **Step 1:** Render all states in Gece plus one audio page per theme at scale 2.
+- [x] **Step 2:** Compare each PNG with `docs/design/r3/renders-6/sheet.png` by eye; list
   differences; fix the layout constants in Tasks 10 to 14's files; re-render to a new folder.
-- [ ] **Step 3:** Quality pass with the `impeccable` skill on the renders (contrast, alignment,
+- [x] **Step 3:** Quality pass with the `impeccable` skill on the renders (contrast, alignment,
   rhythm); fix what it finds that the spec agrees with.
-- [ ] **Step 4:** Copy the final set to `docs/design/r4/renders-1/` only after asking the master
+- [x] **Step 4:** Copy the final set to `docs/design/r4/renders-1/` only after asking the master
   (that path is outside my owned paths); five checks green, commit
   `feat(render): render pages offscreen for review`.
 

@@ -55,27 +55,42 @@ fn meter(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, peak: f32, palette
     kit.fill(ctx, level, 0.0, palette.flow);
 }
 
-/// The samples (0 to 1, oldest first) spread across `rect`, bottom-aligned, as 1 DIP track
-/// segments drawn with `DrawLine` (no path geometry per frame). Fewer than two samples draw
-/// nothing.
+/// The mock's trace: a 1 DIP faint-track baseline 1 DIP inside the bottom of `rect`, and the
+/// samples (0 to 1, oldest first) spread across `rect` as faint 1 DIP segments rising up to
+/// `h - 2` above it, drawn with `DrawLine` (no path geometry per frame). Fewer than two samples
+/// draw only the baseline.
 fn trace(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, samples: &[f32], palette: &Palette) {
+    let bottom = rect.y + rect.h - 1.0;
+    let swing = (rect.h - 2.0).max(0.0);
+    kit.set_ink(palette.faint_track);
+    let (left, right) = (
+        Vector2 {
+            X: f(rect.x),
+            Y: f(bottom),
+        },
+        Vector2 {
+            X: f(rect.x + rect.w),
+            Y: f(bottom),
+        },
+    );
+    // SAFETY: a draw call inside the frame's BeginDraw/EndDraw.
+    unsafe { ctx.DrawLine(left, right, &kit.brush, TRACE_W, None) };
     if samples.len() < 2 {
         return;
     }
     // Allowed: sample counts are small, exact in f64.
     #[allow(clippy::cast_precision_loss)]
     let step = rect.w / (samples.len() - 1) as f64;
-    let bottom = rect.y + rect.h;
     let at = |i: usize, v: f32| {
         // Allowed: as above.
         #[allow(clippy::cast_precision_loss)]
         let x = rect.x + step * i as f64;
         Vector2 {
             X: f(x),
-            Y: f(bottom - f64::from(v.clamp(0.0, 1.0)) * rect.h),
+            Y: f(bottom - f64::from(v.clamp(0.0, 1.0)) * swing),
         }
     };
-    kit.set_ink(palette.track);
+    kit.set_ink(palette.faint);
     for (i, pair) in samples.windows(2).enumerate() {
         // SAFETY: a draw call inside the frame's BeginDraw/EndDraw.
         unsafe {
@@ -90,8 +105,8 @@ fn trace(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, samples: &[f32], p
     }
 }
 
-/// The played part of the track as a 2 DIP flow line along the middle of `rect`, with a
-/// filled ink station at its head.
+/// The played part of the track as a 2 DIP line along the middle of `rect` with a filled
+/// station at its head: lit while playing (sound flows), ink when paused.
 fn seek(
     ctx: &ID2D1DeviceContext,
     kit: &ListKit,
@@ -103,8 +118,13 @@ fn seek(
     let played = timeline.fraction_at(live.now);
     let y = rect.y + rect.h / 2.0;
     let head = rect.x + rect.w * played;
+    let ink = if timeline.playing {
+        palette.flow
+    } else {
+        palette.ink
+    };
     if head > rect.x {
-        kit.set_ink(palette.flow);
+        kit.set_ink(ink);
         let from = Vector2 {
             X: f(rect.x),
             Y: f(y),
@@ -116,11 +136,5 @@ fn seek(
         // SAFETY: a draw call inside the frame's BeginDraw/EndDraw.
         unsafe { ctx.DrawLine(from, to, &kit.brush, SEEK_W, None) };
     }
-    kit.station(
-        ctx,
-        (head, y),
-        StationMark::Filled,
-        palette.ink,
-        palette.floor_high,
-    );
+    kit.station(ctx, (head, y), StationMark::Filled, ink, palette.floor_high);
 }

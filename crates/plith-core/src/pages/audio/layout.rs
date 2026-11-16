@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::{
     AudioView, DENSE_ABOVE, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PITCH_DENSE,
-    PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow,
+    PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow, UNUSED_NAME,
 };
 use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, Rect, TextStyle, Trim};
 use crate::pages::kit::rect;
@@ -59,8 +59,11 @@ const SOURCE_NAME_W: f64 = TRACE_X - 8.0 - MARGIN_LEFT;
 /// Output tag x (mock `XO + 14`) and name x after a tag (mock `XO + 38`).
 const TAG_X: f64 = OUTPUT_X + 14.0;
 const TAG_NAME_X: f64 = OUTPUT_X + 38.0;
-/// Rough advance of one value character, used to keep the name clear of the value.
-const VALUE_CHAR_W: f64 = 7.5;
+/// Advance of one value character (Martian Mono 10 with 0.06 em tracking), used to keep the
+/// name clear of the value.
+const VALUE_CHAR_W: f64 = 7.4;
+/// Extra room on the value's left so DirectWrite never trims it; the text is end-aligned.
+const VALUE_SLACK: f64 = 8.0;
 /// Gap between an output name and its value.
 const VALUE_GAP: f64 = 8.0;
 /// Half height of a row hit target.
@@ -243,7 +246,7 @@ fn source_row(
         (row.name.clone(), Ink::Ink)
     };
     nodes.push(text(
-        rect(MARGIN_LEFT, y - 14.0, SOURCE_NAME_W, NAME_H),
+        rect(MARGIN_LEFT, y - 12.0, SOURCE_NAME_W, NAME_H),
         &name,
         TextStyle::Name,
         ink,
@@ -301,7 +304,12 @@ fn output_row(
         let w = value.chars().count() as f64 * VALUE_CHAR_W;
         name_right = VALUE_RIGHT - w - VALUE_GAP;
         nodes.push(text(
-            rect(VALUE_RIGHT - w, y - 10.0, w, 14.0),
+            rect(
+                VALUE_RIGHT - w - VALUE_SLACK,
+                y - 9.0,
+                w + VALUE_SLACK,
+                LABEL_H,
+            ),
             &value,
             style,
             ink,
@@ -309,10 +317,13 @@ fn output_row(
             Trim::End,
         ));
     }
-    let name_ink = match (row.used, has_voicemeeter(view)) {
-        (true, _) => Ink::Ink,
-        (false, true) => Ink::Faint,
-        (false, false) => Ink::Muted,
+    // The mock: a named bus reads in ink even with no route; only the unused bus is faint.
+    let name_ink = if !has_voicemeeter(view) {
+        if row.used { Ink::Ink } else { Ink::Muted }
+    } else if !row.used && row.name == UNUSED_NAME {
+        Ink::Faint
+    } else {
+        Ink::Ink
     };
     let name_x = match &row.tag {
         Some(tag) => {
@@ -330,9 +341,9 @@ fn output_row(
     };
     if let Some(x) = name_x {
         nodes.push(text(
-            rect(x, y - 13.0, (name_right - x).max(0.0), NAME_H),
+            rect(x, y - 10.0, (name_right - x).max(0.0), NAME_H),
             &row.name,
-            TextStyle::Name,
+            TextStyle::Body,
             name_ink,
             Align::Start,
             Trim::Middle,

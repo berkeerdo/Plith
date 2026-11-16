@@ -10,8 +10,8 @@ use plith_core::theme::Palette;
 use std::collections::HashMap;
 use std::sync::Arc;
 use windows::Win32::Graphics::Direct2D::Common::{
-    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_FIGURE_BEGIN_HOLLOW,
-    D2D1_FIGURE_END_OPEN, D2D1_PIXEL_FORMAT,
+    D2D_RECT_F, D2D_SIZE_U, D2D1_ALPHA_MODE_PREMULTIPLIED, D2D1_FIGURE_BEGIN_FILLED,
+    D2D1_FIGURE_BEGIN_HOLLOW, D2D1_FIGURE_END_CLOSED, D2D1_FIGURE_END_OPEN, D2D1_PIXEL_FORMAT,
 };
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, D2D1_CAP_STYLE_FLAT, D2D1_DASH_STYLE_CUSTOM,
@@ -26,10 +26,10 @@ use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::core::Result;
 use windows_numerics::Vector2;
 
-/// The dash and the gap of a dashed stroke, in DIP.
-const DASH: (f32, f32) = (4.0, 3.0);
-/// A station square's side in DIP.
-pub(crate) const STATION: f64 = 7.0;
+/// The dash and the gap of a dashed stroke, in DIP (the mock's `stroke-dasharray: 3 4`).
+const DASH: (f32, f32) = (3.0, 4.0);
+/// A station's outer side in DIP: the mock's 7 DIP square with a centred 1 DIP stroke.
+pub(crate) const STATION: f64 = 8.0;
 /// The most artwork bitmaps kept before the cache is cleared.
 const ART_CAP: usize = 64;
 
@@ -188,8 +188,8 @@ impl ListKit {
         Ok(())
     }
 
-    /// A 7 DIP station square centred at (x, y): filled with `rgba`, or a 1 DIP inner ring of
-    /// `rgba` over `floor` that hides a line running under it.
+    /// An 8 DIP station square centred at (x, y): filled with `rgba`, or a 1 DIP inner ring of
+    /// `rgba` over `floor` (the floor colour at that height) that hides a line running under it.
     pub(crate) fn station(
         &self,
         ctx: &ID2D1DeviceContext,
@@ -223,6 +223,38 @@ impl ListKit {
             self.set_ink(rgba);
             ctx.DrawRectangle(&raw const ring, &self.brush, 1.0, None);
         }
+    }
+
+    /// A filled polygon through `points` (closed implicitly); fewer than three points draw
+    /// nothing.
+    pub(crate) fn polygon(
+        &self,
+        ctx: &ID2D1DeviceContext,
+        points: &[(f64, f64)],
+        rgba: [f32; 4],
+    ) -> Result<()> {
+        if points.len() < 3 {
+            return Ok(());
+        }
+        // SAFETY: the factory is live; the sink is opened once, the figure begun and ended, and
+        // the sink closed before the geometry is drawn inside the open BeginDraw.
+        unsafe {
+            let geometry = self.factory.CreatePathGeometry()?;
+            let sink = geometry.Open()?;
+            let at = |p: (f64, f64)| Vector2 {
+                X: f(p.0),
+                Y: f(p.1),
+            };
+            sink.BeginFigure(at(points[0]), D2D1_FIGURE_BEGIN_FILLED);
+            for p in &points[1..] {
+                sink.AddLine(at(*p));
+            }
+            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink.Close()?;
+            self.set_ink(rgba);
+            ctx.FillGeometry(&geometry, &self.brush, None);
+        }
+        Ok(())
     }
 
     /// One line of text laid out to the rectangle's width and aligned in it.
@@ -333,6 +365,19 @@ impl ListKit {
     }
 }
 
+/// The island's floor gradient at `t` (0 at the top, 1 at the bottom), mixed in sRGB like
+/// the gradient brush.
+pub(crate) fn floor_at(palette: &Palette, t: f64) -> [f32; 4] {
+    let t = if t.is_finite() {
+        t.clamp(0.0, 1.0)
+    } else {
+        1.0
+    };
+    let (a, b) = (palette.floor, palette.floor_high);
+    let mix = |i: usize| a[i] + (b[i] - a[i]) * f(t);
+    [mix(0), mix(1), mix(2), 1.0]
+}
+
 /// Draws the nodes of `list` (live nodes skipped) inside an open `BeginDraw`, at full alpha.
 /// Returns the artwork that was referenced but missing, so the caller can redraw once it comes.
 ///
@@ -363,8 +408,9 @@ pub(crate) fn draw_list(
                 (*x, *y),
                 *mark,
                 palette.resolve(*ink),
-                palette.floor_high,
+                floor_at(palette, *y / list.size.1),
             ),
+            Node::Polygon { points, ink } => kit.polygon(ctx, points, palette.resolve(*ink))?,
             Node::Text {
                 rect,
                 text,

@@ -83,6 +83,14 @@ fn bgra(c: [f32; 4]) -> [u8; 4] {
     [b(c[2]), b(c[1]), b(c[0]), 255]
 }
 
+/// The floor gradient at `t` (0 at the top, 1 at the bottom) as BGRA bytes.
+fn floor_at(p: &Palette, t: f64) -> [u8; 4] {
+    let mix =
+        |a: f32, b: f32| ((f64::from(a) + (f64::from(b) - f64::from(a)) * t) * 255.0).round() as u8;
+    let (a, b) = (p.floor, p.floor_high);
+    [mix(a[2], b[2]), mix(a[1], b[1]), mix(a[0], b[0]), 255]
+}
+
 fn near(got: [u8; 4], want: [u8; 4], tol: u8, what: &str) {
     let ok = got.iter().zip(want).all(|(g, w)| g.abs_diff(w) <= tol);
     assert!(ok, "{what}: got {got:?}, want {want:?} within {tol}");
@@ -164,30 +172,33 @@ fn station_filled_and_hollow_pixels() {
     };
     let station = |x: f64, mark: StationMark| Node::Station {
         x,
-        y: 60.5,
+        y: 60.0,
         mark,
         ink: Ink::Ink,
     };
     let f = page_frame(vec![
         track,
-        station(30.5, StationMark::Filled),
-        station(80.5, StationMark::Hollow),
+        station(30.0, StationMark::Filled),
+        station(80.0, StationMark::Hollow),
     ]);
     let buf = render(&f);
-    // Page (0, 0) is pixel (10, 10): the filled square spans px 37..44, the hollow 87..94.
+    // The mock's station: a 7 DIP square with a 1 DIP stroke, 8 DIP outside. Page (0, 0) is
+    // pixel (10, 10): the filled square spans px 36..44, the hollow 86..94.
     near(pixel(&buf, W, 40, 70), bgra(p.ink), 2, "filled centre");
-    near(pixel(&buf, W, 37, 67), bgra(p.ink), 2, "filled corner");
+    near(pixel(&buf, W, 36, 66), bgra(p.ink), 2, "filled corner");
+    near(pixel(&buf, W, 43, 73), bgra(p.ink), 2, "filled far corner");
     near(
         pixel(&buf, W, 90, 70),
-        bgra(p.floor_high),
+        floor_at(&p, 60.0 / SHAPE.height),
         2,
         "hollow centre hides the line",
     );
-    near(pixel(&buf, W, 87, 70), bgra(p.ink), 2, "hollow left edge");
-    near(pixel(&buf, W, 90, 67), bgra(p.ink), 2, "hollow top edge");
+    near(pixel(&buf, W, 86, 70), bgra(p.ink), 2, "hollow left edge");
+    near(pixel(&buf, W, 90, 66), bgra(p.ink), 2, "hollow top edge");
+    near(pixel(&buf, W, 93, 70), bgra(p.ink), 2, "hollow right edge");
     near(
-        pixel(&buf, W, 88, 70),
-        bgra(p.floor_high),
+        pixel(&buf, W, 87, 70),
+        floor_at(&p, 60.0 / SHAPE.height),
         2,
         "1 px ring only",
     );
@@ -234,9 +245,10 @@ fn dashed_stroke_has_gaps() {
     let row: Vec<[u8; 4]> = (32..98).map(|x| pixel(&buf, W, x, 130)).collect();
     let lit = row.iter().filter(|px| px[1] > 0xC0).count();
     let dark = row.iter().filter(|px| px[1] < 0x20).count();
+    // The mock's `stroke-dasharray: 3 4`: more gap than dash.
     assert!(
-        lit > 25 && dark > 15,
-        "dash 4 gap 3: {lit} lit, {dark} dark"
+        lit > 20 && dark > 30 && dark > lit,
+        "dash 3 gap 4: {lit} lit, {dark} dark"
     );
 }
 
@@ -457,9 +469,14 @@ fn trace_and_seek_draw_from_live_values() {
         1,
         "unplayed part",
     );
-    near(pixel(&buf, W, 130, 114), bgra(p.ink), 2, "head station");
-    // The trace: five samples at 0.5 lie on y 140.5, row 150 on screen.
-    near(pixel(&buf, W, 300, 150), bgra(p.track), 2, "trace line");
+    near(
+        pixel(&buf, W, 130, 114),
+        bgra(p.flow),
+        2,
+        "head station is lit while playing",
+    );
+    // The trace: five samples at 0.5 lie on y 140.5, row 150 on screen, in faint ink.
+    near(pixel(&buf, W, 300, 150), bgra(p.faint), 2, "trace line");
 }
 
 #[test]

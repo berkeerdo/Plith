@@ -77,14 +77,16 @@ fn label_style_is_upper_cased_and_tracked() {
             .unwrap(),
         "INPUT"
     );
-    // Tracking widens Label (0.08 em) against Sub at the same size and text.
+    // Every mono role carries the mock's 0.06 em tracking, so Label and Sub (same size, same
+    // tracking) measure the same.
     let label = text
         .measure("ABCD", TextStyle::Label, 400.0, Trim::End)
         .unwrap();
     let sub = text
         .measure("ABCD", TextStyle::Sub, 400.0, Trim::End)
         .unwrap();
-    assert!(label > sub + 1.0, "{label} vs {sub}");
+    assert!((label - sub).abs() < 0.01, "{label} vs {sub}");
+    assert!(plith_core::draw::style_spec(TextStyle::Label).tracking_em > 0.0);
 }
 
 #[test]
@@ -131,13 +133,13 @@ fn missing_font_falls_back() {
 #[test]
 fn bundled_faces_resolve_to_the_exact_weights() {
     let text = system();
-    // Sans: Regular 400 (Name) and SemiBold 600 (Title); Mono: Regular 400 (Value) and Medium
-    // 500 (Clock). A missing face or the wrong family model would match the nearest weight.
+    // Sans: Regular 400 (Name) and SemiBold 600 (Title); Mono: Regular 400 (Value and Clock).
+    // A missing face or the wrong family model would match the nearest weight.
     for (style, weight) in [
         (TextStyle::Name, 400),
         (TextStyle::Title, 600),
         (TextStyle::Value, 400),
-        (TextStyle::Clock, 500),
+        (TextStyle::Clock, 400),
     ] {
         assert_eq!(
             text.matched_weight(style).unwrap(),

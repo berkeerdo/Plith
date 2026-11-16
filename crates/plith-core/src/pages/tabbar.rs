@@ -13,12 +13,13 @@ const STEP: f64 = 112.0;
 const LABEL_DX: f64 = 3.0;
 /// Y of the track and the station centres.
 const LINE_Y: f64 = 34.0;
-/// Top of the labels.
-const LABEL_Y: f64 = 14.0;
+/// Top of the labels (mock baseline 22, mono 10).
+const LABEL_Y: f64 = 12.0;
 const LABEL_H: f64 = 12.0;
 const LABEL_W: f64 = STEP - 16.0;
 const CLOCK_W: f64 = 80.0;
-const CLOCK_H: f64 = 18.0;
+/// Clock box height: its top lands on the mock baseline 38 minus the mono 12 size.
+const CLOCK_H: f64 = 16.0;
 /// How far the hit area reaches below the line.
 const HIT_BELOW: f64 = 6.0;
 /// Gap between neighbouring hit areas.
