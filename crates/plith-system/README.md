@@ -12,7 +12,7 @@ monitors through DDC/CI) and suppression of the native Windows volume flyout. De
 | `BrightnessService::set_percent(u8)` | The only hardware write. Clamped to 100, returns at once (`false` when not running); the newest value wins, one write in flight |
 | `FlyoutSuppressor::start(Mode)` | Three WinEvent hooks on their own thread. `Mode::Hide` hides the shell volume flyout, `Mode::DryRun` only reports |
 | `FlyoutSuppressor` methods | `matches() -> &Receiver<Match>`, `suppression_window()`, `open_window()`, `stop()` (restores hidden windows, safe twice, also on drop) |
-| `VolumeKeyHook::start(Option<Arc<SuppressionWindow>>)` | Low level keyboard hook, returns the hook and a `Receiver<()>` with one signal per volume key down. Keys are never swallowed |
+| `VolumeKeyHook::start(Option<Arc<SuppressionWindow>>)` | Low level keyboard hook, returns the hook and a `Receiver<VolumeKey>` with one signal per volume key press (auto-repeat collapsed, the suppression window stays open for the whole hold). Keys are never swallowed |
 | Pure helpers | `step_level`, `CoalescingWriter`, `keep_answering`, `should_hide`, `SuppressionWindow` (400 ms), `HiddenRegistry`, `handle_key_event`, WQL text in `brightness::wql` |
 
 `Status` is `Running` or `Unavailable(reason)`. A machine with no controllable display is

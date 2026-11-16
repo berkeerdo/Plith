@@ -1,6 +1,6 @@
 //! `VolumeKeyHook`: the `WH_KEYBOARD_LL` hook and the thread that pumps for it.
 
-use std::cell::OnceCell;
+use std::cell::{OnceCell, RefCell};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, SyncSender, sync_channel};
 use std::time::Instant;
@@ -10,7 +10,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CallNextHookEx, HHOOK, KBDLLHOOKSTRUCT, SetWindowsHookExW, UnhookWindowsHookEx, WH_KEYBOARD_LL,
 };
 
-use super::handle_key_event;
+use super::{HeldKeys, VolumeKey, handle_key_event};
 use crate::flyout::SuppressionWindow;
 use crate::hook_thread::HookThread;
 
@@ -19,7 +19,9 @@ const QUEUE: usize = 8;
 
 thread_local! {
     /// The sender the proc uses; set once on the hook thread, read without a lock.
-    static SENDER: OnceCell<SyncSender<()>> = const { OnceCell::new() };
+    static SENDER: OnceCell<SyncSender<VolumeKey>> = const { OnceCell::new() };
+    /// Which keys are held, to collapse auto-repeat; only the hook thread touches it.
+    static HELD: RefCell<HeldKeys> = const { RefCell::new(HeldKeys { mute: None, down: None, up: None }) };
     /// The suppression window the proc opens inline, if the owner gave one.
     static WINDOW: OnceCell<Arc<SuppressionWindow>> = const { OnceCell::new() };
 }
@@ -43,14 +45,30 @@ unsafe extern "system" fn proc(n_code: i32, w_param: WPARAM, l_param: LPARAM) ->
         SENDER.with(|cell| {
             if let Some(tx) = cell.get() {
                 WINDOW.with(|window| {
-                    handle_key_event(
-                        n_code,
-                        w_param.0,
-                        vk,
-                        tx,
-                        window.get().map(Arc::as_ref),
-                        Instant::now,
-                    );
+                    let window = window.get().map(Arc::as_ref);
+                    HELD.with(|held| match held.try_borrow_mut() {
+                        Ok(mut held) => {
+                            handle_key_event(
+                                n_code,
+                                w_param.0,
+                                vk,
+                                &mut held,
+                                tx,
+                                window,
+                                Instant::now,
+                            );
+                        }
+                        // Re-entered while borrowed: skip the collapse, never panic.
+                        Err(_) => handle_key_event(
+                            n_code,
+                            w_param.0,
+                            vk,
+                            &mut HeldKeys::default(),
+                            tx,
+                            window,
+                            Instant::now,
+                        ),
+                    });
                 });
             }
         });
@@ -66,14 +84,16 @@ pub struct VolumeKeyHook {
 }
 
 impl VolumeKeyHook {
-    /// Installs the hook on a new message thread. The receiver gets one `()` per volume key
-    /// down (mute, down, up); keys are never swallowed. With a `window` (from
+    /// Installs the hook on a new message thread. The receiver gets one [`VolumeKey`] per press
+    /// (auto-repeat collapsed; a lost key up is forgiven after 1.5 s); keys are never swallowed. With a `window` (from
     /// [`FlyoutSuppressor::suppression_window`](crate::FlyoutSuppressor::suppression_window))
     /// the hook proc opens it inline on every volume key, before the signal is queued.
     ///
     /// # Errors
     /// The text says why the thread or the hook could not start.
-    pub fn start(window: Option<Arc<SuppressionWindow>>) -> Result<(Self, Receiver<()>), String> {
+    pub fn start(
+        window: Option<Arc<SuppressionWindow>>,
+    ) -> Result<(Self, Receiver<VolumeKey>), String> {
         let (tx, rx) = sync_channel(QUEUE);
         let thread = HookThread::spawn("plith-volume-keys", move || {
             SENDER.with(|cell| {

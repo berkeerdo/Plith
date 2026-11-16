@@ -30,10 +30,10 @@ fn main() {
     let (mut presses, mut seen) = (0, 0);
     while started.elapsed() < Duration::from_secs(10) {
         match keys.recv_timeout(Duration::from_millis(5)) {
-            Ok(()) => {
+            Ok(key) => {
                 presses += 1;
                 println!(
-                    "[{:5.2}s] volume key (the hook opened the window inline)",
+                    "[{:5.2}s] volume key {key:?} (the hook opened the window inline)",
                     started.elapsed().as_secs_f64()
                 );
             }
