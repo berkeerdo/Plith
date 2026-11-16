@@ -1,8 +1,8 @@
 //! The rules behind the audio view: rows, route states, density, signal activity.
 
 use super::{
-    AudioFacts, AudioView, Footer, OutputRow, OutputValue, PickMode, Route, RouteState, SourceRow,
-    VmFacts, row_pitch,
+    AudioFacts, AudioView, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode, Route,
+    RouteState, SourceRow, VmFacts, row_pitch,
 };
 
 /// Peak level above which a strip counts as carrying signal.
@@ -81,7 +81,7 @@ pub(super) fn build(
         (_, Some(_)) => Footer::Picking,
         _ => Footer::Normal,
     };
-    let row_pitch = row_pitch(sources.len().max(outputs.len()));
+    let row_pitch = row_pitch(sources.len().max(outputs.len().min(MAX_OUTPUT_SLOTS)));
     AudioView {
         sources,
         outputs,

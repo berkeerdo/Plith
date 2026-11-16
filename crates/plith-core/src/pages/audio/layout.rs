@@ -9,8 +9,8 @@ mod routes;
 use std::sync::Arc;
 
 use super::{
-    AudioView, DENSE_ABOVE, Footer, OutputRow, OutputValue, PITCH_DENSE, PITCH_MIN, PITCH_NORMAL,
-    PickMode, RouteState, SourceRow,
+    AudioView, DENSE_ABOVE, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PITCH_DENSE,
+    PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow,
 };
 use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, Rect, TextStyle, Trim};
 use crate::pages::kit::rect;
@@ -36,6 +36,8 @@ const FIRST_ROW_Y: f64 = 86.0;
 const STATION_DY: f64 = 3.0;
 /// Page height below the last row baseline (mock: 300 - 236).
 const BOTTOM: f64 = 64.0;
+/// The same without Voicemeeter (mock `audioNoVoicemeeter()`: 196 - 136).
+const BOTTOM_NO_VM: f64 = 60.0;
 /// Where a diagonal ends before the output station while the run fits (mock line 163: the
 /// Discord to A1 rise runs from x 280 to 430 with `XO = 452`).
 const DIAGONAL_END: f64 = 22.0;
@@ -45,6 +47,8 @@ const MIN_LEG: f64 = 6.0;
 const REACH: f64 = (OUTPUT_X - MIN_LEG) - (SOURCE_X + MIN_LEG);
 /// Footer baseline above the page bottom (mock: 284 on a 300 high page).
 const FOOTER_UP: f64 = 16.0;
+/// The same without Voicemeeter (mock `audioNoVoicemeeter()`: `h - 22`).
+const FOOTER_UP_NO_VM: f64 = 22.0;
 /// Trace slot left edge and width (mock `trace(svg, 168, ...)`, `w = 64`).
 const TRACE_X: f64 = 168.0;
 const TRACE_W: f64 = 64.0;
@@ -130,19 +134,63 @@ pub fn row_pitch(rows: usize) -> f64 {
     pitch.min(fit).max(PITCH_MIN)
 }
 
+/// The slot each output row takes (`None` when hidden) and how many rows are hidden. Up to
+/// `MAX_OUTPUT_SLOTS` rows all show; past that the first nine show and the last slot holds
+/// `+N`. A routed output (the default endpoint) never hides: it takes the ninth slot.
+fn output_slots(view: &AudioView) -> (Vec<Option<usize>>, usize) {
+    let n = view.outputs.len();
+    if n <= MAX_OUTPUT_SLOTS {
+        return ((0..n).map(Some).collect(), 0);
+    }
+    let shown = MAX_OUTPUT_SLOTS - 1;
+    let mut slots: Vec<Option<usize>> = (0..n).map(|o| (o < shown).then_some(o)).collect();
+    let routed = |o: &usize| view.outputs[*o].used || view.outputs[*o].live;
+    if !(0..shown).any(|o| routed(&o))
+        && let Some(keep) = (shown..n).find(routed)
+    {
+        slots[shown - 1] = None;
+        slots[keep] = Some(shown - 1);
+    }
+    (slots, n - shown)
+}
+
 /// The audio page nodes, hit targets and island shape.
 #[must_use]
 pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
     let (mut nodes, mut targets) = tabbar(PageId::Audio, clock);
-    let rows = view.sources.len().max(view.outputs.len()).max(1);
-    let height = (row_y(view, rows - 1) + BOTTOM).min(shapes::PAGE_MAX_HEIGHT);
+    let (slots, hidden) = output_slots(view);
+    let output_rows = view.outputs.len().min(MAX_OUTPUT_SLOTS);
+    let rows = view.sources.len().max(output_rows).max(1);
+    let (bottom, footer_up) = if has_voicemeeter(view) {
+        (BOTTOM, FOOTER_UP)
+    } else {
+        (BOTTOM_NO_VM, FOOTER_UP_NO_VM)
+    };
+    let height = (row_y(view, rows - 1) + bottom).min(shapes::PAGE_MAX_HEIGHT);
     for (i, row) in view.sources.iter().enumerate() {
         source_row(view, i, row, &mut nodes, &mut targets);
     }
     for (o, row) in view.outputs.iter().enumerate() {
-        output_row(view, o, row, &mut nodes, &mut targets);
+        if let Some(slot) = slots[o] {
+            output_row(view, (o, slot), row, &mut nodes, &mut targets);
+        }
     }
-    routes::draw(view, &mut nodes);
+    if hidden > 0 {
+        nodes.push(text(
+            rect(
+                TAG_X,
+                row_y(view, output_rows - 1) - 9.0,
+                VALUE_RIGHT - TAG_X,
+                LABEL_H,
+            ),
+            &format!("+{hidden}"),
+            TextStyle::Label,
+            Ink::Faint,
+            Align::Start,
+            Trim::End,
+        ));
+    }
+    routes::draw(view, &slots, &mut nodes);
     if let PickMode::Picked(_) = view.mode {
         let top = row_y(view, 0) - ROW_HIT_HALF;
         let left = SOURCE_X + 2.0 * STATION_REACH;
@@ -156,7 +204,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
             action: Action::CancelPick,
         });
     }
-    let footer_y = height - FOOTER_UP - 10.0;
+    let footer_y = height - footer_up - 10.0;
     nodes.push(text(
         rect(MARGIN_LEFT, footer_y, PAGE_W - 2.0 * MARGIN_LEFT, LABEL_H),
         view.footer.text(),
@@ -232,15 +280,15 @@ fn source_row(
     });
 }
 
-/// Tag, name and value on the right; the station is drawn with the routes.
+/// Tag, name and value of output `o` in row `slot`; the station is drawn with the routes.
 fn output_row(
     view: &AudioView,
-    o: usize,
+    (o, slot): (usize, usize),
     row: &OutputRow,
     nodes: &mut Vec<Node>,
     targets: &mut Vec<HitTarget>,
 ) {
-    let y = row_y(view, o);
+    let y = row_y(view, slot);
     let (value, style, ink) = if row.muted {
         (LABEL_TEXT.to_string(), TextStyle::Label, Ink::Faint)
     } else {

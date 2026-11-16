@@ -468,7 +468,7 @@ fn tall_rise_slides_the_diagonal_end_then_runs_steeper() {
     assert!(is_45(&p));
     assert!(p[2].0 > OUTPUT_X - 22.0 && p[2].0 <= OUTPUT_X - 6.0);
     assert_eq!(p[1].0, SOURCE_X + 6.0);
-    // Above the 188 reach (only at Potato density) the documented fallback runs steeper.
+    // Above the 188 reach (six or more rows at pitch 40) the documented fallback runs steeper.
     let p = route_path((SOURCE_X, 83.0), (OUTPUT_X, 353.0));
     assert_eq!(p[1], (SOURCE_X + 6.0, 83.0));
     assert_eq!(p[2], (OUTPUT_X - 6.0, 353.0));
@@ -572,4 +572,84 @@ fn no_voicemeeter_muted_default_says_sessiz_only_at_the_output() {
         unreachable!()
     };
     assert!(rect.x > OUTPUT_X, "the label is the output value");
+}
+
+#[test]
+fn no_voicemeeter_page_matches_its_mock() {
+    // Mock `audioNoVoicemeeter()`: two output rows, 196 high, footer baseline at h - 22.
+    let mut view = windows_view("Edifier R1280");
+    view.row_pitch = row_pitch(2);
+    let page = audio_page(&view, "21:47");
+    assert_eq!(page.list.size.1, 196.0);
+    let Some(Node::Text { rect, .. }) = text_node(&page.list.nodes, Footer::NoVoicemeeter.text())
+    else {
+        panic!("footer missing");
+    };
+    assert_eq!(rect.y + 10.0, 174.0);
+}
+
+#[test]
+fn many_endpoints_cap_at_ten_slots_and_keep_the_default() {
+    let mut view = windows_view("Edifier R1280");
+    view.outputs[0].live = false;
+    view.outputs[0].used = false;
+    view.outputs[0].value = OutputValue::None;
+    for i in 2..14 {
+        view.outputs.push(endpoint(
+            &format!("Out {i}"),
+            &format!("id{i}"),
+            OutputValue::None,
+        ));
+    }
+    view.outputs[12].live = true;
+    view.outputs[12].used = true;
+    view.outputs[12].value = OutputValue::Percent(62);
+    view.routes = vec![route(0, 12, RouteState::Live)];
+    view.row_pitch = row_pitch(10);
+    let page = audio_page(&view, "21:47");
+    let h = page.list.size.1;
+    let n = &page.list.nodes;
+    assert!(h <= shapes::PAGE_MAX_HEIGHT);
+    // Eight rows in order, the default in the ninth slot, `+5` in the tenth.
+    let slot_y = |i: f64| 86.0 + i * view.row_pitch;
+    assert!(text_node(n, "Out 7").is_some());
+    assert!(text_node(n, "Out 8").is_none());
+    assert!(text_node(n, "Out 13").is_none());
+    let Some(Node::Text { rect, .. }) = text_node(n, "Out 12") else {
+        panic!("default endpoint hidden");
+    };
+    assert_eq!(rect.y, slot_y(8.0) - 13.0);
+    let Some(Node::Text {
+        rect, ink, style, ..
+    }) = text_node(n, "+5")
+    else {
+        panic!("+N missing");
+    };
+    assert_eq!((*ink, *style), (Ink::Faint, TextStyle::Label));
+    assert_eq!(rect.y, slot_y(9.0) - 9.0);
+    let live = strokes(n)
+        .into_iter()
+        .find(|l| l.2 == Ink::Flow)
+        .expect("live route");
+    assert_eq!(live.0.last(), Some(&(OUTPUT_X, slot_y(8.0) - 3.0)));
+    assert!(live.0.iter().all(|p| p.1 < h));
+    let defaults: Vec<_> = page
+        .targets
+        .iter()
+        .filter(|t| matches!(t.action, Action::SetDefaultEndpoint(_)))
+        .collect();
+    assert_eq!(defaults.len(), 9);
+    assert!(page.targets.iter().all(|t| t.rect.y + t.rect.h <= h));
+    assert_eq!(
+        hit(&page.targets, 500.0, slot_y(8.0) - 5.0),
+        Some(Action::SetDefaultEndpoint("id12".into()))
+    );
+    assert_eq!(hit(&page.targets, 480.0, slot_y(9.0) - 5.0), None);
+    for node in n {
+        if let Node::Text { rect, text, .. } = node
+            && (text.starts_with("Out") || text.starts_with('+'))
+        {
+            assert!(rect.y + rect.h <= h - 22.0, "{text} below the footer line");
+        }
+    }
 }

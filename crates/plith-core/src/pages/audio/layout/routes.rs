@@ -16,7 +16,8 @@ const CUT_LABEL_W: f64 = 64.0;
 /// A route polyline: horizontal from the source station, a 45 degree run, horizontal into the
 /// output station. Same height: two points. The run ends 22 DIP before the output station; a
 /// taller rise first slides that end right, up to 6 DIP before the station. Only a rise above
-/// the 188 DIP reach (Potato density) cannot stay at 45 degrees: that documented fallback keeps
+/// the 188 DIP reach (six or more rows at pitch 40) cannot stay at 45 degrees: that documented
+/// fallback keeps
 /// 6 DIP legs at both ends and runs steeper.
 #[must_use]
 pub fn route_path(from: (f64, f64), to: (f64, f64)) -> Vec<(f64, f64)> {
@@ -53,8 +54,9 @@ fn look(state: RouteState) -> (u8, f64, Ink, bool) {
 }
 
 /// Routes by pass, the cut stubs of muted sources, then stations. A cut whose source is muted is
-/// drawn as the stub; a cut caused by a muted output keeps its full path in track ink.
-pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
+/// drawn as the stub; a cut caused by a muted output keeps its full path in track ink. Routes to
+/// hidden outputs (no slot) are not drawn.
+pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<Node>) {
     for order in 0..3 {
         for r in &view.routes {
             let Some(source) = view.sources.get(r.source) else {
@@ -62,11 +64,14 @@ pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
             };
             let (at, width, ink, dashed) = look(r.state);
             let stub = r.state == RouteState::Cut && source.muted;
-            if at != order || stub || r.output >= view.outputs.len() {
+            let Some(Some(slot)) = slots.get(r.output) else {
+                continue;
+            };
+            if at != order || stub {
                 continue;
             }
             let from = (SOURCE_X, station_y(view, r.source));
-            let to = (OUTPUT_X, station_y(view, r.output));
+            let to = (OUTPUT_X, station_y(view, *slot));
             nodes.push(stroke(route_path(from, to), width, ink, dashed));
         }
     }
@@ -88,6 +93,9 @@ pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
         nodes.push(station(SOURCE_X, station_y(view, s), mark, ink));
     }
     for (o, row) in view.outputs.iter().enumerate() {
+        let Some(slot) = slots[o] else {
+            continue;
+        };
         let candidate = view
             .routes
             .iter()
@@ -101,7 +109,7 @@ pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
         } else {
             (StationMark::Hollow, Ink::Faint)
         };
-        nodes.push(station(OUTPUT_X, station_y(view, o), mark, ink));
+        nodes.push(station(OUTPUT_X, station_y(view, slot), mark, ink));
     }
 }
 
