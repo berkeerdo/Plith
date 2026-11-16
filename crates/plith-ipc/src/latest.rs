@@ -49,21 +49,30 @@ impl<T> Slot<T> {
     /// Waits up to `timeout` for a value. After `close`, a pending value is still
     /// returned once, then `None` immediately.
     pub fn take_wait(&self, timeout: Duration) -> Option<T> {
-        let deadline = Instant::now() + timeout;
+        // A timeout too large for an `Instant` waits without a deadline.
+        let deadline = Instant::now().checked_add(timeout);
         let mut state = self.lock();
         loop {
             if let Some(value) = state.value.take() {
                 return Some(value);
             }
-            let left = deadline.saturating_duration_since(Instant::now());
-            if state.closed || left.is_zero() {
+            if state.closed {
                 return None;
             }
-            state = self
-                .ready
-                .wait_timeout(state, left)
-                .unwrap_or_else(PoisonError::into_inner)
-                .0;
+            state = if let Some(deadline) = deadline {
+                let left = deadline.saturating_duration_since(Instant::now());
+                if left.is_zero() {
+                    return None;
+                }
+                self.ready
+                    .wait_timeout(state, left)
+                    .unwrap_or_else(PoisonError::into_inner)
+                    .0
+            } else {
+                self.ready
+                    .wait(state)
+                    .unwrap_or_else(PoisonError::into_inner)
+            };
         }
     }
 

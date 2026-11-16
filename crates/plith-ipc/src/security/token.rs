@@ -1,23 +1,45 @@
-//! The SID of the user that owns this process.
+//! The SID of a user, read from a process token.
 
 use std::ffi::c_void;
 
-use windows::Win32::Foundation::{HLOCAL, LocalFree};
+use windows::Win32::Foundation::{HANDLE, HLOCAL, LocalFree};
 use windows::Win32::Security::Authorization::ConvertSidToStringSidW;
 use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TOKEN_USER, TokenUser};
-use windows::Win32::System::Threading::{GetCurrentProcess, OpenProcessToken};
+use windows::Win32::System::Threading::{
+    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_QUERY_LIMITED_INFORMATION,
+};
 use windows::core::PWSTR;
 
 use crate::win::OwnedHandle;
+
+#[cfg(test)]
+mod tests;
 
 /// Returns the string form of the current user's SID, such as `S-1-5-21-...`.
 ///
 /// # Errors
 /// Returns the Windows error text when the process token cannot be read.
 pub(crate) fn current_user_sid() -> Result<String, String> {
-    let mut token = windows::Win32::Foundation::HANDLE::default();
-    // SAFETY: `token` is a valid out pointer and the pseudo handle needs no closing.
-    unsafe { OpenProcessToken(GetCurrentProcess(), TOKEN_QUERY, &raw mut token) }
+    // SAFETY: the pseudo handle of the current process needs no closing.
+    token_user_sid(unsafe { GetCurrentProcess() })
+}
+
+/// Returns the string form of the SID of the user that owns process `pid`.
+///
+/// # Errors
+/// Returns the Windows error text when the process or its token cannot be opened.
+pub(crate) fn process_user_sid(pid: u32) -> Result<String, String> {
+    // SAFETY: plain call; the returned handle is owned and closed by the wrapper.
+    let process = unsafe { OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) }
+        .map_err(|e| format!("OpenProcess: {e}"))?;
+    let process = OwnedHandle(process);
+    token_user_sid(process.0)
+}
+
+fn token_user_sid(process: HANDLE) -> Result<String, String> {
+    let mut token = HANDLE::default();
+    // SAFETY: `token` is a valid out pointer and `process` is a valid process handle.
+    unsafe { OpenProcessToken(process, TOKEN_QUERY, &raw mut token) }
         .map_err(|e| format!("OpenProcessToken: {e}"))?;
     let token = OwnedHandle(token);
 
@@ -43,8 +65,8 @@ pub(crate) fn current_user_sid() -> Result<String, String> {
 
     // SAFETY: the call above filled the buffer with a TOKEN_USER and its SID data.
     let sid = unsafe { (*buffer.as_ptr().cast::<TOKEN_USER>()).User.Sid };
-    // SAFETY: `sid` points into `buffer`, which outlives the call.
     let mut text = PWSTR::null();
+    // SAFETY: `sid` points into `buffer`, which outlives the call.
     unsafe { ConvertSidToStringSidW(sid, &raw mut text) }
         .map_err(|e| format!("ConvertSidToStringSidW: {e}"))?;
     // SAFETY: `text` is a valid NUL-terminated string allocated by the call.

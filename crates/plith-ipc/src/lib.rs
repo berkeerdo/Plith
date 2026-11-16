@@ -13,6 +13,8 @@ pub mod security;
 #[cfg(windows)]
 mod client;
 #[cfg(windows)]
+mod identity;
+#[cfg(windows)]
 mod launch;
 #[cfg(windows)]
 mod server;

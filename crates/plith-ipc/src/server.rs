@@ -9,9 +9,9 @@ use std::sync::{Arc, Mutex, PoisonError};
 use std::time::{Duration, Instant};
 
 use windows::Win32::Foundation::{
-    DUPLICATE_SAME_ACCESS, DuplicateHandle, ERROR_ACCESS_DENIED, ERROR_BROKEN_PIPE,
-    ERROR_MORE_DATA, ERROR_NO_DATA, ERROR_OPERATION_ABORTED, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED,
-    ERROR_PIPE_NOT_CONNECTED, FALSE, GetLastError, HANDLE, HLOCAL, LocalFree,
+    ERROR_ACCESS_DENIED, ERROR_BROKEN_PIPE, ERROR_MORE_DATA, ERROR_NO_DATA,
+    ERROR_OPERATION_ABORTED, ERROR_PIPE_BUSY, ERROR_PIPE_CONNECTED, ERROR_PIPE_NOT_CONNECTED,
+    FALSE, GetLastError, HLOCAL, LocalFree,
 };
 use windows::Win32::Security::Authorization::{
     ConvertStringSecurityDescriptorToSecurityDescriptorW, SDDL_REVISION_1,
@@ -25,18 +25,21 @@ use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_MESSAGE,
     PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_MESSAGE, PIPE_WAIT,
 };
-use windows::Win32::System::Threading::{GetCurrentProcess, GetCurrentThread, GetCurrentThreadId};
+use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::core::PCWSTR;
 
+use crate::identity;
 use crate::security::{pipe_sddl, token};
-use crate::win::{OwnedHandle, wide};
+use crate::win::{OwnedHandle, duplicate_current_thread, wide};
 use crate::{DecodeError, MAX_MESSAGE, Message, decode};
 
 /// Why the server pipe could not be created.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum BindError {
-    /// Another server already owns the pipe name.
+    /// Another server of this user already owns the pipe name.
     AlreadyRunning,
+    /// The pipe name is held by a server that is not this user's (a possible squatter).
+    Squatted,
     /// Any other Windows error, as text.
     Os(String),
 }
@@ -45,6 +48,7 @@ impl std::fmt::Display for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AlreadyRunning => write!(f, "the OSD pipe is already served"),
+            Self::Squatted => write!(f, "the OSD pipe name is held by another user"),
             Self::Os(text) => write!(f, "{text}"),
         }
     }
@@ -77,6 +81,9 @@ pub struct Stopper {
 
 impl Stopper {
     /// Asks the server to stop and aborts its blocking pipe call.
+    ///
+    /// During shutdown this may also cancel synchronous I/O that the message callback
+    /// itself has in flight on the serving thread.
     ///
     /// Returns within about one second even if the callback never returns.
     pub fn stop(&self) {
@@ -174,16 +181,16 @@ impl OsdServer {
             let _ = LocalFree(Some(HLOCAL(descriptor.0)));
         }
         if handle.is_invalid() {
-            return Err(
-                if error == ERROR_ACCESS_DENIED || error == ERROR_PIPE_BUSY {
-                    BindError::AlreadyRunning
-                } else {
-                    BindError::Os(format!(
-                        "CreateNamedPipeW: {}",
-                        windows::core::Error::from(error)
-                    ))
-                },
-            );
+            return Err(if error == ERROR_ACCESS_DENIED {
+                owner_of_taken_name(&wide_name)
+            } else if error == ERROR_PIPE_BUSY {
+                BindError::AlreadyRunning
+            } else {
+                BindError::Os(format!(
+                    "CreateNamedPipeW: {}",
+                    windows::core::Error::from(error)
+                ))
+            });
         }
         Ok(Self {
             pipe: OwnedHandle(handle),
@@ -313,6 +320,20 @@ fn classify(error: &windows::core::Error) -> Read {
     }
 }
 
+/// Tells our own earlier server from a squatter when the name is already taken.
+fn owner_of_taken_name(wide_name: &[u16]) -> BindError {
+    match identity::open_client(wide_name) {
+        Ok(probe) => match identity::server_is_current_user(&probe) {
+            Ok(true) => BindError::AlreadyRunning,
+            Ok(false) => BindError::Squatted,
+            Err(error) => BindError::Os(error),
+        },
+        Err(e) if e.code() == ERROR_PIPE_BUSY.to_hresult() => BindError::AlreadyRunning,
+        Err(e) if e.code() == ERROR_ACCESS_DENIED.to_hresult() => BindError::Squatted,
+        Err(e) => BindError::Os(format!("probing the pipe: {e}")),
+    }
+}
+
 /// Publishes the serving thread to the [`Stopper`] while `serve` runs.
 struct Registration<'a> {
     shared: &'a Shared,
@@ -320,26 +341,12 @@ struct Registration<'a> {
 
 impl<'a> Registration<'a> {
     fn new(shared: &'a Shared) -> Result<Self, String> {
-        let mut duplicate = HANDLE::default();
-        // SAFETY: duplicating the current thread pseudo handle into a real handle.
-        unsafe {
-            DuplicateHandle(
-                GetCurrentProcess(),
-                GetCurrentThread(),
-                GetCurrentProcess(),
-                &raw mut duplicate,
-                0,
-                false,
-                DUPLICATE_SAME_ACCESS,
-            )
-        }
-        .map_err(|e| format!("DuplicateHandle: {e}"))?;
+        let duplicate = duplicate_current_thread()?;
         // SAFETY: plain query of the calling thread id.
         shared
             .serving_thread
             .store(unsafe { GetCurrentThreadId() }, Ordering::SeqCst);
-        *shared.thread.lock().unwrap_or_else(PoisonError::into_inner) =
-            Some(OwnedHandle(duplicate));
+        *shared.thread.lock().unwrap_or_else(PoisonError::into_inner) = Some(duplicate);
         Ok(Self { shared })
     }
 }

@@ -55,3 +55,15 @@ fn put_wakes_a_waiter() {
     slot.put(9);
     assert_eq!(waiter.join().unwrap(), Some(9));
 }
+
+#[test]
+fn huge_timeout_does_not_overflow() {
+    let slot: Arc<Slot<u8>> = Arc::new(Slot::new());
+    let waiter = {
+        let slot = Arc::clone(&slot);
+        thread::spawn(move || slot.take_wait(Duration::MAX))
+    };
+    thread::sleep(Duration::from_millis(50));
+    slot.put(3);
+    assert_eq!(waiter.join().unwrap(), Some(3));
+}

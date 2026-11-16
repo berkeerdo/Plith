@@ -1,6 +1,7 @@
 //! Starting the OSD helper and naming the pipe of this session.
 
 use std::mem::size_of;
+use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
 use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
@@ -10,7 +11,6 @@ use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
 use windows::core::{PCWSTR, w};
 
 use crate::pipe_name;
-use crate::win::wide;
 
 /// Returns the pipe path of the OSD helper in this process's Windows session.
 ///
@@ -34,7 +34,11 @@ pub fn current_pipe_name() -> String {
 /// # Errors
 /// Returns the Windows error text when the helper cannot be started.
 pub fn launch_helper(exe: &Path) -> Result<(), String> {
-    let file = wide(&exe.to_string_lossy());
+    let file: Vec<u16> = exe
+        .as_os_str()
+        .encode_wide()
+        .chain(std::iter::once(0))
+        .collect();
     let mut info = SHELLEXECUTEINFOW {
         cbSize: u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0),
         fMask: SEE_MASK_FLAG_NO_UI,

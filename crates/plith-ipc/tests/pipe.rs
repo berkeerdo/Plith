@@ -9,10 +9,14 @@ use std::time::{Duration, Instant};
 use plith_ipc::{
     BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Stopper, encode,
 };
-use windows::Win32::Foundation::{CloseHandle, GENERIC_WRITE};
+use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_SHARE_MODE, OPEN_EXISTING, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
     WriteFile,
+};
+use windows::Win32::Storage::FileSystem::{FILE_FLAGS_AND_ATTRIBUTES, PIPE_ACCESS_INBOUND};
+use windows::Win32::System::Pipes::{
+    CreateNamedPipeW, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_WAIT, WaitNamedPipeW,
 };
 use windows::core::PCWSTR;
 
@@ -83,19 +87,31 @@ fn level(percent: u8) -> Message {
 /// Writes raw bytes as one pipe message, bypassing the client.
 fn write_raw(name: &str, messages: &[&[u8]]) {
     let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
-    // SAFETY: the name is NUL-terminated and outlives the call.
-    let handle = unsafe {
-        CreateFileW(
-            PCWSTR(wide.as_ptr()),
-            GENERIC_WRITE.0,
-            FILE_SHARE_MODE(0),
-            None,
-            OPEN_EXISTING,
-            SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
-            None,
-        )
-    }
-    .expect("open pipe");
+    // The server needs a moment to listen again after it disconnects a client.
+    let start = Instant::now();
+    let handle = loop {
+        // SAFETY: the name is NUL-terminated and outlives the call.
+        let opened = unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_ptr()),
+                GENERIC_WRITE.0,
+                FILE_SHARE_MODE(0),
+                None,
+                OPEN_EXISTING,
+                SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                None,
+            )
+        };
+        match opened {
+            Ok(handle) => break handle,
+            Err(e) => {
+                assert!(start.elapsed() < WAIT, "open pipe: {e}");
+                assert_eq!(e.code(), ERROR_PIPE_BUSY.to_hresult(), "open pipe: {e}");
+                // SAFETY: the name is NUL-terminated and outlives the call.
+                let _ = unsafe { WaitNamedPipeW(PCWSTR(wide.as_ptr()), 200) };
+            }
+        }
+    };
     for bytes in messages {
         // SAFETY: the handle is open and the buffer outlives the call.
         unsafe { WriteFile(handle, Some(bytes), None, None) }.expect("write");
@@ -180,11 +196,19 @@ fn fatal_decode_error_disconnects_and_the_next_client_is_served() {
     let name = unique_name();
     let server = Running::start(&name);
     let ok = encode(&Message::Hide).unwrap();
-    // The second message sits behind the fatal one and must never be delivered.
-    write_raw(&name, &[b"XXjunk", &ok]);
+    // level(1) sits behind the fatal message and must be discarded with the connection.
+    let behind = encode(&level(1)).unwrap();
+    write_raw(&name, &[b"XXjunk", &behind]);
     assert_eq!(server.next(), Err(DecodeError::Magic));
     write_raw(&name, &[&ok]);
     assert_eq!(server.next(), Ok(Message::Hide));
+    assert!(
+        server
+            .events
+            .recv_timeout(Duration::from_millis(200))
+            .is_err(),
+        "nothing else may be delivered"
+    );
 }
 
 #[test]
@@ -203,4 +227,56 @@ fn dropping_the_link_without_a_server_returns_quickly() {
     let start = Instant::now();
     drop(link);
     assert!(start.elapsed() < Duration::from_secs(1));
+}
+
+/// A server that accepts a client and never reads, with a tiny pipe quota.
+fn create_stuck_pipe(name: &str) -> HANDLE {
+    let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+    // SAFETY: the name is NUL-terminated and outlives the call.
+    let handle = unsafe {
+        CreateNamedPipeW(
+            PCWSTR(wide.as_ptr()),
+            PIPE_ACCESS_INBOUND | FILE_FLAGS_AND_ATTRIBUTES(0),
+            PIPE_TYPE_MESSAGE | PIPE_READMODE_MESSAGE | PIPE_WAIT,
+            1,
+            0,
+            256,
+            0,
+            None,
+        )
+    };
+    assert!(!handle.is_invalid());
+    handle
+}
+
+#[test]
+fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
+    let name = unique_name();
+    let stuck = create_stuck_pipe(&name);
+    let link = OsdLink::start(name);
+    let long = Message::Level {
+        meter: Meter::Volume,
+        percent: 1,
+        muted: false,
+        label: "x".repeat(60),
+    };
+    // Fill the quota so the worker blocks inside WriteFile.
+    for _ in 0..200 {
+        link.send(long.clone()).unwrap();
+        thread::sleep(Duration::from_millis(5));
+    }
+    let (done, finished) = mpsc::channel();
+    thread::spawn(move || {
+        let start = Instant::now();
+        drop(link);
+        let _ = done.send(start.elapsed());
+    });
+    let elapsed = finished
+        .recv_timeout(Duration::from_secs(3))
+        .expect("drop must return");
+    assert!(elapsed < Duration::from_secs(2), "drop took {elapsed:?}");
+    // SAFETY: the handle is closed once.
+    unsafe {
+        let _ = CloseHandle(stuck);
+    }
 }
