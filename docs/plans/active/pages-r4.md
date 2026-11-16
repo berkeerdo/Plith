@@ -38,14 +38,16 @@ L11 to L14.
   that draws. Nothing on the render thread or a service thread calls `SendMessage` to the UI
   thread.
 - G2: at rest (collapsed, no motion) zero render wake-ups; `--idle-check 60` must still pass.
-  Ambient frames (meters, seek) only while expanded on a page that shows them, at `hz / 4`.
+  Ambient frames (meters, seek) only while expanded on a page that shows them, every
+  `round(hz / 60)`-th vblank (about 60 fps).
 - Every motion writes its `motion` line; the bar is 240 fps, 0 to 1 hitches, draw p99 under 1 ms.
 - Palette (Gece) and type from the R3 spec: floor `#0B0B0A` to `#151412`, border `#2B2824`, ink
   `#ECE9E2`, muted `#A39E94`, faint `#8A847A`, track `#4A463F`, flow `#CAFF33`. Public Sans for
   names and titles, Martian Mono with tabular numerals for labels and every changing number,
   smallest text 10 px, uppercase mono labels. 1 px track, 2 px lit route, 7 px station squares,
   45 degree turns. No `+` corner marks.
-- Surfaces (DIP): pill 200 x 32; pages 620 wide: audio 300, media 232, shelf 214, system 178 high
+- Surfaces (DIP): pill 200 x 32; pages 620 wide: audio 300, media 232, shelf 214 (as built: 170
+  for the empty shelf, the mock; 214 is the R5 wagons state), system 178 high
   for the mock data; audio grows with rows up to `PAGE_MAX_HEIGHT = 420`.
 - User-facing strings are Turkish and copied from the mock (`SES`, `MEDYA`, `RAF`, `SİSTEM`,
   `SESSİZ`, `KAPALI`, `KAYNAĞA, SONRA ÇIKIŞA TIKLA`, `Çalan bir şey yok`, ...). Code is English.
@@ -453,7 +455,10 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
 - As built (the mock wins over the numbers above): art 96 x 96 at (30, 62), ruler x 146 to 590
   at y 128 with 20 divisions, route row at y 196, empty page 150 high; title Sans 16 semibold,
   artist `Body` (Sans 12); the ruler target is `Action::SeekRuler(Rect)`, resolved by
-  `pages::hit` into `Seek(f)`; the output row is read-only with no reachable stations.
+  `pages::hit` into `Seek(f)`; the output row is read-only with no reachable stations. The
+  elapsed time was static text in the first build (rebuilt every second); the merge review
+  fix round made it a live node (`LiveNode::Elapsed`), so the media list stays equal for a
+  whole track.
 
 - [x] **Step 1: Failing tests:** `no_session_shows_empty`, `no_timeline_hides_ruler`,
   `seek_fraction_from_click_x`, `disabled_next_has_no_target`, `format_time_cases` (0 → `0:00`,
@@ -561,10 +566,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
 - [x] **Step 1: Failing tests:** `pages_demo_parses`, `content_step_out_of_range_rejected`.
 - [x] **Step 2:** Implement; five checks green; commit `feat(demo): add the pages demo`.
 - [ ] **Step 3:** Ask the master (batched with any other on-screen ask) for a guarded console run:
-  `plith --demo pages --exit-after-demo --fixture banana` (about 60 s), release build, then the
-  same with the island open on the audio page for 20 s of ambient. Acceptance from the log:
-  every `motion` line 238+ fps, 0 to 1 hitches, draw p99 under 1 ms; the `ambient` line at
-  60 fps with 0 hitches; Berke's words on the look recorded verbatim.
+  `plith --demo pages --exit-after-demo --fixture banana` (about 30 s), release build, then the
+  island open for 20 s of ambient on the audio page and 20 s on the media page while playing.
+  Acceptance from the log: every `motion` line 238+ fps, 0 to 1 hitches, draw p99 under 1 ms;
+  each `ambient` line at about 60 fps with 0 hitches; the `prewarm:` lines' cost (the delay
+  before an expand's first frame); Berke's words on the look recorded verbatim. Idle checks
+  with real services run with no audio playing (a pill change is a legitimate wake).
 - [ ] **Step 4:** Record the numbers in the plan's progress log; fix and re-run if the bar is
   missed (systematic-debugging first).
 

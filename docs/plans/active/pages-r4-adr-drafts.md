@@ -13,10 +13,14 @@ targets of the same layout. The UI thread builds the lists and publishes them, w
 through the latest-wins mailbox (ADR 0006), which skips a publish that changes nothing. The render
 thread draws each page's list once into a cached bitmap and rebuilds it only when that list
 changes; every frame composites the cached pages with their slide offset and group opacity inside
-the island clip. Values that change at frame rate (meters, the 8 s traces, the seek fill) are
-**live nodes**: the list only places them, and the render thread draws them each frame from
-sampled values on an ambient tick at `hz / 4`, only while the island is open on a page that has
-them.
+the island clip. Values that change at frame rate (meters, the 8 s traces, the seek fill, the
+elapsed time) are **live nodes**: the list only places them, and the render thread draws them
+from sampled values on an ambient tick that paints every `round(hz / 60)`-th vblank (about
+60 fps: every 4th tick at 240 Hz), only while the island is open on a page that has them.
+Changed page bitmaps are re-rastered outside motion frames (prewarm): at rest while open, and
+on a motion that opens or turns the island only for the pages it shows, before its first clock
+wait; each prewarm writes a `prewarm:` log line with its cost. A collapsed island rasters
+nothing.
 
 **Compared:**
 
@@ -73,5 +77,8 @@ from Windows, Voicemeeter or apps (devices, endpoints, strips, sources, titles) 
 upper-cased with Turkish rules: the renderer's style upper-casing is Rust's invariant
 `to_uppercase`, so "Display" becomes "DISPLAY", never "DİSPLAY".
 
-**Consequences:** every own label is a constant in `copy.rs`, tested to equal its own
-`tr_upper`; a test scans every fixture page; foreign text reaches the renderer unchanged.
+**Consequences:** every own string drawn in an upper-cased style (Label, Sub) is a constant in
+`copy.rs`, tested to equal its own `tr_upper`; own copy in mixed-case styles ("Çalan bir şey
+yok", "Parlaklık", "Mikrofon", "Dosyaları buraya sürükle", "Kaynak N", "Kullanılmıyor") stays in
+its page module, written as Turkish sentence case and never upper-cased; a test scans every
+fixture page; foreign text reaches the renderer unchanged.
