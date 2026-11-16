@@ -148,6 +148,7 @@ impl TextSystem {
     ///
     /// # Errors
     /// Returns the failing DirectWrite call when the factory cannot be created.
+    #[doc(hidden)]
     pub fn new_system_fonts() -> Result<Self> {
         Self::build(false)
     }
@@ -232,14 +233,52 @@ impl TextSystem {
         }
     }
 
+    /// Test hook: the weight of the bundled face the collection matches for `style`'s family
+    /// and requested weight, or `None` when the system fonts are in use. A missing face shows
+    /// up as a different weight than requested.
+    ///
+    /// # Errors
+    /// Returns the failing DirectWrite call.
+    #[doc(hidden)]
+    pub fn matched_weight(&self, style: TextStyle) -> Result<Option<u16>> {
+        let Some(collection) = &self.fonts.collection else {
+            return Ok(None);
+        };
+        let spec = style_spec(style);
+        let mut index = 0u32;
+        let mut exists = BOOL::default();
+        // SAFETY: plain COM calls; the out pointers refer to live locals.
+        let weight = unsafe {
+            collection.FindFamilyName(
+                &HSTRING::from(self.family_name(spec.family)),
+                &raw mut index,
+                &raw mut exists,
+            )?;
+            if !exists.as_bool() {
+                return Err(Error::from(E_FAIL));
+            }
+            collection
+                .GetFontFamily(index)?
+                .GetFirstMatchingFont(
+                    DWRITE_FONT_WEIGHT(i32::from(spec.weight)),
+                    DWRITE_FONT_STRETCH_NORMAL,
+                    DWRITE_FONT_STYLE_NORMAL,
+                )?
+                .GetWeight()
+        };
+        Ok(u16::try_from(weight.0).ok())
+    }
+
     /// How many layouts the cache holds.
     #[must_use]
+    #[doc(hidden)]
     pub fn cache_len(&self) -> usize {
         self.cache.len()
     }
 
     /// How many `layout` calls were answered from the cache.
     #[must_use]
+    #[doc(hidden)]
     pub fn cache_hits(&self) -> u64 {
         self.hits
     }
@@ -302,6 +341,8 @@ impl TextSystem {
                 .factory
                 .CreateTextLayout(&wide, &format, max_w, LAYOUT_H)?;
             if spec.family == Family::Mono {
+                // Martian Mono has no `tnum` feature (its digits are already tabular), so this
+                // call matters for the fallback fonts (Cascadia Mono, Consolas).
                 layout.SetTypography(&self.typography, range)?;
             }
             if spec.tracking_em > 0.0 {
@@ -357,6 +398,9 @@ impl TextSystem {
         self.line_width(&shown, style)
     }
 
+    /// The returned layout must not outlive this `TextSystem`: its font loader is unregistered
+    /// on drop.
+    ///
     /// A layout of `text` for `style`, at most `max_w` DIP wide on one line. Cached by
     /// `(text, style, max_w, trim)`; the cache holds 512 entries and is cleared when full.
     ///

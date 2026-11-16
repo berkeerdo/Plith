@@ -127,3 +127,22 @@ fn missing_font_falls_back() {
     text.layout("12:34", TextStyle::Clock, 100.0, Trim::End)
         .unwrap();
 }
+
+#[test]
+fn bundled_faces_resolve_to_the_exact_weights() {
+    let text = system();
+    // Sans: Regular 400 (Name) and SemiBold 600 (Title); Mono: Regular 400 (Value) and Medium
+    // 500 (Clock). A missing face or the wrong family model would match the nearest weight.
+    for (style, weight) in [
+        (TextStyle::Name, 400),
+        (TextStyle::Title, 600),
+        (TextStyle::Value, 400),
+        (TextStyle::Clock, 500),
+    ] {
+        assert_eq!(
+            text.matched_weight(style).unwrap(),
+            Some(weight),
+            "{style:?}"
+        );
+    }
+}
