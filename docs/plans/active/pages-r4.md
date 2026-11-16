@@ -361,12 +361,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   y) -> Option<Action>` (first match, 4 DIP slack). `pub fn clock_text(hour: u8, minute: u8)
   -> String` (`21:47`).
 
-- [ ] **Step 1: Failing tests:** `four_stations_one_line_between_ends`, `active_is_filled_ink`,
+- [x] **Step 1: Failing tests:** `four_stations_one_line_between_ends`, `active_is_filled_ink`,
   `tab_hit_targets_cover_labels`, `clock_pads_zero` (`09:05`), `hit_slack_four_dip`.
-- [ ] **Step 2:** Run `cargo test -p plith-core pages::tabbar`; expect failures.
-- [ ] **Step 3:** Implement with positions measured off the mock at 1:1 DIP (stations at x 34,
+- [x] **Step 2:** Run `cargo test -p plith-core pages::tabbar`; expect failures.
+- [x] **Step 3:** Implement with positions measured off the mock at 1:1 DIP (stations at x 34,
   161, 288, 415 from the page's left edge; line y 38; labels y 14; clock right edge 586).
-- [ ] **Step 4:** Five checks green, commit `feat(core): add the tab bar layout`.
+- [x] **Step 4:** Five checks green, commit `feat(core): add the tab bar layout`.
 
 ### Task 11: Audio view model
 
