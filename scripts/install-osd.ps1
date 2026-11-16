@@ -128,8 +128,9 @@ if (-not (Test-Path -LiteralPath $source)) { throw "Source not found: $source. R
 if (-not $Yes) {
     $hash = (Get-FileHash -LiteralPath $source -Algorithm SHA256).Hash
     Assert-Signer $source
-    Write-Host "Source: $source"
-    Write-Host "  SHA-256 $hash, signed by the pinned certificate $PinnedThumbprint"
+    Write-Host "Source: $source (signed by the pinned certificate $PinnedThumbprint)"
+    Write-Host "  current file hash, NOT a pin, do not copy it into -Sha256: $hash"
+    Write-Host '  it must equal the SHA-256 that build-osd.ps1 printed; if not, rebuild.'
     Write-Host 'Dry run. Would:'
     Write-Host "  stop plith-osd if running from $dest"
     Write-Host "  check that only admins can change $plithDir and $destDir"

@@ -332,7 +332,7 @@ Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit 
 - [x] **G2 (N5):** one space in the `UNTRUSTED` text.
 - [x] **G3 (N3):** the journal mutex goes to `Global\` (the journal is per user, not per
   session).
-- [ ] **G4 (N4):** the install dry run prints the source hash only labelled "current file,
+- [x] **G4 (N4):** the install dry run prints the source hash only labelled "current file,
   not a pin" next to the instruction to use build-osd's hash.
 - [ ] **G5 (M6 rest), keepalive and idle drop:** new `Message::Ping` (kind 5, no payload);
   `OsdLink` sends it after `KEEPALIVE` (10 s) without a write; the server swallows Ping and
