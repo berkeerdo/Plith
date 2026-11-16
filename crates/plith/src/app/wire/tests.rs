@@ -77,3 +77,24 @@ fn a_plain_error_while_closing_is_a_clean_close() {
     std::fs::remove_file(dir.join("plith.log")).unwrap();
     std::fs::remove_dir(&dir).unwrap();
 }
+
+#[test]
+fn a_real_services_idle_check_fits_its_watchdog() {
+    use crate::idle::{SETTLE_MS, START_CAP};
+    // Worst case: the whole start cap, the settle, then the full measured window.
+    let worst_ms = START_CAP.as_millis() + u128::from(SETTLE_MS) + 60_000;
+    let budget = watchdog_secs(Some(60), true);
+    assert!(
+        u128::from(budget) * 1000 > worst_ms,
+        "{budget} s must cover {worst_ms} ms"
+    );
+    assert_eq!(budget, 20 + 2 + 60 + WATCHDOG_MARGIN_SECS);
+}
+
+#[test]
+fn fixture_idle_checks_and_demos_keep_the_plain_watchdog() {
+    assert_eq!(watchdog_secs(Some(60), false), WATCHDOG_SECS);
+    assert_eq!(watchdog_secs(None, false), WATCHDOG_SECS);
+    assert_eq!(watchdog_secs(None, true), WATCHDOG_SECS);
+    assert_eq!(watchdog_secs(Some(5), true), WATCHDOG_SECS, "never shorter");
+}

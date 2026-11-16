@@ -10,7 +10,7 @@ use windows::Win32::Foundation::FILETIME;
 use windows::Win32::System::Threading::{GetCurrentProcess, GetProcessTimes};
 
 /// Time for the startup frame to settle before the first reading.
-const SETTLE_MS: u64 = 1500;
+pub const SETTLE_MS: u64 = 1500;
 /// The longest wait for the service starts (brightness alone may take 15 s).
 pub const START_CAP: Duration = Duration::from_secs(20);
 /// How often the start wait looks at the board.

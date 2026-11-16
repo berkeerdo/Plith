@@ -276,8 +276,10 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
                 },
             )
         });
-        let watchdog = (launch.demo.is_some() || launch.idle_check_secs.is_some())
-            .then(|| wire::spawn_watchdog(h.stop, quit, h.log, h.fired));
+        let watchdog = (launch.demo.is_some() || launch.idle_check_secs.is_some()).then(|| {
+            let secs = wire::watchdog_secs(launch.idle_check_secs, h.board.is_some());
+            wire::spawn_watchdog(secs, h.stop, quit, h.log, h.fired)
+        });
         let loop_code = run_message_loop();
         h.stop.store(true, Ordering::Release);
         for handle in [demo_thread, watchdog].into_iter().flatten() {

@@ -3,6 +3,7 @@
 
 use super::state::App;
 use crate::demo::sleep_stoppable;
+use crate::idle;
 use crate::log::LogFile;
 use plith_core::ambient::LiveValues;
 use plith_core::launch::Launch;
@@ -15,7 +16,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
 
-/// How long a demo or an idle check may run before the watchdog closes the window.
+/// How long a demo or a fixture idle check may run before the watchdog closes the window.
 pub const WATCHDOG_SECS: u64 = 75;
 
 /// Seconds the watchdog waits after asking the window to close before it ends the process.
@@ -159,8 +160,32 @@ pub fn on_panic(
     })
 }
 
-/// Closes the window after [`WATCHDOG_SECS`] unless `stop` ends the wait first.
+/// Slack on top of an idle check's worst case before the watchdog fires.
+pub const WATCHDOG_MARGIN_SECS: u64 = 10;
+
+/// The watchdog budget. An idle check with real services first waits up to
+/// [`idle::START_CAP`] for the starts and [`idle::SETTLE_MS`] to settle before it measures
+/// `secs`, so its budget covers all three plus [`WATCHDOG_MARGIN_SECS`]; it is never shorter
+/// than [`WATCHDOG_SECS`]. Fixture idle checks and demos keep [`WATCHDOG_SECS`].
+#[must_use]
+pub fn watchdog_secs(idle_secs: Option<u64>, real_services: bool) -> u64 {
+    match idle_secs {
+        Some(secs) if real_services => {
+            let settle = idle::SETTLE_MS.div_ceil(1000);
+            let budget = idle::START_CAP
+                .as_secs()
+                .saturating_add(settle)
+                .saturating_add(secs)
+                .saturating_add(WATCHDOG_MARGIN_SECS);
+            budget.max(WATCHDOG_SECS)
+        }
+        _ => WATCHDOG_SECS,
+    }
+}
+
+/// Closes the window after `secs` (see [`watchdog_secs`]) unless `stop` ends the wait first.
 pub fn spawn_watchdog(
+    secs: u64,
     stop: &Arc<AtomicBool>,
     quit: QuitHandle,
     log: &Arc<LogFile>,
@@ -168,8 +193,8 @@ pub fn spawn_watchdog(
 ) -> JoinHandle<()> {
     let (stop, log, fired) = (Arc::clone(stop), Arc::clone(log), Arc::clone(fired));
     thread::spawn(move || {
-        if sleep_stoppable(WATCHDOG_SECS * 1000, &stop) {
-            log.line(&format!("watchdog: quit after {WATCHDOG_SECS} s"));
+        if sleep_stoppable(secs.saturating_mul(1000), &stop) {
+            log.line(&format!("watchdog: quit after {secs} s"));
             fired.store(true, Ordering::Release);
             quit.quit();
             if !sleep_stoppable(WATCHDOG_GRACE_SECS * 1000, &stop) {
