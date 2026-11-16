@@ -499,3 +499,65 @@ fn a_panicking_callback_unwinds_out_of_serve() {
         .expect("serve must unwind instead of hanging on its clock thread");
     assert!(panicked, "the panic reaches the caller");
 }
+
+#[test]
+fn silent_admitted_client_is_dropped_after_the_idle_timeout() {
+    let name = unique_name();
+    let mut server = OsdServer::bind(&name).expect("bind");
+    server.set_idle_timeout(Duration::from_millis(400));
+    let stopper = server.stopper();
+    let (tx, events) = mpsc::channel();
+    let thread = thread::spawn(move || {
+        let _ = server.serve(|event| {
+            let _ = tx.send(event);
+            Flow::Continue
+        });
+    });
+    let silent = open_raw(&name);
+    // SAFETY: the handle is open and the buffer outlives the call.
+    unsafe { WriteFile(silent, Some(&own_hello()), None, None) }.expect("hello");
+    let next = || events.recv_timeout(WAIT).expect("an event in time");
+    assert!(matches!(next(), ServerEvent::Connected { .. }));
+    assert!(matches!(
+        next(),
+        ServerEvent::Message(Ok(Message::Hello { .. }))
+    ));
+    let start = Instant::now();
+    assert_eq!(
+        next(),
+        ServerEvent::Disconnected,
+        "the idle client is dropped"
+    );
+    assert!(start.elapsed() < Duration::from_secs(2));
+    // The single instance is free again: a real client is served.
+    let link = dev_link(name);
+    assert!(matches!(next(), ServerEvent::Connected { .. }));
+    link.send(Message::Hide).unwrap();
+    assert!(matches!(
+        next(),
+        ServerEvent::Message(Ok(Message::Hello { .. }))
+    ));
+    assert_eq!(next(), ServerEvent::Message(Ok(Message::Hide)));
+    drop(link);
+    stopper.stop();
+    thread.join().expect("serve thread");
+    // SAFETY: the handle is closed once.
+    unsafe {
+        let _ = CloseHandle(silent);
+    }
+}
+
+#[test]
+fn ping_is_swallowed_and_keeps_the_client() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    let ping = encode(&Message::Ping).unwrap();
+    let hide = encode(&Message::Hide).unwrap();
+    write_raw(&name, &[&own_hello(), &ping, &hide]);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
+    assert_eq!(
+        server.next(),
+        Ok(Message::Hide),
+        "Ping never reaches the callback"
+    );
+}

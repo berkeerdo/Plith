@@ -334,7 +334,7 @@ Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit 
   session).
 - [x] **G4 (N4):** the install dry run prints the source hash only labelled "current file,
   not a pin" next to the instruction to use build-osd's hash.
-- [ ] **G5 (M6 rest), keepalive and idle drop:** new `Message::Ping` (kind 5, no payload);
+- [x] **G5 (M6 rest), keepalive and idle drop:** new `Message::Ping` (kind 5, no payload);
   `OsdLink` sends it after `KEEPALIVE` (10 s) without a write; the server swallows Ping and
   drops an admitted client silent for `IDLE_TIMEOUT` (30 s, settable for tests) with
   `Disconnected`. TDD: codec round trip, `ping_due`, `keepalive_is_well_inside_idle`; pipe test

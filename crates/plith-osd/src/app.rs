@@ -206,6 +206,7 @@ pub fn describe(message: &Message) -> String {
         }
         Message::Hide => String::from("hide"),
         Message::Bye => String::from("bye"),
+        Message::Ping => String::from("ping"),
     }
 }
 

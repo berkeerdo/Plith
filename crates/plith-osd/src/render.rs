@@ -223,7 +223,7 @@ impl Engine<'_> {
                 match message {
                     Message::Hello { client_pid } => self.client = Some(client_pid),
                     Message::Level { .. } | Message::Hide => self.retargeted = true,
-                    Message::Bye => {}
+                    Message::Bye | Message::Ping => {}
                 }
                 self.model.apply(&message, now);
             }

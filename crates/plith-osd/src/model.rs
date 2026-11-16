@@ -104,6 +104,7 @@ impl OsdModel {
                 self.hide_at = None;
                 self.aim_opacity(0.0, now);
             }
+            Message::Ping => {}
             Message::Bye => {
                 self.bye = Some(now);
                 self.hide_at = None;

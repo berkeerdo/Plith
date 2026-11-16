@@ -16,6 +16,7 @@ const KIND_HELLO: u8 = 1;
 const KIND_LEVEL: u8 = 2;
 const KIND_HIDE: u8 = 3;
 const KIND_BYE: u8 = 4;
+const KIND_PING: u8 = 5;
 
 /// What a level message measures.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -49,6 +50,9 @@ pub enum Message {
     Hide,
     /// The client is leaving.
     Bye,
+    /// Keepalive: the client is still there. Sent after [`crate::KEEPALIVE`] without another
+    /// write; the server swallows it (it never reaches the `serve` callback).
+    Ping,
 }
 
 /// Why a message could not be encoded.
@@ -155,6 +159,7 @@ pub fn encode(message: &Message) -> Result<Vec<u8>, EncodeError> {
         }
         Message::Hide => out.push(KIND_HIDE),
         Message::Bye => out.push(KIND_BYE),
+        Message::Ping => out.push(KIND_PING),
     }
     Ok(out)
 }
@@ -190,6 +195,7 @@ pub fn decode(bytes: &[u8]) -> Result<Message, DecodeError> {
         KIND_LEVEL => decode_level(payload),
         KIND_HIDE => no_trailing(payload).map(|()| Message::Hide),
         KIND_BYE => no_trailing(payload).map(|()| Message::Bye),
+        KIND_PING => no_trailing(payload).map(|()| Message::Ping),
         other => Err(DecodeError::UnknownKind(other)),
     }
 }

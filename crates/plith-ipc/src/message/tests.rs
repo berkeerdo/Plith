@@ -19,6 +19,7 @@ fn every_message_round_trips() {
         },
         Message::Hide,
         Message::Bye,
+        Message::Ping,
     ];
     for label in labels {
         for meter in [Meter::Volume, Meter::Brightness] {
@@ -48,6 +49,12 @@ fn level_wire_bytes_are_exact() {
     );
     assert_eq!(encode(&Message::Hide).unwrap(), [0x50, 0x4F, 1, 3]);
     assert_eq!(encode(&Message::Bye).unwrap(), [0x50, 0x4F, 1, 4]);
+    assert_eq!(encode(&Message::Ping).unwrap(), [0x50, 0x4F, 1, 5]);
+}
+
+#[test]
+fn ping_with_a_payload_is_rejected() {
+    assert_eq!(decode(&[0x50, 0x4F, 1, 5, 0]), Err(DecodeError::Trailing));
 }
 
 #[test]

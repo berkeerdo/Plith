@@ -7,6 +7,7 @@
 //!
 //! The README holds the API table, the threading notes and how the notch wires it in.
 
+pub mod keepalive;
 pub mod latest;
 mod message;
 mod pipe_name;
@@ -27,6 +28,7 @@ mod win;
 pub use client::OsdLink;
 #[cfg(windows)]
 pub use identity::ServerTrust;
+pub use keepalive::{IDLE_TIMEOUT, KEEPALIVE};
 #[cfg(windows)]
 pub use launch::{HelperProcess, INSTALLED_HELPER, current_pipe_name, launch_helper};
 pub use message::{

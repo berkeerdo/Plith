@@ -12,6 +12,7 @@ use windows::Win32::System::Pipes::WaitNamedPipeW;
 use windows::core::PCWSTR;
 
 use crate::identity::{ServerTrust, open_client, server_is_trusted_for};
+use crate::keepalive::ping_due;
 use crate::latest::Slot;
 use crate::security::token::FactsError;
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
@@ -226,6 +227,7 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
     let mut carry: Option<Message> = None;
     let mut next_attempt = Instant::now();
     let mut connected_at = next_attempt;
+    let mut last_write = next_attempt;
     loop {
         if let Some(newer) = slot.take_wait(Duration::ZERO) {
             carry = Some(newer);
@@ -246,6 +248,7 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
                 Ok(pipe) => {
                     status.connected();
                     connection = Some(pipe);
+                    last_write = Instant::now();
                 }
                 Err(error) => {
                     status.failed(error);
@@ -260,7 +263,11 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
                 if slot.is_closed() {
                     return;
                 }
-                continue;
+                // Idle: keep the admitted connection alive inside the server's idle timeout.
+                if !ping_due(last_write, Instant::now()) {
+                    continue;
+                }
+                carry = Some(Message::Ping);
             }
         }
         let Some(message) = carry.take() else {
@@ -270,12 +277,16 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
         if message == Message::Bye {
             return;
         }
-        if let Err(error) = sent {
-            status.failed(format!("write: {error}"));
-            connection = None;
-            // A connection that died within a second must not cause a tight reconnect loop.
-            next_attempt = connected_at + RETRY;
-            carry = Some(message);
+        match sent {
+            Ok(()) => last_write = Instant::now(),
+            Err(error) => {
+                status.failed(format!("write: {error}"));
+                connection = None;
+                // A connection that died within a second must not cause a tight reconnect loop.
+                next_attempt = connected_at + RETRY;
+                // A lost ping is not worth resending: the reconnect's Hello does its job.
+                carry = (message != Message::Ping).then_some(message);
+            }
         }
     }
 }

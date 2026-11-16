@@ -43,6 +43,7 @@ use windows::core::PCWSTR;
 use self::admission::admit;
 use self::hello_clock::HelloClock;
 use crate::identity::{self, ServerTrust};
+use crate::keepalive::IDLE_TIMEOUT;
 use crate::security::token::FactsError;
 use crate::security::{pipe_sddl, token};
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
@@ -132,6 +133,7 @@ impl Stopper {
 pub struct OsdServer {
     pipe: OwnedHandle,
     shared: Arc<Shared>,
+    idle: Duration,
 }
 
 enum Read {
@@ -213,7 +215,14 @@ impl OsdServer {
         Ok(Self {
             pipe: OwnedHandle(handle),
             shared: Arc::new(Shared::default()),
+            idle: IDLE_TIMEOUT,
         })
+    }
+
+    /// Sets how long an admitted client may send nothing before it is dropped (default
+    /// [`IDLE_TIMEOUT`]; a live [`crate::OsdLink`] pings well inside it). For tests.
+    pub fn set_idle_timeout(&mut self, idle: Duration) {
+        self.idle = idle;
     }
 
     /// Returns a handle that stops [`serve`](Self::serve) from any thread.
@@ -367,9 +376,13 @@ impl OsdServer {
             if self.shared.stop.load(Ordering::SeqCst) {
                 return Pumped::Stop;
             }
-            let (result, fatal) = match self.read_message(&mut buffer) {
+            let (read, expired) = self.read_within(&mut buffer, self.idle);
+            let (result, fatal) = match read {
                 Read::Message(len) => {
                     let result = decode(&buffer[..len]);
+                    if result == Ok(Message::Ping) {
+                        continue;
+                    }
                     let fatal = result.as_ref().err().is_some_and(DecodeError::is_fatal);
                     (result, fatal)
                 }
@@ -378,6 +391,8 @@ impl OsdServer {
                     (Err(DecodeError::Trailing), false)
                 }
                 Read::Closed => return Pumped::Disconnect,
+                // An admitted client silent for the idle timeout gives the instance back.
+                Read::Aborted if expired => return Pumped::Disconnect,
                 Read::Aborted => continue,
                 Read::Failed(error) => return Pumped::Failed(error),
             };
@@ -388,6 +403,13 @@ impl OsdServer {
                 return Pumped::Disconnect;
             }
         }
+    }
+
+    /// One read with the clock armed for `limit`; also says whether the clock expired.
+    fn read_within(&self, buffer: &mut [u8], limit: Duration) -> (Read, bool) {
+        self.shared.hello.arm(Instant::now() + limit);
+        let read = self.read_message(buffer);
+        (read, self.shared.hello.disarm())
     }
 
     fn read_message(&self, buffer: &mut [u8]) -> Read {
