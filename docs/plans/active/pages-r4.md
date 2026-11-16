@@ -290,12 +290,12 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   passed in `PageContent.art: Vec<Arc<Artwork>>` (field added here; core gets a mirror type
   `ArtPixels` so it stays service-free).
 
-- [ ] **Step 1: Failing tests:** `decodes_png_to_premultiplied_bgra` (a 2 x 2 PNG fixture in
+- [x] **Step 1: Failing tests:** `decodes_png_to_premultiplied_bgra` (a 2 x 2 PNG fixture in
   `art/tests.rs` as bytes), `scales_longest_side_to_256`, `garbage_bytes_give_none`.
-- [ ] **Step 2:** Run `cargo test -p plith-media art`; expect failures.
-- [ ] **Step 3:** Implement with `IWICImagingFactory`, `IWICBitmapScaler`,
+- [x] **Step 2:** Run `cargo test -p plith-media art`; expect failures.
+- [x] **Step 3:** Implement with `IWICImagingFactory`, `IWICBitmapScaler`,
   `IWICFormatConverter` to `GUID_WICPixelFormat32bppPBGRA` (context7 check first).
-- [ ] **Step 4:** Five checks green, commit `feat(media): decode artwork on the worker`.
+- [x] **Step 4:** Five checks green, commit `feat(media): decode artwork on the worker`.
 
 ### Task 9: Voicemeeter routes in the audio service (read)
 
@@ -568,4 +568,9 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
 
 - 2026-11-15: plan written; the master approved Tasks 1 to 8 and answered Q4 to Q9, Q12, Q13;
   Q1, Q2, Q3, Q10, Q11 go to Berke and gate Task 9 onward. Page radius stays 40 until Q1.
-- 2026-11-15: Task 1 done (P5 draft in `pages-r4-adr-drafts.md`).
+- 2026-11-15: Task 1 done (P5 draft in `pages-r4-adr-drafts.md`). Tasks 2 and 3 done.
+- 2026-11-15 to 16: build hold while Berke played; Task 4 written blind, compiled after the PC
+  restart. Its Step 4 (idle check on screen) waits for a guarded run.
+- 2026-11-16: Berke via the master: "öneriler tamam devam edelim her şeyi onaylıyorum durmak
+  yok". Q1 radius 24, Q2 density rule, Q3 `KAPALI` in the slot, Q10 click to expand and 400 ms
+  leave to collapse, Q11 the new footer copy: all as recommended. Task 9 onward unblocked.

@@ -2,6 +2,7 @@
 
 use std::sync::Arc;
 
+use crate::art::Artwork;
 use crate::timeline::Timeline;
 
 /// Whether SMTC can be used right now.
@@ -77,6 +78,8 @@ pub struct MediaSnapshot {
     pub artist: String,
     /// Encoded artwork bytes.
     pub thumbnail: Option<Arc<[u8]>>,
+    /// The thumbnail decoded to premultiplied BGRA on the worker; `None` when absent or undecodable.
+    pub artwork: Option<Arc<Artwork>>,
     /// Whether the session reports Playing.
     pub playing: bool,
     /// Whether a seek is both accepted by the source and meaningful (there is a timeline).
@@ -94,6 +97,12 @@ impl MediaSnapshot {
     #[must_use]
     pub fn none() -> Self {
         Self::default()
+    }
+
+    /// Replaces the decoded artwork (the worker decodes it, `assemble` stays pure).
+    #[must_use]
+    pub fn with_artwork(self, artwork: Option<Arc<Artwork>>) -> Self {
+        Self { artwork, ..self }
     }
 
     /// Assembles a snapshot for a live session from independent reads. Any read that failed
@@ -114,6 +123,7 @@ impl MediaSnapshot {
             title: track.title,
             artist: track.artist,
             thumbnail: track.thumbnail,
+            artwork: None,
             playing: playback.playing,
             can_seek: playback.can_seek && timeline.is_some(),
             can_next: playback.can_next,

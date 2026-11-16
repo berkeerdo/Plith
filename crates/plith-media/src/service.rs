@@ -17,8 +17,10 @@ use windows::Media::Control::{
     GlobalSystemMediaTransportControlsSessionManager as Manager,
 };
 
+use crate::art::ArtCache;
 use crate::coalesce::{Generation, expired};
 use crate::com::ComGuard;
+use crate::pending::Pending;
 use crate::session::{self, Command};
 use crate::snapshot::{
     MediaSnapshot, PlaybackFacts, SessionInfo, Status, TrackFacts, keep_last_good,
@@ -87,20 +89,6 @@ enum Msg {
     Stop,
 }
 
-/// Which reads a batch of messages calls for.
-#[derive(Default)]
-#[expect(
-    clippy::struct_excessive_bools,
-    reason = "independent flags that mirror SMTC"
-)]
-struct Pending {
-    session: bool,
-    properties: bool,
-    playback: bool,
-    timeline: bool,
-    stop: bool,
-}
-
 /// Event registrations on one session, removed when the session is replaced.
 struct Attached {
     session: Session,
@@ -136,6 +124,7 @@ struct Worker {
     manager_token: i64,
     attached: Option<Attached>,
     track: Option<TrackFacts>,
+    art: ArtCache,
     playback: Option<PlaybackFacts>,
     timeline: Option<Timeline>,
 }
@@ -215,6 +204,7 @@ impl Worker {
             // A failed or timed-out read keeps the last good value (a new session starts empty).
             if fresh || pending.properties {
                 self.track = keep_last_good(self.track.take(), session::read_track(session));
+                self.art.refresh(self.track.as_ref());
             }
             if fresh || pending.properties || pending.playback {
                 self.playback =
@@ -235,7 +225,8 @@ impl Worker {
                 self.track.clone(),
                 self.playback,
                 self.timeline,
-            ),
+            )
+            .with_artwork(self.art.current()),
             None => MediaSnapshot::none(),
         }
     }
@@ -270,6 +261,7 @@ fn run(shared: Arc<Shared>, tx: Sender<Msg>, rx: &Receiver<Msg>, ready: &SyncSen
         manager_token,
         attached: None,
         track: None,
+        art: ArtCache::default(),
         playback: None,
         timeline: None,
     };
