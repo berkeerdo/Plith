@@ -202,10 +202,10 @@ System_RemoteDesktop, Security, Security_Authorization, UI_Shell for `ShellExecu
 window, now)`: a down opens the window every time (repeats included) and sends only when the
 key was not already held; `WM_KEYUP`/`WM_SYSKEYUP` clears it. `VolumeKeyHook::start` returns
 `Receiver<VolumeKey>`. `HeldKeys` lives in the hook thread local beside `SENDER`.
-- [ ] **Step 1 (TDD):** `held_key_sends_once_for_135_downs` (135 downs, one up: 1 signal, window
+- [x] **Step 1 (TDD):** `held_key_sends_once_for_135_downs` (135 downs, one up: 1 signal, window
   opened 135 times); `release_then_press_sends_again`; `keys_are_independent` (Up held, Down
   pressed: 2 signals); `up_without_down_is_harmless`; existing tests adapted to the new type.
-- [ ] **Step 2:** implement; five checks; commit `feat(system): collapse volume key repeats`.
+- [x] **Step 2:** implement; five checks; commit `feat(system): collapse volume key repeats`.
 
 ### Task 6: `plith-system` panic containment and forced-exit restore (L8, M7)
 **Files:** Create `crates/plith-system/src/flyout/journal.rs` (+ `journal/tests.rs`),
