@@ -3,20 +3,24 @@
 //! At rest it blocks on the event channel until a message arrives or the model's next deadline
 //! (the hide or the exit), so it parks with no wake-ups when nothing is due. While animating it
 //! paces frames on the compositor clock and writes one `motion osd-show|osd-hide` line per
-//! motion. When the model says exit, or on any failure, it posts [`WM_APP_EXIT`] to the window
-//! so the UI thread winds down.
+//! opacity fade. A device loss rebuilds the graphics objects (hardware, then WARP). When the
+//! model says exit, or on any failure, it posts [`WM_APP_EXIT`] to the window so the UI thread
+//! winds down.
+
+mod motion;
+mod stack;
 
 use crate::band;
 use crate::log::Log;
 use crate::model::OsdModel;
-use crate::paint::Painter;
+use motion::MotionTrack;
 use plith_core::clock_choice::ClockKind;
 use plith_core::layout::SurfaceLayout;
-use plith_core::levers::Levers;
 use plith_core::motion::{FramePhases, MotionKind, MotionStats};
 use plith_ipc::Message;
 use plith_render::clock::{open_clock, seconds_since};
-use plith_render::{ClockError, CompositionTarget, FrameSource, Gpu};
+use plith_render::{ClockError, FrameSource};
+use stack::{Stack, is_device_lost};
 use std::sync::Arc;
 use std::sync::mpsc::{Receiver, RecvTimeoutError, TryRecvError};
 use std::time::{Duration, Instant};
@@ -31,6 +35,8 @@ pub const WM_APP_EXIT: u32 = WM_APP + 1;
 pub enum Event {
     /// A decoded protocol message.
     Message(Message),
+    /// The client closed the pipe.
+    Disconnected,
     /// The process that sent `Hello` with this pid has ended.
     ClientGone(u32),
     /// Stop now (the UI thread is closing).
@@ -47,7 +53,7 @@ pub struct Job {
     pub hz: f64,
     /// Time zero of the clock and the model.
     pub origin: Instant,
-    /// Messages, client exits and the quit request.
+    /// Messages, disconnects, client exits and the quit request.
     pub events: Receiver<Event>,
     /// The log.
     pub log: Arc<Log>,
@@ -74,15 +80,27 @@ fn hwnd_of(job: &Job) -> HWND {
     HWND(job.hwnd as *mut core::ffi::c_void)
 }
 
+/// Builds the graphics objects on hardware, then on WARP; logs every failed try.
+fn build_stack(job: &Job) -> Result<Stack, String> {
+    for warp in [false, true] {
+        match Stack::build(hwnd_of(job), &job.layout, warp) {
+            Ok(stack) => return Ok(stack),
+            Err(error) => job
+                .log
+                .line(&format!("osd device build (warp={warp}) failed: {error}")),
+        }
+    }
+    Err(String::from("no device: hardware and WARP both failed"))
+}
+
 struct Engine<'a> {
     job: &'a Job,
-    gpu: Gpu,
-    target: CompositionTarget,
-    painter: Painter,
+    stack: Option<Stack>,
     clock: Box<dyn FrameSource>,
     model: OsdModel,
     client: Option<u32>,
-    motion: Option<(MotionKind, MotionStats)>,
+    track: MotionTrack,
+    stats: Option<MotionStats>,
     /// A `Level` or `Hide` arrived since the last frame.
     retargeted: bool,
     shown: bool,
@@ -91,30 +109,26 @@ struct Engine<'a> {
 /// Runs the render thread until the model says exit, a `Quit` arrives or a call fails.
 ///
 /// # Errors
-/// Returns the failing call (device, target, painter, clock or present).
+/// Returns the failing call (device on hardware and WARP, clock or a non-loss draw error).
 pub fn run(job: &Job) -> Result<(), String> {
     let _exit = ExitPost(job.hwnd);
-    let gpu = Gpu::new(false).map_err(|e| format!("Gpu::new: {e}"))?;
-    let target = CompositionTarget::new(&gpu, hwnd_of(job), &job.layout, Levers::default())
-        .map_err(|e| format!("CompositionTarget::new: {e}"))?;
-    let painter = Painter::new(&gpu).map_err(|e| format!("painter: {e}"))?;
+    let stack = build_stack(job)?;
     let clock = open_clock(ClockKind::Dcomp, job.origin, 0, job.hz)
         .map_err(|e| format!("open_clock(dcomp): {e}"))?;
     job.log.line(&format!(
         "osd render: warp={} font={} hz={}",
-        gpu.is_warp(),
-        painter.family(),
+        stack.is_warp(),
+        stack.family(),
         job.hz
     ));
     let mut engine = Engine {
         job,
-        gpu,
-        target,
-        painter,
+        stack: Some(stack),
         clock,
         model: OsdModel::new(),
         client: None,
-        motion: None,
+        track: MotionTrack::default(),
+        stats: None,
         retargeted: false,
         shown: false,
     };
@@ -146,7 +160,9 @@ impl Engine<'_> {
     fn exit_due(&self, now: f64) -> bool {
         let due = self.model.should_exit(now);
         if due {
-            self.job.log.line("osd exit: client said bye or went away");
+            self.job
+                .log
+                .line("osd exit: bye, client gone, disconnected or no hello");
         }
         due
     }
@@ -201,6 +217,7 @@ impl Engine<'_> {
                 }
                 self.model.apply(&message, now);
             }
+            Event::Disconnected => self.model.disconnected(now),
             Event::ClientGone(pid) if self.client == Some(pid) => {
                 self.client = None;
                 self.job.log.line(&format!("osd client {pid} gone"));
@@ -220,28 +237,15 @@ impl Engine<'_> {
         }
     }
 
-    /// Starts a motion of the current kind, or ends the running one when the kind changed.
-    /// A new target of the same kind counts as a retarget.
-    fn track_motion(&mut self) {
-        let kind = self.kind();
-        let retargeted = std::mem::take(&mut self.retargeted);
-        match self.motion.as_mut() {
-            Some((running, stats)) if *running == kind => {
-                if retargeted {
-                    stats.note_retarget();
-                }
-            }
-            _ => {
-                self.finish_motion();
-                let stats = MotionStats::new(kind, self.job.hz, ClockKind::Dcomp.as_str());
-                self.motion = Some((kind, stats));
-            }
-        }
+    /// Ends the running motion, if any, and logs it.
+    fn finish_motion(&mut self) {
+        self.track.end();
+        self.log_motion();
     }
 
-    /// Logs the running motion, if any.
-    fn finish_motion(&mut self) {
-        if let Some((_, stats)) = self.motion.take() {
+    /// Logs the recorded motion, if any.
+    fn log_motion(&mut self) {
+        if let Some(stats) = self.stats.take() {
             let report = stats.finish();
             self.job.log.line(&report.to_string());
             for line in report.detail_lines() {
@@ -251,7 +255,7 @@ impl Engine<'_> {
     }
 
     /// One compositor tick. A timeout (no tick within 100 ms, for example while the display
-    /// sleeps) counts as a tick at the current time.
+    /// sleeps) counts as a tick at the current time. Returns the tick and the wait in ms.
     fn tick(&mut self) -> Result<(f64, f64), String> {
         let began = self.now();
         let now = match self.clock.wait() {
@@ -266,20 +270,29 @@ impl Engine<'_> {
     /// a `Quit` arrives.
     fn animate(&mut self) -> Result<Flow, String> {
         self.retargeted = false;
-        self.track_motion();
-        let mut first = true;
         loop {
             let (now, wait_ms) = self.tick()?;
             if self.drain(now) == Flow::Stop || self.exit_due(now) {
                 return Ok(Flow::Stop);
             }
             let animating = self.model.step(now);
-            self.track_motion();
+            let fading = self.model.is_fading();
+            let decision = self.track.frame(self.kind(), fading);
+            if decision.end_before {
+                self.log_motion();
+            }
+            if let Some(kind) = decision.start {
+                let mut stats = MotionStats::new(kind, self.job.hz, ClockKind::Dcomp.as_str());
+                stats.note_first_wait(wait_ms);
+                self.stats = Some(stats);
+            }
             let (draw_ms, present_ms) = self.paint()?;
-            if let Some((_, stats)) = self.motion.as_mut() {
-                if first {
-                    stats.note_first_wait(wait_ms);
-                    first = false;
+            let retargeted = std::mem::take(&mut self.retargeted);
+            if decision.record
+                && let Some(stats) = self.stats.as_mut()
+            {
+                if retargeted && decision.start.is_none() {
+                    stats.note_retarget();
                 }
                 let phases = FramePhases {
                     wait_ms,
@@ -288,13 +301,15 @@ impl Engine<'_> {
                     present_ms,
                 };
                 stats.record_frame(now, phases);
-                if animating {
+                if fading {
                     stats.note_visible(now);
                 }
             }
+            if decision.end_after {
+                self.log_motion();
+            }
             self.sync_visibility();
             if !animating {
-                self.finish_motion();
                 return Ok(Flow::Continue);
             }
         }
@@ -310,18 +325,30 @@ impl Engine<'_> {
         }
     }
 
-    /// Draws the model's frame and presents it. Returns draw and present times in ms.
+    /// Draws and presents the model's frame. On a device loss rebuilds everything once
+    /// (hardware, then WARP) and draws again. Returns draw and present times in ms.
     fn paint(&mut self) -> Result<(f64, f64), String> {
         let frame = self.model.frame();
-        let start = Instant::now();
-        // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
-        unsafe { self.gpu.context().BeginDraw() };
-        self.painter.draw(&self.gpu, &frame);
-        // SAFETY: closes the BeginDraw above.
-        unsafe { self.gpu.context().EndDraw(None, None) }.map_err(|e| format!("EndDraw: {e}"))?;
-        let drawn = Instant::now();
-        self.target.present().map_err(|e| format!("Present: {e}"))?;
-        let ms = |d: Duration| d.as_secs_f64() * 1000.0;
-        Ok((ms(drawn - start), ms(drawn.elapsed())))
+        let first = match self.stack.as_mut() {
+            Some(stack) => stack.paint(&frame),
+            None => return Err(String::from("no device")),
+        };
+        match first {
+            Ok(times) => Ok(times),
+            Err(error) if is_device_lost(error.code()) => {
+                self.job
+                    .log
+                    .line(&format!("osd device lost ({error}), rebuilding"));
+                self.stack = None;
+                let stack = self.stack.insert(build_stack(self.job)?);
+                self.job
+                    .log
+                    .line(&format!("osd device rebuilt: warp={}", stack.is_warp()));
+                stack
+                    .paint(&frame)
+                    .map_err(|e| format!("paint after rebuild: {e}"))
+            }
+            Err(error) => Err(format!("paint: {error}")),
+        }
     }
 }

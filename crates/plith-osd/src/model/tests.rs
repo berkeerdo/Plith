@@ -12,6 +12,10 @@ fn level(meter: Meter, percent: u8, muted: bool, label: &str) -> Message {
     }
 }
 
+fn hello() -> Message {
+    Message::Hello { client_pid: 7 }
+}
+
 fn volume(percent: u8) -> Message {
     level(Meter::Volume, percent, false, "Speakers")
 }
@@ -31,6 +35,7 @@ fn run(model: &mut OsdModel, from: f64, to: f64) -> bool {
 fn level_shows_then_hides_after_1_5s() {
     let mut model = OsdModel::new();
     assert!(model.frame().opacity.abs() < f32::EPSILON, "starts hidden");
+    model.apply(&hello(), 0.0);
     model.apply(&volume(40), 0.0);
     assert!(model.step(FRAME), "the show animates");
     assert!(!run(&mut model, FRAME, 1.0), "the show settles within 1 s");
@@ -62,6 +67,7 @@ fn new_level_rearms_the_timer() {
 #[test]
 fn hide_starts_fading_at_once() {
     let mut model = OsdModel::new();
+    model.apply(&hello(), 0.0);
     model.apply(&volume(40), 0.0);
     run(&mut model, 0.0, 0.5);
     model.apply(&Message::Hide, 0.5);
@@ -106,6 +112,12 @@ fn level_retarget_keeps_velocity() {
 fn rest_reports_not_animating() {
     let mut model = OsdModel::new();
     assert!(!model.step(0.0), "a new model rests");
+    assert_eq!(
+        model.deadline(),
+        Some(START_GRACE_S),
+        "only the start grace is due"
+    );
+    model.apply(&hello(), 0.0);
     assert_eq!(model.deadline(), None);
     model.apply(&volume(40), 0.0);
     assert!(!run(&mut model, 0.0, 1.0));
@@ -185,4 +197,81 @@ fn a_change_without_motion_asks_for_one_frame() {
     model.apply(&level(Meter::Brightness, 70, false, "Display"), 1.1);
     assert!(model.step(1.1 + FRAME), "a meter switch snaps and repaints");
     assert!(!model.step(1.1 + 2.0 * FRAME));
+}
+
+#[test]
+fn disconnect_then_2s_exits() {
+    let mut model = OsdModel::new();
+    model.apply(&hello(), 0.0);
+    model.disconnected(3.0);
+    assert_eq!(model.deadline(), Some(5.0));
+    assert!(!model.should_exit(4.99));
+    assert!(model.should_exit(5.0));
+}
+
+#[test]
+fn reconnect_within_2s_stays() {
+    let mut model = OsdModel::new();
+    model.apply(&hello(), 0.0);
+    model.disconnected(3.0);
+    model.apply(&hello(), 4.0);
+    assert_eq!(model.deadline(), None);
+    assert!(!model.should_exit(6.0));
+}
+
+#[test]
+fn no_hello_in_10s_exits() {
+    let model = OsdModel::new();
+    assert_eq!(model.deadline(), Some(10.0));
+    assert!(!model.should_exit(9.99));
+    assert!(model.should_exit(10.0));
+    let mut model = OsdModel::new();
+    model.apply(&hello(), 1.0);
+    assert!(!model.should_exit(20.0), "a Hello ends the start grace");
+}
+
+#[test]
+fn bye_fades_out_before_exit() {
+    let mut model = OsdModel::new();
+    model.apply(&hello(), 0.0);
+    model.apply(&volume(40), 0.0);
+    run(&mut model, 0.0, 0.5);
+    model.apply(&Message::Bye, 0.5);
+    assert!(!model.is_showing(), "Bye starts the fade");
+    assert!(!model.should_exit(0.5), "not while visible");
+    let mut t = 0.5;
+    while !model.is_hidden() {
+        t += FRAME;
+        model.step(t);
+        assert!(t < 1.0, "the fade ends within 0.5 s");
+    }
+    assert!(model.should_exit(t), "exit once hidden");
+    model.apply(&volume(60), t);
+    assert!(model.is_hidden(), "nothing shows after Bye");
+}
+
+#[test]
+fn bye_exits_after_half_a_second_at_most() {
+    let mut model = OsdModel::new();
+    model.apply(&hello(), 0.0);
+    model.apply(&volume(40), 0.0);
+    run(&mut model, 0.0, 0.5);
+    model.apply(&Message::Bye, 0.5);
+    assert_eq!(model.deadline(), Some(1.0));
+    assert!(!model.should_exit(0.99));
+    assert!(model.should_exit(1.0), "even if no frame was stepped");
+}
+
+#[test]
+fn only_opacity_moves_are_fading() {
+    let mut model = OsdModel::new();
+    model.apply(&volume(40), 0.0);
+    assert!(model.is_fading(), "a show fades in");
+    run(&mut model, 0.0, 0.5);
+    assert!(!model.is_fading());
+    model.apply(&volume(90), 0.5);
+    assert!(model.step(0.5 + FRAME), "the level moves");
+    assert!(!model.is_fading(), "but the opacity does not");
+    model.apply(&Message::Hide, 0.6);
+    assert!(model.is_fading(), "a hide fades out");
 }

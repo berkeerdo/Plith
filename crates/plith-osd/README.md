@@ -18,8 +18,10 @@ trusted folder such as Program Files.
 ## Run
 
 - `plith-osd [--pipe NAME]`: the OSD. Serves `NAME` (default: this session's pipe), draws the
-  300 x 40 DIP seal at the top centre of the primary monitor and exits on `Bye`, 2 s after the
-  client process ends, or at once when another helper already serves the pipe (exit 0).
+  300 x 40 DIP seal at the top centre of the primary monitor. It exits (code 0) after `Bye`
+  once the fade-out ends (at most 0.5 s), 2 s after the client disconnects or its process ends
+  with no new `Hello`, 10 s after start when no `Hello` came, or at once when another helper
+  already serves the pipe. A lost GPU device (driver reset) is rebuilt on hardware, then WARP.
   The window is created in the UIAccess band (`CreateWindowInBand`); an unsigned dev build is
   refused that and falls back to a plain topmost window (the log says which one it got).
 - `plith-osd --spike [inband|setband|plain] [--seconds N]`: the Task 2 band spike.

@@ -5,8 +5,8 @@ use windows::Win32::Graphics::DirectWrite::{
     DWRITE_FACTORY_TYPE_SHARED, DWRITE_FONT_STRETCH_NORMAL, DWRITE_FONT_STYLE_NORMAL,
     DWRITE_FONT_WEIGHT_MEDIUM, DWRITE_FONT_WEIGHT_REGULAR, DWRITE_PARAGRAPH_ALIGNMENT_CENTER,
     DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING,
-    DWRITE_WORD_WRAPPING_NO_WRAP, DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection,
-    IDWriteTextFormat,
+    DWRITE_TRIMMING, DWRITE_TRIMMING_GRANULARITY_CHARACTER, DWRITE_WORD_WRAPPING_NO_WRAP,
+    DWriteCreateFactory, IDWriteFactory, IDWriteFontCollection, IDWriteTextFormat,
 };
 use windows::core::{BOOL, HSTRING, Result, w};
 
@@ -22,7 +22,7 @@ const VALUE_DIP: f32 = 13.0;
 pub struct Fonts {
     /// The family every format uses.
     pub family: &'static str,
-    /// Left slot: device name, 10 DIP, leading.
+    /// Left slot: device name, 10 DIP, leading, ends in an ellipsis when too long.
     pub label: IDWriteTextFormat,
     /// Right slot: the number, 13 DIP, trailing.
     pub value: IDWriteTextFormat,
@@ -79,6 +79,21 @@ fn format(
     }
 }
 
+/// Makes `format` trim at a character and end in an ellipsis instead of cutting a glyph.
+fn ellipsized(factory: &IDWriteFactory, format: IDWriteTextFormat) -> Result<IDWriteTextFormat> {
+    let trimming = DWRITE_TRIMMING {
+        granularity: DWRITE_TRIMMING_GRANULARITY_CHARACTER,
+        delimiter: 0,
+        delimiterCount: 0,
+    };
+    // SAFETY: plain COM calls; `trimming` is a live local for the call.
+    unsafe {
+        let sign = factory.CreateEllipsisTrimmingSign(&format)?;
+        format.SetTrimming(&raw const trimming, &sign)?;
+    }
+    Ok(format)
+}
+
 impl Fonts {
     /// Creates the shared DirectWrite factory and the three formats in the first installed
     /// mono family.
@@ -97,12 +112,15 @@ impl Fonts {
         };
         Ok(Self {
             family,
-            label: format(
+            label: ellipsized(
                 &factory,
-                family,
-                LABEL_DIP,
-                false,
-                DWRITE_TEXT_ALIGNMENT_LEADING,
+                format(
+                    &factory,
+                    family,
+                    LABEL_DIP,
+                    false,
+                    DWRITE_TEXT_ALIGNMENT_LEADING,
+                )?,
             )?,
             value: format(
                 &factory,

@@ -72,9 +72,18 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
     let stopper = server.stopper();
     let server_log = Arc::clone(log);
     let server_events = events.clone();
-    let server = spawn("plith-osd-server", move || {
+    let server = match spawn("plith-osd-server", move || {
         serve(&server, &server_events, &server_log)
-    })?;
+    }) {
+        Ok(handle) => handle,
+        Err(error) => {
+            let _ = events.send(Event::Quit);
+            if let Err(render) = join(renderer) {
+                log.line(&format!("osd render: {render}"));
+            }
+            return Err(error);
+        }
+    };
     pump();
     stopper.stop();
     // Blocks only while the render thread still runs and drains; fails at once once it ended.
@@ -164,11 +173,30 @@ struct Served {
 }
 
 impl Served {
-    fn on(
+    /// Handles one server event: logs it and forwards what the render thread needs.
+    fn on(&mut self, event: ServerEvent, events: &SyncSender<Event>, log: &Arc<Log>) -> Flow {
+        match event {
+            ServerEvent::Connected => {
+                log.line("osd pipe: client connected");
+                Flow::Continue
+            }
+            // Rare and it decides the exit, so it waits for room instead of being dropped.
+            ServerEvent::Disconnected => {
+                log.line("osd pipe: client disconnected");
+                match events.send(Event::Disconnected) {
+                    Ok(()) => Flow::Continue,
+                    Err(_) => Flow::Stop,
+                }
+            }
+            ServerEvent::Message(got) => self.message(got, events, log),
+        }
+    }
+
+    fn message(
         &mut self,
         got: Result<Message, DecodeError>,
         events: &SyncSender<Event>,
-        log: &Log,
+        log: &Arc<Log>,
     ) -> Flow {
         let message = match got {
             Ok(message) => message,
@@ -187,7 +215,7 @@ impl Served {
             && self.watched != Some(client_pid)
         {
             self.watched = Some(client_pid);
-            if let Err(error) = watch::client(client_pid, events.clone()) {
+            if let Err(error) = watch::client(client_pid, events.clone(), Arc::clone(log)) {
                 log.line(&format!("osd: {error}"));
             }
         }
@@ -205,15 +233,12 @@ impl Served {
 }
 
 /// The server thread: serves clients until stopped. A server failure asks the render thread
-/// to quit, which ends the app.
-fn serve(server: &OsdServer, events: &SyncSender<Event>, log: &Log) -> Result<(), String> {
+/// to quit (waiting for room in the channel), which ends the app.
+fn serve(server: &OsdServer, events: &SyncSender<Event>, log: &Arc<Log>) -> Result<(), String> {
     let mut state = Served::default();
-    let result = server.serve(|event| match event {
-        ServerEvent::Message(got) => state.on(got, events, log),
-        ServerEvent::Connected | ServerEvent::Disconnected => Flow::Continue,
-    });
+    let result = server.serve(|event| state.on(event, events, log));
     if result.is_err() {
-        let _ = events.try_send(Event::Quit);
+        let _ = events.send(Event::Quit);
     }
     result
 }

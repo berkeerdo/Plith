@@ -68,6 +68,39 @@ pub fn fill_right(level: f32) -> f32 {
     RULER.0 + (RULER.1 - RULER.0) * level.clamp(0.0, 1.0)
 }
 
+/// `dip` moved to the nearest device pixel edge at `scale` pixels per DIP.
+#[must_use]
+pub fn snap(dip: f32, scale: f32) -> f32 {
+    (dip * scale).round() / scale
+}
+
+/// A span from `start` of `len` DIP with both edges on device pixels and at least one device
+/// pixel wide, as `(start, end)`.
+#[must_use]
+pub fn snap_span(start: f32, len: f32, scale: f32) -> (f32, f32) {
+    let a = snap(start, scale);
+    let b = snap(start + len, scale);
+    if (b - a) * scale < 1.0 - 1e-4 {
+        (a, a + 1.0 / scale)
+    } else {
+        (a, b)
+    }
+}
+
+/// Upper case with the Turkish dotted and dotless i: `i` becomes `İ`, `ı` becomes `I`.
+#[must_use]
+pub fn upper_tr(text: &str) -> String {
+    let mut upper = String::with_capacity(text.len());
+    for c in text.chars() {
+        match c {
+            'i' => upper.push('İ'),
+            'ı' => upper.push('I'),
+            other => upper.extend(other.to_uppercase()),
+        }
+    }
+    upper
+}
+
 fn rgb(hex: u32) -> D2D1_COLOR_F {
     let channel = |shift: u32| f32::from(u8::try_from((hex >> shift) & 0xFF).unwrap_or(0)) / 255.0;
     D2D1_COLOR_F {
@@ -93,6 +126,8 @@ fn wide(text: &str) -> Vec<u16> {
 
 /// The device brushes and text formats; owned by the render thread.
 pub struct Painter {
+    /// Device pixels per DIP, for snapping.
+    scale: f32,
     fonts: Fonts,
     floor: ID2D1SolidColorBrush,
     border: ID2D1SolidColorBrush,
@@ -104,11 +139,12 @@ pub struct Painter {
 }
 
 impl Painter {
-    /// Creates the brushes on `gpu`'s context and the text formats.
+    /// Creates the brushes on `gpu`'s context and the text formats, for a surface of `scale`
+    /// device pixels per DIP.
     ///
     /// # Errors
     /// Returns the first failing Direct2D or DirectWrite call.
-    pub fn new(gpu: &Gpu) -> Result<Self> {
+    pub fn new(gpu: &Gpu, scale: f32) -> Result<Self> {
         let ctx = gpu.context();
         let brush = |hex: u32| {
             let color = rgb(hex);
@@ -118,6 +154,7 @@ impl Painter {
         // SAFETY: a plain state setter on the live context.
         unsafe { ctx.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE) };
         Ok(Self {
+            scale,
             fonts: Fonts::new()?,
             floor: brush(FLOOR)?,
             border: brush(BORDER)?,
@@ -162,7 +199,7 @@ impl Painter {
         self.set_opacity(frame.opacity);
         self.draw_seal(gpu);
         self.draw_ruler(gpu, frame);
-        let label = frame.label.to_uppercase();
+        let label = upper_tr(&frame.label);
         Self::text(
             gpu,
             &label,
@@ -179,11 +216,14 @@ impl Painter {
         Self::text(gpu, &value, format, (VALUE_LEFT, WIDTH - PAD), brush);
     }
 
-    /// The floor and its 1 DIP border. The shape starts `RADIUS` above the surface, so its top
-    /// corners and top border fall outside it: square top, round bottom.
+    /// The floor and its 1 DIP border, whole device pixels wide. The shape starts `RADIUS`
+    /// above the surface, so its top corners and top border fall outside it: square top,
+    /// round bottom.
     fn draw_seal(&self, gpu: &Gpu) {
+        let line = self.scale.round().max(1.0) / self.scale;
+        let half = line / 2.0;
         let shape = D2D1_ROUNDED_RECT {
-            rect: rect(0.5, -RADIUS, WIDTH - 0.5, HEIGHT - 0.5),
+            rect: rect(half, -RADIUS, WIDTH - half, HEIGHT - half),
             radiusX: RADIUS,
             radiusY: RADIUS,
         };
@@ -192,25 +232,31 @@ impl Painter {
             gpu.context()
                 .FillRoundedRectangle(&raw const shape, &self.floor);
             gpu.context()
-                .DrawRoundedRectangle(&raw const shape, &self.border, 1.0, None);
+                .DrawRoundedRectangle(&raw const shape, &self.border, line, None);
         }
     }
 
-    /// The 1 DIP track, a tick every 10 % below it and the 2 DIP fill (cut when muted).
+    /// The 1 DIP track, a tick every 10 % below it and the 2 DIP fill (cut when muted), every
+    /// edge on a device pixel so nothing blurs at fractional scales.
     fn draw_ruler(&self, gpu: &Gpu, frame: &OsdFrame) {
+        let s = self.scale;
         let mid = HEIGHT / 2.0;
         let ctx = gpu.context();
-        let track = rect(RULER.0, mid - 0.5, RULER.1, mid + 0.5);
+        let (left, right) = (snap(RULER.0, s), snap(RULER.1, s));
+        let (track_top, track_bottom) = snap_span(mid - 0.5, 1.0, s);
+        let track = rect(left, track_top, right, track_bottom);
+        let (tick_top, tick_bottom) = snap_span(track_bottom, TICK, s);
         // SAFETY: every rect is a live local; the brushes belong to this context.
         unsafe {
             ctx.FillRectangle(&raw const track, &self.track);
             for i in 0..=10 {
-                let x = tick_x(i);
-                let tick = rect(x - 0.5, mid + 0.5, x + 0.5, mid + 0.5 + TICK);
+                let (x0, x1) = snap_span(tick_x(i) - 0.5, 1.0, s);
+                let tick = rect(x0, tick_top, x1, tick_bottom);
                 ctx.FillRectangle(&raw const tick, &self.track);
             }
             if !frame.muted && frame.level > 0.0 {
-                let fill = rect(RULER.0, mid - 1.0, fill_right(frame.level), mid + 1.0);
+                let (top, bottom) = snap_span(mid - 1.0, 2.0, s);
+                let fill = rect(left, top, snap(fill_right(frame.level), s), bottom);
                 let brush = match frame.meter {
                     Meter::Volume => &self.lime,
                     Meter::Brightness => &self.ink,

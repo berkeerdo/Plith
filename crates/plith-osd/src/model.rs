@@ -11,6 +11,10 @@ use plith_ipc::{Message, Meter};
 pub const HOLD_S: f64 = 1.5;
 /// How long the helper waits for a new client after the last one went away, in seconds.
 pub const EXIT_GRACE_S: f64 = 2.0;
+/// How long a new helper waits for its first `Hello`, in seconds from time zero.
+pub const START_GRACE_S: f64 = 10.0;
+/// The longest a fade-out after `Bye` may delay the exit, in seconds.
+pub const BYE_FADE_S: f64 = 0.5;
 /// The ruler fill spring, in percent: critically damped (zeta 1), so it never overshoots.
 pub const LEVEL: Tuning = Tuning::new(400.0, 40.0);
 
@@ -40,7 +44,8 @@ pub struct OsdModel {
     label: String,
     hide_at: Option<f64>,
     exit_at: Option<f64>,
-    bye: bool,
+    /// When `Bye` arrived.
+    bye: Option<f64>,
     /// Time of the previous step while animating; `None` at rest.
     last: Option<f64>,
     /// The frame changed without a spring moving (mute, label, a snapped level).
@@ -61,7 +66,8 @@ fn unit_f32(value: f64) -> f32 {
 }
 
 impl OsdModel {
-    /// A hidden OSD with no client.
+    /// A hidden OSD with no client. Time zero is the helper's start: without a `Hello` by
+    /// `START_GRACE_S` it exits.
     #[must_use]
     pub fn new() -> Self {
         Self {
@@ -71,8 +77,8 @@ impl OsdModel {
             muted: false,
             label: String::new(),
             hide_at: None,
-            exit_at: None,
-            bye: false,
+            exit_at: Some(START_GRACE_S),
+            bye: None,
             last: None,
             dirty: false,
         }
@@ -80,8 +86,12 @@ impl OsdModel {
 
     /// Applies one message received at `now`. `Level` shows (or keeps showing) and arms the
     /// hide at `now + HOLD_S`; `Hide` fades out at once; `Hello` disarms a pending exit;
-    /// `Bye` makes [`should_exit`](Self::should_exit) true.
+    /// `Bye` fades out and makes [`should_exit`](Self::should_exit) true once hidden (at most
+    /// `BYE_FADE_S` later). Every message after `Bye` is ignored.
     pub fn apply(&mut self, msg: &Message, now: f64) {
+        if self.bye.is_some() {
+            return;
+        }
         match msg {
             Message::Hello { .. } => self.exit_at = None,
             Message::Level {
@@ -94,7 +104,11 @@ impl OsdModel {
                 self.hide_at = None;
                 self.aim_opacity(0.0, now);
             }
-            Message::Bye => self.bye = true,
+            Message::Bye => {
+                self.bye = Some(now);
+                self.hide_at = None;
+                self.aim_opacity(0.0, now);
+            }
         }
     }
 
@@ -127,10 +141,21 @@ impl OsdModel {
         self.last.get_or_insert(now);
     }
 
-    /// The client went away at `now` (its process ended): exit unless another `Hello`
-    /// arrives within `EXIT_GRACE_S`.
+    /// The client process ended at `now`: exit unless another `Hello` arrives within
+    /// `EXIT_GRACE_S`.
     pub fn client_gone(&mut self, now: f64) {
-        self.exit_at.get_or_insert(now + EXIT_GRACE_S);
+        self.arm_exit(now + EXIT_GRACE_S);
+    }
+
+    /// The client closed the pipe at `now`: exit unless another `Hello` arrives within
+    /// `EXIT_GRACE_S`.
+    pub fn disconnected(&mut self, now: f64) {
+        self.arm_exit(now + EXIT_GRACE_S);
+    }
+
+    /// Arms the exit at `at`, keeping an earlier one.
+    fn arm_exit(&mut self, at: f64) {
+        self.exit_at = Some(self.exit_at.map_or(at, |armed| armed.min(at)));
     }
 
     /// Fires the hide timer when due and advances the springs to `now`. Returns true while
@@ -162,21 +187,36 @@ impl OsdModel {
         }
     }
 
-    /// Whether the helper should exit at `now`: after `Bye`, or `EXIT_GRACE_S` after the
-    /// client went away with no new `Hello`.
+    /// Whether the helper should exit at `now`: after `Bye` once hidden (or `BYE_FADE_S`
+    /// after it), `EXIT_GRACE_S` after the client went away with no new `Hello`, or at
+    /// `START_GRACE_S` when no `Hello` ever came.
     #[must_use]
     pub fn should_exit(&self, now: f64) -> bool {
-        self.bye || self.exit_at.is_some_and(|at| now >= at)
+        let bye_done = self
+            .bye
+            .is_some_and(|at| self.is_hidden() || now >= at + BYE_FADE_S);
+        bye_done || self.exit_at.is_some_and(|at| now >= at)
     }
 
-    /// The next time something is due while at rest (the hide or the exit), `None` when
-    /// nothing is.
+    /// The next time something is due while at rest (the hide, the exit or the end of the
+    /// `Bye` fade), `None` when nothing is.
     #[must_use]
     pub fn deadline(&self) -> Option<f64> {
-        match (self.hide_at, self.exit_at) {
-            (Some(a), Some(b)) => Some(a.min(b)),
-            (a, b) => a.or(b),
-        }
+        [
+            self.hide_at,
+            self.exit_at,
+            self.bye.map(|at| at + BYE_FADE_S),
+        ]
+        .into_iter()
+        .flatten()
+        .reduce(f64::min)
+    }
+
+    /// Whether the opacity is moving (a show or hide motion), as opposed to a level-only
+    /// change or a repaint.
+    #[must_use]
+    pub fn is_fading(&self) -> bool {
+        !self.opacity.is_settled()
     }
 
     /// Whether the OSD is shown or fading in (false while fading out or hidden).
