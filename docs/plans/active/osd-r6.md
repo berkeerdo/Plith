@@ -312,7 +312,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   mutex `Local\plith-flyout-<fnv64 of the lowercased path>`; a second owner gets an error and
   never reads or clears the journal (`verify_system_writes --flyout` included). TDD:
   `journal_lock_name_is_stable_and_case_blind`, `second_owner_of_a_journal_fails`.
-- [ ] **F9 (I1), install pins signer and binary, I3 recorded:** `build-osd.ps1` prints the
+- [x] **F9 (I1), install pins signer and binary, I3 recorded:** `build-osd.ps1` prints the
   SHA-256; `install-osd.ps1 -Yes -Sha256 <hex>` checks the hash and the pinned signer thumbprint
   on the copy inside Program Files before the rename, then asserts that no non-admin SID has
   write, delete, `WRITE_DAC` or owner rights on `Plith`, `Plith\osd` and the exe (fails closed,

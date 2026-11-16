@@ -61,7 +61,15 @@ Windows only unless marked "pure".
    `FlyoutSuppressor` in `Mode::Hide` while the link is down, or the person gets no OSD at
    all), and relaunch. Relaunch at most every few seconds and give up after a handful of quick
    failures in a row (a `Squatted` pipe or a render failure ends every launch the same way).
-5. On exit, drop the link (sends `Bye`); the helper fades out and exits. Without `Bye` it still
+5. Brightness suppression is unverified (merge review I3): every `WmiMonitorBrightnessEvent`
+   opens the 400 ms hide window, also a Quick Settings slider drag, adaptive brightness or
+   battery saver dimming, and the match (five generic XAML host classes of three shell
+   processes) can then hide a shell flyout under the cursor. Do not call
+   `BrightnessService::set_suppression_window` in `Mode::Hide` until it is measured on a laptop
+   with a built-in panel and Quick Settings open; narrow the match (size and placement, or the
+   UIA name) or open the window only for key-driven changes if it misfires. Volume suppression
+   is not affected.
+6. On exit, drop the link (sends `Bye`); the helper fades out and exits. Without `Bye` it still
    exits 2 s after the pipe closes or the notch process ends, and 10 s after start when no
    `Hello` came.
 

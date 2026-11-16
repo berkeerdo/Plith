@@ -55,5 +55,8 @@ if ($LASTEXITCODE -ne 0) { throw "signtool failed for $exe" }
 $sig = Get-AuthenticodeSignature $exe
 if ($sig.Status -ne 'Valid') { throw "Signature status is $($sig.Status), expected Valid." }
 
+$hash = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
 Write-Host "Signed exe:  $exe"
 Write-Host "Thumbprint:  $($cert.Thumbprint)"
+Write-Host "SHA-256:     $hash"
+Write-Host "Install (under sudo): scripts\install-osd.ps1 -Yes -Sha256 $hash"
