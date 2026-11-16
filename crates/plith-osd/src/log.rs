@@ -16,12 +16,14 @@ use std::ffi::OsString;
 use std::fs::{self, File, OpenOptions};
 use std::io::Write;
 use std::os::windows::ffi::OsStringExt;
-use std::os::windows::fs::MetadataExt;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::os::windows::io::AsRawHandle;
 use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use windows::Win32::Foundation::HANDLE;
-use windows::Win32::Storage::FileSystem::{FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW};
+use windows::Win32::Storage::FileSystem::{
+    FILE_FLAG_OPEN_REPARSE_POINT, FILE_NAME_NORMALIZED, GetFinalPathNameByHandleW,
+};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
@@ -91,12 +93,20 @@ fn open_file() -> Option<(File, u64)> {
             let _ = fs::rename(&path, old);
         }
     }
+    // FILE_FLAG_OPEN_REPARSE_POINT: a link swapped in at the file name after the check above
+    // opens the link itself, never its target, and is refused just below. A junction swapped
+    // in on the folder is still followed (the flag covers only the last name); the final-path
+    // check then drops the handle, but an empty file may be left in the target (residual).
     let file = OpenOptions::new()
         .create(true)
         .append(true)
+        .custom_flags(FILE_FLAG_OPEN_REPARSE_POINT.0)
         .open(&path)
         .ok()?;
-    if !same_final_path(&final_path(&file)?, &path.to_string_lossy()) {
+    let opened_link = file
+        .metadata()
+        .map_or(true, |meta| meta.file_attributes() & REPARSE_POINT != 0);
+    if opened_link || !same_final_path(&final_path(&file)?, &path.to_string_lossy()) {
         return None;
     }
     let size = file.metadata().map_or(0, |meta| meta.len());

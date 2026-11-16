@@ -339,7 +339,7 @@ Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit 
   drops an admitted client silent for `IDLE_TIMEOUT` (30 s, settable for tests) with
   `Disconnected`. TDD: codec round trip, `ping_due`, `keepalive_is_well_inside_idle`; pipe test
   `silent_admitted_client_is_dropped_after_the_idle_timeout`.
-- [ ] **G6 (M5 rest):** the log is opened with `FILE_FLAG_OPEN_REPARSE_POINT`, so a junction or
+- [x] **G6 (M5 rest):** the log is opened with `FILE_FLAG_OPEN_REPARSE_POINT`, so a junction or
   link swapped in after the checks opens the link itself and fails the final-path check
   instead of creating a file in its target.
 - [ ] **G7, record only:** M3 rest (SID is not secret), N2 (elevated notch, standard user:
