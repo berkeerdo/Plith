@@ -1,5 +1,9 @@
 # R4 Pages Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated. Deviations, deliberate
+> omissions and decisions are in the progress log at the end. Code complete 2026-11-16; the
+> unticked steps are the on-screen measurements owed to one guarded console session.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** The tab bar and the audio, media and system pages in the Ray Paneli direction, drawn by
@@ -566,9 +570,9 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
 
 ### Task 19: Handoff
 
-- [ ] **Step 1:** project-docs handoff on my branch: progress log in this plan, honest banner,
+- [x] **Step 1:** project-docs handoff on my branch: progress log in this plan, honest banner,
   ADR drafts ready, tree clean, branch pushed.
-- [ ] **Step 2:** Message the master: what is done, commits, the record path, the next job
+- [x] **Step 2:** Message the master: what is done, commits, the record path, the next job
   (R5 shelf, live hardware write check, themes switch in settings R7).
 
 ## Questions for the master (batched, with recommendations)
@@ -623,6 +627,8 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   one fix wave addresses them (pill signal edges from the Voicemeeter poll, idle check waits for
   service starts plus a fixture tick, English constant names, one hardware table, equal lists
   keep their bitmap, seek live only while playing).
+- 2026-11-16: fix wave `45a3c54` to `68e7494` re-reviewed: approved. Left as a known minor: a
+  playing stream with zero length rebuilds the media page on every wake (`derive.rs:151`).
 - Not measured yet (all render tests ran offscreen on WARP, the owner was on RDP): anything on
   the real screen, `motion` and `ambient` lines and draw p99 with page bitmaps, the idle check
   since R4, `WM_MOUSELEAVE` and collapse on leave, real services feeding the pages live, any
