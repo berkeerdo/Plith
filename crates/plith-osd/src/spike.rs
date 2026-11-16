@@ -8,7 +8,7 @@ use plith_core::clock_choice::ClockKind;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::levers::Levers;
 use plith_render::clock::open_clock;
-use plith_render::{CompositionTarget, Gpu};
+use plith_render::{CompositionTarget, FrameSource, Gpu};
 use std::sync::Arc;
 use std::thread;
 use std::time::{Duration, Instant};
@@ -50,6 +50,20 @@ pub fn p99(samples: &[f64]) -> f64 {
     sorted[rank.clamp(1, sorted.len()) - 1]
 }
 
+/// The median (upper middle for an even count), 0 for no samples.
+#[must_use]
+pub fn median(samples: &[f64]) -> f64 {
+    if samples.is_empty() {
+        return 0.0;
+    }
+    let mut sorted = samples.to_vec();
+    sorted.sort_by(f64::total_cmp);
+    sorted[sorted.len() / 2]
+}
+
+/// A gap longer than this many refresh periods is a hitch.
+const HITCH_PERIODS: f64 = 1.5;
+
 impl Second {
     /// Records one frame: the gap since the previous tick and how long `Present` took.
     pub fn push(&mut self, gap_ms: f64, present_ms: f64) {
@@ -57,8 +71,21 @@ impl Second {
         self.present_ms.push(present_ms);
     }
 
-    /// `motion spike <mode>: N frames (F fps), worst gap G ms, present p99 P ms` over
-    /// `seconds` of wall time.
+    /// Whether no frame was recorded.
+    #[must_use]
+    pub fn is_empty(&self) -> bool {
+        self.gaps_ms.is_empty()
+    }
+
+    /// Gaps longer than 1.5 periods, the period being the median gap.
+    #[must_use]
+    pub fn hitches(&self) -> usize {
+        let limit = median(&self.gaps_ms) * HITCH_PERIODS;
+        self.gaps_ms.iter().filter(|&&gap| gap > limit).count()
+    }
+
+    /// `motion spike <mode>: N frames (F fps), H hitches, worst gap G ms, present p99 P ms`
+    /// over `seconds` of wall time.
     #[must_use]
     pub fn summary(&self, mode: &str, seconds: f64) -> String {
         let frames = self.gaps_ms.len();
@@ -70,10 +97,50 @@ impl Second {
         };
         let worst = self.gaps_ms.iter().copied().fold(0.0_f64, f64::max);
         format!(
-            "motion spike {mode}: {frames} frames ({fps:.1} fps), worst gap {worst:.2} ms, \
-             present p99 {:.2} ms",
+            "motion spike {mode}: {frames} frames ({fps:.1} fps), {} hitches, \
+             worst gap {worst:.2} ms, present p99 {:.2} ms",
+            self.hitches(),
             p99(&self.present_ms)
         )
+    }
+}
+
+/// Splits frame ticks into one-second `motion` lines. The first second starts at the first
+/// tick, so device creation is not in it.
+#[derive(Debug, Default)]
+pub struct Meter {
+    second: Second,
+    start: Option<f64>,
+    last: Option<f64>,
+}
+
+impl Meter {
+    /// Records the tick at `now` (seconds) whose `Present` took `present_ms`. Returns the
+    /// finished second's line once a second has passed since the current one started.
+    pub fn tick(&mut self, now: f64, present_ms: f64, mode: &str) -> Option<String> {
+        if let Some(last) = self.last {
+            self.second.push((now - last) * 1000.0, present_ms);
+        }
+        self.last = Some(now);
+        let start = *self.start.get_or_insert(now);
+        if now - start < 1.0 {
+            return None;
+        }
+        let line = self.second.summary(mode, now - start);
+        (self.second, self.start) = (Second::default(), Some(now));
+        Some(line)
+    }
+
+    /// The line of the unfinished second at `now`, `None` when it holds no frame.
+    pub fn flush(&mut self, now: f64, mode: &str) -> Option<String> {
+        if self.second.is_empty() {
+            return None;
+        }
+        let start = self.start.unwrap_or(now);
+        let line = self.second.summary(mode, now - start);
+        self.second = Second::default();
+        self.start = Some(now);
+        Some(line)
     }
 }
 
@@ -83,7 +150,6 @@ struct Job {
     layout: SurfaceLayout,
     mode: Creation,
     seconds: u32,
-    head: String,
     log: Arc<Log>,
 }
 
@@ -141,42 +207,64 @@ fn brushes(gpu: &Gpu) -> windows::core::Result<(ID2D1SolidColorBrush, ID2D1Solid
     }
 }
 
+/// One frame: waits for the compositor tick, draws, presents. Returns the tick time in
+/// seconds and how long `Present` took in milliseconds.
+fn frame(
+    gpu: &Gpu,
+    target: &mut CompositionTarget,
+    clock: &mut dyn FrameSource,
+    pill: &ID2D1SolidColorBrush,
+    bar: &ID2D1SolidColorBrush,
+) -> Result<(f64, f64), String> {
+    let now = clock.wait().map_err(|e| format!("clock wait: {e}"))?;
+    #[allow(clippy::cast_possible_truncation)]
+    let level = now.fract() as f32;
+    // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
+    unsafe { gpu.context().BeginDraw() };
+    draw(gpu, pill, bar, level);
+    // SAFETY: closes the BeginDraw above.
+    unsafe { gpu.context().EndDraw(None, None) }.map_err(|e| format!("EndDraw: {e}"))?;
+    let before = Instant::now();
+    target.present().map_err(|e| format!("Present: {e}"))?;
+    Ok((now, before.elapsed().as_secs_f64() * 1000.0))
+}
+
 /// The render thread: device, target, then one frame per compositor tick until time is up.
+/// The unfinished second is logged on every exit, a failure included, so a log reads
+/// "N frames, then Present failed after T s".
 fn render(job: &Job) -> Result<(), String> {
     let gpu = Gpu::new(false).map_err(|e| format!("Gpu::new: {e}"))?;
     let hwnd = HWND(job.hwnd as *mut core::ffi::c_void);
     let mut target = CompositionTarget::new(&gpu, hwnd, &job.layout, Levers::default())
         .map_err(|e| format!("CompositionTarget::new: {e}"))?;
     let (pill, bar) = brushes(&gpu).map_err(|e| format!("CreateSolidColorBrush: {e}"))?;
+    let mode = job.mode.as_str();
     job.log
-        .line(&format!("spike {} warp={}", job.head, gpu.is_warp()));
+        .line(&format!("spike {mode} gpu: warp={}", gpu.is_warp()));
     let origin = Instant::now();
     let mut clock = open_clock(ClockKind::Dcomp, origin, 0, 60.0)
         .map_err(|e| format!("open_clock(dcomp): {e}"))?;
-    let (mut second, mut second_start, mut last) = (Second::default(), 0.0, 0.0);
-    let mode = job.mode.as_str();
-    while origin.elapsed().as_secs_f64() < f64::from(job.seconds) {
-        let now = clock.wait().map_err(|e| format!("clock wait: {e}"))?;
-        #[allow(clippy::cast_possible_truncation)]
-        let level = now.fract() as f32;
-        // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
-        unsafe { gpu.context().BeginDraw() };
-        draw(&gpu, &pill, &bar, level);
-        // SAFETY: closes the BeginDraw above.
-        unsafe { gpu.context().EndDraw(None, None) }.map_err(|e| format!("EndDraw: {e}"))?;
-        let before = Instant::now();
-        target.present().map_err(|e| format!("Present: {e}"))?;
-        let present_ms = before.elapsed().as_secs_f64() * 1000.0;
-        if last > 0.0 {
-            second.push((now - last) * 1000.0, present_ms);
+    let mut meter = Meter::default();
+    let result = loop {
+        if origin.elapsed().as_secs_f64() >= f64::from(job.seconds) {
+            break Ok(());
         }
-        last = now;
-        if now - second_start >= 1.0 {
-            job.log.line(&second.summary(mode, now - second_start));
-            (second, second_start) = (Second::default(), now);
+        match frame(&gpu, &mut target, clock.as_mut(), &pill, &bar) {
+            Ok((now, present_ms)) => {
+                if let Some(line) = meter.tick(now, present_ms, mode) {
+                    job.log.line(&line);
+                }
+            }
+            Err(error) => {
+                let after = origin.elapsed().as_secs_f64();
+                break Err(format!("{error} after {after:.2} s"));
+            }
         }
+    };
+    if let Some(line) = meter.flush(origin.elapsed().as_secs_f64(), mode) {
+        job.log.line(&line);
     }
-    Ok(())
+    result
 }
 
 /// Pumps this thread's messages until `worker` ends.
@@ -216,8 +304,9 @@ fn head(window: &BandWindow, surface: RectPx, scale: f64) -> String {
 }
 
 /// Runs the spike for `seconds`: creates the window the `creation` way at the primary
-/// monitor's top centre and draws on a render thread. Logs a `spike` line at start and a
-/// `motion` line every second.
+/// monitor's top centre and draws on a render thread. Logs a `spike` line as soon as the
+/// window exists, a `gpu` line once the device is up, a `motion` line every second and one
+/// for the unfinished second at the end (also when a frame fails).
 ///
 /// # Errors
 /// Returns the first failure (window creation, a band call Windows refused, the device, the
@@ -232,12 +321,13 @@ pub fn run(creation: Creation, seconds: u32, log: &Arc<Log>) -> Result<(), Strin
             band::is_immersive()
         )
     })?;
+    // Logged before any GPU work, so a failing device or swap chain bind keeps this line.
+    log.line(&format!("spike {}", head(&window, surface, scale)));
     let job = Job {
         hwnd: window.hwnd.0 as usize,
         layout: SurfaceLayout { surface, scale },
         mode: creation,
         seconds,
-        head: head(&window, surface, scale),
         log: Arc::clone(log),
     };
     let worker = thread::Builder::new()
