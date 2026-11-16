@@ -3,7 +3,7 @@
 //! threads and only post a wake when they publish.
 
 pub mod fixture;
-mod start;
+pub mod start;
 pub mod writes;
 
 use crate::log::LogFile;
@@ -19,7 +19,7 @@ use plith_core::pages::system::SystemFacts;
 use plith_media::{MediaService, MediaSnapshot};
 use plith_shell::UiWaker;
 use plith_system::{BrightnessService, DeviceLevel};
-use start::{ServiceId, Started};
+use start::{ServiceId, StartBoard, Started};
 use std::ops::{BitOr, BitOrAssign};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
@@ -182,10 +182,11 @@ fn take<T: PartialEq>(slot: &mut T, next: Option<T>, flag: Changes) -> Changes {
 }
 
 impl RealServices {
-    /// Subscribes to every service, sets its waker to `waker` and starts it on its own thread.
-    /// Returns at once; the pages show degraded states until the services publish.
+    /// Subscribes to every service, sets its waker to `waker` and starts it on its own thread;
+    /// `board` marks each finished start. Returns at once; the pages show degraded states until
+    /// the services publish.
     #[must_use]
-    pub fn start(waker: &UiWaker, log: Arc<LogFile>) -> Self {
+    pub fn start(waker: &UiWaker, log: Arc<LogFile>, board: &Arc<StartBoard>) -> Self {
         let (vm, endpoints, mic) = (
             Arc::new(VoicemeeterService::new()),
             Arc::new(EndpointService::new()),
@@ -212,6 +213,7 @@ impl RealServices {
                 media: Arc::clone(&media),
                 brightness: Arc::clone(&brightness),
             },
+            board,
         );
         let writer = spawn_writer(
             start::Set {

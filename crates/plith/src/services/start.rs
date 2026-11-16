@@ -9,8 +9,8 @@ use plith_audio::voicemeeter::VoicemeeterService;
 use plith_media::MediaService;
 use plith_shell::UiWaker;
 use plith_system::BrightnessService;
-use std::sync::Arc;
 use std::sync::mpsc::{Receiver, Sender, channel};
+use std::sync::{Arc, Mutex, PoisonError};
 use std::thread;
 
 /// Which service a start report is about.
@@ -60,6 +60,38 @@ pub struct Started {
     pub status: String,
 }
 
+/// Which starts have returned, readable from any thread (the idle check waits on it).
+#[derive(Debug, Default)]
+pub struct StartBoard {
+    up: Mutex<Vec<ServiceId>>,
+}
+
+impl StartBoard {
+    /// Records that the start of `id` returned; a repeat is ignored.
+    pub fn mark(&self, id: ServiceId) {
+        let mut up = self.up.lock().unwrap_or_else(PoisonError::into_inner);
+        if !up.contains(&id) {
+            up.push(id);
+        }
+    }
+
+    /// The services whose start returned, in [`ServiceId::ALL`] order.
+    #[must_use]
+    pub fn up(&self) -> Vec<ServiceId> {
+        let up = self.up.lock().unwrap_or_else(PoisonError::into_inner);
+        ServiceId::ALL
+            .into_iter()
+            .filter(|id| up.contains(id))
+            .collect()
+    }
+
+    /// True when every service's start returned.
+    #[must_use]
+    pub fn all_up(&self) -> bool {
+        self.up().len() == ServiceId::ALL.len()
+    }
+}
+
 /// The services to start.
 pub struct Set {
     pub vm: Arc<VoicemeeterService>,
@@ -70,8 +102,13 @@ pub struct Set {
 }
 
 /// Sets every waker (before any `start()`), then starts each service on its own thread. The
-/// returned receiver gets one [`Started`] per service.
-pub fn spawn_all(waker: &UiWaker, log: &LogFile, set: Set) -> Receiver<Started> {
+/// returned receiver gets one [`Started`] per service, and `board` marks each finished start.
+pub fn spawn_all(
+    waker: &UiWaker,
+    log: &LogFile,
+    set: Set,
+    board: &Arc<StartBoard>,
+) -> Receiver<Started> {
     let wake = || -> Box<dyn Fn() + Send + Sync> {
         let waker = waker.clone();
         Box::new(move || waker.wake())
@@ -112,7 +149,12 @@ pub fn spawn_all(waker: &UiWaker, log: &LogFile, set: Set) -> Receiver<Started> 
         ),
     ];
     for (id, start) in starters {
-        if let Err(error) = spawn(id, start, waker.clone(), tx.clone()) {
+        let report = Report {
+            waker: waker.clone(),
+            done: tx.clone(),
+            board: Arc::clone(board),
+        };
+        if let Err(error) = spawn(id, start, report) {
             log.line(&format!(
                 "service {}: no starter thread: {error}",
                 id.name()
@@ -122,21 +164,31 @@ pub fn spawn_all(waker: &UiWaker, log: &LogFile, set: Set) -> Receiver<Started> 
     rx
 }
 
-/// Runs `start` on a new `plith-svc-<name>` thread, then reports and wakes the UI thread. The
-/// thread is detached: it ends right after `start()` returns, and at exit nothing waits for a
-/// start that is still blocking.
+/// Where a starter reports a finished start.
+struct Report {
+    waker: UiWaker,
+    done: Sender<Started>,
+    board: Arc<StartBoard>,
+}
+
+/// Runs `start` on a new `plith-svc-<name>` thread, then reports, marks the board and wakes
+/// the UI thread. The thread is detached: it ends right after `start()` returns, and at exit
+/// nothing waits for a start that is still blocking.
 fn spawn(
     id: ServiceId,
     start: Box<dyn FnOnce() -> String + Send>,
-    waker: UiWaker,
-    done: Sender<Started>,
+    report: Report,
 ) -> std::io::Result<()> {
     thread::Builder::new()
         .name(format!("plith-svc-{}", id.name()))
         .spawn(move || {
             let status = start();
-            let _ = done.send(Started { id, status });
-            waker.wake();
+            let _ = report.done.send(Started { id, status });
+            report.board.mark(id);
+            report.waker.wake();
         })
         .map(drop)
 }
+
+#[cfg(test)]
+mod tests;

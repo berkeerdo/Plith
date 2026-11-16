@@ -13,6 +13,9 @@ use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant, SystemTime};
 
+mod tick;
+pub use tick::{TICK, Ticker};
+
 /// The fixture microphone.
 const MIC_NAME: &str = "SHURE MV7";
 
@@ -55,6 +58,10 @@ struct Content {
 pub struct FixtureServices {
     launched: Content,
     variants: Option<Receiver<u8>>,
+    /// Ticks from the [`Ticker`], each a republish of every reading (see [`Self::tick`]).
+    ticks: Option<Receiver<()>>,
+    /// The ticker thread, stopped with the services.
+    ticker: Option<Ticker>,
     shown: u8,
     audio: AudioFacts,
     media: MediaFacts,
@@ -97,6 +104,8 @@ impl FixtureServices {
                 art: Arc::clone(&art),
             },
             variants: None,
+            ticks: None,
+            ticker: None,
             shown: 0,
             audio,
             media,
@@ -122,6 +131,24 @@ impl FixtureServices {
     pub fn with_content(self, variants: Receiver<u8>) -> Self {
         Self {
             variants: Some(variants),
+            ..self
+        }
+    }
+
+    /// Takes ticks from `ticks` on every drain (see [`Self::tick`]).
+    #[must_use]
+    pub fn with_ticks(self, ticks: Receiver<()>) -> Self {
+        Self {
+            ticks: Some(ticks),
+            ..self
+        }
+    }
+
+    /// Keeps `ticker` running until the services stop.
+    #[must_use]
+    pub fn with_ticker(self, ticker: Ticker) -> Self {
+        Self {
+            ticker: Some(ticker),
             ..self
         }
     }
@@ -163,6 +190,31 @@ impl FixtureServices {
         }
         let Some(next) = self.variant(n) else { return };
         self.shown = n;
+        self.apply(next);
+    }
+
+    /// One tick, as a service polling at rest: every reading is sent again, equal except the
+    /// brightness, which moves by one percent and back. Only what differs is marked, so the
+    /// tick changes the system page and never the pill.
+    fn tick(&mut self) {
+        let Some((name, level)) = self.brightness.clone() else {
+            return;
+        };
+        let nudged = if level % 2 == 1 || level == 100 {
+            level - 1
+        } else {
+            level + 1
+        };
+        self.apply(Content {
+            audio: self.audio.clone(),
+            media: self.media.clone(),
+            brightness: Some((name, nudged)),
+            art: Arc::clone(&self.art),
+        });
+    }
+
+    /// Shows `next` and marks what differs from the content shown.
+    fn apply(&mut self, next: Content) {
         let mut changes = Changes::NONE;
         if next.audio != self.audio {
             changes |= Changes::AUDIO;
@@ -228,6 +280,10 @@ impl Services for FixtureServices {
         let asked: Vec<u8> = self.variants.iter().flat_map(Receiver::try_iter).collect();
         for n in asked {
             self.switch(n);
+        }
+        let ticks = self.ticks.iter().flat_map(Receiver::try_iter).count();
+        for _ in 0..ticks {
+            self.tick();
         }
         std::mem::take(&mut self.pending)
     }
@@ -343,6 +399,12 @@ impl Services for FixtureServices {
             position_s: position.as_secs_f64().min(timeline.duration_s),
             ..timeline
         });
+    }
+
+    fn stop(&mut self) {
+        if let Some(ticker) = self.ticker.take() {
+            ticker.stop();
+        }
     }
 }
 

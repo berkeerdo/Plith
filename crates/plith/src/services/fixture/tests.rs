@@ -225,3 +225,48 @@ fn repeating_a_variant_or_an_unknown_one_changes_nothing() {
     tx.send(9).unwrap();
     assert_eq!(fixture.drain(), Changes::NONE);
 }
+
+#[test]
+fn a_tick_changes_the_brightness_only_and_not_the_pill() {
+    let (tx, rx) = std::sync::mpsc::channel();
+    let mut fixture = FixtureServices::new(Fixture::Banana).with_ticks(rx);
+    let before = fixture.facts();
+    tx.send(()).unwrap();
+    // The tick re-sends every reading; only the brightness differs, so only SYSTEM is marked.
+    assert_eq!(fixture.drain(), Changes::SYSTEM);
+    let after = fixture.facts();
+    assert_eq!(after.pill, before.pill);
+    assert_eq!(after.audio, before.audio);
+    assert_eq!(after.media.title, before.media.title);
+    assert_eq!(
+        after.system.brightness,
+        Some(("DELL AW2725DF".to_string(), 71))
+    );
+    tx.send(()).unwrap();
+    assert_eq!(fixture.drain(), Changes::SYSTEM);
+    assert_eq!(fixture.facts().system.brightness, before.system.brightness);
+    assert_eq!(fixture.drain(), Changes::NONE);
+}
+
+#[test]
+fn the_ticker_sends_and_wakes_until_stopped() {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+    let (tx, rx) = std::sync::mpsc::channel();
+    let woken = Arc::new(AtomicUsize::new(0));
+    let seen = Arc::clone(&woken);
+    let ticker = Ticker::spawn(
+        Duration::from_millis(5),
+        tx,
+        Box::new(move || {
+            seen.fetch_add(1, Ordering::SeqCst);
+        }),
+    )
+    .unwrap();
+    rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    rx.recv_timeout(Duration::from_secs(2)).unwrap();
+    ticker.stop();
+    assert!(woken.load(Ordering::SeqCst) >= 2);
+    // Stopped and joined: nothing more arrives.
+    let _ = rx.try_iter().count();
+    assert!(rx.recv_timeout(Duration::from_millis(50)).is_err());
+}

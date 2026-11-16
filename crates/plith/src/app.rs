@@ -9,7 +9,8 @@ mod wire;
 
 use crate::live;
 use crate::log::{self, LogFile};
-use crate::services::fixture::FixtureServices;
+use crate::services::fixture::{FixtureServices, TICK, Ticker};
+use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
 use crate::{demo, idle};
 use feed::Feed;
@@ -26,7 +27,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{self, Sender};
+use std::sync::mpsc::{self, Receiver, Sender};
 use std::thread;
 
 /// Runs the app until its window closes and returns the process exit code.
@@ -100,7 +101,11 @@ fn run_shell(
     };
     shell.show();
     let quit = shell.quit_handle();
-    let (levels, content) = attach_feed(launch, &shell, log, &app);
+    let Attached {
+        levels,
+        content,
+        board,
+    } = attach_feed(launch, &shell, log, &app);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -133,6 +138,7 @@ fn run_shell(
         quit,
         waker: shell.ui_waker(),
         content,
+        board,
     };
     let (loop_code, idle_ok) = drive(&helpers);
     // The `Closing` handler normally joined the renderer already (this call is then a no-op).
@@ -151,6 +157,47 @@ fn run_shell(
     )
 }
 
+/// What attaching the feed hands back to the drivers.
+struct Attached {
+    /// The level reader for the render thread.
+    levels: LevelSource,
+    /// The fixture's content variant requests; `None` with real services.
+    content: Option<Sender<u8>>,
+    /// The finished starts of the real services; `None` with the fixture.
+    board: Option<Arc<StartBoard>>,
+}
+
+/// The fixture services; with an idle check they also tick every [`TICK`], as a service
+/// publishing at rest.
+fn fixture(
+    launch: &Launch,
+    kind: plith_core::launch::Fixture,
+    shell: &Shell,
+    log: &LogFile,
+    content: Receiver<u8>,
+) -> FixtureServices {
+    log.line(&format!("services: fixture {kind:?}"));
+    let waker = shell.ui_waker();
+    let services = FixtureServices::new(kind)
+        .with_waker(Box::new(move || waker.wake()))
+        .with_content(content);
+    if launch.idle_check_secs.is_none() {
+        return services;
+    }
+    let (tx, rx) = mpsc::channel();
+    let waker = shell.ui_waker();
+    match Ticker::spawn(TICK, tx, Box::new(move || waker.wake())) {
+        Ok(ticker) => {
+            log.line("services: fixture ticks every 250 ms");
+            services.with_ticks(rx).with_ticker(ticker)
+        }
+        Err(error) => {
+            log.line(&format!("services: no fixture ticker: {error}"));
+            services
+        }
+    }
+}
+
 /// Starts the services (or the fixture), attaches the feed that turns them into pages and
 /// returns the level reader for the render thread. Never blocks on a service start.
 fn attach_feed(
@@ -158,21 +205,20 @@ fn attach_feed(
     shell: &Shell,
     log: &Arc<LogFile>,
     app: &Rc<RefCell<App>>,
-) -> (LevelSource, Option<Sender<u8>>) {
-    let mut content = None;
-    let services: Box<dyn Services> = match launch.fixture {
-        Some(kind) => {
-            log.line(&format!("services: fixture {kind:?}"));
-            let waker = shell.ui_waker();
-            let (tx, rx) = mpsc::channel();
-            content = Some(tx);
-            Box::new(
-                FixtureServices::new(kind)
-                    .with_waker(Box::new(move || waker.wake()))
-                    .with_content(rx),
-            )
-        }
-        None => Box::new(RealServices::start(&shell.ui_waker(), Arc::clone(log))),
+) -> Attached {
+    let (mut content, mut board) = (None, None);
+    let services: Box<dyn Services> = if let Some(kind) = launch.fixture {
+        let (tx, rx) = mpsc::channel();
+        content = Some(tx);
+        Box::new(fixture(launch, kind, shell, log, rx))
+    } else {
+        let started = Arc::new(StartBoard::default());
+        board = Some(Arc::clone(&started));
+        Box::new(RealServices::start(
+            &shell.ui_waker(),
+            Arc::clone(log),
+            &started,
+        ))
     };
     let levels = services.level_source();
     let mut app = app.borrow_mut();
@@ -183,7 +229,11 @@ fn attach_feed(
         &app.mailbox,
     );
     app.attach_feed(feed);
-    (levels, content)
+    Attached {
+        levels,
+        content,
+        board,
+    }
 }
 
 /// Everything the helper threads and the message loop share.
@@ -197,6 +247,7 @@ struct Helpers<'a> {
     quit: QuitHandle,
     waker: UiWaker,
     content: Option<Sender<u8>>,
+    board: Option<Arc<StartBoard>>,
 }
 
 /// Starts the demo, idle and watchdog threads, runs the message loop, then stops and joins them.
@@ -206,7 +257,7 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
     thread::scope(|scope| {
         let idle_thread = launch.idle_check_secs.map(|secs| {
             scope.spawn(move || {
-                let ok = idle::run(secs, h.render, h.log, h.stop);
+                let ok = idle::run(secs, h.render, h.log, h.stop, h.board.as_deref());
                 quit.quit();
                 ok
             })
