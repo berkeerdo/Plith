@@ -110,6 +110,8 @@ pub struct OutputRow {
     pub value: OutputValue,
     /// Whether any live route ends here.
     pub live: bool,
+    /// Whether the bus or endpoint is muted.
+    pub muted: bool,
 }
 
 /// How a route is drawn.

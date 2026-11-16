@@ -51,7 +51,7 @@ pub(super) fn build(
         None => windows(facts),
     };
     let picked = match mode {
-        PickMode::Picked(s) if s < sources.len() => Some(s),
+        PickMode::Picked(s) if facts.vm.is_some() && s < sources.len() => Some(s),
         _ => None,
     };
     if let Some(s) = picked {
@@ -67,6 +67,7 @@ pub(super) fn build(
         }
     }
     routes.retain(|r| r.state != RouteState::Idle || Some(r.source) == picked);
+    let mode = picked.map_or(PickMode::None, PickMode::Picked);
     for (o, row) in outputs.iter_mut().enumerate() {
         row.live = routes
             .iter()
@@ -115,7 +116,7 @@ fn voicemeeter(vm: &VmFacts, activity: &Activity, now_s: f64) -> Parts {
             if !strip.routes.get(b).copied().unwrap_or(false) {
                 continue;
             }
-            let state = if strip.muted {
+            let state = if strip.muted || bus.muted {
                 RouteState::Cut
             } else if !bus.muted && activity.has_signal(s, now_s) {
                 RouteState::Live
@@ -167,14 +168,16 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         name,
         value: OutputValue::Db(bus.gain_db),
         live: false,
+        muted: bus.muted,
     }
 }
 
 fn windows(facts: &AudioFacts) -> Parts {
+    let muted = matches!(facts.attached, Some((_, true)));
     let sources = vec![SourceRow {
         name: "Windows".to_string(),
         sub: "VARSAYILAN ÇIKIŞ".to_string(),
-        muted: false,
+        muted,
         picked: false,
     }];
     let default_idx = facts
@@ -195,10 +198,10 @@ fn windows(facts: &AudioFacts) -> Parts {
                 name: e.name.clone(),
                 value,
                 live: false,
+                muted: Some(i) == default_idx && muted,
             }
         })
         .collect();
-    let muted = matches!(facts.attached, Some((_, true)));
     let routes = default_idx
         .map(|o| {
             let state = if muted {

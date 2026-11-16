@@ -9,7 +9,6 @@ use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle, Trim};
 const FIRST_X: f64 = MARGIN_LEFT;
 /// Distance between station centres.
 const STEP: f64 = 112.0;
-/// Station square size.
 /// Distance from a station centre to its label and hit area left edge.
 const LABEL_DX: f64 = 3.0;
 /// Y of the track and the station centres.

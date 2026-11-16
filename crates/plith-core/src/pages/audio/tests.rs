@@ -93,7 +93,7 @@ fn muted_bus_is_not_live() {
     let mut facts = banana(five_strips(&[true, false, false, false, false]));
     facts.vm.as_mut().unwrap().buses[0].muted = true;
     let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::Picked(0), 10.0);
-    assert_eq!(view.routes[0].state, RouteState::Idle);
+    assert_eq!(view.routes[0].state, RouteState::Cut);
 }
 
 #[test]
@@ -246,4 +246,63 @@ fn footer_copy() {
         Footer::Picking.text(),
         "ÇIKIŞA TIKLA: YOL KURULUR \u{B7} KAYNAĞA TEKRAR TIKLA: VAZGEÇ"
     );
+}
+
+#[test]
+fn muted_bus_route_is_cut_and_output_muted() {
+    let mut facts = banana(five_strips(&[true, false, false, false, false]));
+    facts.vm.as_mut().unwrap().buses[0].muted = true;
+    let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::None, 10.0);
+    assert_eq!(
+        view.routes,
+        vec![Route {
+            source: 0,
+            output: 0,
+            state: RouteState::Cut
+        }]
+    );
+    assert!(view.outputs[0].muted);
+    assert!(!view.outputs[1].muted);
+}
+
+#[test]
+fn no_voicemeeter_ignores_pick_mode() {
+    let facts = AudioFacts {
+        endpoints: vec![EndpointFacts {
+            id: "a".into(),
+            name: "Speakers".into(),
+        }],
+        default_id: Some("a".into()),
+        attached: Some((0.5, false)),
+        ..AudioFacts::default()
+    };
+    let view = audio_view(&facts, &Activity::default(), PickMode::Picked(0), 0.0);
+    assert_eq!(view.mode, PickMode::None);
+    assert!(!view.sources[0].picked);
+    assert!(view.routes.iter().all(|r| r.state != RouteState::Candidate));
+    assert_eq!(view.footer, Footer::NoVoicemeeter);
+}
+
+#[test]
+fn no_voicemeeter_muted_default_mutes_source_and_output() {
+    let facts = AudioFacts {
+        endpoints: vec![EndpointFacts {
+            id: "a".into(),
+            name: "Speakers".into(),
+        }],
+        default_id: Some("a".into()),
+        attached: Some((0.5, true)),
+        ..AudioFacts::default()
+    };
+    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    assert!(view.sources[0].muted);
+    assert!(view.outputs[0].muted);
+}
+
+#[test]
+fn out_of_range_pick_is_normalised() {
+    let facts = banana(five_strips(&[]));
+    let view = audio_view(&facts, &Activity::default(), PickMode::Picked(99), 0.0);
+    assert_eq!(view.mode, PickMode::None);
+    assert_eq!(view.footer, Footer::Normal);
 }
