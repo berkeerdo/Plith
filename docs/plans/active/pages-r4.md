@@ -391,13 +391,13 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   routes plus `Idle` only for the picked source; rows above 5 shrink pitch from 57 to 40 DIP.
   Short names: Mono labels upper-cased by the style, device names middle-trimmed by the renderer.
 
-- [ ] **Step 1: Failing tests:** `routed_with_signal_is_live`, `routed_without_signal_is_idle`,
+- [x] **Step 1: Failing tests:** `routed_with_signal_is_live`, `routed_without_signal_is_idle`,
   `muted_source_is_cut`, `pick_mode_marks_unrouted_outputs_as_candidates`,
   `no_voicemeeter_shows_windows_outputs`, `potato_rows_shrink_pitch`, `activity_holds_two_seconds`,
   `empty_label_uses_fallback`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(core): map audio facts to the audio view`.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(core): map audio facts to the audio view`.
 
 ### Task 12: Audio page layout
 

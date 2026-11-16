@@ -3,6 +3,7 @@
 
 use crate::draw::Rect;
 
+pub mod audio;
 pub mod tabbar;
 
 /// Page width in DIP.
