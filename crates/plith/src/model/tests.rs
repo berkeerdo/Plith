@@ -3,7 +3,7 @@ use plith_audio::endpoints::{AttachedState, Endpoint};
 use plith_audio::voicemeeter::{Rail, VmKind};
 use plith_core::pages::pill::PillState;
 use plith_media::{Artwork, Timeline};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 
 fn chan(rail: Rail, index: usize, label: &str, routes: &[bool]) -> ChannelSnapshot {
     ChannelSnapshot {
@@ -139,9 +139,8 @@ fn playing() -> MediaSnapshot {
 }
 
 #[test]
-fn media_facts_copy_the_session_and_move_the_timeline() {
-    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(5002);
-    let facts = media_facts(&playing(), Some("G733".to_string()), now);
+fn media_facts_copy_the_session_and_keep_the_timeline() {
+    let facts = media_facts(&playing(), Some("G733".to_string()));
     assert!(facts.has_session);
     assert_eq!(facts.source_name, "Spotify");
     assert_eq!(facts.title, "Midnight City");
@@ -150,11 +149,16 @@ fn media_facts_copy_the_session_and_move_the_timeline() {
     assert!(facts.playing && facts.can_seek && facts.can_next && !facts.can_prev);
     assert_eq!(facts.output.as_deref(), Some("G733"));
     let timeline = facts.timeline.unwrap();
-    assert!((timeline.position_s - 102.0).abs() < 1e-9);
+    // The painter extrapolates from the stamp (the live seek and elapsed nodes), so the facts
+    // stay equal for the whole track and the media page is not rebuilt every second.
+    assert!((timeline.position_s - 100.0).abs() < 1e-9);
     assert!((timeline.duration_s - 240.0).abs() < 1e-9);
-    assert_eq!(timeline.stamp, now);
+    assert_eq!(
+        timeline.stamp,
+        SystemTime::UNIX_EPOCH + Duration::from_secs(5000)
+    );
     assert!(timeline.playing);
-    let none = media_facts(&MediaSnapshot::none(), None, now);
+    let none = media_facts(&MediaSnapshot::none(), None);
     assert_eq!(none, MediaFacts::default());
 }
 
@@ -210,8 +214,7 @@ fn facts_compose_the_pages_and_the_pill() {
         media: playing(),
         brightness: Vec::new(),
     };
-    let now = SystemTime::UNIX_EPOCH + Duration::from_secs(5000);
-    let facts = facts(&readings, now);
+    let facts = facts(&readings);
     assert_eq!(facts.pill.output, "Logitech G733");
     assert_eq!(facts.pill.value, Some(62));
     assert_eq!(facts.pill.state, PillState::Live);
@@ -223,7 +226,7 @@ fn facts_compose_the_pages_and_the_pill() {
         endpoints: EndpointState::default(),
         ..readings
     };
-    let facts = super::facts(&quiet, now);
+    let facts = super::facts(&quiet);
     assert_eq!(facts.pill.state, PillState::Idle);
     assert_eq!(facts.media.output, None);
     // The mixer's held signal makes the pill live without media.
@@ -231,5 +234,5 @@ fn facts_compose_the_pages_and_the_pill() {
         vm: Some(banana()),
         ..quiet
     };
-    assert_eq!(super::facts(&mixing, now).pill.state, PillState::Live);
+    assert_eq!(super::facts(&mixing).pill.state, PillState::Live);
 }

@@ -264,7 +264,14 @@ impl Painter {
         let shift = Matrix3x2::translation(f(snap(ox + offset, scale)), f(snap(oy, scale)));
         // SAFETY: plain state changes inside the frame's BeginDraw/EndDraw; restored below.
         unsafe { ctx.SetTransform(&raw const shift) };
-        draw_live(ctx, &mut self.kit, list, &frame.live, &self.palette, alpha);
+        draw_live(
+            ctx,
+            (&mut self.kit, &mut self.text),
+            list,
+            &frame.live,
+            &self.palette,
+            alpha,
+        );
         let identity = Matrix3x2::identity();
         // SAFETY: as above.
         unsafe { ctx.SetTransform(&raw const identity) };

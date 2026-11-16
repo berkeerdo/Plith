@@ -11,6 +11,7 @@ use crate::draw::{
     Align, ArtId, DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, TextStyle,
 };
 use crate::shapes;
+use std::time::SystemTime;
 
 /// Everything the media page needs to know.
 #[allow(clippy::struct_excessive_bools)]
@@ -80,6 +81,12 @@ pub fn format_time(secs: u64) -> String {
     } else {
         format!("{m}:{s:02}")
     }
+}
+
+/// The elapsed time of `timeline` at wall time `now`, as the media page writes it (`m:ss`).
+#[must_use]
+pub fn elapsed_text(timeline: &SeekTimeline, now: SystemTime) -> String {
+    format_time(whole_secs(timeline.position_at(now)))
 }
 
 /// Whole seconds of a position; negative and non-finite values become 0.
@@ -240,13 +247,7 @@ fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> O
         ));
     }
     played(timeline, nodes);
-    nodes.push(text(
-        rect(x0, 144.0, 80.0, 12.0),
-        &format_time(whole_secs(timeline.position_s)),
-        TextStyle::Sub,
-        Ink::Muted,
-        Align::Start,
-    ));
+    elapsed(timeline, nodes);
     nodes.push(text(
         rect(x0 + w - 80.0, 144.0, 80.0, 12.0),
         &format_time(whole_secs(timeline.duration_s)),
@@ -279,6 +280,29 @@ fn played(timeline: SeekTimeline, nodes: &mut Vec<Node>) {
         nodes.push(line(vec![(x0, RULER_Y), (head, RULER_Y)], SEEK_W, Ink::Ink));
     }
     nodes.push(station(head, RULER_Y, StationMark::Filled, Ink::Ink));
+}
+
+/// The elapsed time under the ruler's start. While playing it advances, so it is a live node
+/// and the page list stays equal for the whole track; paused it is static text.
+fn elapsed(timeline: SeekTimeline, nodes: &mut Vec<Node>) {
+    let place = rect(RULER.x, 144.0, 80.0, 12.0);
+    if timeline.playing {
+        nodes.push(Node::Live(LiveNode::Elapsed {
+            rect: place,
+            timeline,
+            style: TextStyle::Sub,
+            ink: Ink::Muted,
+            align: Align::Start,
+        }));
+        return;
+    }
+    nodes.push(text(
+        place,
+        &elapsed_text(&timeline, timeline.stamp),
+        TextStyle::Sub,
+        Ink::Muted,
+        Align::Start,
+    ));
 }
 
 /// A filled triangle with a 1 DIP outline of the same ink, like the mock's filled and stroked

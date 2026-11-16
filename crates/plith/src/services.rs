@@ -23,7 +23,7 @@ use start::{ServiceId, StartBoard, Started};
 use std::ops::{BitOr, BitOrAssign};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, Instant, SystemTime};
+use std::time::{Duration, Instant};
 use writes::{Write, Writer};
 
 /// Which groups of facts changed since the last drain, as bit flags.
@@ -283,7 +283,7 @@ impl Services for RealServices {
     }
 
     fn facts(&self) -> Facts {
-        model::facts(&self.readings, SystemTime::now())
+        model::facts(&self.readings)
     }
 
     fn level_source(&self) -> LevelSource {

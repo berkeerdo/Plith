@@ -1,5 +1,6 @@
-//! The feed on the UI thread: service readings become page content, and two UI timers keep
-//! it current while the island is open. Collapsed, no timer runs (G2).
+//! The feed on the UI thread: service readings become page content, and the clock timer keeps
+//! the tab bar current while the island is open. Collapsed, no timer runs (G2). The elapsed
+//! time and the seek are live nodes, so no timer rebuilds the media page.
 
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
@@ -29,14 +30,10 @@ impl Timers for TimerHandle {
     }
 }
 
-/// Advances the elapsed time once a second while the media page is open and playing.
-pub const MEDIA_TIMER: usize = FIRST_APP_TIMER;
 /// A one-shot to the next minute boundary for the tab bar clock while open.
-pub const CLOCK_TIMER: usize = FIRST_APP_TIMER + 1;
+pub const CLOCK_TIMER: usize = FIRST_APP_TIMER;
 /// A one-shot that collapses the island after the pointer left it (owned by the app's input).
-pub const COLLAPSE_TIMER: usize = FIRST_APP_TIMER + 2;
-/// The media period.
-pub const MEDIA_MS: u32 = 1000;
+pub const COLLAPSE_TIMER: usize = FIRST_APP_TIMER + 1;
 /// Lands the clock tick just after the minute turns.
 const CLOCK_SLACK_MS: u32 = 20;
 
@@ -60,24 +57,17 @@ fn clock_of(now: Stamp) -> String {
 /// Which timers run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Armed {
-    /// The media timer.
-    pub media: bool,
     /// The clock timer.
     pub clock: bool,
 }
 
-/// The timers `scene` wants: none unless open and shown; the media timer on the media page
-/// while `playing`, the clock always. The audio page needs none: the mixer's debounced signal
-/// flags reach it through the services' wake.
+/// The timers `scene` wants: none unless open and shown, then the clock on every page. The
+/// audio page needs no timer (the mixer's debounced signal flags arrive with a wake) and
+/// neither does the media page (its elapsed time and seek are live nodes).
 #[must_use]
-pub fn wanted(scene: &Scene, playing: bool) -> Armed {
-    if !scene.expanded || scene.suppression.any() {
-        return Armed::default();
-    }
-    let page = PageId::from_index(scene.page);
+pub fn wanted(scene: &Scene) -> Armed {
     Armed {
-        media: page == Some(PageId::Media) && playing,
-        clock: true,
+        clock: is_open(scene),
     }
 }
 
@@ -212,27 +202,13 @@ impl Feed {
             self.sync_timers(mailbox);
             return;
         }
-        let armed = match id {
-            MEDIA_TIMER => self.armed.media,
-            CLOCK_TIMER => self.armed.clock,
-            _ => false,
-        };
-        if !armed {
+        if id != CLOCK_TIMER || !self.armed.clock {
             return;
         }
-        match id {
-            MEDIA_TIMER => {
-                self.facts = self.services.facts();
-                self.rebuild(Dirty::page(PageId::Media), mailbox);
-            }
-            CLOCK_TIMER => {
-                // One-shot: the next tick is armed for the next minute below.
-                self.timers.kill(CLOCK_TIMER);
-                self.armed.clock = false;
-                self.flush(mailbox);
-            }
-            _ => {}
-        }
+        // One-shot: the next tick is armed for the next minute below.
+        self.timers.kill(CLOCK_TIMER);
+        self.armed.clock = false;
+        self.flush(mailbox);
         self.sync_timers(mailbox);
     }
 
@@ -267,18 +243,11 @@ impl Feed {
 
     /// Starts and stops timers to match the scene.
     fn sync_timers(&mut self, mailbox: &SceneMailbox) {
-        let want = wanted(&mailbox.latest().scene, self.facts.media.playing);
-        let have = self.armed;
-        let clock_ms = clock_ms((self.clock)());
-        for (on, was, id, ms) in [
-            (want.media, have.media, MEDIA_TIMER, MEDIA_MS),
-            (want.clock, have.clock, CLOCK_TIMER, clock_ms),
-        ] {
-            match (on, was) {
-                (true, false) => self.timers.set(id, ms),
-                (false, true) => self.timers.kill(id),
-                _ => {}
-            }
+        let want = wanted(&mailbox.latest().scene);
+        match (want.clock, self.armed.clock) {
+            (true, false) => self.timers.set(CLOCK_TIMER, clock_ms((self.clock)())),
+            (false, true) => self.timers.kill(CLOCK_TIMER),
+            _ => {}
         }
         self.armed = want;
     }

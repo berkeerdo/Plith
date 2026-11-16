@@ -150,3 +150,65 @@ fn trace_sits_on_a_faint_track_baseline() {
     near(pixel(&buf, 130, 55), bgra(p.faint_track), 2, "baseline");
     near(pixel(&buf, 130, 41), bgra(p.faint), 2, "full-scale samples");
 }
+
+fn elapsed_frame(now_s: u64) -> PaintFrame {
+    use plith_core::draw::{Align, TextStyle};
+    let stamp = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+    let node = Node::Live(LiveNode::Elapsed {
+        rect: Rect {
+            x: 20.0,
+            y: 40.0,
+            w: 80.0,
+            h: 12.0,
+        },
+        timeline: SeekTimeline {
+            position_s: 60.0,
+            duration_s: 3600.0,
+            stamp,
+            playing: true,
+        },
+        style: TextStyle::Sub,
+        ink: Ink::Muted,
+        align: Align::Start,
+    });
+    let live = LiveValues {
+        now: stamp + Duration::from_secs(now_s),
+        ..LiveValues::default()
+    };
+    page_frame(vec![node], live)
+}
+
+fn static_text(text: &str) -> PaintFrame {
+    use plith_core::draw::{Align, TextStyle, Trim};
+    let node = Node::Text {
+        rect: Rect {
+            x: 20.0,
+            y: 40.0,
+            w: 80.0,
+            h: 12.0,
+        },
+        text: text.into(),
+        style: TextStyle::Sub,
+        ink: Ink::Muted,
+        align: Align::Start,
+        trim: Trim::End,
+    };
+    page_frame(vec![node], LiveValues::default())
+}
+
+#[test]
+fn elapsed_text_is_drawn_live_from_the_clock() {
+    let at_start = render(&elapsed_frame(0));
+    assert_eq!(
+        at_start,
+        render(&static_text("1:00")),
+        "the same text as a static 1:00"
+    );
+    let later = render(&elapsed_frame(75));
+    assert_eq!(
+        later,
+        render(&static_text("2:15")),
+        "advanced with the clock"
+    );
+    assert_ne!(at_start, later);
+}

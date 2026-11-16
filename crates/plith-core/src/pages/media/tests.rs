@@ -387,3 +387,79 @@ fn a_paused_seek_is_drawn_statically_in_ink() {
         Node::Station { x, y: sy, mark: StationMark::Filled, ink: Ink::Ink }
             if (*x - head).abs() < 1e-9 && *sy == y)));
 }
+
+fn elapsed_nodes(nodes: &[Node]) -> Vec<&LiveNode> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Live(live @ LiveNode::Elapsed { .. }) => Some(live),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn a_playing_elapsed_time_is_a_live_node() {
+    let page = media_page(&facts(), "21:47");
+    let live = elapsed_nodes(&page.list.nodes);
+    assert_eq!(live.len(), 1, "one live elapsed text");
+    let LiveNode::Elapsed {
+        timeline: t,
+        style,
+        ink,
+        align,
+        ..
+    } = live[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(*t, timeline());
+    assert_eq!(
+        (*style, *ink, *align),
+        (TextStyle::Sub, Ink::Muted, Align::Start)
+    );
+    assert!(
+        !has_text(&page.list.nodes, "1:42"),
+        "not baked into the bitmap"
+    );
+    assert!(
+        has_text(&page.list.nodes, "4:03"),
+        "the length stays static"
+    );
+}
+
+#[test]
+fn a_paused_elapsed_time_is_static_text() {
+    let mut paused = facts();
+    paused.playing = false;
+    paused.timeline = paused.timeline.map(|t| SeekTimeline {
+        playing: false,
+        ..t
+    });
+    let page = media_page(&paused, "21:47");
+    assert!(elapsed_nodes(&page.list.nodes).is_empty());
+    assert!(has_text(&page.list.nodes, "1:42"));
+}
+
+#[test]
+fn elapsed_text_follows_the_clock_and_stops_at_the_end() {
+    use std::time::Duration;
+    let t = timeline();
+    assert_eq!(elapsed_text(&t, t.stamp), "1:42");
+    assert_eq!(
+        elapsed_text(&t, t.stamp + Duration::from_millis(61_900)),
+        "2:43"
+    );
+    assert_eq!(
+        elapsed_text(&t, t.stamp + Duration::from_secs(1000)),
+        "4:03"
+    );
+    let paused = SeekTimeline {
+        playing: false,
+        ..t
+    };
+    assert_eq!(
+        elapsed_text(&paused, t.stamp + Duration::from_secs(61)),
+        "1:42"
+    );
+}

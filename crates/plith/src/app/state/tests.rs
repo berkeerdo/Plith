@@ -1,5 +1,5 @@
 use super::*;
-use crate::app::feed::{CLOCK_TIMER, COLLAPSE_TIMER, Feed, MEDIA_TIMER, Timers, clock_ms};
+use crate::app::feed::{CLOCK_TIMER, COLLAPSE_TIMER, Feed, Timers, clock_ms};
 use crate::log::Stamp;
 use crate::services::fixture::FixtureServices;
 use plith_core::launch::Fixture;
@@ -208,10 +208,11 @@ fn timers_follow_the_page() {
     );
     go_to(&app, PageId::Media);
     app.on_event(ShellEvent::Wake);
-    assert_eq!(running(&timers), vec![MEDIA_TIMER, CLOCK_TIMER]);
-    go_to(&app, PageId::System);
-    app.on_event(ShellEvent::Timer(MEDIA_TIMER));
-    assert_eq!(running(&timers), vec![CLOCK_TIMER]);
+    assert_eq!(
+        running(&timers),
+        vec![CLOCK_TIMER],
+        "the elapsed time is live: no media timer"
+    );
     collapse(&mut app, &seconds);
     assert!(running(&timers).is_empty(), "collapsed: no timers");
 }
@@ -290,7 +291,7 @@ fn a_tick_after_collapse_publishes_nothing() {
     app.on_event(CLICK);
     collapse(&mut app, &seconds);
     let generation = app.mailbox.latest().generation;
-    for id in [MEDIA_TIMER, CLOCK_TIMER] {
+    for id in [CLOCK_TIMER, COLLAPSE_TIMER + 1] {
         app.on_event(ShellEvent::Timer(id));
     }
     assert_eq!(app.mailbox.latest().generation, generation);
@@ -306,9 +307,6 @@ fn a_scene_from_another_publisher_reaches_the_feed_on_wake() {
     });
     app.on_event(ShellEvent::Wake);
     assert_eq!(running(&timers), vec![CLOCK_TIMER]);
-    go_to(&app, PageId::Media);
-    app.on_event(ShellEvent::Wake);
-    assert_eq!(running(&timers), vec![MEDIA_TIMER, CLOCK_TIMER]);
     go_to(&app, PageId::System);
     app.on_event(ShellEvent::Wake);
     assert_eq!(running(&timers), vec![CLOCK_TIMER]);
@@ -567,7 +565,7 @@ fn a_tick_while_the_scene_is_closed_waits_for_the_wake() {
     });
     minute.set(48);
     let generation = app.mailbox.latest().generation;
-    for id in [MEDIA_TIMER, CLOCK_TIMER] {
+    for id in [CLOCK_TIMER, COLLAPSE_TIMER + 1] {
         app.on_event(ShellEvent::Timer(id));
     }
     assert_eq!(app.mailbox.latest().generation, generation);

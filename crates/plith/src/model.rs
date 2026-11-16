@@ -14,7 +14,6 @@ use plith_core::pages::system::{self, SystemFacts};
 use plith_media::MediaSnapshot;
 use plith_system::DeviceLevel;
 use std::sync::Arc;
-use std::time::SystemTime;
 
 /// One strip or bus.
 fn channel(c: &ChannelSnapshot) -> ChannelFacts {
@@ -64,11 +63,11 @@ pub fn audio_facts(
     }
 }
 
-/// The media page facts; `output` is the route text after the arrow. A playing timeline is
-/// moved to the last whole second before `now`, so a rebuilt page shows the current elapsed
-/// time and facts read within one second compare equal.
+/// The media page facts; `output` is the route text after the arrow. The timeline is kept as
+/// the session reported it: the painter extrapolates the seek and the elapsed time from its
+/// stamp, so the facts (and the page) stay equal for the whole track.
 #[must_use]
-pub fn media_facts(media: &MediaSnapshot, output: Option<String>, now: SystemTime) -> MediaFacts {
+pub fn media_facts(media: &MediaSnapshot, output: Option<String>) -> MediaFacts {
     if !media.has_session {
         return MediaFacts {
             output,
@@ -91,7 +90,7 @@ pub fn media_facts(media: &MediaSnapshot, output: Option<String>, now: SystemTim
         can_seek: media.can_seek,
         can_next: media.can_next,
         can_prev: media.can_prev,
-        timeline: timeline.map(|t| derive::rebase_to_second(t, now)),
+        timeline,
         output,
     }
 }
@@ -127,7 +126,7 @@ pub fn system_facts(
 
 /// Every page's facts from the readings; the pill reads the mixer's debounced signal.
 #[must_use]
-pub fn facts(readings: &Readings, now: SystemTime) -> Facts {
+pub fn facts(readings: &Readings) -> Facts {
     let audio = audio_facts(
         readings.vm.as_ref(),
         &readings.endpoints,
@@ -141,7 +140,7 @@ pub fn facts(readings: &Readings, now: SystemTime) -> Facts {
         audio.vm.as_ref(),
     );
     Facts {
-        media: media_facts(&readings.media, output, now),
+        media: media_facts(&readings.media, output),
         art: art_pixels(&readings.media),
         audio,
         system,

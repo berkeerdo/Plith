@@ -258,7 +258,7 @@ impl ListKit {
     }
 
     /// One line of text laid out to the rectangle's width and aligned in it.
-    fn text(
+    pub(crate) fn text(
         &self,
         ctx: &ID2D1DeviceContext,
         text: &mut TextSystem,

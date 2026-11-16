@@ -1,10 +1,12 @@
 //! Live nodes, drawn every frame on top of the incoming page from the sampled values: meters,
-//! level traces and the seek fill. Group opacity scales each brush colour's alpha (no layer).
+//! level traces, the seek fill and the elapsed time. Group opacity scales each brush colour's alpha (no layer).
 
 use crate::list::ListKit;
 use crate::paint::f;
+use crate::text::TextSystem;
 use plith_core::ambient::LiveValues;
-use plith_core::draw::{DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark};
+use plith_core::draw::{DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, Trim};
+use plith_core::pages::media::elapsed_text;
 use plith_core::theme::Palette;
 use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext;
 use windows_numerics::Vector2;
@@ -18,9 +20,10 @@ const TRACE_W: f32 = 1.0;
 
 /// Draws the live nodes of `list` in page coordinates (the caller sets the page's offset as
 /// the context transform), with every colour's alpha scaled by `alpha`. Inside a `BeginDraw`.
+/// `text` lays out the elapsed time.
 pub(crate) fn draw_live(
     ctx: &ID2D1DeviceContext,
-    kit: &mut ListKit,
+    (kit, text): (&mut ListKit, &mut TextSystem),
     list: &DisplayList,
     live: &LiveValues,
     palette: &Palette,
@@ -43,6 +46,19 @@ pub(crate) fn draw_live(
                 timeline,
                 ink,
             } => seek(ctx, kit, (*rect, timeline, *ink), live, palette),
+            LiveNode::Elapsed {
+                rect,
+                timeline,
+                style,
+                ink,
+                align,
+            } => {
+                let shown = elapsed_text(timeline, live.now);
+                // The brush keeps the group alpha set above. A failed layout loses this frame's
+                // elapsed text only; the next frame retries.
+                let node = (*rect, shown.as_str(), *style, *align, Trim::End);
+                let _ = kit.text(ctx, text, node, palette.resolve(*ink));
+            }
         }
     }
 }

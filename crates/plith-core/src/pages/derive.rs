@@ -138,33 +138,5 @@ pub fn rebase(timeline: SeekTimeline, now: SystemTime) -> SeekTimeline {
     }
 }
 
-/// A playing timeline moved forward to the last whole second of the track before `now` (or to
-/// its end), with the stamp moved by the same amount. It describes the same playback, so the
-/// painter's extrapolation does not jump, but it changes only once a second: page facts built
-/// from it compare equal between second boundaries, and the elapsed text it feeds is whole
-/// seconds anyway. A paused timeline, or one that has not reached its next second, is returned
-/// unchanged.
-#[must_use]
-pub fn rebase_to_second(timeline: SeekTimeline, now: SystemTime) -> SeekTimeline {
-    if !timeline.playing {
-        return timeline;
-    }
-    let exact = rebase(timeline, now).position_s;
-    // A zero (or unknown) duration is a stream with no end: floor it like any other second.
-    let at_end = timeline.duration_s.is_finite()
-        && timeline.duration_s > 0.0
-        && exact >= timeline.duration_s;
-    let target = if at_end { exact } else { exact.floor() };
-    let shift = target - timeline.position_s;
-    if shift <= 0.0 {
-        return timeline;
-    }
-    SeekTimeline {
-        position_s: target,
-        stamp: timeline.stamp + std::time::Duration::from_secs_f64(shift),
-        ..timeline
-    }
-}
-
 #[cfg(test)]
 mod tests;

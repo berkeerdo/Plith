@@ -138,13 +138,25 @@ impl SeekTimeline {
         if self.duration_s.is_nan() || self.duration_s <= 0.0 {
             return 0.0;
         }
+        (self.position_at(now) / self.duration_s).clamp(0.0, 1.0)
+    }
+
+    /// The position in seconds at wall time `now`: the position plus the time since the stamp
+    /// while playing (none when `now` is before it), not past a positive duration.
+    #[must_use]
+    pub fn position_at(&self, now: SystemTime) -> f64 {
         let elapsed = if self.playing {
             now.duration_since(self.stamp)
                 .map_or(0.0, |gap| gap.as_secs_f64())
         } else {
             0.0
         };
-        ((self.position_s + elapsed) / self.duration_s).clamp(0.0, 1.0)
+        let position = self.position_s + elapsed;
+        if self.duration_s > 0.0 {
+            position.min(self.duration_s)
+        } else {
+            position
+        }
     }
 }
 
@@ -178,6 +190,21 @@ pub enum LiveNode {
         /// The colour role of the played part and its head (core decides it, the painter maps
         /// it).
         ink: Ink,
+    },
+    /// The elapsed time of a playing track, as text that advances with the clock. The painter
+    /// lays out the current string every frame (its layout cache keeps one per string), so the
+    /// page bitmap does not change while the track plays.
+    Elapsed {
+        /// Where it is drawn.
+        rect: Rect,
+        /// The playback position to extrapolate.
+        timeline: SeekTimeline,
+        /// The text style.
+        style: TextStyle,
+        /// The colour role.
+        ink: Ink,
+        /// The alignment inside `rect`.
+        align: Align,
     },
 }
 
