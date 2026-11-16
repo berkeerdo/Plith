@@ -41,3 +41,37 @@ them.
   `motion` line and `MotionKind` are unchanged.
 - To measure in R4: draw p99 under 1 ms per frame with two page bitmaps and live nodes, and
   240 fps, 0 to 1 hitches per motion.
+
+## P6 Input on the island: click to expand, leave to collapse
+
+Status: draft. Decided by Berke on 2026-11-16 ("öneriler tamam devam edelim her şeyi
+onaylıyorum durmak yok", relayed by the master), from plan questions 10 to 12.
+
+**Decision:** the island never takes activation and has no keyboard. A click on the pill
+expands; leaving the island for 400 ms collapses; a click on empty page space does nothing;
+there is no hover-to-expand in R4. Pick mode on the audio page cancels by clicking the picked
+source again or empty diagram space (so the mock's `ESC VAZGEÇER` became
+`KAYNAĞA TEKRAR TIKLA: VAZGEÇ`). Values change by a click on their ruler only: no drag, no wheel.
+
+**How:** the shell emits `Click { x, y }` in island DIP only inside the drawn shape, and
+`Enter`/`Leave` from `TrackMouseEvent(TME_LEAVE)`; the window region (ADR 0004) makes leaving the
+region equal to leaving the window. Core `route_click` picks the page on screen (the incoming
+layer once its opacity reaches 0.5) and runs `pages::hit`, which resolves ruler targets into
+values. A due collapse also applies while the island is suppressed, so it never reappears open.
+Hardware writes run on one `plith-writes` thread, never on the UI thread.
+
+**Not measured:** real `WM_MOUSELEAVE` delivery with a per-frame region and the feel of a click
+during a page turn (owed to the console session).
+
+## P7 Upper case: Turkish rules for our copy, invariant for foreign names
+
+Status: draft. Rule from Berke on 2026-11-16, relayed by the master.
+
+**Decision:** our own Turkish UI strings are written upper-cased with Turkish rules through
+`plith_core::pages::copy::tr_upper` (i to İ, ı to I), so `SİSTEM`, `PARLAKLIK`. Names that come
+from Windows, Voicemeeter or apps (devices, endpoints, strips, sources, titles) are never
+upper-cased with Turkish rules: the renderer's style upper-casing is Rust's invariant
+`to_uppercase`, so "Display" becomes "DISPLAY", never "DİSPLAY".
+
+**Consequences:** every own label is a constant in `copy.rs`, tested to equal its own
+`tr_upper`; a test scans every fixture page; foreign text reaches the renderer unchanged.

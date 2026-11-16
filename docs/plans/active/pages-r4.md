@@ -338,6 +338,9 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   `pub fn route_param(kind: VmKind, bus: usize) -> &'static str` (`A1`..`A5`, `B1`..`B3`, same
   split as `fallback_label`); `VoicemeeterService::toggle_route(strip, bus) -> Option<bool>`
   (written, not exercised on hardware without a yes).
+- As built: `route_param` returns `Option<&'static str>` (`None` out of range); Voicemeeter
+  Standard is A1 and B1, not A1 and A2 (source: voicemeeter-api-python `kinds.py`), and
+  `fallback_label` was corrected with it.
 
 - [x] **Step 1: Failing tests:** `route_params_banana` (`[A1, A2, A3, B1, B2]`),
   `route_params_potato`, `route_params_standard`, `poll_reads_routes_into_snapshot` (with the
@@ -443,6 +446,10 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   timeline: ruler and times hidden, transport stays. Disabled transport buttons are faint and
   have no hit target. The played part of the ruler and the position text are `Live::Seek`.
   `pub fn format_time(secs: u64) -> String` (`m:ss`, `h:mm:ss` from an hour).
+- As built (the mock wins over the numbers above): art 96 x 96 at (30, 62), ruler x 146 to 590
+  at y 128 with 20 divisions, route row at y 196, empty page 150 high; title Sans 16 semibold,
+  artist `Body` (Sans 12); the ruler target is `Action::SeekRuler(Rect)`, resolved by
+  `pages::hit` into `Seek(f)`; the output row is read-only with no reachable stations.
 
 - [x] **Step 1: Failing tests:** `no_session_shows_empty`, `no_timeline_hides_ruler`,
   `seek_fraction_from_click_x`, `disabled_next_has_no_target`, `format_time_cases` (0 → `0:00`,
@@ -604,3 +611,20 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
 - 2026-11-16: Berke via the master: "öneriler tamam devam edelim her şeyi onaylıyorum durmak
   yok". Q1 radius 24, Q2 density rule, Q3 `KAPALI` in the slot, Q10 click to expand and 400 ms
   leave to collapse, Q11 the new footer copy: all as recommended. Task 9 onward unblocked.
+- 2026-11-16: Tasks 4 to 18 implemented one by one, each with a fresh spec and quality review
+  and its fix rounds closed, five checks green on every commit (subagent-driven development;
+  ledger outside the repo). Added Task 7a (square top, flush, bottom radius 24), which the first
+  plan missed. Owner rules added on the way: Turkish upper case only for our own copy (foreign
+  names invariant), the mock wins on visual values (row pitch 50, station 8 DIP outside, empty
+  shelf 170, media geometry above).
+- 2026-11-16: rebased on main 0a73ade (R6 merged) without conflicts, five checks green, pushed
+  with force-with-lease. Commits after the rebase: `66bc1d6` (plan) to `6cb4fde` (demo).
+- 2026-11-16: final whole-branch review: ready after fixes (0 critical, 4 important, 12 minor);
+  one fix wave addresses them (pill signal edges from the Voicemeeter poll, idle check waits for
+  service starts plus a fixture tick, English constant names, one hardware table, equal lists
+  keep their bitmap, seek live only while playing).
+- Not measured yet (all render tests ran offscreen on WARP, the owner was on RDP): anything on
+  the real screen, `motion` and `ambient` lines and draw p99 with page bitmaps, the idle check
+  since R4, `WM_MOUSELEAVE` and collapse on leave, real services feeding the pages live, any
+  hardware write. These are Task 4 Step 4, Task 7a Step 5, Task 16 Step 4 and Task 18 Steps 3
+  and 4, owed to one guarded console session.
