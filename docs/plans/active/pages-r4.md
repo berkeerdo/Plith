@@ -417,13 +417,13 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   question 11, no Voicemeeter `VOICEMEETER ÇALIŞMIYOR · ÇIKIŞA TIKLA: VARSAYILAN OLUR`).
   Page height = rows bottom + footer, clamped to `PAGE_MAX_HEIGHT`.
 
-- [ ] **Step 1: Failing tests:** `route_turns_at_45_degrees`, `straight_route_has_two_points`,
+- [x] **Step 1: Failing tests:** `route_turns_at_45_degrees`, `straight_route_has_two_points`,
   `banana_page_is_300_high` (the mock data), `potato_page_fits_max_height`,
   `long_endpoint_name_truncates_in_middle` (the node's trim is `Middle`), `live_route_is_two_px_flow`,
   `meters_and_traces_are_live_nodes`, `hit_source_then_output_actions`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(core): lay out the audio page`.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(core): lay out the audio page`.
 
 ### Task 13: Media page
 

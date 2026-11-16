@@ -3,10 +3,12 @@
 //! Facts are copied from the service crates by the app; this module knows nothing about them.
 //! Layout (positions, nodes) is a separate step that reads this view.
 
+mod layout;
 mod model;
 #[cfg(test)]
 mod tests;
 
+pub use layout::{audio_page, route_path};
 pub use model::Activity;
 
 /// Row pitch in DIP for up to five source rows.
@@ -112,6 +114,8 @@ pub struct OutputRow {
     pub live: bool,
     /// Whether the bus or endpoint is muted.
     pub muted: bool,
+    /// The Windows endpoint id; `None` for Voicemeeter buses.
+    pub id: Option<String>,
 }
 
 /// How a route is drawn.

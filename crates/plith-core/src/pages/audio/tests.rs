@@ -139,6 +139,8 @@ fn no_voicemeeter_shows_windows_outputs() {
     assert_eq!(view.outputs[0].value, OutputValue::None);
     assert_eq!(view.outputs[1].value, OutputValue::Percent(46));
     assert_eq!(view.outputs[1].tag, None);
+    assert_eq!(view.outputs[0].id.as_deref(), Some("a"));
+    assert_eq!(view.outputs[1].id.as_deref(), Some("b"));
     assert_eq!(
         view.routes,
         vec![Route {

@@ -169,6 +169,7 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         value: OutputValue::Db(bus.gain_db),
         live: false,
         muted: bus.muted,
+        id: None,
     }
 }
 
@@ -199,6 +200,7 @@ fn windows(facts: &AudioFacts) -> Parts {
                 value,
                 live: false,
                 muted: Some(i) == default_idx && muted,
+                id: Some(e.id.clone()),
             }
         })
         .collect();
