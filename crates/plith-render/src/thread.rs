@@ -80,7 +80,8 @@ impl Fatal {
 
 /// Callbacks the render thread calls from its own thread.
 pub struct RenderSinks {
-    /// After every painted frame, with the drawn shape and a per-thread frame counter.
+    /// After a painted frame, with the drawn shape and a per-thread frame counter; skipped
+    /// while the same settled shape (previous equal to shape) was already published.
     pub on_shape: Box<dyn Fn(ShapeFrame) + Send>,
     /// Once per finished motion.
     pub on_motion: Box<dyn Fn(MotionReport) + Send>,

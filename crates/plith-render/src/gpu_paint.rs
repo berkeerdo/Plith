@@ -4,9 +4,11 @@ use crate::device::Gpu;
 use crate::levers::apply_gpu_priority;
 use crate::paint::{PaintFrame, Painter};
 use crate::target::CompositionTarget;
+use crate::text::TextSystem;
 use crate::thread::{FrameTimes, Paint};
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, outcome_line};
+use plith_core::theme::Palette;
 use std::time::Instant;
 use windows::Win32::Foundation::{E_UNEXPECTED, HWND};
 use windows::core::{Error, Result};
@@ -29,12 +31,14 @@ impl Stack {
     ) -> Result<(Self, Vec<String>)> {
         let gpu = Gpu::new(warp)?;
         let mut target = CompositionTarget::new(&gpu, hwnd, layout, levers)?;
-        let notes = apply_gpu_priority(gpu.dxgi_device(), levers.gpu_priority)
+        let mut notes: Vec<String> = apply_gpu_priority(gpu.dxgi_device(), levers.gpu_priority)
             .into_iter()
             .chain(target.take_outcome())
             .map(|outcome| outcome_line(&outcome))
             .collect();
-        let painter = Painter::new(gpu.context(), gpu.d2d_factory())?;
+        let text = TextSystem::new()?;
+        let mut painter = Painter::new(gpu.context(), gpu.d2d_factory(), Palette::default(), text)?;
+        notes.extend(painter.take_notes());
         Ok((
             Self {
                 painter,

@@ -1,23 +1,28 @@
-//! The painter: a black island (square top, rounded bottom) and one placeholder bar per visible page layer.
+//! The painter: the island (a floor gradient with a border, square top, rounded bottom), the
+//! cached page bitmaps composited inside its clip, the live nodes of the incoming page and the
+//! pill.
 
+mod island;
+
+use crate::list::{ListEnv, ListKit};
+use crate::live::draw_live;
+use crate::pages::{PILL, PageCache};
+use crate::text::TextSystem;
+use island::Island;
 use plith_core::ambient::LiveValues;
-use plith_core::draw::PageContent;
+use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
-use plith_core::outline::{PathSeg, island_outline};
-use plith_core::page::PageLayers;
-use plith_core::shapes::{FILL, PLACEHOLDER};
+use plith_core::page::{PageLayer, PageLayers};
+use plith_core::theme::Palette;
 use std::sync::Arc;
-use windows::Win32::Graphics::Direct2D::Common::{
-    D2D_RECT_F, D2D_SIZE_F, D2D1_COLOR_F, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED,
-};
+use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_ARC_SEGMENT, D2D1_ARC_SIZE_SMALL,
-    D2D1_LAYER_OPTIONS1_NONE, D2D1_LAYER_PARAMETERS1, D2D1_ROUNDED_RECT,
-    D2D1_SWEEP_DIRECTION_CLOCKWISE, ID2D1DeviceContext, ID2D1Factory1, ID2D1Geometry, ID2D1Layer,
-    ID2D1PathGeometry1, ID2D1SolidColorBrush,
+    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_LAYER_OPTIONS1_NONE,
+    D2D1_LAYER_PARAMETERS1, ID2D1Bitmap1, ID2D1DeviceContext, ID2D1Factory1, ID2D1Geometry,
+    ID2D1Layer,
 };
 use windows::core::Result;
-use windows_numerics::{Matrix3x2, Vector2};
+use windows_numerics::Matrix3x2;
 
 /// Everything the painter needs for one frame.
 #[derive(Debug, Clone, PartialEq)]
@@ -28,7 +33,7 @@ pub struct PaintFrame {
     pub origin: (f64, f64),
     /// Visible page layers, outgoing first.
     pub pages: PageLayers,
-    /// Opacity of the page placeholders (0 hides them); the island clips them always.
+    /// Opacity of the pages (0 hides them); the pill is drawn at `1 - content_opacity`.
     pub content_opacity: f32,
     /// The display lists and artwork to draw.
     pub content: Arc<PageContent>,
@@ -38,18 +43,14 @@ pub struct PaintFrame {
     pub live: LiveValues,
 }
 
-/// Draws frames onto the target set on a Direct2D device context.
-pub struct Painter {
-    brush: ID2D1SolidColorBrush,
-    factory: ID2D1Factory1,
-}
-
+/// Narrows a DIP value for Direct2D.
 #[allow(clippy::cast_possible_truncation)]
-fn f(v: f64) -> f32 {
+pub(crate) fn f(v: f64) -> f32 {
     v as f32
 }
 
-fn color(rgba: [f32; 4], alpha_scale: f32) -> D2D1_COLOR_F {
+/// A straight RGBA colour with its alpha scaled by `alpha_scale`.
+pub(crate) fn color(rgba: [f32; 4], alpha_scale: f32) -> D2D1_COLOR_F {
     D2D1_COLOR_F {
         r: rgba[0],
         g: rgba[1],
@@ -58,165 +59,240 @@ fn color(rgba: [f32; 4], alpha_scale: f32) -> D2D1_COLOR_F {
     }
 }
 
-fn rounded(x: f64, y: f64, width: f64, height: f64, radius: f64) -> D2D1_ROUNDED_RECT {
-    let r = radius.min(width / 2.0).min(height / 2.0).max(0.0);
-    D2D1_ROUNDED_RECT {
-        rect: D2D_RECT_F {
-            left: f(x),
-            top: f(y),
-            right: f(x + width),
-            bottom: f(y + height),
-        },
-        radiusX: f(r),
-        radiusY: f(r),
-    }
+/// A page bitmap ready to composite: where and how opaque.
+struct Placed {
+    bitmap: ID2D1Bitmap1,
+    x: f64,
+    y: f64,
+    opacity: f32,
 }
 
-/// True when some placeholder bar could reach a rounded corner or leave the island, so the
-/// pages must be clipped. Bars inside the straight band (above the bottom corner arcs, within
-/// the width) need no clip: the top corners are square.
-fn needs_clip(frame: &PaintFrame) -> bool {
-    let shape = frame.shape;
-    let radius = shape
-        .radius
-        .min(shape.width / 2.0)
-        .min(shape.height / 2.0)
-        .max(0.0);
-    let vertical_ok = PLACEHOLDER.top + PLACEHOLDER.height <= shape.height - radius;
-    let left = (shape.width - PLACEHOLDER.width) / 2.0;
-    let horizontal_ok = frame.pages.iter().all(|layer| {
-        let x = left + layer.offset;
-        x >= 0.0 && x + PLACEHOLDER.width <= shape.width
-    });
-    !(vertical_ok && horizontal_ok)
+/// Draws frames onto the target set on a Direct2D device context. Render thread only.
+pub struct Painter {
+    factory: ID2D1Factory1,
+    kit: ListKit,
+    island: Island,
+    pages: PageCache,
+    palette: Palette,
+    text: TextSystem,
+}
+
+/// The context's DIP scale (its DPI over 96).
+fn context_scale(ctx: &ID2D1DeviceContext) -> f64 {
+    let (mut x, mut y) = (96.0_f32, 96.0_f32);
+    // SAFETY: both out pointers refer to live locals.
+    unsafe { ctx.GetDpi(&raw mut x, &raw mut y) };
+    f64::from(x) / 96.0
 }
 
 impl Painter {
-    /// Creates the painter's one solid colour brush on `ctx`; `factory` (the context's own
-    /// factory) builds the clip geometry.
+    /// Creates the painter on `ctx`; `factory` (the context's own factory) builds geometry.
+    /// `text` lays out the display lists' text; `palette` colours everything.
     ///
     /// # Errors
-    /// Returns the Windows error when the brush cannot be created.
-    pub fn new(ctx: &ID2D1DeviceContext, factory: &ID2D1Factory1) -> Result<Self> {
-        let initial = color(FILL, 1.0);
-        // SAFETY: `initial` is live for the call.
-        let brush = unsafe { ctx.CreateSolidColorBrush(&raw const initial, None)? };
+    /// Returns the Windows error when a brush cannot be created.
+    pub fn new(
+        ctx: &ID2D1DeviceContext,
+        factory: &ID2D1Factory1,
+        palette: Palette,
+        text: TextSystem,
+    ) -> Result<Self> {
         Ok(Self {
-            brush,
             factory: factory.clone(),
+            kit: ListKit::new(ctx, factory)?,
+            island: Island::default(),
+            pages: PageCache::default(),
+            palette,
+            text,
         })
     }
 
+    /// Switches the palette; the page bitmaps are redrawn on their next use.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
+    /// How many page or pill bitmaps were redrawn so far (a test hook).
+    #[must_use]
+    #[doc(hidden)]
+    pub fn page_rebuilds(&self) -> u64 {
+        self.pages.rebuilds()
+    }
+
+    /// How many times the island geometry was built so far (a test hook).
+    #[must_use]
+    #[doc(hidden)]
+    pub fn island_builds(&self) -> u64 {
+        self.island.builds()
+    }
+
+    /// Drains the text system's notes (font fallbacks), for the log.
+    pub fn take_notes(&mut self) -> Vec<String> {
+        self.text.take_notes()
+    }
+
     /// Clears the target and draws `frame`. The context must already have a target bitmap.
+    /// The page and pill bitmaps are refreshed first, outside this frame's `BeginDraw`.
     ///
     /// # Errors
-    /// Returns the `EndDraw` error (for example device removed) or a geometry failure.
+    /// Returns the `EndDraw` error (for example device removed) or a resource failure.
     pub fn paint(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) -> Result<()> {
+        let scale = context_scale(ctx);
+        let parts =
+            self.island
+                .update(ctx, &self.factory, frame.shape, frame.origin, &self.palette)?;
+        let placed = self.place_pages(ctx, frame, scale)?;
         let clear = color([0.0; 4], 1.0);
-        // Built before BeginDraw so a failure here cannot leave the context mid-draw. One
-        // geometry per frame serves both the fill and the page clip.
-        let island = self.island_geometry(frame)?;
-        let clipped = frame.content_opacity > 0.0 && !frame.pages.is_empty() && needs_clip(frame);
         // SAFETY: draw calls between BeginDraw and EndDraw on a live context with a target.
         unsafe {
             ctx.BeginDraw();
             ctx.Clear(Some(&raw const clear));
-            let fill = color(FILL, 1.0);
-            self.brush.SetColor(&raw const fill);
-            ctx.FillGeometry(&island, &self.brush, None);
+            ctx.FillGeometry(&parts.fill, &parts.gradient, None);
         }
+        let clipped = !placed.is_empty();
         if clipped {
-            Self::push_clip(ctx, island.into());
+            push_clip(ctx, parts.fill.clone().into());
         }
-        if frame.content_opacity > 0.0 {
-            self.draw_pages(ctx, frame);
+        for page in &placed {
+            composite(ctx, page);
         }
-        // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
-        unsafe {
-            if clipped {
-                ctx.PopLayer();
-            }
-            ctx.EndDraw(None, None)
-        }
-    }
-
-    /// Draws one placeholder bar per page layer, faded by the content opacity.
-    fn draw_pages(&self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) {
-        let (ox, oy) = frame.origin;
-        let shape = frame.shape;
-        for layer in frame.pages.iter() {
-            let x = ox + (shape.width - PLACEHOLDER.width) / 2.0 + layer.offset;
-            let bar = rounded(
-                x,
-                oy + PLACEHOLDER.top,
-                PLACEHOLDER.width,
-                PLACEHOLDER.height,
-                PLACEHOLDER.radius,
-            );
-            let tint = color(PLACEHOLDER.rgba, f(layer.opacity) * frame.content_opacity);
-            // SAFETY: draw calls inside the BeginDraw/EndDraw of `paint` on a live context.
+        let live = self.draw_incoming_live(ctx, frame);
+        if let Some(border) = &parts.border {
+            self.kit.set_color(self.palette.border, 1.0);
+            // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
             unsafe {
-                self.brush.SetColor(&raw const tint);
-                ctx.FillRoundedRectangle(&raw const bar, &self.brush);
+                if clipped {
+                    ctx.PopLayer();
+                }
+                ctx.DrawGeometry(border, &self.kit.brush, 1.0, None);
             }
+        } else if clipped {
+            // SAFETY: as above.
+            unsafe { ctx.PopLayer() };
         }
+        // SAFETY: closes the BeginDraw above.
+        let ended = unsafe { ctx.EndDraw(None, None) };
+        live?;
+        ended
     }
 
-    /// Builds the island's path geometry from the shared outline: square top, rounded bottom.
-    fn island_geometry(&self, frame: &PaintFrame) -> Result<ID2D1PathGeometry1> {
+    /// Refreshes the bitmaps this frame shows and places them: the visible page layers (when
+    /// the content is visible), then the pill (when the content is not fully visible).
+    fn place_pages(
+        &mut self,
+        ctx: &ID2D1DeviceContext,
+        frame: &PaintFrame,
+        scale: f64,
+    ) -> Result<Vec<Placed>> {
         let (ox, oy) = frame.origin;
-        let point = |x: f64, y: f64| Vector2 { X: f(x), Y: f(y) };
-        // SAFETY: the factory is live; the sink is opened once, every figure is begun and ended,
-        // and the sink is closed before the geometry is used.
-        unsafe {
-            let geometry = self.factory.CreatePathGeometry()?;
-            let sink = geometry.Open()?;
-            sink.BeginFigure(point(ox, oy), D2D1_FIGURE_BEGIN_FILLED);
-            for seg in island_outline(frame.shape, frame.origin) {
-                match seg {
-                    PathSeg::Line(x, y) => sink.AddLine(point(x, y)),
-                    PathSeg::Arc { to, radius } => {
-                        let arc = D2D1_ARC_SEGMENT {
-                            point: point(to.0, to.1),
-                            size: D2D_SIZE_F {
-                                width: f(radius),
-                                height: f(radius),
-                            },
-                            rotationAngle: 0.0,
-                            sweepDirection: D2D1_SWEEP_DIRECTION_CLOCKWISE,
-                            arcSize: D2D1_ARC_SIZE_SMALL,
-                        };
-                        sink.AddArc(&raw const arc);
-                    }
+        let content = &frame.content;
+        let mut env = ListEnv {
+            palette: &self.palette,
+            text: &mut self.text,
+            art: &content.art,
+            scale,
+        };
+        let mut placed = Vec::with_capacity(3);
+        let mut add = |slot: usize, list: &Arc<DisplayList>, x: f64, opacity: f32| -> Result<()> {
+            if opacity <= 0.0 {
+                return Ok(());
+            }
+            let bitmap = self.pages.draw(ctx, slot, list, &mut self.kit, &mut env)?;
+            if let Some(bitmap) = bitmap {
+                placed.push(Placed {
+                    bitmap,
+                    x,
+                    y: oy,
+                    opacity,
+                });
+            }
+            Ok(())
+        };
+        if frame.content_opacity > 0.0 {
+            for layer in frame.pages.iter() {
+                if let Some(list) = content.pages.get(layer.page) {
+                    let opacity = f(layer.opacity) * frame.content_opacity;
+                    add(layer.page, list, ox + layer.offset, opacity)?;
                 }
             }
-            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
-            sink.Close()?;
-            Ok(geometry)
         }
+        if frame.content_opacity < 1.0 {
+            add(PILL, &content.pill, ox, 1.0 - frame.content_opacity)?;
+        }
+        Ok(placed)
     }
 
-    /// Pushes a layer clipped to `geometry`.
-    fn push_clip(ctx: &ID2D1DeviceContext, geometry: ID2D1Geometry) {
-        // SAFETY: the geometry is moved into the layer parameters and released by the explicit
-        // drop below, after PushLayer took its own reference.
-        unsafe {
-            let params = D2D1_LAYER_PARAMETERS1 {
-                contentBounds: D2D_RECT_F {
-                    left: f32::NEG_INFINITY,
-                    top: f32::NEG_INFINITY,
-                    right: f32::INFINITY,
-                    bottom: f32::INFINITY,
-                },
-                geometricMask: std::mem::ManuallyDrop::new(Some(geometry)),
-                maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
-                maskTransform: Matrix3x2::identity(),
-                opacity: 1.0,
-                opacityBrush: std::mem::ManuallyDrop::new(None),
-                layerOptions: D2D1_LAYER_OPTIONS1_NONE,
-            };
-            ctx.PushLayer(&raw const params, None::<&ID2D1Layer>);
-            drop(std::mem::ManuallyDrop::into_inner(params.geometricMask));
+    /// Draws the live nodes of the incoming (last) page layer at its offset and opacity.
+    fn draw_incoming_live(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) -> Result<()> {
+        let Some(layer) = frame.pages.iter().last().copied() else {
+            return Ok(());
+        };
+        let PageLayer {
+            page,
+            offset,
+            opacity,
+        } = layer;
+        let alpha = f(opacity) * frame.content_opacity;
+        let Some(list) = frame.content.pages.get(page) else {
+            return Ok(());
+        };
+        if alpha <= 0.0 {
+            return Ok(());
         }
+        let (ox, oy) = frame.origin;
+        let shift = Matrix3x2::translation(f(ox + offset), f(oy));
+        // SAFETY: plain state changes inside the frame's BeginDraw/EndDraw; restored below.
+        unsafe { ctx.SetTransform(&raw const shift) };
+        let drawn = draw_live(ctx, &mut self.kit, list, &frame.live, &self.palette, alpha);
+        let identity = Matrix3x2::identity();
+        // SAFETY: as above.
+        unsafe { ctx.SetTransform(&raw const identity) };
+        drawn
+    }
+}
+
+/// Draws a cached bitmap at its place with its group opacity, at its own DIP size.
+fn composite(ctx: &ID2D1DeviceContext, page: &Placed) {
+    // SAFETY: plain draw calls inside the frame's BeginDraw/EndDraw on a live bitmap.
+    unsafe {
+        let size = page.bitmap.GetSize();
+        let dest = D2D_RECT_F {
+            left: f(page.x),
+            top: f(page.y),
+            right: f(page.x) + size.width,
+            bottom: f(page.y) + size.height,
+        };
+        ctx.DrawBitmap(
+            &page.bitmap,
+            Some(&raw const dest),
+            page.opacity,
+            D2D1_INTERPOLATION_MODE_LINEAR,
+            None,
+            None,
+        );
+    }
+}
+
+/// Pushes a layer clipped to `geometry`.
+fn push_clip(ctx: &ID2D1DeviceContext, geometry: ID2D1Geometry) {
+    // SAFETY: the geometry is moved into the layer parameters and released by the explicit
+    // drop below, after PushLayer took its own reference.
+    unsafe {
+        let params = D2D1_LAYER_PARAMETERS1 {
+            contentBounds: D2D_RECT_F {
+                left: f32::NEG_INFINITY,
+                top: f32::NEG_INFINITY,
+                right: f32::INFINITY,
+                bottom: f32::INFINITY,
+            },
+            geometricMask: std::mem::ManuallyDrop::new(Some(geometry)),
+            maskAntialiasMode: D2D1_ANTIALIAS_MODE_PER_PRIMITIVE,
+            maskTransform: Matrix3x2::identity(),
+            opacity: 1.0,
+            opacityBrush: std::mem::ManuallyDrop::new(None),
+            layerOptions: D2D1_LAYER_OPTIONS1_NONE,
+        };
+        ctx.PushLayer(&raw const params, None::<&ID2D1Layer>);
+        drop(std::mem::ManuallyDrop::into_inner(params.geometricMask));
     }
 }

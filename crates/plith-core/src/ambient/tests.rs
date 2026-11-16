@@ -164,3 +164,26 @@ fn an_empty_run_reports_zeros() {
     assert!(report.worst_gap_ms.abs() < f64::EPSILON);
     assert!(report.draw_p99_ms.abs() < f64::EPSILON);
 }
+
+#[test]
+fn peak_is_the_louder_side_and_missing_is_zero() {
+    let live = LiveValues {
+        strips: vec![[0.2, 0.6]],
+        buses: vec![[0.0, 0.0], [0.9, 0.1]],
+        ..LiveValues::default()
+    };
+    assert!((live.peak(LiveRail::Strip, 0) - 0.6).abs() < 1e-6);
+    assert!((live.peak(LiveRail::Bus, 1) - 0.9).abs() < 1e-6);
+    assert!(live.peak(LiveRail::Strip, 4).abs() < 1e-6);
+    assert!(live.peak(LiveRail::Bus, 9).abs() < 1e-6);
+}
+
+#[test]
+fn trace_samples_by_index_or_empty() {
+    let live = LiveValues {
+        traces: vec![TraceSamples(vec![0.1, 0.2])],
+        ..LiveValues::default()
+    };
+    assert_eq!(live.trace(0), &[0.1, 0.2]);
+    assert!(live.trace(3).is_empty());
+}

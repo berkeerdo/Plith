@@ -123,6 +123,25 @@ pub struct SeekTimeline {
     pub playing: bool,
 }
 
+impl SeekTimeline {
+    /// The played fraction (0 to 1) at wall time `now`: the position plus the time since the
+    /// stamp while playing (none when `now` is before it), over the duration. 0 for a track
+    /// with no length.
+    #[must_use]
+    pub fn fraction_at(&self, now: SystemTime) -> f64 {
+        if self.duration_s.is_nan() || self.duration_s <= 0.0 {
+            return 0.0;
+        }
+        let elapsed = if self.playing {
+            now.duration_since(self.stamp)
+                .map_or(0.0, |gap| gap.as_secs_f64())
+        } else {
+            0.0
+        };
+        ((self.position_s + elapsed) / self.duration_s).clamp(0.0, 1.0)
+    }
+}
+
 /// A node whose look changes between display lists without the list being rebuilt.
 #[derive(Debug, Clone, PartialEq)]
 pub enum LiveNode {

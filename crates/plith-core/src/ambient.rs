@@ -1,7 +1,7 @@
 //! The ambient tick: when the open island repaints without motion (meters, seek fill), how
 //! often, the values sampled for it, and its `ambient` log line.
 
-use crate::draw::{Node, PageContent};
+use crate::draw::{LiveRail, Node, PageContent};
 use crate::scene::Scene;
 use std::fmt;
 use std::time::SystemTime;
@@ -65,6 +65,24 @@ impl Default for LiveValues {
             traces: Vec::new(),
             now: SystemTime::UNIX_EPOCH,
         }
+    }
+}
+
+impl LiveValues {
+    /// The louder side of meter `index` of `rail`; 0 when there is no such meter.
+    #[must_use]
+    pub fn peak(&self, rail: LiveRail, index: usize) -> f32 {
+        let family = match rail {
+            LiveRail::Strip => &self.strips,
+            LiveRail::Bus => &self.buses,
+        };
+        family.get(index).map_or(0.0, |[l, r]| l.max(*r))
+    }
+
+    /// The samples of trace `index`, oldest first; empty when there is no such trace.
+    #[must_use]
+    pub fn trace(&self, index: usize) -> &[f32] {
+        self.traces.get(index).map_or(&[], |samples| &samples.0)
     }
 }
 

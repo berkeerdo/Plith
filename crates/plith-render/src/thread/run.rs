@@ -146,6 +146,7 @@ pub fn run_loop<C, P, O, N>(
         gpu: GpuHealth::default(),
         painted: 0,
         last_shape: None,
+        posted: None,
         seen,
     };
     if engine.clocks.order.is_empty() {

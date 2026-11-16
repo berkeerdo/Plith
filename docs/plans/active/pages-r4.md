@@ -296,14 +296,14 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   the incoming page on top. The pill list draws when collapsed (content opacity 0 for pages,
   1 - content for the pill).
 
-- [ ] **Step 1: Failing tests:** core `every_theme_passes_contrast` (text inks 4.5:1, flow and
+- [x] **Step 1: Failing tests:** core `every_theme_passes_contrast` (text inks 4.5:1, flow and
   marks 3:1 against both floor stops); render (`render_offscreen`, WARP)
   `station_filled_and_hollow_pixels`, `lit_route_is_two_px_flow`, `page_bitmap_reused_across_frames`
   (a counting hook in `PageCache`), `outgoing_page_fades_with_opacity`, `live_meter_draws_level`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement. Group opacity comes from drawing the cached bitmap with an opacity,
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement. Group opacity comes from drawing the cached bitmap with an opacity,
   never by fading each node.
-- [ ] **Step 4:** Five checks green, commit `feat(render): paint display lists from page cache`.
+- [x] **Step 4:** Five checks green, commit `feat(render): paint display lists from page cache`.
 
 ### Task 8: Artwork decode on the media worker
 

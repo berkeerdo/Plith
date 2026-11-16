@@ -52,6 +52,9 @@ pub(super) struct Engine<'a, C, P, O, N> {
     pub(super) painted: u64,
     /// The shape of the last frame presented; `None` at the start and after a snap.
     pub(super) last_shape: Option<IslandShape>,
+    /// The (shape, previous) pair of the last `on_shape` call; `None` at the start and after a
+    /// snap, so the first frame then always posts.
+    pub(super) posted: Option<(IslandShape, IslandShape)>,
     pub(super) seen: u64,
 }
 
@@ -223,6 +226,7 @@ where
         self.content_settled = true;
         self.stats = None;
         self.last_shape = None;
+        self.posted = None;
     }
 
     pub(super) fn is_settled(&self) -> bool {
@@ -249,7 +253,9 @@ where
         Ok(times)
     }
 
-    /// One paint: publishes the shape on success, feeds `GpuHealth` and runs its action.
+    /// One paint: publishes the shape on success (except a settled shape already published, so
+    /// an ambient run does not post the same shape every frame), feeds `GpuHealth` and runs its
+    /// action.
     /// Returns the frame times (on success) and whether `recover` ran.
     pub(super) fn paint_once(
         &mut self,
@@ -260,12 +266,16 @@ where
         let times = match result {
             Ok(times) => {
                 self.painted += 1;
-                let previous = self.last_shape.replace(frame.shape);
-                (self.sinks.on_shape)(ShapeFrame {
-                    shape: frame.shape,
-                    previous: previous.unwrap_or(frame.shape),
-                    generation: self.painted,
-                });
+                let previous = self.last_shape.replace(frame.shape).unwrap_or(frame.shape);
+                let pair = (frame.shape, previous);
+                if previous != frame.shape || self.posted != Some(pair) {
+                    self.posted = Some(pair);
+                    (self.sinks.on_shape)(ShapeFrame {
+                        shape: frame.shape,
+                        previous,
+                        generation: self.painted,
+                    });
+                }
                 Some(times)
             }
             Err(_) => None,

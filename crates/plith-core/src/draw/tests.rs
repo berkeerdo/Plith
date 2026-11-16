@@ -31,3 +31,37 @@ fn style_table_matches_the_design() {
         (Family::Mono, 14.0, 500)
     );
 }
+
+fn timeline(playing: bool) -> SeekTimeline {
+    SeekTimeline {
+        position_s: 30.0,
+        duration_s: 120.0,
+        stamp: SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(1000),
+        playing,
+    }
+}
+
+#[test]
+fn seek_fraction_extrapolates_while_playing() {
+    let t = timeline(true);
+    let at = |s: u64| t.stamp + std::time::Duration::from_secs(s);
+    assert!((t.fraction_at(at(0)) - 0.25).abs() < 1e-9);
+    assert!((t.fraction_at(at(30)) - 0.5).abs() < 1e-9);
+    assert!(
+        (t.fraction_at(at(500)) - 1.0).abs() < 1e-9,
+        "clamped to the end"
+    );
+    // A clock before the stamp counts as no time elapsed.
+    assert!((t.fraction_at(SystemTime::UNIX_EPOCH) - 0.25).abs() < 1e-9);
+}
+
+#[test]
+fn seek_fraction_holds_while_paused_and_guards_zero_length() {
+    let t = timeline(false);
+    assert!((t.fraction_at(t.stamp + std::time::Duration::from_secs(30)) - 0.25).abs() < 1e-9);
+    let empty = SeekTimeline {
+        duration_s: 0.0,
+        ..timeline(true)
+    };
+    assert!(empty.fraction_at(empty.stamp).abs() < 1e-9);
+}

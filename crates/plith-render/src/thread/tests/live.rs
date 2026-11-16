@@ -269,3 +269,25 @@ fn idle_after_collapse_has_no_wakes() {
     assert_eq!(wakes, 1 + calls, "one mailbox wake, then only clock waits");
     let _ = run.stop();
 }
+
+#[test]
+fn ambient_posts_an_unchanged_shape_once() {
+    let (run, _, ambient) = ambient_then(Scene::default());
+    let _ = run.report();
+    let shapes = lock(&run.shapes).clone();
+    let frames = run.frames();
+    let settled_open = shapes
+        .iter()
+        .filter(|s| s.shape == PAGES[0] && s.previous == PAGES[0])
+        .count();
+    assert_eq!(settled_open, 1, "one settled post, none per ambient frame");
+    assert!(
+        shapes.len() + ambient.frames - 1 <= frames.len(),
+        "{} posts for {} frames",
+        shapes.len(),
+        frames.len()
+    );
+    // The collapse that follows posts every frame again.
+    assert_eq!(shapes.last().map(|s| s.shape), Some(REST));
+    let _ = run.stop();
+}
