@@ -3,21 +3,33 @@
 Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
-- R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e` (451 tests, five checks green
-  on the merge); its console run over a game (plan Task 9) is the last R6 step.
+- R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
+  (plan Task 9) is the last R6 step.
+- R4 code is merged as `b6bd801` (786 tests, five checks green on the trial merge). Tab bar,
+  audio, media, system, shelf and pill pages as display lists drawn from cached page bitmaps
+  with prewarm (ADR 0010), click to expand and leave to collapse (ADR 0011), upper-case rules
+  (ADR 0012). Plan and progress log: `plans/active/pages-r4.md`; review
+  `quality/2026-11-16-pages-r4-merge-review.md` (3 Important fixed, re-reviewed). Nothing of R4
+  has been on the real screen yet. Lane `pages` stopped, worktree kept for the console run.
 - R6: `plith-osd.exe` draws in a `CreateWindowInBand` window at band 2 (ADR 0009), installed and
   signed under `C:\Program Files\Plith\osd\`; `plith-ipc` pipe with identity checks;
   `plith-system` hook containment, flyout journal, key repeat collapse. Plan and Record:
   `plans/active/osd-r6.md`; reviews `quality/2026-11-16-osd-r6-merge-review.md` and
   `quality/2026-11-16-osd-r6-recheck.md`. The helper is not wired into `crates/plith` yet.
-- **Running:** lane `pages` (R4) on `feature/pages-r4`; state in `LANES.md`.
+- **Running:** no lane. State in `LANES.md`.
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next after R4 merges:** the wiring job (helper and pipe into `crates/plith`, notes in
-  `crates/plith-ipc/README.md` "Wiring" and the osd Record), then one console session with Berke
-  for every owed on-screen check (osd Task 9, pages console run).
+- **Next:** the wiring job (helper and pipe into `crates/plith`, notes in
+  `crates/plith-ipc/README.md` "Wiring" and the osd Record; also OSD text stack vs
+  `plith_render::TextSystem` and OSD `upper_tr` to `tr_upper`, review M8). Then one console
+  session with Berke for every owed on-screen check: osd Task 9; pages Task 4, 7a, 16 and 18
+  on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
+  --fixture banana`, 20 s media ambient while playing, hover and leave, `prewarm:` lines).
+  Later and separate: the guarded route write session (one route on Banana and back).
+- After that: R5 shelf (drag in and out), R4b media output picker; themes switch in R7 settings
+  (palettes exist, nothing calls `set_palette`).
 
 ## Open risks
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
@@ -39,8 +51,8 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
 - Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
 
 ## Recent decisions
+- ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
+- ADR 0011 Click to expand, leave to collapse, no keyboard
+- ADR 0010 UI layer: display list, cached page bitmaps, prewarm
 - ADR 0009 OSD helper draws in a window created in the UIAccess band
 - ADR 0008 Frame latency 2, no priority levers
-- ADR 0007 Themes are palettes over one visual language
-- ADR 0006 Scene handoff between threads
-- ADR 0005 Swap chain (latency line superseded by 0008)
