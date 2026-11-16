@@ -6,6 +6,7 @@
 
 use plith_core::layout::RectPx;
 use std::sync::OnceLock;
+use std::sync::atomic::{AtomicBool, Ordering};
 use windows::Win32::Foundation::{
     CloseHandle, FARPROC, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM,
 };
@@ -18,8 +19,9 @@ use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Threading::{GetCurrentProcess, IsImmersiveProcess, OpenProcessToken};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE,
-    ShowWindow, ShowWindowAsync, WINDOW_EX_STYLE, WNDCLASSEXW, WS_EX_NOACTIVATE,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, PostMessageW, RegisterClassExW, SW_HIDE,
+    SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowPos, ShowWindow, ShowWindowAsync,
+    WINDOW_EX_STYLE, WM_APP, WM_DISPLAYCHANGE, WM_DPICHANGED, WNDCLASSEXW, WS_EX_NOACTIVATE,
     WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{Error, PCSTR, PCWSTR, s, w};
@@ -28,6 +30,20 @@ use windows::core::{Error, PCSTR, PCWSTR, s, w};
 pub const ZBID_UIACCESS: u32 = 2;
 
 const CLASS_NAME: PCWSTR = w!("PlithOsdBand");
+
+/// Posted to the window by its own procedure after a display or DPI change; the UI thread's
+/// message loop answers it by re-placing the window (see [`take_relayout_request`]).
+pub const WM_APP_RELAYOUT: u32 = WM_APP + 2;
+
+/// Set while a [`WM_APP_RELAYOUT`] is posted and not yet taken, so a burst of display
+/// messages (a mode change often brings both) asks for one relayout.
+static RELAYOUT_PENDING: AtomicBool = AtomicBool::new(false);
+
+/// Clears the pending relayout request; returns whether one was pending. The message loop
+/// calls it when it sees [`WM_APP_RELAYOUT`], before it reads the monitor again.
+pub fn take_relayout_request() -> bool {
+    RELAYOUT_PENDING.swap(false, Ordering::SeqCst)
+}
 
 type CreateWindowInBandFn = unsafe extern "system" fn(
     u32,
@@ -98,6 +114,19 @@ fn user32_proc(name: PCSTR) -> FARPROC {
 }
 
 unsafe extern "system" fn wndproc(hwnd: HWND, msg: u32, wp: WPARAM, lp: LPARAM) -> LRESULT {
+    if msg == WM_DISPLAYCHANGE || msg == WM_DPICHANGED {
+        // The work is done from the message loop, outside this (possibly sent) message.
+        if !RELAYOUT_PENDING.swap(true, Ordering::SeqCst) {
+            // SAFETY: posting to this live window never dereferences anything.
+            let posted = unsafe { PostMessageW(Some(hwnd), WM_APP_RELAYOUT, WPARAM(0), LPARAM(0)) };
+            if posted.is_err() {
+                RELAYOUT_PENDING.store(false, Ordering::SeqCst);
+            }
+        }
+        // Both messages want 0 when handled; the window is placed by the loop, not by the
+        // rectangle WM_DPICHANGED suggests.
+        return LRESULT(0);
+    }
     // SAFETY: forwards the arguments Windows passed to this window procedure unchanged.
     unsafe { DefWindowProcW(hwnd, msg, wp, lp) }
 }
@@ -253,6 +282,27 @@ pub fn top_centre(monitor: RectPx, scale: f64, width: f64, height: f64) -> RectP
         width: w,
         height: h,
     }
+}
+
+/// Moves and sizes `hwnd` to `rect` (physical pixels) without activating it, changing its
+/// z-order or band, or changing whether it is shown.
+///
+/// # Errors
+/// Returns the `SetWindowPos` error.
+pub fn move_window(hwnd: HWND, rect: RectPx) -> Result<(), String> {
+    // SAFETY: `hwnd` is a live window of this thread; no pointer is passed.
+    unsafe {
+        SetWindowPos(
+            hwnd,
+            None,
+            rect.x,
+            rect.y,
+            rect.width,
+            rect.height,
+            SWP_NOACTIVATE | SWP_NOZORDER,
+        )
+    }
+    .map_err(|e| format!("SetWindowPos: {e}"))
 }
 
 /// The primary monitor's rectangle and its scale (pixels per DIP).

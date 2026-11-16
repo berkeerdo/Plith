@@ -36,6 +36,12 @@ or the next deadline (hide 1.5 s after the last level, exit) and paces motion on
 clock. The log is `%LOCALAPPDATA%\Plith\plith-osd.log`: one `osd msg:` line per message and one
 `motion osd-show` / `motion osd-hide` line per motion.
 
+Display changes: the window procedure handles `WM_DISPLAYCHANGE` and `WM_DPICHANGED`. The UI
+thread re-reads the primary monitor's rectangle and DPI, moves the window to the new top centre
+(`SetWindowPos`, no activation, no z-order change) and sends the render thread a relayout; the
+render thread rebuilds its graphics objects at the new size and scale (the device-loss path)
+and repaints if the OSD is showing. The log gets one `osd relayout: rect=.. scale=..` line.
+
 ## Fonts
 
 The design asks for Martian Mono (labels and numbers). It is not bundled yet: DirectWrite is

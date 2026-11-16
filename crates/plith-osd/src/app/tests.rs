@@ -126,3 +126,39 @@ fn hello_waits_for_room_instead_of_being_dropped() {
     assert!(got_hello, "a full channel must not drop Hello");
     assert_eq!(sender.join().unwrap(), Flow::Continue);
 }
+
+#[test]
+fn placement_follows_the_monitor_size_and_scale() {
+    // The review's case: a 3840 wide desktop at 150 %, then a game at 1920 x 1080 and 100 %.
+    let desktop = RectPx {
+        x: 0,
+        y: 0,
+        width: 3840,
+        height: 2160,
+    };
+    let game = RectPx {
+        x: 0,
+        y: 0,
+        width: 1920,
+        height: 1080,
+    };
+    let before = placement(desktop, 1.5);
+    let after = placement(game, 1.0);
+    assert!((before.scale - 1.5).abs() < f64::EPSILON);
+    assert!((after.scale - 1.0).abs() < f64::EPSILON);
+    assert_eq!(before.surface, band::top_centre(desktop, 1.5, 300.0, 40.0));
+    assert_eq!(
+        after.surface,
+        RectPx {
+            x: (1920 - 300) / 2,
+            y: 0,
+            width: 300,
+            height: 40,
+        },
+        "centred on the new width, at the new scale"
+    );
+    assert!(
+        after.surface.x + after.surface.width <= game.width,
+        "never cut off"
+    );
+}

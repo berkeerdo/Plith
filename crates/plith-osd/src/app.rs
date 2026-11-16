@@ -1,6 +1,8 @@
 //! The OSD helper: binds the pipe, creates the band window and runs three threads.
 //!
-//! - UI thread (this one): owns the window, pumps its messages, draws nothing.
+//! - UI thread (this one): owns the window, pumps its messages, draws nothing. After a display
+//!   or DPI change it re-places the window at the primary monitor's top centre and sends the
+//!   render thread [`Event::Relayout`].
 //! - Server thread: `OsdServer::serve`; every decoded message goes to the render thread over a
 //!   bounded channel with a blocking send. The render thread drains it quickly, so a final
 //!   `Level`, `Hide` or `Bye` is never the one dropped.
@@ -13,13 +15,14 @@ use crate::log::Log;
 use crate::paint::{HEIGHT, WIDTH};
 use crate::render::{self, Event, Job, WM_APP_EXIT};
 use crate::watch;
-use plith_core::layout::SurfaceLayout;
+use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_ipc::{BindError, DecodeError, Flow, Message, Meter, OsdServer, ServerEvent};
 use std::mem::{Discriminant, discriminant};
 use std::sync::Arc;
 use std::sync::mpsc::{SyncSender, sync_channel};
 use std::thread;
 use std::time::Instant;
+use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, MSG, TranslateMessage,
 };
@@ -43,7 +46,8 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
         Err(error) => return Err(format!("bind {pipe}: {error}")),
     };
     let (monitor, scale) = band::primary_monitor()?;
-    let surface = band::top_centre(monitor, scale, f64::from(WIDTH), f64::from(HEIGHT));
+    let layout = placement(monitor, scale);
+    let surface = layout.surface;
     let window = create_window(surface, log)?;
     // The window stays hidden until the first frame is drawn.
     band::set_visible(window.hwnd, false);
@@ -63,7 +67,7 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
     let (events, inbox) = sync_channel(CHANNEL);
     let job = Job {
         hwnd: window.hwnd.0 as usize,
-        layout: SurfaceLayout { surface, scale },
+        layout,
         hz,
         origin: Instant::now(),
         events: inbox,
@@ -85,7 +89,7 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
             return Err(error);
         }
     };
-    pump();
+    pump(|| relayout(window.hwnd, &events, log));
     stopper.stop();
     // Blocks only while the render thread still runs and drains; fails at once once it ended.
     let _ = events.send(Event::Quit);
@@ -113,8 +117,44 @@ fn join(handle: thread::JoinHandle<Result<(), String>>) -> Result<(), String> {
         .unwrap_or_else(|_| Err(String::from("thread panicked")))
 }
 
+/// The OSD's place on a monitor: the seal's DIP size at `scale`, centred at the top of `monitor`.
+#[must_use]
+pub fn placement(monitor: RectPx, scale: f64) -> SurfaceLayout {
+    SurfaceLayout {
+        surface: band::top_centre(monitor, scale, f64::from(WIDTH), f64::from(HEIGHT)),
+        scale,
+    }
+}
+
+/// Re-reads the primary monitor after a display or DPI change, moves the window there and
+/// asks the render thread to rebuild at the new size and scale. A failed read keeps the old
+/// place (logged).
+fn relayout(hwnd: HWND, events: &SyncSender<Event>, log: &Log) {
+    if !band::take_relayout_request() {
+        return;
+    }
+    let (monitor, scale) = match band::primary_monitor() {
+        Ok(found) => found,
+        Err(error) => {
+            log.line(&format!("osd relayout: {error}, keeping the old place"));
+            return;
+        }
+    };
+    let layout = placement(monitor, scale);
+    let r = layout.surface;
+    log.line(&format!(
+        "osd relayout: rect={},{} {}x{} scale={scale}",
+        r.x, r.y, r.width, r.height
+    ));
+    if let Err(error) = band::move_window(hwnd, r) {
+        log.line(&format!("osd relayout: {error}"));
+    }
+    // Blocking like every other event; the render thread never waits on this thread.
+    let _ = events.send(Event::Relayout(layout));
+}
+
 /// The UIAccess band when Windows allows it (signed, installed), else a plain topmost window.
-fn create_window(surface: plith_core::layout::RectPx, log: &Log) -> Result<BandWindow, String> {
+fn create_window(surface: RectPx, log: &Log) -> Result<BandWindow, String> {
     band::create_band_window(surface, Creation::InBand).or_else(|error| {
         log.line(&format!(
             "osd: inband refused ({error}), falling back to plain"
@@ -123,14 +163,19 @@ fn create_window(surface: plith_core::layout::RectPx, log: &Log) -> Result<BandW
     })
 }
 
-/// Pumps this thread's messages until the render thread posts `WM_APP_EXIT` or `WM_QUIT`.
-fn pump() {
+/// Pumps this thread's messages until the render thread posts `WM_APP_EXIT` or `WM_QUIT`;
+/// calls `on_relayout` for every [`band::WM_APP_RELAYOUT`].
+fn pump(mut on_relayout: impl FnMut()) {
     let mut msg = MSG::default();
     loop {
         // SAFETY: `msg` is a live local; a null window takes every message of this thread.
         let got = unsafe { GetMessageW(&raw mut msg, None, 0, 0) };
         if got.0 <= 0 || msg.message == WM_APP_EXIT {
             return;
+        }
+        if msg.message == band::WM_APP_RELAYOUT {
+            on_relayout();
+            continue;
         }
         // SAFETY: `msg` was filled by GetMessageW above.
         unsafe {

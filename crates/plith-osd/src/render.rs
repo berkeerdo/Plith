@@ -3,7 +3,8 @@
 //! At rest it blocks on the event channel until a message arrives or the model's next deadline
 //! (the hide or the exit), so it parks with no wake-ups when nothing is due. While animating it
 //! paces frames on the compositor clock and writes one `motion osd-show|osd-hide` line per
-//! opacity fade. A device loss rebuilds the graphics objects (hardware, then WARP). When the
+//! opacity fade. A device loss rebuilds the graphics objects (hardware, then WARP), and so does
+//! a relayout after a display or DPI change, at the new size and scale. When the
 //! model says exit, or on any failure, it posts [`WM_APP_EXIT`] to the window so the UI thread
 //! winds down.
 
@@ -39,6 +40,8 @@ pub enum Event {
     Disconnected,
     /// The process that sent `Hello` with this pid has ended.
     ClientGone(u32),
+    /// The display changed: the window now has this rectangle and scale.
+    Relayout(SurfaceLayout),
     /// Stop now (the UI thread is closing).
     Quit,
 }
@@ -47,7 +50,7 @@ pub enum Event {
 pub struct Job {
     /// The OSD window as an integer.
     pub hwnd: usize,
-    /// Surface rectangle and DPI scale.
+    /// Surface rectangle and DPI scale at start; [`Event::Relayout`] replaces it.
     pub layout: SurfaceLayout,
     /// Display refresh rate, for the motion statistics.
     pub hz: f64,
@@ -80,10 +83,10 @@ fn hwnd_of(job: &Job) -> HWND {
     HWND(job.hwnd as *mut core::ffi::c_void)
 }
 
-/// Builds the graphics objects on hardware, then on WARP; logs every failed try.
-fn build_stack(job: &Job) -> Result<Stack, String> {
+/// Builds the graphics objects for `layout` on hardware, then on WARP; logs every failed try.
+fn build_stack(job: &Job, layout: &SurfaceLayout) -> Result<Stack, String> {
     for warp in [false, true] {
-        match Stack::build(hwnd_of(job), &job.layout, warp) {
+        match Stack::build(hwnd_of(job), layout, warp) {
             Ok(stack) => return Ok(stack),
             Err(error) => job
                 .log
@@ -95,6 +98,10 @@ fn build_stack(job: &Job) -> Result<Stack, String> {
 
 struct Engine<'a> {
     job: &'a Job,
+    /// The layout the stack is built for.
+    layout: SurfaceLayout,
+    /// A relayout that arrived and is not applied yet.
+    relayout: Option<SurfaceLayout>,
     stack: Option<Stack>,
     clock: Box<dyn FrameSource>,
     model: OsdModel,
@@ -112,7 +119,7 @@ struct Engine<'a> {
 /// Returns the failing call (device on hardware and WARP, clock or a non-loss draw error).
 pub fn run(job: &Job) -> Result<(), String> {
     let _exit = ExitPost(job.hwnd);
-    let stack = build_stack(job)?;
+    let stack = build_stack(job, &job.layout)?;
     let clock = open_clock(ClockKind::Dcomp, job.origin, 0, job.hz)
         .map_err(|e| format!("open_clock(dcomp): {e}"))?;
     job.log.line(&format!(
@@ -123,6 +130,8 @@ pub fn run(job: &Job) -> Result<(), String> {
     ));
     let mut engine = Engine {
         job,
+        layout: job.layout,
+        relayout: None,
         stack: Some(stack),
         clock,
         model: OsdModel::new(),
@@ -147,6 +156,7 @@ impl Engine<'_> {
             if self.rest() == Flow::Stop {
                 return Ok(());
             }
+            self.apply_relayout()?;
             let now = self.now();
             if self.exit_due(now) {
                 return Ok(());
@@ -224,6 +234,7 @@ impl Engine<'_> {
                 self.model.client_gone(now);
             }
             Event::ClientGone(_) => {}
+            Event::Relayout(layout) => self.relayout = Some(layout),
             Event::Quit => return Flow::Stop,
         }
         Flow::Continue
@@ -275,6 +286,7 @@ impl Engine<'_> {
             if self.drain(now) == Flow::Stop || self.exit_due(now) {
                 return Ok(Flow::Stop);
             }
+            self.apply_relayout()?;
             let animating = self.model.step(now);
             let fading = self.model.is_fading();
             let decision = self.track.frame(self.kind(), fading);
@@ -325,6 +337,28 @@ impl Engine<'_> {
         }
     }
 
+    /// Rebuilds the graphics objects at a pending relayout's size and scale (the device-loss
+    /// path) and repaints when the OSD is on screen. Nothing to do without a pending relayout.
+    fn apply_relayout(&mut self) -> Result<(), String> {
+        let Some(layout) = self.relayout.take() else {
+            return Ok(());
+        };
+        self.layout = layout;
+        self.stack = None;
+        let stack = self.stack.insert(build_stack(self.job, &self.layout)?);
+        self.job.log.line(&format!(
+            "osd relayout rebuilt: warp={} {}x{} scale={}",
+            stack.is_warp(),
+            layout.surface.width,
+            layout.surface.height,
+            layout.scale
+        ));
+        if !self.model.is_hidden() {
+            self.paint()?;
+        }
+        Ok(())
+    }
+
     /// Draws and presents the model's frame. On a device loss rebuilds everything once
     /// (hardware, then WARP) and draws again. Returns draw and present times in ms.
     fn paint(&mut self) -> Result<(f64, f64), String> {
@@ -340,7 +374,7 @@ impl Engine<'_> {
                     .log
                     .line(&format!("osd device lost ({error}), rebuilding"));
                 self.stack = None;
-                let stack = self.stack.insert(build_stack(self.job)?);
+                let stack = self.stack.insert(build_stack(self.job, &self.layout)?);
                 self.job
                     .log
                     .line(&format!("osd device rebuilt: warp={}", stack.is_warp()));
