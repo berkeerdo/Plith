@@ -31,6 +31,9 @@ version = "0.1.0"
 [[package]]
 name = "plith-ipc"
 version = "0.1.0"
+dependencies = [
+ "windows",
+]
 
 [[package]]
 name = "plith-media"
