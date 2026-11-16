@@ -15,7 +15,7 @@ fn value_is_a_whole_percent_or_the_mute_word() {
     assert_eq!(value_text(&frame(0.424, false)), "42");
     assert_eq!(value_text(&frame(1.0, false)), "100");
     assert_eq!(value_text(&frame(0.0, false)), "0");
-    assert_eq!(value_text(&frame(0.5, true)), MUTED_WORD);
+    assert_eq!(value_text(&frame(0.5, true)), "SESSİZ");
 }
 
 #[test]
@@ -78,11 +78,20 @@ fn snapped_span_is_at_least_one_device_pixel() {
 }
 
 #[test]
-fn labels_upper_case_the_turkish_way() {
+fn own_turkish_words_upper_case_the_turkish_way() {
+    assert_eq!(upper_tr(MUTED_WORD), "SESSİZ");
     assert_eq!(upper_tr("Mikrofon"), "MİKROFON");
     assert_eq!(upper_tr("Kulaklık"), "KULAKLIK");
-    assert_eq!(upper_tr("Speakers"), "SPEAKERS");
     assert_eq!(upper_tr("şğüöç"), "ŞĞÜÖÇ");
+}
+
+#[test]
+fn names_from_windows_upper_case_with_invariant_rules() {
+    assert_eq!(upper_name("Display"), "DISPLAY");
+    assert_eq!(upper_name("Speakers (Realtek)"), "SPEAKERS (REALTEK)");
+    assert_eq!(upper_name("Voicemeeter Input"), "VOICEMEETER INPUT");
+    assert_eq!(upper_name("Mikrofon"), "MIKROFON", "no dotted capital I");
+    assert_eq!(upper_name("Kulaklık şğüöç"), "KULAKLIK ŞĞÜÖÇ");
 }
 
 const SCALES: [f32; 3] = [1.0, 1.25, 1.5];

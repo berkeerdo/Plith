@@ -318,7 +318,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   write, delete, `WRITE_DAC` or owner rights on `Plith`, `Plith\osd` and the exe (fails closed,
   removing the new exe); `-CheckAcl` runs that assertion read-only. I3 goes to the Record and
   the wiring notes as unverified (no built-in panel here).
-- [ ] **F10, label case (Berke, relayed 2026-11-16: "önerilerini uygula lütfen"):** Plith's
+- [x] **F10, label case (Berke, relayed 2026-11-16: "önerilerini uygula lütfen"):** Plith's
   own Turkish strings are upper-cased with Turkish rules; names from Windows or Voicemeeter
   (devices, endpoints, apps) with invariant rules, so `Display` shows as `DISPLAY`. TDD: one
   test per case.

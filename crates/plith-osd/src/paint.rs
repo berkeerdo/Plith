@@ -32,8 +32,8 @@ const RULER: (f32, f32) = (92.0, 236.0);
 const VALUE_LEFT: f32 = 244.0;
 /// Tick length below the track.
 const TICK: f32 = 3.0;
-/// The word shown in the value slot while muted.
-pub const MUTED_WORD: &str = "SESSİZ";
+/// The word shown in the value slot while muted, before [`upper_tr`] (Plith's own Turkish).
+pub const MUTED_WORD: &str = "sessiz";
 
 /// The Gece palette as `0xRRGGBB`.
 const FLOOR: u32 = 0x000B_0B0A;
@@ -48,7 +48,7 @@ const LIME: u32 = 0x00CA_FF33;
 #[must_use]
 pub fn value_text(frame: &OsdFrame) -> String {
     if frame.muted {
-        return String::from(MUTED_WORD);
+        return upper_tr(MUTED_WORD);
     }
     // Allowed: the level is clamped to 0..=1, so the percent fits a u8 exactly.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -115,7 +115,16 @@ pub fn ruler_rows(scale: f32) -> ((f32, f32), (f32, f32)) {
     (row(line_px(scale)), row(2.0 * line_px(scale)))
 }
 
-/// Upper case with the Turkish dotted and dotless i: `i` becomes `İ`, `ı` becomes `I`.
+/// Upper case for a name that comes from Windows or Voicemeeter (a device, an endpoint, an
+/// app, the brightness `Display`): invariant rules, so `i` becomes `I` and `Display` reads
+/// `DISPLAY`. Berke's rule (2026-11-16): only Plith's own Turkish words use [`upper_tr`].
+#[must_use]
+pub fn upper_name(text: &str) -> String {
+    text.to_uppercase()
+}
+
+/// Upper case for Plith's own Turkish words, with the Turkish dotted and dotless i: `i`
+/// becomes `İ`, `ı` becomes `I`. Never for names from Windows (see [`upper_name`]).
 #[must_use]
 pub fn upper_tr(text: &str) -> String {
     let mut upper = String::with_capacity(text.len());
@@ -227,7 +236,7 @@ impl Painter {
         self.set_opacity(frame.opacity);
         self.draw_seal(gpu);
         self.draw_ruler(gpu, frame);
-        let label = upper_tr(&frame.label);
+        let label = upper_name(&frame.label);
         Self::text(
             gpu,
             &label,
