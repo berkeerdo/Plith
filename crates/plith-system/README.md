@@ -9,6 +9,8 @@ monitors through DDC/CI) and suppression of the native Windows volume flyout. De
 | Item | Purpose |
 |---|---|
 | `BrightnessService` | `new()`, `start() -> Status`, `stop()`, `status()`, `snapshot() -> Vec<DeviceLevel>`, `subscribe() -> Receiver<Vec<DeviceLevel>>`, `set_waker(..)` |
+| `BrightnessService::set_suppression_window(Option<Arc<SuppressionWindow>>)` | Wires the flyout suppressor's window: every `WmiMonitorBrightnessEvent` (built-in panels only) opens it before the new level is published |
+| `BrightnessService::listener_error() -> Option<String>` | Set when the panel listener could not start (COM, WMI connection or subscription) or its event stream broke; the waker is called once when it is recorded. The service stays `Running` |
 | `BrightnessService::set_percent(u8)` | The only hardware write. Clamped to 100, returns at once (`false` when not running); the newest value wins, one write in flight |
 | `FlyoutSuppressor::start(Mode)` | Three WinEvent hooks on their own thread. `Mode::Hide` hides the shell volume flyout and journals to `default_journal()`, `Mode::DryRun` only reports and uses no journal |
 | `FlyoutSuppressor::start_with_journal(Mode, Option<PathBuf>)` | Same with an explicit journal file (tests, tools) |
@@ -40,20 +42,25 @@ monitors through DDC/CI) and suppression of the native Windows volume flyout. De
   not zero percent. Show nothing rather than a 0% bar.
 - **Wire the pair:** pass `suppressor.suppression_window()` to `VolumeKeyHook::start` so a
   volume key opens the window inline, before the hide filters run.
-- Brightness flyout suppression is NOT covered. The native brightness flyout is a deferred
-  gap: the consumer should wire `WmiMonitorBrightnessEvent` (the brightness service already
-  listens for it on built-in panels) to the suppressor's `open_window`.
+- **Wire the brightness pair the same way:** `service.set_suppression_window(Some(
+  suppressor.suppression_window()))` after both start. Check `listener_error()` (on the waker
+  or after `start`) so a dead listener is not mistaken for "no external changes". Unverified
+  on hardware here: this PC is a desktop with DDC/CI monitors only, and WMI brightness events
+  fire only for built-in panels; only the pure decision is unit tested.
 
 ## Read-only probes
 
 ```
 cargo run --package plith-system --example probe_brightness
 cargo run --package plith-system --example probe_flyout
+cargo run --package plith-system --example probe_flyout -- --brightness
 ```
 
 `probe_brightness` lists displays and prints 5 s of change events and never calls
 `set_percent`. `probe_flyout` is a dry run: it hooks for 10 s, logs what it would hide when a
-volume key is pressed by hand, hides nothing and sends no input.
+volume key is pressed by hand, hides nothing and sends no input. With `--brightness` it
+wires the brightness service to a dry run suppressor for 10 s and prints matches and the
+listener error; it never calls `set_percent`.
 
 ## Hardware write verification
 

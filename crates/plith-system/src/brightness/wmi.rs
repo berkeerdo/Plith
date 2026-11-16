@@ -246,29 +246,33 @@ pub(super) fn enumerate() -> Vec<Box<dyn BrightnessDevice>> {
 
 /// Blocks on `WmiMonitorBrightnessEvent` (internal panels only; an external monitor never
 /// announces anything) and calls `on_event(instance, percent)` for each, until `stop` is set.
-/// The calling thread must have COM initialized. Returns early when WMI cannot be reached.
-pub(super) fn listen(stop: &AtomicBool, mut on_event: impl FnMut(String, u8)) {
-    let Ok(services) = connect() else {
-        return;
-    };
+/// The calling thread must have COM initialized.
+///
+/// # Errors
+/// The reason text when WMI cannot be reached, the subscription is refused or the event
+/// stream breaks.
+pub(super) fn listen(
+    stop: &AtomicBool,
+    mut on_event: impl FnMut(String, u8),
+) -> Result<(), String> {
+    let services = connect().map_err(|err| format!("WMI connection failed: {err}"))?;
     // SAFETY: plain COM call.
-    let Ok(events) = (unsafe {
+    let events = unsafe {
         services.ExecNotificationQuery(
             &BSTR::from("WQL"),
             &BSTR::from("SELECT * FROM WmiMonitorBrightnessEvent"),
             QUERY_FLAGS,
             None::<&IWbemContext>,
         )
-    }) else {
-        return;
-    };
+    }
+    .map_err(|err| format!("brightness event subscription failed: {err}"))?;
     while !stop.load(Ordering::Acquire) {
         let mut slot = [None];
         let mut returned = 0u32;
         // SAFETY: the slot and the count are live locals.
         let status = unsafe { events.Next(EVENT_POLL_MS, &mut slot, &raw mut returned) };
         if status.is_err() {
-            return;
+            return Err(format!("brightness event stream ended: {status:?}"));
         }
         let Some(event) = slot[0].take().filter(|_| returned > 0) else {
             continue;
@@ -279,4 +283,5 @@ pub(super) fn listen(stop: &AtomicBool, mut on_event: impl FnMut(String, u8)) {
             on_event(instance, u8::try_from(percent.clamp(0, 100)).unwrap_or(0));
         }
     }
+    Ok(())
 }
