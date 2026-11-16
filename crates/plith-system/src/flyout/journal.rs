@@ -21,10 +21,13 @@ use std::path::Path;
 /// from the wall clock minus uptime, so a clock adjustment moves it.
 pub const BOOT_TOLERANCE_SECS: u64 = 120;
 
-/// The name of the session-local mutex that makes one process the only owner of the journal
-/// at `path`: `Local\plith-flyout-<FNV-1a 64 of the lower-cased path, 16 hex digits>`. The
+/// The name of the machine-wide mutex that makes one process the only owner of the journal
+/// at `path`: `Global\plith-flyout-<FNV-1a 64 of the lower-cased path, 16 hex digits>`. The
 /// same file always gives the same name, whatever its case (NTFS names are case blind), so
 /// the app and `verify_system_writes` meet on it; a test's scratch journal gets its own.
+/// `Global\`, not `Local\`: the journal lives in the user's profile and is shared by all of
+/// that user's sessions (console and RDP), so the lock must be too. A mutex there needs no
+/// privilege.
 #[must_use]
 pub fn lock_name(path: &Path) -> String {
     let mut hash: u64 = 0xcbf2_9ce4_8422_2325;
@@ -32,7 +35,7 @@ pub fn lock_name(path: &Path) -> String {
         hash ^= u64::from(byte);
         hash = hash.wrapping_mul(0x0000_0100_0000_01b3);
     }
-    format!(r"Local\plith-flyout-{hash:016x}")
+    format!(r"Global\plith-flyout-{hash:016x}")
 }
 
 /// The boot instant in unix seconds from the current unix time and the uptime in ms.

@@ -122,8 +122,8 @@ fn restore_orphans_from_another_boot_shows_nothing_and_clears() {
 fn journal_lock_name_is_stable_and_case_blind() {
     let path = std::path::Path::new(r"C:\Users\me\AppData\Local\Plith\flyout-hidden.txt");
     let name = lock_name(path);
-    assert!(name.starts_with(r"Local\plith-flyout-"), "{name}");
-    assert_eq!(name.len(), r"Local\plith-flyout-".len() + 16);
+    assert!(name.starts_with(r"Global\plith-flyout-"), "{name}");
+    assert_eq!(name.len(), r"Global\plith-flyout-".len() + 16);
     assert_eq!(name, lock_name(path), "stable");
     let upper = std::path::Path::new(r"C:\USERS\ME\APPDATA\LOCAL\PLITH\FLYOUT-HIDDEN.TXT");
     assert_eq!(name, lock_name(upper), "case blind");

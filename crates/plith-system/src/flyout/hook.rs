@@ -101,7 +101,7 @@ impl FlyoutSuppressor {
     }
 
     /// [`start`](Self::start) with an explicit journal file. With a journal, the suppressor
-    /// first takes the journal's single-owner lock (a session-local named mutex, see
+    /// first takes the journal's single-owner lock (a machine-wide named mutex, see
     /// [`journal::lock_name`]); when another live suppressor owns it, start fails and the
     /// journal is neither read nor cleared. Then the hook thread
     /// first shows every journaled window left hidden by a run that was killed, and only one

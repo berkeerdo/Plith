@@ -1,4 +1,5 @@
-//! The single-owner lock of a journal file: a session-local named mutex per journal path.
+//! The single-owner lock of a journal file: a machine-wide (`Global\`) named mutex per
+//! journal path, so every session of the user meets on it.
 //!
 //! The mutex is only created, never waited on: its existence is the lock. It lives as long as
 //! a handle to it is open, so a killed owner releases it with its handles, and the next start
