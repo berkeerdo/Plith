@@ -16,5 +16,5 @@ Little endian. Every message starts with `b'P' b'O' version kind`, then the payl
 | 4 | Bye | none |
 
 Meters: 0 volume, 1 brightness. A message is at most 128 bytes. The pipe is
-`\.\pipe\plith-osd-<session_id>`. A bad magic or a newer version is fatal
+`\\.\pipe\plith-osd-<session_id>`. A bad magic or a newer version is fatal
 (`DecodeError::is_fatal`); an unknown kind is not.

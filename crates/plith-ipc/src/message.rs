@@ -112,7 +112,7 @@ impl fmt::Display for DecodeError {
             Self::Percent(p) => write!(f, "percent {p} is above 100"),
             Self::Meter(m) => write!(f, "unknown meter {m}"),
             Self::Flag(b) => write!(f, "invalid flag byte {b}"),
-            Self::Label => write!(f, "label is not valid UTF-8"),
+            Self::Label => write!(f, "label is too long or not valid UTF-8"),
             Self::Trailing => write!(f, "unexpected bytes after the message"),
         }
     }

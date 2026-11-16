@@ -158,7 +158,7 @@ fn errors_display_and_are_std_errors() {
 
 #[test]
 fn pipe_name_carries_the_session() {
-    assert_eq!(pipe_name(3), r"\.\pipe\plith-osd-3");
+    assert_eq!(pipe_name(3), r"\\.\pipe\plith-osd-3");
 }
 
 #[test]
