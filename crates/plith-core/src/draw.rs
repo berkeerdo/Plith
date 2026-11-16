@@ -262,3 +262,50 @@ impl Default for PageContent {
         Self::empty()
     }
 }
+
+/// Which bundled font family a text role uses.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum Family {
+    /// The proportional face (Public Sans).
+    Sans,
+    /// The monospaced face (Martian Mono).
+    Mono,
+}
+
+/// The typographic recipe of one text role.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct StyleSpec {
+    /// The font family.
+    pub family: Family,
+    /// The font size in DIP.
+    pub size_dip: f32,
+    /// The font weight (400 regular, 500 medium, 600 semibold).
+    pub weight: u16,
+    /// Whether the renderer upper-cases the text before layout.
+    pub uppercase: bool,
+    /// Extra spacing after every character, in em.
+    pub tracking_em: f32,
+}
+
+/// The font, size, weight and tracking of a text role.
+#[must_use]
+pub fn style_spec(style: TextStyle) -> StyleSpec {
+    let (family, size_dip, weight, uppercase, tracking_em) = match style {
+        TextStyle::Title => (Family::Sans, 17.0, 600, false, 0.0),
+        TextStyle::Name => (Family::Sans, 14.0, 400, false, 0.0),
+        TextStyle::Sub => (Family::Mono, 10.0, 400, true, 0.0),
+        TextStyle::Label => (Family::Mono, 10.0, 400, true, 0.08),
+        TextStyle::Value => (Family::Mono, 12.0, 400, false, 0.0),
+        TextStyle::Clock => (Family::Mono, 14.0, 500, false, 0.0),
+    };
+    StyleSpec {
+        family,
+        size_dip,
+        weight,
+        uppercase,
+        tracking_em,
+    }
+}
+
+#[cfg(test)]
+mod tests;

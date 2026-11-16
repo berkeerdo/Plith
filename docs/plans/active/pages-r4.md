@@ -236,14 +236,14 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   TABULAR_FIGURES`) on every Mono format. Middle trim: keep head and tail, insert `…`, binary
   search on measured width.
 
-- [ ] **Step 1: Failing tests** (WARP, `tests/text.rs`): `mono_digits_share_one_advance`
+- [x] **Step 1: Failing tests** (WARP, `tests/text.rs`): `mono_digits_share_one_advance`
   ("1111" and "8888" measure equal), `middle_trim_keeps_both_ends`
   ("Speakers (Realtek(R) High Definition Audio Device)" at 120 DIP starts with "Spea" and ends
   with "ice)"), `cache_reuses_layouts`, `missing_font_falls_back`.
-- [ ] **Step 2:** Run through heavy-run `cargo test -p plith-render --test text`; expect failures.
-- [ ] **Step 3:** Implement (context7 check on `IDWriteFactory5`, `IDWriteFontSetBuilder2`,
+- [x] **Step 2:** Run through heavy-run `cargo test -p plith-render --test text`; expect failures.
+- [x] **Step 3:** Implement (context7 check on `IDWriteFactory5`, `IDWriteFontSetBuilder2`,
   `IDWriteTypography` first).
-- [ ] **Step 4:** Five checks green, commit `feat(render): add DirectWrite text and fonts`.
+- [x] **Step 4:** Five checks green, commit `feat(render): add DirectWrite text and fonts`.
 
 ### Task 7: Painting the display list: page bitmaps, clip, live nodes
 
