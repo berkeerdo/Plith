@@ -64,6 +64,15 @@ pub fn toggle_pick(current: PickMode, source: usize) -> PickMode {
     }
 }
 
+/// `pick` when its source is one of `sources` rows, else no pick (the source went away).
+#[must_use]
+pub fn pick_within(pick: PickMode, sources: usize) -> PickMode {
+    match pick {
+        PickMode::Picked(source) if source < sources => pick,
+        _ => PickMode::None,
+    }
+}
+
 /// The delayed collapse: armed when the pointer leaves, disarmed when it comes back.
 #[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct CollapseTimer {

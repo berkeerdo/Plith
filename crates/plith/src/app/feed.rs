@@ -4,6 +4,7 @@
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
+use plith_core::input::pick_within;
 use plith_core::pages::audio::{Activity, PickMode};
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::{HitTarget, PageId};
@@ -167,6 +168,8 @@ impl Feed {
         if !dirty.any() {
             return;
         }
+        let sources = self.facts.audio.vm.as_ref().map_or(0, |vm| vm.strips.len());
+        self.pick = pick_within(self.pick, sources);
         let inputs = Inputs {
             facts: &self.facts,
             activity: &self.activity,

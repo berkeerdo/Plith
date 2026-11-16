@@ -79,3 +79,46 @@ fn region_top_corners_square() {
     assert_eq!(region.right, 250 + 3);
     assert_eq!(region.bottom, 40 + 3);
 }
+
+#[test]
+fn an_unchanged_covered_shape_is_not_applied_again() {
+    use crate::window::state::Inner;
+    use plith_core::geometry::cover;
+    use plith_core::page::PageLayers;
+    use plith_core::scene::{ShapeCell, ShapeFrame};
+    use plith_core::shapes::{PAGES, REST};
+    use std::sync::Arc;
+    let cell = Arc::new(ShapeCell::default());
+    let inner = Inner::new(
+        layout(1920, 1.0),
+        Arc::clone(&cell),
+        Box::new(|_| {}),
+        Box::new(|_| {}),
+    );
+    let frame = |generation, pages| ShapeFrame {
+        shape: PAGES[0],
+        previous: PAGES[0],
+        generation,
+        pages,
+    };
+    // The window does not exist, so the region call fails and is retried on the next post.
+    cell.publish(frame(1, PageLayers::empty()));
+    apply::apply_latest(&inner);
+    apply::apply_latest(&inner);
+    assert_eq!(inner.stats.get().count, 2, "a failed apply is retried");
+    // Once applied, a page-only frame at the same covered shape skips SetWindowRgn.
+    inner.applied.set(Some(cover(PAGES[0], PAGES[0])));
+    cell.publish(frame(2, PageLayers::empty()));
+    apply::apply_latest(&inner);
+    assert_eq!(
+        inner.stats.get().count,
+        2,
+        "same covered shape: no region call"
+    );
+    cell.publish(ShapeFrame {
+        previous: REST,
+        ..frame(3, PageLayers::empty())
+    });
+    apply::apply_latest(&inner);
+    assert_eq!(inner.stats.get().count, 3, "a new covered shape is applied");
+}

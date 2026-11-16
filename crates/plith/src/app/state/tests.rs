@@ -578,3 +578,34 @@ fn a_tick_while_the_scene_is_closed_waits_for_the_wake() {
     }
     assert_eq!(app.mailbox.latest().generation, generation);
 }
+
+#[test]
+fn a_due_collapse_while_hidden_still_collapses() {
+    let (mut app, timers, _, seconds) = clocked("input-hidden", Fixture::Banana);
+    app.on_event(CLICK);
+    app.on_event(ShellEvent::Leave);
+    let hidden = Suppression {
+        fullscreen: true,
+        ..Suppression::default()
+    };
+    app.on_event(ShellEvent::Suppression(hidden));
+    seconds.set(0.5);
+    app.on_event(ShellEvent::Timer(COLLAPSE_TIMER));
+    assert!(
+        !app.mailbox.latest().scene.expanded,
+        "collapsed while hidden"
+    );
+    app.on_event(ShellEvent::Suppression(Suppression::default()));
+    let scene = app.mailbox.latest().scene;
+    assert!(!scene.expanded && !scene.suppression.any());
+    assert!(running(&timers).is_empty());
+}
+
+#[test]
+fn a_pick_out_of_range_is_cleared_on_rebuild() {
+    let (mut app, _, _) = fed("input-range", Fixture::Banana);
+    app.on_event(CLICK);
+    let feed = app.feed.as_mut().unwrap();
+    feed.set_pick(PickMode::Picked(99), &app.mailbox);
+    assert_eq!(pick(&app), PickMode::None);
+}

@@ -64,7 +64,9 @@ fn set_region(inner: &Inner, shape: IslandShape) -> windows::core::Result<()> {
 }
 
 /// Applies the region for the newest frame in the cell (or the resting shape when none was
-/// posted yet), recording the UI-thread cost. A failure is counted in `hit_errors`.
+/// posted yet), recording the UI-thread cost. A failure is counted in `hit_errors` and retried
+/// on the next post; a covered shape equal to the last applied one (a frame that only moved
+/// the page layers) is skipped.
 ///
 /// The region covers the frame before the newest one as well: with a frame queue the display
 /// can still show it when the region changes, and the region clips the drawn content (ADR 0004).
@@ -73,8 +75,12 @@ pub(crate) fn apply_latest(inner: &Inner) {
         .shapes
         .latest()
         .map_or(REST, |frame| cover(frame.shape, frame.previous));
+    if inner.applied.get() == Some(shape) {
+        return;
+    }
     let start = Instant::now();
     let result = set_region(inner, shape);
+    inner.applied.set(result.is_ok().then_some(shape));
     let ms = start.elapsed().as_secs_f64() * 1000.0;
     let mut stats = inner.stats.get();
     stats.count += 1;

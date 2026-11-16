@@ -36,11 +36,14 @@ fn client_point(lparam: LPARAM) -> (f64, f64) {
 }
 
 /// `WM_LBUTTONUP`: emits a click at the island point when it lies inside the drawn shape.
+/// A click may expand the island, so the next move asks for leave tracking again: a tracking
+/// request the system cancelled can then never leave the island open with no leave to come.
 pub(crate) fn on_click(inner: &Inner, lparam: LPARAM) {
     let Some(frame) = inner.shapes.latest() else {
         return;
     };
     if let Some((x, y)) = island_point(&inner.layout, frame.shape, client_point(lparam)) {
+        inner.tracking.set(false);
         inner.emit(ShellEvent::Click { x, y });
     }
 }

@@ -4,6 +4,7 @@
 use crate::handles::hwnd_of;
 use crate::poster::Coalesce;
 use crate::window::ShellEvent;
+use plith_core::geometry::IslandShape;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{ShapeCell, Suppression};
 use plith_core::topmost::TopmostFight;
@@ -44,6 +45,9 @@ pub(crate) struct Inner {
     pub suppression: Cell<Suppression>,
     pub stats: Cell<HitStats>,
     pub hit_errors: Cell<u64>,
+    /// The covered shape of the last region applied successfully; `None` before the first
+    /// one and after a failure.
+    pub applied: Cell<Option<IslandShape>>,
     /// True while a `WM_MOUSELEAVE` is requested and not yet delivered.
     pub tracking: Cell<bool>,
     pub registrations: RefCell<Registrations>,
@@ -75,6 +79,7 @@ impl Inner {
             stats: Cell::new(HitStats::default()),
             hit_errors: Cell::new(0),
             tracking: Cell::new(false),
+            applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),
             on_event: RefCell::new(on_event),

@@ -139,3 +139,11 @@ fn remaining_counts_down_to_zero() {
     assert!((timer.remaining(1.1).unwrap() - 0.3).abs() < 1e-9);
     assert_eq!(timer.remaining(2.0), Some(0.0));
 }
+
+#[test]
+fn a_pick_out_of_range_is_dropped() {
+    assert_eq!(pick_within(PickMode::Picked(2), 3), PickMode::Picked(2));
+    assert_eq!(pick_within(PickMode::Picked(3), 3), PickMode::None);
+    assert_eq!(pick_within(PickMode::Picked(0), 0), PickMode::None);
+    assert_eq!(pick_within(PickMode::None, 3), PickMode::None);
+}

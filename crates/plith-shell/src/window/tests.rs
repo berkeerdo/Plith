@@ -130,3 +130,33 @@ fn a_click_carries_its_point() {
     inner.emit(ShellEvent::Click { x: 1.0, y: 2.0 });
     assert_eq!(*events.borrow(), vec![ShellEvent::Click { x: 1.0, y: 2.0 }]);
 }
+
+#[test]
+fn a_click_asks_for_leave_tracking_again() {
+    use plith_core::page::PageLayers;
+    use plith_core::scene::ShapeFrame;
+    use plith_core::shapes::REST;
+    let (inner, events) = recording();
+    inner.shapes.publish(ShapeFrame {
+        shape: REST,
+        previous: REST,
+        generation: 1,
+        pages: PageLayers::empty(),
+    });
+    assert!(mouse::note_move(&inner));
+    let (ox, oy) = inner.layout.island_origin(REST);
+    // Allowed: the island point sits well inside the 1920 px wide test surface.
+    #[allow(clippy::cast_possible_truncation)]
+    let x = (ox + 50.0).round() as i16;
+    #[allow(clippy::cast_possible_truncation)]
+    let y = (oy + 10.0).round() as i16;
+    let lparam = LPARAM((isize::from(y) << 16) | isize::from(x));
+    mouse::on_click(&inner, lparam);
+    assert!(
+        mouse::note_move(&inner),
+        "the move after an expanding click re-requests tracking"
+    );
+    let got = events.borrow();
+    assert!(matches!(got[1], ShellEvent::Click { .. }), "{got:?}");
+    assert_eq!(got.len(), 3);
+}

@@ -90,7 +90,8 @@ impl App {
     }
 
     /// The collapse timer ticked. Stray ticks (the pointer came back) stop it; an early tick
-    /// waits for the rest of the delay; a due tick collapses an open island and ends a pick.
+    /// waits for the rest of the delay; a due tick collapses an expanded island (a hidden one
+    /// too: it then shows collapsed when the suppression ends) and ends a pick.
     pub(super) fn on_collapse_tick(&mut self) {
         let now = (self.now)();
         let remaining = self.collapse.remaining(now);
@@ -109,8 +110,7 @@ impl App {
             return;
         }
         self.collapse.enter();
-        let scene = self.mailbox.latest().scene;
-        if !scene.expanded || scene.suppression.any() {
+        if !self.mailbox.latest().scene.expanded {
             return;
         }
         feed.set_pick(PickMode::None, &self.mailbox);
