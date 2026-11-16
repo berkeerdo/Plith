@@ -210,3 +210,16 @@ fn visible_duration_ends_at_the_last_visible_frame() {
         "{report}"
     );
 }
+
+#[test]
+fn osd_kinds_have_their_words_and_line() {
+    assert_eq!(MotionKind::OsdShow.as_str(), "osd-show");
+    assert_eq!(MotionKind::OsdHide.as_str(), "osd-hide");
+    let mut s = MotionStats::new(MotionKind::OsdShow, HZ, "dcomp");
+    s.record_frame(0.0, CALM);
+    assert!(
+        s.finish().to_string().starts_with("motion osd-show:"),
+        "{}",
+        s.finish()
+    );
+}
