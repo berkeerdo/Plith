@@ -58,3 +58,8 @@ fn shelf_has_only_tab_targets() {
             .all(|t| matches!(t.action, Action::Tab(_)))
     );
 }
+
+#[test]
+fn the_pre_feed_default_matches_the_built_shelf() {
+    assert_eq!(shelf_page("09:41").shape, crate::shapes::PAGES[2]);
+}

@@ -17,21 +17,29 @@ fn run(m: &mut IslandMotion, secs: f64) -> Vec<IslandShape> {
     out
 }
 
+/// A second open shape as wide as the pages and lower than the media page (the test needs a
+/// target the height has not yet reached while the width overshoots).
+const NEXT: IslandShape = IslandShape {
+    width: 620.0,
+    height: 214.0,
+    radius: 24.0,
+};
+
 #[test]
 fn per_axis_tuning_follows_each_axis_direction() {
     let mut m = IslandMotion::new(REST, R1);
     m.retarget(PAGES[1]);
     // Step until the width is already past the next page's width while the height lags below it.
     let mut guard = 0;
-    while !(m.shape().width > PAGES[2].width + 5.0 && m.shape().height < PAGES[2].height - 2.0) {
+    while !(m.shape().width > NEXT.width + 5.0 && m.shape().height < NEXT.height - 2.0) {
         m.step(H);
         guard += 1;
         assert!(guard < 2400, "never reached the mixed-direction moment");
     }
-    m.retarget(PAGES[2]);
+    m.retarget(NEXT);
     let samples = run(&mut m, 4.0);
-    assert!(samples.iter().all(|s| s.width >= PAGES[2].width - 1e-9));
-    assert!(samples.iter().any(|s| s.height > PAGES[2].height));
+    assert!(samples.iter().all(|s| s.width >= NEXT.width - 1e-9));
+    assert!(samples.iter().any(|s| s.height > NEXT.height));
 }
 
 #[test]

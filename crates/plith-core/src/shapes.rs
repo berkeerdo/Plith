@@ -9,7 +9,8 @@ pub const REST: IslandShape = IslandShape {
     radius: 16.0,
 };
 
-/// The four pages: audio, media, shelf and system.
+/// The four pages: audio, media, shelf and system. These are pre-feed defaults only: the feed
+/// publishes the shapes of the built pages at once (`pages::*::*_page().shape`).
 pub const PAGES: [IslandShape; 4] = [
     IslandShape {
         width: 620.0,
@@ -23,7 +24,7 @@ pub const PAGES: [IslandShape; 4] = [
     },
     IslandShape {
         width: 620.0,
-        height: 214.0,
+        height: 170.0,
         radius: 24.0,
     },
     IslandShape {
