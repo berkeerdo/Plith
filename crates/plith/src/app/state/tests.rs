@@ -687,3 +687,44 @@ fn a_pick_from_another_mixer_edition_writes_nothing() {
     assert_eq!(routes.get(), 0, "the pick belonged to the old edition");
     assert_eq!(pick(&app), PickMode::None, "the stale pick ends");
 }
+
+#[test]
+fn a_demo_expand_takes_the_click_path() {
+    let (mut app, timers, minute) = fed("demo-expand", Fixture::Banana);
+    let (steps, rx) = std::sync::mpsc::channel();
+    app.attach_demo(rx);
+    minute.set(50);
+    let before = app.mailbox.latest();
+    steps.send(plith_core::demo::DemoStep::Expand).unwrap();
+    assert_eq!(
+        app.mailbox.latest().generation,
+        before.generation,
+        "the demo thread published nothing"
+    );
+    app.on_event(ShellEvent::Wake);
+    let open = app.mailbox.latest();
+    assert!(open.scene.expanded);
+    // The flush publishes the content first, then the expand publishes the scene.
+    assert_eq!(open.generation, before.generation + 2);
+    let has = open.content.pages[0]
+        .nodes
+        .iter()
+        .any(|n| matches!(n, plith_core::draw::Node::Text { text, .. } if &**text == "21:50"));
+    assert!(has, "the expanded scene carries the flushed content");
+    assert_eq!(running(&timers), vec![CLOCK_TIMER]);
+}
+
+#[test]
+fn demo_steps_turn_and_collapse_without_a_feed() {
+    let mut app = app("demo-nofeed");
+    let (steps, rx) = std::sync::mpsc::channel();
+    app.attach_demo(rx);
+    steps.send(plith_core::demo::DemoStep::Page(3)).unwrap();
+    app.on_event(ShellEvent::Wake);
+    let scene = app.mailbox.latest().scene;
+    assert!(scene.expanded && scene.page == 3, "a page step opens on it");
+    steps.send(plith_core::demo::DemoStep::Collapse).unwrap();
+    app.on_event(ShellEvent::Wake);
+    let scene = app.mailbox.latest().scene;
+    assert!(!scene.expanded && scene.page == 3);
+}

@@ -1,8 +1,8 @@
-//! The demo driver: plays a `DemoScript` by publishing scenes. It never synthesises input.
+//! The demo driver: plays a `DemoScript` by handing its scene steps to the UI thread, which
+//! applies them through the same path as a click. It never synthesises input.
 
 use crate::log::LogFile;
 use plith_core::demo::{DemoScript, DemoStep};
-use plith_core::scene::{Scene, SceneMailbox};
 use plith_shell::{QuitHandle, UiWaker};
 use std::cell::Cell;
 use std::sync::Arc;
@@ -16,27 +16,6 @@ const CHUNK_MS: u64 = 50;
 
 /// Time for the last motion to finish and report before the window closes.
 const LAST_REPORT_MS: u64 = 1500;
-
-/// The scene after `step`; a wait changes nothing and the suppression is always kept.
-#[must_use]
-pub fn apply(step: DemoStep, scene: Scene) -> Scene {
-    match step {
-        DemoStep::Expand => Scene {
-            expanded: true,
-            ..scene
-        },
-        DemoStep::Collapse => Scene {
-            expanded: false,
-            ..scene
-        },
-        DemoStep::Page(page) => Scene {
-            expanded: true,
-            page,
-            ..scene
-        },
-        DemoStep::Wait(_) | DemoStep::Content(_) => scene,
-    }
-}
 
 /// Sleeps `ms` in 50 ms chunks; returns false when `stop` was set before the time was up.
 #[must_use]
@@ -70,15 +49,17 @@ pub fn content_requester(services: Option<Sender<u8>>, log: &dyn Fn(&str)) -> im
     }
 }
 
-/// Plays the script into the mailbox; returns false when stopped before the end. Each step reads
-/// the latest scene, so a click or a suppression change in between is respected. `wake` runs
-/// after every scene step, so the UI thread sees the new scene. A `content` step hands its variant
-/// to `content` and then wakes the UI thread, which drains the services.
+/// Plays the script; returns false when stopped before the end. A scene step goes to
+/// `step_to_ui` (the UI thread's channel) and then `wake` runs: the UI thread applies it to the
+/// latest scene through its expand, turn and collapse paths (flush first, then publish), so a
+/// click or a suppression change in between is respected and the demo measures the click path.
+/// A `content` step hands its variant to `content` and then wakes the UI thread, which drains
+/// the services.
 #[must_use]
 pub fn play(
     script: &DemoScript,
-    mailbox: &SceneMailbox,
     stop: &AtomicBool,
+    step_to_ui: &dyn Fn(DemoStep),
     wake: &dyn Fn(),
     content: &dyn Fn(u8),
 ) -> bool {
@@ -98,7 +79,7 @@ pub fn play(
                 content(*variant);
                 wake();
             } else {
-                let _ = mailbox.update(|scene| apply(*step, scene));
+                step_to_ui(*step);
                 wake();
             }
         }
@@ -110,6 +91,8 @@ pub fn play(
 pub struct Links {
     /// Wakes the UI thread after a scene or content step.
     pub waker: UiWaker,
+    /// The UI thread's channel for scene steps (see [`play`]).
+    pub steps: Sender<DemoStep>,
     /// The fixture services' content channel; `None` without `--fixture`.
     pub content: Option<Sender<u8>>,
     /// The log, for the one line about ignored content steps.
@@ -120,7 +103,6 @@ pub struct Links {
 /// motion's report and then closes the window. `content` reaches the fixture services, if any.
 pub fn spawn(
     script: DemoScript,
-    mailbox: Arc<SceneMailbox>,
     stop: Arc<AtomicBool>,
     quit_after: Option<QuitHandle>,
     links: Links,
@@ -128,7 +110,10 @@ pub fn spawn(
     thread::spawn(move || {
         let log_line = |line: &str| links.log.line(line);
         let request = content_requester(links.content, &log_line);
-        let finished = play(&script, &mailbox, &stop, &|| links.waker.wake(), &request);
+        let to_ui = |step: DemoStep| {
+            let _ = links.steps.send(step);
+        };
+        let finished = play(&script, &stop, &to_ui, &|| links.waker.wake(), &request);
         if let (true, Some(quit)) = (finished, quit_after)
             && sleep_stoppable(LAST_REPORT_MS, &stop)
         {

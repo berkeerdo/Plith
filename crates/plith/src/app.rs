@@ -14,6 +14,7 @@ use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
 use crate::{demo, idle};
 use feed::Feed;
+use plith_core::demo::DemoStep;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
@@ -126,17 +127,19 @@ fn run_shell(
         }
     };
     app.borrow_mut().attach_render(render.stop_handle());
+    let (steps, demo_steps) = mpsc::channel();
+    app.borrow_mut().attach_demo(demo_steps);
     let stop = Arc::new(AtomicBool::new(false));
     let fired = Arc::new(AtomicBool::new(false));
     let helpers = Helpers {
         launch,
-        mailbox: &mailbox,
         render: &render,
         log,
         stop: &stop,
         fired: &fired,
         quit,
         waker: shell.ui_waker(),
+        steps,
         content,
         board,
     };
@@ -239,13 +242,13 @@ fn attach_feed(
 /// Everything the helper threads and the message loop share.
 struct Helpers<'a> {
     launch: &'a Launch,
-    mailbox: &'a Arc<SceneMailbox>,
     render: &'a RenderHandle,
     log: &'a Arc<LogFile>,
     stop: &'a Arc<AtomicBool>,
     fired: &'a Arc<AtomicBool>,
     quit: QuitHandle,
     waker: UiWaker,
+    steps: Sender<DemoStep>,
     content: Option<Sender<u8>>,
     board: Option<Arc<StartBoard>>,
 }
@@ -266,11 +269,11 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
             let quit_after = launch.exit_after_demo.then_some(quit);
             demo::spawn(
                 script,
-                Arc::clone(h.mailbox),
                 Arc::clone(h.stop),
                 quit_after,
                 demo::Links {
                     waker: h.waker.clone(),
+                    steps: h.steps.clone(),
                     content: h.content.clone(),
                     log: Arc::clone(h.log),
                 },

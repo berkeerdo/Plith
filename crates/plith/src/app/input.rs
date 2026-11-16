@@ -3,6 +3,7 @@
 
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::state::App;
+use plith_core::demo::DemoStep;
 use plith_core::input::{COLLAPSE_DELAY_S, ClickResult, route_click, toggle_pick};
 use plith_core::page::PageLayers;
 use plith_core::pages::audio::PickMode;
@@ -40,15 +41,51 @@ impl App {
 
     /// Opens the island with the pages brought up to date first.
     fn expand(&mut self) {
+        self.expand_on(None);
+    }
+
+    /// Opens the island (on `page`, when given) with the pages brought up to date first, in
+    /// one scene publish after the content publish. Opening on another page ends a pick.
+    fn expand_on(&mut self, page: Option<PageId>) {
         self.cancel_collapse();
         if let Some(feed) = &mut self.feed {
+            if page.is_some_and(|p| p != PageId::Audio) {
+                feed.set_pick(PickMode::None, &self.mailbox);
+            }
             feed.flush(&self.mailbox);
         }
         let _ = self.mailbox.update(|scene| Scene {
             expanded: true,
+            page: page.map_or(scene.page, PageId::index),
             ..scene
         });
         self.scene_changed();
+    }
+
+    /// Applies the demo's queued scene steps through the click paths: expand and page steps
+    /// flush before they publish, as a click does.
+    pub(super) fn apply_demo_steps(&mut self) {
+        let steps: Vec<DemoStep> = match &self.demo {
+            Some(rx) => rx.try_iter().collect(),
+            None => return,
+        };
+        for step in steps {
+            match step {
+                DemoStep::Expand => self.expand(),
+                DemoStep::Page(index) => {
+                    let Some(page) = PageId::from_index(index) else {
+                        continue;
+                    };
+                    if self.mailbox.latest().scene.expanded {
+                        self.turn_to(page);
+                    } else {
+                        self.expand_on(Some(page));
+                    }
+                }
+                DemoStep::Collapse => self.collapse_now(),
+                DemoStep::Wait(_) | DemoStep::Content(_) => {}
+            }
+        }
     }
 
     /// Turns to `page`; leaving the audio page ends a pick.
@@ -110,10 +147,17 @@ impl App {
             return;
         }
         self.collapse.enter();
+        self.collapse_now();
+    }
+
+    /// Collapses an expanded island now and ends a pick.
+    fn collapse_now(&mut self) {
         if !self.mailbox.latest().scene.expanded {
             return;
         }
-        feed.set_pick(PickMode::None, &self.mailbox);
+        if let Some(feed) = self.feed.as_mut() {
+            feed.set_pick(PickMode::None, &self.mailbox);
+        }
         let _ = self.mailbox.update(|scene| Scene {
             expanded: false,
             ..scene

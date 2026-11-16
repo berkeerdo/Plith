@@ -3,12 +3,14 @@
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::wire::raised_line;
 use crate::log::LogFile;
+use plith_core::demo::DemoStep;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_render::StopHandle;
 use plith_shell::ShellEvent;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::Receiver;
 use std::time::Instant;
 
 /// Something that stops and joins the render thread. A trait so tests can use a fake.
@@ -44,6 +46,8 @@ pub struct App {
     pub(super) now: Box<dyn Fn() -> f64>,
     /// Armed while the pointer is outside the open island.
     pub(super) collapse: CollapseTimer,
+    /// Scene steps from the demo thread, applied on the next wake.
+    pub(super) demo: Option<Receiver<DemoStep>>,
 }
 
 impl App {
@@ -66,6 +70,7 @@ impl App {
             feed: None,
             now: Box::new(move || origin.elapsed().as_secs_f64()),
             collapse: CollapseTimer::default(),
+            demo: None,
         }
     }
 
@@ -79,6 +84,11 @@ impl App {
     /// Starts feeding the pages from the services; until then a wake or a timer does nothing.
     pub fn attach_feed(&mut self, feed: Feed) {
         self.feed = Some(feed);
+    }
+
+    /// Takes the demo's scene steps from `steps`; each wake applies the queued ones.
+    pub fn attach_demo(&mut self, steps: Receiver<DemoStep>) {
+        self.demo = Some(steps);
     }
 
     /// Stops the services, once the render thread has been joined.
@@ -132,6 +142,7 @@ impl App {
                 ));
             }
             ShellEvent::Wake => {
+                self.apply_demo_steps();
                 if let Some(feed) = &mut self.feed {
                     feed.on_wake(&self.mailbox);
                 }
