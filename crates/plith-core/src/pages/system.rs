@@ -104,7 +104,7 @@ fn brightness_row(
     let Some((monitor, percent)) = brightness.map(|(m, p)| (m, (*p).min(100))) else {
         nodes.push(text(
             rect(X0, RULER_Y - 6.0, RIGHT - X0, 12.0),
-            "DESTEKLENM\u{130}YOR \u{b7} MON\u{130}T\u{d6}RDE DDC/CI KAPALI",
+            super::copy::DDC_OFF,
             TextStyle::Label,
             Ink::Faint,
             Align::Start,
@@ -181,7 +181,7 @@ fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &m
         let mid = X0 + f64::midpoint(CUT_FROM, CUT_TO);
         nodes.push(text(
             rect(mid - 30.0, MIC_Y - 6.0, 60.0, 12.0),
-            "KAPALI",
+            super::copy::KAPALI,
             TextStyle::Label,
             Ink::Ink,
             Align::Center,

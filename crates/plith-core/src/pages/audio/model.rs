@@ -185,7 +185,7 @@ fn windows(facts: &AudioFacts) -> Parts {
     let muted = matches!(facts.attached, Some((_, true)));
     let sources = vec![SourceRow {
         name: "Windows".to_string(),
-        sub: "VARSAYILAN ÇIKIŞ".to_string(),
+        sub: crate::pages::copy::DEFAULT_OUTPUT.to_string(),
         muted,
         picked: false,
     }];

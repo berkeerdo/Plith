@@ -74,7 +74,7 @@ const STATION_REACH: f64 = 6.0;
 /// Text heights: Name, labels and values.
 const NAME_H: f64 = 18.0;
 const LABEL_H: f64 = 12.0;
-const LABEL_TEXT: &str = "SESS\u{130}Z";
+const LABEL_TEXT: &str = crate::pages::copy::SESSIZ;
 
 /// Baseline of row `i`.
 fn row_y(view: &AudioView, i: usize) -> f64 {

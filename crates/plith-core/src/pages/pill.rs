@@ -64,7 +64,7 @@ pub fn pill(facts: &PillFacts) -> DisplayList {
     if muted {
         nodes.push(text(
             value_rect,
-            "KAPALI",
+            super::copy::KAPALI,
             TextStyle::Label,
             Ink::Faint,
             Align::End,

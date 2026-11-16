@@ -5,6 +5,7 @@ use crate::draw::{DisplayList, Rect};
 use crate::geometry::IslandShape;
 
 pub mod audio;
+pub mod copy;
 pub mod fixtures;
 mod kit;
 pub mod media;
@@ -58,10 +59,10 @@ impl PageId {
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
-            PageId::Audio => "SES",
-            PageId::Media => "MEDYA",
-            PageId::Shelf => "RAF",
-            PageId::System => "S\u{130}STEM",
+            PageId::Audio => copy::TAB_AUDIO,
+            PageId::Media => copy::TAB_MEDIA,
+            PageId::Shelf => copy::TAB_SHELF,
+            PageId::System => copy::TAB_SYSTEM,
         }
     }
 }

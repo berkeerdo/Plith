@@ -183,3 +183,34 @@ fn named_buses_read_in_ink_and_the_unused_bus_stays_quiet() {
         .count();
     assert_eq!(zero_db, 1, "B1 only; the unused B2 has no value");
 }
+
+#[test]
+fn turkish_label_copy_comes_from_the_upper_cased_constants() {
+    // Every upper-case (Label or Sub) text with a Turkish letter is one of our own constants,
+    // and those are authored with Turkish upper-case rules. Foreign names never get them.
+    use crate::draw::{Node, TextStyle};
+    use crate::pages::copy::{OWN_LABELS, tr_upper};
+    let turkish = |t: &str| {
+        t.chars().any(|c| {
+            "\u{130}\u{131}\u{15e}\u{15f}\u{11e}\u{11f}\u{c7}\u{e7}\u{d6}\u{f6}\u{dc}\u{fc}"
+                .contains(c)
+        })
+    };
+    let mut seen = 0;
+    for list in every_list() {
+        for node in &list.nodes {
+            if let Node::Text {
+                text,
+                style: TextStyle::Label | TextStyle::Sub,
+                ..
+            } = node
+                && turkish(text)
+            {
+                assert!(OWN_LABELS.contains(&&**text), "not an own constant: {text}");
+                assert_eq!(&**text, tr_upper(text));
+                seen += 1;
+            }
+        }
+    }
+    assert!(seen >= 8, "the scan saw the Turkish labels ({seen})");
+}

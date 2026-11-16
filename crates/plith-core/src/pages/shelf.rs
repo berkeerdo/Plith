@@ -44,7 +44,7 @@ pub fn shelf_page(clock: &str) -> PageBuild {
     ));
     nodes.push(text(
         rect(BOX_X, 98.0, right - BOX_X, 12.0),
-        "RAFTA BEKLER, \u{130}STED\u{130}\u{11e}\u{130}N YERE GER\u{130} S\u{dc}R\u{dc}KLERS\u{130}N",
+        super::copy::SHELF_HINT,
         TextStyle::Label,
         Ink::Faint,
         Align::Center,

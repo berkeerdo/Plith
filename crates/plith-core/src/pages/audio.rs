@@ -11,6 +11,8 @@ mod tests;
 pub use layout::{audio_page, route_path, row_pitch};
 pub use model::Activity;
 
+use crate::pages::copy;
+
 /// Row pitch in DIP: the mock's rows sit 50 apart.
 pub const PITCH_NORMAL: f64 = 50.0;
 /// Row pitch in DIP above five rows, and the floor of the reach-driven pitch.
@@ -179,9 +181,9 @@ impl Footer {
     #[must_use]
     pub fn text(self) -> &'static str {
         match self {
-            Footer::Normal => "KAYNAĞA, SONRA ÇIKIŞA TIKLA",
-            Footer::Picking => "ÇIKIŞA TIKLA: YOL KURULUR \u{B7} KAYNAĞA TEKRAR TIKLA: VAZGEÇ",
-            Footer::NoVoicemeeter => "VOICEMEETER ÇALIŞMIYOR \u{B7} ÇIKIŞA TIKLA: VARSAYILAN OLUR",
+            Footer::Normal => copy::FOOTER_NORMAL,
+            Footer::Picking => copy::FOOTER_PICKING,
+            Footer::NoVoicemeeter => copy::FOOTER_NO_VM,
         }
     }
 }

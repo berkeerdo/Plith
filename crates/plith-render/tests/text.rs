@@ -190,3 +190,13 @@ fn short_device_names_stay_whole_and_long_ones_trim_in_the_middle() {
     assert_ne!(got, long);
     assert!(got.contains('\u{2026}'), "{got}");
 }
+
+#[test]
+fn foreign_names_upper_case_invariantly() {
+    // Device and app names are not Turkish copy: "Display" must not become "DİSPLAY".
+    let mut text = system();
+    let got = text
+        .display_text("Display", TextStyle::Label, 400.0, Trim::End)
+        .unwrap();
+    assert_eq!(got, "DISPLAY");
+}
