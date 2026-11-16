@@ -6,6 +6,7 @@ use crate::geometry::IslandShape;
 
 pub mod audio;
 pub mod copy;
+pub mod derive;
 pub mod fixtures;
 mod kit;
 pub mod media;

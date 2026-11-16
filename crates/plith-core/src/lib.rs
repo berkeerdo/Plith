@@ -21,5 +21,6 @@ pub mod spring;
 pub mod theme;
 pub mod timeline;
 pub mod topmost;
+pub mod trace;
 pub mod tuning;
 pub mod visible;
