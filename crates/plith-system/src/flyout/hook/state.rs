@@ -16,10 +16,11 @@ use std::time::Instant;
 
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::Accessibility::HWINEVENTHOOK;
-use windows::Win32::UI::WindowsAndMessaging::{GetWindowThreadProcessId, OBJID_WINDOW};
+use windows::Win32::UI::WindowsAndMessaging::OBJID_WINDOW;
 
 use super::query::{
-    CLASS_BUF, GetWindowBand, class_name_into, is_visible, post_hide, process_name,
+    CLASS_BUF, GetWindowBand, class_name_into, is_visible, post_hide, process_name, window_band,
+    window_pid,
 };
 use crate::flyout::{
     Match, Mode, RestoreHandle, SuppressionWindow, WindowFacts, is_host_class, should_hide,
@@ -57,9 +58,7 @@ thread_local! {
 impl State {
     /// Process and band lookups; called only for a window whose class already matched.
     fn facts(&mut self, hwnd: HWND, class: String) -> WindowFacts {
-        let mut pid = 0u32;
-        // SAFETY: `pid` is a valid out pointer.
-        unsafe { GetWindowThreadProcessId(hwnd, Some(&raw mut pid)) };
+        let pid = window_pid(hwnd);
         if self.names.len() >= CACHE_CAP {
             self.names.clear();
         }
@@ -68,16 +67,10 @@ impl State {
             .entry(pid)
             .or_insert_with(|| process_name(pid))
             .clone();
-        let band = self.band_fn.and_then(|get| {
-            let mut band = 0u32;
-            // SAFETY: resolved export with the documented-by-use signature.
-            let ok = unsafe { get(hwnd, &raw mut band) }.as_bool();
-            (ok && band != u32::MAX).then_some(band)
-        });
         WindowFacts {
             class,
             process,
-            band,
+            band: window_band(self.band_fn, hwnd),
         }
     }
 
@@ -107,7 +100,9 @@ impl State {
 
 /// The work of one event that passed the shape and disabled checks.
 fn dispatch(hwnd: HWND) {
-    STATE.with(|cell| {
+    // `try_with`: the state has a destructor, so a late event during thread teardown finds
+    // it gone; that is a no-op, never a panic.
+    let _ = STATE.try_with(|cell| {
         let Ok(mut guard) = cell.try_borrow_mut() else {
             return;
         };
@@ -126,7 +121,7 @@ fn dispatch(hwnd: HWND) {
 fn fail(text: String) {
     DISABLED.with(|disabled| disabled.set(true));
     let _ = contain(|| {
-        STATE.with(|cell| {
+        let _ = STATE.try_with(|cell| {
             if let Ok(guard) = cell.try_borrow()
                 && let Some(state) = guard.as_ref()
             {

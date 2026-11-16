@@ -106,13 +106,16 @@ impl FlyoutSuppressor {
     pub fn start_with_journal(mode: Mode, journal: Option<PathBuf>) -> Result<Self, String> {
         let window = Arc::new(SuppressionWindow::new(Instant::now()));
         let (tx, matches) = sync_channel(QUEUE);
-        let restore = RestoreHandle::new(journal.clone(), query::post_show);
+        let boot = query::current_boot();
+        let restore = RestoreHandle::new(journal.clone(), boot, query::post_show);
         let failure = FailureSlot::default();
         let (shared, restore_state, failure_state) =
             (Arc::clone(&window), restore.clone(), failure.clone());
         let thread = HookThread::spawn("plith-flyout", move || {
+            let band_fn = query::resolve_band_fn();
             if let Some(path) = &journal {
-                journal::restore_orphans(path, query::is_orphan, query::post_show);
+                let is_orphan = |handle| query::is_orphan(handle, band_fn);
+                journal::restore_orphans(path, boot, is_orphan, query::post_show);
             }
             STATE.with(|cell| {
                 *cell.borrow_mut() = Some(State {
@@ -121,7 +124,7 @@ impl FlyoutSuppressor {
                     restore: restore_state,
                     failure: failure_state,
                     names: HashMap::new(),
-                    band_fn: query::resolve_band_fn(),
+                    band_fn,
                     matches: tx,
                 });
             });

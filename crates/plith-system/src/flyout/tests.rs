@@ -1,12 +1,16 @@
 //! Unit tests for the pure flyout layer. No windows, no hooks.
 
+use std::sync::Mutex;
 use std::time::{Duration, Instant};
 
-use std::sync::Mutex;
-
 use super::{
-    HiddenRegistry, RestoreHandle, SuppressionWindow, WindowFacts, is_host_class, should_hide,
+    HiddenRegistry, RestoreHandle, SuppressionWindow, WindowFacts, is_host_class, is_orphan,
+    should_hide,
 };
+use crate::test_support::ScratchDir;
+
+/// Any boot stamp; the pure tests only need the writer and reader to agree.
+const BOOT: u64 = 1_800_000_000;
 
 fn facts(class: &str, process: &str, band: Option<u32>) -> WindowFacts {
     WindowFacts {
@@ -104,18 +108,16 @@ fn record_show(hwnd: isize) {
 
 #[test]
 fn restore_now_through_a_shared_handle_empties_the_set() {
-    let dir = std::env::temp_dir().join(format!("plith-restore-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp folder");
-    let journal = dir.join("flyout-hidden.txt");
-    let _ = std::fs::remove_file(&journal);
+    let scratch = ScratchDir::new("restore");
+    let journal = scratch.journal().to_path_buf();
 
-    let handle = RestoreHandle::new(Some(journal.clone()), record_show);
+    let handle = RestoreHandle::new(Some(journal.clone()), BOOT, record_show);
     assert!(handle.hide(7, |_| true, |_| true));
     assert!(handle.hide(9, |_| true, |_| true));
     assert!(!handle.hide(11, |_| false, |_| true));
     assert_eq!(handle.pending(), 2);
     assert_eq!(
-        super::journal::read(&journal),
+        super::journal::read(&journal, BOOT),
         vec![7, 9],
         "each hide is journaled"
     );
@@ -138,12 +140,35 @@ fn restore_now_through_a_shared_handle_empties_the_set() {
 
 #[test]
 fn restore_now_tolerates_a_poisoned_lock() {
-    let handle = RestoreHandle::new(None, |_| {});
+    let handle = RestoreHandle::new(None, BOOT, |_| {});
     assert!(handle.hide(5, |_| true, |_| true));
     let poisoner = handle.clone();
     let _ = std::thread::spawn(move || poisoner.poison_for_test()).join();
+    assert!(handle.is_poisoned_for_test(), "the lock really is poisoned");
     handle.restore_now();
     assert_eq!(handle.pending(), 0);
+}
+
+#[test]
+fn orphan_needs_the_hide_facts_a_window_and_hidden() {
+    assert!(is_orphan(&flyout(), true, false));
+    assert!(!is_orphan(&flyout(), false, false), "not a window any more");
+    assert!(
+        !is_orphan(&flyout(), true, true),
+        "visible: not ours to show"
+    );
+    assert!(
+        !is_orphan(&facts("NativeHWNDHost", "SomeApp", Some(0x4)), true, false),
+        "a host class in another app's process is a stranger"
+    );
+    assert!(
+        !is_orphan(
+            &facts("NativeHWNDHost", "ShellExperienceHost", Some(0x1)),
+            true,
+            false
+        ),
+        "a shell window in another band is a stranger"
+    );
 }
 
 #[test]
@@ -183,22 +208,20 @@ fn dry_run_start_stop_joins_and_disconnects() {
     assert_eq!(end, TryRecvError::Disconnected);
 }
 
-/// A journal left by a killed run is consumed at start: a handle that names no window (here
-/// 1, never a valid window handle) fails the orphan check, so nothing is shown, and the file is
-/// cleared. Dry run, so nothing is hidden either.
+/// A journal left by a killed run is cleared at start. Which handles would be shown is the
+/// pure [`is_orphan`] decision, tested above; here the handle is 1 (never a window). Dry run,
+/// so nothing is hidden either.
 #[cfg(windows)]
 #[test]
-fn start_consumes_a_stale_journal_without_showing_strangers() {
-    use super::{FlyoutSuppressor, Mode, journal};
+fn start_clears_a_stale_journal() {
+    use super::{FlyoutSuppressor, Mode};
 
-    let dir = std::env::temp_dir().join(format!("plith-start-test-{}", std::process::id()));
-    std::fs::create_dir_all(&dir).expect("temp folder");
-    let path = dir.join("flyout-hidden.txt");
-    std::fs::write(&path, "1\ngarbage\n").expect("stale journal");
+    let scratch = ScratchDir::new("start");
+    let path = scratch.journal().to_path_buf();
+    std::fs::write(&path, "boot 1\n1\ngarbage\n").expect("stale journal");
     let mut suppressor =
         FlyoutSuppressor::start_with_journal(Mode::DryRun, Some(path.clone())).expect("start");
     assert!(!path.exists(), "the start-up pass clears the journal");
-    assert_eq!(journal::read(&path), Vec::<isize>::new());
     assert_eq!(suppressor.restore_handle().pending(), 0);
     assert_eq!(suppressor.failure(), None);
     assert_eq!(suppressor.stop(), Ok(()));

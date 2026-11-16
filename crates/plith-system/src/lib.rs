@@ -18,6 +18,8 @@ pub mod volume_keys;
 
 #[cfg(windows)]
 mod hook_thread;
+#[cfg(test)]
+mod test_support;
 #[cfg(windows)]
 mod waker;
 

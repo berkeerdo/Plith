@@ -82,16 +82,20 @@ impl HiddenRegistry {
 pub struct RestoreHandle {
     hidden: Arc<Mutex<HiddenRegistry>>,
     journal: Option<PathBuf>,
+    /// The boot stamp written to the journal (see [`journal::boot_stamp`]).
+    boot: u64,
     show: fn(isize),
 }
 
 impl RestoreHandle {
-    /// An empty set mirrored to `journal` (none: no file is written). `show` puts one window
-    /// back and must not block (in the app: `ShowWindowAsync(SW_SHOWNA)`).
-    pub(crate) fn new(journal: Option<PathBuf>, show: fn(isize)) -> Self {
+    /// An empty set mirrored to `journal` (none: no file is written), stamped with `boot`.
+    /// `show` puts one window back and must not block (in the app:
+    /// `ShowWindowAsync(SW_SHOWNA)`).
+    pub(crate) fn new(journal: Option<PathBuf>, boot: u64, show: fn(isize)) -> Self {
         Self {
             hidden: Arc::new(Mutex::new(HiddenRegistry::new())),
             journal,
+            boot,
             show,
         }
     }
@@ -113,7 +117,7 @@ impl RestoreHandle {
         let mut set = self.lock();
         let hidden = set.hide(hwnd, is_visible, post_hide);
         if hidden && let Some(path) = &self.journal {
-            let _ = journal::write(path, &set.handles());
+            let _ = journal::write(path, self.boot, &set.handles());
         }
         hidden
     }
@@ -126,6 +130,10 @@ impl RestoreHandle {
 
     /// Shows every hidden window now, empties the set and clears the journal. Callable from
     /// any thread, and idempotent: a second call finds nothing to do.
+    ///
+    /// It does not stop later hides: the hooks keep running until the suppressor stops, so a
+    /// volume key between this call and the exit can hide the flyout again. That hide is
+    /// journaled, and the next start shows it.
     pub fn restore_now(&self) {
         let mut set = self.lock();
         set.restore_all(self.show);
@@ -139,5 +147,11 @@ impl RestoreHandle {
     pub(crate) fn poison_for_test(&self) {
         let _held = self.lock();
         std::panic::resume_unwind(Box::new("poison"));
+    }
+
+    /// Whether a holder unwound while holding the lock.
+    #[cfg(test)]
+    pub(crate) fn is_poisoned_for_test(&self) -> bool {
+        self.hidden.is_poisoned()
     }
 }

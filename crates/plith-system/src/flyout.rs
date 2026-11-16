@@ -94,6 +94,15 @@ pub fn should_hide(facts: &WindowFacts, window_open: bool) -> bool {
         && facts.band.is_none_or(|band| FLYOUT_BANDS.contains(&band))
 }
 
+/// True when a journaled window should be shown at start: it still names a window
+/// (`is_window`), that window is hidden (`!visible`), and it has every fact the hide path
+/// requires (class, process, band, see [`should_hide`]). A host class alone is not enough:
+/// other apps' XAML and `WinUI` hosts share those classes.
+#[must_use]
+pub fn is_orphan(facts: &WindowFacts, is_window: bool, visible: bool) -> bool {
+    is_window && !visible && should_hide(facts, true)
+}
+
 /// The window a volume event opens. Lock free, so the event callback and the thread that
 /// opens it never wait on each other; the clock is passed in so tests control time.
 #[derive(Debug)]

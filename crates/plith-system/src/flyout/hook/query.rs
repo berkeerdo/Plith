@@ -3,20 +3,23 @@
 use std::ffi::OsString;
 use std::os::windows::ffi::OsStringExt;
 use std::path::PathBuf;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use windows::Win32::Foundation::{CloseHandle, FARPROC, HWND};
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
+use windows::Win32::System::SystemInformation::GetTickCount64;
 use windows::Win32::System::Threading::{
     OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION, QueryFullProcessImageNameW,
 };
 use windows::Win32::UI::Shell::{FOLDERID_LocalAppData, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
 use windows::Win32::UI::WindowsAndMessaging::{
-    GetClassNameW, IsWindow, IsWindowVisible, SW_HIDE, SW_SHOWNA, ShowWindowAsync,
+    GetClassNameW, GetWindowThreadProcessId, IsWindow, IsWindowVisible, SW_HIDE, SW_SHOWNA,
+    ShowWindowAsync,
 };
 use windows::core::{BOOL, PWSTR, s, w};
 
-use crate::flyout::is_host_class;
+use crate::flyout::{self, WindowFacts, journal};
 
 pub(super) type GetWindowBand = unsafe extern "system" fn(HWND, *mut u32) -> BOOL;
 
@@ -96,9 +99,28 @@ pub(super) fn post_show(handle: isize) {
     let _ = unsafe { ShowWindowAsync(hwnd(handle), SW_SHOWNA) };
 }
 
-/// A journaled handle that is still ours to show: it names a window, that window has a host
-/// class, and it is hidden. A recycled handle naming another window fails the class check.
-pub(super) fn is_orphan(handle: isize) -> bool {
+/// The pid that owns `window` (0 when it cannot be read).
+pub(super) fn window_pid(window: HWND) -> u32 {
+    let mut pid = 0u32;
+    // SAFETY: `pid` is a valid out pointer.
+    unsafe { GetWindowThreadProcessId(window, Some(&raw mut pid)) };
+    pid
+}
+
+/// The window's Z-band through the resolved export; `None` without it or on failure.
+pub(super) fn window_band(band_fn: Option<GetWindowBand>, window: HWND) -> Option<u32> {
+    band_fn.and_then(|get| {
+        let mut band = 0u32;
+        // SAFETY: resolved export with the documented-by-use signature.
+        let ok = unsafe { get(window, &raw mut band) }.as_bool();
+        (ok && band != u32::MAX).then_some(band)
+    })
+}
+
+/// A journaled handle that is still ours to show: the pure [`flyout::is_orphan`] decision
+/// over the same facts the hide path reads (class, process, band), plus whether it is still a
+/// window and hidden. A recycled handle naming another app's window fails the facts.
+pub(super) fn is_orphan(handle: isize, band_fn: Option<GetWindowBand>) -> bool {
     let window = hwnd(handle);
     // SAFETY: `IsWindow` accepts any value and only reports whether it names a window.
     if !unsafe { IsWindow(Some(window)) }.as_bool() {
@@ -106,7 +128,22 @@ pub(super) fn is_orphan(handle: isize) -> bool {
     }
     let mut buf = [0u16; CLASS_BUF];
     let len = class_name_into(window, &mut buf);
-    is_host_class(&buf[..len]) && !is_visible(handle)
+    let facts = WindowFacts {
+        class: String::from_utf16_lossy(&buf[..len]),
+        process: process_name(window_pid(window)),
+        band: window_band(band_fn, window),
+    };
+    flyout::is_orphan(&facts, true, is_visible(handle))
+}
+
+/// This boot's stamp for the journal: the wall clock minus the uptime, in unix seconds.
+pub(super) fn current_boot() -> u64 {
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |since| since.as_secs());
+    // SAFETY: no arguments; reads the tick count since boot (sleep included).
+    let uptime_ms = unsafe { GetTickCount64() };
+    journal::boot_stamp(now, uptime_ms)
 }
 
 /// `%LOCALAPPDATA%\Plith\flyout-hidden.txt`; `None` when the known folder cannot be read.

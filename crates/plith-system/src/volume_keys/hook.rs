@@ -46,11 +46,11 @@ impl Drop for Installed {
 
 /// Hands one key event to [`handle_key_event`] with the thread's state.
 fn classify(n_code: i32, w_param: usize, vk: u32) {
-    SENDER.with(|cell| {
+    let _ = SENDER.try_with(|cell| {
         let Some(tx) = cell.get() else {
             return;
         };
-        WINDOW.with(|window| {
+        let _ = WINDOW.try_with(|window| {
             let window = window.get().map(Arc::as_ref);
             HELD.with(|held| match held.try_borrow_mut() {
                 Ok(mut held) => {
@@ -74,7 +74,9 @@ fn classify(n_code: i32, w_param: usize, vk: u32) {
 /// After a contained panic: pass every later event on untouched and tell the owner why.
 fn fail(text: String) {
     DISABLED.with(|disabled| disabled.set(true));
-    FAILURE.with(|slot| {
+    // `try_with`: these thread locals have destructors, so during thread teardown they may be
+    // gone; skipping is fine, a panic here would abort.
+    let _ = FAILURE.try_with(|slot| {
         if let Some(slot) = slot.get() {
             slot.record(text);
         }
