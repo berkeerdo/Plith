@@ -4,7 +4,7 @@
 use crate::list::ListKit;
 use crate::paint::f;
 use plith_core::ambient::LiveValues;
-use plith_core::draw::{DisplayList, LiveNode, Node, Rect, SeekTimeline, StationMark};
+use plith_core::draw::{DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark};
 use plith_core::theme::Palette;
 use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext;
 use windows_numerics::Vector2;
@@ -38,7 +38,11 @@ pub(crate) fn draw_live(
             LiveNode::Trace { rect, index, .. } => {
                 trace(ctx, kit, *rect, live.trace(*index), palette);
             }
-            LiveNode::Seek { rect, timeline } => seek(ctx, kit, *rect, timeline, live, palette),
+            LiveNode::Seek {
+                rect,
+                timeline,
+                ink,
+            } => seek(ctx, kit, (*rect, timeline, *ink), live, palette),
         }
     }
 }
@@ -106,23 +110,18 @@ fn trace(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, samples: &[f32], p
 }
 
 /// The played part of the track as a 2 DIP line along the middle of `rect` with a filled
-/// station at its head: lit while playing (sound flows), ink when paused.
+/// station at its head, in the ink the node carries (core picks it).
 fn seek(
     ctx: &ID2D1DeviceContext,
     kit: &ListKit,
-    rect: Rect,
-    timeline: &SeekTimeline,
+    (rect, timeline, ink): (Rect, &SeekTimeline, Ink),
     live: &LiveValues,
     palette: &Palette,
 ) {
     let played = timeline.fraction_at(live.now);
     let y = rect.y + rect.h / 2.0;
     let head = rect.x + rect.w * played;
-    let ink = if timeline.playing {
-        palette.flow
-    } else {
-        palette.ink
-    };
+    let ink = palette.resolve(ink);
     if head > rect.x {
         kit.set_ink(ink);
         let from = Vector2 {

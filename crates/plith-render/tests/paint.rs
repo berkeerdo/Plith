@@ -436,6 +436,7 @@ fn trace_and_seek_draw_from_live_values() {
             stamp,
             playing: true,
         },
+        ink: Ink::Flow,
     });
     let trace = Node::Live(LiveNode::Trace {
         rect: Rect {

@@ -347,3 +347,43 @@ fn transport_wins_over_seek_where_they_touch() {
     let got = hit(&page.targets, RULER.x + RULER.w / 2.0 - 2.0, y);
     assert_eq!(got, Some(Action::PlayPause));
 }
+
+#[test]
+fn a_playing_seek_is_live_with_the_flow_ink() {
+    let page = media_page(&facts(), "21:47");
+    let inks: Vec<Ink> = page
+        .list
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Live(LiveNode::Seek { ink, .. }) => Some(*ink),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(inks, [Ink::Flow]);
+}
+
+#[test]
+fn a_paused_seek_is_drawn_statically_in_ink() {
+    let paused = MediaFacts {
+        playing: false,
+        timeline: Some(SeekTimeline {
+            playing: false,
+            ..timeline()
+        }),
+        ..facts()
+    };
+    let page = media_page(&paused, "21:47");
+    // Nothing moves on a paused page, so it has no live node and wants no ambient frames.
+    assert_eq!(seeks(&page.list.nodes), 0);
+    assert!(!page.list.nodes.iter().any(|n| matches!(n, Node::Live(_))));
+    let head = RULER.x + RULER.w * 102.0 / 243.0;
+    let y = RULER_Y;
+    assert!(page.list.nodes.iter().any(|n| matches!(n,
+        Node::Stroke { points, width, ink: Ink::Ink, dashed: false }
+            if *width == 2.0 && points.len() == 2 && points[0] == (RULER.x, y)
+                && (points[1].0 - head).abs() < 1e-9 && points[1].1 == y)));
+    assert!(page.list.nodes.iter().any(|n| matches!(n,
+        Node::Station { x, y: sy, mark: StationMark::Filled, ink: Ink::Ink }
+            if (*x - head).abs() < 1e-9 && *sy == y)));
+}

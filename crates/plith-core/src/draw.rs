@@ -175,6 +175,9 @@ pub enum LiveNode {
         rect: Rect,
         /// The playback position to extrapolate.
         timeline: SeekTimeline,
+        /// The colour role of the played part and its head (core decides it, the painter maps
+        /// it).
+        ink: Ink,
     },
 }
 

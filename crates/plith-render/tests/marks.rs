@@ -86,7 +86,7 @@ fn polygon_fills_its_triangle() {
     assert_ne!(pixel(&buf, 95, 60), bgra(p.ink), "left of the base");
 }
 
-fn seek(playing: bool) -> (Node, LiveValues) {
+fn seek(playing: bool, ink: Ink) -> (Node, LiveValues) {
     let stamp = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
     let node = Node::Live(LiveNode::Seek {
         rect: Rect {
@@ -101,6 +101,7 @@ fn seek(playing: bool) -> (Node, LiveValues) {
             stamp,
             playing,
         },
+        ink,
     });
     let live = LiveValues {
         now: stamp,
@@ -110,15 +111,20 @@ fn seek(playing: bool) -> (Node, LiveValues) {
 }
 
 #[test]
-fn seek_head_is_lit_while_playing_and_ink_when_paused() {
-    // The mock's head is a lit station (sound flows); paused, nothing flows.
+fn seek_head_takes_the_ink_of_its_node() {
+    // Core decides the ink (flow while playing); the renderer only maps it.
     let p = Theme::Gece.palette();
-    let (node, live) = seek(true);
+    let (node, live) = seek(true, Ink::Flow);
     let buf = render(&page_frame(vec![node], live));
-    near(pixel(&buf, 120, 100), bgra(p.flow), 2, "playing head");
-    let (node, live) = seek(false);
+    near(pixel(&buf, 120, 100), bgra(p.flow), 2, "flow head");
+    let (node, live) = seek(true, Ink::Ink);
     let buf = render(&page_frame(vec![node], live));
-    near(pixel(&buf, 120, 100), bgra(p.ink), 2, "paused head");
+    near(
+        pixel(&buf, 120, 100),
+        bgra(p.ink),
+        2,
+        "ink head while playing",
+    );
 }
 
 #[test]

@@ -55,6 +55,8 @@ const HEIGHT_EMPTY: f64 = 150.0;
 const RULER_Y: f64 = 128.0;
 /// Ruler divisions (mock: 20, a taller tick every 5).
 const DIVISIONS: u8 = 20;
+/// Width of the played part of the seek bar (the painter's live seek width).
+const SEEK_W: f64 = 2.0;
 /// Extra reach of the seek target above and below the ruler.
 const SEEK_GROW: f64 = 6.0;
 /// Transport centre y (mock `ty = 150`).
@@ -237,10 +239,7 @@ fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> O
             Ink::Faint,
         ));
     }
-    nodes.push(Node::Live(LiveNode::Seek {
-        rect: rect(x0, RULER_Y - 5.0, w, 10.0),
-        timeline,
-    }));
+    played(timeline, nodes);
     nodes.push(text(
         rect(x0, 144.0, 80.0, 12.0),
         &format_time(whole_secs(timeline.position_s)),
@@ -259,6 +258,27 @@ fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> O
         rect: rect(x0, RULER.y - SEEK_GROW, w, RULER.h + 2.0 * SEEK_GROW),
         action: Action::SeekRuler(RULER),
     })
+}
+
+/// The played part of the track with a filled station at its head. While playing it moves, so
+/// it is a live node in the flow ink (sound flows); paused nothing moves, so it is drawn
+/// statically in ink and the page wants no ambient frames.
+fn played(timeline: SeekTimeline, nodes: &mut Vec<Node>) {
+    let (x0, w) = (RULER.x, RULER.w);
+    if timeline.playing {
+        nodes.push(Node::Live(LiveNode::Seek {
+            rect: rect(x0, RULER_Y - 5.0, w, 10.0),
+            timeline,
+            ink: Ink::Flow,
+        }));
+        return;
+    }
+    // Paused, the fraction does not depend on the clock.
+    let head = x0 + w * timeline.fraction_at(timeline.stamp);
+    if head > x0 {
+        nodes.push(line(vec![(x0, RULER_Y), (head, RULER_Y)], SEEK_W, Ink::Ink));
+    }
+    nodes.push(station(head, RULER_Y, StationMark::Filled, Ink::Ink));
 }
 
 /// A filled triangle with a 1 DIP outline of the same ink, like the mock's filled and stroked
