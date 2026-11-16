@@ -339,12 +339,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   split as `fallback_label`); `VoicemeeterService::toggle_route(strip, bus) -> Option<bool>`
   (written, not exercised on hardware without a yes).
 
-- [ ] **Step 1: Failing tests:** `route_params_banana` (`[A1, A2, A3, B1, B2]`),
+- [x] **Step 1: Failing tests:** `route_params_banana` (`[A1, A2, A3, B1, B2]`),
   `route_params_potato`, `route_params_standard`, `poll_reads_routes_into_snapshot` (with the
   existing fake API in `tests.rs`).
-- [ ] **Step 2:** Run `cargo test -p plith-audio voicemeeter`; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(audio): read Voicemeeter strip routes`.
+- [x] **Step 2:** Run `cargo test -p plith-audio voicemeeter`; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(audio): read Voicemeeter strip routes`.
 
 ### Task 10: Tab bar and clock
 

@@ -43,7 +43,7 @@ fn bus_labels(kind: VmKind) -> Vec<String> {
 
 #[test]
 fn fallback_labels_buses_per_kind() {
-    assert_eq!(bus_labels(VmKind::Standard), ["A1", "A2"]);
+    assert_eq!(bus_labels(VmKind::Standard), ["A1", "B1"]);
     assert_eq!(bus_labels(VmKind::Banana), ["A1", "A2", "A3", "B1", "B2"]);
     let potato = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
     assert_eq!(bus_labels(VmKind::Potato), potato);
@@ -225,4 +225,61 @@ fn level_channels_for_buses() {
 fn level_type_per_rail() {
     assert_eq!(level_type(Rail::Strip), 1);
     assert_eq!(level_type(Rail::Bus), 3);
+}
+
+fn route_params(kind: VmKind) -> Vec<&'static str> {
+    (0..kind.bus_count())
+        .map(|b| route_param(kind, b).unwrap())
+        .collect()
+}
+
+#[test]
+fn route_params_standard() {
+    assert_eq!(route_params(VmKind::Standard), ["A1", "B1"]);
+    assert_eq!(route_param(VmKind::Standard, 2), None);
+}
+
+#[test]
+fn route_params_banana() {
+    assert_eq!(route_params(VmKind::Banana), ["A1", "A2", "A3", "B1", "B2"]);
+    assert_eq!(route_param(VmKind::Banana, 5), None);
+}
+
+#[test]
+fn route_params_potato() {
+    let potato = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
+    assert_eq!(route_params(VmKind::Potato), potato);
+    assert_eq!(route_param(VmKind::Potato, 8), None);
+}
+
+#[test]
+fn route_params_match_bus_labels() {
+    for kind in [VmKind::Standard, VmKind::Banana, VmKind::Potato] {
+        assert_eq!(route_params(kind), bus_labels(kind));
+    }
+}
+
+#[test]
+fn poll_reads_routes_into_snapshot() {
+    let mut asked = Vec::new();
+    let routes = read_routes(VmKind::Banana, 2, |name| {
+        asked.push(name.to_owned());
+        match name {
+            "Strip[2].A1" | "Strip[2].B2" => Some(1.0),
+            "Strip[2].B1" => None,
+            _ => Some(0.0),
+        }
+    });
+    assert_eq!(routes, [true, false, false, false, true]);
+    assert_eq!(asked[0], "Strip[2].A1");
+    assert_eq!(asked[3], "Strip[2].B1");
+    assert_eq!(asked.len(), 5);
+}
+
+#[test]
+fn route_threshold_is_half() {
+    let routes = read_routes(VmKind::Standard, 0, |n| {
+        Some(if n.ends_with("A1") { 0.5 } else { 0.49 })
+    });
+    assert_eq!(routes, [true, false]);
 }

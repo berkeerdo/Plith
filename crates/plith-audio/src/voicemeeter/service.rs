@@ -8,7 +8,9 @@ use std::time::Instant;
 
 use super::api::Api;
 use super::poll;
-use super::{LoginSession, Rail, Readiness, VmLevels, VmSnapshot, clamp_gain, param_name};
+use super::{
+    LoginSession, Rail, Readiness, VmLevels, VmSnapshot, clamp_gain, param_name, route_param,
+};
 use crate::waker::{Waker, publish_with};
 
 /// Whether the Voicemeeter engine can be used right now.
@@ -237,6 +239,17 @@ impl VoicemeeterService {
             return None;
         }
         api.toggle_float(&param_name(rail, index, "Mute"))
+    }
+
+    /// Flips the routing of a strip to an output bus: reads the real state, writes the opposite
+    /// and returns it. `None` when unavailable, out of range or the read or write failed.
+    pub fn toggle_route(&self, strip: usize, bus: usize) -> Option<bool> {
+        let api = self.api()?;
+        let kind = self.snapshot()?.kind;
+        if strip >= kind.strip_count() {
+            return None;
+        }
+        api.toggle_float(&param_name(Rail::Strip, strip, route_param(kind, bus)?))
     }
 }
 

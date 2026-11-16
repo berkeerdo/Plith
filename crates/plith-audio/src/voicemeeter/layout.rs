@@ -13,7 +13,7 @@ pub fn param_name(rail: Rail, index: usize, param: &str) -> String {
 }
 
 /// Label used when the engine reports an empty one: `Strip 1`, or for buses `A1..` then `B1..`
-/// with the split depending on the edition (Standard A1,A2; Banana A1..A3, B1,B2; Potato
+/// with the split depending on the edition (Standard A1, B1; Banana A1..A3, B1,B2; Potato
 /// A1..A5, B1..B3).
 #[must_use]
 pub fn fallback_label(kind: VmKind, rail: Rail, index: usize) -> String {
@@ -21,7 +21,7 @@ pub fn fallback_label(kind: VmKind, rail: Rail, index: usize) -> String {
         Rail::Strip => format!("Strip {}", index + 1),
         Rail::Bus => {
             let hardware_outputs = match kind {
-                VmKind::Standard => 2,
+                VmKind::Standard => 1,
                 VmKind::Banana => 3,
                 VmKind::Potato => 5,
             };
@@ -32,4 +32,43 @@ pub fn fallback_label(kind: VmKind, rail: Rail, index: usize) -> String {
             }
         }
     }
+}
+
+/// Strip parameter suffixes for the bus assignments, in bus order: `A1..` then `B1..`.
+const ROUTE_PARAMS: [&str; 8] = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
+
+/// Remote API suffix of the strip parameter that routes a strip to output `bus` (`Strip[i].A1`),
+/// split per edition exactly as [`fallback_label`]. `None` when the edition has no such bus.
+#[must_use]
+pub fn route_param(kind: VmKind, bus: usize) -> Option<&'static str> {
+    if bus >= kind.bus_count() {
+        return None;
+    }
+    let hardware_outputs = match kind {
+        VmKind::Standard => 1,
+        VmKind::Banana => 3,
+        VmKind::Potato => 5,
+    };
+    let slot = if bus < hardware_outputs {
+        bus
+    } else {
+        5 + bus - hardware_outputs
+    };
+    ROUTE_PARAMS.get(slot).copied()
+}
+
+/// Reads every bus assignment of strip `index` through `get` (the float getter). A value of at
+/// least 0.5 is on; a failed read counts as off, like the mute flag.
+pub fn read_routes(
+    kind: VmKind,
+    index: usize,
+    mut get: impl FnMut(&str) -> Option<f32>,
+) -> Vec<bool> {
+    (0..kind.bus_count())
+        .map(|bus| {
+            route_param(kind, bus)
+                .and_then(|suffix| get(&param_name(Rail::Strip, index, suffix)))
+                .is_some_and(|v| v >= 0.5)
+        })
+        .collect()
 }

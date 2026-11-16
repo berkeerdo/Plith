@@ -9,7 +9,7 @@ use super::api::Api;
 use super::service::{Shared, Status};
 use super::{
     ChannelSnapshot, DirtyOutcome, LoginSession, Rail, Readiness, VmKind, VmLevels, VmSnapshot,
-    fallback_label, level_channel, level_type, param_name,
+    fallback_label, level_channel, level_type, param_name, read_routes,
 };
 
 /// Dirty check cadence.
@@ -30,12 +30,17 @@ fn read_channel(api: &Api, kind: VmKind, rail: Rail, index: usize) -> Option<Cha
         .get_string(&param_name(rail, index, "Label"))
         .filter(|l| !l.trim().is_empty())
         .unwrap_or_else(|| fallback_label(kind, rail, index));
+    let routes = match rail {
+        Rail::Strip => read_routes(kind, index, |name| api.get_float(name)),
+        Rail::Bus => Vec::new(),
+    };
     Some(ChannelSnapshot {
         rail,
         index,
         label,
         gain_db,
         muted,
+        routes,
     })
 }
 
