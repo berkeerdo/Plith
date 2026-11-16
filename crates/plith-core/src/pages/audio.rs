@@ -8,14 +8,16 @@ mod model;
 #[cfg(test)]
 mod tests;
 
-pub use layout::{audio_page, route_path};
+pub use layout::{audio_page, route_path, row_pitch};
 pub use model::Activity;
 
-/// Row pitch in DIP for up to five source rows.
-pub const PITCH_NORMAL: f64 = 57.0;
-/// Row pitch in DIP above five source rows.
+/// Row pitch in DIP: the mock's rows sit 50 apart.
+pub const PITCH_NORMAL: f64 = 50.0;
+/// Row pitch in DIP above five rows, and the floor of the reach-driven pitch.
 pub const PITCH_DENSE: f64 = 40.0;
-/// Source row count above which the pitch shrinks.
+/// The smallest pitch used to fit the page into its maximum height.
+pub const PITCH_MIN: f64 = 32.0;
+/// Row count (sources or outputs, whichever is more) above which the pitch is dense.
 pub const DENSE_ABOVE: usize = 5;
 
 /// One strip or bus as the mixer reports it.
@@ -116,6 +118,8 @@ pub struct OutputRow {
     pub muted: bool,
     /// The Windows endpoint id; `None` for Voicemeeter buses.
     pub id: Option<String>,
+    /// Whether any route (live, idle or cut) ends here.
+    pub used: bool,
 }
 
 /// How a route is drawn.

@@ -1,8 +1,8 @@
 //! The rules behind the audio view: rows, route states, density, signal activity.
 
 use super::{
-    AudioFacts, AudioView, DENSE_ABOVE, Footer, OutputRow, OutputValue, PITCH_DENSE, PITCH_NORMAL,
-    PickMode, Route, RouteState, SourceRow, VmFacts,
+    AudioFacts, AudioView, Footer, OutputRow, OutputValue, PickMode, Route, RouteState, SourceRow,
+    VmFacts, row_pitch,
 };
 
 /// Peak level above which a strip counts as carrying signal.
@@ -50,6 +50,9 @@ pub(super) fn build(
         Some(vm) => voicemeeter(vm, activity, now_s),
         None => windows(facts),
     };
+    for (o, row) in outputs.iter_mut().enumerate() {
+        row.used = routes.iter().any(|r| r.output == o);
+    }
     let picked = match mode {
         PickMode::Picked(s) if facts.vm.is_some() && s < sources.len() => Some(s),
         _ => None,
@@ -78,11 +81,7 @@ pub(super) fn build(
         (_, Some(_)) => Footer::Picking,
         _ => Footer::Normal,
     };
-    let row_pitch = if sources.len() > DENSE_ABOVE {
-        PITCH_DENSE
-    } else {
-        PITCH_NORMAL
-    };
+    let row_pitch = row_pitch(sources.len().max(outputs.len()));
     AudioView {
         sources,
         outputs,
@@ -170,6 +169,7 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         live: false,
         muted: bus.muted,
         id: None,
+        used: false,
     }
 }
 
@@ -201,6 +201,7 @@ fn windows(facts: &AudioFacts) -> Parts {
                 live: false,
                 muted: Some(i) == default_idx && muted,
                 id: Some(e.id.clone()),
+                used: false,
             }
         })
         .collect();

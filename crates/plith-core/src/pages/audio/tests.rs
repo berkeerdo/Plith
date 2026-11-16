@@ -141,6 +141,8 @@ fn no_voicemeeter_shows_windows_outputs() {
     assert_eq!(view.outputs[1].tag, None);
     assert_eq!(view.outputs[0].id.as_deref(), Some("a"));
     assert_eq!(view.outputs[1].id.as_deref(), Some("b"));
+    assert!(!view.outputs[0].used);
+    assert!(view.outputs[1].used);
     assert_eq!(
         view.routes,
         vec![Route {
@@ -189,7 +191,8 @@ fn potato_rows_shrink_pitch() {
         ..AudioFacts::default()
     };
     let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
-    assert!((view.row_pitch - 40.0).abs() < 1e-9);
+    // 8 rows at 40 overflow 420; the pitch shrinks to fit: (420 - 86 - 64) / 7.
+    assert!((view.row_pitch - 270.0 / 7.0).abs() < 1e-9);
     assert_eq!(view.sources[4].sub, "HW 5");
     assert_eq!(view.sources[5].sub, "VAIO");
     assert_eq!(view.sources[6].sub, "AUX");
@@ -202,7 +205,8 @@ fn potato_rows_shrink_pitch() {
         PickMode::None,
         0.0,
     );
-    assert!((banana_view.row_pitch - 57.0).abs() < 1e-9);
+    // Five rows: the 45 degree reach (188) over four gaps.
+    assert!((banana_view.row_pitch - 47.0).abs() < 1e-9);
 }
 
 #[test]
@@ -265,6 +269,8 @@ fn muted_bus_route_is_cut_and_output_muted() {
     );
     assert!(view.outputs[0].muted);
     assert!(!view.outputs[1].muted);
+    assert!(view.outputs[0].used);
+    assert!(!view.outputs[1].used);
 }
 
 #[test]

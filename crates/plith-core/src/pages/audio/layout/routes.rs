@@ -3,22 +3,21 @@
 use std::sync::Arc;
 
 use super::{
-    CUT_END_X, CUT_LABEL_X, LABEL_H, LABEL_TEXT, OUTPUT_X, SOURCE_X, source_has, station_y,
+    CUT_END_X, CUT_LABEL_X, DIAGONAL_END, LABEL_H, LABEL_TEXT, MIN_LEG, OUTPUT_X, SOURCE_X,
+    has_voicemeeter, source_has, station_y,
 };
 use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle, Trim};
 use crate::pages::audio::{AudioView, RouteState};
+use crate::pages::kit::station;
 
-/// Where a diagonal ends before the output station (mock: the Discord to A1 rise runs from
-/// x 280 to 430 with `XO = 452`).
-const DIAGONAL_END: f64 = 22.0;
-/// Shortest horizontal leg when a rise is too tall for a 45 degree run.
-const MIN_LEG: f64 = 6.0;
 /// Width of the `SESSİZ` label on a cut line.
 const CUT_LABEL_W: f64 = 64.0;
 
-/// A route polyline: horizontal from the source station, a 45 degree run that ends 22 DIP before
-/// the output station, horizontal into it. Same height: two points. A rise taller than the
-/// column gap allows keeps short legs and runs steeper than 45 degrees.
+/// A route polyline: horizontal from the source station, a 45 degree run, horizontal into the
+/// output station. Same height: two points. The run ends 22 DIP before the output station; a
+/// taller rise first slides that end right, up to 6 DIP before the station. Only a rise above
+/// the 188 DIP reach (Potato density) cannot stay at 45 degrees: that documented fallback keeps
+/// 6 DIP legs at both ends and runs steeper.
 #[must_use]
 pub fn route_path(from: (f64, f64), to: (f64, f64)) -> Vec<(f64, f64)> {
     let dy = (to.1 - from.1).abs();
@@ -28,8 +27,8 @@ pub fn route_path(from: (f64, f64), to: (f64, f64)) -> Vec<(f64, f64)> {
     let mut end = to.0 - DIAGONAL_END;
     let mut start = end - dy;
     if start < from.0 + MIN_LEG {
-        start = from.0 + MIN_LEG;
-        end = end.max(start).min(to.0 - MIN_LEG);
+        end = (from.0 + MIN_LEG + dy).min(to.0 - MIN_LEG);
+        start = (end - dy).max(from.0 + MIN_LEG);
     }
     vec![from, (start, from.1), (end, to.1), to]
 }
@@ -43,20 +42,27 @@ fn stroke(points: Vec<(f64, f64)>, width: f64, ink: Ink, dashed: bool) -> Node {
     }
 }
 
-fn station(x: f64, y: f64, mark: StationMark, ink: Ink) -> Node {
-    Node::Station { x, y, mark, ink }
+/// The drawing pass of a route state and its line: idle routes and bus-muted cuts first (1 px
+/// track), candidates (dashed flow), live routes on top (2 px flow).
+fn look(state: RouteState) -> (u8, f64, Ink, bool) {
+    match state {
+        RouteState::Idle | RouteState::Cut => (0, 1.0, Ink::Track, false),
+        RouteState::Candidate => (1, 1.0, Ink::Flow, true),
+        RouteState::Live => (2, 2.0, Ink::Flow, false),
+    }
 }
 
-/// Idle, candidate and live routes (in that order, lit on top), cut stubs, then stations.
+/// Routes by pass, the cut stubs of muted sources, then stations. A cut whose source is muted is
+/// drawn as the stub; a cut caused by a muted output keeps its full path in track ink.
 pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
-    let order = [
-        (RouteState::Idle, 1.0, Ink::Track, false),
-        (RouteState::Candidate, 1.0, Ink::Flow, true),
-        (RouteState::Live, 2.0, Ink::Flow, false),
-    ];
-    for (state, width, ink, dashed) in order {
-        for r in view.routes.iter().filter(|r| r.state == state) {
-            if r.source >= view.sources.len() || r.output >= view.outputs.len() {
+    for order in 0..3 {
+        for r in &view.routes {
+            let Some(source) = view.sources.get(r.source) else {
+                continue;
+            };
+            let (at, width, ink, dashed) = look(r.state);
+            let stub = r.state == RouteState::Cut && source.muted;
+            if at != order || stub || r.output >= view.outputs.len() {
                 continue;
             }
             let from = (SOURCE_X, station_y(view, r.source));
@@ -64,9 +70,9 @@ pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
             nodes.push(stroke(route_path(from, to), width, ink, dashed));
         }
     }
-    for s in 0..view.sources.len() {
-        if source_has(view, s, RouteState::Cut) {
-            cut(station_y(view, s), nodes);
+    for (s, row) in view.sources.iter().enumerate() {
+        if row.muted && source_has(view, s, RouteState::Cut) {
+            cut(station_y(view, s), has_voicemeeter(view), nodes);
         }
     }
     for (s, row) in view.sources.iter().enumerate() {
@@ -99,8 +105,9 @@ pub(super) fn draw(view: &AudioView, nodes: &mut Vec<Node>) {
     }
 }
 
-/// The mock's cut line: a stub from the source station to a hollow station, then `SESSİZ`.
-fn cut(y: f64, nodes: &mut Vec<Node>) {
+/// The mock's cut line: a stub from the source station to a hollow station, then `SESSİZ`
+/// (without Voicemeeter the muted default output already says it, so no label).
+fn cut(y: f64, label: bool, nodes: &mut Vec<Node>) {
     nodes.push(stroke(
         vec![(SOURCE_X, y), (CUT_END_X, y)],
         1.0,
@@ -108,6 +115,9 @@ fn cut(y: f64, nodes: &mut Vec<Node>) {
         false,
     ));
     nodes.push(station(CUT_END_X, y, StationMark::Hollow, Ink::Faint));
+    if !label {
+        return;
+    }
     nodes.push(Node::Text {
         rect: Rect {
             x: CUT_LABEL_X,

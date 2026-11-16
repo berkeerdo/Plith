@@ -8,8 +8,12 @@ mod routes;
 
 use std::sync::Arc;
 
-use super::{AudioView, Footer, OutputRow, OutputValue, PickMode, RouteState, SourceRow};
+use super::{
+    AudioView, DENSE_ABOVE, Footer, OutputRow, OutputValue, PITCH_DENSE, PITCH_MIN, PITCH_NORMAL,
+    PickMode, RouteState, SourceRow,
+};
 use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, Rect, TextStyle, Trim};
+use crate::pages::kit::rect;
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
@@ -30,8 +34,15 @@ const CUT_LABEL_X: f64 = 300.0;
 const FIRST_ROW_Y: f64 = 86.0;
 /// Station centre above a row baseline (mock `s.y - 3`).
 const STATION_DY: f64 = 3.0;
-/// Page height below the last row baseline: 300 for four rows at the 57 DIP pitch.
-const BOTTOM: f64 = 43.0;
+/// Page height below the last row baseline (mock: 300 - 236).
+const BOTTOM: f64 = 64.0;
+/// Where a diagonal ends before the output station while the run fits (mock line 163: the
+/// Discord to A1 rise runs from x 280 to 430 with `XO = 452`).
+const DIAGONAL_END: f64 = 22.0;
+/// Shortest horizontal leg at either end of a route.
+const MIN_LEG: f64 = 6.0;
+/// The tallest rise a route can draw at 45 degrees: 188.
+const REACH: f64 = (OUTPUT_X - MIN_LEG) - (SOURCE_X + MIN_LEG);
 /// Footer baseline above the page bottom (mock: 284 on a 300 high page).
 const FOOTER_UP: f64 = 16.0;
 /// Trace slot left edge and width (mock `trace(svg, 168, ...)`, `w = 64`).
@@ -74,10 +85,6 @@ fn has_voicemeeter(view: &AudioView) -> bool {
     view.footer != Footer::NoVoicemeeter
 }
 
-fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
-    Rect { x, y, w, h }
-}
-
 fn text(r: Rect, s: &str, style: TextStyle, ink: Ink, align: Align, trim: Trim) -> Node {
     Node::Text {
         rect: r,
@@ -101,6 +108,26 @@ fn format_value(value: OutputValue) -> String {
         OutputValue::Percent(p) => p.to_string(),
         OutputValue::None => String::new(),
     }
+}
+
+/// Row pitch for a diagram of `rows` rows (sources or outputs, whichever is more): 50 as the
+/// mock; up to five rows no taller than the 45 degree reach allows (floor 40); 40 above five
+/// rows; then shrunk (floor 32) until the page fits `PAGE_MAX_HEIGHT`.
+#[must_use]
+pub fn row_pitch(rows: usize) -> f64 {
+    if rows <= 1 {
+        return PITCH_NORMAL;
+    }
+    #[allow(clippy::cast_precision_loss)]
+    // Row counts are tiny, the cast is exact.
+    let gaps = (rows - 1) as f64;
+    let pitch = if rows <= DENSE_ABOVE {
+        (REACH / gaps).clamp(PITCH_DENSE, PITCH_NORMAL)
+    } else {
+        PITCH_DENSE
+    };
+    let fit = (shapes::PAGE_MAX_HEIGHT - FIRST_ROW_Y - BOTTOM) / gaps;
+    pitch.min(fit).max(PITCH_MIN)
 }
 
 /// The audio page nodes, hit targets and island shape.
@@ -234,6 +261,11 @@ fn output_row(
             Trim::End,
         ));
     }
+    let name_ink = match (row.used, has_voicemeeter(view)) {
+        (true, _) => Ink::Ink,
+        (false, true) => Ink::Faint,
+        (false, false) => Ink::Muted,
+    };
     let name_x = match &row.tag {
         Some(tag) => {
             nodes.push(text(
@@ -253,7 +285,7 @@ fn output_row(
             rect(x, y - 13.0, (name_right - x).max(0.0), NAME_H),
             &row.name,
             TextStyle::Name,
-            Ink::Ink,
+            name_ink,
             Align::Start,
             Trim::Middle,
         ));
