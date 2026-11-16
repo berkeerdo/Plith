@@ -1,7 +1,7 @@
 //! Facts to page content: builds the four pages and the pill, keeps their hit targets and
 //! shapes, and rebuilds only the pages a change touches.
 
-use crate::services::{Changes, Facts};
+use crate::services::Facts;
 use plith_core::draw::{ArtPixels, DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::pages::audio::{Activity, PickMode, audio_page, audio_view};
@@ -36,17 +36,21 @@ pub struct Dirty {
 }
 
 impl Dirty {
-    /// The lists a change touches: audio facts reach every page but the shelf (the media route
-    /// names the output, the system page the microphone) and the pill; media reaches its page
-    /// and the pill; brightness only the system page.
+    /// The lists whose facts differ between `old` and `new`. Each page's facts already hold
+    /// what it reads from other services (the media route names the output, the system page
+    /// the microphone and its bus), so an audio change reaches the system page only when the
+    /// microphone facts changed. The shelf reads no service.
     #[must_use]
-    pub fn from_changes(changes: Changes) -> Dirty {
-        let audio = changes.has(Changes::AUDIO);
-        let media = changes.has(Changes::MEDIA);
-        let system = changes.has(Changes::SYSTEM);
+    pub fn between(old: &Facts, new: &Facts) -> Dirty {
+        let art = |facts: &Facts| facts.art.as_ref().map(|a| a.id);
         Dirty {
-            pages: [audio, audio || media, false, audio || system],
-            pill: audio || media,
+            pages: [
+                old.audio != new.audio,
+                old.media != new.media || art(old) != art(new),
+                false,
+                old.system != new.system,
+            ],
+            pill: old.pill != new.pill,
         }
     }
 
@@ -103,7 +107,8 @@ impl Pages {
         }
     }
 
-    /// Rebuilds the lists `dirty` names; the others keep their `Arc`.
+    /// Rebuilds the lists `dirty` names. The others, and a rebuilt list equal to the old one,
+    /// keep their `Arc`, so the render cache (keyed on it) keeps its bitmap.
     pub fn rebuild(&mut self, dirty: Dirty, inputs: &Inputs) {
         for page in PageId::ALL {
             let i = page.index();
@@ -113,10 +118,10 @@ impl Pages {
             let build = build_page(page, inputs);
             self.shapes[i] = build.shape;
             self.targets[i] = build.targets;
-            self.lists[i] = Arc::new(build.list);
+            keep_or_replace(&mut self.lists[i], build.list);
         }
         if dirty.pill {
-            self.pill = Arc::new(pill(&inputs.facts.pill));
+            keep_or_replace(&mut self.pill, pill(&inputs.facts.pill));
         }
         if dirty.pages[PageId::Media.index()] {
             self.art = art(inputs.facts);
@@ -143,6 +148,13 @@ impl Pages {
     #[must_use]
     pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
         &self.targets
+    }
+}
+
+/// Replaces `slot` with `list` unless they are equal.
+fn keep_or_replace(slot: &mut Arc<DisplayList>, list: DisplayList) {
+    if **slot != list {
+        *slot = Arc::new(list);
     }
 }
 

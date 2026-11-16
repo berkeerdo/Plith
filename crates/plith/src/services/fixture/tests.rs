@@ -66,7 +66,7 @@ fn fixture_writes_stay_in_fixture() {
     assert_eq!(facts.system.mic_bus.as_deref(), Some("A1"));
 
     fixture.toggle_mic();
-    assert!(fixture.drain().has(Changes::AUDIO));
+    assert_eq!(fixture.drain(), Changes::AUDIO);
     let facts = fixture.facts();
     assert!(facts.audio.mic.as_ref().unwrap().muted);
     assert!(facts.system.mic.as_ref().unwrap().muted);

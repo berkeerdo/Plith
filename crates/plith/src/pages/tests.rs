@@ -18,37 +18,57 @@ fn inputs<'a>(facts: &'a Facts, activity: &'a Activity) -> Inputs<'a> {
     }
 }
 
+/// A paused fixture (its timeline then does not move between two reads).
+fn paused_fixture() -> FixtureServices {
+    let mut fixture = FixtureServices::new(Fixture::Banana);
+    fixture.play_pause();
+    let _ = fixture.drain();
+    fixture
+}
+
 #[test]
-fn changes_mark_the_pages_they_reach() {
-    assert_eq!(Dirty::from_changes(Changes::NONE), Dirty::default());
+fn dirty_follows_the_facts_that_changed() {
+    let mut fixture = paused_fixture();
+    let start = fixture.facts();
+    assert_eq!(Dirty::between(&start, &fixture.facts()), Dirty::default());
+    // A route of a strip that is not the microphone: the audio page only.
+    fixture.toggle_route(2, 3);
+    let routed = fixture.facts();
     assert_eq!(
-        Dirty::from_changes(Changes::AUDIO),
+        Dirty::between(&start, &routed),
         Dirty {
-            pages: [true, true, false, true],
+            pages: [true, false, false, false],
+            pill: false,
+        }
+    );
+    // The microphone: the audio and the system page.
+    fixture.toggle_mic();
+    let muted = fixture.facts();
+    assert_eq!(
+        Dirty::between(&routed, &muted),
+        Dirty {
+            pages: [true, false, false, true],
+            pill: false,
+        }
+    );
+    // The default output: the audio page, the media route and the pill.
+    fixture.set_default_endpoint("r1280");
+    let moved = fixture.facts();
+    assert_eq!(
+        Dirty::between(&muted, &moved),
+        Dirty {
+            pages: [true, true, false, false],
             pill: true,
         }
     );
+    // Brightness: the system page only.
+    fixture.set_brightness(20);
     assert_eq!(
-        Dirty::from_changes(Changes::MEDIA),
-        Dirty {
-            pages: [false, true, false, false],
-            pill: true,
-        }
-    );
-    assert_eq!(
-        Dirty::from_changes(Changes::SYSTEM),
+        Dirty::between(&moved, &fixture.facts()),
         Dirty {
             pages: [false, false, false, true],
             pill: false,
         }
-    );
-    assert_eq!(
-        Dirty::from_changes(Changes::AUDIO | Changes::MEDIA | Changes::SYSTEM),
-        Dirty {
-            pages: [true, true, false, true],
-            pill: true,
-        },
-        "the shelf reads no service"
     );
     assert_eq!(
         Dirty::page(PageId::Media),
@@ -58,6 +78,24 @@ fn changes_mark_the_pages_they_reach() {
         }
     );
     assert!(!Dirty::default().any());
+}
+
+#[test]
+fn an_equal_rebuild_keeps_every_arc() {
+    let facts = paused_fixture().facts();
+    let activity = Activity::default();
+    let mut pages = Pages::new(&inputs(&facts, &activity));
+    let before = pages.content();
+    let all = Dirty {
+        pages: [true; 4],
+        pill: true,
+    };
+    pages.rebuild(all, &inputs(&facts, &activity));
+    let after = pages.content();
+    for i in 0..4 {
+        assert!(Arc::ptr_eq(&before.pages[i], &after.pages[i]), "page {i}");
+    }
+    assert!(Arc::ptr_eq(&before.pill, &after.pill));
 }
 
 #[test]

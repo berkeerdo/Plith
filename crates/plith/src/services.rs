@@ -45,12 +45,6 @@ impl Changes {
     pub fn any(self) -> bool {
         self.0 != 0
     }
-
-    /// True when any flag of `other` is set here too.
-    #[must_use]
-    pub fn has(self, other: Changes) -> bool {
-        self.0 & other.0 != 0
-    }
 }
 
 impl BitOr for Changes {

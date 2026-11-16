@@ -301,7 +301,9 @@ impl Services for FixtureServices {
         }
         let pill = derive::pill_facts(&audio, self.media.playing);
         let mut media = self.media.clone();
-        media.timeline = media.timeline.map(|t| derive::rebase(t, SystemTime::now()));
+        media.timeline = media
+            .timeline
+            .map(|t| derive::rebase_to_second(t, SystemTime::now()));
         media.output = (!pill.output.is_empty()).then(|| pill.output.clone());
         let system = SystemFacts {
             brightness: self.brightness.clone(),

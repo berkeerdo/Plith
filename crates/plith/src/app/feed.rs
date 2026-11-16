@@ -192,8 +192,9 @@ impl Feed {
     pub fn on_wake(&mut self, mailbox: &SceneMailbox) {
         let changes = self.services.drain();
         if changes.any() {
-            self.facts = self.services.facts();
-            let dirty = Dirty::from_changes(changes);
+            let facts = self.services.facts();
+            let dirty = Dirty::between(&self.facts, &facts);
+            self.facts = facts;
             if is_open(&mailbox.latest().scene) {
                 self.rebuild(dirty, mailbox);
             } else {

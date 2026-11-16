@@ -65,7 +65,8 @@ pub fn audio_facts(
 }
 
 /// The media page facts; `output` is the route text after the arrow. A playing timeline is
-/// moved to `now`, so a rebuilt page shows the current elapsed time.
+/// moved to the last whole second before `now`, so a rebuilt page shows the current elapsed
+/// time and facts read within one second compare equal.
 #[must_use]
 pub fn media_facts(media: &MediaSnapshot, output: Option<String>, now: SystemTime) -> MediaFacts {
     if !media.has_session {
@@ -90,7 +91,7 @@ pub fn media_facts(media: &MediaSnapshot, output: Option<String>, now: SystemTim
         can_seek: media.can_seek,
         can_next: media.can_next,
         can_prev: media.can_prev,
-        timeline: timeline.map(|t| derive::rebase(t, now)),
+        timeline: timeline.map(|t| derive::rebase_to_second(t, now)),
         output,
     }
 }
