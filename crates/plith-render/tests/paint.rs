@@ -1,11 +1,14 @@
 #![allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 //! Offscreen painter tests on WARP: no window, CI-safe.
 
+use plith_core::ambient::LiveValues;
+use plith_core::draw::PageContent;
 use plith_core::geometry::IslandShape;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::shapes::{PLACEHOLDER, REST};
 use plith_render::paint::PaintFrame;
 use plith_render::render_offscreen;
+use std::sync::Arc;
 
 /// The 480 x 180 shape these pixel checks were written for.
 const SHAPE: IslandShape = IslandShape {
@@ -20,6 +23,9 @@ fn frame(shape: IslandShape, origin: (f64, f64), pages: &[PageLayer]) -> PaintFr
         origin,
         pages: PageLayers::of(pages),
         content_opacity: 1.0,
+        content: Arc::new(PageContent::empty()),
+        content_gen: 0,
+        live: LiveValues::default(),
     }
 }
 

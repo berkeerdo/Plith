@@ -149,7 +149,23 @@ impl SceneMailbox {
     }
 
     /// Replaces the page content; `None` (no bump, no wake) when it equals the current one.
+    ///
+    /// The deep compare runs outside the lock, so the render thread never waits on it: the
+    /// stored `Arc` is cloned under the lock, compared without it, and the new content is stored
+    /// only if the stored `Arc` is still the one compared against. A lost race retries once;
+    /// a second lost race compares under the lock.
     pub fn publish_content(&self, content: Arc<PageContent>) -> Option<u64> {
+        for _ in 0..2 {
+            let current = Arc::clone(&lock(&self.state).content);
+            if Arc::ptr_eq(&current, &content) || *current == *content {
+                return None;
+            }
+            let mut state = lock(&self.state);
+            if Arc::ptr_eq(&state.content, &current) {
+                state.content = content;
+                return Some(self.bump(state));
+            }
+        }
         let mut state = lock(&self.state);
         if Arc::ptr_eq(&state.content, &content) || *state.content == *content {
             return None;

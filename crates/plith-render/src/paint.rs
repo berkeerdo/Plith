@@ -1,8 +1,11 @@
 //! The painter: a black rounded island and one placeholder bar per visible page layer.
 
+use plith_core::ambient::LiveValues;
+use plith_core::draw::PageContent;
 use plith_core::geometry::IslandShape;
 use plith_core::page::PageLayers;
 use plith_core::shapes::{FILL, PLACEHOLDER};
+use std::sync::Arc;
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
     D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_LAYER_OPTIONS1_NONE, D2D1_LAYER_PARAMETERS1,
@@ -23,6 +26,12 @@ pub struct PaintFrame {
     pub pages: PageLayers,
     /// Opacity of the page placeholders (0 hides them); the island clips them always.
     pub content_opacity: f32,
+    /// The display lists and artwork to draw.
+    pub content: Arc<PageContent>,
+    /// The mailbox generation `content` arrived with; it changes only when the content does.
+    pub content_gen: u64,
+    /// Values sampled for the live nodes on an ambient frame; the default on any other frame.
+    pub live: LiveValues,
 }
 
 /// Draws frames onto the target set on a Direct2D device context.

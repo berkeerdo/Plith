@@ -1,4 +1,5 @@
 mod harness;
+mod live;
 
 use super::{Fatal, RenderHandle};
 use harness::*;

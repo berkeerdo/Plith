@@ -304,3 +304,33 @@ fn target_reads_scene_shapes() {
     assert_ne!(scene.target(), PAGES[2]);
     assert_eq!(Scene::default().shapes, PAGES);
 }
+
+#[test]
+fn publish_content_compares_outside_the_lock() {
+    let mailbox = Arc::new(mailbox(Scene::default()));
+    // Same answers as a compare under the lock: equal content never bumps, new content does.
+    let first = content_with_fill(3.0);
+    assert_eq!(mailbox.publish_content(Arc::clone(&first)), Some(1));
+    assert_eq!(mailbox.publish_content(content_with_fill(3.0)), None);
+    assert_eq!(mailbox.publish_content(content_with_fill(4.0)), Some(2));
+    // Racing publishers: every bump is counted once and the stored content is one they sent.
+    let publishers: Vec<_> = (0..4_u32)
+        .map(|t| {
+            let mailbox = Arc::clone(&mailbox);
+            thread::spawn(move || {
+                (0..50_u32)
+                    .filter_map(|i| {
+                        mailbox.publish_content(content_with_fill(f64::from(t * 1000 + i % 7)))
+                    })
+                    .count()
+            })
+        })
+        .collect();
+    let bumps: usize = publishers.into_iter().map(|h| h.join().unwrap()).sum();
+    let latest = mailbox.latest();
+    assert_eq!(usize::try_from(latest.generation).unwrap(), 2 + bumps);
+    let Node::Fill { rect, .. } = &latest.content.pages[0].nodes[0] else {
+        panic!("a fill node");
+    };
+    assert!(rect.w >= 0.0);
+}

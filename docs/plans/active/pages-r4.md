@@ -206,15 +206,15 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   line; it writes one `ambient` line when it stops. A scene change during ambient starts a normal
   motion (motion line as today).
 
-- [ ] **Step 1: Failing tests** (fake clock and painter in `harness.rs`):
+- [x] **Step 1: Failing tests** (fake clock and painter in `harness.rs`):
   `content_change_at_rest_paints_once`, `content_change_mid_motion_keeps_motion` (velocity kept,
   one motion line), `ambient_runs_only_when_expanded_with_live_nodes`,
   `ambient_paints_every_fourth_tick_at_240`, `collapse_stops_ambient_and_reports`,
   `idle_after_collapse_has_no_wakes`; core `divisor_at_60_120_144_240`.
-- [ ] **Step 2:** Run `cargo test -p plith-render thread` and `-p plith-core ambient`; expect
+- [x] **Step 2:** Run `cargo test -p plith-render thread` and `-p plith-core ambient`; expect
   failures.
-- [ ] **Step 3:** Split first (no behaviour change, tests still green), then implement.
-- [ ] **Step 4:** Five checks green, commit `feat(render): repaint content and tick ambient`.
+- [x] **Step 3:** Split first (no behaviour change, tests still green), then implement.
+- [x] **Step 4:** Five checks green, commit `feat(render): repaint content and tick ambient`.
 
 ### Task 6: Text with DirectWrite and the bundled fonts
 
