@@ -107,6 +107,18 @@ fn fixture_media_writes_stay_in_fixture() {
 }
 
 #[test]
+fn writes_wake_the_ui_thread() {
+    let wakes = std::rc::Rc::new(std::cell::Cell::new(0));
+    let seen = std::rc::Rc::clone(&wakes);
+    let mut fixture = FixtureServices::new(Fixture::Banana)
+        .with_waker(Box::new(move || seen.set(seen.get() + 1)));
+    fixture.toggle_mic();
+    fixture.set_brightness(5);
+    fixture.set_default_endpoint("missing");
+    assert_eq!(wakes.get(), 2, "only a real change wakes");
+}
+
+#[test]
 fn out_of_range_writes_change_nothing() {
     let mut fixture = FixtureServices::new(Fixture::Banana);
     fixture.toggle_route(9, 0);

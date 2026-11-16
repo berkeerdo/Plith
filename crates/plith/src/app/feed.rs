@@ -7,7 +7,7 @@ use crate::services::{Facts, Services};
 use plith_core::pages::PageId;
 use plith_core::pages::audio::{Activity, PickMode};
 use plith_core::pages::tabbar::clock_text;
-use plith_core::scene::{Scene, SceneMailbox};
+use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
 use std::time::Instant;
 
@@ -85,6 +85,18 @@ pub fn wanted(scene: &Scene, playing: bool) -> Armed {
     }
 }
 
+/// True when the island shows its pages: expanded and not suppressed.
+fn is_open(scene: &Scene) -> bool {
+    scene.expanded && !scene.suppression.any()
+}
+
+/// The part of a scene the feed reacts to.
+type SceneKey = (bool, usize, Suppression);
+
+fn key(scene: &Scene) -> SceneKey {
+    (scene.expanded, scene.page, scene.suppression)
+}
+
 /// The services, the built pages and the timers.
 pub struct Feed {
     services: Box<dyn Services>,
@@ -96,6 +108,10 @@ pub struct Feed {
     origin: Instant,
     armed: Armed,
     clock_text: String,
+    /// Pages a change reached while the island was closed; rebuilt when it opens (G2).
+    pending: Dirty,
+    /// The scene the feed last reacted to.
+    seen: Option<SceneKey>,
 }
 
 impl Feed {
@@ -129,6 +145,8 @@ impl Feed {
             origin: Instant::now(),
             armed: Armed::default(),
             clock_text,
+            pending: Dirty::default(),
+            seen: None,
         };
         feed.publish(mailbox);
         feed
@@ -161,19 +179,47 @@ impl Feed {
         let _ = mailbox.update(|scene| Scene { shapes, ..scene });
     }
 
-    /// A service published: rebuild what changed and publish it.
+    /// A service published or another thread changed the scene: rebuild what changed and
+    /// publish it. While closed only the pill is rebuilt; the pages wait for the opening.
     pub fn on_wake(&mut self, mailbox: &SceneMailbox) {
         let changes = self.services.drain();
-        if !changes.any() {
-            return;
+        if changes.any() {
+            self.facts = self.services.facts(self.now_s());
+            let dirty = Dirty::from_changes(changes);
+            if is_open(&mailbox.latest().scene) {
+                self.rebuild(dirty, mailbox);
+            } else {
+                for (wait, now) in self.pending.pages.iter_mut().zip(dirty.pages) {
+                    *wait |= now;
+                }
+                self.rebuild(
+                    Dirty {
+                        pages: [false; 4],
+                        pill: dirty.pill,
+                    },
+                    mailbox,
+                );
+            }
         }
-        self.facts = self.services.facts(self.now_s());
-        self.rebuild(Dirty::from_changes(changes), mailbox);
-        self.sync_timers(mailbox);
+        if self.seen != Some(key(&mailbox.latest().scene)) {
+            self.on_scene(mailbox);
+        } else if changes.any() {
+            self.sync_timers(mailbox);
+        }
     }
 
-    /// A UI timer ticked.
+    /// A UI timer ticked. A tick of a timer no longer armed (one queued before `KillTimer`)
+    /// does nothing.
     pub fn on_timer(&mut self, id: usize, mailbox: &SceneMailbox) {
+        let armed = match id {
+            ACTIVITY_TIMER => self.armed.activity,
+            MEDIA_TIMER => self.armed.media,
+            CLOCK_TIMER => self.armed.clock,
+            _ => false,
+        };
+        if !armed {
+            return;
+        }
         match id {
             ACTIVITY_TIMER => self.read_activity(mailbox),
             MEDIA_TIMER => {
@@ -184,7 +230,7 @@ impl Feed {
                 // One-shot: the next tick is armed for the next minute below.
                 self.timers.kill(CLOCK_TIMER);
                 self.armed.clock = false;
-                self.refresh_clock(mailbox);
+                self.flush(mailbox);
             }
             _ => {}
         }
@@ -194,10 +240,30 @@ impl Feed {
     /// The scene changed (expanded, collapsed, suppressed): refresh the clock on opening and
     /// set the timers it wants.
     pub fn on_scene(&mut self, mailbox: &SceneMailbox) {
-        if mailbox.latest().scene.expanded {
-            self.refresh_clock(mailbox);
+        let scene = mailbox.latest().scene;
+        self.seen = Some(key(&scene));
+        if is_open(&scene) {
+            self.flush(mailbox);
         }
         self.sync_timers(mailbox);
+    }
+
+    /// Brings the pages up to date for an open island: the clock, then every page a change
+    /// reached while closed, in one publish. The app calls it before it publishes an expand,
+    /// so the first motion frames show current content.
+    pub fn flush(&mut self, mailbox: &SceneMailbox) {
+        let text = clock_of((self.clock)());
+        if text != self.clock_text {
+            self.clock_text = text;
+            self.pending.pages = [true; 4];
+        }
+        let pending = std::mem::take(&mut self.pending);
+        self.rebuild(pending, mailbox);
+    }
+
+    /// Stops the services; called once at shutdown, after the render thread was joined.
+    pub fn stop(&mut self) {
+        self.services.stop();
     }
 
     /// Feeds the current levels to the activity and rebuilds the audio page.
@@ -205,21 +271,6 @@ impl Feed {
         if let Some(levels) = self.services.levels() {
             self.activity.observe(&levels.strips, self.now_s());
             self.rebuild(Dirty::page(PageId::Audio), mailbox);
-        }
-    }
-
-    /// Rebuilds every page when the minute changed.
-    fn refresh_clock(&mut self, mailbox: &SceneMailbox) {
-        let text = clock_of((self.clock)());
-        if text != self.clock_text {
-            self.clock_text = text;
-            self.rebuild(
-                Dirty {
-                    pages: [true; 4],
-                    pill: false,
-                },
-                mailbox,
-            );
         }
     }
 

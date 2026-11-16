@@ -49,6 +49,7 @@ pub struct FixtureServices {
     art: Arc<ArtPixels>,
     pending: Changes,
     origin: Instant,
+    wake: Option<Box<dyn Fn()>>,
 }
 
 impl FixtureServices {
@@ -80,7 +81,30 @@ impl FixtureServices {
             art: Arc::new(fixtures::art()),
             pending: Changes::NONE,
             origin: Instant::now(),
+            wake: None,
         }
+    }
+
+    /// Calls `wake` after every write that changed something.
+    #[must_use]
+    pub fn with_waker(self, wake: Box<dyn Fn()>) -> Self {
+        Self {
+            wake: Some(wake),
+            ..self
+        }
+    }
+
+    /// Records a change and wakes the UI thread, as a real service would.
+    fn mark(&mut self, changes: Changes) {
+        self.pending |= changes;
+        if let Some(wake) = &self.wake {
+            wake();
+        }
+    }
+
+    /// Seconds since the fixture started: the one time origin of its levels and facts.
+    fn now_s(&self) -> f64 {
+        self.origin.elapsed().as_secs_f64()
     }
 
     /// The muted flag of every strip.
@@ -108,7 +132,7 @@ impl FixtureServices {
         if let Some(timeline) = self.media.timeline {
             let current = derive::rebase(timeline, SystemTime::now());
             self.media.timeline = Some(change(&mut self.media, current));
-            self.pending |= Changes::MEDIA;
+            self.mark(Changes::MEDIA);
         }
     }
 }
@@ -118,9 +142,11 @@ impl Services for FixtureServices {
         std::mem::take(&mut self.pending)
     }
 
-    fn facts(&self, now_s: f64) -> Facts {
+    /// The caller's `now_s` is ignored: the levels the render thread draws, `levels()` and the
+    /// pill all read the fixture's own clock.
+    fn facts(&self, _now_s: f64) -> Facts {
         let signal = self
-            .levels_at(now_s)
+            .levels_at(self.now_s())
             .is_some_and(|levels| derive::any_signal(&levels.strips));
         let pill = derive::pill_facts(&self.audio, self.media.playing, signal);
         let mut media = self.media.clone();
@@ -144,7 +170,7 @@ impl Services for FixtureServices {
     }
 
     fn levels(&self) -> Option<Levels> {
-        self.levels_at(self.origin.elapsed().as_secs_f64())
+        self.levels_at(self.now_s())
     }
 
     fn level_source(&self) -> LevelSource {
@@ -159,7 +185,7 @@ impl Services for FixtureServices {
         let known = self.audio.endpoints.iter().any(|e| e.id == id);
         if known && self.audio.default_id.as_deref() != Some(id) {
             self.audio.default_id = Some(id.to_string());
-            self.pending |= Changes::AUDIO;
+            self.mark(Changes::AUDIO);
         }
     }
 
@@ -176,20 +202,20 @@ impl Services for FixtureServices {
         }
         strip.routes.resize(buses, false);
         strip.routes[bus] = !strip.routes[bus];
-        self.pending |= Changes::AUDIO;
+        self.mark(Changes::AUDIO);
     }
 
     fn toggle_mic(&mut self) {
         if let Some(mic) = self.audio.mic.as_mut() {
             mic.muted = !mic.muted;
-            self.pending |= Changes::AUDIO;
+            self.mark(Changes::AUDIO);
         }
     }
 
     fn set_brightness(&mut self, percent: u8) {
         if let Some((_, level)) = self.brightness.as_mut() {
             *level = percent.min(100);
-            self.pending |= Changes::SYSTEM;
+            self.mark(Changes::SYSTEM);
         }
     }
 

@@ -56,6 +56,13 @@ impl App {
         self.feed = Some(feed);
     }
 
+    /// Stops the services, once the render thread has been joined.
+    pub fn stop_feed(&mut self) {
+        if let Some(feed) = &mut self.feed {
+            feed.stop();
+        }
+    }
+
     /// Lets the feed react to a scene change.
     fn scene_changed(&mut self) {
         if let Some(feed) = &mut self.feed {
@@ -85,6 +92,10 @@ impl App {
                 self.close_render();
             }
             ShellEvent::Click => {
+                let opening = !self.mailbox.latest().scene.expanded;
+                if let (true, Some(feed)) = (opening, &mut self.feed) {
+                    feed.flush(&self.mailbox);
+                }
                 let _ = self.mailbox.update(|scene| Scene {
                     expanded: !scene.expanded,
                     ..scene

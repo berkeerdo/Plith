@@ -29,6 +29,15 @@ pub enum ServiceId {
 }
 
 impl ServiceId {
+    /// Every service, in start order.
+    pub const ALL: [ServiceId; 5] = [
+        ServiceId::Voicemeeter,
+        ServiceId::Endpoints,
+        ServiceId::Microphone,
+        ServiceId::Media,
+        ServiceId::Brightness,
+    ];
+
     /// The short name used in thread names and log lines.
     #[must_use]
     pub fn name(self) -> &'static str {

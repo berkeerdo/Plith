@@ -17,7 +17,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
-    MonitorInfo, QuitHandle, Shell, init_process, init_ui_thread, is_remote_session,
+    MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,
     primary_monitor, run_message_loop, uninit_ui_thread, user_busy,
 };
 use state::App;
@@ -127,6 +127,7 @@ fn run_shell(
         stop: &stop,
         fired: &fired,
         quit,
+        waker: shell.ui_waker(),
     };
     let (loop_code, idle_ok) = drive(&helpers);
     // The `Closing` handler normally joined the renderer already (this call is then a no-op).
@@ -135,6 +136,7 @@ fn run_shell(
     closing.store(true, Ordering::Release);
     backstop::close_render(log, &render.stop_handle());
     render.shutdown();
+    app.borrow_mut().stop_feed();
     log.line(&wire::hit_line(&shell));
     wire::exit_code(
         loop_code,
@@ -155,7 +157,8 @@ fn attach_feed(
     let services: Box<dyn Services> = match launch.fixture {
         Some(kind) => {
             log.line(&format!("services: fixture {kind:?}"));
-            Box::new(FixtureServices::new(kind))
+            let waker = shell.ui_waker();
+            Box::new(FixtureServices::new(kind).with_waker(Box::new(move || waker.wake())))
         }
         None => Box::new(RealServices::start(&shell.ui_waker(), Arc::clone(log))),
     };
@@ -180,6 +183,7 @@ struct Helpers<'a> {
     stop: &'a Arc<AtomicBool>,
     fired: &'a Arc<AtomicBool>,
     quit: QuitHandle,
+    waker: UiWaker,
 }
 
 /// Starts the demo, idle and watchdog threads, runs the message loop, then stops and joins them.
@@ -201,6 +205,7 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
                 Arc::clone(h.mailbox),
                 Arc::clone(h.stop),
                 quit_after,
+                h.waker.clone(),
             )
         });
         let watchdog = (launch.demo.is_some() || launch.idle_check_secs.is_some())

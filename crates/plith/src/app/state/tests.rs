@@ -164,6 +164,7 @@ fn wake_with_no_change_publishes_nothing() {
 #[test]
 fn wake_after_a_write_publishes_the_change() {
     let (mut app, _, _) = fed("feed-write", Fixture::Banana);
+    app.on_event(ShellEvent::Click);
     let before = app.mailbox.latest();
     app.feed.as_mut().unwrap().services().set_brightness(10);
     app.on_event(ShellEvent::Wake);
@@ -268,6 +269,76 @@ fn opening_after_a_minute_refreshes_the_clock() {
         .iter()
         .any(|n| matches!(n, plith_core::draw::Node::Text { text, .. } if &**text == "21:50"));
     assert!(has);
+}
+
+#[test]
+fn a_tick_after_collapse_publishes_nothing() {
+    let (mut app, timers, _) = fed("feed-stale", Fixture::Banana);
+    app.on_event(ShellEvent::Click);
+    app.on_event(ShellEvent::Click);
+    let generation = app.mailbox.latest().generation;
+    for id in [ACTIVITY_TIMER, MEDIA_TIMER, CLOCK_TIMER] {
+        app.on_event(ShellEvent::Timer(id));
+    }
+    assert_eq!(app.mailbox.latest().generation, generation);
+    assert!(running(&timers).is_empty());
+}
+
+#[test]
+fn a_scene_from_another_publisher_reaches_the_feed_on_wake() {
+    let (mut app, timers, _) = fed("feed-demo", Fixture::Banana);
+    let _ = app.mailbox.update(|scene| Scene {
+        expanded: true,
+        ..scene
+    });
+    app.on_event(ShellEvent::Wake);
+    assert_eq!(running(&timers), vec![ACTIVITY_TIMER, CLOCK_TIMER]);
+    go_to(&app, PageId::System);
+    app.on_event(ShellEvent::Wake);
+    assert_eq!(running(&timers), vec![CLOCK_TIMER]);
+    let _ = app.mailbox.update(|scene| Scene {
+        expanded: false,
+        ..scene
+    });
+    app.on_event(ShellEvent::Wake);
+    assert!(running(&timers).is_empty());
+}
+
+#[test]
+fn collapsed_changes_publish_only_the_pill_until_opening() {
+    let (mut app, _, _) = fed("feed-quiet", Fixture::Banana);
+    let first = app.mailbox.latest();
+    app.feed.as_mut().unwrap().services().set_brightness(10);
+    app.on_event(ShellEvent::Wake);
+    app.feed.as_mut().unwrap().services().play_pause();
+    app.on_event(ShellEvent::Wake);
+    assert_eq!(
+        app.mailbox.latest().generation,
+        first.generation,
+        "neither change touches the pill"
+    );
+    app.feed
+        .as_mut()
+        .unwrap()
+        .services()
+        .set_default_endpoint("r1280");
+    app.on_event(ShellEvent::Wake);
+    let collapsed = app.mailbox.latest();
+    assert_eq!(collapsed.generation, first.generation + 1, "the pill only");
+    assert_ne!(collapsed.content.pill, first.content.pill);
+    for i in 0..4 {
+        assert!(Arc::ptr_eq(
+            &collapsed.content.pages[i],
+            &first.content.pages[i]
+        ));
+    }
+    app.on_event(ShellEvent::Click);
+    let open = app.mailbox.latest();
+    assert_ne!(open.content.pages[1], first.content.pages[1]);
+    assert_ne!(open.content.pages[3], first.content.pages[3]);
+    let generation = open.generation;
+    app.on_event(ShellEvent::Wake);
+    assert_eq!(app.mailbox.latest().generation, generation, "flushed once");
 }
 
 #[test]

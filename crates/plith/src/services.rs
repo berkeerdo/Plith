@@ -11,8 +11,8 @@ use plith_audio::endpoints::{EndpointService, EndpointState};
 use plith_audio::microphone::{MicSnapshot, MicrophoneService};
 use plith_audio::voicemeeter::{VmSnapshot, VoicemeeterService};
 use plith_core::draw::ArtPixels;
+use plith_core::pages::audio::Activity;
 use plith_core::pages::audio::AudioFacts;
-use plith_core::pages::derive;
 use plith_core::pages::media::MediaFacts;
 use plith_core::pages::pill::PillFacts;
 use plith_core::pages::system::SystemFacts;
@@ -20,10 +20,11 @@ use plith_media::{MediaService, MediaSnapshot};
 use plith_shell::UiWaker;
 use plith_system::{BrightnessService, DeviceLevel};
 use start::{ServiceId, Started};
+use std::cell::RefCell;
 use std::ops::{BitOr, BitOrAssign};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
-use std::time::{Duration, SystemTime};
+use std::time::{Duration, Instant, SystemTime};
 
 /// Which groups of facts changed since the last drain, as bit flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -96,7 +97,8 @@ pub type LevelSource = Box<dyn FnMut() -> Option<Levels> + Send>;
 pub trait Services {
     /// Takes every published reading (the latest of each wins) and says what changed.
     fn drain(&mut self) -> Changes;
-    /// The facts for the pages at `now_s` seconds of app time.
+    /// The facts for the pages at `now_s` seconds of the feed's clock (the signal hold of the
+    /// pill reads it).
     fn facts(&self, now_s: f64) -> Facts;
     /// The current levels, for the signal activity; `None` without a mixer.
     fn levels(&self) -> Option<Levels>;
@@ -126,6 +128,8 @@ pub trait Services {
     /// Seeks to `position` in the track.
     #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn seek(&mut self, position: Duration);
+    /// Stops the services at shutdown; nothing to stop by default.
+    fn stop(&mut self) {}
 }
 
 /// The latest reading of every service.
@@ -163,6 +167,10 @@ pub struct RealServices {
     started: Receiver<Started>,
     readings: Readings,
     log: Arc<LogFile>,
+    /// The services whose `start()` returned.
+    up: Vec<ServiceId>,
+    /// Signal per strip with the activity hold, for the pill.
+    activity: RefCell<Activity>,
 }
 
 /// The newest value waiting on `rx`, if any.
@@ -223,6 +231,8 @@ impl RealServices {
             started,
             readings: Readings::default(),
             log,
+            up: Vec::new(),
+            activity: RefCell::new(Activity::default()),
         }
     }
 
@@ -234,6 +244,7 @@ impl RealServices {
             started.id.name(),
             started.status
         ));
+        self.up.push(started.id);
         let r = &mut self.readings;
         match started.id {
             ServiceId::Voicemeeter => take(&mut r.vm, Some(self.vm.snapshot()), Changes::AUDIO),
@@ -268,10 +279,12 @@ impl Services for RealServices {
         changes
     }
 
-    fn facts(&self, _now_s: f64) -> Facts {
-        let signal = self
-            .levels()
-            .is_some_and(|levels| derive::any_signal(&levels.strips));
+    fn facts(&self, now_s: f64) -> Facts {
+        let signal = self.levels().is_some_and(|levels| {
+            let mut activity = self.activity.borrow_mut();
+            activity.observe(&levels.strips, now_s);
+            (0..levels.strips.len()).any(|s| activity.has_signal(s, now_s))
+        });
         model::facts(&self.readings, signal, SystemTime::now())
     }
 
@@ -325,5 +338,36 @@ impl Services for RealServices {
 
     fn seek(&mut self, position: Duration) {
         let _ = self.media.seek(position);
+    }
+
+    /// Stops every service whose start returned, logging how long each stop took. A service
+    /// still inside `start()` is left to its starter thread (its `stop` would wait for the
+    /// start, up to 15 s for brightness).
+    fn stop(&mut self) {
+        while let Ok(started) = self.started.try_recv() {
+            let _ = self.on_started(&started);
+        }
+        for id in ServiceId::ALL {
+            if !self.up.contains(&id) {
+                self.log.line(&format!(
+                    "service {}: still starting, not stopped",
+                    id.name()
+                ));
+                continue;
+            }
+            let begun = Instant::now();
+            match id {
+                ServiceId::Voicemeeter => self.vm.stop(),
+                ServiceId::Endpoints => self.endpoints.stop(),
+                ServiceId::Microphone => self.mic.stop(),
+                ServiceId::Media => self.media.stop(),
+                ServiceId::Brightness => self.brightness.stop(),
+            }
+            self.log.line(&format!(
+                "service {}: stopped in {:.1} ms",
+                id.name(),
+                begun.elapsed().as_secs_f64() * 1000.0
+            ));
+        }
     }
 }

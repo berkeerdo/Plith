@@ -2,7 +2,7 @@
 
 use plith_core::demo::{DemoScript, DemoStep};
 use plith_core::scene::{Scene, SceneMailbox};
-use plith_shell::QuitHandle;
+use plith_shell::{QuitHandle, UiWaker};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
@@ -53,9 +53,15 @@ pub fn sleep_stoppable(ms: u64, stop: &AtomicBool) -> bool {
 }
 
 /// Plays the script into the mailbox; returns false when stopped before the end. Each step reads
-/// the latest scene, so a click or a suppression change in between is respected.
+/// the latest scene, so a click or a suppression change in between is respected. `wake` runs
+/// after every scene step, so the UI thread sees the new scene.
 #[must_use]
-pub fn play(script: &DemoScript, mailbox: &SceneMailbox, stop: &AtomicBool) -> bool {
+pub fn play(
+    script: &DemoScript,
+    mailbox: &SceneMailbox,
+    stop: &AtomicBool,
+    wake: &dyn Fn(),
+) -> bool {
     if script.steps.is_empty() {
         return true;
     }
@@ -70,6 +76,7 @@ pub fn play(script: &DemoScript, mailbox: &SceneMailbox, stop: &AtomicBool) -> b
                 }
             } else {
                 let _ = mailbox.update(|scene| apply(*step, scene));
+                wake();
             }
         }
     }
@@ -83,9 +90,10 @@ pub fn spawn(
     mailbox: Arc<SceneMailbox>,
     stop: Arc<AtomicBool>,
     quit_after: Option<QuitHandle>,
+    waker: UiWaker,
 ) -> JoinHandle<()> {
     thread::spawn(move || {
-        let finished = play(&script, &mailbox, &stop);
+        let finished = play(&script, &mailbox, &stop, &|| waker.wake());
         if let (true, Some(quit)) = (finished, quit_after)
             && sleep_stoppable(LAST_REPORT_MS, &stop)
         {
