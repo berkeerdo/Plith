@@ -48,3 +48,12 @@ fn the_installed_helper_path_matches_the_install_script() {
         r"C:\Program Files\Plith\osd\plith-osd.exe"
     );
 }
+
+#[test]
+fn the_current_pipe_name_carries_this_users_sid() {
+    let sid = current_user_sid().expect("own token");
+    assert!(sid.starts_with("S-1-"), "{sid}");
+    let name = current_pipe_name();
+    assert!(name.starts_with(r"\\.\pipe\plith-osd-"), "{name}");
+    assert!(name.ends_with(&format!("-{sid}")), "{name}");
+}

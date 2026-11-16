@@ -15,15 +15,18 @@ use windows::Win32::UI::WindowsAndMessaging::SW_HIDE;
 use windows::core::{PCWSTR, w};
 
 use crate::pipe_name;
+use crate::security::token::current_user_sid;
 use crate::win::OwnedHandle;
 
 /// Where `scripts/install-osd.ps1` installs the signed helper. Only an exe under a trusted
 /// folder like this one gets UIAccess.
 pub const INSTALLED_HELPER: &str = r"C:\Program Files\Plith\osd\plith-osd.exe";
 
-/// Returns the pipe path of the OSD helper in this process's Windows session.
+/// Returns the pipe path of the OSD helper for this process's user and Windows session.
 ///
-/// Falls back to session 0 when the session id cannot be read.
+/// Falls back to session 0 when the session id cannot be read, and to the word `nosid` when
+/// the token cannot be read (the notch and its helper run as the same user, so both fall
+/// back the same way).
 #[must_use]
 pub fn current_pipe_name() -> String {
     let mut session = 0u32;
@@ -32,7 +35,8 @@ pub fn current_pipe_name() -> String {
     if found.is_err() {
         session = 0;
     }
-    pipe_name(session)
+    let sid = current_user_sid().unwrap_or_else(|_| String::from("nosid"));
+    pipe_name(session, &sid)
 }
 
 /// A started helper process. Its handle is closed on drop; dropping it does not stop the

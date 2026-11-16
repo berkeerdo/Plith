@@ -19,8 +19,8 @@ Windows only unless marked "pure".
 | `launch_helper(exe) -> Result<HelperProcess, String>` | Starts the helper with `ShellExecuteExW` and the `open` verb (a plain `CreateProcess` fails on a `uiAccess` exe with `ERROR_ELEVATION_REQUIRED`), hidden, waiting until the start is done. |
 | `HelperProcess::pid()`, `has_exited()` | The started helper. `has_exited` is a zero-timeout wait, so it tells a dead helper from a slow one without blocking. Dropping it closes the handle and does not stop the helper. |
 | `INSTALLED_HELPER` | `C:\Program Files\Plith\osd\plith-osd.exe`, where `scripts/install-osd.ps1` puts the signed helper. Only there does it get UIAccess. |
-| `current_pipe_name()` | `\\.\pipe\plith-osd-<session>` for this process's Windows session (session 0 if it cannot be read). Notch and helper both use it. |
-| `pipe_name(session)` | Pure. The same name for a given session id. |
+| `current_pipe_name()` | `\\.\pipe\plith-osd-<session>-<user SID>` for this process's user and Windows session (session 0 if it cannot be read). Notch and helper both use it. The SID keeps another user's session from pre-creating the name. |
+| `pipe_name(session, sid)` | Pure. The same name for a given session id and user SID. |
 | `OsdServer::bind(name) -> Result<OsdServer, BindError>` | Helper side. One message-mode pipe instance, remote clients refused, only this user may open it. |
 | `BindError::AlreadyRunning` | This user's helper already serves the name. The helper exits 0. |
 | `BindError::Squatted` | Another user's (or a less trusted) process holds the name. The helper exits 1. |
@@ -75,5 +75,5 @@ Little endian. Every message starts with `b'P' b'O' version kind`, then the payl
 | 4 | Bye | none |
 
 Meters: 0 volume, 1 brightness. A message is at most 128 bytes. The pipe is
-`\\.\pipe\plith-osd-<session_id>`. A bad magic or a newer version is fatal
+`\\.\pipe\plith-osd-<session_id>-<user_sid>`. A bad magic or a newer version is fatal
 (`DecodeError::is_fatal`); an unknown kind is not.

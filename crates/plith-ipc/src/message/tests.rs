@@ -157,8 +157,12 @@ fn errors_display_and_are_std_errors() {
 }
 
 #[test]
-fn pipe_name_carries_the_session() {
-    assert_eq!(pipe_name(3), r"\\.\pipe\plith-osd-3");
+fn pipe_name_holds_session_and_sid() {
+    assert_eq!(
+        pipe_name(3, "S-1-5-21-1-2-3-1001"),
+        r"\\.\pipe\plith-osd-3-S-1-5-21-1-2-3-1001"
+    );
+    assert_ne!(pipe_name(3, "S-1-5-21-9"), pipe_name(3, "S-1-5-21-8"));
 }
 
 #[test]

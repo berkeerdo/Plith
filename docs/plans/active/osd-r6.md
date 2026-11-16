@@ -277,6 +277,52 @@ instead of returning silently.
 - [x] **Step 2:** implement; dev run (unsigned, `Plain`) fed by `send_osd`; log shows the
   messages and motion lines. Five checks; commit `feat(osd): helper draws the osd`; push.
 
+### Review fix round (merge review 2026-11-16)
+Source: `docs/quality/2026-11-16-osd-r6-merge-review.md` (main checkout). One commit per task,
+five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task 9).
+- [x] **F1 (M3), pipe name per user:** `pipe_name(session, sid)` gives
+  `\\.\pipe\plith-osd-<session>-<sid>`; `current_pipe_name` reads the token SID. TDD:
+  `pipe_name_holds_session_and_sid`.
+- [ ] **F2 (M2), client trusts only a more trusted server:** `ServerTrust::Installed` (default
+  of `OsdLink::start`) needs the same user, no `AppContainer` and an integrity level strictly
+  above the client's (High for an admin, Medium Plus for a standard user's UIAccess helper);
+  `ServerTrust::DevSameUser` (`OsdLink::start_with`, `send_osd --dev`, tests) keeps
+  "at least our level". TDD in `identity/tests.rs`.
+- [ ] **F3 (I2, M6), server admits a client only after a matching Hello:** the client pid comes
+  from `GetNamedPipeClientProcessId`; the first message must be `Hello` naming that pid within
+  `HELLO_TIMEOUT` (1 s), else the client is dropped and `ServerEvent::Rejected(reason)` is
+  reported. `ServerEvent::Connected { pid }` follows admission. TDD: pure `admit`; pipe tests
+  `wrong_hello_pid_is_rejected`, `silent_client_is_dropped_and_the_next_one_served`,
+  `connected_reports_the_kernel_pid`.
+- [ ] **F4 (I2), one cancellable watcher per connection:** `watch::Watcher` waits on the process
+  and a cancel event; a new connection or a disconnect drops the old one (cancel and join). The
+  pid comes from `Connected { pid }` only. Test: dropping a watcher of a live process returns
+  at once and sends nothing.
+- [ ] **F5 (M4), a server-thread panic quits the helper:** a drop guard in the server thread
+  sends `Event::Quit` while panicking. Test: a panicking thread holding the guard delivers Quit.
+- [ ] **F6 (M5), log hardening:** folder from `SHGetKnownFolderPath(LocalAppData)`; refuse a
+  reparse-point folder or file and a handle whose final path is not the expected one; control
+  characters escaped in every line; `--pipe` logged with `{:?}`; the log rotates to
+  `plith-osd.old.log` past 1 MiB at open and stops (one notice line) past 1 MiB in a run. TDD:
+  `escape_controls`, `same_final_path`, `line_fate`.
+- [ ] **F7 (M1), journal before the hide:** the handle is journaled before
+  `ShowWindowAsync(SW_HIDE)` is posted and removed again when the post fails. TDD:
+  `hide_is_journaled_before_it_is_posted`, `failed_post_unjournals`.
+- [ ] **F8 (I4), one owner per journal:** `start_with_journal` with a journal takes the named
+  mutex `Local\plith-flyout-<fnv64 of the lowercased path>`; a second owner gets an error and
+  never reads or clears the journal (`verify_system_writes --flyout` included). TDD:
+  `journal_lock_name_is_stable_and_case_blind`, `second_owner_of_a_journal_fails`.
+- [ ] **F9 (I1), install pins signer and binary, I3 recorded:** `build-osd.ps1` prints the
+  SHA-256; `install-osd.ps1 -Yes -Sha256 <hex>` checks the hash and the pinned signer thumbprint
+  on the copy inside Program Files before the rename, then asserts that no non-admin SID has
+  write, delete, `WRITE_DAC` or owner rights on `Plith`, `Plith\osd` and the exe (fails closed,
+  removing the new exe); `-CheckAcl` runs that assertion read-only. I3 goes to the Record and
+  the wiring notes as unverified (no built-in panel here).
+- [ ] **F10, label case (Berke, relayed 2026-11-16: "önerilerini uygula lütfen"):** Plith's
+  own Turkish strings are upper-cased with Turkish rules; names from Windows or Voicemeeter
+  (devices, endpoints, apps) with invariant rules, so `Display` shows as `DISPLAY`. TDD: one
+  test per case.
+
 ### Task 9: On-screen verification (batch B ask) and handoff
 Done without Berke at the console (2026-11-16, over RDP, installed signed build): the medium
 `send_osd` reaches the High-integrity UIAccess helper on the real session pipe, band 2,
