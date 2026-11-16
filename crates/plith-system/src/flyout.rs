@@ -2,8 +2,10 @@
 //!
 //! Pure layer (this file and [`registry`]): [`should_hide`] decides from [`WindowFacts`],
 //! [`SuppressionWindow`] is the 400 ms window a volume event opens, [`HiddenRegistry`] remembers
-//! what was hidden. Windows layer: `hook` (`WinEvent` hooks on their own message thread).
+//! what was hidden, [`RestoreHandle`] shares it across threads and [`journal`] mirrors it to
+//! disk. Windows layer: `hook` (`WinEvent` hooks on their own message thread).
 
+pub mod journal;
 pub mod registry;
 
 #[cfg(windows)]
@@ -14,7 +16,7 @@ mod tests;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::time::{Duration, Instant};
 
-pub use registry::HiddenRegistry;
+pub use registry::{HiddenRegistry, RestoreHandle};
 
 #[cfg(windows)]
 pub use hook::FlyoutSuppressor;

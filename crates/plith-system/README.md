@@ -10,9 +10,16 @@ monitors through DDC/CI) and suppression of the native Windows volume flyout. De
 |---|---|
 | `BrightnessService` | `new()`, `start() -> Status`, `stop()`, `status()`, `snapshot() -> Vec<DeviceLevel>`, `subscribe() -> Receiver<Vec<DeviceLevel>>`, `set_waker(..)` |
 | `BrightnessService::set_percent(u8)` | The only hardware write. Clamped to 100, returns at once (`false` when not running); the newest value wins, one write in flight |
-| `FlyoutSuppressor::start(Mode)` | Three WinEvent hooks on their own thread. `Mode::Hide` hides the shell volume flyout, `Mode::DryRun` only reports |
-| `FlyoutSuppressor` methods | `matches() -> &Receiver<Match>`, `suppression_window()`, `open_window()`, `stop()` (restores hidden windows, safe twice, also on drop) |
+| `FlyoutSuppressor::start(Mode)` | Three WinEvent hooks on their own thread. `Mode::Hide` hides the shell volume flyout and journals to `default_journal()`, `Mode::DryRun` only reports and uses no journal |
+| `FlyoutSuppressor::start_with_journal(Mode, Option<PathBuf>)` | Same with an explicit journal file (tests, tools) |
+| `FlyoutSuppressor` methods | `matches() -> &Receiver<Match>`, `suppression_window()`, `open_window()`, `restore_handle()`, `failure()`, `stop()` (restores hidden windows, safe twice, also on drop) |
+| `RestoreHandle` | `Clone + Send + Sync`. `restore_now()` shows every hidden window (`ShowWindowAsync(SW_SHOWNA)`, never blocks on the shell), empties the shared set and clears the journal; idempotent, callable from any thread, meant for paths that skip `Drop` (backstop, watchdog before `process::exit`). `pending()` counts what is owed |
+| Journal | `%LOCALAPPDATA%\Plith\flyout-hidden.txt`, one decimal handle per line (`flyout::journal::format`/`parse`). Rewritten through a temp file and a rename on the hook thread after each hide, cleared on each restore. At start, each journaled handle that is still a window, of a host class, and hidden is shown, then the file is cleared: this covers a kill no code can catch |
 | `VolumeKeyHook::start(Option<Arc<SuppressionWindow>>)` | Low level keyboard hook, returns the hook and a `Receiver<VolumeKey>` with one signal per volume key press (auto-repeat collapsed, the suppression window stays open for the whole hold). Keys are never swallowed |
+| `VolumeKeyHook` methods | `failure()`, `stop()` (safe twice, also on drop) |
+| `failure() -> Option<String>` | On both owners: the text of a panic contained in the hook proc, or the `GetMessageW` error that ended the hook thread early. After a panic the flyout callback disables itself and restores every hidden window; the keyboard proc disables itself and only passes keys on |
+| `VolumeKey`, `HeldKeys` | `Mute`, `Down`, `Up`; `HeldKeys::new()` (`const`) is the per-key hold state `handle_key_event` uses to collapse auto-repeat |
+| `guard::contain` | Runs a closure and stops a panic there (`false` when it panicked); `contain_text` returns the panic text |
 | Pure helpers | `step_level`, `CoalescingWriter`, `keep_answering`, `should_hide`, `SuppressionWindow` (400 ms), `HiddenRegistry`, `handle_key_event`, WQL text in `brightness::wql` |
 
 `Status` is `Running` or `Unavailable(reason)`. A machine with no controllable display is
@@ -74,4 +81,8 @@ send, with no allocation, lock or I/O inline, and always calls the next hook.
   displays are reported per device by the verify example.
 - The flyout host class, process and Z-band filters are unverified on this Windows build
   (10.0.26300); the band export is undocumented and an unknown band is allowed.
-- A run killed while `Mode::Hide` is active can leave a window hidden; restart Explorer.
+- A run killed while `Mode::Hide` is active leaves the window hidden until Plith starts again
+  in `Mode::Hide` (the journal restore) or Explorer restarts. The journal is not fsynced: a
+  power loss right after a hide can lose the last entry.
+- Panic containment and the journal restore are unit tested in the pure layer; neither the
+  contained panic in a live hook nor `Mode::Hide` against the real shell was run here.

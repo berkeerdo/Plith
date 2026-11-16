@@ -3,7 +3,8 @@
 //! Both a `WinEvent` hook (out of context) and a low level keyboard hook are delivered through
 //! the message loop of the thread that installed them, so each owner needs such a thread. The
 //! guard returned by the setup closure (the installed hooks) is created on the thread, and
-//! dropped there when the loop ends, on every exit path including a panic.
+//! dropped there when the loop ends, on every exit path including a panic. A loop that ends
+//! on a `GetMessageW` error instead of `WM_QUIT` is recorded for [`HookThread::ended_early`].
 
 use std::sync::mpsc::channel;
 use std::thread::{self, JoinHandle};
@@ -14,12 +15,16 @@ use windows::Win32::UI::WindowsAndMessaging::{
     DispatchMessageW, GetMessageW, MSG, PM_NOREMOVE, PeekMessageW, PostThreadMessageW,
     TranslateMessage, WM_QUIT,
 };
+use windows::core::Error;
+
+use crate::guard::FailureSlot;
 
 /// Handle to a running hook thread. Dropping it stops and joins the thread.
 #[derive(Debug)]
 pub(crate) struct HookThread {
     thread_id: u32,
     join: Option<JoinHandle<()>>,
+    ended: FailureSlot,
 }
 
 impl HookThread {
@@ -30,6 +35,8 @@ impl HookThread {
         setup: impl FnOnce() -> Result<G, String> + Send + 'static,
     ) -> Result<Self, String> {
         let (ready_tx, ready_rx) = channel::<Result<u32, String>>();
+        let ended = FailureSlot::default();
+        let ended_on_thread = ended.clone();
         let join = thread::Builder::new()
             .name(name.to_owned())
             .spawn(move || {
@@ -41,8 +48,10 @@ impl HookThread {
                     Ok(guard) => {
                         // SAFETY: no arguments.
                         let id = unsafe { GetCurrentThreadId() };
-                        if ready_tx.send(Ok(id)).is_ok() {
-                            pump();
+                        if ready_tx.send(Ok(id)).is_ok()
+                            && let Err(why) = pump()
+                        {
+                            ended_on_thread.record(why);
                         }
                         drop(guard);
                     }
@@ -56,6 +65,7 @@ impl HookThread {
             Ok(Ok(thread_id)) => Ok(Self {
                 thread_id,
                 join: Some(join),
+                ended,
             }),
             Ok(Err(why)) => {
                 let _ = join.join();
@@ -66,6 +76,12 @@ impl HookThread {
                 Err(format!("{name} thread ended before it was ready"))
             }
         }
+    }
+
+    /// Why the message loop ended before `WM_QUIT` (a `GetMessageW` error), if it did. The
+    /// hooks were removed when it ended, so the owner should treat the service as stopped.
+    pub(crate) fn ended_early(&self) -> Option<String> {
+        self.ended.get()
     }
 
     /// Posts `WM_QUIT` and joins; the thread unhooks (and restores) on its way out.
@@ -99,14 +115,21 @@ impl Drop for HookThread {
     }
 }
 
-/// Runs the message loop until `WM_QUIT` (or an error).
-fn pump() {
+/// Runs the message loop until `WM_QUIT` (`Ok`) or a `GetMessageW` error (`Err` with its text).
+fn pump() -> Result<(), String> {
     let mut msg = MSG::default();
-    // SAFETY: `msg` is a valid out pointer for the whole loop; the thread owns its queue.
-    unsafe {
-        while GetMessageW(&raw mut msg, None, 0, 0).0 > 0 {
-            let _ = TranslateMessage(&raw const msg);
-            DispatchMessageW(&raw const msg);
+    loop {
+        // SAFETY: `msg` is a valid out pointer for the whole loop; the thread owns its queue.
+        match unsafe { GetMessageW(&raw mut msg, None, 0, 0) }.0 {
+            0 => return Ok(()),
+            -1 => return Err(format!("GetMessageW failed: {}", Error::from_thread())),
+            _ => {
+                // SAFETY: `msg` was just filled by `GetMessageW`.
+                unsafe {
+                    let _ = TranslateMessage(&raw const msg);
+                    DispatchMessageW(&raw const msg);
+                }
+            }
         }
     }
 }

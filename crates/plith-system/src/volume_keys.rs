@@ -4,7 +4,8 @@
 //! proc lags typing everywhere. The proc therefore does one thing: [`handle_key_event`] checks
 //! the key code and does a non-blocking channel send, then the proc always calls
 //! `CallNextHookEx`. Held keys auto-repeat (135 events for one hold were measured), so a repeat
-//! opens the flyout suppression window but sends no signal. No allocation, lock, log, I/O or window and process query happens inline.
+//! opens the flyout suppression window but sends no signal. No allocation, lock, log, I/O or
+//! window and process query happens inline.
 
 #[cfg(windows)]
 mod hook;
@@ -62,7 +63,7 @@ impl VolumeKey {
 }
 
 /// Per key, when its last down arrived while it is held; used to collapse auto-repeat.
-#[derive(Debug, Clone, Copy, Default)]
+#[derive(Debug, Clone, Default)]
 pub struct HeldKeys {
     mute: Option<Instant>,
     down: Option<Instant>,
@@ -70,6 +71,16 @@ pub struct HeldKeys {
 }
 
 impl HeldKeys {
+    /// No key held. `const`, so a thread local can start from it.
+    #[must_use]
+    pub const fn new() -> Self {
+        Self {
+            mute: None,
+            down: None,
+            up: None,
+        }
+    }
+
     fn slot(&mut self, key: VolumeKey) -> &mut Option<Instant> {
         match key {
             VolumeKey::Mute => &mut self.mute,
