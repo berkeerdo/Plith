@@ -268,10 +268,10 @@ instead of returning silently.
 - `app.rs`: binds the server (exit 0 on `AlreadyRunning`), creates the band window with the
   spike's winning `Creation`, places it at the top centre of the monitor under the cursor-free
   primary (per-monitor DPI v2), watches the Hello pid with `OpenProcess(SYNCHRONIZE)`.
-- [ ] **Step 1 (TDD), `model/tests.rs`:** `level_shows_then_hides_after_1_5s`,
+- [x] **Step 1 (TDD), `model/tests.rs`:** `level_shows_then_hides_after_1_5s`,
   `new_level_rearms_the_timer`, `hide_starts_fading_at_once`, `level_retarget_keeps_velocity`,
   `rest_reports_not_animating`, `bye_and_lost_client_exit` (2 s), `muted_frame_carries_the_flag`.
-- [ ] **Step 2:** implement; dev run (unsigned, `Plain`) fed by `send_osd`; log shows the
+- [x] **Step 2:** implement; dev run (unsigned, `Plain`) fed by `send_osd`; log shows the
   messages and motion lines. Five checks; commit `feat(osd): helper draws the osd`; push.
 
 ### Task 9: On-screen verification (batch B ask) and handoff
