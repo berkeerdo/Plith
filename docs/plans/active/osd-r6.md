@@ -323,6 +323,29 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   (devices, endpoints, apps) with invariant rules, so `Display` shows as `DISPLAY`. TDD: one
   test per case.
 
+### Re-check fix round (master re-check 2026-11-16)
+Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit per task.
+- [x] **G1 (N1, blocks the merge), a panic in `serve` unwinds:** a drop guard inside the
+  scope quits the hello clock, so `std::thread::scope` can join it and re-raise; the helper's
+  `QuitOnPanic` then sends `Quit`. Tests: a real `serve` whose callback panics returns within
+  2 s (ipc); the same through the helper's guard delivers `Quit` (osd).
+- [ ] **G2 (N5):** one space in the `UNTRUSTED` text.
+- [ ] **G3 (N3):** the journal mutex goes to `Global\` (the journal is per user, not per
+  session).
+- [ ] **G4 (N4):** the install dry run prints the source hash only labelled "current file,
+  not a pin" next to the instruction to use build-osd's hash.
+- [ ] **G5 (M6 rest), keepalive and idle drop:** new `Message::Ping` (kind 5, no payload);
+  `OsdLink` sends it after `KEEPALIVE` (10 s) without a write; the server swallows Ping and
+  drops an admitted client silent for `IDLE_TIMEOUT` (30 s, settable for tests) with
+  `Disconnected`. TDD: codec round trip, `ping_due`, `keepalive_is_well_inside_idle`; pipe test
+  `silent_admitted_client_is_dropped_after_the_idle_timeout`.
+- [ ] **G6 (M5 rest):** the log is opened with `FILE_FLAG_OPEN_REPARSE_POINT`, so a junction or
+  link swapped in after the checks opens the link itself and fails the final-path check
+  instead of creating a file in its target.
+- [ ] **G7, record only:** M3 rest (SID is not secret), N2 (elevated notch, standard user:
+  Task 9 checks and wiring notes), the notch upper-cases its own Turkish labels with
+  `upper_tr` before sending.
+
 ### Task 9: On-screen verification (batch B ask) and handoff
 Done without Berke at the console (2026-11-16, over RDP, installed signed build): the medium
 `send_osd` reaches the High-integrity UIAccess helper on the real session pipe, band 2,

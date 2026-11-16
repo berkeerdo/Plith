@@ -70,6 +70,16 @@ impl Shared {
     }
 }
 
+/// Ends the hello clock thread when dropped, so `serve` returns or unwinds instead of waiting
+/// on a clock that was never told to quit.
+struct QuitClock<'a>(&'a HelloClock);
+
+impl Drop for QuitClock<'_> {
+    fn drop(&mut self) {
+        self.0.quit();
+    }
+}
+
 /// How the first message of a connection ended.
 enum Admission {
     Admitted { pid: u32, hello: Message },
@@ -234,9 +244,10 @@ impl OsdServer {
                 .name(String::from("plith-ipc-hello-clock"))
                 .spawn_scoped(scope, || shared.hello.run(|| shared.cancel_serving_io()))
                 .map_err(|e| format!("spawn the hello clock: {e}"))?;
-            let result = self.serve_clients(&mut on);
-            shared.hello.quit();
-            result
+            // Also on a panic in `serve_clients` or `on`: the scope joins the clock thread
+            // before it re-raises, so the clock must be told to end on every path.
+            let _quit_clock = QuitClock(&shared.hello);
+            self.serve_clients(&mut on)
         })
     }
 

@@ -192,3 +192,25 @@ fn a_normal_server_exit_sends_no_quit_from_the_guard() {
     drop(QuitOnPanic(&events));
     assert!(inbox.try_recv().is_err());
 }
+
+#[test]
+fn a_panic_inside_a_real_serve_reaches_the_quit_guard() {
+    let name = format!(r"\\.\pipe\plith-osd-apptest-{}", std::process::id());
+    let server = OsdServer::bind(&name).expect("bind");
+    let (events, inbox) = sync_channel(4);
+    let worker = std::thread::spawn(move || {
+        let _guard = QuitOnPanic(&events);
+        let _ = server.serve(|event| {
+            if matches!(event, ServerEvent::Connected { .. }) {
+                std::panic::resume_unwind(Box::new("callback failure"));
+            }
+            Flow::Continue
+        });
+    });
+    let _link = plith_ipc::OsdLink::start_with(name, plith_ipc::ServerTrust::DevSameUser);
+    match inbox.recv_timeout(std::time::Duration::from_secs(3)) {
+        Ok(Event::Quit) => {}
+        other => panic!("the helper must be told to quit, got {other:?}"),
+    }
+    assert!(worker.join().is_err(), "the server thread panicked");
+}

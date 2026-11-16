@@ -476,3 +476,26 @@ fn a_probe_that_only_opens_and_closes_is_not_a_connection() {
     write_raw(&name, &[]);
     assert_eq!(next_rejection(&server), Rejection::ClosedBeforeHello);
 }
+
+#[test]
+fn a_panicking_callback_unwinds_out_of_serve() {
+    let name = unique_name();
+    let server = OsdServer::bind(&name).expect("bind");
+    let (done, finished) = mpsc::channel();
+    thread::spawn(move || {
+        let outcome = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            server.serve(|event| {
+                if matches!(event, ServerEvent::Connected { .. }) {
+                    std::panic::resume_unwind(Box::new("callback failure"));
+                }
+                Flow::Continue
+            })
+        }));
+        let _ = done.send(outcome.is_err());
+    });
+    let _link = dev_link(name);
+    let panicked = finished
+        .recv_timeout(Duration::from_secs(3))
+        .expect("serve must unwind instead of hanging on its clock thread");
+    assert!(panicked, "the panic reaches the caller");
+}
