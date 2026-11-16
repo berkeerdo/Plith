@@ -192,3 +192,18 @@ fn rebase_to_second_keeps_a_timeline_that_has_not_reached_a_second() {
     assert_eq!(a, b);
     assert!((a.position_s - 100.0).abs() < 1e-9);
 }
+
+#[test]
+fn rebase_to_second_floors_a_stream_with_no_length() {
+    let stamp = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+    let stream = SeekTimeline {
+        position_s: 10.0,
+        duration_s: 0.0,
+        stamp,
+        playing: true,
+    };
+    let early = rebase_to_second(stream, stamp + Duration::from_millis(2200));
+    let late = rebase_to_second(stream, stamp + Duration::from_millis(2900));
+    assert_eq!(early, late, "a zero duration is no end: whole seconds only");
+    assert!((early.position_s - 12.0).abs() < 1e-9);
+}

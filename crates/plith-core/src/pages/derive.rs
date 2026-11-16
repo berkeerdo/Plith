@@ -148,7 +148,10 @@ pub fn rebase_to_second(timeline: SeekTimeline, now: SystemTime) -> SeekTimeline
         return timeline;
     }
     let exact = rebase(timeline, now).position_s;
-    let at_end = timeline.duration_s.is_finite() && exact >= timeline.duration_s;
+    // A zero (or unknown) duration is a stream with no end: floor it like any other second.
+    let at_end = timeline.duration_s.is_finite()
+        && timeline.duration_s > 0.0
+        && exact >= timeline.duration_s;
     let target = if at_end { exact } else { exact.floor() };
     let shift = target - timeline.position_s;
     if shift <= 0.0 {
