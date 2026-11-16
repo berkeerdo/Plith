@@ -1,7 +1,19 @@
 //! The pipe server that runs inside the UIAccess OSD helper.
 //!
-//! Threading: [`OsdServer::serve`] runs on one thread and blocks it. A [`Stopper`] may
-//! call [`Stopper::stop`] from any thread.
+//! Threading: [`OsdServer::serve`] runs on one thread and blocks it, with a helper thread of
+//! its own for the `Hello` deadline. A [`Stopper`] may call [`Stopper::stop`] from any thread.
+//!
+//! Admission: a client counts as connected only after its first message, within
+//! [`HELLO_TIMEOUT`], is a `Hello` naming the pid Windows reports for the pipe client
+//! (`GetNamedPipeClientProcessId`). Anything else drops the client with
+//! [`ServerEvent::Rejected`], so a silent or lying client cannot hold the single instance.
+
+mod admission;
+mod events;
+mod hello_clock;
+
+pub use admission::{HELLO_TIMEOUT, Rejection};
+pub use events::{BindError, Flow, ServerEvent};
 
 use std::mem::size_of;
 use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
@@ -22,61 +34,19 @@ use windows::Win32::Storage::FileSystem::{
 };
 use windows::Win32::System::IO::CancelSynchronousIo;
 use windows::Win32::System::Pipes::{
-    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, PIPE_READMODE_MESSAGE,
-    PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_MESSAGE, PIPE_WAIT,
+    ConnectNamedPipe, CreateNamedPipeW, DisconnectNamedPipe, GetNamedPipeClientProcessId,
+    PIPE_READMODE_MESSAGE, PIPE_REJECT_REMOTE_CLIENTS, PIPE_TYPE_MESSAGE, PIPE_WAIT,
 };
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::core::PCWSTR;
 
+use self::admission::admit;
+use self::hello_clock::HelloClock;
 use crate::identity::{self, ServerTrust};
 use crate::security::token::FactsError;
 use crate::security::{pipe_sddl, token};
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
 use crate::{DecodeError, MAX_MESSAGE, Message, decode};
-
-/// Why the server pipe could not be created.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum BindError {
-    /// Another server of this user already owns the pipe name.
-    AlreadyRunning,
-    /// The pipe name is held by a server that is not this user's (a possible squatter).
-    Squatted,
-    /// Any other Windows error, as text.
-    Os(String),
-}
-
-impl std::fmt::Display for BindError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            Self::AlreadyRunning => write!(f, "the OSD pipe is already served"),
-            Self::Squatted => write!(f, "the OSD pipe name is held by another user"),
-            Self::Os(text) => write!(f, "{text}"),
-        }
-    }
-}
-
-impl std::error::Error for BindError {}
-
-/// What the message callback wants the server to do next.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Flow {
-    /// Keep reading.
-    Continue,
-    /// Stop serving.
-    Stop,
-}
-
-/// What [`OsdServer::serve`] reports to its callback.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub enum ServerEvent {
-    /// A client opened the pipe.
-    Connected,
-    /// A message from the connected client, or why its bytes could not be decoded.
-    Message(Result<Message, DecodeError>),
-    /// The client closed the pipe or was dropped after a fatal decode error. Not reported
-    /// when the server itself stops.
-    Disconnected,
-}
 
 #[derive(Default)]
 struct Shared {
@@ -84,6 +54,28 @@ struct Shared {
     serving_thread: AtomicU32,
     /// A real handle to the serving thread, present only while `serve` runs.
     thread: Mutex<Option<OwnedHandle>>,
+    hello: HelloClock,
+}
+
+impl Shared {
+    /// Aborts the serving thread's blocking pipe call, if `serve` runs.
+    fn cancel_serving_io(&self) {
+        let guard = self.thread.lock().unwrap_or_else(PoisonError::into_inner);
+        if let Some(handle) = guard.as_ref() {
+            // SAFETY: the handle stays valid while the guard is held.
+            unsafe {
+                let _ = CancelSynchronousIo(handle.0);
+            }
+        }
+    }
+}
+
+/// How the first message of a connection ended.
+enum Admission {
+    Admitted { pid: u32, hello: Message },
+    Rejected(Rejection),
+    Stop,
+    Failed(String),
 }
 
 /// Stops a running [`OsdServer::serve`] from any thread.
@@ -142,6 +134,7 @@ enum Read {
 
 enum Pumped {
     Stop,
+    Rejected,
     Disconnect,
     Failed(String),
 }
@@ -221,17 +214,33 @@ impl OsdServer {
         }
     }
 
-    /// Serves clients one after another and reports to `on`: [`ServerEvent::Connected`],
-    /// then every message, then [`ServerEvent::Disconnected`] when the client goes.
+    /// Serves clients one after another and reports to `on`: [`ServerEvent::Connected`]
+    /// once a client is admitted, then every message (the admitting `Hello` first), then
+    /// [`ServerEvent::Disconnected`] when the client goes. A client that is not admitted is
+    /// reported as [`ServerEvent::Rejected`] and dropped.
     ///
     /// Blocks the calling thread until `on` returns [`Flow::Stop`], the [`Stopper`] fires
     /// or a fatal error occurs. A client that sends a fatal decode error (bad magic or
     /// version) is disconnected and the next client is awaited.
     ///
     /// # Errors
-    /// Returns the Windows error text on an unexpected pipe failure.
+    /// Returns the Windows error text on an unexpected pipe failure, or when the deadline
+    /// thread cannot start.
     pub fn serve(&self, mut on: impl FnMut(ServerEvent) -> Flow) -> Result<(), String> {
         let _registration = Registration::new(&self.shared)?;
+        let shared = &*self.shared;
+        std::thread::scope(|scope| {
+            std::thread::Builder::new()
+                .name(String::from("plith-ipc-hello-clock"))
+                .spawn_scoped(scope, || shared.hello.run(|| shared.cancel_serving_io()))
+                .map_err(|e| format!("spawn the hello clock: {e}"))?;
+            let result = self.serve_clients(&mut on);
+            shared.hello.quit();
+            result
+        })
+    }
+
+    fn serve_clients(&self, on: &mut impl FnMut(ServerEvent) -> Flow) -> Result<(), String> {
         loop {
             if self.shared.stop.load(Ordering::SeqCst) {
                 return Ok(());
@@ -243,10 +252,25 @@ impl OsdServer {
                     Err(error)
                 };
             }
-            let outcome = if on(ServerEvent::Connected) == Flow::Stop {
-                Pumped::Stop
-            } else {
-                self.pump(&mut on)
+            let outcome = match self.admit_client() {
+                Admission::Admitted { pid, hello } => {
+                    if on(ServerEvent::Connected { pid }) == Flow::Stop
+                        || on(ServerEvent::Message(Ok(hello))) == Flow::Stop
+                    {
+                        Pumped::Stop
+                    } else {
+                        self.pump(on)
+                    }
+                }
+                Admission::Rejected(why) => {
+                    if on(ServerEvent::Rejected(why)) == Flow::Stop {
+                        Pumped::Stop
+                    } else {
+                        Pumped::Rejected
+                    }
+                }
+                Admission::Stop => Pumped::Stop,
+                Admission::Failed(error) => Pumped::Failed(error),
             };
             // SAFETY: the pipe handle is valid; a failure only means nothing was connected.
             unsafe {
@@ -254,6 +278,7 @@ impl OsdServer {
             }
             match outcome {
                 Pumped::Stop => return Ok(()),
+                Pumped::Rejected => {}
                 Pumped::Disconnect => {
                     if on(ServerEvent::Disconnected) == Flow::Stop {
                         return Ok(());
@@ -277,6 +302,51 @@ impl OsdServer {
                 Ok(())
             }
             Err(e) => Err(format!("ConnectNamedPipe: {e}")),
+        }
+    }
+
+    /// Reads the connected client's pid and first message and decides admission, with the
+    /// [`HELLO_TIMEOUT`] deadline armed for the read.
+    fn admit_client(&self) -> Admission {
+        let mut pid = 0u32;
+        // SAFETY: the pipe handle is valid and connected; `pid` is a valid out pointer.
+        if let Err(e) = unsafe { GetNamedPipeClientProcessId(self.pipe.0, &raw mut pid) } {
+            return Admission::Rejected(Rejection::NoClientPid(e.to_string()));
+        }
+        let mut buffer = [0u8; MAX_MESSAGE];
+        let clock = &self.shared.hello;
+        clock.arm(Instant::now() + HELLO_TIMEOUT);
+        let first = loop {
+            if self.shared.stop.load(Ordering::SeqCst) {
+                clock.disarm();
+                return Admission::Stop;
+            }
+            match self.read_message(&mut buffer) {
+                Read::Message(len) => break decode(&buffer[..len]),
+                Read::TooBig => {
+                    clock.disarm();
+                    self.drain();
+                    return Admission::Rejected(Rejection::NotHello);
+                }
+                Read::Closed => {
+                    clock.disarm();
+                    return Admission::Rejected(Rejection::ClosedBeforeHello);
+                }
+                Read::Aborted if clock.expired() => {
+                    clock.disarm();
+                    return Admission::Rejected(Rejection::Timeout);
+                }
+                Read::Aborted => {}
+                Read::Failed(error) => {
+                    clock.disarm();
+                    return Admission::Failed(error);
+                }
+            }
+        };
+        clock.disarm();
+        match admit(&first, pid) {
+            Ok(hello) => Admission::Admitted { pid, hello },
+            Err(why) => Admission::Rejected(why),
         }
     }
 

@@ -220,8 +220,12 @@ impl Served {
     /// Handles one server event: logs it and forwards what the render thread needs.
     fn on(&mut self, event: ServerEvent, events: &SyncSender<Event>, log: &Arc<Log>) -> Flow {
         match event {
-            ServerEvent::Connected => {
-                log.line("osd pipe: client connected");
+            ServerEvent::Connected { pid } => {
+                log.line(&format!("osd pipe: client pid {pid} connected"));
+                Flow::Continue
+            }
+            ServerEvent::Rejected(why) => {
+                log.line(&format!("osd pipe: client rejected: {why}"));
                 Flow::Continue
             }
             ServerEvent::Disconnected => {

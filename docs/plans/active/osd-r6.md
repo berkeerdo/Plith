@@ -288,7 +288,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   above the client's (High for an admin, Medium Plus for a standard user's UIAccess helper);
   `ServerTrust::DevSameUser` (`OsdLink::start_with`, `send_osd --dev`, tests) keeps
   "at least our level". TDD in `identity/tests.rs`.
-- [ ] **F3 (I2, M6), server admits a client only after a matching Hello:** the client pid comes
+- [x] **F3 (I2, M6), server admits a client only after a matching Hello:** the client pid comes
   from `GetNamedPipeClientProcessId`; the first message must be `Hello` naming that pid within
   `HELLO_TIMEOUT` (1 s), else the client is dropped and `ServerEvent::Rejected(reason)` is
   reported. `ServerEvent::Connected { pid }` follows admission. TDD: pure `admit`; pipe tests

@@ -7,8 +7,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use plith_ipc::{
-    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, ServerEvent, ServerTrust,
-    Stopper, encode,
+    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Rejection, ServerEvent,
+    ServerTrust, Stopper, encode,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -113,12 +113,33 @@ fn level(percent: u8) -> Message {
     }
 }
 
-/// Writes raw bytes as one pipe message, bypassing the client.
+/// Writes raw bytes as one pipe message each, bypassing the client, then closes.
 fn write_raw(name: &str, messages: &[&[u8]]) {
+    let handle = open_raw(name);
+    for bytes in messages {
+        // SAFETY: the handle is open and the buffer outlives the call.
+        unsafe { WriteFile(handle, Some(bytes), None, None) }.expect("write");
+    }
+    // SAFETY: the handle is closed once.
+    unsafe {
+        let _ = CloseHandle(handle);
+    }
+}
+
+/// This process's own `Hello`, the admission ticket of a raw client.
+fn own_hello() -> Vec<u8> {
+    encode(&Message::Hello {
+        client_pid: std::process::id(),
+    })
+    .unwrap()
+}
+
+/// Opens the pipe as a raw client, waiting while the single instance is busy.
+fn open_raw(name: &str) -> HANDLE {
     let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
     // The server needs a moment to listen again after it disconnects a client.
     let start = Instant::now();
-    let handle = loop {
+    loop {
         // SAFETY: the name is NUL-terminated and outlives the call.
         let opened = unsafe {
             CreateFileW(
@@ -132,7 +153,7 @@ fn write_raw(name: &str, messages: &[&[u8]]) {
             )
         };
         match opened {
-            Ok(handle) => break handle,
+            Ok(handle) => return handle,
             Err(e) => {
                 assert!(start.elapsed() < WAIT, "open pipe: {e}");
                 assert_eq!(e.code(), ERROR_PIPE_BUSY.to_hresult(), "open pipe: {e}");
@@ -140,14 +161,6 @@ fn write_raw(name: &str, messages: &[&[u8]]) {
                 let _ = unsafe { WaitNamedPipeW(PCWSTR(wide.as_ptr()), 200) };
             }
         }
-    };
-    for bytes in messages {
-        // SAFETY: the handle is open and the buffer outlives the call.
-        unsafe { WriteFile(handle, Some(bytes), None, None) }.expect("write");
-    }
-    // SAFETY: the handle is closed once.
-    unsafe {
-        let _ = CloseHandle(handle);
     }
 }
 
@@ -171,7 +184,12 @@ fn each_connection_is_framed_by_connected_and_disconnected() {
     let server = Running::start(&name);
     for _ in 0..2 {
         let link = dev_link(name.clone());
-        assert_eq!(server.next_event(), ServerEvent::Connected);
+        assert_eq!(
+            server.next_event(),
+            ServerEvent::Connected {
+                pid: std::process::id()
+            }
+        );
         assert!(matches!(
             server.next_event(),
             ServerEvent::Message(Ok(Message::Hello { .. }))
@@ -273,7 +291,8 @@ fn oversized_message_is_reported_and_the_next_one_still_arrives() {
     let server = Running::start(&name);
     let big = vec![b'x'; 1000];
     let ok = encode(&Message::Hide).unwrap();
-    write_raw(&name, &[&big, &ok]);
+    write_raw(&name, &[&own_hello(), &big, &ok]);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
     assert_eq!(server.next(), Err(DecodeError::Trailing));
     assert_eq!(server.next(), Ok(Message::Hide));
 }
@@ -285,9 +304,11 @@ fn fatal_decode_error_disconnects_and_the_next_client_is_served() {
     let ok = encode(&Message::Hide).unwrap();
     // level(1) sits behind the fatal message and must be discarded with the connection.
     let behind = encode(&level(1)).unwrap();
-    write_raw(&name, &[b"XXjunk", &behind]);
+    write_raw(&name, &[&own_hello(), b"XXjunk", &behind]);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
     assert_eq!(server.next(), Err(DecodeError::Magic));
-    write_raw(&name, &[&ok]);
+    write_raw(&name, &[&own_hello(), &ok]);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
     assert_eq!(server.next(), Ok(Message::Hide));
     assert!(
         server.quiet_for(Duration::from_millis(200)),
@@ -382,4 +403,76 @@ fn the_default_link_refuses_a_server_at_its_own_level() {
         server.quiet_for(Duration::from_millis(300)),
         "no Hello reaches it"
     );
+}
+
+/// The next `Rejected` event, skipping nothing else: any other event fails the test.
+fn next_rejection(server: &Running) -> Rejection {
+    match server.next_event() {
+        ServerEvent::Rejected(why) => why,
+        other => panic!("expected a rejection, got {other:?}"),
+    }
+}
+
+#[test]
+fn wrong_hello_pid_is_rejected() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    let liar = encode(&Message::Hello { client_pid: 4 }).unwrap();
+    let hide = encode(&Message::Hide).unwrap();
+    write_raw(&name, &[&liar, &hide]);
+    assert_eq!(
+        next_rejection(&server),
+        Rejection::PidMismatch {
+            kernel: std::process::id(),
+            hello: 4
+        }
+    );
+    assert!(
+        server.quiet_for(Duration::from_millis(200)),
+        "nothing from a rejected client is delivered"
+    );
+}
+
+#[test]
+fn a_first_message_other_than_hello_is_rejected() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    write_raw(&name, &[&encode(&Message::Hide).unwrap()]);
+    assert_eq!(next_rejection(&server), Rejection::NotHello);
+}
+
+#[test]
+fn silent_client_is_dropped_and_the_next_one_served() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    let silent = open_raw(&name);
+    let start = Instant::now();
+    assert_eq!(next_rejection(&server), Rejection::Timeout);
+    let waited = start.elapsed();
+    assert!(
+        waited >= Duration::from_millis(900) && waited < Duration::from_millis(2000),
+        "dropped after {waited:?}"
+    );
+    let link = dev_link(name);
+    assert_eq!(
+        server.next_event(),
+        ServerEvent::Connected {
+            pid: std::process::id()
+        }
+    );
+    link.send(level(3)).unwrap();
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
+    assert_eq!(server.next(), Ok(level(3)));
+    // SAFETY: the handle is closed once.
+    unsafe {
+        let _ = CloseHandle(silent);
+    }
+}
+
+#[test]
+fn a_probe_that_only_opens_and_closes_is_not_a_connection() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    write_raw(&name, &[]);
+    assert_eq!(next_rejection(&server), Rejection::ClosedBeforeHello);
 }

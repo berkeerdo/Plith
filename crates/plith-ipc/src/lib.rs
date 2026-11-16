@@ -35,4 +35,4 @@ pub use message::{
 };
 pub use pipe_name::pipe_name;
 #[cfg(windows)]
-pub use server::{BindError, Flow, OsdServer, ServerEvent, Stopper};
+pub use server::{BindError, Flow, HELLO_TIMEOUT, OsdServer, Rejection, ServerEvent, Stopper};

@@ -83,7 +83,7 @@ fn connection_events_are_forwarded_or_logged() {
     let log = Arc::new(Log::closed());
     let mut served = Served::default();
     assert_eq!(
-        served.on(ServerEvent::Connected, &events, &log),
+        served.on(ServerEvent::Connected { pid: 1 }, &events, &log),
         Flow::Continue
     );
     assert!(

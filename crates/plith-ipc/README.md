@@ -26,7 +26,8 @@ Windows only unless marked "pure".
 | `BindError::AlreadyRunning` | This user's helper already serves the name. The helper exits 0. |
 | `BindError::Squatted` | Another user's (or a less trusted) process holds the name. The helper exits 1. |
 | `BindError::Os(text)` | Any other Windows error. |
-| `OsdServer::serve(&self, on)` | Blocks its thread and calls `on(ServerEvent)` per connection in this order: `Connected`, then `Message(Ok(..))` or `Message(Err(DecodeError))` per message, then `Disconnected` (not sent when the server itself stops). `on` returns `Flow::Continue` or `Flow::Stop`. A fatal decode error drops that client and waits for the next. |
+| `OsdServer::serve(&self, on)` | Blocks its thread (plus one deadline thread of its own) and calls `on(ServerEvent)` per connection in this order: `Connected { pid }`, then `Message(Ok(..))` or `Message(Err(DecodeError))` per message (the admitting `Hello` first), then `Disconnected` (not sent when the server itself stops). `on` returns `Flow::Continue` or `Flow::Stop`. A fatal decode error drops that client and waits for the next. |
+| Admission, `ServerEvent::Rejected(Rejection)`, `HELLO_TIMEOUT` (1 s) | A client is admitted only when its first message, within `HELLO_TIMEOUT`, is a `Hello` naming the pid Windows reports for the pipe (`GetNamedPipeClientProcessId`); `Connected { pid }` carries that kernel pid. Otherwise it is dropped and reported once as `Rejected(Timeout | ClosedBeforeHello | NotHello | PidMismatch | NoClientPid)`, with no `Connected` or `Disconnected`. A silent client cannot hold the single instance, and a bind probe no longer counts as a connection. |
 | `OsdServer::stopper() -> Stopper`, `Stopper::stop()` | Ends `serve` from any thread within about 1 s. |
 | `Message` | Pure. `Hello { client_pid }`, `Level { meter, percent, muted, label }`, `Hide`, `Bye`. |
 | `Meter` | Pure. `Volume`, `Brightness`. |
