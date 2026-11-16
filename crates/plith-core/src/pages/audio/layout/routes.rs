@@ -1,14 +1,12 @@
 //! Routes and stations of the track diagram.
 
-use std::sync::Arc;
-
 use super::{
     CUT_END_X, CUT_LABEL_X, DIAGONAL_END, LABEL_H, LABEL_TEXT, MIN_LEG, OUTPUT_X, SOURCE_X,
     has_voicemeeter, source_has, station_y,
 };
-use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle, Trim};
+use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
 use crate::pages::audio::{AudioView, RouteState};
-use crate::pages::kit::station;
+use crate::pages::kit::{rect, station, text};
 
 #[cfg(test)]
 mod tests;
@@ -219,17 +217,11 @@ fn cut(y: f64, label: bool, nodes: &mut Vec<Node>) {
     if !label {
         return;
     }
-    nodes.push(Node::Text {
-        rect: Rect {
-            x: CUT_LABEL_X,
-            y: y + 4.0 - 10.0,
-            w: CUT_LABEL_W,
-            h: LABEL_H,
-        },
-        text: Arc::from(LABEL_TEXT),
-        style: TextStyle::Label,
-        ink: Ink::Faint,
-        align: Align::Start,
-        trim: Trim::End,
-    });
+    nodes.push(text(
+        rect(CUT_LABEL_X, y + 4.0 - 10.0, CUT_LABEL_W, LABEL_H),
+        LABEL_TEXT,
+        TextStyle::Label,
+        Ink::Faint,
+        Align::Start,
+    ));
 }

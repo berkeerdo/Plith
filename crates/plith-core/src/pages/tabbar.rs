@@ -1,9 +1,8 @@
 //! The tab bar: one hairline track with four stations and a clock at the right end.
 
-use std::sync::Arc;
-
+use super::kit::{rect, text};
 use super::{Action, HitTarget, MARGIN_LEFT, MARGIN_RIGHT, PAGE_W, PageId};
-use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle, Trim};
+use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle};
 
 /// Centre x of the first station.
 const FIRST_X: f64 = MARGIN_LEFT;
@@ -59,19 +58,13 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
             },
             ink,
         });
-        nodes.push(Node::Text {
-            rect: Rect {
-                x: left,
-                y: LABEL_Y,
-                w: LABEL_W,
-                h: LABEL_H,
-            },
-            text: Arc::from(page.label()),
-            style: TextStyle::Label,
+        nodes.push(text(
+            rect(left, LABEL_Y, LABEL_W, LABEL_H),
+            page.label(),
+            TextStyle::Label,
             ink,
-            align: Align::Start,
-            trim: Trim::End,
-        });
+            Align::Start,
+        ));
         let right = if page == PageId::System {
             x + LAST_REACH
         } else {
@@ -88,19 +81,18 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
         });
     }
     let right_edge = PAGE_W - MARGIN_RIGHT;
-    nodes.push(Node::Text {
-        rect: Rect {
-            x: right_edge - CLOCK_W,
-            y: LINE_Y - CLOCK_H / 2.0,
-            w: CLOCK_W,
-            h: CLOCK_H,
-        },
-        text: Arc::from(clock),
-        style: TextStyle::Clock,
-        ink: Ink::Muted,
-        align: Align::End,
-        trim: Trim::End,
-    });
+    nodes.push(text(
+        rect(
+            right_edge - CLOCK_W,
+            LINE_Y - CLOCK_H / 2.0,
+            CLOCK_W,
+            CLOCK_H,
+        ),
+        clock,
+        TextStyle::Clock,
+        Ink::Muted,
+        Align::End,
+    ));
     (nodes, targets)
 }
 

@@ -1,4 +1,4 @@
-//! Small node constructors shared by the system, shelf and pill layouts.
+//! Small node constructors shared by every page layout, the tab bar and the pill.
 
 use std::sync::Arc;
 
@@ -11,13 +11,25 @@ pub(super) fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
 
 /// A text node, cut at the end when too long.
 pub(super) fn text(r: Rect, s: &str, style: TextStyle, ink: Ink, align: Align) -> Node {
+    text_trim(r, s, style, ink, align, Trim::End)
+}
+
+/// A text node cut by `trim` when too long.
+pub(super) fn text_trim(
+    r: Rect,
+    s: &str,
+    style: TextStyle,
+    ink: Ink,
+    align: Align,
+    trim: Trim,
+) -> Node {
     Node::Text {
         rect: r,
         text: Arc::from(s),
         style,
         ink,
         align,
-        trim: Trim::End,
+        trim,
     }
 }
 

@@ -6,14 +6,12 @@
 
 mod routes;
 
-use std::sync::Arc;
-
 use super::{
     AudioView, DENSE_ABOVE, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PITCH_DENSE,
     PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow,
 };
-use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, Rect, TextStyle, Trim};
-use crate::pages::kit::rect;
+use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, TextStyle, Trim};
+use crate::pages::kit::{rect, text_trim};
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
@@ -91,17 +89,6 @@ fn station_y(view: &AudioView, i: usize) -> f64 {
 
 fn has_voicemeeter(view: &AudioView) -> bool {
     view.footer != Footer::NoVoicemeeter
-}
-
-fn text(r: Rect, s: &str, style: TextStyle, ink: Ink, align: Align, trim: Trim) -> Node {
-    Node::Text {
-        rect: r,
-        text: Arc::from(s),
-        style,
-        ink,
-        align,
-        trim,
-    }
 }
 
 /// The value copy: a gain as a bare signed whole number (`-6`, `0`, `+3`, like the mock's
@@ -185,7 +172,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
         }
     }
     if hidden > 0 {
-        nodes.push(text(
+        nodes.push(text_trim(
             rect(
                 TAG_X,
                 row_y(view, output_rows - 1) - 9.0,
@@ -214,7 +201,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
         });
     }
     let footer_y = height - footer_up - 10.0;
-    nodes.push(text(
+    nodes.push(text_trim(
         rect(MARGIN_LEFT, footer_y, PAGE_W - 2.0 * MARGIN_LEFT, LABEL_H),
         view.footer.text(),
         TextStyle::Label,
@@ -251,7 +238,7 @@ fn source_row(
     } else {
         (row.name.clone(), Ink::Ink)
     };
-    nodes.push(text(
+    nodes.push(text_trim(
         rect(MARGIN_LEFT, y - 12.0, SOURCE_NAME_W, NAME_H),
         &name,
         TextStyle::Name,
@@ -259,7 +246,7 @@ fn source_row(
         Align::Start,
         Trim::End,
     ));
-    nodes.push(text(
+    nodes.push(text_trim(
         rect(MARGIN_LEFT, y + 5.0, SOURCE_X - 8.0 - MARGIN_LEFT, LABEL_H),
         &row.sub,
         TextStyle::Sub,
@@ -309,7 +296,7 @@ fn output_row(
         // A value is a few characters, the cast is exact.
         let w = value.chars().count() as f64 * VALUE_CHAR_W;
         name_right = VALUE_RIGHT - w - VALUE_GAP;
-        nodes.push(text(
+        nodes.push(text_trim(
             rect(
                 VALUE_RIGHT - w - VALUE_SLACK,
                 y - 9.0,
@@ -333,7 +320,7 @@ fn output_row(
     };
     let name_x = match &row.tag {
         Some(tag) => {
-            nodes.push(text(
+            nodes.push(text_trim(
                 rect(TAG_X, y - 9.0, TAG_NAME_X - TAG_X, LABEL_H),
                 tag,
                 TextStyle::Label,
@@ -346,7 +333,7 @@ fn output_row(
         None => Some(TAG_X),
     };
     if let Some(x) = name_x {
-        nodes.push(text(
+        nodes.push(text_trim(
             rect(x, y - 10.0, (name_right - x).max(0.0), NAME_H),
             &row.name,
             TextStyle::Body,
