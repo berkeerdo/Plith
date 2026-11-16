@@ -226,3 +226,39 @@ fn start_clears_a_stale_journal() {
     assert_eq!(suppressor.failure(), None);
     assert_eq!(suppressor.stop(), Ok(()));
 }
+
+#[test]
+fn hide_is_journaled_before_it_is_posted() {
+    let scratch = ScratchDir::new("journal-first");
+    let journal = scratch.journal().to_path_buf();
+    let handle = RestoreHandle::new(Some(journal.clone()), BOOT, |_| {});
+    let seen_at_post = Mutex::new(Vec::new());
+    assert!(handle.hide(
+        21,
+        |_| true,
+        |_| {
+            *seen_at_post.lock().expect("not poisoned") = super::journal::read(&journal, BOOT);
+            true
+        }
+    ));
+    assert_eq!(
+        *seen_at_post.lock().expect("not poisoned"),
+        vec![21],
+        "a kill during the post still finds the handle in the journal"
+    );
+}
+
+#[test]
+fn failed_post_unjournals() {
+    let scratch = ScratchDir::new("journal-unpost");
+    let journal = scratch.journal().to_path_buf();
+    let handle = RestoreHandle::new(Some(journal.clone()), BOOT, |_| {});
+    assert!(handle.hide(3, |_| true, |_| true));
+    assert!(
+        !handle.hide(4, |_| true, |_| false),
+        "a refused post hides nothing"
+    );
+    assert_eq!(handle.pending(), 1);
+    assert_eq!(super::journal::read(&journal, BOOT), vec![3]);
+    assert!(!handle.hide(5, |_| false, |_| panic!("not posted for a hidden window")));
+}

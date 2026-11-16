@@ -305,7 +305,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   characters escaped in every line; `--pipe` logged with `{:?}`; the log rotates to
   `plith-osd.old.log` past 1 MiB at open and stops (one notice line) past 1 MiB in a run. TDD:
   `escape_controls`, `same_final_path`, `line_fate`.
-- [ ] **F7 (M1), journal before the hide:** the handle is journaled before
+- [x] **F7 (M1), journal before the hide:** the handle is journaled before
   `ShowWindowAsync(SW_HIDE)` is posted and removed again when the post fails. TDD:
   `hide_is_journaled_before_it_is_posted`, `failed_post_unjournals`.
 - [ ] **F8 (I4), one owner per journal:** `start_with_journal` with a journal takes the named

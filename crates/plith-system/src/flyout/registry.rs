@@ -105,9 +105,11 @@ impl RestoreHandle {
         self.hidden.lock().unwrap_or_else(PoisonError::into_inner)
     }
 
-    /// [`HiddenRegistry::hide`] on the shared set; a window that is now owed a restore is
-    /// written to the journal before the lock is released (best effort: a failed write is
-    /// ignored, the in-memory set still restores it).
+    /// [`HiddenRegistry::hide`] on the shared set, journal first: a visible window is
+    /// recorded and written to the journal before `post_hide` runs, so a kill between the
+    /// post and the write cannot leave a hidden window the journal does not know. A refused
+    /// post takes it out of the set and the journal again. Journal writes are best effort (a
+    /// failed write is ignored, the in-memory set still restores it).
     pub(crate) fn hide(
         &self,
         hwnd: isize,
@@ -115,11 +117,24 @@ impl RestoreHandle {
         post_hide: impl FnOnce(isize) -> bool,
     ) -> bool {
         let mut set = self.lock();
-        let hidden = set.hide(hwnd, is_visible, post_hide);
-        if hidden && let Some(path) = &self.journal {
+        if !is_visible(hwnd) {
+            return false;
+        }
+        set.hidden.insert(hwnd);
+        self.mirror(&set);
+        if post_hide(hwnd) {
+            return true;
+        }
+        set.hidden.remove(&hwnd);
+        self.mirror(&set);
+        false
+    }
+
+    /// Writes the set to the journal, if there is one (best effort).
+    fn mirror(&self, set: &HiddenRegistry) {
+        if let Some(path) = &self.journal {
             let _ = journal::write(path, self.boot, &set.handles());
         }
-        hidden
     }
 
     /// How many windows are owed a restore.
