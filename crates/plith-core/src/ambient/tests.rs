@@ -187,3 +187,37 @@ fn trace_samples_by_index_or_empty() {
     assert_eq!(live.trace(0), &[0.1, 0.2]);
     assert!(live.trace(3).is_empty());
 }
+
+fn live_page() -> Arc<DisplayList> {
+    Arc::new(DisplayList {
+        nodes: vec![Node::Live(LiveNode::Meter {
+            rect: RECT,
+            rail: LiveRail::Strip,
+            index: 0,
+        })],
+        size: (10.0, 10.0),
+    })
+}
+
+#[test]
+fn shows_live_needs_a_visible_layer_with_a_live_node() {
+    use crate::page::{PageLayer, PageLayers};
+    let mut content = PageContent::empty();
+    content.pages[2] = live_page();
+    let layer = |page: usize, opacity: f64| PageLayer {
+        page,
+        offset: 0.0,
+        opacity,
+    };
+    // Outgoing live page, incoming plain page: still live.
+    let turning = PageLayers::of(&[layer(2, 0.5), layer(1, 0.5)]);
+    assert!(shows_live(&content, &turning, 1.0));
+    assert!(!shows_live(&content, &turning, 0.0), "hidden content");
+    let gone = PageLayers::of(&[layer(2, 0.0), layer(1, 1.0)]);
+    assert!(!shows_live(&content, &gone, 1.0), "faded out layer");
+    assert!(!shows_live(
+        &content,
+        &PageLayers::of(&[layer(0, 1.0)]),
+        1.0
+    ));
+}

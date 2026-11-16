@@ -1,7 +1,8 @@
 //! The ambient tick: when the open island repaints without motion (meters, seek fill), how
 //! often, the values sampled for it, and its `ambient` log line.
 
-use crate::draw::{LiveRail, Node, PageContent};
+use crate::draw::{DisplayList, LiveRail, Node, PageContent};
+use crate::page::PageLayers;
 use crate::scene::Scene;
 use std::fmt;
 use std::time::SystemTime;
@@ -37,7 +38,22 @@ pub fn wants_ambient(scene: &Scene, content: &PageContent) -> bool {
     content
         .pages
         .get(scene.page)
-        .is_some_and(|list| list.nodes.iter().any(|node| matches!(node, Node::Live(_))))
+        .is_some_and(|list| has_live(list))
+}
+
+fn has_live(list: &DisplayList) -> bool {
+    list.nodes.iter().any(|node| matches!(node, Node::Live(_)))
+}
+
+/// True when a frame drawn with `layers` at `content_opacity` shows a live node: the content
+/// is visible and some visible layer's page (incoming or outgoing) has one. Such a frame needs
+/// sampled live values, whether it is a motion, a static repaint or an ambient frame.
+#[must_use]
+pub fn shows_live(content: &PageContent, layers: &PageLayers, content_opacity: f64) -> bool {
+    content_opacity > 0.0
+        && layers.iter().any(|layer| {
+            layer.opacity > 0.0 && content.pages.get(layer.page).is_some_and(|l| has_live(l))
+        })
 }
 
 /// The recent level history of one meter, oldest first.

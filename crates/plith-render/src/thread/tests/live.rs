@@ -187,10 +187,17 @@ fn ambient_runs_only_when_expanded_with_live_nodes() {
         "every frame after the expand is an ambient frame"
     );
     assert!(
-        frames[..=expand.frames]
-            .iter()
-            .all(|f| !is_ambient(&f.live))
+        !is_ambient(&frames[0].live),
+        "the collapsed start frame is not sampled"
     );
+    assert!(
+        frames[1..=expand.frames]
+            .iter()
+            .all(|f| is_ambient(&f.live)),
+        "the expand shows the meter, so its frames are sampled too"
+    );
+    let sampled = frames.iter().filter(|f| is_ambient(&f.live)).count();
+    assert_eq!(run.samples.load(Ordering::SeqCst), sampled as u64);
     assert!(run.reports.recv_timeout(QUIET).is_err(), "no motion line");
     let _ = run.stop();
 }
@@ -201,19 +208,27 @@ fn ambient_paints_every_fourth_tick_at_240() {
     let _ = run.report();
     let frames = run.frames();
     let calls = run.calls_at();
+    let first = expand.frames as u64;
+    // Ambient frames: after the expand, before the collapse at `AT`.
     let ticks: Vec<u64> = frames
         .iter()
         .zip(&calls)
-        .filter(|(f, _)| is_ambient(&f.live))
+        .filter(|(f, c)| is_ambient(&f.live) && **c > first && **c < AT)
         .map(|(_, c)| *c)
         .collect();
-    let first = expand.frames as u64;
     assert_eq!(ticks.first(), Some(&(first + 4)));
     assert!(ticks.windows(2).all(|w| w[1] - w[0] == 4), "every 4th tick");
     // The tick that sees the collapse paints nothing.
     assert_eq!(ticks.len() as u64, (AT - 1 - first) / 4);
     assert_eq!(ambient.frames, ticks.len());
-    assert_eq!(run.samples.load(Ordering::SeqCst), ticks.len() as u64);
+    // One sample per painted frame that shows the meter: expand, ambient and collapse alike.
+    let sampled = frames.iter().filter(|f| is_ambient(&f.live)).count();
+    let visible = frames.iter().filter(|f| f.content_opacity > 0.0).count();
+    assert_eq!(
+        sampled, visible,
+        "sampled exactly while the meter's page is visible"
+    );
+    assert_eq!(run.samples.load(Ordering::SeqCst), sampled as u64);
     let levels: Vec<f32> = frames
         .iter()
         .filter(|f| is_ambient(&f.live))
@@ -289,5 +304,59 @@ fn ambient_posts_an_unchanged_shape_once() {
     );
     // The collapse that follows posts every frame again.
     assert_eq!(shapes.last().map(|s| s.shape), Some(REST));
+    let _ = run.stop();
+}
+
+/// Meters on pages 0 and 1.
+fn two_live_pages() -> Arc<PageContent> {
+    let meter = Node::Live(LiveNode::Meter {
+        rect: RECT,
+        rail: LiveRail::Strip,
+        index: 0,
+    });
+    let mut content = (*page_zero(meter.clone())).clone();
+    content.pages[1] = Arc::new(DisplayList {
+        nodes: vec![meter],
+        size: (300.0, 100.0),
+    });
+    Arc::new(content)
+}
+
+#[test]
+fn a_page_turn_between_live_pages_samples_every_motion_frame() {
+    let run = start(Setup {
+        content: Some(two_live_pages()),
+        script: vec![(AT, expanded(1))],
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let expand = run.report();
+    let turn = run.report();
+    assert_eq!(turn.kind, MotionKind::Page);
+    let frames = run.frames();
+    let calls = run.calls_at();
+    let turn_frames: Vec<_> = frames
+        .iter()
+        .zip(&calls)
+        .filter(|(_, c)| **c > AT)
+        .take(turn.frames)
+        .map(|(f, _)| f)
+        .collect();
+    assert_eq!(turn_frames.len(), turn.frames);
+    assert!(
+        turn_frames.iter().all(|f| is_ambient(&f.live)),
+        "every turn frame shows live nodes, so every one is sampled"
+    );
+    assert!(
+        frames[1..=expand.frames]
+            .iter()
+            .all(|f| is_ambient(&f.live)),
+        "the expand samples too"
+    );
+    assert!(
+        !is_ambient(&frames[0].live),
+        "the collapsed start frame does not"
+    );
     let _ = run.stop();
 }

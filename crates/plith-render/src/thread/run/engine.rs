@@ -6,7 +6,7 @@ use super::super::{FrameTimes, Paint, RenderSinks};
 use super::LoopShared;
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
-use plith_core::ambient::{LiveValues, wants_ambient};
+use plith_core::ambient::{LiveValues, shows_live, wants_ambient};
 use plith_core::clock_choice::ClockKind;
 use plith_core::draw::PageContent;
 use plith_core::geometry::IslandShape;
@@ -233,15 +233,23 @@ where
         self.island.is_settled() && self.pages_settled && self.content_settled
     }
 
-    /// Paints the current state. After a failed paint and a successful `recover`, the same
+    /// Paints the current state, with live values sampled once when a visible page layer has a
+    /// live node (the default values otherwise). After a failed paint and a successful `recover`, the same
     /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
-    pub(super) fn paint_frame(&mut self, live: LiveValues) -> Result<Option<FrameTimes>, String> {
+    pub(super) fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
         let shape = self.island.shape();
+        let pages = self.pages.layers();
+        let content_opacity = opacity_f32(self.content.value());
+        let live = if shows_live(&self.page_content, &pages, f64::from(content_opacity)) {
+            (self.sinks.sample)()
+        } else {
+            LiveValues::default()
+        };
         let frame = PaintFrame {
             shape,
             origin: self.layout.island_origin(shape),
-            pages: self.pages.layers(),
-            content_opacity: opacity_f32(self.content.value()),
+            pages,
+            content_opacity,
             content: Arc::clone(&self.page_content),
             content_gen: self.content_gen,
             live,

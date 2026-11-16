@@ -1,11 +1,11 @@
 //! The ambient tick: while the settled island shows a page with live nodes, the loop waits on
-//! the frame clock every period and paints every `ambient_divisor(hz)`-th tick with freshly
-//! sampled values. It writes no motion line, and one `ambient` line when it ends.
+//! the frame clock every period and paints every `ambient_divisor(hz)`-th tick (each painted
+//! frame samples fresh values). It writes no motion line, and one `ambient` line when it ends.
 
 use super::super::Paint;
 use super::engine::{Engine, Taken};
 use crate::clock::{ClockError, FrameSource};
-use plith_core::ambient::{AmbientStats, LiveValues, ambient_divisor};
+use plith_core::ambient::{AmbientStats, ambient_divisor};
 use plith_core::clock_choice::ClockKind;
 use plith_core::scene::SceneMailbox;
 
@@ -54,8 +54,7 @@ where
                 continue;
             }
             phase = 0;
-            let live = (self.sinks.sample)();
-            if let Some(times) = self.paint_frame(live)? {
+            if let Some(times) = self.paint_frame()? {
                 stats.record_frame(anim_t, times.draw_ms);
             }
             self.wait_ms = 0.0;
@@ -83,7 +82,7 @@ where
         if self.wants_ambient() {
             return Ok(None);
         }
-        self.paint_frame(LiveValues::default())?;
+        self.paint_frame()?;
         Ok(Some(AmbientEnd::Parked))
     }
 }

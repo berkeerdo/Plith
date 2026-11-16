@@ -11,7 +11,6 @@ use super::{Fatal, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use ambient::AmbientEnd;
 use engine::{Engine, Taken, content_spring};
-use plith_core::ambient::LiveValues;
 use plith_core::clock_choice::ClockKind;
 use plith_core::gpu_health::GpuHealth;
 use plith_core::island::IslandMotion;
@@ -168,7 +167,7 @@ where
     /// Paints the start frame, then parks, animates and ticks the ambient frames until stopped.
     fn run(&mut self, mailbox: &SceneMailbox, start: Scene) -> Result<(), String> {
         if !start.suppression.any() {
-            self.paint_frame(LiveValues::default())?;
+            self.paint_frame()?;
         }
         loop {
             if self.wants_ambient() {
@@ -192,13 +191,13 @@ where
                 Taken::Snapped => continue,
                 // New content on a still island: one frame, no clock wait, no motion.
                 Taken::ContentOnly => {
-                    self.paint_frame(LiveValues::default())?;
+                    self.paint_frame()?;
                     continue;
                 }
                 Taken::Aimed if self.is_settled() => {
                     // Nothing to animate (an unsuppress): one frame, no clock wait.
                     self.stats = None;
-                    self.paint_frame(LiveValues::default())?;
+                    self.paint_frame()?;
                     continue;
                 }
                 Taken::Aimed => {}
@@ -241,7 +240,7 @@ where
             self.content_settled = self.content.step(dt);
             let drawn_by = self.clocks.kind();
             let visible = self.differs_from_rest();
-            if let Some(times) = self.paint_frame(LiveValues::default())?
+            if let Some(times) = self.paint_frame()?
                 && let Some(stats) = self.stats.as_mut()
             {
                 let phases = FramePhases {

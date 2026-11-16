@@ -28,6 +28,7 @@ impl Stack {
         layout: &SurfaceLayout,
         warp: bool,
         levers: Levers,
+        palette: Palette,
     ) -> Result<(Self, Vec<String>)> {
         let gpu = Gpu::new(warp)?;
         let mut target = CompositionTarget::new(&gpu, hwnd, layout, levers)?;
@@ -37,7 +38,7 @@ impl Stack {
             .map(|outcome| outcome_line(&outcome))
             .collect();
         let text = TextSystem::new()?;
-        let mut painter = Painter::new(gpu.context(), gpu.d2d_factory(), Palette::default(), text)?;
+        let mut painter = Painter::new(gpu.context(), gpu.d2d_factory(), palette, text)?;
         notes.extend(painter.take_notes());
         Ok((
             Self {
@@ -55,6 +56,8 @@ pub struct GpuPaint {
     hwnd: HWND,
     layout: SurfaceLayout,
     levers: Levers,
+    /// The palette the painter uses; kept here so a recovered painter gets it back.
+    palette: Palette,
     stack: Option<Stack>,
     notes: Vec<String>,
 }
@@ -69,14 +72,26 @@ impl GpuPaint {
     /// # Errors
     /// Returns the first failing creation call.
     pub fn new(hwnd: HWND, layout: SurfaceLayout, warp: bool, levers: Levers) -> Result<Self> {
-        let (stack, notes) = Stack::new(hwnd, &layout, warp, levers)?;
+        let palette = Palette::default();
+        let (stack, notes) = Stack::new(hwnd, &layout, warp, levers, palette)?;
         Ok(Self {
             hwnd,
             layout,
             levers,
+            palette,
             stack: Some(stack),
             notes,
         })
+    }
+}
+
+impl GpuPaint {
+    /// Switches the palette now and for every painter rebuilt by a recovery.
+    pub fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+        if let Some(stack) = self.stack.as_mut() {
+            stack.painter.set_palette(palette);
+        }
     }
 }
 
@@ -103,7 +118,7 @@ impl Paint for GpuPaint {
             // Dropped before the rebuild: a window takes only one composition target.
             drop(stack);
         }
-        let (stack, notes) = Stack::new(self.hwnd, &self.layout, warp, self.levers)?;
+        let (stack, notes) = Stack::new(self.hwnd, &self.layout, warp, self.levers, self.palette)?;
         self.stack = Some(stack);
         self.notes.extend(notes);
         Ok(())

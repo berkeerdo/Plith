@@ -59,12 +59,23 @@ pub(crate) fn color(rgba: [f32; 4], alpha_scale: f32) -> D2D1_COLOR_F {
     }
 }
 
-/// A page bitmap ready to composite: where and how opaque.
+/// Rounds a DIP coordinate to the nearest device pixel at `scale`, so a cached bitmap (or the
+/// live nodes over it) lands pixel for pixel and stays sharp at fractional scales.
+pub(crate) fn snap(v: f64, scale: f64) -> f64 {
+    if scale > 0.0 {
+        (v * scale).round() / scale
+    } else {
+        v
+    }
+}
+
+/// A page bitmap ready to composite: where, how opaque and at which scale.
 struct Placed {
     bitmap: ID2D1Bitmap1,
     x: f64,
     y: f64,
     opacity: f32,
+    scale: f64,
 }
 
 /// Draws frames onto the target set on a Direct2D device context. Render thread only.
@@ -156,7 +167,7 @@ impl Painter {
         for page in &placed {
             composite(ctx, page);
         }
-        let live = self.draw_incoming_live(ctx, frame);
+        self.draw_layers_live(ctx, frame, scale);
         if let Some(border) = &parts.border {
             self.kit.set_color(self.palette.border, 1.0);
             // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
@@ -171,9 +182,7 @@ impl Painter {
             unsafe { ctx.PopLayer() };
         }
         // SAFETY: closes the BeginDraw above.
-        let ended = unsafe { ctx.EndDraw(None, None) };
-        live?;
-        ended
+        unsafe { ctx.EndDraw(None, None) }
     }
 
     /// Refreshes the bitmaps this frame shows and places them: the visible page layers (when
@@ -204,6 +213,7 @@ impl Painter {
                     x,
                     y: oy,
                     opacity,
+                    scale,
                 });
             }
             Ok(())
@@ -222,11 +232,22 @@ impl Painter {
         Ok(placed)
     }
 
-    /// Draws the live nodes of the incoming (last) page layer at its offset and opacity.
-    fn draw_incoming_live(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) -> Result<()> {
-        let Some(layer) = frame.pages.iter().last().copied() else {
-            return Ok(());
-        };
+    /// Draws the live nodes of every visible page layer (outgoing first) at its offset and
+    /// opacity.
+    fn draw_layers_live(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame, scale: f64) {
+        for layer in frame.pages.iter() {
+            self.draw_layer_live(ctx, frame, *layer, scale);
+        }
+    }
+
+    /// Draws the live nodes of one page layer, offset to the same snapped place as its bitmap.
+    fn draw_layer_live(
+        &mut self,
+        ctx: &ID2D1DeviceContext,
+        frame: &PaintFrame,
+        layer: PageLayer,
+        scale: f64,
+    ) {
         let PageLayer {
             page,
             offset,
@@ -234,20 +255,19 @@ impl Painter {
         } = layer;
         let alpha = f(opacity) * frame.content_opacity;
         let Some(list) = frame.content.pages.get(page) else {
-            return Ok(());
+            return;
         };
         if alpha <= 0.0 {
-            return Ok(());
+            return;
         }
         let (ox, oy) = frame.origin;
-        let shift = Matrix3x2::translation(f(ox + offset), f(oy));
+        let shift = Matrix3x2::translation(f(snap(ox + offset, scale)), f(snap(oy, scale)));
         // SAFETY: plain state changes inside the frame's BeginDraw/EndDraw; restored below.
         unsafe { ctx.SetTransform(&raw const shift) };
-        let drawn = draw_live(ctx, &mut self.kit, list, &frame.live, &self.palette, alpha);
+        draw_live(ctx, &mut self.kit, list, &frame.live, &self.palette, alpha);
         let identity = Matrix3x2::identity();
         // SAFETY: as above.
         unsafe { ctx.SetTransform(&raw const identity) };
-        drawn
     }
 }
 
@@ -256,11 +276,12 @@ fn composite(ctx: &ID2D1DeviceContext, page: &Placed) {
     // SAFETY: plain draw calls inside the frame's BeginDraw/EndDraw on a live bitmap.
     unsafe {
         let size = page.bitmap.GetSize();
+        let (x, y) = (f(snap(page.x, page.scale)), f(snap(page.y, page.scale)));
         let dest = D2D_RECT_F {
-            left: f(page.x),
-            top: f(page.y),
-            right: f(page.x) + size.width,
-            bottom: f(page.y) + size.height,
+            left: x,
+            top: y,
+            right: x + size.width,
+            bottom: y + size.height,
         };
         ctx.DrawBitmap(
             &page.bitmap,

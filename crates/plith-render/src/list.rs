@@ -114,11 +114,6 @@ impl ListKit {
         })
     }
 
-    /// The factory paths are built with.
-    pub(crate) fn factory(&self) -> &ID2D1Factory1 {
-        &self.factory
-    }
-
     /// Sets the brush to `rgba` with its alpha scaled by `alpha` and remembers the scale for
     /// the following `set_ink` calls.
     pub(crate) fn set_color(&mut self, rgba: [f32; 4], alpha: f32) {

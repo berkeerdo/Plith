@@ -1,13 +1,12 @@
 //! Live nodes, drawn every frame on top of the incoming page from the sampled values: meters,
 //! level traces and the seek fill. Group opacity scales each brush colour's alpha (no layer).
 
-use crate::list::{ListKit, polyline};
+use crate::list::ListKit;
 use crate::paint::f;
 use plith_core::ambient::LiveValues;
 use plith_core::draw::{DisplayList, LiveNode, Node, Rect, SeekTimeline, StationMark};
 use plith_core::theme::Palette;
 use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext;
-use windows::core::Result;
 use windows_numerics::Vector2;
 
 /// A level at or below this draws no meter.
@@ -19,9 +18,6 @@ const TRACE_W: f32 = 1.0;
 
 /// Draws the live nodes of `list` in page coordinates (the caller sets the page's offset as
 /// the context transform), with every colour's alpha scaled by `alpha`. Inside a `BeginDraw`.
-///
-/// # Errors
-/// Returns a failing path geometry call.
 pub(crate) fn draw_live(
     ctx: &ID2D1DeviceContext,
     kit: &mut ListKit,
@@ -29,7 +25,7 @@ pub(crate) fn draw_live(
     live: &LiveValues,
     palette: &Palette,
     alpha: f32,
-) -> Result<()> {
+) {
     kit.set_color(palette.flow, alpha);
     for node in &list.nodes {
         let Node::Live(node) = node else {
@@ -40,12 +36,11 @@ pub(crate) fn draw_live(
                 meter(ctx, kit, *rect, live.peak(*rail, *index), palette);
             }
             LiveNode::Trace { rect, index, .. } => {
-                trace(ctx, kit, *rect, live.trace(*index), palette)?;
+                trace(ctx, kit, *rect, live.trace(*index), palette);
             }
             LiveNode::Seek { rect, timeline } => seek(ctx, kit, *rect, timeline, live, palette),
         }
     }
-    Ok(())
 }
 
 /// A bar from the left of `rect` over the level's share of its width, in the flow colour.
@@ -60,35 +55,39 @@ fn meter(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, peak: f32, palette
     kit.fill(ctx, level, 0.0, palette.flow);
 }
 
-/// The samples (0 to 1, oldest first) spread across `rect`, bottom-aligned, as a 1 DIP track
-/// line. Fewer than two samples draw nothing.
-fn trace(
-    ctx: &ID2D1DeviceContext,
-    kit: &ListKit,
-    rect: Rect,
-    samples: &[f32],
-    palette: &Palette,
-) -> Result<()> {
+/// The samples (0 to 1, oldest first) spread across `rect`, bottom-aligned, as 1 DIP track
+/// segments drawn with `DrawLine` (no path geometry per frame). Fewer than two samples draw
+/// nothing.
+fn trace(ctx: &ID2D1DeviceContext, kit: &ListKit, rect: Rect, samples: &[f32], palette: &Palette) {
     if samples.len() < 2 {
-        return Ok(());
+        return;
     }
     // Allowed: sample counts are small, exact in f64.
     #[allow(clippy::cast_precision_loss)]
     let step = rect.w / (samples.len() - 1) as f64;
     let bottom = rect.y + rect.h;
-    let points = samples.iter().enumerate().map(|(i, v)| {
+    let at = |i: usize, v: f32| {
         // Allowed: as above.
         #[allow(clippy::cast_precision_loss)]
         let x = rect.x + step * i as f64;
-        (x, bottom - f64::from(v.clamp(0.0, 1.0)) * rect.h)
-    });
-    let Some(path) = polyline(kit.factory(), points)? else {
-        return Ok(());
+        Vector2 {
+            X: f(x),
+            Y: f(bottom - f64::from(v.clamp(0.0, 1.0)) * rect.h),
+        }
     };
     kit.set_ink(palette.track);
-    // SAFETY: a draw call inside the frame's BeginDraw/EndDraw.
-    unsafe { ctx.DrawGeometry(&path, &kit.brush, TRACE_W, None) };
-    Ok(())
+    for (i, pair) in samples.windows(2).enumerate() {
+        // SAFETY: a draw call inside the frame's BeginDraw/EndDraw.
+        unsafe {
+            ctx.DrawLine(
+                at(i, pair[0]),
+                at(i + 1, pair[1]),
+                &kit.brush,
+                TRACE_W,
+                None,
+            );
+        }
+    }
 }
 
 /// The played part of the track as a 2 DIP flow line along the middle of `rect`, with a

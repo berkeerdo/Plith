@@ -588,3 +588,49 @@ fn collapsed_island_draws_the_pill_not_the_pages() {
         "page drawn, pill hidden",
     );
 }
+
+#[test]
+fn pages_snap_to_device_pixels_at_fractional_scale() {
+    // At 1.25 the origin 10 DIP is 12.5 px: unsnapped, a 1 px column would blur over two.
+    let scale = 1.25;
+    let (w, h) = (650_u32, 275_u32);
+    let mut f = page_frame(vec![Node::Fill {
+        rect: Rect {
+            x: 8.0,
+            y: 16.0,
+            w: 0.8,
+            h: 32.0,
+        },
+        radius: 0.0,
+        ink: Ink::Ink,
+    }]);
+    f.pages = PageLayers::of(&[layer(0, 0.0, 1.0)]);
+    let buf = render_scaled(w, h, scale, &f);
+    let ink = bgra(gece().ink);
+    let row: Vec<[u8; 4]> = (18..30).map(|x| pixel(&buf, w, x, 45)).collect();
+    let full = row.iter().filter(|px| px[2].abs_diff(ink[2]) <= 2).count();
+    let partial = row
+        .iter()
+        .filter(|px| px[2] > 0x30 && px[2].abs_diff(ink[2]) > 2)
+        .count();
+    assert_eq!((full, partial), (1, 0), "one sharp column: {row:?}");
+}
+
+#[test]
+fn outgoing_page_keeps_its_live_nodes() {
+    let p = gece();
+    let mut content = PageContent::empty();
+    content.pages[0] = list(vec![meter(LiveRail::Strip, 0)]);
+    let mut f = frame(SHAPE, ORIGIN, &[layer(0, 0.0, 1.0), layer(1, 0.0, 1.0)]);
+    f.content = Arc::new(content);
+    f.live = LiveValues {
+        strips: vec![[0.5, 0.5]],
+        ..LiveValues::default()
+    };
+    near(
+        pixel(&render(&f), W, 40, 52),
+        bgra(p.flow),
+        2,
+        "outgoing meter",
+    );
+}
