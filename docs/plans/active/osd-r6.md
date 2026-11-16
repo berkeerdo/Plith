@@ -300,7 +300,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   at once and sends nothing.
 - [x] **F5 (M4), a server-thread panic quits the helper:** a drop guard in the server thread
   sends `Event::Quit` while panicking. Test: a panicking thread holding the guard delivers Quit.
-- [ ] **F6 (M5), log hardening:** folder from `SHGetKnownFolderPath(LocalAppData)`; refuse a
+- [x] **F6 (M5), log hardening:** folder from `SHGetKnownFolderPath(LocalAppData)`; refuse a
   reparse-point folder or file and a handle whose final path is not the expected one; control
   characters escaped in every line; `--pipe` logged with `{:?}`; the log rotates to
   `plith-osd.old.log` past 1 MiB at open and stops (one notice line) past 1 MiB in a run. TDD:

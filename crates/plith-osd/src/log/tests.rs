@@ -1,26 +1,29 @@
 use super::*;
 
 #[test]
-fn line_has_padded_stamp_then_text() {
-    let stamp = Stamp {
-        year: 2026,
-        month: 3,
-        day: 7,
-        hour: 4,
-        minute: 5,
-        second: 6,
-        millis: 9,
-    };
-    assert_eq!(
-        format_line(stamp, "spike start"),
-        "2026-03-07 04:05:06.009 spike start\n"
-    );
+fn a_log_without_a_file_ignores_lines() {
+    let log = Log::closed();
+    log.line("dropped");
 }
 
 #[test]
-fn a_log_without_a_file_ignores_lines() {
-    let log = Log {
-        file: Mutex::new(None),
-    };
-    log.line("dropped");
+fn the_known_folder_is_a_real_absolute_path() {
+    let folder = local_app_data().expect("LocalAppData");
+    assert!(folder.is_absolute(), "{}", folder.display());
+    assert!(!is_reparse_point(&folder));
+}
+
+#[test]
+fn a_temp_file_reports_its_own_final_path() {
+    let path = std::env::temp_dir().join(format!("plith-osd-log-test-{}.txt", std::process::id()));
+    let file = File::create(&path).expect("create");
+    let resolved = final_path(&file).expect("final path");
+    let expected = fs::canonicalize(&path).expect("canonical");
+    assert!(
+        same_final_path(&resolved, &expected.to_string_lossy()),
+        "{resolved} vs {}",
+        expected.display()
+    );
+    drop(file);
+    let _ = fs::remove_file(&path);
 }

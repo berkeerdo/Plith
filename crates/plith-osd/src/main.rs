@@ -57,7 +57,7 @@ fn run_spike(
     log: &Arc<log::Log>,
 ) -> ExitCode {
     log.line(&format!(
-        "start: spike {} for {} s, pipe {}",
+        "start: spike {} for {} s, pipe {:?}",
         creation.as_str(),
         seconds,
         pipe.unwrap_or("none")

@@ -40,10 +40,10 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
     let server = match OsdServer::bind(pipe) {
         Ok(server) => server,
         Err(BindError::AlreadyRunning) => {
-            log.line(&format!("osd: {pipe} is already served, exiting"));
+            log.line(&format!("osd: {pipe:?} is already served, exiting"));
             return Ok(());
         }
-        Err(error) => return Err(format!("bind {pipe}: {error}")),
+        Err(error) => return Err(format!("bind {pipe:?}: {error}")),
     };
     let (monitor, scale) = band::primary_monitor()?;
     let layout = placement(monitor, scale);
@@ -53,7 +53,7 @@ pub fn run(pipe: &str, log: &Arc<Log>) -> Result<(), String> {
     band::set_visible(window.hwnd, false);
     let hz = band::refresh_hz();
     log.line(&format!(
-        "osd start: {} band={} uiaccess={} rect={},{} {}x{} scale={scale} hz={hz} pipe={pipe}",
+        "osd start: {} band={} uiaccess={} rect={},{} {}x{} scale={scale} hz={hz} pipe={pipe:?}",
         window.creation.as_str(),
         window
             .band
