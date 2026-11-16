@@ -97,9 +97,13 @@ impl FlyoutSuppressor {
     }
 
     /// [`start`](Self::start) with an explicit journal file. With a journal, the hook thread
-    /// first shows every journaled window that is still a hidden host-class window (left by a
-    /// run that was killed) and clears the file; then each hide is written to it and each
-    /// restore clears it. A missing or unreadable journal is not an error.
+    /// first shows every journaled window left hidden by a run that was killed, and only one
+    /// that is still an orphan: it is still a window (`IsWindow`), it is not visible, and it
+    /// still has the same facts the hide path required (a flyout host class, owned by the
+    /// shell process, in a flyout band or an unknown one, see [`crate::flyout::is_orphan`]). A
+    /// journal stamped by another boot is discarded
+    /// unread. Either way the file is then cleared; after that each hide is written to it and
+    /// each restore clears it. A missing or unreadable journal is not an error.
     ///
     /// # Errors
     /// The text says why the thread or a hook could not start.

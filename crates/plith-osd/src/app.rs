@@ -2,7 +2,8 @@
 //!
 //! - UI thread (this one): owns the window, pumps its messages, draws nothing.
 //! - Server thread: `OsdServer::serve`; every decoded message goes to the render thread over a
-//!   bounded channel with a non-blocking send (a full channel drops the message, logged once).
+//!   bounded channel with a blocking send. The render thread drains it quickly, so a final
+//!   `Level`, `Hide` or `Bye` is never the one dropped.
 //! - Render thread ([`crate::render`]): owns every graphics object and the model.
 //!
 //! The render thread ends the app: it posts [`WM_APP_EXIT`] when the model says exit.
@@ -16,7 +17,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_ipc::{BindError, DecodeError, Flow, Message, Meter, OsdServer, ServerEvent};
 use std::mem::{Discriminant, discriminant};
 use std::sync::Arc;
-use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
+use std::sync::mpsc::{SyncSender, sync_channel};
 use std::thread;
 use std::time::Instant;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -166,8 +167,6 @@ pub fn describe(message: &Message) -> String {
 struct Served {
     /// Decode error kinds already logged.
     errors: Vec<Discriminant<DecodeError>>,
-    /// Whether a full channel was already logged.
-    dropped: bool,
     /// The pid whose watcher runs.
     watched: Option<u32>,
 }
@@ -180,13 +179,9 @@ impl Served {
                 log.line("osd pipe: client connected");
                 Flow::Continue
             }
-            // Rare and it decides the exit, so it waits for room instead of being dropped.
             ServerEvent::Disconnected => {
                 log.line("osd pipe: client disconnected");
-                match events.send(Event::Disconnected) {
-                    Ok(()) => Flow::Continue,
-                    Err(_) => Flow::Stop,
-                }
+                forward(events, Event::Disconnected)
             }
             ServerEvent::Message(got) => self.message(got, events, log),
         }
@@ -219,23 +214,17 @@ impl Served {
                 log.line(&format!("osd: {error}"));
             }
         }
-        // Hello decides whether the helper stays, so it waits for room like Disconnected.
-        if matches!(message, Message::Hello { .. }) {
-            return match events.send(Event::Message(message)) {
-                Ok(()) => Flow::Continue,
-                Err(_) => Flow::Stop,
-            };
-        }
-        match events.try_send(Event::Message(message)) {
-            Ok(()) => Flow::Continue,
-            Err(TrySendError::Full(_)) => {
-                if !std::mem::replace(&mut self.dropped, true) {
-                    log.line("osd: render channel full, dropping messages (logged once)");
-                }
-                Flow::Continue
-            }
-            Err(TrySendError::Disconnected(_)) => Flow::Stop,
-        }
+        forward(events, Event::Message(message))
+    }
+}
+
+/// Sends `event` to the render thread, waiting for room: the render thread drains quickly, and a
+/// dropped `Hello`, `Level`, `Hide` or `Bye` would leave the OSD wrong. A closed channel
+/// (the render thread ended) stops the server.
+fn forward(events: &SyncSender<Event>, event: Event) -> Flow {
+    match events.send(event) {
+        Ok(()) => Flow::Continue,
+        Err(_) => Flow::Stop,
     }
 }
 

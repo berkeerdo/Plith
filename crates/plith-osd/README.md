@@ -25,11 +25,12 @@ trusted folder such as Program Files.
   The window is created in the UIAccess band (`CreateWindowInBand`); an unsigned dev build is
   refused that and falls back to a plain topmost window (the log says which one it got).
 - `plith-osd --spike [inband|setband|plain] [--seconds N]`: the Task 2 band spike.
-- Dev run: `cargo run --package plith-osd -- --pipe \.\pipe\plith-osd-dev`, then
-  `cargo run --package plith-ipc --example send_osd -- --pipe \.\pipe\plith-osd-dev`.
+- Dev run: `cargo run --package plith-osd -- --pipe \\.\pipe\plith-osd-dev`, then
+  `cargo run --package plith-ipc --example send_osd -- --pipe \\.\pipe\plith-osd-dev`.
 
 Threads: the UI thread owns the window and draws nothing; the server thread hands each message
-to the render thread over a bounded channel; the render thread owns the device, the swap chain,
+to the render thread over a bounded channel with a blocking send (the render thread drains it
+quickly, so no message is ever dropped); the render thread owns the device, the swap chain,
 the text formats and the model (`src/model.rs`, pure and unit tested). It sleeps until a message
 or the next deadline (hide 1.5 s after the last level, exit) and paces motion on the compositor
 clock. The log is `%LOCALAPPDATA%\Plith\plith-osd.log`: one `osd msg:` line per message and one

@@ -18,27 +18,43 @@ fn messages_read_as_one_log_word_each() {
 }
 
 #[test]
-fn a_full_channel_drops_and_keeps_serving() {
+fn a_full_channel_waits_for_room_and_drops_nothing() {
     let (events, inbox) = sync_channel(1);
     let log = Arc::new(Log::closed());
     let mut served = Served::default();
-    assert_eq!(
-        served.on(ServerEvent::Message(Ok(Message::Hide)), &events, &log),
-        Flow::Continue
-    );
-    assert_eq!(
-        served.on(ServerEvent::Message(Ok(Message::Bye)), &events, &log),
-        Flow::Continue
-    );
-    assert!(served.dropped, "the second message found the channel full");
-    assert!(matches!(
-        inbox.try_recv(),
-        Ok(Event::Message(Message::Hide))
-    ));
+    let level = Message::Level {
+        meter: Meter::Volume,
+        percent: 7,
+        muted: false,
+        label: String::new(),
+    };
+    let sent = vec![level, Message::Hide, Message::Bye];
+    let expected = sent.clone();
+    let sender = std::thread::spawn(move || {
+        let flows: Vec<Flow> = sent
+            .into_iter()
+            .map(|message| served.on(ServerEvent::Message(Ok(message)), &events, &log))
+            .collect();
+        (flows, served, events, log)
+    });
+    // Let the sender meet the full channel before any room is made.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    let mut got = Vec::new();
+    while got.len() < expected.len() {
+        match inbox.recv_timeout(std::time::Duration::from_secs(2)) {
+            Ok(Event::Message(message)) => got.push(message),
+            Ok(other) => panic!("unexpected event {other:?}"),
+            Err(error) => panic!("a message was dropped: {error}"),
+        }
+    }
+    assert_eq!(got, expected, "every message arrives, in order");
+    let (flows, mut served, events, log) = sender.join().unwrap();
+    assert!(flows.iter().all(|flow| *flow == Flow::Continue));
     drop(inbox);
     assert_eq!(
         served.on(ServerEvent::Message(Ok(Message::Hide)), &events, &log),
-        Flow::Stop
+        Flow::Stop,
+        "a closed render channel stops the server"
     );
 }
 
