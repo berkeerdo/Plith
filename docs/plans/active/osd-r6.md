@@ -107,19 +107,19 @@ Graphics_Gdi, UI_WindowsAndMessaging, System_LibraryLoader, System_Threading, Hi
   `%LOCALAPPDATA%\Plith\plith-osd.log`; never panics (falls back to no file).
 - `args::parse(&[String]) -> Result<Args, String>`: `--spike [inband|setband|plain]` (default
   `inband`), `--seconds N` (1 to 120, default 20), `--pipe NAME`.
-- [ ] **Step 1 (TDD):** `args/tests.rs`: `spike_defaults_to_inband_20s`,
+- [x] **Step 1 (TDD):** `args/tests.rs`: `spike_defaults_to_inband_20s`,
   `seconds_out_of_range_is_rejected` (0 and 121), `unknown_flag_is_rejected`.
-- [ ] **Step 2:** `spike.rs`: one `Gpu::new(false)` and one `CompositionTarget::new` on the band
+- [x] **Step 2:** `spike.rs`: one `Gpu::new(false)` and one `CompositionTarget::new` on the band
   window (360 x 96 DIP at the primary monitor's top centre, `Levers::default()`), clear to
   transparent, draw a rounded pill and a level bar that sweeps 0 to 100 % once per second, present
   every frame on the DComp clock (`open_clock(ClockKind::Dcomp, ..)`). Log a `spike` line at start
   (creation, band read back, `IsImmersiveProcess`, token UIAccess flag via `GetTokenInformation
   (TokenUIAccess)`, warp) and a `motion`-shaped summary line every second (frames, fps, worst gap,
   present p99). Exits after `--seconds`.
-- [ ] **Step 3:** Dev run, unsigned, `--spike plain --seconds 3` on this desktop: the log shows
+- [x] **Step 3:** Dev run, unsigned, `--spike plain --seconds 3` on this desktop: the log shows
   creation and frame lines, exit 0. (Not on screen with a game; that is Task 9's ask.)
-- [ ] **Step 4:** Five checks green, commit `feat(osd): band window spike`, push.
-- [ ] **Step 5: Ask the master (batch A, see end).** Spike matrix, release build signed and
+- [x] **Step 4:** Five checks green, commit `feat(osd): band window spike`, push.
+- [ ] **Step 5: Ask the master (batch A, see end).** Partly done 2026-11-16 (signed, over RDP): `inband` reads back band 2 with uiaccess=true and the DComp target presents; `setband` is refused (Access denied) even with UIAccess, so the app uses `InBand`. The visual cells (a) to (e) move to Task 9 (Berke: the game run is the last step of R6, not a gate). Spike matrix, release build signed and
   installed: `inband` and `setband` over (a) the desktop, (b) an elevated window (elevated
   Task Manager), (c) a borderless game, (d) the same game in fullscreen with Fullscreen
   Optimizations on, (e) a true exclusive fullscreen game (FSO off). Record per cell: visible
