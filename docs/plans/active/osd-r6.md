@@ -149,14 +149,14 @@ band, Direct2D `ID2D1DCRenderTarget` into a 32-bit DIB, `UpdateLayeredWindow` wi
   UnknownKind(u8), Percent(u8), Meter(u8), Flag(u8), Label, Trailing }` with
   `fn is_fatal(&self) -> bool` (true for `Magic` and `Version`).
 - `fn pipe_name(session_id: u32) -> String` = `\\.\pipe\plith-osd-<session_id>`.
-- [ ] **Step 1 (TDD), `message/tests.rs`:** `every_message_round_trips` (each variant, label empty,
+- [x] **Step 1 (TDD), `message/tests.rs`:** `every_message_round_trips` (each variant, label empty,
   ASCII, Turkish `"Hoparlör"`, exactly 64 bytes); `level_wire_bytes_are_exact` (Level Volume 42
   unmuted "A" = `[0x50,0x4F,1,2,0,42,0,1,0x41]`); `label_over_64_bytes_does_not_encode`;
   `percent_over_100_is_rejected_both_ways`; `truncated_input_is_short` (every prefix of a valid
   Level); `wrong_magic_and_newer_version_are_fatal`; `unknown_kind_is_not_fatal`;
   `trailing_bytes_are_rejected`; `invalid_utf8_label_is_rejected`; `muted_flag_2_is_rejected`;
   `pipe_name_carries_the_session`.
-- [ ] **Step 2:** implement; tests pass; five checks; commit `feat(ipc): versioned osd protocol`.
+- [x] **Step 2:** implement; tests pass; five checks; commit `feat(ipc): versioned osd protocol`.
 
 ### Task 4: `plith-ipc` pipe server, client and example sender
 **Files:** Create `crates/plith-ipc/src/server.rs`, `src/client.rs`, `src/security.rs`,
