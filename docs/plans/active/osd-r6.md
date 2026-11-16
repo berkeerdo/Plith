@@ -329,7 +329,8 @@ Done without Berke at the console (2026-11-16, over RDP, installed signed build)
 uiaccess=true, show and hide motion lines with 0 hitches (at RDP's 32 Hz), fade on Bye, exit 0.
 Nobody looked at the screen; nothing at 240 Hz. The rest waits for the console (Berke: last step).
 - [ ] **Step 1:** Rebuild and reinstall the signed helper from the branch head
-  (`scripts/build-osd.ps1`, then `sudo scripts/install-osd.ps1 -Yes`; install is approved).
+  (`scripts/build-osd.ps1`, then `sudo scripts/install-osd.ps1 -Yes -Sha256 <printed hash>`,
+  then `scripts/install-osd.ps1 -CheckAcl`; install is approved).
 - [ ] **Step 2:** Checks at the console, each recorded with its log line:
   9.1 `send_osd` over the desktop: the OSD shows and hides, the seal looks right at 100 % and
   the current scale (crisp 1 px track, even ticks, square top flush with the edge).
@@ -343,6 +344,10 @@ Nobody looked at the screen; nothing at 240 Hz. The rest waits for the console (
   9.7 `launch_helper` on the installed exe: `has_exited()` is false while it runs.
   9.8 (separate yes) `verify_system_writes --flyout --yes`, kill it while the flyout is hidden,
   start `probe_flyout`: the journal restores the flyout.
+  9.9 (review M8) while the OSD shows, `WindowFromPoint` at its centre (a read-only query, no
+  pointer move) must not return the OSD window; if it does, add `WS_EX_LAYERED`.
+  9.10 (review M7) the device-loss rebuild, only if a forced TDR is acceptable that day; else
+  it stays recorded as unmeasured.
 - [ ] **Step 3:** The master files ADR 0009 from the draft below and merges.
 
 ---
@@ -363,9 +368,36 @@ Nobody looked at the screen; nothing at 240 Hz. The rest waits for the console (
 
 ## Record (handoff, 2026-11-16)
 
-**State.** Tasks 1 to 8 and the final review fix wave are done, reviewed and pushed on
-`feature/osd-r6` (32 commits on `e34f4ff`). Five checks green at every commit that changed code.
-Task 9's console checks are open: Berke ruled the game run is the last step of R6, not a gate.
+**State.** Tasks 1 to 8, the final review fix wave and the merge review fix round (F1 to F10,
+`docs/quality/2026-11-16-osd-r6-merge-review.md`) are done and pushed on `feature/osd-r6`. Five
+checks green at every commit that changed code. Task 9's console checks are open: Berke ruled
+the game run is the last step of R6, not a gate.
+
+**Merge review fix round (2026-11-16):**
+- I1: `install-osd.ps1 -Yes -Sha256 <hex>` checks hash and pinned signer on the copy inside
+  Program Files, and fails closed unless only SYSTEM, Administrators and TrustedInstaller can
+  change `Plith`, `Plith\osd` and the exe. Measured read-only: `-CheckAcl` passes on the
+  current install, and the same check flags a user-owned folder. The elevated path itself
+  was not run in this round (it runs at Task 9 Step 1). Limit: the script is user-writable.
+- I2, M6: the server admits a client only after a `Hello` naming the kernel pid
+  (`GetNamedPipeClientProcessId`) within 1 s; the helper watches that pid, one cancellable
+  watcher per connection. A bind probe is no longer a connection (fixes the old open minor).
+- I3: **not fixed, unverified.** Brightness suppression opens the window on every WMI
+  brightness event and may hide Quick Settings while its slider is dragged. Needs a laptop
+  with a built-in panel; the wiring notes say keep it off until measured.
+- I4: a session-local named mutex per journal path; a second owner (a second notch,
+  `verify_system_writes --flyout`) fails and leaves the journal alone.
+- M1 journal before the hide; M2 the default link trusts only a server above its own
+  integrity (`ServerTrust::DevSameUser` for dev runs, `send_osd --dev`); M3 the pipe name
+  carries the user SID; M4 a server-thread panic quits the helper (exit 1); M5 log from the
+  known folder, reparse and final-path checks, escaped lines, 1 MiB cap and rotation.
+- M7, M8: tracked, measured at Task 9 (9.10, 9.9).
+- Label case (Berke, 2026-11-16, "önerilerini uygula lütfen"): names from Windows or
+  Voicemeeter use invariant upper case (`Display` reads `DISPLAY`); Plith's own Turkish words
+  use Turkish rules (`sessiz` reads `SESSİZ`).
+- Not measured: a standard (non-admin) user's UIAccess helper level. `ServerTrust::Installed`
+  needs a level strictly above medium; if such a helper ran at plain medium the notch would
+  refuse it. Check on a standard account before release.
 
 **Measured on this PC (not just tested):**
 - Signed spike: `CreateWindowInBand` reaches band 2 with uiaccess=true and the DComp swap chain
@@ -383,7 +415,8 @@ flyout and the journal restore; GPU device-loss rebuild; a real display mode cha
 
 **Deviations from the plan:**
 - The app uses `Creation::InBand` only (measured); `SetBand` stays a spike mode.
-- `plith-ipc::serve` reports `ServerEvent::{Connected, Message, Disconnected}`; the helper exits
+- `plith-ipc::serve` reports `ServerEvent::{Connected { pid }, Rejected, Message, Disconnected}`;
+  the helper exits
   2 s after a disconnect, 10 s after start without a Hello, and after a fade on Bye.
 - Messages to the render thread use a blocking send (the plan said a bounded drop).
 - Client hardening beyond the plan, from three automated security reviews: SQOS identification,
@@ -394,22 +427,21 @@ flyout and the journal restore; GPU device-loss rebuild; a real display mode cha
 - `plith-core`: only `MotionKind::OsdShow`/`OsdHide` (granted R-2), in its own commit `8132ad4`.
 
 **For the wiring job (`crates/plith`), see `crates/plith-ipc/README.md` "Wiring":**
-- `launch_helper(INSTALLED_HELPER)`, `OsdLink::start(current_pipe_name())`, send `Level` on
-  every volume, brightness and mute change, relaunch when `has_exited()`.
+- `launch_helper(INSTALLED_HELPER)`, `OsdLink::start(current_pipe_name())` (trusts only the
+  installed helper), send `Level` on every volume, brightness and mute change, relaunch when
+  `has_exited()`.
 - `FlyoutSuppressor::restore_handle().restore_now()` on the backstop and watchdog exits (M7);
   read `failure()` on both hooks; pass `suppression_window()` to `VolumeKeyHook::start` and to
-  `BrightnessService::set_suppression_window`. The key receiver now yields `VolumeKey`, one per
-  press.
-- Keep `plith.exe` single-instance before Hide mode is on: a second instance would consume the
-  live one's journal.
+  `BrightnessService::set_suppression_window` (the latter only after I3 is measured). The key
+  receiver now yields `VolumeKey`, one per press.
+- `FlyoutSuppressor::start(Mode::Hide)` now fails while another process owns the journal:
+  treat that as "suppression off", never retry in a loop.
 - The two new `MotionKind` variants may break an exhaustive `match` in lane pages at merge.
 - `crates/plith/src/log/tests.rs` leaves an empty `plith-log-test-<pid>` folder in `%TEMP%`.
 
-**Open minors (none blocks the merge):** the bind probe can shorten an idle helper's start grace;
-`plith-osd.log` has no size cap; `refresh_hz` is read once (stale `hz` after a mode change); a
-relayout during a motion counts as a hitch; the first step after rest is not exactly one period;
-opacity is per brush, not on the DComp visual (needs `plith-render`); labels use Turkish
-upper case for every name (`Display` becomes `DİSPLAY`): Berke's call.
+**Open minors (none blocks the merge):** `refresh_hz` is read once (stale `hz` after a mode
+change); a relayout during a motion counts as a hitch; the first step after rest is not exactly
+one period; opacity is per brush, not on the DComp visual (needs `plith-render`).
 
 ### ADR 0009 draft (for the master to file in `docs/decisions/`)
 
