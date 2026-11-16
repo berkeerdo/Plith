@@ -70,7 +70,16 @@ Windows only unless marked "pure".
    with a built-in panel and Quick Settings open; narrow the match (size and placement, or the
    UIA name) or open the window only for key-driven changes if it misfires. Volume suppression
    is not affected.
-6. On exit, drop the link (sends `Bye`); the helper fades out and exits. Without `Bye` it still
+6. Trust fails closed in two unmeasured cases (re-check N2): the notch running elevated (the
+   helper is then at the same level, and `ServerTrust::Installed` refuses it), and a standard
+   (non-admin) user if the UIAccess helper does not run above medium there. Detect the first
+   (own integrity above medium) and log it to `plith.log` instead of retrying silently;
+   measure the second on a standard account before release.
+7. Labels: the helper upper-cases every label with invariant rules, as a name from Windows or
+   Voicemeeter. A label the notch writes itself in Turkish (for example a fallback
+   "Parlaklık") must be upper-cased by the notch with Turkish rules before it is sent, or it
+   shows the wrong I.
+8. On exit, drop the link (sends `Bye`); the helper fades out and exits. Without `Bye` it still
    exits 2 s after the pipe closes or the notch process ends, and 10 s after start when no
    `Hello` came.
 

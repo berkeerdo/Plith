@@ -342,7 +342,7 @@ Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit 
 - [x] **G6 (M5 rest):** the log is opened with `FILE_FLAG_OPEN_REPARSE_POINT`, so a junction or
   link swapped in after the checks opens the link itself and fails the final-path check
   instead of creating a file in its target.
-- [ ] **G7, record only:** M3 rest (SID is not secret), N2 (elevated notch, standard user:
+- [x] **G7, record only:** M3 rest (SID is not secret), N2 (elevated notch, standard user:
   Task 9 checks and wiring notes), the notch upper-cases its own Turkish labels with
   `upper_tr` before sending.
 
@@ -371,6 +371,9 @@ Nobody looked at the screen; nothing at 240 Hz. The rest waits for the console (
   pointer move) must not return the OSD window; if it does, add `WS_EX_LAYERED`.
   9.10 (review M7) the device-loss rebuild, only if a forced TDR is acceptable that day; else
   it stays recorded as unmeasured.
+  9.11 (re-check N2) an elevated `send_osd` to the installed helper: it must be refused with
+  the "not trusted" error (same level), not hang. On a standard (non-admin) account, if one is
+  available: the helper's integrity level, and that `send_osd` reaches it.
 - [ ] **Step 3:** The master files ADR 0009 from the draft below and merges.
 
 ---
@@ -418,6 +421,19 @@ the game run is the last step of R6, not a gate.
 - Label case (Berke, 2026-11-16, "önerilerini uygula lütfen"): names from Windows or
   Voicemeeter use invariant upper case (`Display` reads `DISPLAY`); Plith's own Turkish words
   use Turkish rules (`sessiz` reads `SESSİZ`).
+- Re-check round (`docs/quality/2026-11-16-osd-r6-recheck.md`): N1 fixed (a panic in `serve`
+  ended in a hang: the scope waited on the hello clock; a guard now quits it, tested through a
+  real `serve` and the helper's `QuitOnPanic`). N3 the journal mutex is `Global\`. N4 the
+  install dry run labels its hash "not a pin". N5 error text spacing. M6 rest: `Ping`
+  keepalive (10 s) and a 30 s idle drop of a silent admitted client; the keepalive timing is
+  tested as a pure rule and the drop with a real pipe, not measured over a long idle run.
+  M5 rest: the log opens without following a link at its own name; a junction swapped in on
+  the folder is still followed (an empty file may remain in its target; low).
+- M3 rest (record only): the SID in the pipe name is not secret, so another user who sets out
+  to squat can still pre-create the name (same `Squatted` denial as before, low). A real fix
+  is a per-launch random name passed as `--pipe`.
+- N2 (record only): `ServerTrust::Installed` fails closed for an elevated notch and possibly
+  for a standard user; Task 9 check 9.11 and the wiring notes cover both.
 - Not measured: a standard (non-admin) user's UIAccess helper level. `ServerTrust::Installed`
   needs a level strictly above medium; if such a helper ran at plain medium the notch would
   refuse it. Check on a standard account before release.
