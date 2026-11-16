@@ -13,6 +13,9 @@ pub mod writer;
 #[cfg(windows)]
 mod ddc;
 #[cfg(windows)]
+mod listener;
+mod panel_event;
+#[cfg(windows)]
 mod service;
 #[cfg(test)]
 mod tests;

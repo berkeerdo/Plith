@@ -13,16 +13,21 @@ pub use brightness::{
 };
 
 pub mod flyout;
+pub mod guard;
 pub mod volume_keys;
 
 #[cfg(windows)]
 mod hook_thread;
+#[cfg(test)]
+mod test_support;
 #[cfg(windows)]
 mod waker;
 
 #[cfg(windows)]
 pub use flyout::FlyoutSuppressor;
-pub use flyout::{HiddenRegistry, Match, Mode, SuppressionWindow, WindowFacts, should_hide};
+pub use flyout::{
+    HiddenRegistry, Match, Mode, RestoreHandle, SuppressionWindow, WindowFacts, should_hide,
+};
 #[cfg(windows)]
 pub use volume_keys::VolumeKeyHook;
-pub use volume_keys::handle_key_event;
+pub use volume_keys::{HeldKeys, VolumeKey, handle_key_event};

@@ -14,10 +14,11 @@ use std::time::Duration;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};
 
 use super::discovery::{apply_event, apply_write, keep_answering};
+use super::listener::{Listener, ListenerState};
 use super::run_token::RunTokens;
-use super::wql::panel_id;
 use super::writer::{CoalescingWriter, Job};
 use super::{BrightnessDevice, DeviceLevel, Status, ddc, wmi};
+use crate::flyout::SuppressionWindow;
 use crate::waker::{Waker, publish_with};
 
 /// How long `start` waits for discovery (each DDC read is tens of milliseconds).
@@ -47,6 +48,7 @@ struct Shared {
     subscribers: Mutex<Vec<Sender<Vec<DeviceLevel>>>>,
     waker: Waker,
     runs: RunTokens,
+    panel: Arc<ListenerState>,
 }
 
 impl Shared {
@@ -57,6 +59,7 @@ impl Shared {
             subscribers: Mutex::new(Vec::new()),
             waker: Waker::default(),
             runs: RunTokens::default(),
+            panel: Arc::default(),
         }
     }
 
@@ -83,7 +86,7 @@ impl Shared {
     }
 }
 
-enum Msg {
+pub(super) enum Msg {
     /// A caller asked for a level.
     Set(u8),
     /// The writer's pump, queued by its runner.
@@ -97,10 +100,10 @@ enum Msg {
 }
 
 /// Owns COM for one thread; dropped last.
-struct ComGuard;
+pub(super) struct ComGuard;
 
 impl ComGuard {
-    fn init() -> windows::core::Result<Self> {
+    pub(super) fn init() -> windows::core::Result<Self> {
         // SAFETY: plain apartment initialization on the calling thread, balanced by `Drop`.
         unsafe { CoInitializeEx(None, COINIT_MULTITHREADED) }.ok()?;
         Ok(Self)
@@ -111,43 +114,6 @@ impl Drop for ComGuard {
     fn drop(&mut self) {
         // SAFETY: balances the successful `CoInitializeEx` in `init`.
         unsafe { CoUninitialize() };
-    }
-}
-
-/// The event listener thread, stopped and joined on drop.
-struct Listener {
-    stop: Arc<AtomicBool>,
-    thread: Option<JoinHandle<()>>,
-}
-
-impl Listener {
-    fn spawn(tx: Sender<Msg>) -> Self {
-        let stop = Arc::new(AtomicBool::new(false));
-        let flag = Arc::clone(&stop);
-        let thread = thread::Builder::new()
-            .name("plith-brightness-events".into())
-            .spawn(move || {
-                let Ok(_com) = ComGuard::init() else {
-                    return;
-                };
-                wmi::listen(&flag, |instance, percent| {
-                    let _ = tx.send(Msg::Event {
-                        id: panel_id(&instance),
-                        percent,
-                    });
-                });
-            })
-            .ok();
-        Self { stop, thread }
-    }
-}
-
-impl Drop for Listener {
-    fn drop(&mut self) {
-        self.stop.store(true, Ordering::Release);
-        if let Some(thread) = self.thread.take() {
-            let _ = thread.join();
-        }
     }
 }
 
@@ -192,7 +158,14 @@ fn run(
             });
         }),
     );
-    let listener = (panels > 0).then(|| Listener::spawn(tx));
+    shared.panel.set_error(None);
+    let listener = (panels > 0).then(|| {
+        let reporter = Arc::clone(shared);
+        Listener::spawn(tx, Arc::clone(&shared.panel), move |text| {
+            reporter.panel.set_error(Some(text));
+            reporter.waker.wake();
+        })
+    });
     let _ = ready.send(Status::Running);
     serve(shared, token, &writer, rx);
     // Stop the listener before the devices (inside `writer`) are dropped.
@@ -329,6 +302,23 @@ impl BrightnessService {
     /// earlier callback.
     pub fn set_waker(&self, waker: Box<dyn Fn() + Send + Sync>) {
         self.shared.waker.set(waker);
+    }
+
+    /// Wires (or, with `None`, unwires) the flyout suppression window. Every
+    /// `WmiMonitorBrightnessEvent` opens it before the new level is published, so the native
+    /// brightness flyout can be hidden like the volume one. Pass
+    /// [`FlyoutSuppressor::suppression_window`](crate::FlyoutSuppressor::suppression_window).
+    /// Only built-in panels raise the event; a desktop with DDC/CI monitors never does.
+    pub fn set_suppression_window(&self, window: Option<Arc<SuppressionWindow>>) {
+        self.shared.panel.set_window(window);
+    }
+
+    /// Why the built-in panel listener could not start or ended (COM or WMI failure), if it
+    /// did. The service stays `Running` and still writes; only external level changes and
+    /// flyout suppression are lost. The waker is called once when this is recorded.
+    #[must_use]
+    pub fn listener_error(&self) -> Option<String> {
+        self.shared.panel.error()
     }
 
     /// The latest levels, built-in panel first; empty when there is no controllable display or

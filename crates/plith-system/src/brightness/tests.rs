@@ -357,3 +357,28 @@ fn only_the_newest_run_token_is_current() {
     assert!(tokens.is_current(second));
     assert_eq!(tokens.latest(), second);
 }
+
+#[test]
+fn panel_event_opens_the_window_then_sends() {
+    use super::panel_event::on_panel_event;
+    use crate::flyout::SuppressionWindow;
+    use std::time::Instant;
+
+    let t0 = Instant::now();
+    let window = SuppressionWindow::new(t0);
+    let mut open_when_sent = None;
+    on_panel_event(Some(&window), t0, || {
+        open_when_sent = Some(window.is_open(t0));
+    });
+    assert_eq!(open_when_sent, Some(true));
+}
+
+#[test]
+fn no_window_still_sends() {
+    use super::panel_event::on_panel_event;
+    use std::time::Instant;
+
+    let mut sent = false;
+    on_panel_event(None, Instant::now(), || sent = true);
+    assert!(sent);
+}

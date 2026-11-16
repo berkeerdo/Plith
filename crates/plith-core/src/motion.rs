@@ -58,6 +58,10 @@ pub enum MotionKind {
     Page,
     /// Any other size change.
     Resize,
+    /// The OSD helper fading in.
+    OsdShow,
+    /// The OSD helper fading out.
+    OsdHide,
 }
 
 impl MotionKind {
@@ -69,6 +73,8 @@ impl MotionKind {
             Self::Collapse => "collapse",
             Self::Page => "page",
             Self::Resize => "resize",
+            Self::OsdShow => "osd-show",
+            Self::OsdHide => "osd-hide",
         }
     }
 

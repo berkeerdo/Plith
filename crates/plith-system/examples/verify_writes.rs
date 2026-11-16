@@ -246,7 +246,8 @@ mod imp {
         }
         let mut suppressor = match FlyoutSuppressor::start(Mode::Hide) {
             Ok(s) => s,
-            Err(why) => return Verdict::Skipped(format!("suppressor unavailable: {why}")),
+            // A held journal (the app is running) is a failure, not a skip: nothing was tested.
+            Err(why) => return Verdict::Fail(format!("suppressor refused to start: {why}")),
         };
         let (keys_owner, keys) = match VolumeKeyHook::start(Some(suppressor.suppression_window())) {
             Ok(pair) => pair,
