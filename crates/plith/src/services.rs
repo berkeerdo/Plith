@@ -94,8 +94,6 @@ pub trait Services {
     /// The facts for the pages. A pure read: the pill's signal comes debounced from the mixer
     /// service, so nothing here observes levels.
     fn facts(&self) -> Facts;
-    /// The current levels, for the signal activity; `None` without a mixer.
-    fn levels(&self) -> Option<Levels>;
     /// A level reader for the render thread.
     fn level_source(&self) -> LevelSource;
     /// Makes the endpoint with this id the default output.
@@ -286,15 +284,6 @@ impl Services for RealServices {
 
     fn facts(&self) -> Facts {
         model::facts(&self.readings, SystemTime::now())
-    }
-
-    fn levels(&self) -> Option<Levels> {
-        self.readings.vm.as_ref()?;
-        let levels = self.vm.levels();
-        Some(Levels {
-            strips: levels.strips,
-            buses: levels.buses,
-        })
     }
 
     fn level_source(&self) -> LevelSource {

@@ -8,12 +8,10 @@ fn fixture_facts(kind: Fixture) -> Facts {
     FixtureServices::new(kind).facts()
 }
 
-fn inputs<'a>(facts: &'a Facts, activity: &'a Activity) -> Inputs<'a> {
+fn inputs(facts: &Facts) -> Inputs<'_> {
     Inputs {
         facts,
-        activity,
         pick: PickMode::None,
-        now_s: 1.0,
         clock: "21:47",
     }
 }
@@ -83,14 +81,13 @@ fn dirty_follows_the_facts_that_changed() {
 #[test]
 fn an_equal_rebuild_keeps_every_arc() {
     let facts = paused_fixture().facts();
-    let activity = Activity::default();
-    let mut pages = Pages::new(&inputs(&facts, &activity));
+    let mut pages = Pages::new(&inputs(&facts));
     let before = pages.content();
     let all = Dirty {
         pages: [true; 4],
         pill: true,
     };
-    pages.rebuild(all, &inputs(&facts, &activity));
+    pages.rebuild(all, &inputs(&facts));
     let after = pages.content();
     for i in 0..4 {
         assert!(Arc::ptr_eq(&before.pages[i], &after.pages[i]), "page {i}");
@@ -101,8 +98,7 @@ fn an_equal_rebuild_keeps_every_arc() {
 #[test]
 fn content_holds_every_page_the_pill_and_the_art() {
     let facts = fixture_facts(Fixture::Banana);
-    let activity = Activity::default();
-    let pages = Pages::new(&inputs(&facts, &activity));
+    let pages = Pages::new(&inputs(&facts));
     let content = pages.content();
     for (i, list) in content.pages.iter().enumerate() {
         assert!(!list.nodes.is_empty(), "page {i} is empty");
@@ -123,24 +119,17 @@ fn no_art_publishes_no_art() {
     let mut facts = fixture_facts(Fixture::Bare);
     facts.art = None;
     facts.media.art = None;
-    let activity = Activity::default();
-    assert!(
-        Pages::new(&inputs(&facts, &activity))
-            .content()
-            .art
-            .is_empty()
-    );
+    assert!(Pages::new(&inputs(&facts)).content().art.is_empty());
 }
 
 #[test]
 fn rebuild_touches_only_the_dirty_lists() {
     let mut facts = fixture_facts(Fixture::Banana);
-    let activity = Activity::default();
-    let mut pages = Pages::new(&inputs(&facts, &activity));
+    let mut pages = Pages::new(&inputs(&facts));
     let before = pages.content();
     facts.system.brightness = Some(("DELL AW2725DF".to_string(), 20));
     facts.pill.value = Some(1);
-    pages.rebuild(Dirty::page(PageId::System), &inputs(&facts, &activity));
+    pages.rebuild(Dirty::page(PageId::System), &inputs(&facts));
     let after = pages.content();
     for i in 0..3 {
         assert!(Arc::ptr_eq(&before.pages[i], &after.pages[i]), "page {i}");
@@ -151,10 +140,9 @@ fn rebuild_touches_only_the_dirty_lists() {
 
 #[test]
 fn a_taller_audio_page_changes_its_shape() {
-    let activity = Activity::default();
     let banana = fixture_facts(Fixture::Banana);
     let potato = fixture_facts(Fixture::Potato);
-    let short = Pages::new(&inputs(&banana, &activity)).shapes()[0];
-    let tall = Pages::new(&inputs(&potato, &activity)).shapes()[0];
+    let short = Pages::new(&inputs(&banana)).shapes()[0];
+    let tall = Pages::new(&inputs(&potato)).shapes()[0];
     assert!(tall.height > short.height);
 }

@@ -24,8 +24,7 @@ fn strokes(nodes: &[Node]) -> Vec<Line> {
 }
 
 fn page_strokes(facts: &crate::pages::audio::AudioFacts, mode: PickMode) -> Vec<Line> {
-    let (activity, now) = fixtures::banana_activity();
-    let view = audio_view(facts, &activity, mode, now);
+    let view = audio_view(&fixtures::lit(facts), mode);
     strokes(&audio_page(&view, fixtures::CLOCK).list.nodes)
 }
 

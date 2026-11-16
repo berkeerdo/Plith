@@ -204,9 +204,8 @@ fn write_png(path: &Path, canvas: &Canvas) -> Result<()> {
 /// Every Gece state, by file name.
 fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
     let clock = fixtures::CLOCK;
-    let (activity, now) = fixtures::banana_activity();
     let audio = |facts, mode| {
-        let view = audio_view(&facts, &activity, mode, now);
+        let view = audio_view(&fixtures::lit(&facts), mode);
         vec![Content::Page(PageId::Audio, audio_page(&view, clock))]
     };
     let media = |facts| vec![Content::Page(PageId::Media, media_page(&facts, clock))];
@@ -261,8 +260,7 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             &cell(&contents, Theme::Gece)?,
         )?;
     }
-    let (activity, now) = fixtures::banana_activity();
-    let view = audio_view(&fixtures::banana(), &activity, PickMode::None, now);
+    let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None);
     let themes = [
         ("kagit", Theme::Kagit),
         ("york", Theme::York),

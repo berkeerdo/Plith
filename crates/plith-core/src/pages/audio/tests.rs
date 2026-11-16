@@ -37,18 +37,18 @@ fn five_strips(first_routes: &[bool]) -> Vec<ChannelFacts> {
     v
 }
 
-fn active(strips: usize, hot: usize, now: f64) -> Activity {
-    let mut levels = vec![[0.0_f32; 2]; strips];
-    levels[hot] = [0.5, 0.1];
-    let mut a = Activity::default();
-    a.observe(&levels, now);
-    a
+/// `facts` with the mixer's debounced signal flag set on strip `strip` only.
+fn hot(facts: &AudioFacts, strip: usize) -> AudioFacts {
+    let mut facts = facts.clone();
+    let vm = facts.vm.as_mut().expect("a mixer");
+    vm.signal = (0..vm.strips.len()).map(|s| s == strip).collect();
+    facts
 }
 
 #[test]
 fn routed_with_signal_is_live() {
     let facts = banana(five_strips(&[true, false, false, false, false]));
-    let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::None, 10.5);
+    let view = audio_view(&hot(&facts, 0), PickMode::None);
     assert_eq!(
         view.routes,
         vec![Route {
@@ -65,13 +65,12 @@ fn routed_with_signal_is_live() {
 #[test]
 fn routed_without_signal_is_idle() {
     let facts = banana(five_strips(&[true, false, false, false, false]));
-    let silent = Activity::default();
-    let view = audio_view(&facts, &silent, PickMode::None, 10.0);
+    let view = audio_view(&facts, PickMode::None);
     assert!(
         view.routes.is_empty(),
         "idle routes are dropped unless picked"
     );
-    let view = audio_view(&facts, &silent, PickMode::Picked(0), 10.0);
+    let view = audio_view(&facts, PickMode::Picked(0));
     assert!(view.routes.contains(&Route {
         source: 0,
         output: 0,
@@ -84,7 +83,7 @@ fn muted_source_is_cut() {
     let mut strips = five_strips(&[true, false, false, false, false]);
     strips[0].muted = true;
     let facts = banana(strips);
-    let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::None, 10.0);
+    let view = audio_view(&hot(&facts, 0), PickMode::None);
     assert_eq!(view.routes[0].state, RouteState::Cut);
     assert!(view.sources[0].muted);
 }
@@ -93,14 +92,14 @@ fn muted_source_is_cut() {
 fn muted_bus_is_not_live() {
     let mut facts = banana(five_strips(&[true, false, false, false, false]));
     facts.vm.as_mut().unwrap().buses[0].muted = true;
-    let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::Picked(0), 10.0);
+    let view = audio_view(&hot(&facts, 0), PickMode::Picked(0));
     assert_eq!(view.routes[0].state, RouteState::Cut);
 }
 
 #[test]
 fn pick_mode_marks_unrouted_outputs_as_candidates() {
     let facts = banana(five_strips(&[true, false, false, false, false]));
-    let view = audio_view(&facts, &Activity::default(), PickMode::Picked(0), 0.0);
+    let view = audio_view(&facts, PickMode::Picked(0));
     let cands: Vec<usize> = view
         .routes
         .iter()
@@ -132,7 +131,7 @@ fn no_voicemeeter_shows_windows_outputs() {
         attached: Some((0.456, false)),
         mic: None,
     };
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     assert_eq!(view.sources.len(), 1);
     assert_eq!(view.sources[0].name, "Windows");
     assert_eq!(view.sources[0].sub, "VARSAYILAN ÇIKIŞ");
@@ -170,7 +169,7 @@ fn no_voicemeeter_muted_default_is_cut() {
         attached: Some((0.5, true)),
         ..AudioFacts::default()
     };
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     assert_eq!(view.routes[0].state, RouteState::Cut);
 }
 
@@ -192,7 +191,7 @@ fn potato_rows_shrink_pitch() {
         }),
         ..AudioFacts::default()
     };
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     // 8 rows at 40 overflow 420; the pitch shrinks to fit: (420 - 86 - 64) / 7.
     assert!((view.row_pitch - 270.0 / 7.0).abs() < 1e-9);
     assert_eq!(view.sources[4].sub, "HW 5");
@@ -201,12 +200,7 @@ fn potato_rows_shrink_pitch() {
     assert_eq!(view.sources[7].sub, "VAIO3");
     assert_eq!(view.outputs[4].tag.as_deref(), Some("A5"));
     assert_eq!(view.outputs[5].tag.as_deref(), Some("B1"));
-    let banana_view = audio_view(
-        &banana(five_strips(&[])),
-        &Activity::default(),
-        PickMode::None,
-        0.0,
-    );
+    let banana_view = audio_view(&banana(five_strips(&[])), PickMode::None);
     // Five rows: the 45 degree reach (188) over four gaps.
     assert!((banana_view.row_pitch - 47.0).abs() < 1e-9);
 }
@@ -215,7 +209,7 @@ fn potato_rows_shrink_pitch() {
 fn bus_names() {
     let mut facts = banana(five_strips(&[true, false, false, false, false]));
     facts.vm.as_mut().unwrap().buses[1].label = "Headset".into();
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     assert_eq!(view.outputs[1].name, "Headset");
     assert_eq!(view.outputs[2].name, "Kullanılmıyor");
     assert_eq!(view.outputs[0].name, "A1");
@@ -223,25 +217,19 @@ fn bus_names() {
 }
 
 #[test]
-fn activity_holds_two_seconds() {
-    let mut a = Activity::default();
-    assert!(!a.has_signal(0, 0.0));
-    a.observe(&[[0.2, 0.0]], 5.0);
-    assert!(a.has_signal(0, 6.9));
-    assert!(!a.has_signal(0, 7.1));
-    a.observe(&[[0.005, 0.005]], 6.0);
-    assert!(
-        !a.has_signal(0, 7.1),
-        "quiet frames do not refresh the hold"
-    );
-    assert!(!a.has_signal(3, 6.0));
+fn a_signal_flag_past_the_list_or_on_another_strip_is_not_live() {
+    let facts = banana(five_strips(&[true, false, false, false, false]));
+    assert_eq!(audio_view(&hot(&facts, 3), PickMode::None).routes, vec![]);
+    let mut short = facts.clone();
+    short.vm.as_mut().unwrap().signal = vec![];
+    assert_eq!(audio_view(&short, PickMode::None).routes, vec![]);
 }
 
 #[test]
 fn empty_label_uses_fallback() {
     let mut strips = five_strips(&[]);
     strips[2].label = String::new();
-    let view = audio_view(&banana(strips), &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&banana(strips), PickMode::None);
     assert_eq!(view.sources[2].name, "Kaynak 3");
     assert_eq!(view.sources[2].sub, "HW 3");
     assert_eq!(view.sources[3].sub, "VAIO");
@@ -260,7 +248,7 @@ fn footer_copy() {
 fn muted_bus_route_is_cut_and_output_muted() {
     let mut facts = banana(five_strips(&[true, false, false, false, false]));
     facts.vm.as_mut().unwrap().buses[0].muted = true;
-    let view = audio_view(&facts, &active(5, 0, 10.0), PickMode::None, 10.0);
+    let view = audio_view(&hot(&facts, 0), PickMode::None);
     assert_eq!(
         view.routes,
         vec![Route {
@@ -286,7 +274,7 @@ fn no_voicemeeter_ignores_pick_mode() {
         attached: Some((0.5, false)),
         ..AudioFacts::default()
     };
-    let view = audio_view(&facts, &Activity::default(), PickMode::Picked(0), 0.0);
+    let view = audio_view(&facts, PickMode::Picked(0));
     assert_eq!(view.mode, PickMode::None);
     assert!(!view.sources[0].picked);
     assert!(view.routes.iter().all(|r| r.state != RouteState::Candidate));
@@ -304,7 +292,7 @@ fn no_voicemeeter_muted_default_mutes_source_and_output() {
         attached: Some((0.5, true)),
         ..AudioFacts::default()
     };
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     assert!(view.sources[0].muted);
     assert!(view.outputs[0].muted);
 }
@@ -312,7 +300,7 @@ fn no_voicemeeter_muted_default_mutes_source_and_output() {
 #[test]
 fn out_of_range_pick_is_normalised() {
     let facts = banana(five_strips(&[]));
-    let view = audio_view(&facts, &Activity::default(), PickMode::Picked(99), 0.0);
+    let view = audio_view(&facts, PickMode::Picked(99));
     assert_eq!(view.mode, PickMode::None);
     assert_eq!(view.footer, Footer::Normal);
 }
@@ -323,7 +311,7 @@ fn unnamed_reads_the_facts_not_the_display_string() {
     let vm = facts.vm.as_mut().unwrap();
     // An unused bus whose user label happens to read like the placeholder is still named.
     vm.buses[3].label = UNUSED_NAME.to_string();
-    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&facts, PickMode::None);
     let row = &view.outputs[3];
     assert_eq!(row.name, UNUSED_NAME);
     assert!(!row.unnamed);

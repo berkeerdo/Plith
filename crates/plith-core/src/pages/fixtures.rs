@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::ambient::{LiveValues, TraceSamples};
 use crate::draw::{ArtId, ArtPixels, SeekTimeline};
-use crate::pages::audio::{Activity, AudioFacts, ChannelFacts, EndpointFacts, VmFacts};
+use crate::pages::audio::{AudioFacts, ChannelFacts, EndpointFacts, VmFacts};
 use crate::pages::media::MediaFacts;
 use crate::pages::pill::{PillFacts, PillState};
 use crate::pages::system::{MicFacts, SystemFacts};
@@ -27,8 +27,6 @@ const POSITION_S: f64 = 102.0;
 const DURATION_S: f64 = 243.0;
 /// The wall time the fixtures are read at: the media stamp and `LiveValues::now`.
 const STAMP_S: u64 = 1_763_329_620;
-/// The seconds clock `banana_activity` observes at.
-const NOW_S: f64 = 100.0;
 
 fn stamp() -> SystemTime {
     SystemTime::UNIX_EPOCH + Duration::from_secs(STAMP_S)
@@ -73,14 +71,15 @@ pub fn banana() -> AudioFacts {
     }
 }
 
-/// Signal on every strip but the muted line in, and the seconds clock to read it at.
+/// `facts` with the mixer's signal flag set on every strip but the muted line in (strip 1),
+/// as the mock draws it. Without a mixer, `facts` unchanged.
 #[must_use]
-pub fn banana_activity() -> (Activity, f64) {
-    let mut activity = Activity::default();
-    let mut levels = [[0.4_f32, 0.35]; 8];
-    levels[1] = [0.0, 0.0];
-    activity.observe(&levels, NOW_S);
-    (activity, NOW_S)
+pub fn lit(facts: &AudioFacts) -> AudioFacts {
+    let mut facts = facts.clone();
+    if let Some(vm) = facts.vm.as_mut() {
+        vm.signal = (0..vm.strips.len()).map(|s| s != 1).collect();
+    }
+    facts
 }
 
 /// Voicemeeter Potato: five hardware strips and three virtual ones, five A and three B buses,

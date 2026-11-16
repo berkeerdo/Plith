@@ -1,16 +1,15 @@
-//! The feed on the UI thread: service readings become page content, and three UI timers keep
+//! The feed on the UI thread: service readings become page content, and two UI timers keep
 //! it current while the island is open. Collapsed, no timer runs (G2).
 
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
-use plith_core::pages::audio::{Activity, PickMode};
+use plith_core::pages::audio::PickMode;
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::{HitTarget, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
-use std::time::Instant;
 
 /// Sets and kills UI timers. A trait so tests can record instead of calling Windows.
 pub trait Timers {
@@ -30,16 +29,12 @@ impl Timers for TimerHandle {
     }
 }
 
-/// Feeds `Activity` at 4 Hz while the audio page is open.
-pub const ACTIVITY_TIMER: usize = FIRST_APP_TIMER;
 /// Advances the elapsed time once a second while the media page is open and playing.
-pub const MEDIA_TIMER: usize = FIRST_APP_TIMER + 1;
+pub const MEDIA_TIMER: usize = FIRST_APP_TIMER;
 /// A one-shot to the next minute boundary for the tab bar clock while open.
-pub const CLOCK_TIMER: usize = FIRST_APP_TIMER + 2;
+pub const CLOCK_TIMER: usize = FIRST_APP_TIMER + 1;
 /// A one-shot that collapses the island after the pointer left it (owned by the app's input).
-pub const COLLAPSE_TIMER: usize = FIRST_APP_TIMER + 3;
-/// The activity period.
-pub const ACTIVITY_MS: u32 = 250;
+pub const COLLAPSE_TIMER: usize = FIRST_APP_TIMER + 2;
 /// The media period.
 pub const MEDIA_MS: u32 = 1000;
 /// Lands the clock tick just after the minute turns.
@@ -65,16 +60,15 @@ fn clock_of(now: Stamp) -> String {
 /// Which timers run.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Armed {
-    /// The activity timer.
-    pub activity: bool,
     /// The media timer.
     pub media: bool,
     /// The clock timer.
     pub clock: bool,
 }
 
-/// The timers `scene` wants: none unless open and shown; the activity timer on the audio
-/// page, the media timer on the media page while `playing`, the clock always.
+/// The timers `scene` wants: none unless open and shown; the media timer on the media page
+/// while `playing`, the clock always. The audio page needs none: the mixer's debounced signal
+/// flags reach it through the services' wake.
 #[must_use]
 pub fn wanted(scene: &Scene, playing: bool) -> Armed {
     if !scene.expanded || scene.suppression.any() {
@@ -82,7 +76,6 @@ pub fn wanted(scene: &Scene, playing: bool) -> Armed {
     }
     let page = PageId::from_index(scene.page);
     Armed {
-        activity: page == Some(PageId::Audio),
         media: page == Some(PageId::Media) && playing,
         clock: true,
     }
@@ -107,8 +100,6 @@ pub struct Feed {
     clock: Clock,
     pages: Pages,
     facts: Facts,
-    activity: Activity,
-    origin: Instant,
     armed: Armed,
     clock_text: String,
     /// Pages a change reached while the island was closed; rebuilt when it opens (G2).
@@ -134,12 +125,9 @@ impl Feed {
         let _ = services.drain();
         let facts = services.facts();
         let clock_text = clock_of(clock());
-        let activity = Activity::default();
         let pages = Pages::new(&Inputs {
             facts: &facts,
-            activity: &activity,
             pick: PickMode::None,
-            now_s: 0.0,
             clock: &clock_text,
         });
         let feed = Self {
@@ -148,8 +136,6 @@ impl Feed {
             clock,
             pages,
             facts,
-            activity,
-            origin: Instant::now(),
             armed: Armed::default(),
             clock_text,
             pending: Dirty::default(),
@@ -159,10 +145,6 @@ impl Feed {
         };
         feed.publish(mailbox);
         feed
-    }
-
-    fn now_s(&self) -> f64 {
-        self.origin.elapsed().as_secs_f64()
     }
 
     /// Rebuilds the `dirty` lists from the current facts and publishes the content and, when a
@@ -178,9 +160,7 @@ impl Feed {
         }
         let inputs = Inputs {
             facts: &self.facts,
-            activity: &self.activity,
             pick: self.pick,
-            now_s: self.now_s(),
             clock: &self.clock_text,
         };
         self.pages.rebuild(dirty, &inputs);
@@ -233,7 +213,6 @@ impl Feed {
             return;
         }
         let armed = match id {
-            ACTIVITY_TIMER => self.armed.activity,
             MEDIA_TIMER => self.armed.media,
             CLOCK_TIMER => self.armed.clock,
             _ => false,
@@ -242,7 +221,6 @@ impl Feed {
             return;
         }
         match id {
-            ACTIVITY_TIMER => self.read_activity(mailbox),
             MEDIA_TIMER => {
                 self.facts = self.services.facts();
                 self.rebuild(Dirty::page(PageId::Media), mailbox);
@@ -287,22 +265,12 @@ impl Feed {
         self.services.stop();
     }
 
-    /// Feeds the current levels to the activity and rebuilds the audio page.
-    fn read_activity(&mut self, mailbox: &SceneMailbox) {
-        if let Some(levels) = self.services.levels() {
-            self.activity.observe(&levels.strips, self.now_s());
-            self.rebuild(Dirty::page(PageId::Audio), mailbox);
-        }
-    }
-
-    /// Starts and stops timers to match the scene; a newly started activity timer reads the
-    /// levels at once, so the routes light without waiting a tick.
+    /// Starts and stops timers to match the scene.
     fn sync_timers(&mut self, mailbox: &SceneMailbox) {
         let want = wanted(&mailbox.latest().scene, self.facts.media.playing);
         let have = self.armed;
         let clock_ms = clock_ms((self.clock)());
         for (on, was, id, ms) in [
-            (want.activity, have.activity, ACTIVITY_TIMER, ACTIVITY_MS),
             (want.media, have.media, MEDIA_TIMER, MEDIA_MS),
             (want.clock, have.clock, CLOCK_TIMER, clock_ms),
         ] {
@@ -313,9 +281,6 @@ impl Feed {
             }
         }
         self.armed = want;
-        if want.activity && !have.activity {
-            self.read_activity(mailbox);
-        }
     }
 
     /// The services, for the writes.

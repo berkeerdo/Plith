@@ -1,7 +1,5 @@
 use super::*;
-use crate::app::feed::{
-    ACTIVITY_TIMER, CLOCK_TIMER, COLLAPSE_TIMER, Feed, MEDIA_TIMER, Timers, clock_ms,
-};
+use crate::app::feed::{CLOCK_TIMER, COLLAPSE_TIMER, Feed, MEDIA_TIMER, Timers, clock_ms};
 use crate::log::Stamp;
 use crate::services::fixture::FixtureServices;
 use plith_core::launch::Fixture;
@@ -200,19 +198,20 @@ fn wake_after_a_write_publishes_the_change() {
 }
 
 #[test]
-fn activity_timer_only_on_audio_page() {
-    let (mut app, timers, _, seconds) = clocked("feed-activity", Fixture::Banana);
+fn timers_follow_the_page() {
+    let (mut app, timers, _, seconds) = clocked("feed-timers", Fixture::Banana);
     app.on_event(CLICK);
-    assert_eq!(running(&timers), vec![ACTIVITY_TIMER, CLOCK_TIMER]);
+    assert_eq!(
+        running(&timers),
+        vec![CLOCK_TIMER],
+        "the audio page needs no timer"
+    );
     go_to(&app, PageId::Media);
-    app.on_event(ShellEvent::Timer(ACTIVITY_TIMER));
+    app.on_event(ShellEvent::Wake);
     assert_eq!(running(&timers), vec![MEDIA_TIMER, CLOCK_TIMER]);
     go_to(&app, PageId::System);
     app.on_event(ShellEvent::Timer(MEDIA_TIMER));
     assert_eq!(running(&timers), vec![CLOCK_TIMER]);
-    go_to(&app, PageId::Audio);
-    app.on_event(ShellEvent::Timer(CLOCK_TIMER));
-    assert_eq!(running(&timers), vec![ACTIVITY_TIMER, CLOCK_TIMER]);
     collapse(&mut app, &seconds);
     assert!(running(&timers).is_empty(), "collapsed: no timers");
 }
@@ -240,22 +239,14 @@ fn no_media_timer_while_paused() {
 }
 
 #[test]
-fn activity_tick_lights_the_routes() {
+fn opening_on_the_audio_page_reads_no_levels() {
     let (mut app, _, _) = fed("feed-lit", Fixture::Banana);
     let before = app.mailbox.latest();
     app.on_event(CLICK);
     let after = app.mailbox.latest();
-    assert!(after.generation > before.generation);
-    assert_ne!(
-        before.content.pages[0], after.content.pages[0],
-        "opening on the audio page reads the levels at once"
-    );
-    let generation = after.generation;
-    app.on_event(ShellEvent::Timer(ACTIVITY_TIMER));
-    assert_eq!(
-        app.mailbox.latest().generation,
-        generation,
-        "the same signal publishes nothing"
+    assert!(
+        Arc::ptr_eq(&before.content.pages[0], &after.content.pages[0]),
+        "the routes light from the mixer's signal flags the page was built with"
     );
 }
 
@@ -299,7 +290,7 @@ fn a_tick_after_collapse_publishes_nothing() {
     app.on_event(CLICK);
     collapse(&mut app, &seconds);
     let generation = app.mailbox.latest().generation;
-    for id in [ACTIVITY_TIMER, MEDIA_TIMER, CLOCK_TIMER] {
+    for id in [MEDIA_TIMER, CLOCK_TIMER] {
         app.on_event(ShellEvent::Timer(id));
     }
     assert_eq!(app.mailbox.latest().generation, generation);
@@ -314,7 +305,10 @@ fn a_scene_from_another_publisher_reaches_the_feed_on_wake() {
         ..scene
     });
     app.on_event(ShellEvent::Wake);
-    assert_eq!(running(&timers), vec![ACTIVITY_TIMER, CLOCK_TIMER]);
+    assert_eq!(running(&timers), vec![CLOCK_TIMER]);
+    go_to(&app, PageId::Media);
+    app.on_event(ShellEvent::Wake);
+    assert_eq!(running(&timers), vec![MEDIA_TIMER, CLOCK_TIMER]);
     go_to(&app, PageId::System);
     app.on_event(ShellEvent::Wake);
     assert_eq!(running(&timers), vec![CLOCK_TIMER]);
@@ -573,7 +567,7 @@ fn a_tick_while_the_scene_is_closed_waits_for_the_wake() {
     });
     minute.set(48);
     let generation = app.mailbox.latest().generation;
-    for id in [ACTIVITY_TIMER, MEDIA_TIMER, CLOCK_TIMER] {
+    for id in [MEDIA_TIMER, CLOCK_TIMER] {
         app.on_event(ShellEvent::Timer(id));
     }
     assert_eq!(app.mailbox.latest().generation, generation);
@@ -641,9 +635,6 @@ impl crate::services::Services for Swapping {
             facts.audio.vm = plith_core::pages::fixtures::potato().vm;
         }
         facts
-    }
-    fn levels(&self) -> Option<crate::services::Levels> {
-        self.inner.levels()
     }
     fn level_source(&self) -> crate::services::LevelSource {
         self.inner.level_source()

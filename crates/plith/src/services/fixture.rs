@@ -288,7 +288,7 @@ impl Services for FixtureServices {
         std::mem::take(&mut self.pending)
     }
 
-    /// The levels the render thread draws, `levels()` and the mixer's signal flags all read
+    /// The levels the render thread draws and the mixer's signal flags both read
     /// the fixture's own clock.
     fn facts(&self) -> Facts {
         let mut audio = self.audio.clone();
@@ -320,10 +320,6 @@ impl Services for FixtureServices {
             system,
             pill,
         }
-    }
-
-    fn levels(&self) -> Option<Levels> {
-        self.levels_at(self.now_s())
     }
 
     fn level_source(&self) -> LevelSource {

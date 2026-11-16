@@ -1,53 +1,21 @@
-//! The rules behind the audio view: rows, route states, density, signal activity.
+//! The rules behind the audio view: rows, route states and density. Signal comes from the
+//! mixer's debounced flags (`VmFacts::signal`), which change only on an edge.
+
+use crate::pages::derive;
 
 use super::{
     AudioFacts, AudioView, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode, Route,
     RouteState, SourceRow, UNUSED_NAME, VmFacts, row_pitch,
 };
 
-/// Peak level above which a strip counts as carrying signal.
-const SIGNAL_PEAK: f32 = 0.01;
-/// How long signal is held after the last loud frame, in seconds.
-const HOLD_S: f64 = 2.0;
 /// Captions of the virtual strips, in order.
 const VIRTUAL_SUBS: [&str; 3] = ["VAIO", "AUX", "VAIO3"];
 
-/// Per-strip signal memory with a two second hold.
-#[derive(Debug, Clone, Default)]
-pub struct Activity {
-    last: Vec<Option<f64>>,
-}
-
-impl Activity {
-    /// Records a frame of per-strip `[left, right]` peaks taken at `now_s` seconds.
-    pub fn observe(&mut self, strips: &[[f32; 2]], now_s: f64) {
-        if self.last.len() < strips.len() {
-            self.last.resize(strips.len(), None);
-        }
-        for (slot, peaks) in self.last.iter_mut().zip(strips) {
-            if peaks[0].max(peaks[1]) > SIGNAL_PEAK {
-                *slot = Some(now_s);
-            }
-        }
-    }
-
-    /// Whether strip `s` had signal within the hold time before `now_s`.
-    #[must_use]
-    pub fn has_signal(&self, s: usize, now_s: f64) -> bool {
-        matches!(self.last.get(s), Some(Some(t)) if now_s - t <= HOLD_S)
-    }
-}
-
 type Parts = (Vec<SourceRow>, Vec<OutputRow>, Vec<Route>, Footer);
 
-pub(super) fn build(
-    facts: &AudioFacts,
-    activity: &Activity,
-    mode: PickMode,
-    now_s: f64,
-) -> AudioView {
+pub(super) fn build(facts: &AudioFacts, mode: PickMode) -> AudioView {
     let (mut sources, mut outputs, mut routes, base_footer) = match &facts.vm {
-        Some(vm) => voicemeeter(vm, activity, now_s),
+        Some(vm) => voicemeeter(vm),
         None => windows(facts),
     };
     for (o, row) in outputs.iter_mut().enumerate() {
@@ -92,7 +60,7 @@ pub(super) fn build(
     }
 }
 
-fn voicemeeter(vm: &VmFacts, activity: &Activity, now_s: f64) -> Parts {
+fn voicemeeter(vm: &VmFacts) -> Parts {
     let sources = vm
         .strips
         .iter()
@@ -117,7 +85,7 @@ fn voicemeeter(vm: &VmFacts, activity: &Activity, now_s: f64) -> Parts {
             }
             let state = if strip.muted || bus.muted {
                 RouteState::Cut
-            } else if !bus.muted && activity.has_signal(s, now_s) {
+            } else if vm.signal.get(s).copied().unwrap_or(false) {
                 RouteState::Live
             } else {
                 RouteState::Idle
@@ -146,11 +114,7 @@ fn strip_sub(vm: &VmFacts, i: usize) -> String {
 
 fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
     let bus = &vm.buses[b];
-    let tag = if b < vm.hardware_buses {
-        format!("A{}", b + 1)
-    } else {
-        format!("B{}", b - vm.hardware_buses + 1)
-    };
+    let tag = derive::bus_tag(vm, b);
     let used = vm
         .strips
         .iter()
@@ -201,7 +165,7 @@ fn windows(facts: &AudioFacts) -> Parts {
         .enumerate()
         .map(|(i, e)| {
             let value = match (Some(i) == default_idx, facts.attached) {
-                (true, Some((v, _))) => OutputValue::Percent(percent(v)),
+                (true, Some((v, _))) => OutputValue::Percent(derive::percent(v)),
                 _ => OutputValue::None,
             };
             OutputRow {
@@ -231,11 +195,4 @@ fn windows(facts: &AudioFacts) -> Parts {
         })
         .unwrap_or_default();
     (sources, outputs, routes, Footer::NoVoicemeeter)
-}
-
-/// A 0..1 volume as a whole percent, clamped to 0..=100.
-#[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn percent(v: f32) -> u8 {
-    // The value is clamped to 0..=100 first, so the cast cannot truncate or lose a sign.
-    (v * 100.0).round().clamp(0.0, 100.0) as u8
 }

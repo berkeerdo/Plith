@@ -9,7 +9,6 @@ mod model;
 mod tests;
 
 pub use layout::{audio_page, route_path, row_pitch};
-pub use model::Activity;
 
 use crate::pages::copy;
 
@@ -208,13 +207,8 @@ pub struct AudioView {
     pub row_pitch: f64,
 }
 
-/// Maps facts, signal activity and the pick mode to the view.
+/// Maps facts (with the mixer's debounced signal flags) and the pick mode to the view.
 #[must_use]
-pub fn audio_view(
-    facts: &AudioFacts,
-    activity: &Activity,
-    mode: PickMode,
-    now_s: f64,
-) -> AudioView {
-    model::build(facts, activity, mode, now_s)
+pub fn audio_view(facts: &AudioFacts, mode: PickMode) -> AudioView {
+    model::build(facts, mode)
 }

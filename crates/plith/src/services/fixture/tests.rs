@@ -48,7 +48,6 @@ fn potato_and_bare_differ_in_the_mixer() {
         facts.system.mic.as_ref().map(|m| m.name.as_str()),
         Some("SHURE MV7")
     );
-    assert_eq!(bare.levels(), None);
     assert_eq!((bare.level_source())(), None);
 }
 

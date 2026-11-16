@@ -5,8 +5,7 @@ use crate::pages::audio::{PickMode, RouteState, audio_view};
 
 #[test]
 fn banana_is_the_mock_diagram() {
-    let (activity, now) = banana_activity();
-    let view = audio_view(&banana(), &activity, PickMode::None, now);
+    let view = audio_view(&lit(&banana()), PickMode::None);
     let names: Vec<&str> = view.sources.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(
         names,
@@ -40,15 +39,14 @@ fn banana_is_the_mock_diagram() {
 
 #[test]
 fn potato_has_eight_by_eight() {
-    let (activity, now) = banana_activity();
-    let view = audio_view(&potato(), &activity, PickMode::None, now);
+    let view = audio_view(&lit(&potato()), PickMode::None);
     assert_eq!(view.sources.len(), 8);
     assert_eq!(view.outputs.len(), 8);
 }
 
 #[test]
 fn no_voicemeeter_routes_windows_to_the_default() {
-    let view = audio_view(&no_voicemeeter(), &Activity::default(), PickMode::None, 0.0);
+    let view = audio_view(&no_voicemeeter(), PickMode::None);
     assert_eq!(view.sources.len(), 1);
     assert_eq!(view.outputs[0].name, "Logitech G733");
     assert_eq!(view.routes[0].state, RouteState::Live);
@@ -100,11 +98,10 @@ fn pills_are_live_muted_idle() {
 fn every_list() -> Vec<crate::draw::DisplayList> {
     use crate::pages::system::system_page;
     use crate::pages::{audio::audio_page, media::media_page, pill::pill, shelf::shelf_page};
-    let (activity, now) = banana_activity();
     let mut lists = Vec::new();
     for facts in [banana(), potato(), no_voicemeeter()] {
         for mode in [PickMode::None, PickMode::Picked(0)] {
-            let view = audio_view(&facts, &activity, mode, now);
+            let view = audio_view(&lit(&facts), mode);
             lists.push(audio_page(&view, CLOCK).list);
         }
     }
@@ -145,8 +142,7 @@ fn hollow_stations_are_faint_or_candidates_like_the_mock() {
 fn output_rows_use_the_mock_sizes() {
     // Mock `audioPage()`: output names in sans 12, values in mono 10.
     use crate::draw::{Node, TextStyle};
-    let (activity, now) = banana_activity();
-    let view = audio_view(&banana(), &activity, PickMode::None, now);
+    let view = audio_view(&lit(&banana()), PickMode::None);
     let page = crate::pages::audio::audio_page(&view, CLOCK);
     let style_of = |wanted: &str| {
         page.list.nodes.iter().find_map(|n| match n {
@@ -164,8 +160,7 @@ fn named_buses_read_in_ink_and_the_unused_bus_stays_quiet() {
     // Mock `audioPage()`: A2 Edifier is ink with its value although nothing routes to it; only
     // the unused B2 is faint and shows no value.
     use crate::draw::{Ink, Node};
-    let (activity, now) = banana_activity();
-    let view = audio_view(&banana(), &activity, PickMode::None, now);
+    let view = audio_view(&lit(&banana()), PickMode::None);
     let page = crate::pages::audio::audio_page(&view, CLOCK);
     let ink_of = |wanted: &str| {
         page.list.nodes.iter().find_map(|n| match n {

@@ -7,7 +7,8 @@ use crate::draw::SeekTimeline;
 use crate::pages::audio::{AudioFacts, VmFacts};
 use crate::pages::pill::{PillFacts, PillState};
 
-/// Peak level above which a strip counts as carrying signal (the audio model's threshold).
+/// Peak level above which a strip counts as carrying signal. `plith-audio` keeps the same value
+/// for its debounced flags; the two crates do not depend on each other, so it exists once each.
 pub const SIGNAL_PEAK: f32 = 0.01;
 
 /// The name shown for an endpoint: the device description when there is one, else the
@@ -92,8 +93,9 @@ pub fn pill_facts(audio: &AudioFacts, playing: bool) -> PillFacts {
 }
 
 /// A 0..1 volume as a whole percent, clamped to 0..=100.
+#[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-fn percent(v: f32) -> u8 {
+pub fn percent(v: f32) -> u8 {
     // The value is clamped to 0..=100 first, so the cast cannot truncate or lose a sign.
     (v * 100.0).round().clamp(0.0, 100.0) as u8
 }

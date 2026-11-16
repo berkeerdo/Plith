@@ -4,7 +4,7 @@
 use crate::services::Facts;
 use plith_core::draw::{ArtPixels, DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
-use plith_core::pages::audio::{Activity, PickMode, audio_page, audio_view};
+use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::media::media_page;
 use plith_core::pages::pill::pill;
 use plith_core::pages::shelf::shelf_page;
@@ -16,12 +16,8 @@ use std::sync::Arc;
 pub struct Inputs<'a> {
     /// The facts.
     pub facts: &'a Facts,
-    /// Signal activity per strip.
-    pub activity: &'a Activity,
     /// The audio page's pick mode.
     pub pick: PickMode,
-    /// App time in seconds, for the activity hold.
-    pub now_s: f64,
     /// The tab bar clock, `HH:MM`.
     pub clock: &'a str,
 }
@@ -75,7 +71,7 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
     let facts = inputs.facts;
     match page {
         PageId::Audio => {
-            let view = audio_view(&facts.audio, inputs.activity, inputs.pick, inputs.now_s);
+            let view = audio_view(&facts.audio, inputs.pick);
             audio_page(&view, inputs.clock)
         }
         PageId::Media => media_page(&facts.media, inputs.clock),

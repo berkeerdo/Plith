@@ -174,8 +174,7 @@ fn short_device_names_stay_whole_and_long_ones_trim_in_the_middle() {
     use plith_core::pages::audio::{PickMode, audio_page, audio_view};
     use plith_core::pages::fixtures;
     let mut text = system();
-    let (activity, now) = fixtures::banana_activity();
-    let view = audio_view(&fixtures::banana(), &activity, PickMode::None, now);
+    let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None);
     let page = audio_page(&view, fixtures::CLOCK);
     for name in ["Logitech G733", "Edifier R1280"] {
         assert_eq!(shown(&mut text, &page.list.nodes, name), name);
@@ -184,7 +183,7 @@ fn short_device_names_stay_whole_and_long_ones_trim_in_the_middle() {
     assert_eq!(long.chars().count(), 40);
     let mut facts = fixtures::no_voicemeeter();
     facts.endpoints[1].name = long.to_string();
-    let view = audio_view(&facts, &activity, PickMode::None, now);
+    let view = audio_view(&fixtures::lit(&facts), PickMode::None);
     let page = audio_page(&view, fixtures::CLOCK);
     let got = shown(&mut text, &page.list.nodes, long);
     assert_ne!(got, long);
