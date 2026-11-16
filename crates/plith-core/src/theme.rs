@@ -123,6 +123,7 @@ impl Palette {
             Ink::Muted => self.muted,
             Ink::Faint => self.faint,
             Ink::Track => self.track,
+            Ink::FaintTrack => self.faint_track,
             Ink::Flow => self.flow,
         }
     }

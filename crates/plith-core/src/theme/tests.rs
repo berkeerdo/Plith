@@ -74,6 +74,7 @@ fn resolve_maps_every_role() {
     assert_eq!(bits(p.resolve(Ink::Muted)), bits(p.muted));
     assert_eq!(bits(p.resolve(Ink::Faint)), bits(p.faint));
     assert_eq!(bits(p.resolve(Ink::Track)), bits(p.track));
+    assert_eq!(bits(p.resolve(Ink::FaintTrack)), bits(p.faint_track));
     assert_eq!(bits(p.resolve(Ink::Flow)), bits(p.flow));
 }
 

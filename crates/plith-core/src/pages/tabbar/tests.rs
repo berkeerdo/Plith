@@ -26,7 +26,7 @@ fn four_stations_one_line_between_ends() {
         &Node::Stroke {
             points: vec![(30.0, 34.0), (366.0, 34.0)],
             width: 1.0,
-            ink: Ink::Track,
+            ink: Ink::FaintTrack,
             dashed: false,
         }
     );
@@ -96,14 +96,27 @@ fn clock_is_right_aligned_at_the_margin() {
                 rect,
                 style: TextStyle::Clock,
                 align,
+                ink,
                 ..
-            } => Some((*rect, *align)),
+            } => Some((*rect, *align, *ink)),
             _ => None,
         })
         .expect("clock node");
     assert!((clock.0.x + clock.0.w - 596.0).abs() < 1e-9);
     assert!((clock.0.y + clock.0.h / 2.0 - 34.0).abs() < 1e-9);
     assert_eq!(clock.1, Align::End);
+    assert_eq!(clock.2, Ink::Muted);
+}
+
+#[test]
+fn seam_between_two_tabs_goes_to_the_earlier() {
+    let (_, targets) = tabbar(PageId::Audio, "21:47");
+    let first = targets[0].rect;
+    let second = targets[1].rect;
+    // Grown by 4 DIP each, the two rects touch exactly at this x.
+    let seam = first.x + first.w + 4.0;
+    assert!((seam - (second.x - 4.0)).abs() < 1e-9);
+    assert_eq!(hit(&targets, seam, 20.0), Some(Action::Tab(PageId::Audio)));
 }
 
 #[test]

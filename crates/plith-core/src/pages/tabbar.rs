@@ -10,7 +10,8 @@ const FIRST_X: f64 = MARGIN_LEFT;
 /// Distance between station centres.
 const STEP: f64 = 112.0;
 /// Station square size.
-const STATION: f64 = 7.0;
+/// Distance from a station centre to its label and hit area left edge.
+const LABEL_DX: f64 = 3.0;
 /// Y of the track and the station centres.
 const LINE_Y: f64 = 34.0;
 /// Top of the labels.
@@ -39,7 +40,7 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
     let mut nodes = vec![Node::Stroke {
         points: vec![(FIRST_X, LINE_Y), (last_x, LINE_Y)],
         width: 1.0,
-        ink: Ink::Track,
+        ink: Ink::FaintTrack,
         dashed: false,
     }];
     let mut targets = Vec::with_capacity(4);
@@ -47,7 +48,7 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
         let x = FIRST_X + STEP * slot;
         let on = page == active;
         let ink = if on { Ink::Ink } else { Ink::Faint };
-        let left = x - STATION / 2.0;
+        let left = x - LABEL_DX;
         nodes.push(Node::Station {
             x,
             y: LINE_Y,
@@ -74,7 +75,7 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
         let right = if page == PageId::System {
             x + LAST_REACH
         } else {
-            x + STEP - STATION / 2.0 - HIT_GAP
+            x + STEP - LABEL_DX - HIT_GAP
         };
         targets.push(HitTarget {
             rect: Rect {
@@ -96,7 +97,7 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
         },
         text: Arc::from(clock),
         style: TextStyle::Clock,
-        ink: Ink::Ink,
+        ink: Ink::Muted,
         align: Align::End,
         trim: Trim::End,
     });

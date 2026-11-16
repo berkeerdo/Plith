@@ -21,6 +21,8 @@ pub enum Ink {
     Faint,
     /// Slider and meter tracks.
     Track,
+    /// The fainter track of a tab bar hairline.
+    FaintTrack,
     /// The signal-flow accent.
     Flow,
 }
