@@ -14,3 +14,27 @@ trusted folder such as Program Files.
   certificate (fails if it is missing), verifies the signature. Output `target\release\plith-osd.exe`.
 - `scripts/install-osd.ps1 [-Yes] [-Uninstall]`: copies to `C:\Program Files\Plith\osd\`.
   Without `-Yes` it only prints what it would do. Run with `-Yes` under `sudo`.
+
+## Run
+
+- `plith-osd [--pipe NAME]`: the OSD. Serves `NAME` (default: this session's pipe), draws the
+  300 x 40 DIP seal at the top centre of the primary monitor and exits on `Bye`, 2 s after the
+  client process ends, or at once when another helper already serves the pipe (exit 0).
+  The window is created in the UIAccess band (`CreateWindowInBand`); an unsigned dev build is
+  refused that and falls back to a plain topmost window (the log says which one it got).
+- `plith-osd --spike [inband|setband|plain] [--seconds N]`: the Task 2 band spike.
+- Dev run: `cargo run --package plith-osd -- --pipe \.\pipe\plith-osd-dev`, then
+  `cargo run --package plith-ipc --example send_osd -- --pipe \.\pipe\plith-osd-dev`.
+
+Threads: the UI thread owns the window and draws nothing; the server thread hands each message
+to the render thread over a bounded channel; the render thread owns the device, the swap chain,
+the text formats and the model (`src/model.rs`, pure and unit tested). It sleeps until a message
+or the next deadline (hide 1.5 s after the last level, exit) and paces motion on the compositor
+clock. The log is `%LOCALAPPDATA%\Plith\plith-osd.log`: one `osd msg:` line per message and one
+`motion osd-show` / `motion osd-hide` line per motion.
+
+## Fonts
+
+The design asks for Martian Mono (labels and numbers). It is not bundled yet: DirectWrite is
+asked for "Martian Mono" and the helper falls back to Consolas when it is not installed (the
+`osd render:` log line names the family in use). Bundling the font is a later job.

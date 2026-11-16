@@ -1,12 +1,20 @@
 //! The UIAccess helper that draws the volume, brightness and mute OSD over exclusive fullscreen games.
 //!
-//! Exit codes: 0 done, 1 the spike failed (the log says why, for example a band call that
-//! Windows refused without UIAccess), 2 bad arguments.
+//! Without `--spike` it runs the OSD on `--pipe NAME` (default: this session's pipe). With
+//! `--spike` it runs the Task 2 band spike instead.
+//!
+//! Exit codes: 0 done (also when another helper already serves the pipe), 1 failed (the log
+//! says why), 2 bad arguments.
 
+mod app;
 mod args;
 mod band;
 mod log;
+mod model;
+mod paint;
+mod render;
 mod spike;
+mod watch;
 
 use std::process::ExitCode;
 use std::sync::Arc;
@@ -22,17 +30,39 @@ fn main() -> ExitCode {
             return ExitCode::from(2);
         }
     };
-    let Some(creation) = parsed.spike else {
-        log.line("start: no --spike given, nothing to do yet");
-        return ExitCode::SUCCESS;
-    };
+    if let Some(creation) = parsed.spike {
+        return run_spike(creation, parsed.seconds, parsed.pipe.as_deref(), &log);
+    }
+    let pipe = parsed.pipe.unwrap_or_else(plith_ipc::current_pipe_name);
+    run_app(&pipe, &log)
+}
+
+fn run_app(pipe: &str, log: &Arc<log::Log>) -> ExitCode {
+    match app::run(pipe, log) {
+        Ok(()) => {
+            log.line("osd done");
+            ExitCode::SUCCESS
+        }
+        Err(error) => {
+            log.line(&format!("osd failed: {error}"));
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn run_spike(
+    creation: band::Creation,
+    seconds: u32,
+    pipe: Option<&str>,
+    log: &Arc<log::Log>,
+) -> ExitCode {
     log.line(&format!(
         "start: spike {} for {} s, pipe {}",
         creation.as_str(),
-        parsed.seconds,
-        parsed.pipe.as_deref().unwrap_or("none")
+        seconds,
+        pipe.unwrap_or("none")
     ));
-    match spike::run(creation, parsed.seconds, &log) {
+    match spike::run(creation, seconds, log) {
         Ok(()) => {
             log.line(&format!("spike {} done", creation.as_str()));
             ExitCode::SUCCESS

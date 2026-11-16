@@ -10,16 +10,17 @@ use windows::Win32::Foundation::{
     CloseHandle, FARPROC, HANDLE, HINSTANCE, HWND, LPARAM, LRESULT, POINT, WPARAM,
 };
 use windows::Win32::Graphics::Gdi::{
-    GetMonitorInfoW, MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint,
+    DEVMODEW, ENUM_CURRENT_SETTINGS, EnumDisplaySettingsW, GetMonitorInfoW,
+    MONITOR_DEFAULTTOPRIMARY, MONITORINFO, MonitorFromPoint,
 };
 use windows::Win32::Security::{GetTokenInformation, TOKEN_QUERY, TokenUIAccess};
 use windows::Win32::System::LibraryLoader::{GetModuleHandleW, GetProcAddress};
 use windows::Win32::System::Threading::{GetCurrentProcess, IsImmersiveProcess, OpenProcessToken};
 use windows::Win32::UI::HiDpi::{GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SW_SHOWNOACTIVATE,
-    ShowWindow, WINDOW_EX_STYLE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
-    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
+    CreateWindowExW, DefWindowProcW, DestroyWindow, RegisterClassExW, SW_HIDE, SW_SHOWNOACTIVATE,
+    ShowWindow, ShowWindowAsync, WINDOW_EX_STYLE, WNDCLASSEXW, WS_EX_NOACTIVATE,
+    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_EX_TRANSPARENT, WS_POPUP,
 };
 use windows::core::{Error, PCSTR, PCWSTR, s, w};
 
@@ -281,6 +282,32 @@ pub fn primary_monitor() -> Result<(RectPx, f64), String> {
         };
         Ok((rect, f64::from(dpi_x) / 96.0))
     }
+}
+
+/// Refresh rate of the primary display in hertz, 60 when the query fails.
+#[must_use]
+pub fn refresh_hz() -> f64 {
+    let mut mode = DEVMODEW {
+        dmSize: u16::try_from(size_of::<DEVMODEW>()).unwrap_or(0),
+        ..DEVMODEW::default()
+    };
+    // SAFETY: a null device name means the primary display; `mode` is a live DEVMODEW with
+    // `dmSize` set.
+    let ok = unsafe { EnumDisplaySettingsW(PCWSTR::null(), ENUM_CURRENT_SETTINGS, &raw mut mode) };
+    // 0 and 1 mean "hardware default" rather than a rate.
+    if ok.as_bool() && mode.dmDisplayFrequency > 1 {
+        f64::from(mode.dmDisplayFrequency)
+    } else {
+        60.0
+    }
+}
+
+/// Shows (without activating) or hides `hwnd` from any thread: the window's own thread does
+/// it when it next pumps messages.
+pub fn set_visible(hwnd: HWND, visible: bool) {
+    let command = if visible { SW_SHOWNOACTIVATE } else { SW_HIDE };
+    // SAFETY: `hwnd` is a live window; ShowWindowAsync only posts to its thread.
+    let _ = unsafe { ShowWindowAsync(hwnd, command) };
 }
 
 /// Whether Windows treats this process as immersive.

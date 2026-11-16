@@ -74,6 +74,15 @@ impl Log {
         }
     }
 
+    /// A log without a file: every line is dropped (tests).
+    #[cfg(test)]
+    #[must_use]
+    pub fn closed() -> Self {
+        Self {
+            file: Mutex::new(None),
+        }
+    }
+
     /// Appends `text` with the current local time in front.
     pub fn line(&self, text: &str) {
         let line = format_line(now(), text);
