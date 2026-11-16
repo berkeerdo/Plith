@@ -86,9 +86,11 @@ fn unknown_steps_carry_their_text() {
 fn pages_demo_parses() {
     let script = DemoScript::builtin("pages").expect("builtin exists");
     assert_eq!(script.repeat, 3);
+    // Every pass starts from the launched content, so each pass measures the same swaps.
     assert_eq!(
         script.steps,
         vec![
+            DemoStep::Content(0),
             DemoStep::Expand,
             DemoStep::Wait(1500),
             DemoStep::Page(1),

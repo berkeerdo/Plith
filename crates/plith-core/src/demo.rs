@@ -54,7 +54,7 @@ impl fmt::Display for DemoError {
 impl std::error::Error for DemoError {}
 
 const BASIC: &str = "expand; wait 1500; page 1; wait 1200; page 2; wait 1200; page 0; wait 1200; collapse; wait 1500; repeat 3";
-const PAGES_DEMO: &str = "expand; wait 1500; page 1; wait 1200; page 2; wait 1200; page 3; wait 1200; page 0; wait 600; content 1; wait 900; page 1; wait 200; content 2; wait 1300; collapse; wait 1500; repeat 3";
+const PAGES_DEMO: &str = "content 0; expand; wait 1500; page 1; wait 1200; page 2; wait 1200; page 3; wait 1200; page 0; wait 600; content 1; wait 900; page 1; wait 200; content 2; wait 1300; collapse; wait 1500; repeat 3";
 /// The highest content variant a `content` step may name.
 const MAX_CONTENT: u64 = 3;
 const INTERRUPT: &str = "expand; wait 200; collapse; wait 150; expand; wait 1500; page 1; wait 120; page 0; wait 1500; collapse; wait 100; expand; wait 1500; collapse; wait 1500; repeat 3";
