@@ -31,7 +31,8 @@ art colour bleed, bouncing EQ bars, a giant percentage, fader strips, RGB, scanl
   (Berke, 2026-11-14: they do not look good on the island).
 - Themes (ADR 0007): colours only, rendered in `docs/design/r3/renders-6/themes.png`: Gece,
   Kağıt, York, Sodyum. The palette above is Gece.
-- Lines: 1 px track, 2 px lit route. Every line ends on a 7 px station square: filled lime = live,
+- Lines: 1 px track, 2 px lit route. Every line ends on an 8 DIP station square (a 7 DIP rect with a 1 DIP stroke, as the mock
+  draws it): filled lime = live,
   filled ink = selected or a muted source, hollow = reachable or idle. Routes run horizontal and
   turn at 45 degrees, like a signal box diagram.
 - Shape: square top (flush with the screen edge), rounded bottom. Mock uses radius 24 for pages and

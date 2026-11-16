@@ -41,7 +41,7 @@ Updated 2026-11-16.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `pages` | R4: Tasks 1 to 8 + 7a done (flush top, square top corners, bottom radius 24); Task 9 on | `feature/pages-r4` @ `f69f112` | 2026-11-16: owed console run: Task 4 idle check, square-top look, draw p99 with page bitmaps (1 ms bar unmeasured, all renders WARP offscreen) | nothing (Q1 to Q3, Q10, Q11 yes, Berke 2026-11-16) |
+| `pages` | R4: Tasks 1 to 15 + 7a done and reviewed; Task 16 (feed pages from services) in fix round 1 (G2 stale tick after collapse, demo scene not reaching feed, hidden pages rebuilt while collapsed); then rebase on `0a73ade`, Tasks 17 (clicks), 18 (`pages` demo), 19 (handoff), final branch review | `feature/pages-r4` @ `4f5072a` (pushed, not yet on current main) | 2026-11-16: status after master clear; owed console run: Task 4 and 16 idle checks (`--idle-check 60 --fixture banana`), square-top look, `pages` demo motion, draw p99 with page bitmaps (all renders WARP so far) | nothing |
 | `osd` | R6 merged as `4aca03e` after two review rounds; lane stopped, worktree kept for Task 9 (console run over a game), restarted with `lanes restart osd` when Berke is at the console | `feature/osd-r6` @ `70c7300` (merged) | 2026-11-16: re-check fixes done (N1 serve panic, N3 to N5, M5/M6 rests) | Berke at the console; 9.8 flyout Hide plus a kill needs his separate yes |
 
 **Approvals (Berke 2026-11-16, "önerilerini uygula", "her şeyi onaylıyorum"):** merge of each lane into main after a clean master review; device names use invariant upper case, Turkish UI strings Turkish rules.
