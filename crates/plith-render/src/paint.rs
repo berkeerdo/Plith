@@ -1,19 +1,23 @@
-//! The painter: a black rounded island and one placeholder bar per visible page layer.
+//! The painter: a black island (square top, rounded bottom) and one placeholder bar per visible page layer.
 
 use plith_core::ambient::LiveValues;
 use plith_core::draw::PageContent;
 use plith_core::geometry::IslandShape;
+use plith_core::outline::{PathSeg, island_outline};
 use plith_core::page::PageLayers;
 use plith_core::shapes::{FILL, PLACEHOLDER};
 use std::sync::Arc;
-use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
+use windows::Win32::Graphics::Direct2D::Common::{
+    D2D_RECT_F, D2D_SIZE_F, D2D1_COLOR_F, D2D1_FIGURE_BEGIN_FILLED, D2D1_FIGURE_END_CLOSED,
+};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_LAYER_OPTIONS1_NONE, D2D1_LAYER_PARAMETERS1,
-    D2D1_ROUNDED_RECT, ID2D1DeviceContext, ID2D1Factory1, ID2D1Geometry, ID2D1Layer,
-    ID2D1SolidColorBrush,
+    D2D1_ANTIALIAS_MODE_PER_PRIMITIVE, D2D1_ARC_SEGMENT, D2D1_ARC_SIZE_SMALL,
+    D2D1_LAYER_OPTIONS1_NONE, D2D1_LAYER_PARAMETERS1, D2D1_ROUNDED_RECT,
+    D2D1_SWEEP_DIRECTION_CLOCKWISE, ID2D1DeviceContext, ID2D1Factory1, ID2D1Geometry, ID2D1Layer,
+    ID2D1PathGeometry1, ID2D1SolidColorBrush,
 };
 use windows::core::Result;
-use windows_numerics::Matrix3x2;
+use windows_numerics::{Matrix3x2, Vector2};
 
 /// Everything the painter needs for one frame.
 #[derive(Debug, Clone, PartialEq)]
@@ -69,8 +73,8 @@ fn rounded(x: f64, y: f64, width: f64, height: f64, radius: f64) -> D2D1_ROUNDED
 }
 
 /// True when some placeholder bar could reach a rounded corner or leave the island, so the
-/// pages must be clipped. Bars inside the straight band (below the top corner arcs, above the
-/// bottom ones, within the width) need no clip.
+/// pages must be clipped. Bars inside the straight band (above the bottom corner arcs, within
+/// the width) need no clip: the top corners are square.
 fn needs_clip(frame: &PaintFrame) -> bool {
     let shape = frame.shape;
     let radius = shape
@@ -78,8 +82,7 @@ fn needs_clip(frame: &PaintFrame) -> bool {
         .min(shape.width / 2.0)
         .min(shape.height / 2.0)
         .max(0.0);
-    let vertical_ok =
-        PLACEHOLDER.top >= radius && PLACEHOLDER.top + PLACEHOLDER.height <= shape.height - radius;
+    let vertical_ok = PLACEHOLDER.top + PLACEHOLDER.height <= shape.height - radius;
     let left = (shape.width - PLACEHOLDER.width) / 2.0;
     let horizontal_ok = frame.pages.iter().all(|layer| {
         let x = left + layer.offset;
@@ -109,27 +112,21 @@ impl Painter {
     /// # Errors
     /// Returns the `EndDraw` error (for example device removed) or a geometry failure.
     pub fn paint(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) -> Result<()> {
-        let (ox, oy) = frame.origin;
-        let shape = frame.shape;
-        let island = rounded(ox, oy, shape.width, shape.height, shape.radius);
         let clear = color([0.0; 4], 1.0);
-        // Built before BeginDraw so a failure here cannot leave the context mid-draw.
-        let clip = if frame.content_opacity > 0.0 && !frame.pages.is_empty() && needs_clip(frame) {
-            Some(self.clip_geometry(&island)?)
-        } else {
-            None
-        };
+        // Built before BeginDraw so a failure here cannot leave the context mid-draw. One
+        // geometry per frame serves both the fill and the page clip.
+        let island = self.island_geometry(frame)?;
+        let clipped = frame.content_opacity > 0.0 && !frame.pages.is_empty() && needs_clip(frame);
         // SAFETY: draw calls between BeginDraw and EndDraw on a live context with a target.
         unsafe {
             ctx.BeginDraw();
             ctx.Clear(Some(&raw const clear));
             let fill = color(FILL, 1.0);
             self.brush.SetColor(&raw const fill);
-            ctx.FillRoundedRectangle(&raw const island, &self.brush);
+            ctx.FillGeometry(&island, &self.brush, None);
         }
-        let clipped = clip.is_some();
-        if let Some(geometry) = clip {
-            Self::push_clip(ctx, geometry);
+        if clipped {
+            Self::push_clip(ctx, island.into());
         }
         if frame.content_opacity > 0.0 {
             self.draw_pages(ctx, frame);
@@ -165,10 +162,38 @@ impl Painter {
         }
     }
 
-    /// Builds the island's rounded-rect geometry.
-    fn clip_geometry(&self, island: &D2D1_ROUNDED_RECT) -> Result<ID2D1Geometry> {
-        // SAFETY: the factory is live and `island` is valid for the call.
-        unsafe { Ok(self.factory.CreateRoundedRectangleGeometry(island)?.into()) }
+    /// Builds the island's path geometry from the shared outline: square top, rounded bottom.
+    fn island_geometry(&self, frame: &PaintFrame) -> Result<ID2D1PathGeometry1> {
+        let (ox, oy) = frame.origin;
+        let point = |x: f64, y: f64| Vector2 { X: f(x), Y: f(y) };
+        // SAFETY: the factory is live; the sink is opened once, every figure is begun and ended,
+        // and the sink is closed before the geometry is used.
+        unsafe {
+            let geometry = self.factory.CreatePathGeometry()?;
+            let sink = geometry.Open()?;
+            sink.BeginFigure(point(ox, oy), D2D1_FIGURE_BEGIN_FILLED);
+            for seg in island_outline(frame.shape, frame.origin) {
+                match seg {
+                    PathSeg::Line(x, y) => sink.AddLine(point(x, y)),
+                    PathSeg::Arc { to, radius } => {
+                        let arc = D2D1_ARC_SEGMENT {
+                            point: point(to.0, to.1),
+                            size: D2D_SIZE_F {
+                                width: f(radius),
+                                height: f(radius),
+                            },
+                            rotationAngle: 0.0,
+                            sweepDirection: D2D1_SWEEP_DIRECTION_CLOCKWISE,
+                            arcSize: D2D1_ARC_SIZE_SMALL,
+                        };
+                        sink.AddArc(&raw const arc);
+                    }
+                }
+            }
+            sink.EndFigure(D2D1_FIGURE_END_CLOSED);
+            sink.Close()?;
+            Ok(geometry)
+        }
     }
 
     /// Pushes a layer clipped to `geometry`.

@@ -11,6 +11,7 @@ pub mod launch;
 pub mod layout;
 pub mod levers;
 pub mod motion;
+pub mod outline;
 pub mod page;
 pub mod panic_text;
 pub mod scene;

@@ -5,10 +5,28 @@ use crate::shapes::{PAGES, REST};
 const BIG: IslandShape = PAGES[0];
 
 #[test]
-fn contains_rejects_the_corner_outside_the_arc() {
+fn contains_rejects_the_bottom_corner_outside_the_arc() {
     let near = BIG.radius * 0.05;
-    assert!(!BIG.contains(near, near));
+    assert!(!BIG.contains(near, BIG.height - near));
     assert!(!BIG.contains(BIG.width - near, BIG.height - near));
+}
+
+#[test]
+fn square_top_corner_is_inside() {
+    assert!(BIG.contains(0.5, 0.5));
+    assert!(BIG.contains(BIG.width - 0.5, 0.5));
+    assert!(BIG.contains(0.0, 0.0));
+    // The whole top band above the bottom-corner zone is a plain rectangle.
+    assert!(BIG.contains(0.5, BIG.height - BIG.radius));
+}
+
+#[test]
+fn bottom_corner_is_rounded() {
+    assert!(!BIG.contains(0.5, BIG.height - 0.5));
+    assert!(!BIG.contains(BIG.width - 0.5, BIG.height - 0.5));
+    // On the diagonal 0.35 r in from both edges is inside the arc (distance 0.92 r from centre).
+    let inside = BIG.radius * 0.35;
+    assert!(BIG.contains(inside, BIG.height - inside));
 }
 
 #[test]
@@ -46,8 +64,8 @@ fn boundary(shape: IslandShape) -> Vec<(f64, f64)> {
         points.push((w, r + t * (h - 2.0 * r)));
         let angle = t * std::f64::consts::FRAC_PI_2;
         let (dx, dy) = (r * angle.cos(), r * angle.sin());
-        points.push((r - dx, r - dy));
-        points.push((w - r + dx, r - dy));
+        points.push((0.0, 0.0));
+        points.push((w, 0.0));
         points.push((r - dx, h - r + dy));
         points.push((w - r + dx, h - r + dy));
     }

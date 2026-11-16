@@ -33,11 +33,11 @@ fn rect_is_centred_where_island_origin_says() {
 }
 
 #[test]
-fn outset_grows_each_side_by_one_pixel() {
+fn outset_grows_sides_and_bottom_by_one_pixel_but_not_the_top() {
     let plain = region_px(SHAPE, &layout(400, 1.0), 0);
     let grown = region_px(SHAPE, &layout(400, 1.0), 1);
     assert_eq!(grown.left, plain.left - 1);
-    assert_eq!(grown.top, plain.top - 1);
+    assert_eq!(grown.top, plain.top);
     assert_eq!(grown.right, plain.right + 1);
     assert_eq!(grown.bottom, plain.bottom + 1);
     assert_eq!(grown.ellipse, plain.ellipse + 2);
@@ -61,4 +61,21 @@ fn radius_is_clamped_to_half_the_short_side() {
     };
     let region = region_px(shape, &layout(400, 1.0), 0);
     assert_eq!(region.ellipse, 40);
+}
+
+#[test]
+fn region_top_corners_square() {
+    let region = region_px(SHAPE, &layout(400, 1.0), 3);
+    // Flush at the top: no outset above the island.
+    assert_eq!(region.top, 0);
+    // The square band covers the top half of the outset rect.
+    assert_eq!(
+        region.square_bottom,
+        region.top + (region.bottom - region.top) / 2
+    );
+    assert!(region.square_bottom > region.top);
+    // Sides and bottom are still 3 px outside the drawn shape.
+    assert_eq!(region.left, 150 - 3);
+    assert_eq!(region.right, 250 + 3);
+    assert_eq!(region.bottom, 40 + 3);
 }

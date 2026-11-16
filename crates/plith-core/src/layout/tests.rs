@@ -84,3 +84,15 @@ fn surface_fits_max_page() {
     }
     assert!(f64::from(l.surface.height) >= TOP_GAP + PAGE_MAX_HEIGHT * OVERSHOOT + SURFACE_MARGIN);
 }
+
+#[test]
+fn surface_top_is_work_top() {
+    let l = SurfaceLayout::new(MONITOR, 40, 1.0);
+    assert_eq!(l.surface.y, 40);
+    let (_, y) = l.island_origin(PAGES[0]);
+    assert!(
+        y.abs() < 1e-9,
+        "island is flush with the surface top, got {y}"
+    );
+    assert!(TOP_GAP.abs() < 1e-9);
+}

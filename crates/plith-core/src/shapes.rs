@@ -14,22 +14,22 @@ pub const PAGES: [IslandShape; 4] = [
     IslandShape {
         width: 620.0,
         height: 300.0,
-        radius: 40.0,
+        radius: 24.0,
     },
     IslandShape {
         width: 620.0,
         height: 232.0,
-        radius: 40.0,
+        radius: 24.0,
     },
     IslandShape {
         width: 620.0,
         height: 214.0,
-        radius: 40.0,
+        radius: 24.0,
     },
     IslandShape {
         width: 620.0,
         height: 178.0,
-        radius: 40.0,
+        radius: 24.0,
     },
 ];
 
@@ -38,8 +38,8 @@ pub const PAGE_MAX_WIDTH: f64 = 620.0;
 /// The tallest page the surface has room for, in DIP.
 pub const PAGE_MAX_HEIGHT: f64 = 420.0;
 
-/// Gap between the work-area top and the island, in DIP.
-pub const TOP_GAP: f64 = 8.0;
+/// Gap between the work-area top and the island, in DIP: zero, the island is flush with the top.
+pub const TOP_GAP: f64 = 0.0;
 /// Empty margin around the largest page on the surface, in DIP.
 pub const SURFACE_MARGIN: f64 = 20.0;
 /// Room reserved for spring overshoot, as a factor of the page size.

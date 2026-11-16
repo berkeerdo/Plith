@@ -43,14 +43,17 @@ fn island_pixels_are_opaque_black_and_outside_is_transparent() {
     let centre = pixel(&buf, 520, 250, 100);
     assert_eq!(centre, [0, 0, 0, 255]);
     assert_eq!(pixel(&buf, 520, 0, 0)[3], 0);
-    // Corner arc of r40 at origin (10, 10): circle centre (50, 50). A pixel d px diagonally in
-    // from the bounding corner (10 + d) is (40 - d) * sqrt(2) from the circle centre;
+    // The top corners are square: the top-left pixel is opaque.
+    assert_eq!(pixel(&buf, 520, 10, 10), [0, 0, 0, 255]);
+    assert_eq!(pixel(&buf, 520, 489, 10), [0, 0, 0, 255]);
+    // Bottom-left arc of r40 at origin (10, 10), bottom at 190: circle centre (50, 150). A pixel
+    // d px diagonally in from the bounding corner is (40 - d) * sqrt(2) from the circle centre;
     // it is inside only when d > 40 * (1 - 1 / sqrt(2)) = 11.7.
-    // d = 8: pixel (18, 18), centre (18.5, 18.5), distance 44.5 > 40: transparent.
-    // d = 16: pixel (26, 26), centre (26.5, 26.5), distance 33.2 < 40: opaque.
+    // d = 8: pixel (18, 181), centre (18.5, 181.5), distance 44.5 > 40: transparent.
+    // d = 16: pixel (26, 173), centre (26.5, 173.5), distance 33.2 < 40: opaque.
     // A radius near 20 would make d = 8 opaque, so this pins the radius to about 40.
-    assert_eq!(pixel(&buf, 520, 18, 18)[3], 0);
-    assert_eq!(pixel(&buf, 520, 26, 26)[3], 255);
+    assert_eq!(pixel(&buf, 520, 18, 181)[3], 0);
+    assert_eq!(pixel(&buf, 520, 26, 173)[3], 255);
 }
 
 #[test]
@@ -64,7 +67,9 @@ fn scale_1_5_draws_the_same_shape_larger() {
     assert_eq!(pixel(&buf, 780, 745, 150)[3], 0);
     assert_eq!(pixel(&buf, 780, 375, 280)[3], 255);
     assert_eq!(pixel(&buf, 780, 375, 295)[3], 0);
-    assert_eq!(pixel(&buf, 780, 18, 18)[3], 0);
+    // Square top-left corner, round bottom-left corner (d = 8 DIP = 12 px from the corner).
+    assert_eq!(pixel(&buf, 780, 15, 15)[3], 255);
+    assert_eq!(pixel(&buf, 780, 22, 277)[3], 0);
 }
 
 #[test]

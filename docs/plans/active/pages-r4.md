@@ -267,12 +267,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
 - Shell: the window region is the union of a rounded rect (bottom corners) and a rect over the
   top half, still 3 px outside the drawn shape on the sides and bottom, flush at the top.
 
-- [ ] **Step 1: Failing tests:** `square_top_corner_is_inside` (0.5, 0.5 inside),
+- [x] **Step 1: Failing tests:** `square_top_corner_is_inside` (0.5, 0.5 inside),
   `bottom_corner_is_rounded` (0.5, h - 0.5 outside), `outline_starts_top_left_clockwise`,
   `region_top_corners_square`, `surface_top_is_work_top`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(engine): square top and rounded bottom`.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(engine): square top and rounded bottom`.
 - [ ] **Step 5:** On-screen look (corner smoothness at the top edge) joins the Task 18 guarded run.
 
 ### Task 7: Painting the display list: page bitmaps, clip, live nodes
