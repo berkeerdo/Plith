@@ -158,3 +158,16 @@ fn system_page_is_178_high() {
         assert_eq!(page.shape.width, 620.0);
     }
 }
+
+#[test]
+fn brightness_over_100_is_clamped_once() {
+    let mut f = facts();
+    f.brightness = Some(("DELL AW2725DF".into(), 130));
+    let page = system_page(&f, "09:41");
+    assert!(texts(&page.list.nodes).iter().any(|(s, _, _)| s == "100"));
+    let fill_end = page.list.nodes.iter().find_map(|n| match n {
+        Node::Station { x, y, .. } if *y == 80.0 => Some(*x),
+        _ => None,
+    });
+    assert_eq!(fill_end, Some(550.0));
+}

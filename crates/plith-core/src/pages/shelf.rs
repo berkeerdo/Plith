@@ -1,8 +1,7 @@
 //! The shelf page, empty state only (dropping files is R5).
 //!
 //! Positions come from `shelfEmpty()` in `docs/design/r3/ray-paneli.html`. The mock island is
-//! 170 high; the page is 214 per the visual direction spec, so the content keeps the mock
-//! positions from the top and the siding line stays at the mock y.
+//! 170 high and so is the empty page (the spec's 214 is the R5 state with wagons).
 
 use super::kit::{line, rect, station, text};
 use super::tabbar::tabbar;
@@ -10,8 +9,8 @@ use super::{PAGE_W, PageBuild, PageId};
 use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
 use crate::shapes;
 
-/// Page height (spec: shelf 620 x 214).
-const HEIGHT: f64 = 214.0;
+/// Empty page height (mock `shelfEmpty`, `h = 170`).
+const HEIGHT: f64 = 170.0;
 /// The dashed drop box (mock `rect x 30, y 58, W - 60, 70`).
 const BOX_X: f64 = 30.0;
 const BOX_Y: f64 = 58.0;

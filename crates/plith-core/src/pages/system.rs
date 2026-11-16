@@ -4,6 +4,7 @@
 //! mock's text baselines become top-aligned rects (baseline minus roughly the cap height).
 
 use super::kit::{line, rect, station, text};
+use super::seek_fraction;
 use super::tabbar::tabbar;
 use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{Align, DisplayList, Ink, Node, Rect, StationMark, TextStyle};
@@ -59,10 +60,7 @@ const RULER: Rect = Rect {
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn brightness_at(ruler: Rect, x: f64) -> u8 {
-    if ruler.w <= 0.0 {
-        return 0;
-    }
-    (((x - ruler.x) / ruler.w).clamp(0.0, 1.0) * 100.0).round() as u8
+    (seek_fraction(ruler, x) * 100.0).round() as u8
 }
 
 /// The system page nodes, hit targets and island shape.
@@ -103,7 +101,7 @@ fn brightness_row(
         name_ink,
         Align::Start,
     ));
-    let Some((monitor, percent)) = brightness else {
+    let Some((monitor, percent)) = brightness.map(|(m, p)| (m, (*p).min(100))) else {
         nodes.push(text(
             rect(X0, RULER_Y - 6.0, RIGHT - X0, 12.0),
             "DESTEKLENM\u{130}YOR \u{b7} MON\u{130}T\u{d6}RDE DDC/CI KAPALI",
@@ -120,7 +118,7 @@ fn brightness_row(
         Ink::Faint,
         Align::Start,
     ));
-    let fraction = f64::from((*percent).min(100)) / 100.0;
+    let fraction = f64::from(percent) / 100.0;
     let at = X0 + (X1 - X0) * fraction;
     nodes.push(line(vec![(X0, RULER_Y), (X1, RULER_Y)], 1.0, Ink::Track));
     for i in 0..=10u8 {

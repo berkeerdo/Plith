@@ -3,14 +3,12 @@
 //! Positions come from `mediaPage()` and `mediaEmpty()` in `docs/design/r3/ray-paneli.html`.
 //! The mock's text baselines become top-aligned rects (baseline minus the cap height).
 
-use std::sync::Arc;
-
+use super::kit::{line, rect, station, text};
 pub use super::seek_fraction;
 use super::tabbar::tabbar;
 use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{
     Align, ArtId, DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, TextStyle,
-    Trim,
 };
 use crate::shapes;
 
@@ -90,34 +88,6 @@ fn whole_secs(s: f64) -> u64 {
     } else {
         0
     }
-}
-
-fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
-    Rect { x, y, w, h }
-}
-
-fn text(r: Rect, s: &str, style: TextStyle, ink: Ink, align: Align) -> Node {
-    Node::Text {
-        rect: r,
-        text: Arc::from(s),
-        style,
-        ink,
-        align,
-        trim: Trim::End,
-    }
-}
-
-fn line(points: Vec<(f64, f64)>, width: f64, ink: Ink) -> Node {
-    Node::Stroke {
-        points,
-        width,
-        ink,
-        dashed: false,
-    }
-}
-
-fn station(x: f64, y: f64, mark: StationMark, ink: Ink) -> Node {
-    Node::Station { x, y, mark, ink }
 }
 
 /// The media page nodes, hit targets and island shape.

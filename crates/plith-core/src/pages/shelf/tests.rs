@@ -5,10 +5,10 @@ use crate::draw::{Ink, Node, StationMark, TextStyle};
 use crate::pages::Action;
 
 #[test]
-fn shelf_empty_is_214_high() {
+fn shelf_empty_is_170_high() {
     let page = shelf_page("09:41");
-    assert_eq!(page.list.size, (620.0, 214.0));
-    assert_eq!(page.shape.height, 214.0);
+    assert_eq!(page.list.size, (620.0, 170.0));
+    assert_eq!(page.shape.height, 170.0);
 }
 
 #[test]
