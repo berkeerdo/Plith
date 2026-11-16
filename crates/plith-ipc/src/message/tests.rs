@@ -160,3 +160,10 @@ fn errors_display_and_are_std_errors() {
 fn pipe_name_carries_the_session() {
     assert_eq!(pipe_name(3), r"\.\pipe\plith-osd-3");
 }
+
+#[test]
+fn label_over_64_bytes_does_not_decode() {
+    let mut bytes = vec![0x50, 0x4F, 1, 2, 0, 5, 0, 65];
+    bytes.extend(std::iter::repeat_n(b'a', 65));
+    assert_eq!(decode(&bytes), Err(DecodeError::Label));
+}

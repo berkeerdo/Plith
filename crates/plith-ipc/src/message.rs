@@ -77,7 +77,7 @@ pub enum DecodeError {
     Meter(u8),
     /// A flag byte that is neither 0 nor 1.
     Flag(u8),
-    /// The label is not valid UTF-8.
+    /// The label is longer than [`MAX_LABEL`] bytes or not valid UTF-8.
     Label,
     /// Bytes remain after the message.
     Trailing,
@@ -220,6 +220,9 @@ fn decode_level(payload: &[u8]) -> Result<Message, DecodeError> {
         other => return Err(DecodeError::Flag(other)),
     };
     let label_len = usize::from(*label_len);
+    if label_len > MAX_LABEL {
+        return Err(DecodeError::Label);
+    }
     let label = rest.get(..label_len).ok_or(DecodeError::Short)?;
     no_trailing(&rest[label_len..])?;
     let label = std::str::from_utf8(label).map_err(|_| DecodeError::Label)?;
