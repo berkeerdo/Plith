@@ -155,7 +155,7 @@ fn output_rows_use_the_mock_sizes() {
         })
     };
     assert_eq!(style_of("Logitech G733"), Some(TextStyle::Body));
-    assert_eq!(style_of("-6 dB"), Some(TextStyle::Value));
+    assert_eq!(style_of("-6"), Some(TextStyle::Value));
     assert_eq!(style_of("Mikrofon"), Some(TextStyle::Name));
 }
 
@@ -179,7 +179,7 @@ fn named_buses_read_in_ink_and_the_unused_bus_stays_quiet() {
         .list
         .nodes
         .iter()
-        .filter(|n| matches!(n, Node::Text { text, .. } if &**text == "0 dB"))
+        .filter(|n| matches!(n, Node::Text { text, .. } if &**text == "0"))
         .count();
     assert_eq!(zero_db, 1, "B1 only; the unused B2 has no value");
 }

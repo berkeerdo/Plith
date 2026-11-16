@@ -135,6 +135,7 @@ fn brightness_row(
     nodes.push(text(
         rect(RIGHT - 60.0, RULER_Y - 8.0, 60.0, 14.0),
         &percent.to_string(),
+        // The mock sets this value in mono 12, the clock's face and size.
         TextStyle::Clock,
         Ink::Ink,
         Align::End,

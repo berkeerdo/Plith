@@ -38,9 +38,6 @@ pub struct MediaFacts {
     pub timeline: Option<SeekTimeline>,
     /// The output route text after the arrow (for example `A1 · G733`).
     pub output: Option<String>,
-    /// Another output the source could move to, drawn as a branch with a hollow station (for
-    /// example `A2 · EDIFIER`).
-    pub reachable: Option<String>,
 }
 
 /// The ruler rectangle, used for the seek hit area and the seek fraction.
@@ -71,10 +68,6 @@ const ROUTE_Y_EMPTY: f64 = 124.0;
 /// Route line start x and end x (mock 96 and 380).
 const ROUTE_X0: f64 = 96.0;
 const ROUTE_X1: f64 = 380.0;
-/// The reachable branch: leaves the route at x 300, drops 20 at 45 degrees, ends at x 470.
-const BRANCH_X: f64 = 300.0;
-const BRANCH_DROP: f64 = 20.0;
-const BRANCH_END_X: f64 = 470.0;
 
 /// `m:ss`, or `h:mm:ss` from one hour.
 #[must_use]
@@ -225,29 +218,7 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
             output,
             facts.playing,
         );
-        if let Some(reachable) = &facts.reachable {
-            reachable_branch(nodes, ROUTE_Y, reachable);
-        }
     }
-}
-
-/// Another output the source can move to: a track branch leaving the route at x 300 at 45
-/// degrees, a hollow station and a faint label (mock `mediaPage()`, `ry + 20`).
-fn reachable_branch(nodes: &mut Vec<Node>, y: f64, label: &str) {
-    let (y2, end) = (y + BRANCH_DROP, BRANCH_END_X);
-    nodes.push(line(
-        vec![(BRANCH_X, y), (BRANCH_X + BRANCH_DROP, y2), (end, y2)],
-        1.0,
-        Ink::Track,
-    ));
-    nodes.push(station(end, y2, StationMark::Hollow, Ink::Faint));
-    nodes.push(text(
-        rect(end + 12.0, y2 - 6.0, PAGE_W - 30.0 - end - 12.0, 12.0),
-        label,
-        TextStyle::Label,
-        Ink::Faint,
-        Align::Start,
-    ));
 }
 
 fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> Option<HitTarget> {

@@ -25,6 +25,7 @@ fn bus(tag: &str, name: &str, value: OutputValue, live: bool) -> OutputRow {
         muted: false,
         id: None,
         used: true,
+        unnamed: false,
     }
 }
 
@@ -51,6 +52,7 @@ fn mock_view() -> AudioView {
             bus("B1", "Discord", OutputValue::Db(0.0), true),
             OutputRow {
                 used: false,
+                unnamed: true,
                 ..bus(
                     "B2",
                     "Kullan\u{131}lm\u{131}yor",
@@ -90,6 +92,7 @@ fn endpoint(name: &str, id: &str, value: OutputValue) -> OutputRow {
         muted: false,
         id: Some(id.into()),
         used: false,
+        unnamed: false,
     }
 }
 
@@ -343,20 +346,19 @@ fn outputs_show_tag_name_and_value() {
     assert_eq!(text_count(n, "A2"), 1, "tag drawn once when it is the name");
     assert!(text_node(n, "A1").is_some());
     assert!(text_node(n, "Logitech G733").is_some());
-    assert!(
-        text_node(n, "-6 dB").is_some(),
-        "renamed row keeps its value"
-    );
-    assert_eq!(text_count(n, "0 dB"), 2, "A1 and B2; B1 is muted");
+    assert!(text_node(n, "-6").is_some(), "renamed row keeps its value");
+    assert_eq!(text_count(n, "0"), 2, "A1 and B2; B1 is muted");
     assert_eq!(text_count(n, "SESS\u{130}Z"), 2, "cut line and muted B1");
-    let Some(Node::Text { rect, .. }) = text_node(n, "0 dB") else {
+    let Some(Node::Text { rect, .. }) = text_node(n, "0") else {
         panic!("value missing");
     };
     assert_eq!(rect.x + rect.w, VALUE_RIGHT);
     let page = audio_page(&windows_view("Edifier R1280"), "21:47");
     assert!(text_node(&page.list.nodes, "62").is_some());
-    assert_eq!(format_value(OutputValue::Db(-6.4)), "-6 dB");
-    assert_eq!(format_value(OutputValue::Db(-0.3)), "0 dB");
+    // A bare signed integer, like the mock's 62 and 40: no unit to crowd the name.
+    assert_eq!(format_value(OutputValue::Db(-6.4)), "-6");
+    assert_eq!(format_value(OutputValue::Db(-0.3)), "0");
+    assert_eq!(format_value(OutputValue::Db(3.0)), "+3");
     assert_eq!(format_value(OutputValue::None), "");
 }
 

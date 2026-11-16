@@ -163,7 +163,8 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         UNUSED_NAME.to_string()
     };
     // The mock shows no value on an unused, unnamed bus.
-    let value = if name == UNUSED_NAME {
+    let unnamed = name == UNUSED_NAME;
+    let value = if unnamed {
         OutputValue::None
     } else {
         OutputValue::Db(bus.gain_db)
@@ -176,6 +177,7 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         muted: bus.muted,
         id: None,
         used: false,
+        unnamed,
     }
 }
 
@@ -208,6 +210,7 @@ fn windows(facts: &AudioFacts) -> Parts {
                 muted: Some(i) == default_idx && muted,
                 id: Some(e.id.clone()),
                 used: false,
+                unnamed: false,
             }
         })
         .collect();

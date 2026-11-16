@@ -264,7 +264,6 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let (activity, now) = fixtures::banana_activity();
     let view = audio_view(&fixtures::banana(), &activity, PickMode::None, now);
     let themes = [
-        ("gece", Theme::Gece),
         ("kagit", Theme::Kagit),
         ("york", Theme::York),
         ("sodyum", Theme::Sodyum),

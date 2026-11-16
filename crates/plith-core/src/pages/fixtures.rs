@@ -173,7 +173,6 @@ pub fn media_playing() -> MediaFacts {
             playing: true,
         }),
         output: Some("A1 \u{b7} G733".to_string()),
-        reachable: Some("A2 \u{b7} EDIFIER".to_string()),
     }
 }
 

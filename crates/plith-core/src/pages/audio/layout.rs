@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::{
     AudioView, DENSE_ABOVE, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PITCH_DENSE,
-    PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow, UNUSED_NAME,
+    PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow,
 };
 use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, Rect, TextStyle, Trim};
 use crate::pages::kit::rect;
@@ -56,9 +56,10 @@ const TRACE_W: f64 = 64.0;
 const TRACE_HALF: f64 = 8.0;
 /// Width of a source name, up to the trace slot.
 const SOURCE_NAME_W: f64 = TRACE_X - 8.0 - MARGIN_LEFT;
-/// Output tag x (mock `XO + 14`) and name x after a tag (mock `XO + 38`).
+/// Output tag x (mock `XO + 14`) and name x after a tag: the mock's `XO + 38` moved in to
+/// `XO + 34` (the two-character mono tag ends near `XO + 29`), so device names keep 4 DIP more.
 const TAG_X: f64 = OUTPUT_X + 14.0;
-const TAG_NAME_X: f64 = OUTPUT_X + 38.0;
+const TAG_NAME_X: f64 = OUTPUT_X + 34.0;
 /// Advance of one value character (Martian Mono 10 with 0.06 em tracking), used to keep the
 /// name clear of the value.
 const VALUE_CHAR_W: f64 = 7.4;
@@ -103,14 +104,19 @@ fn text(r: Rect, s: &str, style: TextStyle, ink: Ink, align: Align, trim: Trim) 
     }
 }
 
-/// The value copy: `0 dB` / `-6 dB` rounded, a bare percent, or nothing.
+/// The value copy: a gain as a bare signed whole number (`-6`, `0`, `+3`, like the mock's
+/// `62`), a bare percent, or nothing.
 fn format_value(value: OutputValue) -> String {
     match value {
         OutputValue::Db(db) => {
             #[allow(clippy::cast_possible_truncation)]
             // Gains are within -60..12 dB, the rounded value fits an i32.
             let whole = db.round() as i32;
-            format!("{whole} dB")
+            if whole > 0 {
+                format!("+{whole}")
+            } else {
+                whole.to_string()
+            }
         }
         OutputValue::Percent(p) => p.to_string(),
         OutputValue::None => String::new(),
@@ -320,7 +326,7 @@ fn output_row(
     // The mock: a named bus reads in ink even with no route; only the unused bus is faint.
     let name_ink = if !has_voicemeeter(view) {
         if row.used { Ink::Ink } else { Ink::Muted }
-    } else if !row.used && row.name == UNUSED_NAME {
+    } else if row.unnamed {
         Ink::Faint
     } else {
         Ink::Ink

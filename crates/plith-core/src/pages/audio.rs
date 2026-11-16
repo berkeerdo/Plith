@@ -108,6 +108,8 @@ pub enum OutputValue {
 }
 
 /// An output row.
+// Allowed: four independent facts of one row, not a hidden state machine.
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct OutputRow {
     /// Bus tag such as `A1`; `None` for Windows endpoints.
@@ -124,6 +126,8 @@ pub struct OutputRow {
     pub id: Option<String>,
     /// Whether any route (live, idle or cut) ends here.
     pub used: bool,
+    /// Whether the bus has no label and no route, so its name is the unused placeholder.
+    pub unnamed: bool,
 }
 
 /// How a route is drawn.

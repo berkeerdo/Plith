@@ -27,7 +27,6 @@ fn facts() -> MediaFacts {
         can_prev: true,
         timeline: Some(timeline()),
         output: Some("A1 \u{b7} G733".into()),
-        reachable: None,
     }
 }
 
@@ -325,36 +324,6 @@ fn enabled_transport_is_filled_ink() {
         .filter(|n| matches!(n, Node::Polygon { ink: Ink::Ink, .. }))
         .count();
     assert_eq!(play, 3, "two skips and the play triangle");
-}
-
-#[test]
-fn reachable_output_branches_off_the_route() {
-    // Mock lines 211 to 214: a track branch to a hollow station and a faint label.
-    let page = media_page(
-        &MediaFacts {
-            reachable: Some("A2 · EDIFIER".into()),
-            ..facts()
-        },
-        "21:47",
-    );
-    let n = &page.list.nodes;
-    assert!(n.iter().any(
-        |n| matches!(n, Node::Stroke { points, ink: Ink::Track, width, .. }
-        if *points == vec![(300.0, 196.0), (320.0, 216.0), (470.0, 216.0)] && *width == 1.0)
-    ));
-    assert!(n.iter().any(
-        |n| matches!(n, Node::Station { x, y, mark: StationMark::Hollow, ink: Ink::Faint }
-        if *x == 470.0 && *y == 216.0)
-    ));
-    assert!(texts(n).contains(&("A2 · EDIFIER".to_string(), TextStyle::Label)));
-    let plain = media_page(&facts(), "21:47");
-    assert!(
-        !plain
-            .list
-            .nodes
-            .iter()
-            .any(|n| matches!(n, Node::Station { y, .. } if *y == 216.0))
-    );
 }
 
 #[test]

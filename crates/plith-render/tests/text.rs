@@ -148,3 +148,45 @@ fn bundled_faces_resolve_to_the_exact_weights() {
         );
     }
 }
+
+/// What the renderer shows for the first text node reading `wanted` in `nodes`.
+fn shown(text: &mut TextSystem, nodes: &[plith_core::draw::Node], wanted: &str) -> String {
+    let (rect, style, trim) = nodes
+        .iter()
+        .find_map(|n| match n {
+            plith_core::draw::Node::Text {
+                rect,
+                text,
+                style,
+                trim,
+                ..
+            } if &**text == wanted => Some((*rect, *style, *trim)),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("{wanted} missing"));
+    #[allow(clippy::cast_possible_truncation)]
+    let width = rect.w as f32;
+    text.display_text(wanted, style, width, trim).unwrap()
+}
+
+#[test]
+fn short_device_names_stay_whole_and_long_ones_trim_in_the_middle() {
+    use plith_core::pages::audio::{PickMode, audio_page, audio_view};
+    use plith_core::pages::fixtures;
+    let mut text = system();
+    let (activity, now) = fixtures::banana_activity();
+    let view = audio_view(&fixtures::banana(), &activity, PickMode::None, now);
+    let page = audio_page(&view, fixtures::CLOCK);
+    for name in ["Logitech G733", "Edifier R1280"] {
+        assert_eq!(shown(&mut text, &page.list.nodes, name), name);
+    }
+    let long = "Hoparl\u{f6}r (Realtek High Definition Audio)";
+    assert_eq!(long.chars().count(), 40);
+    let mut facts = fixtures::no_voicemeeter();
+    facts.endpoints[1].name = long.to_string();
+    let view = audio_view(&facts, &activity, PickMode::None, now);
+    let page = audio_page(&view, fixtures::CLOCK);
+    let got = shown(&mut text, &page.list.nodes, long);
+    assert_ne!(got, long);
+    assert!(got.contains('\u{2026}'), "{got}");
+}
