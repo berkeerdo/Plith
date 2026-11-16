@@ -50,6 +50,8 @@ pub(crate) struct Inner {
     pub applied: Cell<Option<IslandShape>>,
     /// True while a `WM_MOUSELEAVE` is requested and not yet delivered.
     pub tracking: Cell<bool>,
+    /// The left-button press waiting for its release (`WM_LBUTTONDOWN` inside the shape).
+    pub press: crate::window::mouse::PressRecord,
     pub registrations: RefCell<Registrations>,
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
@@ -79,6 +81,7 @@ impl Inner {
             stats: Cell::new(HitStats::default()),
             hit_errors: Cell::new(0),
             tracking: Cell::new(false),
+            press: crate::window::mouse::PressRecord::default(),
             applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),

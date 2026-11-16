@@ -1,13 +1,17 @@
-//! Pointer messages: a left-button release inside the drawn island becomes a click at an
-//! island point, and leave tracking turns the pointer leaving the window region into a leave.
+//! Pointer messages: a left-button press and release inside the drawn island become a click at
+//! the release point (standard button semantics with capture), and leave tracking turns the
+//! pointer leaving the window region into a leave.
 
 use super::ShellEvent;
 use super::state::Inner;
 use crate::handles::hwnd_of;
 use plith_core::geometry::IslandShape;
 use plith_core::layout::SurfaceLayout;
+use std::cell::Cell;
 use windows::Win32::Foundation::LPARAM;
-use windows::Win32::UI::Input::KeyboardAndMouse::{TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent};
+use windows::Win32::UI::Input::KeyboardAndMouse::{
+    ReleaseCapture, SetCapture, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+};
 
 /// `WM_MOUSELEAVE`; its constant lives in the large `Win32_UI_Controls` feature, so it is
 /// spelled here (winuser.h: `0x02A3`).
@@ -35,17 +39,74 @@ fn client_point(lparam: LPARAM) -> (f64, f64) {
     (f64::from(x), f64::from(y))
 }
 
-/// `WM_LBUTTONUP`: emits a click at the island point when it lies inside the drawn shape.
-/// A click may expand the island, so the next move asks for leave tracking again: a tracking
-/// request the system cancelled can then never leave the island open with no leave to come.
-pub(crate) fn on_click(inner: &Inner, lparam: LPARAM) {
-    let Some(frame) = inner.shapes.latest() else {
-        return;
-    };
-    if let Some((x, y)) = island_point(&inner.layout, frame.shape, client_point(lparam)) {
+/// The press half of a click: the island point where the left button went down inside the
+/// shape, kept until the release, a lost capture or a leave.
+#[derive(Debug, Default)]
+pub(crate) struct PressRecord(Cell<Option<(f64, f64)>>);
+
+impl PressRecord {
+    /// Records a press at `point` (`None`: outside the shape, which clears any record).
+    /// Returns `true` when the press counts and the window should take the capture.
+    pub(crate) fn down(&self, point: Option<(f64, f64)>) -> bool {
+        self.0.set(point);
+        point.is_some()
+    }
+
+    /// Ends the press: the click point when a press was recorded and the release `point` lies
+    /// inside the shape, else `None`. The record is always cleared.
+    pub(crate) fn up(&self, point: Option<(f64, f64)>) -> Option<(f64, f64)> {
+        self.0.take().and(point)
+    }
+
+    /// Forgets the press (capture lost or pointer left).
+    pub(crate) fn cancel(&self) {
+        self.0.set(None);
+    }
+}
+
+/// The island point of a mouse message, or `None` outside the drawn shape or before the first
+/// shape was published.
+fn message_point(inner: &Inner, lparam: LPARAM) -> Option<(f64, f64)> {
+    let frame = inner.shapes.latest()?;
+    island_point(&inner.layout, frame.shape, client_point(lparam))
+}
+
+/// `WM_LBUTTONDOWN`: records a press inside the shape. Returns `true` when the caller must take
+/// the mouse capture so the matching release reaches this window.
+pub(crate) fn note_down(inner: &Inner, lparam: LPARAM) -> bool {
+    inner.press.down(message_point(inner, lparam))
+}
+
+/// `WM_LBUTTONUP`: emits a click at the release point when the press went down on the island
+/// and the release lies inside the drawn shape. A click may expand the island, so the next move
+/// asks for leave tracking again: a tracking request the system cancelled can then never leave
+/// the island open with no leave to come.
+pub(crate) fn note_up(inner: &Inner, lparam: LPARAM) {
+    if let Some((x, y)) = inner.press.up(message_point(inner, lparam)) {
         inner.tracking.set(false);
         inner.emit(ShellEvent::Click { x, y });
     }
+}
+
+/// `WM_LBUTTONDOWN` with capture: a counted press makes this window capture the mouse.
+pub(crate) fn on_button_down(inner: &Inner, lparam: LPARAM) {
+    if note_down(inner, lparam) {
+        // SAFETY: names the notch window of this thread; capture does not activate it, and the
+        // previous capture owner (none in practice) is not used.
+        let _ = unsafe { SetCapture(hwnd_of(inner.visual.get())) };
+    }
+}
+
+/// `WM_LBUTTONUP` with capture: emits the click (if any), then releases the capture.
+pub(crate) fn on_button_up(inner: &Inner, lparam: LPARAM) {
+    note_up(inner, lparam);
+    release_capture();
+}
+
+/// Gives the capture back. A failure (we did not hold it) changes nothing.
+fn release_capture() {
+    // SAFETY: plain call; releasing a capture this thread does not hold is a no-op error.
+    let _ = unsafe { ReleaseCapture() };
 }
 
 /// Notes a pointer move. The first move since the last leave emits `Enter` and returns `true`:
@@ -61,6 +122,7 @@ pub(crate) fn note_move(inner: &Inner) -> bool {
 /// Notes that the pointer left the window region and emits `Leave`.
 pub(crate) fn note_leave(inner: &Inner) {
     inner.tracking.set(false);
+    inner.press.cancel();
     inner.emit(ShellEvent::Leave);
 }
 

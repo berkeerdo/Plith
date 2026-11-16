@@ -28,9 +28,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST,
     IDC_ARROW, IsWindow, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage, RegisterClassExW,
     SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-    WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE,
-    WM_MOUSEMOVE, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
-    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    WM_CAPTURECHANGED, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_POWERBROADCAST, WM_TIMER,
+    WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
@@ -39,8 +40,8 @@ const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
 /// Something the app has to react to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellEvent {
-    /// The left button was released inside the drawn island shape, at `(x, y)` DIP relative
-    /// to the island's top-left.
+    /// The left button went down on the island and was released inside the drawn island shape,
+    /// at `(x, y)` DIP relative to the island's top-left (the release point).
     Click {
         /// Horizontal island DIP.
         x: f64,
@@ -372,8 +373,18 @@ fn dispatch(
     let is_visual = hwnd.0 as isize == inner.visual.get();
     match msg {
         WM_MOUSEACTIVATE => return Some(LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0))),
+        // The press only records and captures: `WM_MOUSEACTIVATE` above already answered
+        // `MA_NOACTIVATE`, and neither the press nor the capture activates the island.
+        WM_LBUTTONDOWN => {
+            mouse::on_button_down(inner, lparam);
+            return Some(LRESULT(0));
+        }
         WM_LBUTTONUP => {
-            mouse::on_click(inner, lparam);
+            mouse::on_button_up(inner, lparam);
+            return Some(LRESULT(0));
+        }
+        WM_CAPTURECHANGED => {
+            inner.press.cancel();
             return Some(LRESULT(0));
         }
         WM_MOUSEMOVE if is_visual => {

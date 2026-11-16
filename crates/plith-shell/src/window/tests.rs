@@ -151,7 +151,8 @@ fn a_click_asks_for_leave_tracking_again() {
     #[allow(clippy::cast_possible_truncation)]
     let y = (oy + 10.0).round() as i16;
     let lparam = LPARAM((isize::from(y) << 16) | isize::from(x));
-    mouse::on_click(&inner, lparam);
+    assert!(mouse::note_down(&inner, lparam), "a press inside the shape");
+    mouse::note_up(&inner, lparam);
     assert!(
         mouse::note_move(&inner),
         "the move after an expanding click re-requests tracking"
@@ -159,4 +160,54 @@ fn a_click_asks_for_leave_tracking_again() {
     let got = events.borrow();
     assert!(matches!(got[1], ShellEvent::Click { .. }), "{got:?}");
     assert_eq!(got.len(), 3);
+}
+
+#[test]
+fn press_outside_then_release_inside_is_no_click() {
+    let press = mouse::PressRecord::default();
+    assert!(
+        !press.down(None),
+        "a press outside the shape takes no capture"
+    );
+    assert_eq!(press.up(Some((10.0, 5.0))), None);
+}
+
+#[test]
+fn press_inside_then_release_inside_clicks_at_the_release() {
+    let press = mouse::PressRecord::default();
+    assert!(
+        press.down(Some((4.0, 2.0))),
+        "a press inside takes the capture"
+    );
+    assert_eq!(press.up(Some((10.0, 5.0))), Some((10.0, 5.0)));
+    assert_eq!(press.up(Some((10.0, 5.0))), None, "one press, one click");
+}
+
+#[test]
+fn release_with_no_press_is_nothing() {
+    let press = mouse::PressRecord::default();
+    assert_eq!(press.up(Some((10.0, 5.0))), None);
+}
+
+#[test]
+fn capture_lost_between_press_and_release_is_nothing() {
+    let press = mouse::PressRecord::default();
+    assert!(press.down(Some((4.0, 2.0))));
+    press.cancel();
+    assert_eq!(press.up(Some((10.0, 5.0))), None);
+}
+
+#[test]
+fn press_inside_then_release_outside_is_nothing() {
+    let press = mouse::PressRecord::default();
+    assert!(press.down(Some((4.0, 2.0))));
+    assert_eq!(press.up(None), None);
+    assert_eq!(press.up(Some((1.0, 1.0))), None, "the record is gone");
+}
+
+#[test]
+fn a_release_without_a_press_emits_nothing() {
+    let (inner, events) = recording();
+    mouse::note_up(&inner, LPARAM(0));
+    assert!(events.borrow().is_empty());
 }
