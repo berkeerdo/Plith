@@ -74,6 +74,8 @@ pub enum Action {
     Previous,
     /// Seek to a fraction (0 to 1) of the track.
     Seek(f64),
+    /// A press on a seek ruler: `hit` turns it into `Seek` with the fraction at the click.
+    SeekRuler(Rect),
 }
 
 /// A built page: what to draw, where to click and how big the island is.
@@ -100,6 +102,7 @@ pub struct HitTarget {
 const HIT_SLACK: f64 = 4.0;
 
 /// The action of the first target whose rect, grown by 4 DIP on each side, contains the point.
+/// A `SeekRuler` target comes back as `Seek` with the fraction at `x`.
 #[must_use]
 pub fn hit(targets: &[HitTarget], x: f64, y: f64) -> Option<Action> {
     targets
@@ -110,5 +113,17 @@ pub fn hit(targets: &[HitTarget], x: f64, y: f64) -> Option<Action> {
                 && y >= t.rect.y - HIT_SLACK
                 && y <= t.rect.y + t.rect.h + HIT_SLACK
         })
-        .map(|t| t.action.clone())
+        .map(|t| match &t.action {
+            Action::SeekRuler(ruler) => Action::Seek(seek_fraction(*ruler, x)),
+            other => other.clone(),
+        })
+}
+
+/// The played fraction for a click at `x` on `ruler`, clamped to 0..1.
+#[must_use]
+pub fn seek_fraction(ruler: Rect, x: f64) -> f64 {
+    if ruler.w <= 0.0 {
+        return 0.0;
+    }
+    ((x - ruler.x) / ruler.w).clamp(0.0, 1.0)
 }

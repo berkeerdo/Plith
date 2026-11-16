@@ -55,6 +55,10 @@ pub enum TextStyle {
     Value,
     /// A clock readout.
     Clock,
+    /// Running text: regular sans 12.
+    Body,
+    /// A strong line: semibold sans 14.
+    Strong,
 }
 
 /// Where an overlong line loses its characters.
@@ -312,12 +316,14 @@ pub struct StyleSpec {
 #[must_use]
 pub fn style_spec(style: TextStyle) -> StyleSpec {
     let (family, size_dip, weight, uppercase, tracking_em) = match style {
-        TextStyle::Title => (Family::Sans, 17.0, 600, false, 0.0),
+        TextStyle::Title => (Family::Sans, 16.0, 600, false, 0.0),
         TextStyle::Name => (Family::Sans, 14.0, 400, false, 0.0),
         TextStyle::Sub => (Family::Mono, 10.0, 400, true, 0.0),
         TextStyle::Label => (Family::Mono, 10.0, 400, true, 0.08),
         TextStyle::Value => (Family::Mono, 12.0, 400, false, 0.0),
         TextStyle::Clock => (Family::Mono, 14.0, 500, false, 0.0),
+        TextStyle::Body => (Family::Sans, 12.0, 400, false, 0.0),
+        TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
     };
     StyleSpec {
         family,

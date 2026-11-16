@@ -5,6 +5,7 @@
 
 use std::sync::Arc;
 
+pub use super::seek_fraction;
 use super::tabbar::tabbar;
 use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{
@@ -79,15 +80,6 @@ pub fn format_time(secs: u64) -> String {
     } else {
         format!("{m}:{s:02}")
     }
-}
-
-/// The played fraction for a click at `x` on `ruler`, clamped to 0..1.
-#[must_use]
-pub fn seek_fraction(ruler: Rect, x: f64) -> f64 {
-    if ruler.w <= 0.0 {
-        return 0.0;
-    }
-    ((x - ruler.x) / ruler.w).clamp(0.0, 1.0)
 }
 
 /// Whole seconds of a position; negative and non-finite values become 0.
@@ -191,14 +183,14 @@ fn empty_body(facts: &MediaFacts, nodes: &mut Vec<Node>) {
     nodes.push(text(
         rect(30.0, 68.0, 560.0, 20.0),
         "\u{c7}alan bir \u{15f}ey yok",
-        TextStyle::Title,
+        TextStyle::Strong,
         Ink::Ink,
         Align::Start,
     ));
     nodes.push(text(
         rect(30.0, 94.0, 560.0, 12.0),
         "Spotify, taray\u{131}c\u{131} ya da bir oyun ses verdi\u{11f}inde burada g\u{f6}r\u{fc}n\u{fc}r.",
-        TextStyle::Sub,
+        TextStyle::Body,
         Ink::Muted,
         Align::Start,
     ));
@@ -236,15 +228,18 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
         nodes.push(text(
             rect(146.0, 92.0, 444.0, 12.0),
             &facts.artist,
-            TextStyle::Sub,
+            TextStyle::Body,
             Ink::Muted,
             Align::Start,
         ));
     }
-    if let Some(timeline) = facts.timeline {
-        ruler(facts, timeline, nodes, targets);
-    }
+    // The transport targets go first so their top edge wins where the seek target grows into it.
+    let seek = facts
+        .timeline
+        .filter(|t| t.duration_s.is_finite() && t.duration_s > 0.0)
+        .and_then(|timeline| ruler(facts, timeline, nodes));
     transport(facts, nodes, targets);
+    targets.extend(seek);
     if let Some(output) = &facts.output {
         route_row(
             nodes,
@@ -256,12 +251,7 @@ fn session_body(facts: &MediaFacts, nodes: &mut Vec<Node>, targets: &mut Vec<Hit
     }
 }
 
-fn ruler(
-    facts: &MediaFacts,
-    timeline: SeekTimeline,
-    nodes: &mut Vec<Node>,
-    targets: &mut Vec<HitTarget>,
-) {
+fn ruler(facts: &MediaFacts, timeline: SeekTimeline, nodes: &mut Vec<Node>) -> Option<HitTarget> {
     let (x0, w) = (RULER.x, RULER.w);
     nodes.push(line(
         vec![(x0, RULER_Y), (x0 + w, RULER_Y)],
@@ -295,12 +285,10 @@ fn ruler(
         Ink::Muted,
         Align::End,
     ));
-    if facts.can_seek {
-        targets.push(HitTarget {
-            rect: rect(x0, RULER.y - SEEK_GROW, w, RULER.h + 2.0 * SEEK_GROW),
-            action: Action::Seek(0.0),
-        });
-    }
+    facts.can_seek.then(|| HitTarget {
+        rect: rect(x0, RULER.y - SEEK_GROW, w, RULER.h + 2.0 * SEEK_GROW),
+        action: Action::SeekRuler(RULER),
+    })
 }
 
 /// Previous, play or pause, next, centred under the ruler (mock `cx`, `ty`).

@@ -5,7 +5,17 @@ fn style_table_matches_the_design() {
     let title = style_spec(TextStyle::Title);
     assert_eq!(
         (title.family, title.size_dip, title.weight),
-        (Family::Sans, 17.0, 600)
+        (Family::Sans, 16.0, 600)
+    );
+    let body = style_spec(TextStyle::Body);
+    assert_eq!(
+        (body.family, body.size_dip, body.weight, body.uppercase),
+        (Family::Sans, 12.0, 400, false)
+    );
+    let strong = style_spec(TextStyle::Strong);
+    assert_eq!(
+        (strong.family, strong.size_dip, strong.weight),
+        (Family::Sans, 14.0, 600)
     );
     let name = style_spec(TextStyle::Name);
     assert_eq!(

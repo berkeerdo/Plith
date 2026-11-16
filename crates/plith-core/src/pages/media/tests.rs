@@ -110,7 +110,7 @@ fn no_timeline_hides_ruler() {
         !page
             .targets
             .iter()
-            .any(|t| matches!(t.action, Action::Seek(_)))
+            .any(|t| matches!(t.action, Action::Seek(_) | Action::SeekRuler(_)))
     );
     assert!(page.targets.iter().any(|t| t.action == Action::PlayPause));
 }
@@ -128,8 +128,8 @@ fn seek_fraction_from_click_x() {
 #[test]
 fn ruler_click_yields_seek_action() {
     let page = media_page(&facts(), "21:47");
-    let got = hit(&page.targets, RULER.x + RULER.w / 2.0, RULER.y + 5.0);
-    assert!(matches!(got, Some(Action::Seek(_))));
+    let got = hit(&page.targets, RULER.x + RULER.w * 0.25, RULER.y + 5.0);
+    assert_eq!(got, Some(Action::Seek(0.25)));
 }
 
 #[test]
@@ -186,6 +186,7 @@ fn empty_title_shows_source_name() {
     );
     let t = texts(&page.list.nodes);
     assert!(t.contains(&("Spotify".to_string(), TextStyle::Title)));
+    assert!(!t.iter().any(|(_, s)| *s == TextStyle::Body));
     assert!(!has_text(&page.list.nodes, "M83"));
 }
 
@@ -240,4 +241,81 @@ fn art_is_image_or_placeholder() {
             ..
         }
     )));
+}
+
+fn seek_targets(page: &PageBuild) -> usize {
+    page.targets
+        .iter()
+        .filter(|t| matches!(t.action, Action::Seek(_) | Action::SeekRuler(_)))
+        .count()
+}
+
+#[test]
+fn cannot_seek_draws_ruler_without_target() {
+    let page = media_page(
+        &MediaFacts {
+            can_seek: false,
+            ..facts()
+        },
+        "21:47",
+    );
+    assert_eq!(seeks(&page.list.nodes), 1);
+    assert_eq!(seek_targets(&page), 0);
+}
+
+#[test]
+fn zero_duration_is_no_timeline() {
+    let mut zero = timeline();
+    zero.duration_s = 0.0;
+    let page = media_page(
+        &MediaFacts {
+            timeline: Some(zero),
+            ..facts()
+        },
+        "21:47",
+    );
+    assert_eq!(seeks(&page.list.nodes), 0);
+    assert_eq!(seek_targets(&page), 0);
+    assert!(!has_text(&page.list.nodes, "1:42"));
+}
+
+#[test]
+fn enabled_transport_is_ink() {
+    let page = media_page(&facts(), "21:47");
+    let ink = page
+        .list
+        .nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Stroke { ink: Ink::Ink, width, .. } if *width == 1.5))
+        .count();
+    let faint = page
+        .list
+        .nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Stroke { ink: Ink::Faint, width, .. } if *width == 1.5))
+        .count();
+    assert_eq!(ink, 4);
+    assert_eq!(faint, 0);
+}
+
+#[test]
+fn empty_state_uses_strong_and_body() {
+    let page = media_page(&MediaFacts::default(), "21:47");
+    let t = texts(&page.list.nodes);
+    assert!(t.contains(&("Çalan bir şey yok".to_string(), TextStyle::Strong)));
+    assert!(t.iter().any(|(_, s)| *s == TextStyle::Body));
+}
+
+#[test]
+fn artist_uses_body_style() {
+    let page = media_page(&facts(), "21:47");
+    assert!(texts(&page.list.nodes).contains(&("M83".to_string(), TextStyle::Body)));
+}
+
+#[test]
+fn transport_wins_over_seek_where_they_touch() {
+    let page = media_page(&facts(), "21:47");
+    let y = 150.0 - 10.0 - 1.0;
+    let got = hit(&page.targets, RULER.x + RULER.w / 2.0 - 2.0, y);
+    assert_eq!(got, Some(Action::PlayPause));
 }
