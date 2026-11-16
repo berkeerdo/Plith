@@ -7,7 +7,7 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use plith_ipc::{
-    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Stopper, encode,
+    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, ServerEvent, Stopper, encode,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -32,7 +32,7 @@ fn unique_name() -> String {
 
 struct Running {
     stopper: Stopper,
-    events: Receiver<Event>,
+    events: Receiver<ServerEvent>,
     thread: Option<JoinHandle<()>>,
 }
 
@@ -57,8 +57,31 @@ impl Running {
         }
     }
 
-    fn next(&self) -> Event {
+    /// The next server event, connection events included.
+    fn next_event(&self) -> ServerEvent {
         self.events.recv_timeout(WAIT).expect("an event in time")
+    }
+
+    /// The next message (or decode error), skipping connection events.
+    fn next(&self) -> Event {
+        loop {
+            if let ServerEvent::Message(event) = self.next_event() {
+                return event;
+            }
+        }
+    }
+
+    /// True when no message (or decode error) arrives within `time`.
+    fn quiet_for(&self, time: Duration) -> bool {
+        let deadline = Instant::now() + time;
+        loop {
+            let left = deadline.saturating_duration_since(Instant::now());
+            match self.events.recv_timeout(left) {
+                Ok(ServerEvent::Message(_)) => return false,
+                Ok(_) => {}
+                Err(_) => return true,
+            }
+        }
     }
 
     fn shut_down(&mut self) {
@@ -137,6 +160,25 @@ fn client_messages_reach_the_server_in_order() {
 }
 
 #[test]
+fn each_connection_is_framed_by_connected_and_disconnected() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    for _ in 0..2 {
+        let link = OsdLink::start(name.clone());
+        assert_eq!(server.next_event(), ServerEvent::Connected);
+        assert!(matches!(
+            server.next_event(),
+            ServerEvent::Message(Ok(Message::Hello { .. }))
+        ));
+        link.send(Message::Hide).unwrap();
+        assert_eq!(server.next_event(), ServerEvent::Message(Ok(Message::Hide)));
+        drop(link);
+        assert_eq!(server.next_event(), ServerEvent::Message(Ok(Message::Bye)));
+        assert_eq!(server.next_event(), ServerEvent::Disconnected);
+    }
+}
+
+#[test]
 fn second_bind_reports_already_running() {
     let name = unique_name();
     let _first = OsdServer::bind(&name).expect("first bind");
@@ -203,10 +245,7 @@ fn fatal_decode_error_disconnects_and_the_next_client_is_served() {
     write_raw(&name, &[&ok]);
     assert_eq!(server.next(), Ok(Message::Hide));
     assert!(
-        server
-            .events
-            .recv_timeout(Duration::from_millis(200))
-            .is_err(),
+        server.quiet_for(Duration::from_millis(200)),
         "nothing else may be delivered"
     );
 }

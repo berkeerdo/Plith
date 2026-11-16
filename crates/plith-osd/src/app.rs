@@ -13,7 +13,7 @@ use crate::paint::{HEIGHT, WIDTH};
 use crate::render::{self, Event, Job, WM_APP_EXIT};
 use crate::watch;
 use plith_core::layout::SurfaceLayout;
-use plith_ipc::{BindError, DecodeError, Flow, Message, Meter, OsdServer};
+use plith_ipc::{BindError, DecodeError, Flow, Message, Meter, OsdServer, ServerEvent};
 use std::mem::{Discriminant, discriminant};
 use std::sync::Arc;
 use std::sync::mpsc::{SyncSender, TrySendError, sync_channel};
@@ -208,7 +208,10 @@ impl Served {
 /// to quit, which ends the app.
 fn serve(server: &OsdServer, events: &SyncSender<Event>, log: &Log) -> Result<(), String> {
     let mut state = Served::default();
-    let result = server.serve(|got| state.on(got, events, log));
+    let result = server.serve(|event| match event {
+        ServerEvent::Message(got) => state.on(got, events, log),
+        ServerEvent::Connected | ServerEvent::Disconnected => Flow::Continue,
+    });
     if result.is_err() {
         let _ = events.try_send(Event::Quit);
     }

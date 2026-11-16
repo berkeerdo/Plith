@@ -66,6 +66,18 @@ pub enum Flow {
     Stop,
 }
 
+/// What [`OsdServer::serve`] reports to its callback.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum ServerEvent {
+    /// A client opened the pipe.
+    Connected,
+    /// A message from the connected client, or why its bytes could not be decoded.
+    Message(Result<Message, DecodeError>),
+    /// The client closed the pipe or was dropped after a fatal decode error. Not reported
+    /// when the server itself stops.
+    Disconnected,
+}
+
 #[derive(Default)]
 struct Shared {
     stop: AtomicBool,
@@ -209,7 +221,8 @@ impl OsdServer {
         }
     }
 
-    /// Serves clients one after another and reports every message to `on`.
+    /// Serves clients one after another and reports to `on`: [`ServerEvent::Connected`],
+    /// then every message, then [`ServerEvent::Disconnected`] when the client goes.
     ///
     /// Blocks the calling thread until `on` returns [`Flow::Stop`], the [`Stopper`] fires
     /// or a fatal error occurs. A client that sends a fatal decode error (bad magic or
@@ -217,10 +230,7 @@ impl OsdServer {
     ///
     /// # Errors
     /// Returns the Windows error text on an unexpected pipe failure.
-    pub fn serve(
-        &self,
-        mut on: impl FnMut(Result<Message, DecodeError>) -> Flow,
-    ) -> Result<(), String> {
+    pub fn serve(&self, mut on: impl FnMut(ServerEvent) -> Flow) -> Result<(), String> {
         let _registration = Registration::new(&self.shared)?;
         loop {
             if self.shared.stop.load(Ordering::SeqCst) {
@@ -233,14 +243,22 @@ impl OsdServer {
                     Err(error)
                 };
             }
-            let outcome = self.pump(&mut on);
+            let outcome = if on(ServerEvent::Connected) == Flow::Stop {
+                Pumped::Stop
+            } else {
+                self.pump(&mut on)
+            };
             // SAFETY: the pipe handle is valid; a failure only means nothing was connected.
             unsafe {
                 let _ = DisconnectNamedPipe(self.pipe.0);
             }
             match outcome {
                 Pumped::Stop => return Ok(()),
-                Pumped::Disconnect => {}
+                Pumped::Disconnect => {
+                    if on(ServerEvent::Disconnected) == Flow::Stop {
+                        return Ok(());
+                    }
+                }
                 Pumped::Failed(error) => return Err(error),
             }
         }
@@ -262,7 +280,7 @@ impl OsdServer {
         }
     }
 
-    fn pump(&self, on: &mut impl FnMut(Result<Message, DecodeError>) -> Flow) -> Pumped {
+    fn pump(&self, on: &mut impl FnMut(ServerEvent) -> Flow) -> Pumped {
         let mut buffer = [0u8; MAX_MESSAGE];
         loop {
             if self.shared.stop.load(Ordering::SeqCst) {
@@ -282,7 +300,7 @@ impl OsdServer {
                 Read::Aborted => continue,
                 Read::Failed(error) => return Pumped::Failed(error),
             };
-            if on(result) == Flow::Stop {
+            if on(ServerEvent::Message(result)) == Flow::Stop {
                 return Pumped::Stop;
             }
             if fatal {
