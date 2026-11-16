@@ -1,10 +1,11 @@
-//! Service readings to core facts: field copies and the edition counts only. Every decision
-//! (names, the pill, the microphone bus, the media source) is a `plith_core` function.
+//! Service readings to core facts: field copies only. Every decision (names, the pill, the
+//! microphone bus, the media source) is a `plith_core` function; the edition counts come from
+//! `VmKind`.
 
 use crate::services::{Facts, Readings};
 use plith_audio::endpoints::EndpointState;
 use plith_audio::microphone::MicSnapshot;
-use plith_audio::voicemeeter::{ChannelSnapshot, VmKind, VmSnapshot};
+use plith_audio::voicemeeter::{ChannelSnapshot, VmSnapshot};
 use plith_core::draw::{ArtId, ArtPixels, SeekTimeline};
 use plith_core::pages::audio::{AudioFacts, ChannelFacts, EndpointFacts, MicFacts, VmFacts};
 use plith_core::pages::derive;
@@ -14,17 +15,6 @@ use plith_media::MediaSnapshot;
 use plith_system::DeviceLevel;
 use std::sync::Arc;
 use std::time::SystemTime;
-
-/// Hardware strips and hardware (A) buses of an edition: Standard 2 and 1, Banana 3 and 3,
-/// Potato 5 and 5.
-#[must_use]
-pub fn edition_counts(kind: VmKind) -> (usize, usize) {
-    match kind {
-        VmKind::Standard => (2, 1),
-        VmKind::Banana => (3, 3),
-        VmKind::Potato => (5, 5),
-    }
-}
 
 /// One strip or bus.
 fn channel(c: &ChannelSnapshot) -> ChannelFacts {
@@ -39,12 +29,12 @@ fn channel(c: &ChannelSnapshot) -> ChannelFacts {
 /// The mixer as audio facts.
 #[must_use]
 pub fn vm_facts(vm: &VmSnapshot) -> VmFacts {
-    let (hardware_strips, hardware_buses) = edition_counts(vm.kind);
     VmFacts {
         strips: vm.strips.iter().map(channel).collect(),
         buses: vm.buses.iter().map(channel).collect(),
-        hardware_strips,
-        hardware_buses,
+        hardware_strips: vm.kind.hardware_strips(),
+        hardware_buses: vm.kind.hardware_buses(),
+        signal: vm.signal.clone(),
     }
 }
 
@@ -134,15 +124,15 @@ pub fn system_facts(
     }
 }
 
-/// Every page's facts from the readings; `signal` says whether a strip carries sound now.
+/// Every page's facts from the readings; the pill reads the mixer's debounced signal.
 #[must_use]
-pub fn facts(readings: &Readings, signal: bool, now: SystemTime) -> Facts {
+pub fn facts(readings: &Readings, now: SystemTime) -> Facts {
     let audio = audio_facts(
         readings.vm.as_ref(),
         &readings.endpoints,
         readings.mic.as_ref(),
     );
-    let pill = derive::pill_facts(&audio, readings.media.playing, signal);
+    let pill = derive::pill_facts(&audio, readings.media.playing);
     let output = (!pill.output.is_empty()).then(|| pill.output.clone());
     let system = system_facts(
         &readings.brightness,

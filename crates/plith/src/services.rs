@@ -12,7 +12,6 @@ use plith_audio::endpoints::{EndpointService, EndpointState};
 use plith_audio::microphone::{MicSnapshot, MicrophoneService};
 use plith_audio::voicemeeter::{VmSnapshot, VoicemeeterService};
 use plith_core::draw::ArtPixels;
-use plith_core::pages::audio::Activity;
 use plith_core::pages::audio::AudioFacts;
 use plith_core::pages::media::MediaFacts;
 use plith_core::pages::pill::PillFacts;
@@ -21,7 +20,6 @@ use plith_media::{MediaService, MediaSnapshot};
 use plith_shell::UiWaker;
 use plith_system::{BrightnessService, DeviceLevel};
 use start::{ServiceId, Started};
-use std::cell::RefCell;
 use std::ops::{BitOr, BitOrAssign};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
@@ -99,9 +97,9 @@ pub type LevelSource = Box<dyn FnMut() -> Option<Levels> + Send>;
 pub trait Services {
     /// Takes every published reading (the latest of each wins) and says what changed.
     fn drain(&mut self) -> Changes;
-    /// The facts for the pages at `now_s` seconds of the feed's clock (the signal hold of the
-    /// pill reads it).
-    fn facts(&self, now_s: f64) -> Facts;
+    /// The facts for the pages. A pure read: the pill's signal comes debounced from the mixer
+    /// service, so nothing here observes levels.
+    fn facts(&self) -> Facts;
     /// The current levels, for the signal activity; `None` without a mixer.
     fn levels(&self) -> Option<Levels>;
     /// A level reader for the render thread.
@@ -163,8 +161,6 @@ pub struct RealServices {
     log: Arc<LogFile>,
     /// The services whose `start()` returned.
     up: Vec<ServiceId>,
-    /// Signal per strip with the activity hold, for the pill.
-    activity: RefCell<Activity>,
     /// Applies the writes off the UI thread; `None` when its thread did not start.
     writer: Option<Writer>,
 }
@@ -238,7 +234,6 @@ impl RealServices {
             readings: Readings::default(),
             log,
             up: Vec::new(),
-            activity: RefCell::new(Activity::default()),
             writer,
         }
     }
@@ -293,13 +288,8 @@ impl Services for RealServices {
         changes
     }
 
-    fn facts(&self, now_s: f64) -> Facts {
-        let signal = self.levels().is_some_and(|levels| {
-            let mut activity = self.activity.borrow_mut();
-            activity.observe(&levels.strips, now_s);
-            (0..levels.strips.len()).any(|s| activity.has_signal(s, now_s))
-        });
-        model::facts(&self.readings, signal, SystemTime::now())
+    fn facts(&self) -> Facts {
+        model::facts(&self.readings, SystemTime::now())
     }
 
     fn levels(&self) -> Option<Levels> {

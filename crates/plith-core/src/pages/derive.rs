@@ -69,9 +69,14 @@ pub fn pill_state(muted: bool, playing: bool, signal: bool) -> PillState {
     }
 }
 
-/// The pill: the default endpoint's name, its volume in percent and the route state.
+/// The pill: the default endpoint's name, its volume in percent and the route state. Sound
+/// is media `playing` or a strip holding signal in the mixer's debounced flags.
 #[must_use]
-pub fn pill_facts(audio: &AudioFacts, playing: bool, signal: bool) -> PillFacts {
+pub fn pill_facts(audio: &AudioFacts, playing: bool) -> PillFacts {
+    let signal = audio
+        .vm
+        .as_ref()
+        .is_some_and(|vm| vm.signal.iter().any(|s| *s));
     let output = audio
         .default_id
         .as_ref()

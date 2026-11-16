@@ -20,11 +20,7 @@ pub fn fallback_label(kind: VmKind, rail: Rail, index: usize) -> String {
     match rail {
         Rail::Strip => format!("Strip {}", index + 1),
         Rail::Bus => {
-            let hardware_outputs = match kind {
-                VmKind::Standard => 1,
-                VmKind::Banana => 3,
-                VmKind::Potato => 5,
-            };
+            let hardware_outputs = kind.hardware_buses();
             if index < hardware_outputs {
                 format!("A{}", index + 1)
             } else {
@@ -44,11 +40,7 @@ pub fn route_param(kind: VmKind, bus: usize) -> Option<&'static str> {
     if bus >= kind.bus_count() {
         return None;
     }
-    let hardware_outputs = match kind {
-        VmKind::Standard => 1,
-        VmKind::Banana => 3,
-        VmKind::Potato => 5,
-    };
+    let hardware_outputs = kind.hardware_buses();
     let slot = if bus < hardware_outputs {
         bus
     } else {

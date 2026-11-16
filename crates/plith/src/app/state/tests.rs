@@ -424,7 +424,7 @@ fn press(app: &mut App, page: PageId, wanted: impl Fn(&Action) -> bool) {
 }
 
 fn facts(app: &mut App) -> crate::services::Facts {
-    app.feed.as_mut().unwrap().services().facts(0.0)
+    app.feed.as_mut().unwrap().services().facts()
 }
 
 fn pick(app: &App) -> PickMode {

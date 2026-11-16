@@ -1,6 +1,6 @@
 use super::*;
 use plith_audio::endpoints::{AttachedState, Endpoint};
-use plith_audio::voicemeeter::Rail;
+use plith_audio::voicemeeter::{Rail, VmKind};
 use plith_core::pages::pill::PillState;
 use plith_media::{Artwork, Timeline};
 use std::time::Duration;
@@ -34,6 +34,7 @@ fn banana() -> VmSnapshot {
         kind: VmKind::Banana,
         strips,
         buses,
+        signal: vec![false, true, false, false, false],
     }
 }
 
@@ -85,13 +86,7 @@ fn model_copies_vm_snapshot() {
     assert!(facts.strips[1].muted);
     assert_eq!(facts.buses[4].label, "B4");
     assert!(facts.buses[4].routes.is_empty());
-}
-
-#[test]
-fn edition_counts_follow_the_edition() {
-    assert_eq!(edition_counts(VmKind::Standard), (2, 1));
-    assert_eq!(edition_counts(VmKind::Banana), (3, 3));
-    assert_eq!(edition_counts(VmKind::Potato), (5, 5));
+    assert_eq!(facts.signal, [false, true, false, false, false]);
 }
 
 #[test]
@@ -216,7 +211,7 @@ fn facts_compose_the_pages_and_the_pill() {
         brightness: Vec::new(),
     };
     let now = SystemTime::UNIX_EPOCH + Duration::from_secs(5000);
-    let facts = facts(&readings, false, now);
+    let facts = facts(&readings, now);
     assert_eq!(facts.pill.output, "Logitech G733");
     assert_eq!(facts.pill.value, Some(62));
     assert_eq!(facts.pill.state, PillState::Live);
@@ -228,7 +223,13 @@ fn facts_compose_the_pages_and_the_pill() {
         endpoints: EndpointState::default(),
         ..readings
     };
-    let facts = super::facts(&quiet, false, now);
+    let facts = super::facts(&quiet, now);
     assert_eq!(facts.pill.state, PillState::Idle);
     assert_eq!(facts.media.output, None);
+    // The mixer's held signal makes the pill live without media.
+    let mixing = Readings {
+        vm: Some(banana()),
+        ..quiet
+    };
+    assert_eq!(super::facts(&mixing, now).pill.state, PillState::Live);
 }

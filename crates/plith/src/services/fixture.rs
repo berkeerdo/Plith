@@ -232,13 +232,18 @@ impl Services for FixtureServices {
         std::mem::take(&mut self.pending)
     }
 
-    /// The caller's `now_s` is ignored: the levels the render thread draws, `levels()` and the
-    /// pill all read the fixture's own clock.
-    fn facts(&self, _now_s: f64) -> Facts {
-        let signal = self
-            .levels_at(self.now_s())
-            .is_some_and(|levels| derive::any_signal(&levels.strips));
-        let pill = derive::pill_facts(&self.audio, self.media.playing, signal);
+    /// The levels the render thread draws, `levels()` and the mixer's signal flags all read
+    /// the fixture's own clock.
+    fn facts(&self) -> Facts {
+        let mut audio = self.audio.clone();
+        if let (Some(vm), Some(levels)) = (audio.vm.as_mut(), self.levels_at(self.now_s())) {
+            vm.signal = levels
+                .strips
+                .iter()
+                .map(|peaks| derive::any_signal(std::slice::from_ref(peaks)))
+                .collect();
+        }
+        let pill = derive::pill_facts(&audio, self.media.playing);
         let mut media = self.media.clone();
         media.timeline = media.timeline.map(|t| derive::rebase(t, SystemTime::now()));
         media.output = (!pill.output.is_empty()).then(|| pill.output.clone());
@@ -251,7 +256,7 @@ impl Services for FixtureServices {
             mic_bus: self.audio.vm.as_ref().and_then(derive::mic_bus),
         };
         Facts {
-            audio: self.audio.clone(),
+            audio,
             art: media.art.map(|_| Arc::clone(&self.art)),
             media,
             system,

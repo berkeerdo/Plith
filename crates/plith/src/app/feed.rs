@@ -130,7 +130,7 @@ impl Feed {
         mailbox: &SceneMailbox,
     ) -> Self {
         let _ = services.drain();
-        let facts = services.facts(0.0);
+        let facts = services.facts();
         let clock_text = clock_of(clock());
         let activity = Activity::default();
         let pages = Pages::new(&Inputs {
@@ -192,7 +192,7 @@ impl Feed {
     pub fn on_wake(&mut self, mailbox: &SceneMailbox) {
         let changes = self.services.drain();
         if changes.any() {
-            self.facts = self.services.facts(self.now_s());
+            self.facts = self.services.facts();
             let dirty = Dirty::from_changes(changes);
             if is_open(&mailbox.latest().scene) {
                 self.rebuild(dirty, mailbox);
@@ -235,7 +235,7 @@ impl Feed {
         match id {
             ACTIVITY_TIMER => self.read_activity(mailbox),
             MEDIA_TIMER => {
-                self.facts = self.services.facts(self.now_s());
+                self.facts = self.services.facts();
                 self.rebuild(Dirty::page(PageId::Media), mailbox);
             }
             CLOCK_TIMER => {

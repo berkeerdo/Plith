@@ -23,6 +23,7 @@ fn banana(strips: Vec<ChannelFacts>) -> AudioFacts {
             buses,
             hardware_strips: 3,
             hardware_buses: 3,
+            signal: Vec::new(),
         }),
         ..AudioFacts::default()
     }
@@ -187,6 +188,7 @@ fn potato_rows_shrink_pitch() {
             buses,
             hardware_strips: 5,
             hardware_buses: 5,
+            signal: Vec::new(),
         }),
         ..AudioFacts::default()
     };
@@ -313,4 +315,17 @@ fn out_of_range_pick_is_normalised() {
     let view = audio_view(&facts, &Activity::default(), PickMode::Picked(99), 0.0);
     assert_eq!(view.mode, PickMode::None);
     assert_eq!(view.footer, Footer::Normal);
+}
+
+#[test]
+fn unnamed_reads_the_facts_not_the_display_string() {
+    let mut facts = crate::pages::fixtures::banana();
+    let vm = facts.vm.as_mut().unwrap();
+    // An unused bus whose user label happens to read like the placeholder is still named.
+    vm.buses[3].label = UNUSED_NAME.to_string();
+    let view = audio_view(&facts, &Activity::default(), PickMode::None, 0.0);
+    let row = &view.outputs[3];
+    assert_eq!(row.name, UNUSED_NAME);
+    assert!(!row.unnamed);
+    assert_eq!(row.value, OutputValue::Db(0.0));
 }

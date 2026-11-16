@@ -155,15 +155,17 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         .strips
         .iter()
         .any(|s| s.routes.get(b).copied().unwrap_or(false));
-    let name = if !bus.label.is_empty() && bus.label != tag {
+    // A bus is named when its label is set and is not just its tag.
+    let named = !bus.label.is_empty() && bus.label != tag;
+    // The mock shows no value on an unused, unnamed bus.
+    let unnamed = !named && !used;
+    let name = if named {
         bus.label.clone()
     } else if used {
         tag.clone()
     } else {
         UNUSED_NAME.to_string()
     };
-    // The mock shows no value on an unused, unnamed bus.
-    let unnamed = name == UNUSED_NAME;
     let value = if unnamed {
         OutputValue::None
     } else {

@@ -283,3 +283,72 @@ fn route_threshold_is_half() {
     });
     assert_eq!(routes, [true, false]);
 }
+
+#[test]
+fn hardware_counts_per_kind() {
+    let expect = [
+        (VmKind::Standard, 2, 1),
+        (VmKind::Banana, 3, 3),
+        (VmKind::Potato, 5, 5),
+    ];
+    for (kind, strips, buses) in expect {
+        assert_eq!(kind.hardware_strips(), strips);
+        assert_eq!(kind.hardware_buses(), buses);
+    }
+}
+
+fn ms(n: u64) -> Duration {
+    Duration::from_millis(n)
+}
+
+#[test]
+fn signal_hold_reports_edges_only() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    // The first reading reports the silent flags once, then nothing while they hold.
+    assert_eq!(
+        hold.update(&[[0.0, 0.0], [0.0, 0.0]], t0),
+        Some(vec![false, false])
+    );
+    assert_eq!(hold.update(&[[0.0, 0.005], [0.0, 0.0]], t0 + ms(100)), None);
+    // A loud frame on strip 1 is one edge.
+    assert_eq!(
+        hold.update(&[[0.0, 0.0], [0.2, 0.0]], t0 + ms(200)),
+        Some(vec![false, true])
+    );
+    assert_eq!(hold.update(&[[0.0, 0.0], [0.3, 0.1]], t0 + ms(300)), None);
+    assert_eq!(hold.flags(), [false, true]);
+}
+
+#[test]
+fn signal_hold_keeps_signal_for_two_seconds() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    let silent = [[0.0, 0.0]];
+    assert_eq!(hold.update(&[[0.0, 0.5]], t0), Some(vec![true]));
+    // Silence within the hold changes nothing.
+    assert_eq!(hold.update(&silent, t0 + ms(1_000)), None);
+    assert_eq!(hold.update(&silent, t0 + ms(2_000)), None);
+    // Past the hold: one falling edge, then quiet.
+    assert_eq!(hold.update(&silent, t0 + ms(2_100)), Some(vec![false]));
+    assert_eq!(hold.update(&silent, t0 + ms(9_000)), None);
+}
+
+#[test]
+fn signal_hold_threshold_and_reset() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    assert_eq!(hold.update(&[[0.01, 0.01]], t0), Some(vec![false]));
+    assert_eq!(hold.update(&[[0.011, 0.0]], t0), Some(vec![true]));
+    hold.reset();
+    assert!(hold.flags().is_empty());
+    assert_eq!(hold.update(&[[0.0, 0.0]], t0), Some(vec![false]));
+}
+
+#[test]
+fn signal_flags_pad_to_the_strip_count() {
+    let mut hold = SignalHold::default();
+    assert_eq!(hold.flags_for(3), vec![false, false, false]);
+    hold.update(&[[0.5, 0.5]], Instant::now());
+    assert_eq!(hold.flags_for(3), vec![true, false, false]);
+}

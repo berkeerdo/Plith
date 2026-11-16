@@ -50,6 +50,9 @@ pub struct VmFacts {
     pub hardware_strips: usize,
     /// How many buses are hardware outputs (A buses).
     pub hardware_buses: usize,
+    /// Per strip: whether it carries signal, debounced by the mixer service (empty when not
+    /// known). The pill reads it; it changes only on an edge.
+    pub signal: Vec<bool>,
 }
 
 /// One active Windows output endpoint.

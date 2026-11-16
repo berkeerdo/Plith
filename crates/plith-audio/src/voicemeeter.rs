@@ -13,6 +13,7 @@ mod poll;
 #[cfg(windows)]
 mod service;
 mod session;
+mod signal;
 #[cfg(test)]
 mod tests;
 
@@ -23,6 +24,7 @@ pub use layout::{fallback_label, param_name, read_routes, route_param};
 #[cfg(windows)]
 pub use service::{Status, VoicemeeterService};
 pub use session::{DirtyOutcome, LoginSession, Readiness};
+pub use signal::{SIGNAL_HOLD, SIGNAL_PEAK, SignalHold};
 
 /// Lowest gain the Remote API accepts, in dB.
 pub const MIN_GAIN_DB: f32 = -60.0;
@@ -73,6 +75,26 @@ impl VmKind {
             VmKind::Potato => 8,
         }
     }
+
+    /// Number of hardware input strips; the rest are virtual inputs.
+    #[must_use]
+    pub fn hardware_strips(self) -> usize {
+        match self {
+            VmKind::Standard => 2,
+            VmKind::Banana => 3,
+            VmKind::Potato => 5,
+        }
+    }
+
+    /// Number of hardware output buses (`A1..`); the rest are virtual buses (`B1..`).
+    #[must_use]
+    pub fn hardware_buses(self) -> usize {
+        match self {
+            VmKind::Standard => 1,
+            VmKind::Banana => 3,
+            VmKind::Potato => 5,
+        }
+    }
 }
 
 /// Input strip or output bus.
@@ -111,6 +133,9 @@ pub struct VmSnapshot {
     pub strips: Vec<ChannelSnapshot>,
     /// Output buses.
     pub buses: Vec<ChannelSnapshot>,
+    /// Per strip: whether it carries signal, debounced with [`SignalHold`]. It changes only on
+    /// an edge, so a consumer wakes once per edge and never at the level poll rate.
+    pub signal: Vec<bool>,
 }
 
 /// Peak levels (linear, 0.0 to 1.0 and above on clipping) of the left and right channel of

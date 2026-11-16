@@ -270,6 +270,7 @@ mod tests {
             kind,
             strips: Vec::new(),
             buses: Vec::new(),
+            signal: Vec::new(),
         }
     }
 

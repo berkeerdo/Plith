@@ -56,7 +56,7 @@ fn pill_state_muted_beats_live_beats_idle() {
 #[test]
 fn pill_facts_read_the_default_endpoint() {
     let audio = fixtures::no_voicemeeter();
-    let pill = pill_facts(&audio, true, false);
+    let pill = pill_facts(&audio, true);
     assert_eq!(pill.output, "Logitech G733");
     assert_eq!(pill.value, Some(62));
     assert_eq!(pill.state, PillState::Live);
@@ -64,8 +64,8 @@ fn pill_facts_read_the_default_endpoint() {
         attached: Some((0.5, true)),
         ..audio
     };
-    assert_eq!(pill_facts(&muted, true, true).state, PillState::Muted);
-    let none = pill_facts(&AudioFacts::default(), false, false);
+    assert_eq!(pill_facts(&muted, true).state, PillState::Muted);
+    let none = pill_facts(&AudioFacts::default(), false);
     assert_eq!(none.output, "");
     assert_eq!(none.value, None);
     assert_eq!(none.state, PillState::Idle);
@@ -85,7 +85,7 @@ fn pill_facts_without_a_known_default_show_no_name() {
         }),
         ..AudioFacts::default()
     };
-    assert_eq!(pill_facts(&audio, false, false).output, "");
+    assert_eq!(pill_facts(&audio, false).output, "");
 }
 
 #[test]
@@ -127,4 +127,15 @@ fn rebase_moves_a_playing_timeline_to_now() {
     assert_eq!(rebase(paused, now), paused);
     let early = rebase(playing, stamp - Duration::from_secs(1));
     assert!((early.position_s - 10.0).abs() < 1e-9);
+}
+
+#[test]
+fn pill_is_live_while_a_strip_holds_signal() {
+    let mut audio = fixtures::banana();
+    assert_eq!(pill_facts(&audio, false).state, PillState::Idle);
+    audio.vm.as_mut().unwrap().signal = vec![false, true, false, false];
+    assert_eq!(pill_facts(&audio, false).state, PillState::Live);
+    audio.vm.as_mut().unwrap().signal = vec![false; 4];
+    assert_eq!(pill_facts(&audio, false).state, PillState::Idle);
+    assert_eq!(pill_facts(&audio, true).state, PillState::Live);
 }

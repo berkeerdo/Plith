@@ -5,7 +5,7 @@ use plith_core::draw::Node;
 use plith_core::launch::Fixture;
 
 fn fixture_facts(kind: Fixture) -> Facts {
-    FixtureServices::new(kind).facts(1.0)
+    FixtureServices::new(kind).facts()
 }
 
 fn inputs<'a>(facts: &'a Facts, activity: &'a Activity) -> Inputs<'a> {

@@ -10,9 +10,11 @@ fn a_new_fixture_has_nothing_to_drain() {
 #[test]
 fn banana_facts_are_the_mock() {
     let fixture = FixtureServices::new(Fixture::Banana);
-    let facts = fixture.facts(1.0);
+    let facts = fixture.facts();
     let vm = facts.audio.vm.as_ref().unwrap();
     assert_eq!(vm.strips.len(), 4);
+    // Every strip but the muted line in carries the fixture's signal.
+    assert_eq!(vm.signal, [true, false, true, true]);
     assert_eq!(facts.audio.default_id.as_deref(), Some("g733"));
     assert_eq!(
         facts.system.brightness,
@@ -35,10 +37,10 @@ fn banana_facts_are_the_mock() {
 
 #[test]
 fn potato_and_bare_differ_in_the_mixer() {
-    let potato = FixtureServices::new(Fixture::Potato).facts(0.0);
+    let potato = FixtureServices::new(Fixture::Potato).facts();
     assert_eq!(potato.audio.vm.as_ref().unwrap().strips.len(), 8);
     let bare = FixtureServices::new(Fixture::Bare);
-    let facts = bare.facts(0.0);
+    let facts = bare.facts();
     assert!(facts.audio.vm.is_none());
     assert_eq!(facts.audio.endpoints.len(), 2);
     assert_eq!(facts.system.mic_bus, None);
@@ -53,35 +55,32 @@ fn potato_and_bare_differ_in_the_mixer() {
 #[test]
 fn fixture_writes_stay_in_fixture() {
     let mut fixture = FixtureServices::new(Fixture::Banana);
-    let before = fixture.facts(0.0);
+    let before = fixture.facts();
     assert!(!before.audio.vm.as_ref().unwrap().strips[0].routes[0]);
 
     fixture.toggle_route(0, 0);
     assert_eq!(fixture.drain(), Changes::AUDIO);
     assert_eq!(fixture.drain(), Changes::NONE, "a change drains once");
-    let facts = fixture.facts(0.0);
+    let facts = fixture.facts();
     assert!(facts.audio.vm.as_ref().unwrap().strips[0].routes[0]);
     assert_eq!(facts.system.mic_bus.as_deref(), Some("A1"));
 
     fixture.toggle_mic();
     assert!(fixture.drain().has(Changes::AUDIO));
-    let facts = fixture.facts(0.0);
+    let facts = fixture.facts();
     assert!(facts.audio.mic.as_ref().unwrap().muted);
     assert!(facts.system.mic.as_ref().unwrap().muted);
 
     fixture.set_brightness(30);
     assert_eq!(fixture.drain(), Changes::SYSTEM);
     assert_eq!(
-        fixture.facts(0.0).system.brightness,
+        fixture.facts().system.brightness,
         Some(("DELL AW2725DF".to_string(), 30))
     );
 
     fixture.set_default_endpoint("r1280");
     assert_eq!(fixture.drain(), Changes::AUDIO);
-    assert_eq!(
-        fixture.facts(0.0).audio.default_id.as_deref(),
-        Some("r1280")
-    );
+    assert_eq!(fixture.facts().audio.default_id.as_deref(), Some("r1280"));
     fixture.set_default_endpoint("missing");
     assert_eq!(fixture.drain(), Changes::NONE);
 }
@@ -91,16 +90,16 @@ fn fixture_media_writes_stay_in_fixture() {
     let mut fixture = FixtureServices::new(Fixture::Banana);
     fixture.play_pause();
     assert_eq!(fixture.drain(), Changes::MEDIA);
-    assert!(!fixture.facts(0.0).media.playing);
+    assert!(!fixture.facts().media.playing);
 
     fixture.seek(Duration::from_secs(10));
     assert_eq!(fixture.drain(), Changes::MEDIA);
-    let timeline = fixture.facts(0.0).media.timeline.unwrap();
+    let timeline = fixture.facts().media.timeline.unwrap();
     assert!((timeline.position_s - 10.0).abs() < 1e-9);
 
     fixture.next();
     assert_eq!(fixture.drain(), Changes::MEDIA);
-    let timeline = fixture.facts(0.0).media.timeline.unwrap();
+    let timeline = fixture.facts().media.timeline.unwrap();
     assert!(timeline.position_s.abs() < 1e-9);
     fixture.previous();
     assert_eq!(fixture.drain(), Changes::MEDIA);
@@ -152,10 +151,10 @@ fn with_content() -> (FixtureServices, std::sync::mpsc::Sender<u8>) {
 #[test]
 fn content_one_is_the_next_track_with_new_art() {
     let (mut fixture, tx) = with_content();
-    let before = fixture.facts(0.0);
+    let before = fixture.facts();
     tx.send(1).unwrap();
     assert_eq!(fixture.drain(), Changes::MEDIA);
-    let after = fixture.facts(0.0);
+    let after = fixture.facts();
     assert_ne!(after.media.title, before.media.title);
     assert_ne!(after.media.art, before.media.art);
     assert_eq!(
@@ -169,10 +168,10 @@ fn content_one_is_the_next_track_with_new_art() {
 #[test]
 fn content_two_toggles_a_route_and_mutes_a_source() {
     let (mut fixture, tx) = with_content();
-    let before = fixture.facts(0.0);
+    let before = fixture.facts();
     tx.send(2).unwrap();
     assert_eq!(fixture.drain(), Changes::AUDIO);
-    let after = fixture.facts(0.0);
+    let after = fixture.facts();
     let (b, a) = (before.audio.vm.unwrap(), after.audio.vm.unwrap());
     assert_ne!(a.strips, b.strips);
     let routes = |vm: &plith_core::pages::audio::VmFacts| {
@@ -192,10 +191,10 @@ fn content_two_toggles_a_route_and_mutes_a_source() {
 #[test]
 fn content_three_changes_the_brightness_only() {
     let (mut fixture, tx) = with_content();
-    let before = fixture.facts(0.0);
+    let before = fixture.facts();
     tx.send(3).unwrap();
     assert_eq!(fixture.drain(), Changes::SYSTEM);
-    let after = fixture.facts(0.0);
+    let after = fixture.facts();
     assert_ne!(after.system.brightness, before.system.brightness);
     assert_eq!(after.audio, before.audio);
 }
@@ -203,14 +202,14 @@ fn content_three_changes_the_brightness_only() {
 #[test]
 fn content_zero_restores_the_fixture_as_launched() {
     let (mut fixture, tx) = with_content();
-    let launched = fixture.facts(0.0);
+    let launched = fixture.facts();
     for n in [1, 2, 3] {
         tx.send(n).unwrap();
         assert!(fixture.drain().any());
     }
     tx.send(0).unwrap();
     assert!(fixture.drain().any());
-    let back = fixture.facts(0.0);
+    let back = fixture.facts();
     assert_eq!(back.audio, launched.audio);
     assert_eq!(back.system, launched.system);
     assert_eq!(back.media.title, launched.media.title);

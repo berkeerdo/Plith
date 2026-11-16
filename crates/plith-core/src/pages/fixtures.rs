@@ -67,6 +67,7 @@ pub fn banana() -> AudioFacts {
             buses,
             hardware_strips: 2,
             hardware_buses: 2,
+            signal: Vec::new(),
         }),
         ..AudioFacts::default()
     }
@@ -131,6 +132,7 @@ pub fn potato() -> AudioFacts {
             buses,
             hardware_strips: 5,
             hardware_buses: 5,
+            signal: Vec::new(),
         }),
         ..AudioFacts::default()
     }
