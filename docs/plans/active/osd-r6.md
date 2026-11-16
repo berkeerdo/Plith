@@ -183,16 +183,16 @@ System_RemoteDesktop, Security, Security_Authorization, UI_Shell for `ShellExecu
 - `fn launch_helper(exe: &Path) -> Result<(), String>`: `ShellExecuteExW` with `open` (plain
   `CreateProcess` fails on a uiAccess exe with `ERROR_ELEVATION_REQUIRED`).
 - `fn current_pipe_name() -> String` via `ProcessIdToSessionId`.
-- [ ] **Step 1 (TDD), `latest/tests.rs`:** `newer_value_replaces_older`, `take_wait_times_out_empty`,
+- [x] **Step 1 (TDD), `latest/tests.rs`:** `newer_value_replaces_older`, `take_wait_times_out_empty`,
   `close_wakes_a_waiter`.
-- [ ] **Step 2:** `security.rs` pure part: `pipe_sddl("S-1-5-21-1-2-3-1001")` exact string test.
-- [ ] **Step 3:** server, client, launch. Integration test `crates/plith-ipc/tests/pipe.rs`
+- [x] **Step 2:** `security.rs` pure part: `pipe_sddl("S-1-5-21-1-2-3-1001")` exact string test.
+- [x] **Step 3:** server, client, launch. Integration test `crates/plith-ipc/tests/pipe.rs`
   (Windows only, unique pipe name per test with the pid): `client_messages_reach_the_server_in_order`,
   `second_bind_reports_already_running`, `client_reconnects_after_server_restart` (2 s bound),
   `hello_comes_first_on_every_connection`.
-- [ ] **Step 4:** `examples/send_osd.rs [--pipe NAME]`: sends Level Volume 0 to 100 in steps of
+- [x] **Step 4:** `examples/send_osd.rs [--pipe NAME]`: sends Level Volume 0 to 100 in steps of
   10 every 150 ms, Level muted, Level Brightness 50, Hide, then Bye. Writes nothing to hardware.
-- [ ] **Step 5:** five checks; commit `feat(ipc): pipe server, client, sender`; push.
+- [x] **Step 5:** five checks; commit `feat(ipc): pipe server, client, sender`; push.
 
 ### Task 5: `plith-system` key repeat collapse
 **Files:** Modify `crates/plith-system/src/volume_keys.rs`, `volume_keys/hook.rs`,
