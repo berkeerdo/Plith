@@ -391,3 +391,109 @@ fn a_page_turn_at_one_shape_posts_the_layers() {
     assert_eq!(last.pages.iter().map(|l| l.page).collect::<Vec<_>>(), [1]);
     let _ = run.stop();
 }
+
+/// Live content, expand, then `next` arrives as new content at clock call `AT` while the ambient
+/// tick runs; the scene collapses at `AT + 400` when `collapse` is set.
+fn content_during_ambient(next: Arc<PageContent>, collapse: bool) -> Run {
+    let script = if collapse {
+        vec![(AT + 400, Scene::default())]
+    } else {
+        Vec::new()
+    };
+    let run = start(Setup {
+        content: Some(live_content()),
+        content_script: vec![(AT, next)],
+        script,
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let expand = run.report();
+    assert!((expand.frames as u64) < AT - 40);
+    run
+}
+
+#[test]
+fn new_live_content_during_ambient_keeps_ticking() {
+    let next = two_live_pages();
+    let run = content_during_ambient(Arc::clone(&next), true);
+    let ambient = run.ambient_report();
+    let collapse = run.report();
+    assert_eq!(collapse.kind, MotionKind::Collapse);
+    let frames = run.frames();
+    let calls = run.calls_at();
+    let between: Vec<_> = frames
+        .iter()
+        .zip(&calls)
+        .filter(|(_, c)| **c >= AT && **c < AT + 400)
+        .map(|(f, _)| f)
+        .collect();
+    assert!(
+        between.len() > 50,
+        "{} frames after the swap",
+        between.len()
+    );
+    assert!(
+        between
+            .iter()
+            .all(|f| f.content == next && is_ambient(&f.live)),
+        "the new content is drawn by the same ambient run"
+    );
+    // One ambient run across the swap: it ticked the old content too, then wrote one line.
+    assert!(
+        ambient.frames > between.len() + 50,
+        "{} ambient frames, {} after the swap",
+        ambient.frames,
+        between.len()
+    );
+    assert!(run.ambient.recv_timeout(QUIET).is_err(), "one ambient line");
+    assert!(
+        run.reports.try_recv().is_err(),
+        "no motion line for content"
+    );
+    let _ = run.stop();
+}
+
+#[test]
+fn content_without_live_nodes_ends_ambient_after_one_frame() {
+    let next = text_content("Paused");
+    let run = content_during_ambient(Arc::clone(&next), false);
+    let ambient = run.ambient_report();
+    run.assert_parked();
+    let frames = run.frames();
+    let last = frames.last().expect("painted");
+    assert_eq!(last.content, next);
+    assert!(!is_ambient(&last.live), "the parting frame samples nothing");
+    assert_eq!(
+        frames.iter().filter(|f| f.content == next).count(),
+        1,
+        "the new state is painted once, then the loop parks"
+    );
+    assert!(ambient.frames > 100);
+    assert!(run.reports.try_recv().is_err(), "no motion line");
+    let _ = run.stop();
+}
+
+#[test]
+fn a_stop_mid_ambient_ends_the_loop_and_writes_the_line() {
+    let run = start(Setup {
+        content: Some(live_content()),
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    let expand = run.report();
+    run.wait_calls(expand.frames as u64 + 200);
+    run.shared.request_stop();
+    run.mailbox.stop();
+    run.done
+        .recv_timeout(BOUND)
+        .expect("the ambient loop ends within the bound");
+    run.join.join().expect("the render loop does not panic");
+    let ambient = run
+        .ambient
+        .recv_timeout(BOUND)
+        .expect("the stopped run still writes its ambient line");
+    assert!(ambient.frames > 40, "ambient frames {}", ambient.frames);
+    assert!(run.reports.try_recv().is_err(), "no motion line");
+}
