@@ -29,6 +29,7 @@ use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::core::PCWSTR;
 
 use crate::identity;
+use crate::security::token::FactsError;
 use crate::security::{pipe_sddl, token};
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
 use crate::{DecodeError, MAX_MESSAGE, Message, decode};
@@ -140,7 +141,9 @@ impl OsdServer {
     /// current user may open it.
     ///
     /// # Errors
-    /// [`BindError::AlreadyRunning`] when the name is taken, [`BindError::Os`] otherwise.
+    /// [`BindError::AlreadyRunning`] when this user's server already owns the name,
+    /// [`BindError::Squatted`] when another user's (or a less trusted) process holds it,
+    /// [`BindError::Os`] otherwise.
     pub fn bind(name: &str) -> Result<Self, BindError> {
         let sid = token::current_user_sid().map_err(BindError::Os)?;
         let sddl = wide(&pipe_sddl(&sid));
@@ -323,10 +326,10 @@ fn classify(error: &windows::core::Error) -> Read {
 /// Tells our own earlier server from a squatter when the name is already taken.
 fn owner_of_taken_name(wide_name: &[u16]) -> BindError {
     match identity::open_client(wide_name) {
-        Ok(probe) => match identity::server_is_current_user(&probe) {
+        Ok(probe) => match identity::server_is_trusted_for(&probe) {
             Ok(true) => BindError::AlreadyRunning,
-            Ok(false) => BindError::Squatted,
-            Err(error) => BindError::Os(error),
+            Ok(false) | Err(FactsError::AccessDenied) => BindError::Squatted,
+            Err(FactsError::Os(error)) => BindError::Os(error),
         },
         Err(e) if e.code() == ERROR_PIPE_BUSY.to_hresult() => BindError::AlreadyRunning,
         Err(e) if e.code() == ERROR_ACCESS_DENIED.to_hresult() => BindError::Squatted,

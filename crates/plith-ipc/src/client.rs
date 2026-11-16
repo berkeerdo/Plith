@@ -10,7 +10,7 @@ use windows::Win32::System::IO::CancelSynchronousIo;
 use windows::Win32::System::Pipes::WaitNamedPipeW;
 use windows::core::PCWSTR;
 
-use crate::identity::{open_client, server_is_current_user};
+use crate::identity::{open_client, server_is_trusted_for};
 use crate::latest::Slot;
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
 use crate::{EncodeError, Message, encode};
@@ -157,6 +157,7 @@ fn run(name: &str, slot: &Slot<Message>) {
     let mut connection: Option<OwnedHandle> = None;
     let mut carry: Option<Message> = None;
     let mut next_attempt = Instant::now();
+    let mut connected_at = next_attempt;
     loop {
         if let Some(newer) = slot.take_wait(Duration::ZERO) {
             carry = Some(newer);
@@ -173,8 +174,9 @@ fn run(name: &str, slot: &Slot<Message>) {
                 continue;
             }
             connection = connect(&wide_name);
+            connected_at = Instant::now();
             if connection.is_none() {
-                next_attempt = Instant::now() + RETRY;
+                next_attempt = connected_at + RETRY;
             }
             continue;
         };
@@ -196,6 +198,8 @@ fn run(name: &str, slot: &Slot<Message>) {
         }
         if !sent {
             connection = None;
+            // A connection that died within a second must not cause a tight reconnect loop.
+            next_attempt = connected_at + RETRY;
             carry = Some(message);
         }
     }
@@ -215,8 +219,9 @@ fn connect(wide_name: &[u16]) -> Option<OwnedHandle> {
         }
         Err(_) => return None,
     };
-    // Never send to a server that runs as another user: close and try again later.
-    if !server_is_current_user(&pipe).ok()? {
+    // Never send to a server of another user, in an AppContainer or at a lower integrity
+    // level: close and try again later.
+    if !server_is_trusted_for(&pipe).ok()? {
         return None;
     }
     let hello = Message::Hello {

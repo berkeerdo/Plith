@@ -7,7 +7,7 @@ use windows::Win32::Storage::FileSystem::{
 use windows::Win32::System::Pipes::GetNamedPipeServerProcessId;
 use windows::core::PCWSTR;
 
-use crate::security::token::{current_user_sid, process_user_sid};
+use crate::security::token::{FactsError, current_token_facts, process_token_facts};
 use crate::win::OwnedHandle;
 
 /// Opens the pipe for writing at the identification impersonation level, so the server
@@ -30,14 +30,39 @@ pub(crate) fn open_client(wide_name: &[u16]) -> windows::core::Result<OwnedHandl
     .map(OwnedHandle)
 }
 
-/// Whether the process serving the open client `pipe` runs as the current user.
+/// What decides whether a token can be trusted as the OSD server.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub(crate) struct TokenFacts {
+    /// The user SID as text.
+    pub(crate) sid: String,
+    /// The integrity level: the last sub-authority of the token's label SID.
+    pub(crate) integrity_rid: u32,
+    /// Whether the token belongs to an `AppContainer` process.
+    pub(crate) app_container: bool,
+}
+
+#[cfg(test)]
+mod tests;
+
+/// Whether a server with token `server` may receive data from a client with `own`.
+///
+/// The server must run as the same user, not in an `AppContainer`, and at an integrity
+/// level at least as high as ours.
+pub(crate) fn server_is_trusted(server: &TokenFacts, own: &TokenFacts) -> bool {
+    server.sid == own.sid && !server.app_container && server.integrity_rid >= own.integrity_rid
+}
+
+/// Whether the process serving the open client `pipe` may be trusted as the OSD server.
 ///
 /// # Errors
-/// Returns the Windows error text when the server process cannot be identified.
-pub(crate) fn server_is_current_user(pipe: &OwnedHandle) -> Result<bool, String> {
+/// [`FactsError`] when the server process or its token cannot be read.
+pub(crate) fn server_is_trusted_for(pipe: &OwnedHandle) -> Result<bool, FactsError> {
     let mut pid = 0u32;
     // SAFETY: the handle is an open pipe client and `pid` is a valid out pointer.
     unsafe { GetNamedPipeServerProcessId(pipe.0, &raw mut pid) }
-        .map_err(|e| format!("GetNamedPipeServerProcessId: {e}"))?;
-    Ok(process_user_sid(pid)? == current_user_sid()?)
+        .map_err(|e| FactsError::Os(format!("GetNamedPipeServerProcessId: {e}")))?;
+    Ok(server_is_trusted(
+        &process_token_facts(pid)?,
+        &current_token_facts()?,
+    ))
 }
