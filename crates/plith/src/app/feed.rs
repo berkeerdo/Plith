@@ -219,9 +219,11 @@ impl Feed {
 
     /// A UI timer ticked. A tick of a timer no longer armed (one queued before `KillTimer`)
     /// does nothing, and so does any tick while the scene is not open (another publisher
-    /// collapsed it and its wake, which syncs the timers, is still queued).
+    /// collapsed it); that tick syncs the timers itself, so a lost wake cannot leave them
+    /// running while collapsed.
     pub fn on_timer(&mut self, id: usize, mailbox: &SceneMailbox) {
         if !is_open(&mailbox.latest().scene) {
+            self.sync_timers(mailbox);
             return;
         }
         let armed = match id {

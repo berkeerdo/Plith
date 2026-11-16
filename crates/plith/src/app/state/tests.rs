@@ -609,3 +609,17 @@ fn a_pick_out_of_range_is_cleared_on_rebuild() {
     feed.set_pick(PickMode::Picked(99), &app.mailbox);
     assert_eq!(pick(&app), PickMode::None);
 }
+
+#[test]
+fn a_tick_while_the_scene_is_closed_stops_the_timers() {
+    let (mut app, timers, _) = fed("feed-closed-kill", Fixture::Banana);
+    app.on_event(CLICK);
+    assert!(running(&timers).contains(&CLOCK_TIMER));
+    // Another publisher collapses and its wake is lost: the tick itself stops the timers.
+    let _ = app.mailbox.update(|scene| Scene {
+        expanded: false,
+        ..scene
+    });
+    app.on_event(ShellEvent::Timer(CLOCK_TIMER));
+    assert!(running(&timers).is_empty(), "{:?}", running(&timers));
+}
