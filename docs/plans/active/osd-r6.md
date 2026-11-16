@@ -228,12 +228,12 @@ key was not already held; `WM_KEYUP`/`WM_SYSKEYUP` clears it. `VolumeKeyHook::st
   clears the file. This covers a kill (`TerminateProcess`) that no code can catch.
 - `hook_thread::pump` returns the `GetMessageW` error and the thread logs it into a status the
   owner can read (`HookThread::ended_early() -> Option<String>`), per services review L8.
-- [ ] **Step 1 (TDD):** `guard`: `contain_reports_a_panic`, `contain_passes_a_normal_run`.
+- [x] **Step 1 (TDD):** `guard`: `contain_reports_a_panic`, `contain_passes_a_normal_run`.
   `journal/tests.rs`: `round_trips_handles`, `skips_garbage_lines`, `empty_text_is_empty`.
   `registry`: `restore_now_through_a_shared_handle_empties_the_set`.
-- [ ] **Step 2:** implement. A test-only `#[cfg(test)]` panic hook in the pure layer is enough;
+- [x] **Step 2:** implement. A test-only `#[cfg(test)]` panic hook in the pure layer is enough;
   the procs are thin wrappers around tested functions.
-- [ ] **Step 3:** five checks; commit `fix(system): contain hook panics, journal hides`.
+- [x] **Step 3:** five checks; commit `fix(system): contain hook panics, journal hides`.
 
 ### Task 7: `plith-system` brightness flyout suppression (G5, services L9)
 **Files:** Modify `crates/plith-system/src/brightness/service.rs` (stays under 500),
