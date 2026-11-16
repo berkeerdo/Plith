@@ -22,6 +22,10 @@ pub(super) const PERIOD: f64 = 1.0 / 240.0;
 pub(super) const BOUND: Duration = Duration::from_secs(2);
 pub(super) const QUIET: Duration = Duration::from_millis(50);
 pub(super) const KINDS: [ClockKind; 3] = [ClockKind::Dcomp, ClockKind::Dxgi, ClockKind::Timer];
+/// Every prewarm call: the pages asked for and the clock call count at the time.
+pub(super) type Prewarms = Arc<Mutex<Vec<(Vec<usize>, u64)>>>;
+/// What the fake painter reports for every prewarm call, in milliseconds.
+pub(super) const PREWARM_MS: f64 = 0.75;
 
 pub(super) fn index(kind: ClockKind) -> usize {
     match kind {
@@ -114,6 +118,8 @@ pub(super) struct FakePaint {
     pub(super) recover_fails: bool,
     /// Panics when asked to paint this frame number (1 is the start frame).
     pub(super) panic_at: Option<usize>,
+    /// Every prewarm call: the pages asked for and the clock call count at the time.
+    pub(super) prewarms: Prewarms,
 }
 
 impl Paint for FakePaint {
@@ -133,6 +139,11 @@ impl Paint for FakePaint {
             draw_ms: 1.0,
             present_ms: 0.5,
         })
+    }
+
+    fn prewarm(&mut self, _content: &PageContent, pages: &[usize]) -> f64 {
+        lock(&self.prewarms).push((pages.to_vec(), self.harness.total()));
+        PREWARM_MS
     }
 
     fn recover(&mut self, warp: bool) -> windows::core::Result<()> {
@@ -176,6 +187,8 @@ pub(super) struct Run {
     pub(super) ambient: Receiver<AmbientReport>,
     pub(super) samples: Arc<AtomicU64>,
     pub(super) fatal: Receiver<Fatal>,
+    pub(super) notes: Receiver<String>,
+    pub(super) prewarms: Prewarms,
     pub(super) done: Receiver<()>,
     pub(super) join: JoinHandle<()>,
 }
@@ -195,6 +208,7 @@ pub(super) struct SinkEnds {
     pub(super) reports: Receiver<MotionReport>,
     pub(super) ambient: Receiver<AmbientReport>,
     pub(super) fatal: Receiver<Fatal>,
+    pub(super) notes: Receiver<String>,
 }
 
 /// Sinks into channels; `sample` counts its calls in `samples` and returns the count as strip 0.
@@ -205,6 +219,7 @@ pub(super) fn sinks(
     let (report_tx, reports) = mpsc::channel();
     let (ambient_tx, ambient) = mpsc::channel();
     let (fatal_tx, fatal) = mpsc::channel();
+    let (note_tx, notes) = mpsc::channel();
     let sinks = RenderSinks {
         on_shape: Box::new(move |frame| lock(&shapes).push(frame)),
         on_motion: Box::new(move |report| {
@@ -213,7 +228,9 @@ pub(super) fn sinks(
         on_fatal: Box::new(move |message| {
             let _ = fatal_tx.send(message);
         }),
-        on_note: Box::new(|_| {}),
+        on_note: Box::new(move |line| {
+            let _ = note_tx.send(line);
+        }),
         sample: Box::new(move || {
             let n = samples.fetch_add(1, Ordering::SeqCst) + 1;
             #[allow(clippy::cast_precision_loss)]
@@ -231,6 +248,7 @@ pub(super) fn sinks(
         reports,
         ambient,
         fatal,
+        notes,
     };
     (sinks, ends)
 }
@@ -256,6 +274,7 @@ pub(super) fn start(setup: Setup) -> Run {
     let recovers = Arc::new(Mutex::new(Vec::new()));
     let calls_at = Arc::new(Mutex::new(Vec::new()));
     let samples = Arc::new(AtomicU64::new(0));
+    let prewarms = Arc::new(Mutex::new(Vec::new()));
     let (mut sinks, ends) = sinks(Arc::clone(&shapes), Arc::clone(&samples));
     let paint = FakePaint {
         frames: Arc::clone(&frames),
@@ -265,6 +284,7 @@ pub(super) fn start(setup: Setup) -> Run {
         recovers: Arc::clone(&recovers),
         recover_fails: setup.recover_fails,
         panic_at: setup.panic_at,
+        prewarms: Arc::clone(&prewarms),
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
@@ -307,6 +327,8 @@ pub(super) fn start(setup: Setup) -> Run {
         ambient: ends.ambient,
         samples,
         fatal: ends.fatal,
+        notes: ends.notes,
+        prewarms,
         done,
         join,
     }
@@ -315,6 +337,19 @@ pub(super) fn start(setup: Setup) -> Run {
 impl Run {
     pub(super) fn frames(&self) -> Vec<PaintFrame> {
         lock(&self.frames).clone()
+    }
+
+    /// Every prewarm call so far: the pages and the clock call count at the time.
+    pub(super) fn prewarms(&self) -> Vec<(Vec<usize>, u64)> {
+        lock(&self.prewarms).clone()
+    }
+
+    /// The `prewarm:` log lines so far.
+    pub(super) fn prewarm_notes(&self) -> Vec<String> {
+        self.notes
+            .try_iter()
+            .filter(|line| line.starts_with("prewarm:"))
+            .collect()
     }
 
     pub(super) fn calls_at(&self) -> Vec<u64> {

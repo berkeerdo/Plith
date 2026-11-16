@@ -5,6 +5,7 @@
 
 mod ambient;
 mod engine;
+mod prewarm;
 
 use super::clocks::Clocks;
 use super::{Fatal, Paint, RenderSinks};
@@ -21,6 +22,7 @@ use plith_core::panic_text::payload_text;
 use plith_core::scene::{Scene, SceneMailbox, Snapshot};
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::TuningSet;
+use prewarm::Reason;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 
@@ -147,6 +149,9 @@ pub fn run_loop<C, P, O, N>(
         last_shape: None,
         posted: None,
         seen,
+        warm: Default::default(),
+        aim_pages: Vec::new(),
+        presented: None,
     };
     if engine.clocks.order.is_empty() {
         (engine.sinks.on_fatal)(Fatal::Error(String::from("no frame clock kinds to try")));
@@ -175,7 +180,7 @@ where
                     AmbientEnd::Stopped => return Ok(()),
                     AmbientEnd::Parked => {}
                     AmbientEnd::Moving => {
-                        if self.motion(mailbox)? {
+                        if self.warmed_motion(mailbox)? {
                             return Ok(());
                         }
                         continue;
@@ -189,23 +194,37 @@ where
             };
             match self.take(snapshot) {
                 Taken::Snapped => continue,
-                // New content on a still island: one frame, no clock wait, no motion.
+                // New content on a still island: warm what changed, present only when a shown
+                // list changed; no clock wait, no motion.
                 Taken::ContentOnly => {
-                    self.paint_frame()?;
+                    self.content_at_rest()?;
                     continue;
                 }
                 Taken::Aimed if self.is_settled() => {
                     // Nothing to animate (an unsuppress): one frame, no clock wait.
                     self.stats = None;
+                    self.aim_pages.clear();
                     self.paint_frame()?;
                     continue;
                 }
                 Taken::Aimed => {}
             }
-            if self.motion(mailbox)? {
+            if self.warmed_motion(mailbox)? {
                 return Ok(());
             }
         }
+    }
+
+    /// Warms the pages the aimed motion shows (before its first clock wait, outside its stats),
+    /// animates it, then warms the other pages at rest; true when a stop was requested.
+    fn warmed_motion(&mut self, mailbox: &SceneMailbox) -> Result<bool, String> {
+        let aimed = std::mem::take(&mut self.aim_pages);
+        self.prewarm(&aimed, Reason::Aim);
+        if self.motion(mailbox)? {
+            return Ok(true);
+        }
+        self.prewarm_open(Reason::Rest);
+        Ok(false)
     }
 
     /// Starts the clock afresh and animates the aimed motion; true when a stop was requested.
@@ -235,6 +254,8 @@ where
             if snapshot.generation != self.seen && self.take(snapshot) == Taken::Snapped {
                 return Ok(());
             }
+            // A retarget mid-motion warms nothing here: the frames are being measured.
+            self.aim_pages.clear();
             let island_settled = self.island.step(dt);
             self.pages_settled = self.pages.step(dt);
             self.content_settled = self.content.step(dt);

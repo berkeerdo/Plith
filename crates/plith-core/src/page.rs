@@ -185,5 +185,21 @@ impl PageTurn {
     }
 }
 
+/// The pages a motion that ends open on `target` shows: the current page (it fades out as the
+/// outgoing layer when the page changes, an expand included) and the target, each once, in
+/// that order. A motion that ends collapsed shows none (only the pill).
+#[must_use]
+pub fn motion_pages(current: usize, opens: bool, target: usize) -> Vec<usize> {
+    if !opens {
+        return Vec::new();
+    }
+    let mut pages = Vec::with_capacity(2);
+    if current != target {
+        pages.push(current);
+    }
+    pages.push(target);
+    pages
+}
+
 #[cfg(test)]
 mod tests;

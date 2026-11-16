@@ -137,6 +137,31 @@ impl Painter {
         self.island.builds()
     }
 
+    /// Re-rasters the bitmaps of `pages` (page indices into `content`) whose list changed since
+    /// their last raster. Outside any frame's `BeginDraw`.
+    ///
+    /// # Errors
+    /// Returns the failing bitmap creation, draw or `EndDraw` call.
+    pub fn prewarm(
+        &mut self,
+        ctx: &ID2D1DeviceContext,
+        content: &PageContent,
+        pages: &[usize],
+    ) -> Result<()> {
+        let mut env = ListEnv {
+            palette: &self.palette,
+            text: &mut self.text,
+            art: &content.art,
+            scale: context_scale(ctx),
+        };
+        for &page in pages {
+            if let Some(list) = content.pages.get(page) {
+                self.pages.draw(ctx, page, list, &mut self.kit, &mut env)?;
+            }
+        }
+        Ok(())
+    }
+
     /// Drains the text system's notes (font fallbacks), for the log.
     pub fn take_notes(&mut self) -> Vec<String> {
         self.text.take_notes()

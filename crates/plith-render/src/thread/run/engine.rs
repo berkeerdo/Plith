@@ -8,13 +8,13 @@ use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::ambient::{LiveValues, shows_live, wants_ambient};
 use plith_core::clock_choice::ClockKind;
-use plith_core::draw::PageContent;
+use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
 use plith_core::motion::{MotionKind, MotionStats};
-use plith_core::page::{PageLayers, PageTurn};
+use plith_core::page::{PageLayers, PageTurn, motion_pages};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
 use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
@@ -56,6 +56,13 @@ pub(super) struct Engine<'a, C, P, O, N> {
     /// a snap, so the first frame then always posts.
     pub(super) posted: Option<(IslandShape, IslandShape, PageLayers)>,
     pub(super) seen: u64,
+    /// Per page, the list its bitmap was last rastered from (by a prewarm or a frame that
+    /// showed it); `None` before that and after a GPU recovery.
+    pub(super) warm: [Option<Arc<DisplayList>>; 4],
+    /// The pages the aimed motion shows, warmed before its first clock wait.
+    pub(super) aim_pages: Vec<usize>,
+    /// The content of the last presented frame.
+    pub(super) presented: Option<Arc<PageContent>>,
 }
 
 /// What a new mailbox generation changed.
@@ -72,6 +79,11 @@ pub(super) enum Taken {
 /// The content opacity spring, resting at 1 for an expanded scene and 0 for a collapsed one.
 pub(super) fn content_spring(scene: Scene, opacity: Tuning) -> Spring {
     Spring::new(content_target(scene), opacity).with_eps(0.002, 0.01)
+}
+
+/// True when both contents carry the same artwork `Arc`s.
+fn same_art(a: &PageContent, b: &PageContent) -> bool {
+    a.art.len() == b.art.len() && a.art.iter().zip(&b.art).all(|(x, y)| Arc::ptr_eq(x, y))
 }
 
 pub(super) fn content_target(scene: Scene) -> f64 {
@@ -102,6 +114,10 @@ where
         } = snapshot;
         self.seen = generation;
         if !Arc::ptr_eq(&self.page_content, &content) {
+            if !same_art(&self.page_content, &content) {
+                // Artwork a bitmap was missing may have arrived: let the painter look again.
+                self.warm = Default::default();
+            }
             self.page_content = content;
             self.content_gen = generation;
         }
@@ -198,6 +214,7 @@ where
     pub(super) fn aim(&mut self, scene: Scene) {
         let target = scene.target();
         let page_changed = scene.page != self.pages.current();
+        self.aim_pages = motion_pages(self.pages.current(), scene.expanded, scene.page);
         if let Some(stats) = self.stats.as_mut() {
             stats.note_retarget();
         } else {
@@ -274,6 +291,7 @@ where
         let times = match result {
             Ok(times) => {
                 self.painted += 1;
+                self.note_presented(frame);
                 let previous = self.last_shape.replace(frame.shape).unwrap_or(frame.shape);
                 let drawn = (frame.shape, previous, frame.pages);
                 if previous != frame.shape || self.posted != Some(drawn) {
@@ -294,6 +312,8 @@ where
             GpuAction::Recreate => false,
             GpuAction::FallBackToWarp => true,
         };
+        self.warm = Default::default();
+        self.presented = None;
         self.paint
             .recover(warp)
             .map_err(|error| format!("GPU recovery failed (warp {warp}): {error}"))?;

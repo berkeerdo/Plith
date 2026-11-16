@@ -4,6 +4,7 @@
 
 use super::super::Paint;
 use super::engine::{Engine, Taken};
+use super::prewarm::Reason;
 use crate::clock::{ClockError, FrameSource};
 use plith_core::ambient::{AmbientStats, ambient_divisor};
 use plith_core::clock_choice::ClockKind;
@@ -76,8 +77,12 @@ where
         match self.take(snapshot) {
             Taken::Snapped => return Ok(Some(AmbientEnd::Parked)),
             Taken::Aimed if !self.is_settled() => return Ok(Some(AmbientEnd::Moving)),
-            Taken::Aimed => self.stats = None,
-            Taken::ContentOnly => {}
+            Taken::Aimed => {
+                self.stats = None;
+                self.aim_pages.clear();
+            }
+            // Between ticks: the next painted tick then finds the bitmaps fresh.
+            Taken::ContentOnly => self.prewarm_open(Reason::Ambient),
         }
         if self.wants_ambient() {
             return Ok(None);

@@ -6,6 +6,7 @@ use crate::paint::{PaintFrame, Painter};
 use crate::target::CompositionTarget;
 use crate::text::TextSystem;
 use crate::thread::{FrameTimes, Paint};
+use plith_core::draw::PageContent;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, outcome_line};
 use plith_core::theme::Palette;
@@ -110,6 +111,22 @@ impl Paint for GpuPaint {
             draw_ms,
             present_ms: ms_since(start),
         })
+    }
+
+    fn prewarm(&mut self, content: &PageContent, pages: &[usize]) -> f64 {
+        let Some(stack) = self.stack.as_mut() else {
+            return 0.0;
+        };
+        let before = stack.painter.page_rebuilds();
+        let start = Instant::now();
+        // A failure (device lost) shows again at the next paint, which reports it to the GPU
+        // health; the page is then rastered lazily.
+        let _ = stack.painter.prewarm(stack.gpu.context(), content, pages);
+        if stack.painter.page_rebuilds() == before {
+            0.0
+        } else {
+            ms_since(start)
+        }
     }
 
     fn recover(&mut self, warp: bool) -> Result<()> {

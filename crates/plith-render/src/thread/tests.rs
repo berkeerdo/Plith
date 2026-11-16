@@ -1,5 +1,6 @@
 mod harness;
 mod live;
+mod prewarm;
 
 use super::{Fatal, RenderHandle};
 use harness::*;

@@ -12,6 +12,7 @@ use crate::levers::{apply_mmcss, apply_sched_class};
 use crate::paint::PaintFrame;
 use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::clock_order;
+use plith_core::draw::PageContent;
 use plith_core::launch::ClockRequest;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, MmcssPriority, outcome_line};
@@ -45,6 +46,12 @@ pub trait Paint {
     /// # Errors
     /// Returns the failing draw or present call (for example device removed).
     fn paint(&mut self, frame: &PaintFrame) -> windows::core::Result<FrameTimes>;
+
+    /// Re-rasters the page bitmaps among `pages` (page indices) whose list changed since their
+    /// last raster, outside any frame. Returns the milliseconds spent; nothing by default.
+    fn prewarm(&mut self, _content: &PageContent, _pages: &[usize]) -> f64 {
+        0.0
+    }
 
     /// Rebuilds the device and target, on WARP when `warp` is set.
     ///
