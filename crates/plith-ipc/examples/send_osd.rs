@@ -1,6 +1,9 @@
 //! Sends a demo sequence to an OSD helper. It only sends messages and writes to no hardware.
 //!
-//! Usage: `cargo run --package plith-ipc --example send_osd -- [--pipe NAME] [--seconds N]`
+//! Usage: `cargo run --package plith-ipc --example send_osd -- [--pipe NAME] [--seconds N] [--dev]`
+//!
+//! `--dev` also sends to a helper at this process's own integrity level (an unsigned dev
+//! run); without it only the installed, more trusted helper is accepted.
 //!
 //! With no server it keeps retrying and exits after `--seconds` (default 10).
 
@@ -8,17 +11,22 @@
 fn main() {
     use std::time::{Duration, Instant};
 
-    use plith_ipc::{Message, Meter, OsdLink, current_pipe_name};
+    use plith_ipc::{Message, Meter, OsdLink, ServerTrust, current_pipe_name};
 
     let mut pipe = current_pipe_name();
     let mut seconds = 10u64;
+    let mut trust = ServerTrust::Installed;
     let mut args = std::env::args().skip(1);
     while let Some(arg) = args.next() {
+        if arg == "--dev" {
+            trust = ServerTrust::DevSameUser;
+            continue;
+        }
         match (arg.as_str(), args.next()) {
             ("--pipe", Some(value)) => pipe = value,
             ("--seconds", Some(value)) => seconds = value.parse().unwrap_or(seconds),
             _ => {
-                eprintln!("usage: send_osd [--pipe NAME] [--seconds N]");
+                eprintln!("usage: send_osd [--pipe NAME] [--seconds N] [--dev]");
                 return;
             }
         }
@@ -36,8 +44,8 @@ fn main() {
         label: label.to_string(),
     };
 
-    println!("sending to {pipe} for at most {seconds} s");
-    let link = OsdLink::start(pipe);
+    println!("sending to {pipe:?} for at most {seconds} s ({trust:?})");
+    let link = OsdLink::start_with(pipe, trust);
     let report = |link: &OsdLink| {
         println!(
             "link: connected={} last_error={:?}",

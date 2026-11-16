@@ -26,6 +26,8 @@ mod win;
 #[cfg(windows)]
 pub use client::OsdLink;
 #[cfg(windows)]
+pub use identity::ServerTrust;
+#[cfg(windows)]
 pub use launch::{HelperProcess, INSTALLED_HELPER, current_pipe_name, launch_helper};
 pub use message::{
     DecodeError, EncodeError, MAX_LABEL, MAX_MESSAGE, Message, Meter, PROTOCOL_VERSION, decode,

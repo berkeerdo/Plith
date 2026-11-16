@@ -7,7 +7,8 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use plith_ipc::{
-    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, ServerEvent, Stopper, encode,
+    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, ServerEvent, ServerTrust,
+    Stopper, encode,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::{
@@ -98,6 +99,11 @@ impl Drop for Running {
     }
 }
 
+/// A link that accepts a server at its own level: the test server runs in this process.
+fn dev_link(name: String) -> OsdLink {
+    OsdLink::start_with(name, ServerTrust::DevSameUser)
+}
+
 fn level(percent: u8) -> Message {
     Message::Level {
         meter: Meter::Volume,
@@ -149,7 +155,7 @@ fn write_raw(name: &str, messages: &[&[u8]]) {
 fn client_messages_reach_the_server_in_order() {
     let name = unique_name();
     let server = Running::start(&name);
-    let link = OsdLink::start(name);
+    let link = dev_link(name);
     assert!(matches!(server.next(), Ok(Message::Hello { .. })));
     for percent in [10, 20, 30] {
         link.send(level(percent)).unwrap();
@@ -164,7 +170,7 @@ fn each_connection_is_framed_by_connected_and_disconnected() {
     let name = unique_name();
     let server = Running::start(&name);
     for _ in 0..2 {
-        let link = OsdLink::start(name.clone());
+        let link = dev_link(name.clone());
         assert_eq!(server.next_event(), ServerEvent::Connected);
         assert!(matches!(
             server.next_event(),
@@ -193,7 +199,7 @@ fn hello_comes_first_on_every_connection() {
     let name = unique_name();
     let server = Running::start(&name);
     for _ in 0..2 {
-        let link = OsdLink::start(name.clone());
+        let link = dev_link(name.clone());
         let Ok(Message::Hello { client_pid }) = server.next() else {
             panic!("the first message must be Hello");
         };
@@ -209,7 +215,7 @@ fn hello_comes_first_on_every_connection() {
 fn client_reconnects_after_server_restart() {
     let name = unique_name();
     let mut first = Running::start(&name);
-    let link = OsdLink::start(name.clone());
+    let link = dev_link(name.clone());
     assert!(matches!(first.next(), Ok(Message::Hello { .. })));
     first.shut_down();
     drop(first);
@@ -237,7 +243,7 @@ fn eventually(check: impl Fn() -> bool) -> bool {
 #[test]
 fn link_state_follows_the_server_life() {
     let name = unique_name();
-    let link = OsdLink::start(name.clone());
+    let link = dev_link(name.clone());
     assert!(
         eventually(|| link.last_error().is_some()),
         "no server yet: the failed connect is reported"
@@ -300,7 +306,7 @@ fn stopper_ends_serve_while_idle() {
 
 #[test]
 fn dropping_the_link_without_a_server_returns_quickly() {
-    let link = OsdLink::start(unique_name());
+    let link = dev_link(unique_name());
     thread::sleep(Duration::from_millis(100));
     let start = Instant::now();
     drop(link);
@@ -331,7 +337,7 @@ fn create_stuck_pipe(name: &str) -> HANDLE {
 fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
     let name = unique_name();
     let stuck = create_stuck_pipe(&name);
-    let link = OsdLink::start(name);
+    let link = dev_link(name);
     let long = Message::Level {
         meter: Meter::Volume,
         percent: 1,
@@ -357,4 +363,23 @@ fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
     unsafe {
         let _ = CloseHandle(stuck);
     }
+}
+
+#[test]
+fn the_default_link_refuses_a_server_at_its_own_level() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    let link = OsdLink::start(name);
+    assert!(
+        eventually(|| link
+            .last_error()
+            .is_some_and(|error| error.contains("not trusted"))),
+        "a same-level server is refused: {:?}",
+        link.last_error()
+    );
+    assert!(!link.is_connected());
+    assert!(
+        server.quiet_for(Duration::from_millis(300)),
+        "no Hello reaches it"
+    );
 }

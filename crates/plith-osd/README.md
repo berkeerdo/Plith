@@ -26,7 +26,9 @@ trusted folder such as Program Files.
   refused that and falls back to a plain topmost window (the log says which one it got).
 - `plith-osd --spike [inband|setband|plain] [--seconds N]`: the Task 2 band spike.
 - Dev run: `cargo run --package plith-osd -- --pipe \\.\pipe\plith-osd-dev`, then
-  `cargo run --package plith-ipc --example send_osd -- --pipe \\.\pipe\plith-osd-dev`.
+  `cargo run --package plith-ipc --example send_osd -- --pipe \\.\pipe\plith-osd-dev --dev`
+  (`--dev`: the unsigned helper runs at the sender's own level, which the default trust
+  refuses).
 
 Threads: the UI thread owns the window and draws nothing; the server thread hands each message
 to the render thread over a bounded channel with a blocking send (the render thread drains it

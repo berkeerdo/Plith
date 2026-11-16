@@ -44,19 +44,37 @@ pub(crate) struct TokenFacts {
 #[cfg(test)]
 mod tests;
 
-/// Whether a server with token `server` may receive data from a client with `own`.
-///
-/// The server must run as the same user, not in an `AppContainer`, and at an integrity
-/// level at least as high as ours.
-pub(crate) fn server_is_trusted(server: &TokenFacts, own: &TokenFacts) -> bool {
-    server.sid == own.sid && !server.app_container && server.integrity_rid >= own.integrity_rid
+/// Which pipe server a client may send to.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum ServerTrust {
+    /// The installed UIAccess helper: the same user, not in an `AppContainer`, and at an
+    /// integrity level strictly above the client's. A same-user process cannot raise its own
+    /// level, so a medium squatter is refused. The installed helper was measured at High for
+    /// an administrator; a standard user's UIAccess process is expected one step above medium
+    /// (not measured here). The default of [`OsdLink::start`](crate::OsdLink::start).
+    Installed,
+    /// Development only (unsigned helper, tests): the same user, no `AppContainer`, and a
+    /// level at least as high as the client's.
+    DevSameUser,
 }
 
-/// Whether the process serving the open client `pipe` may be trusted as the OSD server.
+/// Whether a server with token `server` may receive data from a client with `own`.
+pub(crate) fn server_is_trusted(server: &TokenFacts, own: &TokenFacts, trust: ServerTrust) -> bool {
+    let level_ok = match trust {
+        ServerTrust::Installed => server.integrity_rid > own.integrity_rid,
+        ServerTrust::DevSameUser => server.integrity_rid >= own.integrity_rid,
+    };
+    server.sid == own.sid && !server.app_container && level_ok
+}
+
+/// Whether the process serving the open client `pipe` may be trusted under `trust`.
 ///
 /// # Errors
 /// [`FactsError`] when the server process or its token cannot be read.
-pub(crate) fn server_is_trusted_for(pipe: &OwnedHandle) -> Result<bool, FactsError> {
+pub(crate) fn server_is_trusted_for(
+    pipe: &OwnedHandle,
+    trust: ServerTrust,
+) -> Result<bool, FactsError> {
     let mut pid = 0u32;
     // SAFETY: the handle is an open pipe client and `pid` is a valid out pointer.
     unsafe { GetNamedPipeServerProcessId(pipe.0, &raw mut pid) }
@@ -64,5 +82,6 @@ pub(crate) fn server_is_trusted_for(pipe: &OwnedHandle) -> Result<bool, FactsErr
     Ok(server_is_trusted(
         &process_token_facts(pid)?,
         &current_token_facts()?,
+        trust,
     ))
 }

@@ -283,7 +283,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
 - [x] **F1 (M3), pipe name per user:** `pipe_name(session, sid)` gives
   `\\.\pipe\plith-osd-<session>-<sid>`; `current_pipe_name` reads the token SID. TDD:
   `pipe_name_holds_session_and_sid`.
-- [ ] **F2 (M2), client trusts only a more trusted server:** `ServerTrust::Installed` (default
+- [x] **F2 (M2), client trusts only a more trusted server:** `ServerTrust::Installed` (default
   of `OsdLink::start`) needs the same user, no `AppContainer` and an integrity level strictly
   above the client's (High for an admin, Medium Plus for a standard user's UIAccess helper);
   `ServerTrust::DevSameUser` (`OsdLink::start_with`, `send_osd --dev`, tests) keeps

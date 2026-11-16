@@ -12,6 +12,7 @@ Windows only unless marked "pure".
 | Item | What it is |
 |---|---|
 | `OsdLink::start(name) -> OsdLink` | Notch side. Starts a worker thread that connects to `name` (the pipe need not exist yet), checks the server and sends `Hello` on every connection, then forwards the latest pending message. Reconnects at most once per second. |
+| `OsdLink::start_with(name, ServerTrust)` | `start` with an explicit trust rule. `ServerTrust::Installed` (the default of `start`) sends only to a server of the same user, outside an `AppContainer`, at an integrity level strictly above the client's: the installed UIAccess helper (High measured for an admin), never a same-user medium squatter. `ServerTrust::DevSameUser` also accepts the client's own level, for an unsigned dev helper and tests only. |
 | `OsdLink::send(&self, Message) -> Result<(), EncodeError>` | Never blocks. Latest wins: a message not yet written is replaced. Fails only for an out of range message (percent above 100, label over 64 bytes). |
 | `OsdLink::is_connected(&self) -> bool` | True from a successful connect (open, server check, `Hello`) until a write or the next connect fails. A server that dies while nothing is sent is noticed at the next send. Never blocks. |
 | `OsdLink::last_error(&self) -> Option<String>` | The latest connect or write failure (`open: ...` when there is no server, `the pipe server is not trusted ...` for a server of another user, an `AppContainer` or a lower integrity level, `write: ...` for a broken pipe). Cleared by a successful connect. Never waits on the worker. |

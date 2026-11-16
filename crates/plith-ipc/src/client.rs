@@ -11,7 +11,7 @@ use windows::Win32::System::IO::CancelSynchronousIo;
 use windows::Win32::System::Pipes::WaitNamedPipeW;
 use windows::core::PCWSTR;
 
-use crate::identity::{open_client, server_is_trusted_for};
+use crate::identity::{ServerTrust, open_client, server_is_trusted_for};
 use crate::latest::Slot;
 use crate::security::token::FactsError;
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
@@ -24,8 +24,7 @@ const DROP_GRACE: Duration = Duration::from_millis(500);
 /// How long drop waits after cancelling before it gives up on the worker.
 const DROP_CANCEL: Duration = Duration::from_millis(500);
 /// The `last_error` text when the pipe is served by a process this client must not trust.
-const UNTRUSTED: &str =
-    "the pipe server is not trusted (another user, an AppContainer or a lower integrity level)";
+const UNTRUSTED: &str = "the pipe server is not trusted (another user, an AppContainer or an      integrity level the trust rule refuses)";
 
 /// A link to the OSD helper that never blocks the caller.
 ///
@@ -134,9 +133,18 @@ impl Drop for Registration<'_> {
 }
 
 impl OsdLink {
-    /// Starts the worker for the pipe `name`. The pipe need not exist yet.
+    /// Starts the worker for the pipe `name` and sends only to the installed helper
+    /// ([`ServerTrust::Installed`]: a server more trusted than this process). The pipe need
+    /// not exist yet.
     #[must_use]
     pub fn start(name: String) -> Self {
+        Self::start_with(name, ServerTrust::Installed)
+    }
+
+    /// [`start`](Self::start) with an explicit trust rule. [`ServerTrust::DevSameUser`] is for
+    /// an unsigned dev helper and tests only.
+    #[must_use]
+    pub fn start_with(name: String, trust: ServerTrust) -> Self {
         let slot = Arc::new(Slot::new());
         let state = Arc::new(WorkerState::default());
         let status = Arc::new(LinkStatus::default());
@@ -146,7 +154,7 @@ impl OsdLink {
             let status = Arc::clone(&status);
             std::thread::spawn(move || {
                 let _registration = Registration::new(&state);
-                run(&name, &slot, &status);
+                run(&name, trust, &slot, &status);
             })
         };
         Self {
@@ -211,7 +219,7 @@ impl Drop for OsdLink {
     }
 }
 
-fn run(name: &str, slot: &Slot<Message>, status: &LinkStatus) {
+fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus) {
     let wide_name = wide(name);
     let mut connection: Option<OwnedHandle> = None;
     let mut carry: Option<Message> = None;
@@ -233,7 +241,7 @@ fn run(name: &str, slot: &Slot<Message>, status: &LinkStatus) {
                 continue;
             }
             connected_at = Instant::now();
-            match connect(&wide_name) {
+            match connect(&wide_name, trust) {
                 Ok(pipe) => {
                     status.connected();
                     connection = Some(pipe);
@@ -273,7 +281,7 @@ fn run(name: &str, slot: &Slot<Message>, status: &LinkStatus) {
 
 /// Opens the pipe, checks that this user's process serves it and sends `Hello`.
 /// The error text says why not: no server, busy, not ours, or the `Hello` write failed.
-fn connect(wide_name: &[u16]) -> Result<OwnedHandle, String> {
+fn connect(wide_name: &[u16], trust: ServerTrust) -> Result<OwnedHandle, String> {
     let pipe = match open_client(wide_name) {
         Ok(pipe) => pipe,
         Err(e) if e.code() == ERROR_PIPE_BUSY.to_hresult() => {
@@ -285,9 +293,9 @@ fn connect(wide_name: &[u16]) -> Result<OwnedHandle, String> {
         }
         Err(e) => return Err(format!("open: {e}")),
     };
-    // Never send to a server of another user, in an AppContainer or at a lower integrity
-    // level: close and try again later.
-    match server_is_trusted_for(&pipe) {
+    // Never send to a server of another user, in an AppContainer or at a level `trust`
+    // refuses: close and try again later.
+    match server_is_trusted_for(&pipe, trust) {
         Ok(true) => {}
         Ok(false) => return Err(String::from(UNTRUSTED)),
         Err(FactsError::AccessDenied) => {

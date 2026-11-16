@@ -28,7 +28,7 @@ use windows::Win32::System::Pipes::{
 use windows::Win32::System::Threading::GetCurrentThreadId;
 use windows::core::PCWSTR;
 
-use crate::identity;
+use crate::identity::{self, ServerTrust};
 use crate::security::token::FactsError;
 use crate::security::{pipe_sddl, token};
 use crate::win::{OwnedHandle, duplicate_current_thread, wide};
@@ -344,7 +344,8 @@ fn classify(error: &windows::core::Error) -> Read {
 /// Tells our own earlier server from a squatter when the name is already taken.
 fn owner_of_taken_name(wide_name: &[u16]) -> BindError {
     match identity::open_client(wide_name) {
-        Ok(probe) => match identity::server_is_trusted_for(&probe) {
+        // Our own earlier helper runs at our level, so the same-user rule tells it apart.
+        Ok(probe) => match identity::server_is_trusted_for(&probe, ServerTrust::DevSameUser) {
             Ok(true) => BindError::AlreadyRunning,
             Ok(false) | Err(FactsError::AccessDenied) => BindError::Squatted,
             Err(FactsError::Os(error)) => BindError::Os(error),
