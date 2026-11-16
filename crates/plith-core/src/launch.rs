@@ -19,6 +19,17 @@ pub enum ClockRequest {
     Timer,
 }
 
+/// Mock data that replaces the hardware services (`--fixture`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum Fixture {
+    /// Voicemeeter Banana as the mock draws it.
+    Banana,
+    /// Voicemeeter Potato: eight strips, eight buses.
+    Potato,
+    /// No Voicemeeter: Windows endpoints only.
+    Bare,
+}
+
 /// Parsed launch options.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
@@ -34,6 +45,8 @@ pub struct Launch {
     pub levers: Levers,
     /// Spring tuning preset; the default is BRISK (R1 stays as `--tune r1`).
     pub tune: TuningSet,
+    /// Mock data instead of the real services; `None` runs the real services.
+    pub fixture: Option<Fixture>,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -80,6 +93,15 @@ fn parse_clock(value: &str) -> Option<ClockRequest> {
         "dcomp" => Some(ClockRequest::Dcomp),
         "dxgi" => Some(ClockRequest::Dxgi),
         "timer" => Some(ClockRequest::Timer),
+        _ => None,
+    }
+}
+
+fn parse_fixture(value: &str) -> Option<Fixture> {
+    match value {
+        "banana" => Some(Fixture::Banana),
+        "potato" => Some(Fixture::Potato),
+        "bare" => Some(Fixture::Bare),
         _ => None,
     }
 }
@@ -169,6 +191,15 @@ impl Launch {
                 "--tune" => {
                     let text = value()?;
                     launch.tune = TuningSet::by_name(&text).ok_or_else(|| bad(text))?;
+                }
+                "--fixture" => {
+                    let text = value()?;
+                    // `none` means the real services.
+                    launch.fixture = if text == "none" {
+                        None
+                    } else {
+                        Some(parse_fixture(&text).ok_or_else(|| bad(text))?)
+                    };
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

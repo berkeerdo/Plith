@@ -122,3 +122,23 @@ fn layers_hold_outgoing_then_incoming_without_allocating() {
     let pages: Vec<usize> = turn.layers().iter().map(|l| l.page).collect();
     assert_eq!(pages, vec![0, 1]);
 }
+
+#[test]
+fn a_motion_shows_its_start_page_and_its_target_page() {
+    assert_eq!(
+        motion_pages(2, true, 2),
+        vec![2],
+        "an expand shows its page"
+    );
+    assert_eq!(motion_pages(0, true, 2), vec![0, 2], "a turn shows both");
+    assert_eq!(
+        motion_pages(1, true, 3),
+        vec![1, 3],
+        "an expand that turns fades the old page out"
+    );
+    assert!(
+        motion_pages(1, false, 1).is_empty(),
+        "a collapse shows the pill"
+    );
+    assert!(motion_pages(0, false, 2).is_empty());
+}

@@ -2,7 +2,9 @@
 //! here lives on the UI thread, so plain `Cell` and `RefCell` are enough.
 
 use crate::handles::hwnd_of;
+use crate::poster::Coalesce;
 use crate::window::ShellEvent;
+use plith_core::geometry::IslandShape;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{ShapeCell, Suppression};
 use plith_core::topmost::TopmostFight;
@@ -10,7 +12,6 @@ use std::cell::{Cell, RefCell};
 use std::collections::VecDeque;
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::AtomicBool;
 use std::time::Instant;
 use windows::Win32::Foundation::{LPARAM, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{PostMessageW, PostQuitMessage, WM_CLOSE};
@@ -35,13 +36,22 @@ pub(crate) struct Registrations {
 pub(crate) struct Inner {
     pub layout: SurfaceLayout,
     pub shapes: Arc<ShapeCell>,
-    pub pending: Arc<AtomicBool>,
+    pub pending: Arc<Coalesce>,
+    /// Coalescer of the generic UI wake; cleared when `WM_APP_WAKE` is handled.
+    pub wake: Arc<Coalesce>,
     pub visual: Cell<isize>,
     pub fight: Cell<TopmostFight>,
     pub culprit: RefCell<Option<String>>,
     pub suppression: Cell<Suppression>,
     pub stats: Cell<HitStats>,
     pub hit_errors: Cell<u64>,
+    /// The covered shape of the last region applied successfully; `None` before the first
+    /// one and after a failure.
+    pub applied: Cell<Option<IslandShape>>,
+    /// True while a `WM_MOUSELEAVE` is requested and not yet delivered.
+    pub tracking: Cell<bool>,
+    /// The left-button press waiting for its release (`WM_LBUTTONDOWN` inside the shape).
+    pub press: crate::window::mouse::PressRecord,
     pub registrations: RefCell<Registrations>,
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
@@ -62,13 +72,17 @@ impl Inner {
         Self {
             layout,
             shapes,
-            pending: Arc::new(AtomicBool::new(false)),
+            pending: Arc::new(Coalesce::default()),
+            wake: Arc::new(Coalesce::default()),
             visual: Cell::new(0),
             fight: Cell::new(TopmostFight::default()),
             culprit: RefCell::new(None),
             suppression: Cell::new(Suppression::default()),
             stats: Cell::new(HitStats::default()),
             hit_errors: Cell::new(0),
+            tracking: Cell::new(false),
+            press: crate::window::mouse::PressRecord::default(),
+            applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),
             on_event: RefCell::new(on_event),

@@ -1,20 +1,27 @@
 //! Pure logic with no Windows dependency: springs, the vsync timeline, motion statistics, the island state machine, geometry and page layout.
 
+pub mod ambient;
 pub mod clock_choice;
 pub mod demo;
+pub mod draw;
 pub mod geometry;
 pub mod gpu_health;
+pub mod input;
 pub mod island;
 pub mod launch;
 pub mod layout;
 pub mod levers;
 pub mod motion;
+pub mod outline;
 pub mod page;
+pub mod pages;
 pub mod panic_text;
 pub mod scene;
 pub mod shapes;
 pub mod spring;
+pub mod theme;
 pub mod timeline;
 pub mod topmost;
+pub mod trace;
 pub mod tuning;
 pub mod visible;

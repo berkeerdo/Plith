@@ -1,4 +1,6 @@
 mod harness;
+mod live;
+mod prewarm;
 
 use super::{Fatal, RenderHandle};
 use harness::*;
@@ -17,6 +19,7 @@ fn expanded(page: usize) -> Scene {
         expanded: true,
         page,
         suppression: Suppression::default(),
+        ..Scene::default()
     }
 }
 

@@ -43,7 +43,7 @@ fn bus_labels(kind: VmKind) -> Vec<String> {
 
 #[test]
 fn fallback_labels_buses_per_kind() {
-    assert_eq!(bus_labels(VmKind::Standard), ["A1", "A2"]);
+    assert_eq!(bus_labels(VmKind::Standard), ["A1", "B1"]);
     assert_eq!(bus_labels(VmKind::Banana), ["A1", "A2", "A3", "B1", "B2"]);
     let potato = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
     assert_eq!(bus_labels(VmKind::Potato), potato);
@@ -225,4 +225,130 @@ fn level_channels_for_buses() {
 fn level_type_per_rail() {
     assert_eq!(level_type(Rail::Strip), 1);
     assert_eq!(level_type(Rail::Bus), 3);
+}
+
+fn route_params(kind: VmKind) -> Vec<&'static str> {
+    (0..kind.bus_count())
+        .map(|b| route_param(kind, b).unwrap())
+        .collect()
+}
+
+#[test]
+fn route_params_standard() {
+    assert_eq!(route_params(VmKind::Standard), ["A1", "B1"]);
+    assert_eq!(route_param(VmKind::Standard, 2), None);
+}
+
+#[test]
+fn route_params_banana() {
+    assert_eq!(route_params(VmKind::Banana), ["A1", "A2", "A3", "B1", "B2"]);
+    assert_eq!(route_param(VmKind::Banana, 5), None);
+}
+
+#[test]
+fn route_params_potato() {
+    let potato = ["A1", "A2", "A3", "A4", "A5", "B1", "B2", "B3"];
+    assert_eq!(route_params(VmKind::Potato), potato);
+    assert_eq!(route_param(VmKind::Potato, 8), None);
+}
+
+#[test]
+fn route_params_match_bus_labels() {
+    for kind in [VmKind::Standard, VmKind::Banana, VmKind::Potato] {
+        assert_eq!(route_params(kind), bus_labels(kind));
+    }
+}
+
+#[test]
+fn poll_reads_routes_into_snapshot() {
+    let mut asked = Vec::new();
+    let routes = read_routes(VmKind::Banana, 2, |name| {
+        asked.push(name.to_owned());
+        match name {
+            "Strip[2].A1" | "Strip[2].B2" => Some(1.0),
+            "Strip[2].B1" => None,
+            _ => Some(0.0),
+        }
+    });
+    assert_eq!(routes, [true, false, false, false, true]);
+    assert_eq!(asked[0], "Strip[2].A1");
+    assert_eq!(asked[3], "Strip[2].B1");
+    assert_eq!(asked.len(), 5);
+}
+
+#[test]
+fn route_threshold_is_half() {
+    let routes = read_routes(VmKind::Standard, 0, |n| {
+        Some(if n.ends_with("A1") { 0.5 } else { 0.49 })
+    });
+    assert_eq!(routes, [true, false]);
+}
+
+#[test]
+fn hardware_counts_per_kind() {
+    let expect = [
+        (VmKind::Standard, 2, 1),
+        (VmKind::Banana, 3, 3),
+        (VmKind::Potato, 5, 5),
+    ];
+    for (kind, strips, buses) in expect {
+        assert_eq!(kind.hardware_strips(), strips);
+        assert_eq!(kind.hardware_buses(), buses);
+    }
+}
+
+fn ms(n: u64) -> Duration {
+    Duration::from_millis(n)
+}
+
+#[test]
+fn signal_hold_reports_edges_only() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    // The first reading reports the silent flags once, then nothing while they hold.
+    assert_eq!(
+        hold.update(&[[0.0, 0.0], [0.0, 0.0]], t0),
+        Some(vec![false, false])
+    );
+    assert_eq!(hold.update(&[[0.0, 0.005], [0.0, 0.0]], t0 + ms(100)), None);
+    // A loud frame on strip 1 is one edge.
+    assert_eq!(
+        hold.update(&[[0.0, 0.0], [0.2, 0.0]], t0 + ms(200)),
+        Some(vec![false, true])
+    );
+    assert_eq!(hold.update(&[[0.0, 0.0], [0.3, 0.1]], t0 + ms(300)), None);
+    assert_eq!(hold.flags(), [false, true]);
+}
+
+#[test]
+fn signal_hold_keeps_signal_for_two_seconds() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    let silent = [[0.0, 0.0]];
+    assert_eq!(hold.update(&[[0.0, 0.5]], t0), Some(vec![true]));
+    // Silence within the hold changes nothing.
+    assert_eq!(hold.update(&silent, t0 + ms(1_000)), None);
+    assert_eq!(hold.update(&silent, t0 + ms(2_000)), None);
+    // Past the hold: one falling edge, then quiet.
+    assert_eq!(hold.update(&silent, t0 + ms(2_100)), Some(vec![false]));
+    assert_eq!(hold.update(&silent, t0 + ms(9_000)), None);
+}
+
+#[test]
+fn signal_hold_threshold_and_reset() {
+    let t0 = Instant::now();
+    let mut hold = SignalHold::default();
+    assert_eq!(hold.update(&[[0.01, 0.01]], t0), Some(vec![false]));
+    assert_eq!(hold.update(&[[0.011, 0.0]], t0), Some(vec![true]));
+    hold.reset();
+    assert!(hold.flags().is_empty());
+    assert_eq!(hold.update(&[[0.0, 0.0]], t0), Some(vec![false]));
+}
+
+#[test]
+fn signal_flags_pad_to_the_strip_count() {
+    let mut hold = SignalHold::default();
+    assert_eq!(hold.flags_for(3), vec![false, false, false]);
+    hold.update(&[[0.5, 0.5]], Instant::now());
+    assert_eq!(hold.flags_for(3), vec![true, false, false]);
 }

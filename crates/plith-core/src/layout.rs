@@ -1,7 +1,7 @@
 //! Fixed overlay surface: sized for the largest page, centred on the monitor.
 
 use crate::geometry::IslandShape;
-use crate::shapes::{OVERSHOOT, PAGES, SURFACE_MARGIN, TOP_GAP};
+use crate::shapes::{OVERSHOOT, PAGE_MAX_HEIGHT, PAGE_MAX_WIDTH, SURFACE_MARGIN, TOP_GAP};
 
 /// Integer pixel rectangle.
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -32,13 +32,11 @@ fn ceil_px(v: f64) -> i32 {
 }
 
 impl SurfaceLayout {
-    /// Sizes the surface for the largest page and centres it on the monitor centre pixel.
+    /// Sizes the surface for the widest and tallest page and centres it on the monitor centre pixel.
     #[must_use]
     pub fn new(monitor: RectPx, work_top_px: i32, scale: f64) -> Self {
-        let max_w = PAGES.iter().fold(0.0_f64, |a, p| a.max(p.width));
-        let max_h = PAGES.iter().fold(0.0_f64, |a, p| a.max(p.height));
-        let dip_w = max_w * OVERSHOOT + 2.0 * SURFACE_MARGIN;
-        let dip_h = TOP_GAP + max_h * OVERSHOOT + SURFACE_MARGIN;
+        let dip_w = PAGE_MAX_WIDTH * OVERSHOOT + 2.0 * SURFACE_MARGIN;
+        let dip_h = TOP_GAP + PAGE_MAX_HEIGHT * OVERSHOOT + SURFACE_MARGIN;
         let mut width = ceil_px(dip_w * scale);
         if width % 2 != 0 {
             width += 1;

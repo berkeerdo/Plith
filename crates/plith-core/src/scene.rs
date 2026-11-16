@@ -1,9 +1,11 @@
 //! Cross-thread handoff: the UI thread publishes the wanted scene, the render thread parks on
 //! it, and publishes the drawn shape back for hit testing.
 
+use crate::draw::PageContent;
 use crate::geometry::IslandShape;
+use crate::page::PageLayers;
 use crate::shapes::{PAGES, REST};
-use std::sync::{Condvar, Mutex, MutexGuard, PoisonError};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
 /// Reasons the island must not be shown.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -25,7 +27,7 @@ impl Suppression {
 }
 
 /// What the UI thread wants on screen.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Scene {
     /// Whether the island is expanded.
     pub expanded: bool,
@@ -33,6 +35,19 @@ pub struct Scene {
     pub page: usize,
     /// Why the island is hidden, if it is.
     pub suppression: Suppression,
+    /// The shape of each page; `target` reads the one at `page`.
+    pub shapes: [IslandShape; 4],
+}
+
+impl Default for Scene {
+    fn default() -> Self {
+        Self {
+            expanded: false,
+            page: 0,
+            suppression: Suppression::default(),
+            shapes: PAGES,
+        }
+    }
 }
 
 impl Scene {
@@ -42,16 +57,42 @@ impl Scene {
         if !self.expanded {
             return REST;
         }
-        debug_assert!(self.page < PAGES.len(), "page {} out of range", self.page);
-        PAGES[self.page.min(PAGES.len() - 1)]
+        debug_assert!(
+            self.page < self.shapes.len(),
+            "page {} out of range",
+            self.page
+        );
+        self.shapes[self.page.min(self.shapes.len() - 1)]
     }
+}
+
+/// The scene and the page content it is drawn with, at one generation.
+#[derive(Debug, Clone, PartialEq)]
+pub struct Snapshot {
+    /// The wanted scene.
+    pub scene: Scene,
+    /// The display lists and artwork.
+    pub content: Arc<PageContent>,
+    /// The mailbox generation this snapshot was taken at.
+    pub generation: u64,
 }
 
 #[derive(Debug)]
 struct State {
     scene: Scene,
+    content: Arc<PageContent>,
     generation: u64,
     stopped: bool,
+}
+
+impl State {
+    fn snapshot(&self) -> Snapshot {
+        Snapshot {
+            scene: self.scene,
+            content: Arc::clone(&self.content),
+            generation: self.generation,
+        }
+    }
 }
 
 /// Latest-wins mailbox from the UI thread to the render thread.
@@ -66,12 +107,13 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl SceneMailbox {
-    /// A mailbox holding `scene` at generation 0.
+    /// A mailbox holding `scene` and `content` at generation 0.
     #[must_use]
-    pub fn new(scene: Scene) -> Self {
+    pub fn new(scene: Scene, content: Arc<PageContent>) -> Self {
         Self {
             state: Mutex::new(State {
                 scene,
+                content,
                 generation: 0,
                 stopped: false,
             }),
@@ -79,46 +121,76 @@ impl SceneMailbox {
         }
     }
 
-    /// Replaces the scene, wakes the waiter and returns the new generation.
-    pub fn publish(&self, scene: Scene) -> u64 {
-        let mut state = lock(&self.state);
-        state.scene = scene;
+    /// Bumps the generation and wakes the waiter; the caller holds the lock.
+    fn bump(&self, mut state: MutexGuard<'_, State>) -> u64 {
         state.generation += 1;
         let generation = state.generation;
         drop(state);
         self.changed.notify_all();
         generation
+    }
+
+    /// Replaces the scene, wakes the waiter and returns the new generation; `None` (no bump,
+    /// no wake) when the scene is unchanged.
+    pub fn publish(&self, scene: Scene) -> Option<u64> {
+        self.update(|_| scene)
     }
 
     /// Reads the scene, applies `change` and publishes the result under one lock, so no other
-    /// publisher can slip in between. Bumps the generation once and returns it.
-    pub fn update(&self, change: impl FnOnce(Scene) -> Scene) -> u64 {
+    /// publisher can slip in between. Bumps the generation once and returns it; `None` (no
+    /// bump, no wake) when `change` leaves the scene as it was.
+    pub fn update(&self, change: impl FnOnce(Scene) -> Scene) -> Option<u64> {
         let mut state = lock(&self.state);
-        state.scene = change(state.scene);
-        state.generation += 1;
-        let generation = state.generation;
-        drop(state);
-        self.changed.notify_all();
-        generation
+        let next = change(state.scene);
+        if next == state.scene {
+            return None;
+        }
+        state.scene = next;
+        Some(self.bump(state))
     }
 
-    /// The current scene and its generation, without blocking.
+    /// Replaces the page content; `None` (no bump, no wake) when it equals the current one.
+    ///
+    /// The deep compare runs outside the lock, so the render thread never waits on it: the
+    /// stored `Arc` is cloned under the lock, compared without it, and the new content is stored
+    /// only if the stored `Arc` is still the one compared against. A lost race retries once;
+    /// a second lost race compares under the lock.
+    pub fn publish_content(&self, content: Arc<PageContent>) -> Option<u64> {
+        for _ in 0..2 {
+            let current = Arc::clone(&lock(&self.state).content);
+            if Arc::ptr_eq(&current, &content) || *current == *content {
+                return None;
+            }
+            let mut state = lock(&self.state);
+            if Arc::ptr_eq(&state.content, &current) {
+                state.content = content;
+                return Some(self.bump(state));
+            }
+        }
+        let mut state = lock(&self.state);
+        if Arc::ptr_eq(&state.content, &content) || *state.content == *content {
+            return None;
+        }
+        state.content = content;
+        Some(self.bump(state))
+    }
+
+    /// The current scene, content and generation, without blocking.
     #[must_use]
-    pub fn latest(&self) -> (Scene, u64) {
-        let state = lock(&self.state);
-        (state.scene, state.generation)
+    pub fn latest(&self) -> Snapshot {
+        lock(&self.state).snapshot()
     }
 
     /// Blocks until the generation is newer than `seen`; `None` once stopped.
     #[must_use]
-    pub fn wait_newer(&self, seen: u64) -> Option<(Scene, u64)> {
+    pub fn wait_newer(&self, seen: u64) -> Option<Snapshot> {
         let mut state = lock(&self.state);
         loop {
             if state.stopped {
                 return None;
             }
             if state.generation > seen {
-                return Some((state.scene, state.generation));
+                return Some(state.snapshot());
             }
             state = self
                 .changed
@@ -144,6 +216,9 @@ pub struct ShapeFrame {
     pub previous: IslandShape,
     /// The render thread's frame counter: 1 for its first painted frame, then increasing.
     pub generation: u64,
+    /// The page layers drawn in this frame, outgoing first; the click router reads which page
+    /// is on screen from them.
+    pub pages: PageLayers,
 }
 
 /// Holds the latest drawn shape.

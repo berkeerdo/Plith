@@ -4,7 +4,9 @@
 use super::super::{Fatal, FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_guarded};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
+use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::ClockKind;
+use plith_core::draw::PageContent;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
@@ -20,6 +22,10 @@ pub(super) const PERIOD: f64 = 1.0 / 240.0;
 pub(super) const BOUND: Duration = Duration::from_secs(2);
 pub(super) const QUIET: Duration = Duration::from_millis(50);
 pub(super) const KINDS: [ClockKind; 3] = [ClockKind::Dcomp, ClockKind::Dxgi, ClockKind::Timer];
+/// Every prewarm call: the pages asked for and the clock call count at the time.
+pub(super) type Prewarms = Arc<Mutex<Vec<(Vec<usize>, u64)>>>;
+/// What the fake painter reports for every prewarm call, in milliseconds.
+pub(super) const PREWARM_MS: f64 = 0.75;
 
 pub(super) fn index(kind: ClockKind) -> usize {
     match kind {
@@ -35,6 +41,7 @@ pub(super) struct Harness {
     pub(super) total: AtomicU64,
     pub(super) calls: [AtomicU64; 3],
     pub(super) script: Vec<(u64, Scene)>,
+    pub(super) content_script: Vec<(u64, Arc<PageContent>)>,
     pub(super) mailbox: Arc<SceneMailbox>,
     pub(super) delay: Option<Duration>,
     pub(super) fail_once: Option<ClockKind>,
@@ -85,7 +92,12 @@ impl FrameSource for FakeClock {
         }
         for (at, scene) in &self.harness.script {
             if *at == call {
-                self.harness.mailbox.publish(*scene);
+                let _ = self.harness.mailbox.publish(*scene);
+            }
+        }
+        for (at, content) in &self.harness.content_script {
+            if *at == call {
+                let _ = self.harness.mailbox.publish_content(Arc::clone(content));
             }
         }
         Ok(self.harness.now())
@@ -96,14 +108,18 @@ impl FrameSource for FakeClock {
     }
 }
 
-/// Records painted frames; fails the first `fail` paints; records every `recover` call.
+/// Records painted frames and the clock call count at each; fails the first `fail` paints; records every `recover` call.
 pub(super) struct FakePaint {
     pub(super) frames: Arc<Mutex<Vec<PaintFrame>>>,
+    pub(super) calls_at: Arc<Mutex<Vec<u64>>>,
+    pub(super) harness: Arc<Harness>,
     pub(super) fail: Arc<AtomicU32>,
     pub(super) recovers: Arc<Mutex<Vec<bool>>>,
     pub(super) recover_fails: bool,
     /// Panics when asked to paint this frame number (1 is the start frame).
     pub(super) panic_at: Option<usize>,
+    /// Every prewarm call: the pages asked for and the clock call count at the time.
+    pub(super) prewarms: Prewarms,
 }
 
 impl Paint for FakePaint {
@@ -118,10 +134,16 @@ impl Paint for FakePaint {
             return Err(E_FAIL.into());
         }
         lock(&self.frames).push(frame.clone());
+        lock(&self.calls_at).push(self.harness.total());
         Ok(FrameTimes {
             draw_ms: 1.0,
             present_ms: 0.5,
         })
+    }
+
+    fn prewarm(&mut self, _content: &PageContent, pages: &[usize]) -> f64 {
+        lock(&self.prewarms).push((pages.to_vec(), self.harness.total()));
+        PREWARM_MS
     }
 
     fn recover(&mut self, warp: bool) -> windows::core::Result<()> {
@@ -148,6 +170,9 @@ pub(super) struct Setup {
     pub(super) fail_once: Option<ClockKind>,
     pub(super) lead: f64,
     pub(super) panic_at: Option<usize>,
+    /// The page content the mailbox starts with (empty when `None`).
+    pub(super) content: Option<Arc<PageContent>>,
+    pub(super) content_script: Vec<(u64, Arc<PageContent>)>,
 }
 
 pub(super) struct Run {
@@ -155,10 +180,15 @@ pub(super) struct Run {
     pub(super) shared: Arc<LoopShared>,
     pub(super) harness: Arc<Harness>,
     pub(super) frames: Arc<Mutex<Vec<PaintFrame>>>,
+    pub(super) calls_at: Arc<Mutex<Vec<u64>>>,
     pub(super) shapes: Arc<Mutex<Vec<ShapeFrame>>>,
     pub(super) recovers: Arc<Mutex<Vec<bool>>>,
     pub(super) reports: Receiver<MotionReport>,
+    pub(super) ambient: Receiver<AmbientReport>,
+    pub(super) samples: Arc<AtomicU64>,
     pub(super) fatal: Receiver<Fatal>,
+    pub(super) notes: Receiver<String>,
+    pub(super) prewarms: Prewarms,
     pub(super) done: Receiver<()>,
     pub(super) join: JoinHandle<()>,
 }
@@ -173,11 +203,23 @@ pub(super) fn layout() -> SurfaceLayout {
     SurfaceLayout::new(monitor, 0, 1.0)
 }
 
+/// The receivers of the sinks built by [`sinks`].
+pub(super) struct SinkEnds {
+    pub(super) reports: Receiver<MotionReport>,
+    pub(super) ambient: Receiver<AmbientReport>,
+    pub(super) fatal: Receiver<Fatal>,
+    pub(super) notes: Receiver<String>,
+}
+
+/// Sinks into channels; `sample` counts its calls in `samples` and returns the count as strip 0.
 pub(super) fn sinks(
     shapes: Arc<Mutex<Vec<ShapeFrame>>>,
-) -> (RenderSinks, Receiver<MotionReport>, Receiver<Fatal>) {
+    samples: Arc<AtomicU64>,
+) -> (RenderSinks, SinkEnds) {
     let (report_tx, reports) = mpsc::channel();
+    let (ambient_tx, ambient) = mpsc::channel();
     let (fatal_tx, fatal) = mpsc::channel();
+    let (note_tx, notes) = mpsc::channel();
     let sinks = RenderSinks {
         on_shape: Box::new(move |frame| lock(&shapes).push(frame)),
         on_motion: Box::new(move |report| {
@@ -186,19 +228,41 @@ pub(super) fn sinks(
         on_fatal: Box::new(move |message| {
             let _ = fatal_tx.send(message);
         }),
-        on_note: Box::new(|_| {}),
+        on_note: Box::new(move |line| {
+            let _ = note_tx.send(line);
+        }),
+        sample: Box::new(move || {
+            let n = samples.fetch_add(1, Ordering::SeqCst) + 1;
+            #[allow(clippy::cast_precision_loss)]
+            let level = n as f32;
+            LiveValues {
+                strips: vec![[level, level]],
+                ..LiveValues::default()
+            }
+        }),
+        on_ambient: Box::new(move |report| {
+            let _ = ambient_tx.send(report);
+        }),
     };
-    (sinks, reports, fatal)
+    let ends = SinkEnds {
+        reports,
+        ambient,
+        fatal,
+        notes,
+    };
+    (sinks, ends)
 }
 
 pub(super) fn start(setup: Setup) -> Run {
-    let mailbox = Arc::new(SceneMailbox::new(Scene::default()));
+    let content = setup.content.clone().unwrap_or_default();
+    let mailbox = Arc::new(SceneMailbox::new(Scene::default(), content));
     let shared = Arc::new(LoopShared::new());
     let harness = Arc::new(Harness {
         time: Mutex::new(0.0),
         total: AtomicU64::new(0),
         calls: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
         script: setup.script,
+        content_script: setup.content_script,
         mailbox: Arc::clone(&mailbox),
         delay: setup.delay,
         fail_once: setup.fail_once,
@@ -208,13 +272,19 @@ pub(super) fn start(setup: Setup) -> Run {
     let frames = Arc::new(Mutex::new(Vec::new()));
     let shapes = Arc::new(Mutex::new(Vec::new()));
     let recovers = Arc::new(Mutex::new(Vec::new()));
-    let (sinks, reports, fatal) = sinks(Arc::clone(&shapes));
+    let calls_at = Arc::new(Mutex::new(Vec::new()));
+    let samples = Arc::new(AtomicU64::new(0));
+    let prewarms = Arc::new(Mutex::new(Vec::new()));
+    let (mut sinks, ends) = sinks(Arc::clone(&shapes), Arc::clone(&samples));
     let paint = FakePaint {
         frames: Arc::clone(&frames),
+        calls_at: Arc::clone(&calls_at),
+        harness: Arc::clone(&harness),
         fail: Arc::new(AtomicU32::new(setup.fail)),
         recovers: Arc::clone(&recovers),
         recover_fails: setup.recover_fails,
         panic_at: setup.panic_at,
+        prewarms: Arc::clone(&prewarms),
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
@@ -241,7 +311,7 @@ pub(super) fn start(setup: Setup) -> Run {
                 layout: layout(),
                 tune: R1,
             };
-            run_guarded(parts, &mailbox, &shared, &sinks, || {});
+            run_guarded(parts, &mailbox, &shared, &mut sinks, || {});
             let _ = done_tx.send(());
         })
     };
@@ -250,10 +320,15 @@ pub(super) fn start(setup: Setup) -> Run {
         shared,
         harness,
         frames,
+        calls_at,
         shapes,
         recovers,
-        reports,
-        fatal,
+        reports: ends.reports,
+        ambient: ends.ambient,
+        samples,
+        fatal: ends.fatal,
+        notes: ends.notes,
+        prewarms,
         done,
         join,
     }
@@ -262,6 +337,29 @@ pub(super) fn start(setup: Setup) -> Run {
 impl Run {
     pub(super) fn frames(&self) -> Vec<PaintFrame> {
         lock(&self.frames).clone()
+    }
+
+    /// Every prewarm call so far: the pages and the clock call count at the time.
+    pub(super) fn prewarms(&self) -> Vec<(Vec<usize>, u64)> {
+        lock(&self.prewarms).clone()
+    }
+
+    /// The `prewarm:` log lines so far.
+    pub(super) fn prewarm_notes(&self) -> Vec<String> {
+        self.notes
+            .try_iter()
+            .filter(|line| line.starts_with("prewarm:"))
+            .collect()
+    }
+
+    pub(super) fn calls_at(&self) -> Vec<u64> {
+        lock(&self.calls_at).clone()
+    }
+
+    pub(super) fn ambient_report(&self) -> AmbientReport {
+        self.ambient
+            .recv_timeout(BOUND)
+            .expect("an ambient report within the bound")
     }
 
     pub(super) fn report(&self) -> MotionReport {

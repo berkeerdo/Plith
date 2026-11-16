@@ -1,5 +1,7 @@
 use super::*;
-use crate::shapes::{OVERSHOOT, PAGES, REST, SURFACE_MARGIN, TOP_GAP};
+use crate::shapes::{
+    OVERSHOOT, PAGE_MAX_HEIGHT, PAGE_MAX_WIDTH, PAGES, REST, SURFACE_MARGIN, TOP_GAP,
+};
 
 const MONITOR: RectPx = RectPx {
     x: 0,
@@ -10,11 +12,9 @@ const MONITOR: RectPx = RectPx {
 
 /// The surface size in DIP for the largest page, derived from the shape constants.
 fn surface_dip() -> (f64, f64) {
-    let max_w = PAGES.iter().fold(0.0_f64, |a, p| a.max(p.width));
-    let max_h = PAGES.iter().fold(0.0_f64, |a, p| a.max(p.height));
     (
-        max_w * OVERSHOOT + 2.0 * SURFACE_MARGIN,
-        TOP_GAP + max_h * OVERSHOOT + SURFACE_MARGIN,
+        PAGE_MAX_WIDTH * OVERSHOOT + 2.0 * SURFACE_MARGIN,
+        TOP_GAP + PAGE_MAX_HEIGHT * OVERSHOOT + SURFACE_MARGIN,
     )
 }
 
@@ -73,4 +73,26 @@ fn island_origin_is_centred_with_top_gap() {
     let surface_w = f64::from(even_px(dip_w, 1.0));
     assert!((x - (surface_w - REST.width) / 2.0).abs() < 1e-9);
     assert!((y - TOP_GAP).abs() < 1e-9);
+}
+
+#[test]
+fn surface_fits_max_page() {
+    let l = SurfaceLayout::new(MONITOR, 0, 1.0);
+    for page in PAGES {
+        assert!(f64::from(l.surface.width) >= page.width * OVERSHOOT + 2.0 * SURFACE_MARGIN);
+        assert!(f64::from(l.surface.height) >= TOP_GAP + page.height * OVERSHOOT + SURFACE_MARGIN);
+    }
+    assert!(f64::from(l.surface.height) >= TOP_GAP + PAGE_MAX_HEIGHT * OVERSHOOT + SURFACE_MARGIN);
+}
+
+#[test]
+fn surface_top_is_work_top() {
+    let l = SurfaceLayout::new(MONITOR, 40, 1.0);
+    assert_eq!(l.surface.y, 40);
+    let (_, y) = l.island_origin(PAGES[0]);
+    assert!(
+        y.abs() < 1e-9,
+        "island is flush with the surface top, got {y}"
+    );
+    assert!(TOP_GAP.abs() < 1e-9);
 }

@@ -17,21 +17,29 @@ fn run(m: &mut IslandMotion, secs: f64) -> Vec<IslandShape> {
     out
 }
 
+/// A second open shape as wide as the pages and lower than the media page (the test needs a
+/// target the height has not yet reached while the width overshoots).
+const NEXT: IslandShape = IslandShape {
+    width: 620.0,
+    height: 214.0,
+    radius: 24.0,
+};
+
 #[test]
 fn per_axis_tuning_follows_each_axis_direction() {
     let mut m = IslandMotion::new(REST, R1);
     m.retarget(PAGES[1]);
     // Step until the width is already past the next page's width while the height lags below it.
     let mut guard = 0;
-    while !(m.shape().width > PAGES[2].width + 5.0 && m.shape().height < PAGES[2].height - 2.0) {
+    while !(m.shape().width > NEXT.width + 5.0 && m.shape().height < NEXT.height - 2.0) {
         m.step(H);
         guard += 1;
         assert!(guard < 2400, "never reached the mixed-direction moment");
     }
-    m.retarget(PAGES[2]);
+    m.retarget(NEXT);
     let samples = run(&mut m, 4.0);
-    assert!(samples.iter().all(|s| s.width >= PAGES[2].width - 1e-9));
-    assert!(samples.iter().any(|s| s.height > PAGES[2].height));
+    assert!(samples.iter().all(|s| s.width >= NEXT.width - 1e-9));
+    assert!(samples.iter().any(|s| s.height > NEXT.height));
 }
 
 #[test]
@@ -124,14 +132,14 @@ fn reference(from: f64, to: f64, tuning: Tuning, steps: usize) -> f64 {
 
 #[test]
 fn card_to_card_growth_uses_the_card_tunings() {
-    let mut m = IslandMotion::new(PAGES[0], BRISK);
-    m.retarget(PAGES[1]);
+    let mut m = IslandMotion::new(PAGES[1], BRISK);
+    m.retarget(PAGES[0]);
     for _ in 0..30 {
         m.step(H);
     }
-    let want = reference(PAGES[0].height, PAGES[1].height, BRISK.card_grow_h, 30);
+    let want = reference(PAGES[1].height, PAGES[0].height, BRISK.card_grow_h, 30);
     assert!((m.height.spring.value() - want).abs() < 1e-9);
-    let plain = reference(PAGES[0].height, PAGES[1].height, BRISK.grow_h, 30);
+    let plain = reference(PAGES[1].height, PAGES[0].height, BRISK.grow_h, 30);
     assert!((want - plain).abs() > 0.1, "the two tunings must differ");
 }
 
@@ -145,15 +153,15 @@ fn growth_from_or_to_rest_keeps_the_plain_grow_tunings() {
     let want = reference(REST.height, PAGES[0].height, BRISK.grow_h, 30);
     assert!((m.height.spring.value() - want).abs() < 1e-9);
     // Mid-collapse the current target is REST, so a retarget up is not card to card.
-    let mut back = IslandMotion::new(PAGES[0], BRISK);
+    let mut back = IslandMotion::new(PAGES[1], BRISK);
     back.retarget(REST);
     back.step(H);
-    back.retarget(PAGES[1]);
+    back.retarget(PAGES[0]);
     back.step(H);
-    let mut s = Spring::new(PAGES[0].height, BRISK.shrink_h);
+    let mut s = Spring::new(PAGES[1].height, BRISK.shrink_h);
     s.retarget(REST.height, BRISK.shrink_h);
     s.step(H);
-    s.retarget(PAGES[1].height, BRISK.grow_h);
+    s.retarget(PAGES[0].height, BRISK.grow_h);
     s.step(H);
     assert!((back.height.spring.value() - s.value()).abs() < 1e-9);
 }

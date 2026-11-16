@@ -10,7 +10,9 @@ use crate::clock::{open_clock, seconds_since};
 use crate::gpu_paint::GpuPaint;
 use crate::levers::{apply_mmcss, apply_sched_class};
 use crate::paint::PaintFrame;
+use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::clock_order;
+use plith_core::draw::PageContent;
 use plith_core::launch::ClockRequest;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, MmcssPriority, outcome_line};
@@ -44,6 +46,12 @@ pub trait Paint {
     /// # Errors
     /// Returns the failing draw or present call (for example device removed).
     fn paint(&mut self, frame: &PaintFrame) -> windows::core::Result<FrameTimes>;
+
+    /// Re-rasters the page bitmaps among `pages` (page indices) whose list changed since their
+    /// last raster, outside any frame. Returns the milliseconds spent; nothing by default.
+    fn prewarm(&mut self, _content: &PageContent, _pages: &[usize]) -> f64 {
+        0.0
+    }
 
     /// Rebuilds the device and target, on WARP when `warp` is set.
     ///
@@ -79,7 +87,8 @@ impl Fatal {
 
 /// Callbacks the render thread calls from its own thread.
 pub struct RenderSinks {
-    /// After every painted frame, with the drawn shape and a per-thread frame counter.
+    /// After a painted frame, with the drawn shape and a per-thread frame counter; skipped
+    /// while the same settled shape (previous equal to shape) was already published.
     pub on_shape: Box<dyn Fn(ShapeFrame) + Send>,
     /// Once per finished motion.
     pub on_motion: Box<dyn Fn(MotionReport) + Send>,
@@ -87,6 +96,10 @@ pub struct RenderSinks {
     pub on_fatal: Box<dyn Fn(Fatal) + Send>,
     /// A non-fatal log line from the render thread (for example a lever outcome).
     pub on_note: Box<dyn Fn(String) + Send>,
+    /// Levels and traces for the live nodes, called once per ambient frame.
+    pub sample: Box<dyn FnMut() -> LiveValues + Send>,
+    /// Once per ambient run that painted a frame, when it ends.
+    pub on_ambient: Box<dyn Fn(AmbientReport) + Send>,
 }
 
 /// What the render thread needs to start.
@@ -213,7 +226,7 @@ impl Drop for RenderHandle {
 pub fn spawn(
     config: RenderConfig,
     mailbox: Arc<SceneMailbox>,
-    sinks: RenderSinks,
+    mut sinks: RenderSinks,
 ) -> Result<RenderHandle, RenderError> {
     let shared = Arc::new(LoopShared::new());
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
@@ -221,7 +234,7 @@ pub fn spawn(
         let (mailbox, shared) = (Arc::clone(&mailbox), Arc::clone(&shared));
         thread::Builder::new()
             .name(String::from("plith-render"))
-            .spawn(move || render_main(config, &mailbox, &shared, &sinks, &ready_tx))
+            .spawn(move || render_main(config, &mailbox, &shared, &mut sinks, &ready_tx))
             .map_err(RenderError::Spawn)?
     };
     // The thread sends exactly once before its loop, or drops the sender when it ends early,
@@ -245,7 +258,7 @@ fn render_main(
     config: RenderConfig,
     mailbox: &SceneMailbox,
     shared: &LoopShared,
-    sinks: &RenderSinks,
+    sinks: &mut RenderSinks,
     ready: &SyncSender<windows::core::Result<()>>,
 ) {
     let mmcss = join_mmcss(config.levers.mmcss, sinks);

@@ -188,3 +188,28 @@ fn idle_check_over_70_is_rejected() {
         })
     );
 }
+
+#[test]
+fn fixture_flag_names_the_mock_data() {
+    assert_eq!(parse(&[]).unwrap().fixture, None);
+    let pick = |name: &str| parse(&["--fixture", name]).unwrap().fixture;
+    assert_eq!(pick("banana"), Some(Fixture::Banana));
+    assert_eq!(pick("potato"), Some(Fixture::Potato));
+    assert_eq!(pick("bare"), Some(Fixture::Bare));
+    assert_eq!(pick("none"), None);
+}
+
+#[test]
+fn bad_or_missing_fixture_is_rejected() {
+    assert_eq!(
+        parse(&["--fixture", "standard"]),
+        Err(LaunchError::BadValue {
+            flag: "--fixture".to_string(),
+            value: "standard".to_string(),
+        })
+    );
+    assert_eq!(
+        parse(&["--fixture"]),
+        Err(LaunchError::MissingValue("--fixture".to_string()))
+    );
+}

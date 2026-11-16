@@ -3,21 +3,23 @@
 //! One fixed topmost window is placed once at the surface rectangle and never moves. Its window
 //! region follows the island shape, so clicks outside the shape fall through (see `hit`).
 
+pub(crate) mod mouse;
 pub(crate) mod state;
 
 use crate::handles::hwnd_of;
 use crate::hit::apply::apply_latest;
-use crate::poster::{QuitHandle, ShapePoster, WM_APP_SHAPE};
-use crate::suppress::{self, WM_APP_BAR};
+use crate::poster::{QuitHandle, ShapePoster, UiWaker, WM_APP_BAR, WM_APP_SHAPE, WM_APP_WAKE};
+use crate::suppress;
+use crate::timer::{TimerHandle, is_app_timer};
 use crate::topmost;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::panic_text::payload_text;
 use plith_core::scene::{ShapeCell, Suppression};
 use state::{Inner, current, set_current};
+use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
 use windows::Win32::Foundation::{
     ERROR_CLASS_ALREADY_EXISTS, GetLastError, HINSTANCE, HWND, LPARAM, LRESULT, WPARAM,
 };
@@ -26,9 +28,10 @@ use windows::Win32::UI::WindowsAndMessaging::{
     CreateWindowExW, DefWindowProcW, DestroyWindow, DispatchMessageW, GetMessageW, HWND_TOPMOST,
     IDC_ARROW, IsWindow, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage, RegisterClassExW,
     SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
-    WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE,
-    WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
-    WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
+    WM_CAPTURECHANGED, WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEACTIVATE, WM_MOUSEMOVE, WM_POWERBROADCAST, WM_TIMER,
+    WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE, WS_EX_NOREDIRECTIONBITMAP,
+    WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
 
@@ -37,14 +40,28 @@ const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
 /// Something the app has to react to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellEvent {
-    /// The left button was released inside the island shape.
-    Click,
+    /// The left button went down on the island and was released inside the drawn island shape,
+    /// at `(x, y)` DIP relative to the island's top-left (the release point).
+    Click {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
+    /// The pointer moved over the window for the first time since it last left.
+    Enter,
+    /// The pointer left the window region (the island shape, ADR 0004).
+    Leave,
     /// The DPI or the display configuration changed; relay the surface when the island is at rest.
     DisplayChanged,
     /// The window is about to be destroyed (`WM_CLOSE`): stop anything that presents to it.
     Closing,
     /// The suppression state changed; republish the scene with it.
     Suppression(Suppression),
+    /// A service thread called [`UiWaker::wake`]; re-read whatever the services published.
+    Wake,
+    /// App timer `id` (set through [`TimerHandle`]) ticked.
+    Timer(usize),
     /// A foreground change reached the topmost fight.
     Raised {
         /// Class name of the new foreground window, or `?` when it is already gone.
@@ -200,6 +217,34 @@ impl Shell {
         }
     }
 
+    /// A handle for service threads to wake the UI thread; see [`UiWaker`].
+    #[must_use]
+    pub fn ui_waker(&self) -> UiWaker {
+        UiWaker {
+            hwnd: self.hwnd(),
+            pending: Arc::clone(&self.inner.wake),
+        }
+    }
+
+    /// A handle that sets and kills app timers on this window, from the UI thread.
+    #[must_use]
+    pub fn timer_handle(&self) -> TimerHandle {
+        TimerHandle {
+            hwnd: self.hwnd(),
+            _ui_thread: PhantomData,
+        }
+    }
+
+    /// Starts or restarts app timer `id` with a period of `ms`; see [`TimerHandle::set`].
+    pub fn set_timer(&self, id: usize, ms: u32) {
+        self.timer_handle().set(id, ms);
+    }
+
+    /// Stops app timer `id`; see [`TimerHandle::kill`].
+    pub fn kill_timer(&self, id: usize) {
+        self.timer_handle().kill(id);
+    }
+
     /// A handle that closes the window from any thread.
     #[must_use]
     pub fn quit_handle(&self) -> QuitHandle {
@@ -273,22 +318,6 @@ pub fn run_message_loop() -> i32 {
     }
 }
 
-fn on_click(inner: &Inner, lparam: LPARAM) {
-    let Some(frame) = inner.shapes.latest() else {
-        return;
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    let (x, y) = (
-        f64::from(lparam.0 as i16),
-        f64::from((lparam.0 >> 16) as i16),
-    );
-    let scale = inner.layout.scale;
-    let (ox, oy) = inner.layout.island_origin(frame.shape);
-    if frame.shape.contains(x / scale - ox, y / scale - oy) {
-        inner.emit(ShellEvent::Click);
-    }
-}
-
 fn on_destroy(inner: &Inner, hwnd: HWND) {
     topmost::kill_timer(inner);
     if let Some(hook) = inner.registrations.borrow_mut().win_event_hook.take() {
@@ -344,8 +373,26 @@ fn dispatch(
     let is_visual = hwnd.0 as isize == inner.visual.get();
     match msg {
         WM_MOUSEACTIVATE => return Some(LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0))),
+        // The press only records and captures: `WM_MOUSEACTIVATE` above already answered
+        // `MA_NOACTIVATE`, and neither the press nor the capture activates the island.
+        WM_LBUTTONDOWN => {
+            mouse::on_button_down(inner, lparam);
+            return Some(LRESULT(0));
+        }
         WM_LBUTTONUP => {
-            on_click(inner, lparam);
+            mouse::on_button_up(inner, lparam);
+            return Some(LRESULT(0));
+        }
+        WM_CAPTURECHANGED => {
+            inner.press.cancel();
+            return Some(LRESULT(0));
+        }
+        WM_MOUSEMOVE if is_visual => {
+            mouse::on_move(inner);
+            return Some(LRESULT(0));
+        }
+        mouse::WM_MOUSELEAVE if is_visual => {
+            mouse::note_leave(inner);
             return Some(LRESULT(0));
         }
         WM_DPICHANGED | WM_DISPLAYCHANGE if is_visual => {
@@ -353,12 +400,21 @@ fn dispatch(
             return Some(LRESULT(0));
         }
         WM_APP_SHAPE if is_visual => {
-            inner.pending.store(false, Ordering::Release);
+            inner.pending.clear();
             apply_latest(inner);
+            return Some(LRESULT(0));
+        }
+        WM_APP_WAKE if is_visual => {
+            inner.wake.clear();
+            inner.emit(ShellEvent::Wake);
             return Some(LRESULT(0));
         }
         WM_TIMER if is_visual && wparam.0 == topmost::RETRY_TIMER_ID => {
             topmost::on_timer(inner);
+            return Some(LRESULT(0));
+        }
+        WM_TIMER if is_visual && is_app_timer(wparam.0) => {
+            inner.emit(ShellEvent::Timer(wparam.0));
             return Some(LRESULT(0));
         }
         WM_POWERBROADCAST if is_visual => suppress::on_power(inner, wparam, lparam),

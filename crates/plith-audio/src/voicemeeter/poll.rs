@@ -8,8 +8,8 @@ use std::time::{Duration, Instant};
 use super::api::Api;
 use super::service::{Shared, Status};
 use super::{
-    ChannelSnapshot, DirtyOutcome, LoginSession, Rail, Readiness, VmKind, VmLevels, VmSnapshot,
-    fallback_label, level_channel, level_type, param_name,
+    ChannelSnapshot, DirtyOutcome, LoginSession, Rail, Readiness, SignalHold, VmKind, VmLevels,
+    VmSnapshot, fallback_label, level_channel, level_type, param_name, read_routes,
 };
 
 /// Dirty check cadence.
@@ -30,17 +30,23 @@ fn read_channel(api: &Api, kind: VmKind, rail: Rail, index: usize) -> Option<Cha
         .get_string(&param_name(rail, index, "Label"))
         .filter(|l| !l.trim().is_empty())
         .unwrap_or_else(|| fallback_label(kind, rail, index));
+    let routes = match rail {
+        Rail::Strip => read_routes(kind, index, |name| api.get_float(name)),
+        Rail::Bus => Vec::new(),
+    };
     Some(ChannelSnapshot {
         rail,
         index,
         label,
         gain_db,
         muted,
+        routes,
     })
 }
 
-/// Builds a full snapshot, or `None` when any part is not readable yet.
-pub(super) fn build_snapshot(api: &Api) -> Option<VmSnapshot> {
+/// Builds a full snapshot with the held signal flags `hold`, or `None` when any part is not
+/// readable yet.
+pub(super) fn build_snapshot(api: &Api, hold: &SignalHold) -> Option<VmSnapshot> {
     let kind = VmKind::from_api(api.voicemeeter_type()?)?;
     let strips = (0..kind.strip_count())
         .map(|i| read_channel(api, kind, Rail::Strip, i))
@@ -52,6 +58,7 @@ pub(super) fn build_snapshot(api: &Api) -> Option<VmSnapshot> {
         kind,
         strips,
         buses,
+        signal: hold.flags_for(kind.strip_count()),
     })
 }
 
@@ -98,6 +105,10 @@ struct Poller {
     awaiting_app: bool,
     kind: Option<VmKind>,
     tick: u32,
+    /// The debounced per-strip signal published in the snapshot.
+    hold: SignalHold,
+    /// The snapshot last published, re-published with new flags on a signal edge.
+    last: Option<VmSnapshot>,
 }
 
 impl Poller {
@@ -106,6 +117,8 @@ impl Poller {
         self.connected = false;
         self.kind = None;
         self.tick = 0;
+        self.hold.reset();
+        self.last = None;
         self.shared
             .set_status(Status::Unavailable("the Voicemeeter engine stopped".into()));
         self.shared.publish(None);
@@ -126,6 +139,19 @@ impl Poller {
         }
     }
 
+    /// Reads the levels and, on a signal edge only, re-publishes the last snapshot with the
+    /// new flags. The levels themselves are never published (they change constantly).
+    fn read_levels(&mut self, kind: VmKind) {
+        let levels = read_levels(&self.api, kind);
+        let edge = self.hold.update(&levels.strips, Instant::now());
+        self.shared.set_levels(levels);
+        if let (Some(flags), Some(last)) = (edge, self.last.as_mut()) {
+            last.signal = flags;
+            last.signal.resize(kind.strip_count(), false);
+            self.shared.publish(Some(last));
+        }
+    }
+
     fn step_connected(&mut self) {
         let outcome = self.session.on_dirty(self.api.is_dirty(), Instant::now());
         match outcome {
@@ -139,7 +165,7 @@ impl Poller {
             DirtyOutcome::Clean | DirtyOutcome::Transient => {}
         }
         if self.need_snapshot
-            && let Some(snapshot) = build_snapshot(&self.api)
+            && let Some(snapshot) = build_snapshot(&self.api, &self.hold)
         {
             self.need_snapshot = false;
             self.kind = Some(snapshot.kind);
@@ -148,11 +174,12 @@ impl Poller {
                 self.shared.set_status(Status::Running);
             }
             self.shared.publish(Some(&snapshot));
+            self.last = Some(snapshot);
         }
         if let Some(kind) = self.kind
             && self.tick.is_multiple_of(LEVEL_DIVISOR)
         {
-            self.shared.set_levels(read_levels(&self.api, kind));
+            self.read_levels(kind);
         }
     }
 
@@ -177,6 +204,8 @@ pub(super) fn run(api: Arc<Api>, shared: Arc<Shared>, session: LoginSession, rea
         awaiting_app: readiness.keeps_session_on_gone(),
         kind: None,
         tick: 0,
+        hold: SignalHold::default(),
+        last: None,
     };
     while !poller.shared.stop.load(Ordering::Acquire) {
         poller.step();

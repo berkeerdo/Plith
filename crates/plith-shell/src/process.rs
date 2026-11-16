@@ -1,5 +1,6 @@
 //! Process-wide setup.
 
+use windows::Win32::System::Ole::{OleInitialize, OleUninitialize};
 use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
@@ -14,6 +15,22 @@ use windows::Win32::UI::Shell::{
 pub fn init_process() -> windows::core::Result<()> {
     // SAFETY: the call takes a plain constant and has no pointer arguments.
     unsafe { SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) }
+}
+
+/// Makes the calling thread a single-threaded apartment with OLE (needed for drag and drop).
+/// Call on the UI thread before creating the window; pair a success with [`uninit_ui_thread`].
+///
+/// # Errors
+/// Returns the COM error when the apartment cannot be entered.
+pub fn init_ui_thread() -> windows::core::Result<()> {
+    // SAFETY: the reserved argument must be null, which `None` passes.
+    unsafe { OleInitialize(None) }
+}
+
+/// Leaves the apartment entered by a successful [`init_ui_thread`], on the same thread.
+pub fn uninit_ui_thread() {
+    // SAFETY: balances one successful `OleInitialize` on this thread.
+    unsafe { OleUninitialize() }
 }
 
 /// Names the reason the user must not be disturbed right now (an exclusive fullscreen game, a
