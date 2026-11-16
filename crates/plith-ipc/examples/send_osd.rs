@@ -38,7 +38,15 @@ fn main() {
 
     println!("sending to {pipe} for at most {seconds} s");
     let link = OsdLink::start(pipe);
+    let report = |link: &OsdLink| {
+        println!(
+            "link: connected={} last_error={:?}",
+            link.is_connected(),
+            link.last_error()
+        );
+    };
     pause(Duration::from_millis(300));
+    report(&link);
     for percent in (0..=100).step_by(10) {
         let _ = link.send(level(Meter::Volume, percent, false, "Speakers"));
         pause(Duration::from_millis(150));
@@ -49,6 +57,7 @@ fn main() {
     pause(Duration::from_millis(500));
     let _ = link.send(Message::Hide);
     pause(Duration::from_millis(300));
+    report(&link);
     drop(link);
     println!("done");
 }

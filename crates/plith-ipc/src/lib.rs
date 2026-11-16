@@ -3,7 +3,9 @@
 //! The protocol ([`Message`], [`encode`], [`decode`]), the latest-wins [`latest::Slot`] and
 //! the pipe ACL text ([`security::pipe_sddl`]) are pure and tested everywhere. The pipe
 //! server ([`OsdServer`]), the non-blocking client ([`OsdLink`]) and [`launch_helper`]
-//! are Windows only.
+//! (with the [`HelperProcess`] it returns) are Windows only.
+//!
+//! The README holds the API table, the threading notes and how the notch wires it in.
 
 pub mod latest;
 mod message;
@@ -24,7 +26,7 @@ mod win;
 #[cfg(windows)]
 pub use client::OsdLink;
 #[cfg(windows)]
-pub use launch::{current_pipe_name, launch_helper};
+pub use launch::{HelperProcess, INSTALLED_HELPER, current_pipe_name, launch_helper};
 pub use message::{
     DecodeError, EncodeError, MAX_LABEL, MAX_MESSAGE, Message, Meter, PROTOCOL_VERSION, decode,
     encode,

@@ -222,6 +222,45 @@ fn client_reconnects_after_server_restart() {
     assert!(start.elapsed() < Duration::from_secs(2));
 }
 
+/// Polls `check` until it holds or `WAIT` passes.
+fn eventually(check: impl Fn() -> bool) -> bool {
+    let deadline = Instant::now() + WAIT;
+    while Instant::now() < deadline {
+        if check() {
+            return true;
+        }
+        thread::sleep(Duration::from_millis(10));
+    }
+    check()
+}
+
+#[test]
+fn link_state_follows_the_server_life() {
+    let name = unique_name();
+    let link = OsdLink::start(name.clone());
+    assert!(
+        eventually(|| link.last_error().is_some()),
+        "no server yet: the failed connect is reported"
+    );
+    assert!(!link.is_connected());
+
+    let mut server = Running::start(&name);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
+    assert!(eventually(|| link.is_connected()), "up once Hello went out");
+    assert_eq!(link.last_error(), None, "a connect clears the error");
+
+    server.shut_down();
+    drop(server);
+    // An idle link notices a gone server at its next send.
+    link.send(level(9)).unwrap();
+    assert!(eventually(|| !link.is_connected()), "down after the server");
+    let error = link.last_error().expect("why the link is down");
+    assert!(
+        error.starts_with("write:") || error.starts_with("open:"),
+        "{error}"
+    );
+}
+
 #[test]
 fn oversized_message_is_reported_and_the_next_one_still_arrives() {
     let name = unique_name();
