@@ -262,3 +262,26 @@ fn failed_post_unjournals() {
     assert_eq!(super::journal::read(&journal, BOOT), vec![3]);
     assert!(!handle.hide(5, |_| false, |_| panic!("not posted for a hidden window")));
 }
+
+/// The journal's single-owner lock: a second suppressor on the same journal fails and leaves
+/// the file alone; once the first is gone the journal can be taken again. Dry run.
+#[cfg(windows)]
+#[test]
+fn second_owner_of_a_journal_fails() {
+    use super::{FlyoutSuppressor, Mode};
+
+    let scratch = ScratchDir::new("owner");
+    let path = scratch.journal().to_path_buf();
+    let first =
+        FlyoutSuppressor::start_with_journal(Mode::DryRun, Some(path.clone())).expect("first");
+    std::fs::write(&path, "boot 1\n5\n").expect("the first owner's journal");
+    let second = FlyoutSuppressor::start_with_journal(Mode::DryRun, Some(path.clone()));
+    let error = second.expect_err("a second owner must fail");
+    assert!(error.contains("another Plith process"), "{error}");
+    assert!(path.exists(), "the second start never touched the journal");
+    drop(first);
+    let third =
+        FlyoutSuppressor::start_with_journal(Mode::DryRun, Some(path.clone())).expect("third");
+    assert!(!path.exists(), "the next owner takes the journal over");
+    drop(third);
+}

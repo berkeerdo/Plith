@@ -4,6 +4,7 @@
 //! is shared through a [`RestoreHandle`], so a forced exit can restore it from any thread, and
 //! mirrored to a journal file, so the next start can restore what a killed run left hidden.
 
+mod lock;
 mod query;
 mod state;
 
@@ -78,6 +79,9 @@ pub struct FlyoutSuppressor {
     restore: RestoreHandle,
     failure: FailureSlot,
     thread: HookThread,
+    /// Held for the suppressor's whole life when it has a journal; declared last, so it is
+    /// released only after the thread stopped and restored.
+    _journal_lock: Option<lock::JournalLock>,
 }
 
 impl FlyoutSuppressor {
@@ -96,7 +100,10 @@ impl FlyoutSuppressor {
         Self::start_with_journal(mode, journal)
     }
 
-    /// [`start`](Self::start) with an explicit journal file. With a journal, the hook thread
+    /// [`start`](Self::start) with an explicit journal file. With a journal, the suppressor
+    /// first takes the journal's single-owner lock (a session-local named mutex, see
+    /// [`journal::lock_name`]); when another live suppressor owns it, start fails and the
+    /// journal is neither read nor cleared. Then the hook thread
     /// first shows every journaled window left hidden by a run that was killed, and only one
     /// that is still an orphan: it is still a window (`IsWindow`), it is not visible, and it
     /// still has the same facts the hide path required (a flyout host class, owned by the
@@ -106,8 +113,9 @@ impl FlyoutSuppressor {
     /// each restore clears it. A missing or unreadable journal is not an error.
     ///
     /// # Errors
-    /// The text says why the thread or a hook could not start.
+    /// The text says why the journal lock, the thread or a hook could not be had.
     pub fn start_with_journal(mode: Mode, journal: Option<PathBuf>) -> Result<Self, String> {
+        let journal_lock = journal.as_deref().map(lock::acquire).transpose()?;
         let window = Arc::new(SuppressionWindow::new(Instant::now()));
         let (tx, matches) = sync_channel(QUEUE);
         let boot = query::current_boot();
@@ -140,6 +148,7 @@ impl FlyoutSuppressor {
             restore,
             failure,
             thread,
+            _journal_lock: journal_lock,
         })
     }
 

@@ -308,7 +308,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
 - [x] **F7 (M1), journal before the hide:** the handle is journaled before
   `ShowWindowAsync(SW_HIDE)` is posted and removed again when the post fails. TDD:
   `hide_is_journaled_before_it_is_posted`, `failed_post_unjournals`.
-- [ ] **F8 (I4), one owner per journal:** `start_with_journal` with a journal takes the named
+- [x] **F8 (I4), one owner per journal:** `start_with_journal` with a journal takes the named
   mutex `Local\plith-flyout-<fnv64 of the lowercased path>`; a second owner gets an error and
   never reads or clears the journal (`verify_system_writes --flyout` included). TDD:
   `journal_lock_name_is_stable_and_case_blind`, `second_owner_of_a_journal_fails`.

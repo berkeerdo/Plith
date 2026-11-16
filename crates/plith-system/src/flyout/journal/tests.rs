@@ -2,8 +2,8 @@
 //! helpers, which run in a scratch folder under the temp directory that is removed afterwards.
 
 use super::{
-    BOOT_TOLERANCE_SECS, boot_stamp, clear, format, handles_for_boot, parse, read, restore_orphans,
-    write,
+    BOOT_TOLERANCE_SECS, boot_stamp, clear, format, handles_for_boot, lock_name, parse, read,
+    restore_orphans, write,
 };
 use crate::test_support::ScratchDir;
 
@@ -116,4 +116,17 @@ fn restore_orphans_from_another_boot_shows_nothing_and_clears() {
     let count = restore_orphans(path, BOOT + 86_400, |_| true, |_| panic!("other boot"));
     assert_eq!(count, 0);
     assert!(!path.exists(), "a stale journal is still cleared");
+}
+
+#[test]
+fn journal_lock_name_is_stable_and_case_blind() {
+    let path = std::path::Path::new(r"C:\Users\me\AppData\Local\Plith\flyout-hidden.txt");
+    let name = lock_name(path);
+    assert!(name.starts_with(r"Local\plith-flyout-"), "{name}");
+    assert_eq!(name.len(), r"Local\plith-flyout-".len() + 16);
+    assert_eq!(name, lock_name(path), "stable");
+    let upper = std::path::Path::new(r"C:\USERS\ME\APPDATA\LOCAL\PLITH\FLYOUT-HIDDEN.TXT");
+    assert_eq!(name, lock_name(upper), "case blind");
+    let other = std::path::Path::new(r"C:\Temp\flyout-hidden.txt");
+    assert_ne!(name, lock_name(other));
 }
