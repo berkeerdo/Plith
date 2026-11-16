@@ -350,8 +350,8 @@ impl Services for RealServices {
     /// still inside `start()` is left to its starter thread (its `stop` would wait for the
     /// start, up to 15 s for brightness).
     fn stop(&mut self) {
-        if let Some(writer) = &mut self.writer {
-            writer.stop();
+        if let Some(took) = self.writer.as_mut().and_then(Writer::stop) {
+            self.log.line(&writes::stop_line(took));
         }
         while let Ok(started) = self.started.try_recv() {
             let _ = self.on_started(&started);

@@ -59,3 +59,27 @@ fn a_slow_write_does_not_block_the_sender() {
     writer.send(Write::Previous);
     assert!(done_rx.recv_timeout(Duration::from_millis(50)).is_err());
 }
+
+#[test]
+fn stop_reports_how_long_the_join_took_once() {
+    let (started_tx, started_rx) = mpsc::channel();
+    let mut writer = Writer::spawn(move |_| {
+        let _ = started_tx.send(());
+        std::thread::sleep(Duration::from_millis(40));
+    })
+    .expect("spawned");
+    writer.send(Write::Next);
+    started_rx.recv_timeout(BOUND).expect("in flight");
+    // The write in flight is waited for, and the wait is reported.
+    let took = writer.stop().expect("first stop joins");
+    assert!(took >= Duration::from_millis(20), "{took:?}");
+    assert_eq!(writer.stop(), None);
+}
+
+#[test]
+fn stop_line_matches_the_service_stop_lines() {
+    assert_eq!(
+        stop_line(Duration::from_micros(1_300)),
+        "service writes: stopped in 1.3 ms"
+    );
+}

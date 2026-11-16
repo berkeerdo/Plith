@@ -6,7 +6,7 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Sender};
 use std::thread::{self, JoinHandle};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 /// One write to a service.
 #[derive(Debug, Clone, PartialEq)]
@@ -75,20 +75,31 @@ impl Writer {
     }
 
     /// Drops the writes still queued, waits for the one in flight and joins the thread.
-    /// Calling it again does nothing.
-    pub fn stop(&mut self) {
+    /// Returns how long the join took (log it with [`stop_line`]); `None` when it was already
+    /// stopped, as a repeat call does nothing.
+    pub fn stop(&mut self) -> Option<Duration> {
         self.stopping.store(true, Ordering::Release);
         self.tx = None;
-        if let Some(join) = self.join.take() {
-            let _ = join.join();
-        }
+        let join = self.join.take()?;
+        let begun = Instant::now();
+        let _ = join.join();
+        Some(begun.elapsed())
     }
 }
 
 impl Drop for Writer {
     fn drop(&mut self) {
-        self.stop();
+        let _ = self.stop();
     }
+}
+
+/// The log line of a writes stop, in the format of the service stop lines.
+#[must_use]
+pub fn stop_line(took: Duration) -> String {
+    format!(
+        "service writes: stopped in {:.1} ms",
+        took.as_secs_f64() * 1000.0
+    )
 }
 
 #[cfg(test)]
