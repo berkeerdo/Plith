@@ -509,13 +509,13 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   on the audio page to feed `Activity`; it is killed on collapse.
 - Clock: a one-shot timer to the next minute boundary while expanded.
 
-- [ ] **Step 1: Failing tests:** `model_copies_vm_snapshot`, `wake_with_no_change_publishes_nothing`
+- [x] **Step 1: Failing tests:** `model_copies_vm_snapshot`, `wake_with_no_change_publishes_nothing`
   (fixture + mailbox generation), `activity_timer_only_on_audio_page`, `fixture_writes_stay_in_fixture`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
 - [ ] **Step 4:** `--idle-check 60 --fixture banana` through heavy-run: 0 render wakes while
   collapsed with the fixture ticking.
-- [ ] **Step 5:** Five checks green, commit `feat(app): feed pages from the services`.
+- [x] **Step 5:** Five checks green, commit `feat(app): feed pages from the services`.
 
 ### Task 17: Input on pages
 

@@ -2,11 +2,16 @@
 //! idle-check driver, the message loop and a clean shutdown.
 
 mod backstop;
+mod feed;
 mod state;
 mod wire;
 
-use crate::log::LogFile;
+use crate::live;
+use crate::log::{self, LogFile};
+use crate::services::fixture::FixtureServices;
+use crate::services::{LevelSource, RealServices, Services};
 use crate::{demo, idle};
+use feed::Feed;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
@@ -48,6 +53,9 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     let probing = launch.demo.is_some() || launch.idle_check_secs.is_some();
     if probing && let Some(state) = user_busy() {
         log.line(&format!("skipped: user busy ({state})"));
+        if ole.is_ok() {
+            uninit_ui_thread();
+        }
         return wire::EXIT_USER_BUSY;
     }
     let monitor = primary_monitor();
@@ -88,6 +96,7 @@ fn run_shell(
     };
     shell.show();
     let quit = shell.quit_handle();
+    let levels = attach_feed(launch, &shell, log, &app);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -98,7 +107,8 @@ fn run_shell(
         levers: launch.levers,
         tune: launch.tune,
     };
-    let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing);
+    let sample = live::sampler(levels);
+    let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing, sample);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
         Ok(render) => render,
         Err(error) => {
@@ -132,6 +142,33 @@ fn run_shell(
         fired.load(Ordering::Acquire),
         idle_ok,
     )
+}
+
+/// Starts the services (or the fixture), attaches the feed that turns them into pages and
+/// returns the level reader for the render thread. Never blocks on a service start.
+fn attach_feed(
+    launch: &Launch,
+    shell: &Shell,
+    log: &Arc<LogFile>,
+    app: &Rc<RefCell<App>>,
+) -> LevelSource {
+    let services: Box<dyn Services> = match launch.fixture {
+        Some(kind) => {
+            log.line(&format!("services: fixture {kind:?}"));
+            Box::new(FixtureServices::new(kind))
+        }
+        None => Box::new(RealServices::start(&shell.ui_waker(), Arc::clone(log))),
+    };
+    let levels = services.level_source();
+    let mut app = app.borrow_mut();
+    let feed = Feed::new(
+        services,
+        Box::new(shell.timer_handle()),
+        Box::new(log::now),
+        &app.mailbox,
+    );
+    app.attach_feed(feed);
+    levels
 }
 
 /// Everything the helper threads and the message loop share.

@@ -1,5 +1,6 @@
 //! The UI-thread state of the app: one [`App`] reached by the shell handler and the panic hook.
 
+use super::feed::Feed;
 use super::wire::raised_line;
 use crate::log::LogFile;
 use plith_core::scene::{Scene, SceneMailbox};
@@ -34,6 +35,7 @@ pub struct App {
     /// Set on `Closing`; the render sinks read it from another thread, so it stays an `Arc`.
     pub closing: Arc<AtomicBool>,
     stop: Option<Box<dyn Stopper>>,
+    feed: Option<Feed>,
 }
 
 impl App {
@@ -45,6 +47,19 @@ impl App {
             log,
             closing,
             stop: None,
+            feed: None,
+        }
+    }
+
+    /// Starts feeding the pages from the services; until then a wake or a timer does nothing.
+    pub fn attach_feed(&mut self, feed: Feed) {
+        self.feed = Some(feed);
+    }
+
+    /// Lets the feed react to a scene change.
+    fn scene_changed(&mut self) {
+        if let Some(feed) = &mut self.feed {
+            feed.on_scene(&self.mailbox);
         }
     }
 
@@ -74,18 +89,29 @@ impl App {
                     expanded: !scene.expanded,
                     ..scene
                 });
+                self.scene_changed();
             }
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,
                     ..scene
                 });
+                self.scene_changed();
                 self.log.line(&format!(
                     "suppression: display_off={} locked={} fullscreen={}",
                     suppression.display_off, suppression.locked, suppression.fullscreen
                 ));
             }
-            ShellEvent::Wake => {}
+            ShellEvent::Wake => {
+                if let Some(feed) = &mut self.feed {
+                    feed.on_wake(&self.mailbox);
+                }
+            }
+            ShellEvent::Timer(id) => {
+                if let Some(feed) = &mut self.feed {
+                    feed.on_timer(id, &self.mailbox);
+                }
+            }
             ShellEvent::DisplayChanged => self.log.line("display changed: restart needed"),
             ShellEvent::Raised {
                 foreground,

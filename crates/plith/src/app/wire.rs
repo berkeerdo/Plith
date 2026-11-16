@@ -104,7 +104,8 @@ pub fn handle_fatal(reason: &Fatal, closing: bool, log: &LogFile, fatal: &Atomic
 }
 
 /// The render thread's callbacks: shapes to the UI thread, motion and ambient reports and a
-/// fatal end to the log; live values are empty until the services feed them. A fatal end closes the window and sets `fatal`, with one exception: a `Fatal::Error`
+/// fatal end to the log, live values from `sample`. A fatal end closes the window and sets
+/// `fatal`, with one exception: a `Fatal::Error`
 /// while the window is already closing is a clean close (a present that fails on a window being
 /// destroyed) and only logs `render stopped while closing:`. A `Fatal::Panic` always logs
 /// `render fatal:` and sets `fatal`, so the exit code is 1.
@@ -114,6 +115,7 @@ pub fn sinks(
     quit: QuitHandle,
     fatal: &Arc<AtomicBool>,
     closing: &Arc<AtomicBool>,
+    sample: Box<dyn FnMut() -> LiveValues + Send>,
 ) -> RenderSinks {
     let (motion_log, fatal_log, note_log) = (Arc::clone(log), Arc::clone(log), Arc::clone(log));
     let ambient_log = Arc::clone(log);
@@ -127,7 +129,7 @@ pub fn sinks(
             }
         }),
         on_note: Box::new(move |line| note_log.line(&line)),
-        sample: Box::new(LiveValues::default),
+        sample,
         on_ambient: Box::new(move |report| ambient_log.line(&report.to_string())),
         on_fatal: Box::new(move |reason| {
             if handle_fatal(&reason, closing.load(Ordering::Acquire), &fatal_log, &fatal) {
@@ -150,8 +152,9 @@ pub fn on_panic(
     Box::new(move |message| {
         log.line(&format!("ui fatal: {message}"));
         fatal.store(true, Ordering::Release);
-        if let Ok(app) = app.try_borrow() {
-            app.close_render();
+        match app.try_borrow() {
+            Ok(app) => app.close_render(),
+            Err(_) => log.line("ui fatal: app busy, render not stopped here"),
         }
     })
 }

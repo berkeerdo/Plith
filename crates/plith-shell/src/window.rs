@@ -9,11 +9,13 @@ use crate::handles::hwnd_of;
 use crate::hit::apply::apply_latest;
 use crate::poster::{QuitHandle, ShapePoster, UiWaker, WM_APP_BAR, WM_APP_SHAPE, WM_APP_WAKE};
 use crate::suppress;
+use crate::timer::{TimerHandle, is_app_timer};
 use crate::topmost;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::panic_text::payload_text;
 use plith_core::scene::{ShapeCell, Suppression};
 use state::{Inner, current, set_current};
+use std::marker::PhantomData;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::rc::Rc;
 use std::sync::Arc;
@@ -46,6 +48,8 @@ pub enum ShellEvent {
     Suppression(Suppression),
     /// A service thread called [`UiWaker::wake`]; re-read whatever the services published.
     Wake,
+    /// App timer `id` (set through [`TimerHandle`]) ticked.
+    Timer(usize),
     /// A foreground change reached the topmost fight.
     Raised {
         /// Class name of the new foreground window, or `?` when it is already gone.
@@ -208,6 +212,25 @@ impl Shell {
             hwnd: self.hwnd(),
             pending: Arc::clone(&self.inner.wake),
         }
+    }
+
+    /// A handle that sets and kills app timers on this window, from the UI thread.
+    #[must_use]
+    pub fn timer_handle(&self) -> TimerHandle {
+        TimerHandle {
+            hwnd: self.hwnd(),
+            _ui_thread: PhantomData,
+        }
+    }
+
+    /// Starts or restarts app timer `id` with a period of `ms`; see [`TimerHandle::set`].
+    pub fn set_timer(&self, id: usize, ms: u32) {
+        self.timer_handle().set(id, ms);
+    }
+
+    /// Stops app timer `id`; see [`TimerHandle::kill`].
+    pub fn kill_timer(&self, id: usize) {
+        self.timer_handle().kill(id);
     }
 
     /// A handle that closes the window from any thread.
@@ -374,6 +397,10 @@ fn dispatch(
         }
         WM_TIMER if is_visual && wparam.0 == topmost::RETRY_TIMER_ID => {
             topmost::on_timer(inner);
+            return Some(LRESULT(0));
+        }
+        WM_TIMER if is_visual && is_app_timer(wparam.0) => {
+            inner.emit(ShellEvent::Timer(wparam.0));
             return Some(LRESULT(0));
         }
         WM_POWERBROADCAST if is_visual => suppress::on_power(inner, wparam, lparam),
