@@ -31,3 +31,9 @@ fn a_failure_is_kept_until_the_next_connect() {
 fn an_untrusted_server_has_its_own_text() {
     assert!(UNTRUSTED.contains("not trusted"), "{UNTRUSTED}");
 }
+
+#[test]
+fn the_untrusted_text_reads_as_one_sentence() {
+    assert!(!super::UNTRUSTED.contains("  "), "{}", super::UNTRUSTED);
+    assert!(super::UNTRUSTED.ends_with("refuses)"));
+}

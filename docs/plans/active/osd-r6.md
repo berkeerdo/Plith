@@ -329,7 +329,7 @@ Source: `docs/quality/2026-11-16-osd-r6-recheck.md` (main checkout). One commit 
   scope quits the hello clock, so `std::thread::scope` can join it and re-raise; the helper's
   `QuitOnPanic` then sends `Quit`. Tests: a real `serve` whose callback panics returns within
   2 s (ipc); the same through the helper's guard delivers `Quit` (osd).
-- [ ] **G2 (N5):** one space in the `UNTRUSTED` text.
+- [x] **G2 (N5):** one space in the `UNTRUSTED` text.
 - [ ] **G3 (N3):** the journal mutex goes to `Global\` (the journal is per user, not per
   session).
 - [ ] **G4 (N4):** the install dry run prints the source hash only labelled "current file,

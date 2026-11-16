@@ -24,7 +24,8 @@ const DROP_GRACE: Duration = Duration::from_millis(500);
 /// How long drop waits after cancelling before it gives up on the worker.
 const DROP_CANCEL: Duration = Duration::from_millis(500);
 /// The `last_error` text when the pipe is served by a process this client must not trust.
-const UNTRUSTED: &str = "the pipe server is not trusted (another user, an AppContainer or an      integrity level the trust rule refuses)";
+const UNTRUSTED: &str = "the pipe server is not trusted (another user, an AppContainer or an \
+                         integrity level the trust rule refuses)";
 
 /// A link to the OSD helper that never blocks the caller.
 ///
