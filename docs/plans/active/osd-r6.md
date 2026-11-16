@@ -1,5 +1,8 @@
 # R6 OSD Helper Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, rulings and what is still open are in the Record section at the end.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development
 > (recommended) or superpowers:executing-plans. Steps use checkbox (`- [ ]`) syntax.
 
@@ -275,18 +278,26 @@ instead of returning silently.
   messages and motion lines. Five checks; commit `feat(osd): helper draws the osd`; push.
 
 ### Task 9: On-screen verification (batch B ask) and handoff
-- [ ] **Step 1:** Ask the master (batch B): install the signed release (`sudo
-  install-osd.ps1 -Yes`), Berke at the console with the game from Task 2.
-- [ ] **Step 2:** Checks, each recorded with the log line: 9.1 `send_osd` over the desktop, the
-  OSD shows and hides; 9.2 over the borderless game and the FSO fullscreen game, motion lines at
-  240 fps with 0 to 1 hitches; 9.3 over an elevated window; 9.4 kill `send_osd` mid-sequence, the
-  helper hides and exits within 2 s; 9.5 start a second helper, it exits 0 and the first keeps
-  serving; 9.6 (Berke's yes needed separately) `verify_system_writes --flyout --yes`, then kill
-  it while a window is hidden, restart `probe_flyout`: the journal restores the flyout.
-- [ ] **Step 3:** ADR 0009 (OSD drawing path and band, from the spike numbers) on this branch;
-  `project-docs` handoff (the record section of this plan, STATUS lines for the master); message
-  the master with commits, the record path and the next job (wiring `OsdLink` and
-  `RestoreHandle` into `crates/plith`).
+Done without Berke at the console (2026-11-16, over RDP, installed signed build): the medium
+`send_osd` reaches the High-integrity UIAccess helper on the real session pipe, band 2,
+uiaccess=true, show and hide motion lines with 0 hitches (at RDP's 32 Hz), fade on Bye, exit 0.
+Nobody looked at the screen; nothing at 240 Hz. The rest waits for the console (Berke: last step).
+- [ ] **Step 1:** Rebuild and reinstall the signed helper from the branch head
+  (`scripts/build-osd.ps1`, then `sudo scripts/install-osd.ps1 -Yes`; install is approved).
+- [ ] **Step 2:** Checks at the console, each recorded with its log line:
+  9.1 `send_osd` over the desktop: the OSD shows and hides, the seal looks right at 100 % and
+  the current scale (crisp 1 px track, even ticks, square top flush with the edge).
+  9.2 over a borderless game and the same game in fullscreen (FSO on): visible, motion lines at
+  240 fps with 0 to 1 hitches. A true exclusive (FSO off) title if available: record the result,
+  a failure there is a known limit, not a defect.
+  9.3 over an elevated window (elevated Task Manager).
+  9.4 kill `send_osd` mid-sequence: the helper hides and exits within about 2 s.
+  9.5 start a second helper: it exits 0 and the first keeps serving.
+  9.6 a game that changes the display mode: the OSD stays top centre (`osd relayout` line).
+  9.7 `launch_helper` on the installed exe: `has_exited()` is false while it runs.
+  9.8 (separate yes) `verify_system_writes --flyout --yes`, kill it while the flyout is hidden,
+  start `probe_flyout`: the journal restores the flyout.
+- [ ] **Step 3:** The master files ADR 0009 from the draft below and merges.
 
 ---
 
@@ -303,3 +314,74 @@ instead of returning silently.
   true exclusive (FSO off) title is available. About 15 minutes.
 - **Batch B (Task 9):** the same session shape, about 15 minutes, plus a separate yes for 9.6
   (flyout Hide mode).
+
+## Record (handoff, 2026-11-16)
+
+**State.** Tasks 1 to 8 and the final review fix wave are done, reviewed and pushed on
+`feature/osd-r6` (32 commits on `e34f4ff`). Five checks green at every commit that changed code.
+Task 9's console checks are open: Berke ruled the game run is the last step of R6, not a gate.
+
+**Measured on this PC (not just tested):**
+- Signed spike: `CreateWindowInBand` reaches band 2 with uiaccess=true and the DComp swap chain
+  from `plith-render` binds and presents. `SetWindowBand` (the WPF path) is refused with Access
+  denied even with UIAccess; WPF very likely fell back to a plain topmost window silently.
+- The installed UIAccess helper runs at High integrity (`S-1-16-12288`). A medium process can
+  open it with `PROCESS_QUERY_LIMITED_INFORMATION` and read its token user, so the client's
+  server identity check works across the two levels; the pipe needs its medium label.
+- End to end over RDP: medium `send_osd` to the installed helper, every message delivered,
+  `motion osd-show` and `osd-hide` lines, fade on Bye, exit 0.
+
+**Not measured:** how the OSD looks; 240 Hz motion; visibility over any game or elevated
+window; brightness flyout suppression (no built-in panel here); Hide mode against the real
+flyout and the journal restore; GPU device-loss rebuild; a real display mode change.
+
+**Deviations from the plan:**
+- The app uses `Creation::InBand` only (measured); `SetBand` stays a spike mode.
+- `plith-ipc::serve` reports `ServerEvent::{Connected, Message, Disconnected}`; the helper exits
+  2 s after a disconnect, 10 s after start without a Hello, and after a fade on Bye.
+- Messages to the render thread use a blocking send (the plan said a bounded drop).
+- Client hardening beyond the plan, from three automated security reviews: SQOS identification,
+  server user, integrity level and AppContainer check, `BindError::Squatted`.
+- The journal is boot-stamped and the start-up restore requires the full hide facts.
+- Added after the final review: `OsdLink::is_connected`/`last_error`, `launch_helper` returns a
+  `HelperProcess`, the helper follows `WM_DISPLAYCHANGE`/`WM_DPICHANGED`.
+- `plith-core`: only `MotionKind::OsdShow`/`OsdHide` (granted R-2), in its own commit `8132ad4`.
+
+**For the wiring job (`crates/plith`), see `crates/plith-ipc/README.md` "Wiring":**
+- `launch_helper(INSTALLED_HELPER)`, `OsdLink::start(current_pipe_name())`, send `Level` on
+  every volume, brightness and mute change, relaunch when `has_exited()`.
+- `FlyoutSuppressor::restore_handle().restore_now()` on the backstop and watchdog exits (M7);
+  read `failure()` on both hooks; pass `suppression_window()` to `VolumeKeyHook::start` and to
+  `BrightnessService::set_suppression_window`. The key receiver now yields `VolumeKey`, one per
+  press.
+- Keep `plith.exe` single-instance before Hide mode is on: a second instance would consume the
+  live one's journal.
+- The two new `MotionKind` variants may break an exhaustive `match` in lane pages at merge.
+- `crates/plith/src/log/tests.rs` leaves an empty `plith-log-test-<pid>` folder in `%TEMP%`.
+
+**Open minors (none blocks the merge):** the bind probe can shorten an idle helper's start grace;
+`plith-osd.log` has no size cap; `refresh_hz` is read once (stale `hz` after a mode change); a
+relayout during a motion counts as a hitch; the first step after rest is not exactly one period;
+opacity is per brush, not on the DComp visual (needs `plith-render`); labels use Turkish
+upper case for every name (`Display` becomes `DİSPLAY`): Berke's call.
+
+### ADR 0009 draft (for the master to file in `docs/decisions/`)
+
+# 0009 The OSD helper draws a DComp swap chain in a window created in the UIAccess band
+
+Date: 2026-11-16. Status: proposed by lane `osd` from the signed spike (RDP, facts only).
+
+**Decision:** `plith-osd.exe` creates its window with the undocumented
+`CreateWindowInBand(.., ZBID_UIACCESS = 2)`, resolved at run time, and draws with the
+`plith-render` `Gpu` and `CompositionTarget` (DComp, flip sequential, latency 2, as ADR 0005 and
+0008). Without UIAccess (unsigned dev runs) it falls back to a plain topmost window. The layered
+window fallback of spec section 10 is not built.
+
+**Measured:** signed and installed, `CreateWindowInBand` reads back band 2 with uiaccess=true and
+the swap chain presents; `SetWindowBand` on an existing window is refused (Access denied) even
+with UIAccess. The helper runs at High integrity; the medium notch writes to its pipe through an
+explicit medium label and verifies the server's user and integrity level.
+
+**Consequences:** motion lines go to `%LOCALAPPDATA%\Plith\plith-osd.log`, not `plith.log`.
+Visibility over games, elevated windows and true exclusive fullscreen is recorded by the R6
+console run; a true exclusive failure is a limit of composition, not of this path.
