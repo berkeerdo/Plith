@@ -131,10 +131,11 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
             feed.set_pick(next, mailbox);
         }
         Action::PickOutput(bus) => {
-            if let PickMode::Picked(strip) = feed.pick() {
+            // A pick made in another mixer edition ends without a write.
+            if let Some(strip) = feed.route_source() {
                 feed.services().toggle_route(strip, bus);
-                feed.set_pick(PickMode::None, mailbox);
             }
+            feed.set_pick(PickMode::None, mailbox);
         }
         Action::CancelPick => feed.set_pick(PickMode::None, mailbox),
         Action::SetDefaultEndpoint(id) => feed.services().set_default_endpoint(&id),

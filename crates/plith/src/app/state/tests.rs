@@ -623,3 +623,78 @@ fn a_tick_while_the_scene_is_closed_stops_the_timers() {
     app.on_event(ShellEvent::Timer(CLOCK_TIMER));
     assert!(running(&timers).is_empty(), "{:?}", running(&timers));
 }
+
+/// The Banana fixture whose mixer turns into Potato when `swapped` is set, without a wake.
+struct Swapping {
+    inner: FixtureServices,
+    swapped: Rc<Cell<bool>>,
+    routes: Rc<Cell<u32>>,
+}
+
+impl crate::services::Services for Swapping {
+    fn drain(&mut self) -> crate::services::Changes {
+        self.inner.drain()
+    }
+    fn facts(&self) -> crate::services::Facts {
+        let mut facts = self.inner.facts();
+        if self.swapped.get() {
+            facts.audio.vm = plith_core::pages::fixtures::potato().vm;
+        }
+        facts
+    }
+    fn levels(&self) -> Option<crate::services::Levels> {
+        self.inner.levels()
+    }
+    fn level_source(&self) -> crate::services::LevelSource {
+        self.inner.level_source()
+    }
+    fn set_default_endpoint(&mut self, id: &str) {
+        self.inner.set_default_endpoint(id);
+    }
+    fn toggle_route(&mut self, strip: usize, bus: usize) {
+        self.routes.set(self.routes.get() + 1);
+        self.inner.toggle_route(strip, bus);
+    }
+    fn toggle_mic(&mut self) {
+        self.inner.toggle_mic();
+    }
+    fn set_brightness(&mut self, percent: u8) {
+        self.inner.set_brightness(percent);
+    }
+    fn play_pause(&mut self) {
+        self.inner.play_pause();
+    }
+    fn next(&mut self) {
+        self.inner.next();
+    }
+    fn previous(&mut self) {
+        self.inner.previous();
+    }
+    fn seek(&mut self, position: std::time::Duration) {
+        self.inner.seek(position);
+    }
+}
+
+#[test]
+fn a_pick_from_another_mixer_edition_writes_nothing() {
+    let mut app = app("input-edition");
+    let (swapped, routes) = (Rc::new(Cell::new(false)), Rc::new(Cell::new(0)));
+    let services = Swapping {
+        inner: FixtureServices::new(Fixture::Banana),
+        swapped: Rc::clone(&swapped),
+        routes: Rc::clone(&routes),
+    };
+    let feed = Feed::new(
+        Box::new(services),
+        Box::new(FakeTimers::default()),
+        Box::new(|| stamp(47)),
+        &app.mailbox,
+    );
+    app.attach_feed(feed);
+    press(&mut app, PageId::Audio, |a| *a == Action::PickSource(0));
+    assert_eq!(pick(&app), PickMode::Picked(0));
+    swapped.set(true);
+    press(&mut app, PageId::Audio, |a| *a == Action::PickOutput(2));
+    assert_eq!(routes.get(), 0, "the pick belonged to the old edition");
+    assert_eq!(pick(&app), PickMode::None, "the stale pick ends");
+}

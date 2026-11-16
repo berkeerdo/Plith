@@ -147,3 +147,15 @@ fn a_pick_out_of_range_is_dropped() {
     assert_eq!(pick_within(PickMode::Picked(0), 0), PickMode::None);
     assert_eq!(pick_within(PickMode::None, 3), PickMode::None);
 }
+
+#[test]
+fn a_route_needs_the_mixer_the_pick_was_made_in() {
+    use crate::pages::fixtures;
+    let banana = MixerShape::of(fixtures::banana().vm.as_ref());
+    let potato = MixerShape::of(fixtures::potato().vm.as_ref());
+    assert!(banana.is_some() && banana != potato);
+    assert!(route_allowed(banana, banana));
+    assert!(!route_allowed(banana, potato), "the mixer changed edition");
+    assert!(!route_allowed(banana, None), "the mixer went away");
+    assert!(!route_allowed(None, None), "no mixer, no route");
+}

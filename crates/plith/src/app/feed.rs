@@ -4,7 +4,7 @@
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
-use plith_core::input::pick_within;
+use plith_core::input::{MixerShape, pick_within, route_allowed};
 use plith_core::pages::audio::{Activity, PickMode};
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::{HitTarget, PageId};
@@ -117,6 +117,8 @@ pub struct Feed {
     seen: Option<SceneKey>,
     /// The audio page's pick mode.
     pick: PickMode,
+    /// The mixer the pick was made in; a route write needs the same one.
+    pick_mixer: Option<MixerShape>,
 }
 
 impl Feed {
@@ -153,6 +155,7 @@ impl Feed {
             pending: Dirty::default(),
             seen: None,
             pick: PickMode::None,
+            pick_mixer: None,
         };
         feed.publish(mailbox);
         feed
@@ -170,6 +173,9 @@ impl Feed {
         }
         let sources = self.facts.audio.vm.as_ref().map_or(0, |vm| vm.strips.len());
         self.pick = pick_within(self.pick, sources);
+        if !route_allowed(self.pick_mixer, self.mixer()) {
+            self.pick = PickMode::None;
+        }
         let inputs = Inputs {
             facts: &self.facts,
             activity: &self.activity,
@@ -340,11 +346,32 @@ impl Feed {
         self.pick
     }
 
-    /// Sets the pick mode and rebuilds the audio page when it changed.
+    /// Sets the pick mode and rebuilds the audio page when it changed. A pick remembers the
+    /// mixer it was made in.
     pub fn set_pick(&mut self, pick: PickMode, mailbox: &SceneMailbox) {
         if self.pick != pick {
             self.pick = pick;
+            self.pick_mixer = match pick {
+                PickMode::Picked(_) => self.mixer(),
+                PickMode::None => None,
+            };
             self.rebuild(Dirty::page(PageId::Audio), mailbox);
         }
+    }
+
+    /// The picked strip, if the services' mixer right now is the one the pick was made in.
+    /// Read fresh from the services: a mixer restart may not have reached the pages yet.
+    #[must_use]
+    pub fn route_source(&self) -> Option<usize> {
+        let PickMode::Picked(strip) = self.pick else {
+            return None;
+        };
+        let now = MixerShape::of(self.services.facts().audio.vm.as_ref());
+        route_allowed(self.pick_mixer, now).then_some(strip)
+    }
+
+    /// The shape of the mixer the pages were last built from.
+    fn mixer(&self) -> Option<MixerShape> {
+        MixerShape::of(self.facts.audio.vm.as_ref())
     }
 }

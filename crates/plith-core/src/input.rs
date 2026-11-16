@@ -2,7 +2,7 @@
 //! collapse after the pointer leaves.
 
 use crate::page::{PageLayer, PageLayers};
-use crate::pages::audio::PickMode;
+use crate::pages::audio::{PickMode, VmFacts};
 use crate::pages::{Action, HitTarget, hit};
 
 /// Seconds the pointer must stay outside the island before it collapses.
@@ -71,6 +71,40 @@ pub fn pick_within(pick: PickMode, sources: usize) -> PickMode {
         PickMode::Picked(source) if source < sources => pick,
         _ => PickMode::None,
     }
+}
+
+/// The layout of the mixer a pick was made in. Voicemeeter editions differ in their strip and
+/// bus counts, so a pick from one edition must not route on another (indices would name a
+/// different strip/bus pair).
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct MixerShape {
+    /// All strips.
+    pub strips: usize,
+    /// All buses.
+    pub buses: usize,
+    /// Hardware strips.
+    pub hardware_strips: usize,
+    /// Hardware buses.
+    pub hardware_buses: usize,
+}
+
+impl MixerShape {
+    /// The shape of `vm`, or `None` without a mixer.
+    #[must_use]
+    pub fn of(vm: Option<&VmFacts>) -> Option<Self> {
+        vm.map(|vm| Self {
+            strips: vm.strips.len(),
+            buses: vm.buses.len(),
+            hardware_strips: vm.hardware_strips,
+            hardware_buses: vm.hardware_buses,
+        })
+    }
+}
+
+/// Whether a route picked in mixer `picked` may be written to mixer `now`: both exist and match.
+#[must_use]
+pub fn route_allowed(picked: Option<MixerShape>, now: Option<MixerShape>) -> bool {
+    picked.is_some() && picked == now
 }
 
 /// The delayed collapse: armed when the pointer leaves, disarmed when it comes back.
