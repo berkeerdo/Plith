@@ -11,8 +11,7 @@ Updated 2026-11-15. Rewritten, not appended; old content goes to `journal/`.
 - R3 direction: **Ray Paneli**, spec `specs/2026-11-14-r3-visual-direction.md`, mock
   `design/r3/ray-paneli.html` (open with `#themes` for the theme sheet), renders
   `design/r3/renders-6/`. Four themes ship (ADR 0007), default Gece.
-- **Next:** R4 Pages on the engine (tab bar, audio, media, system in Ray Paneli) and R6 OSD
-  helper. They own disjoint crates; the master decides lanes at the start (skill `parallel-lanes`).
+- **Now running:** lanes `pages` (R4) and `osd` (R6), both opus; ownership and state in `LANES.md`.
   R4 opens with the UI layer shape (P5), review items L11 to L14 and a Scene that carries page
   content.
 
