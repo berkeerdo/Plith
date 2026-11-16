@@ -1,9 +1,9 @@
 //! The always-on close backstop: stopping the render thread must not hang the UI thread inside
 //! `WM_CLOSE` with the island on screen. If the join takes too long the process exits.
 
+use super::state::Stopper;
 use super::wire::EXIT_RENDER_FATAL;
 use crate::log::LogFile;
-use plith_render::StopHandle;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;
@@ -35,7 +35,7 @@ pub fn with_backstop<R>(
 
 /// Stops and joins the render thread under the backstop: after [`CLOSE_BACKSTOP_MS`] it logs,
 /// flushes the log and ends the process with the fatal exit code.
-pub fn close_render(log: &LogFile, stop: &StopHandle) {
+pub fn close_render(log: &LogFile, stop: &dyn Stopper) {
     with_backstop(
         Duration::from_millis(CLOSE_BACKSTOP_MS),
         || {

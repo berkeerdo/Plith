@@ -2,6 +2,7 @@
 //! idle-check driver, the message loop and a clean shutdown.
 
 mod backstop;
+mod state;
 mod wire;
 
 use crate::log::LogFile;
@@ -11,11 +12,14 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
-    MonitorInfo, QuitHandle, Shell, init_process, is_remote_session, primary_monitor,
-    run_message_loop, user_busy,
+    MonitorInfo, QuitHandle, Shell, init_process, init_ui_thread, is_remote_session,
+    primary_monitor, run_message_loop, uninit_ui_thread, user_busy,
 };
+use state::App;
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
 use std::thread;
 
 /// Runs the app until its window closes and returns the process exit code.
@@ -37,6 +41,10 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     if let Err(error) = init_process() {
         log.line(&format!("dpi awareness not set: {error}"));
     }
+    let ole = init_ui_thread();
+    if let Err(error) = &ole {
+        log.line(&format!("ole not initialized: {error}"));
+    }
     let probing = launch.demo.is_some() || launch.idle_check_secs.is_some();
     if probing && let Some(state) = user_busy() {
         log.line(&format!("skipped: user busy ({state})"));
@@ -45,7 +53,11 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     let monitor = primary_monitor();
     let layout = SurfaceLayout::new(monitor.rect, monitor.work_top_px, monitor.scale);
     log.line(&wire::start_line(launch, &monitor, &layout));
-    run_shell(launch, log, &monitor, layout)
+    let code = run_shell(launch, log, &monitor, layout);
+    if ole.is_ok() {
+        uninit_ui_thread();
+    }
+    code
 }
 
 fn run_shell(
@@ -56,10 +68,17 @@ fn run_shell(
 ) -> i32 {
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let closing = Arc::new(AtomicBool::new(false));
-    let stopper = Arc::new(OnceLock::new());
     let fatal = Arc::new(AtomicBool::new(false));
-    let handler = wire::event_handler(&mailbox, log, &closing, &stopper);
-    let on_panic = wire::on_panic(log, &fatal, &stopper);
+    let app = Rc::new(RefCell::new(App::new(
+        Arc::clone(&mailbox),
+        Arc::clone(log),
+        Arc::clone(&closing),
+    )));
+    let handler = {
+        let app = Rc::clone(&app);
+        Box::new(move |event| app.borrow_mut().on_event(event))
+    };
+    let on_panic = wire::on_panic(log, &fatal, &app);
     let shell = match Shell::create(layout, Arc::new(ShapeCell::default()), handler, on_panic) {
         Ok(shell) => shell,
         Err(error) => {
@@ -87,7 +106,7 @@ fn run_shell(
             return 1;
         }
     };
-    let _ = stopper.set(render.stop_handle());
+    app.borrow_mut().attach_render(render.stop_handle());
     let stop = Arc::new(AtomicBool::new(false));
     let fired = Arc::new(AtomicBool::new(false));
     let helpers = Helpers {

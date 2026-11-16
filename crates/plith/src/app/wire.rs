@@ -1,16 +1,17 @@
-//! The small pieces `app::run` is made of: the shell event handler, the render sinks, the
+//! The small pieces `app::run` is made of: the render sinks, the
 //! watchdog and the startup and exit lines.
 
-use super::backstop::close_render;
+use super::state::App;
 use crate::demo::sleep_stoppable;
 use crate::log::LogFile;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
-use plith_core::scene::{Scene, SceneMailbox};
-use plith_render::{Fatal, RenderSinks, StopHandle};
-use plith_shell::{MonitorInfo, QuitHandle, ShapePoster, Shell, ShellEvent, is_remote_session};
+use plith_render::{Fatal, RenderSinks};
+use plith_shell::{MonitorInfo, QuitHandle, ShapePoster, Shell, is_remote_session};
+use std::cell::RefCell;
+use std::rc::Rc;
+use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Arc, OnceLock};
 use std::thread::{self, JoinHandle};
 
 /// How long a demo or an idle check may run before the watchdog closes the window.
@@ -85,53 +86,6 @@ pub fn raised_line(foreground: &str, above: Option<&str>, immediate: bool) -> St
     }
 }
 
-/// The shell event handler. It runs on the UI thread and reads the current scene from the
-/// mailbox, so a demo step in between is not overwritten.
-///
-/// On `Closing` (`WM_CLOSE`, before the window is destroyed) it sets `closing`, then stops and
-/// joins the render thread, because that thread presents to the window being destroyed: it has
-/// ended before `DefWindowProc` destroys the window.
-pub fn event_handler(
-    mailbox: &Arc<SceneMailbox>,
-    log: &Arc<LogFile>,
-    closing: &Arc<AtomicBool>,
-    stopper: &Arc<OnceLock<StopHandle>>,
-) -> Box<dyn FnMut(ShellEvent)> {
-    let (mailbox, log) = (Arc::clone(mailbox), Arc::clone(log));
-    let (closing, stopper) = (Arc::clone(closing), Arc::clone(stopper));
-    Box::new(move |event| match event {
-        ShellEvent::Closing => {
-            closing.store(true, Ordering::Release);
-            if let Some(stop) = stopper.get() {
-                close_render(&log, stop);
-            }
-        }
-        ShellEvent::Click => {
-            let _ = mailbox.update(|scene| Scene {
-                expanded: !scene.expanded,
-                ..scene
-            });
-        }
-        ShellEvent::Suppression(suppression) => {
-            let _ = mailbox.update(|scene| Scene {
-                suppression,
-                ..scene
-            });
-            log.line(&format!(
-                "suppression: display_off={} locked={} fullscreen={}",
-                suppression.display_off, suppression.locked, suppression.fullscreen
-            ));
-        }
-        ShellEvent::Wake => {}
-        ShellEvent::DisplayChanged => log.line("display changed: restart needed"),
-        ShellEvent::Raised {
-            foreground,
-            above,
-            immediate,
-        } => log.line(&raised_line(&foreground, above.as_deref(), immediate)),
-    })
-}
-
 /// Logs why the render thread ended and sets `fatal`. Returns true when the window should be
 /// asked to close. A plain error while the window is already closing is part of a clean close
 /// and changes nothing else; a panic always counts, closing or not.
@@ -181,18 +135,19 @@ pub fn sinks(
 
 /// What happens when a window callback panics: the payload is logged as `ui fatal`, the same
 /// `fatal` flag the render sink uses is set (so the exit code is 1) and the render thread is
-/// stopped and joined, because the shell is about to close the window. Runs on the UI thread.
+/// stopped and joined, because the shell is about to close the window. Runs on the UI thread,
+/// after the failed callback's borrow of the app was released by the unwind.
 pub fn on_panic(
     log: &Arc<LogFile>,
     fatal: &Arc<AtomicBool>,
-    stopper: &Arc<OnceLock<StopHandle>>,
+    app: &Rc<RefCell<App>>,
 ) -> Box<dyn Fn(String)> {
-    let (log, fatal, stopper) = (Arc::clone(log), Arc::clone(fatal), Arc::clone(stopper));
+    let (log, fatal, app) = (Arc::clone(log), Arc::clone(fatal), Rc::clone(app));
     Box::new(move |message| {
         log.line(&format!("ui fatal: {message}"));
         fatal.store(true, Ordering::Release);
-        if let Some(stop) = stopper.get() {
-            close_render(&log, stop);
+        if let Ok(app) = app.try_borrow() {
+            app.close_render();
         }
     })
 }

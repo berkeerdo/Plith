@@ -47,7 +47,7 @@ fn empty_script_ends_at_once_with_huge_repeat() {
 }
 
 #[test]
-fn play_publishes_each_step_every_round() {
+fn play_publishes_only_changes_so_a_repeated_round_adds_nothing() {
     let script = DemoScript {
         steps: vec![DemoStep::Expand, DemoStep::Wait(0), DemoStep::Page(1)],
         repeat: 2,
@@ -58,6 +58,18 @@ fn play_publishes_each_step_every_round() {
     let latest = mailbox.latest();
     assert_eq!(latest.generation, 2, "the second round changes nothing");
     assert_eq!((latest.scene.expanded, latest.scene.page), (true, 1));
+}
+
+#[test]
+fn play_publishes_changing_steps_every_round() {
+    let script = DemoScript {
+        steps: vec![DemoStep::Expand, DemoStep::Collapse],
+        repeat: 2,
+    };
+    let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
+    let stop = AtomicBool::new(false);
+    assert!(play(&script, &mailbox, &stop));
+    assert_eq!(mailbox.latest().generation, 4);
 }
 
 #[test]

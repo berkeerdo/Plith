@@ -170,17 +170,17 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   (STA, needed by R5) before the window exists.
 - Consumes: `ShellEvent::Wake` (Task 2), `SceneMailbox` (Task 3).
 
-- [ ] **Step 1: Failing tests** in `state/tests.rs` with a fake stopper:
+- [x] **Step 1: Failing tests** in `state/tests.rs` with a fake stopper:
   `closing_before_render_attached_is_safe`, `click_toggles_expanded`,
   `suppression_republishes`.
-- [ ] **Step 2:** Run `cargo test -p plith app::state`; expect failures.
-- [ ] **Step 3:** Move the handler body from `wire::event_handler` into `App::on_event`;
+- [x] **Step 2:** Run `cargo test -p plith app::state`; expect failures.
+- [x] **Step 3:** Move the handler body from `wire::event_handler` into `App::on_event`;
   `run_shell` builds `App`, creates the shell with a closure over the `Rc`, then attaches the
   render stop handle. The `Closing` path still stops and joins before `DefWindowProc` destroys
   the window.
 - [ ] **Step 4:** `cargo run --release -p plith -- --idle-check 20` through heavy-run: exit 0 and
   `idle` passes in the log (no screen look needed; this is not motion).
-- [ ] **Step 5:** Five checks green, commit `refactor(app): own UI state in one App`.
+- [x] **Step 5:** Five checks green, commit `refactor(app): own UI state in one App`.
 
 ### Task 5: Render loop: split, content repaint, ambient tick
 
