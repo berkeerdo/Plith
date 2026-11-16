@@ -212,8 +212,8 @@ pub fn describe(message: &Message) -> String {
 struct Served {
     /// Decode error kinds already logged.
     errors: Vec<Discriminant<DecodeError>>,
-    /// The pid whose watcher runs.
-    watched: Option<u32>,
+    /// The watcher of the connected client (kernel pid), dropped when it disconnects.
+    watcher: Option<watch::Watcher>,
 }
 
 impl Served {
@@ -222,6 +222,12 @@ impl Served {
         match event {
             ServerEvent::Connected { pid } => {
                 log.line(&format!("osd pipe: client pid {pid} connected"));
+                // The old watcher is cancelled and joined before the new one starts.
+                self.watcher = None;
+                match watch::client(pid, events.clone(), Arc::clone(log)) {
+                    Ok(watcher) => self.watcher = Some(watcher),
+                    Err(error) => log.line(&format!("osd: {error}")),
+                }
                 Flow::Continue
             }
             ServerEvent::Rejected(why) => {
@@ -230,6 +236,7 @@ impl Served {
             }
             ServerEvent::Disconnected => {
                 log.line("osd pipe: client disconnected");
+                self.watcher = None;
                 forward(events, Event::Disconnected)
             }
             ServerEvent::Message(got) => self.message(got, events, log),
@@ -255,14 +262,6 @@ impl Served {
             }
         };
         log.line(&format!("osd msg: {}", describe(&message)));
-        if let Message::Hello { client_pid } = message
-            && self.watched != Some(client_pid)
-        {
-            self.watched = Some(client_pid);
-            if let Err(error) = watch::client(client_pid, events.clone(), Arc::clone(log)) {
-                log.line(&format!("osd: {error}"));
-            }
-        }
         forward(events, Event::Message(message))
     }
 }

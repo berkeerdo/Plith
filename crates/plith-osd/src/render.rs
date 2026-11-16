@@ -38,7 +38,7 @@ pub enum Event {
     Message(Message),
     /// The client closed the pipe.
     Disconnected,
-    /// The process that sent `Hello` with this pid has ended.
+    /// The connected client process (kernel pid, equal to its admitted `Hello`) has ended.
     ClientGone(u32),
     /// The display changed: the window now has this rectangle and scale.
     Relayout(SurfaceLayout),

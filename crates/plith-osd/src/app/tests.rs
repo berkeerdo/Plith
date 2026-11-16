@@ -83,9 +83,16 @@ fn connection_events_are_forwarded_or_logged() {
     let log = Arc::new(Log::closed());
     let mut served = Served::default();
     assert_eq!(
-        served.on(ServerEvent::Connected { pid: 1 }, &events, &log),
+        served.on(
+            ServerEvent::Connected {
+                pid: std::process::id()
+            },
+            &events,
+            &log
+        ),
         Flow::Continue
     );
+    assert!(served.watcher.is_some(), "a connect starts a watcher");
     assert!(
         inbox.try_recv().is_err(),
         "a connect needs nothing from the renderer"
@@ -95,6 +102,11 @@ fn connection_events_are_forwarded_or_logged() {
         Flow::Continue
     );
     assert!(matches!(inbox.try_recv(), Ok(Event::Disconnected)));
+    assert!(served.watcher.is_none(), "a disconnect cancels the watcher");
+    assert!(
+        inbox.try_recv().is_err(),
+        "a cancelled watcher sends nothing"
+    );
     drop(inbox);
     assert_eq!(
         served.on(ServerEvent::Disconnected, &events, &log),

@@ -294,7 +294,7 @@ five checks green, push, tick. I3, M7 and M8 are tracked, not fixed (F9 and Task
   reported. `ServerEvent::Connected { pid }` follows admission. TDD: pure `admit`; pipe tests
   `wrong_hello_pid_is_rejected`, `silent_client_is_dropped_and_the_next_one_served`,
   `connected_reports_the_kernel_pid`.
-- [ ] **F4 (I2), one cancellable watcher per connection:** `watch::Watcher` waits on the process
+- [x] **F4 (I2), one cancellable watcher per connection:** `watch::Watcher` waits on the process
   and a cancel event; a new connection or a disconnect drops the old one (cancel and join). The
   pid comes from `Connected { pid }` only. Test: dropping a watcher of a live process returns
   at once and sends nothing.
