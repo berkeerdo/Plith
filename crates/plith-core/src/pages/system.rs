@@ -181,7 +181,7 @@ fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &m
         let mid = X0 + f64::midpoint(CUT_FROM, CUT_TO);
         nodes.push(text(
             rect(mid - 30.0, MIC_Y - 6.0, 60.0, 12.0),
-            super::copy::KAPALI,
+            super::copy::OFF_LABEL,
             TextStyle::Label,
             Ink::Ink,
             Align::Center,

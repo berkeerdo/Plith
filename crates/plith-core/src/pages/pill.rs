@@ -23,7 +23,7 @@ pub struct PillFacts {
 pub enum PillState {
     /// Sound flows to the output.
     Live,
-    /// The output is muted: the route is cut and the value slot reads `KAPALI`.
+    /// The output is muted: the route is cut and the value slot reads `KAPALI` (`OFF_LABEL`).
     Muted,
     /// Nothing plays.
     Idle,
@@ -64,7 +64,7 @@ pub fn pill(facts: &PillFacts) -> DisplayList {
     if muted {
         nodes.push(text(
             value_rect,
-            super::copy::KAPALI,
+            super::copy::OFF_LABEL,
             TextStyle::Label,
             Ink::Faint,
             Align::End,

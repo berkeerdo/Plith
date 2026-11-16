@@ -27,6 +27,9 @@ pub struct Palette {
 }
 
 /// The fixed set of themes.
+///
+/// The variant names `Gece`, `Kagit`, `York` and `Sodyum` are the product names of the themes
+/// as the spec gives them (ADR 0007), kept as proper names on purpose rather than translated.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 pub enum Theme {
     /// Loft dark with a lime flow; the default.

@@ -11,9 +11,9 @@ pub const TAB_SHELF: &str = "RAF";
 /// Tab label of the system page.
 pub const TAB_SYSTEM: &str = "SİSTEM";
 /// A muted source or output.
-pub const SESSIZ: &str = "SESSİZ";
+pub const MUTED_LABEL: &str = "SESSİZ";
 /// A muted microphone or output in the pill.
-pub const KAPALI: &str = "KAPALI";
+pub const OFF_LABEL: &str = "KAPALI";
 /// Brightness without DDC/CI.
 pub const DDC_OFF: &str = "DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI";
 /// The empty shelf's caption.
@@ -33,8 +33,8 @@ pub const OWN_LABELS: [&str; 12] = [
     TAB_MEDIA,
     TAB_SHELF,
     TAB_SYSTEM,
-    SESSIZ,
-    KAPALI,
+    MUTED_LABEL,
+    OFF_LABEL,
     DDC_OFF,
     SHELF_HINT,
     DEFAULT_OUTPUT,

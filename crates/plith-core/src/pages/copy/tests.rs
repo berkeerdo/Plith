@@ -17,5 +17,5 @@ fn own_labels_are_authored_upper_cased() {
         assert_eq!(*label, tr_upper(label), "{label}");
     }
     assert!(OWN_LABELS.contains(&"S\u{130}STEM"));
-    assert!(OWN_LABELS.contains(&KAPALI));
+    assert!(OWN_LABELS.contains(&OFF_LABEL));
 }

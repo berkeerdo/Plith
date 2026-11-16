@@ -132,9 +132,11 @@ mod wic {
     }
 
     fn decode_pixels(encoded: &[u8]) -> windows::core::Result<(u32, u32, Vec<u8>)> {
-        // SAFETY: COM is initialized on this thread by the caller; every pointer handed to WIC
-        // below outlives its call (`encoded` and the out locals live on this stack frame), and
-        // `stream` keeps no copy of `encoded`, so it is not used after this function returns.
+        // SAFETY: COM is initialized on this thread by the caller, and every out pointer handed
+        // to WIC is a local that outlives its call. `InitializeFromMemory` references `encoded`
+        // without copying it; the stream, the decoder, the frame and everything built on them
+        // are locals of this block, so they are all dropped before `encoded` (borrowed for the
+        // whole call) goes out of scope.
         unsafe {
             let factory: IWICImagingFactory =
                 CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
