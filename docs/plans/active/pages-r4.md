@@ -245,6 +245,36 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   `IDWriteTypography` first).
 - [x] **Step 4:** Five checks green, commit `feat(render): add DirectWrite text and fonts`.
 
+### Task 7a: Square top, rounded bottom (added 2026-11-16)
+
+The R3 spec: "Shape: square top (flush with the screen edge), rounded bottom", with radius 24
+for pages (Q1, Berke) and 16 for the pill. The engine draws four round corners 8 DIP below the
+work-area top. Missed in the first plan; done before Task 7 so the painter builds one path.
+
+**Files:**
+- Modify: `crates/plith-core/src/geometry.rs` + tests (`contains` with a square top; `cover`
+  keeps meaning), `crates/plith-core/src/shapes.rs` (`TOP_GAP = 0.0`, `PAGES` radius 24),
+  `crates/plith-render/src/paint.rs` (island path), `crates/plith-shell/src/hit.rs`,
+  `hit/apply.rs`, `hit/tests.rs` (region)
+
+**Interfaces:**
+- Produces in core: `IslandShape::radius` means the bottom corners only;
+  `pub fn island_outline(shape: IslandShape, origin: (f64, f64)) -> Vec<PathSeg>` with
+  `PathSeg { Line(x, y), Arc { to: (f64, f64), radius: f64 } }`, starting top-left, clockwise:
+  the one outline the painter fills and clips with and the region mirrors.
+- Painter: fill the outline with a vertical gradient `floor` to `floor_high` once Task 7 brings
+  the palette (here: keep the black fill), clip pages to it.
+- Shell: the window region is the union of a rounded rect (bottom corners) and a rect over the
+  top half, still 3 px outside the drawn shape on the sides and bottom, flush at the top.
+
+- [ ] **Step 1: Failing tests:** `square_top_corner_is_inside` (0.5, 0.5 inside),
+  `bottom_corner_is_rounded` (0.5, h - 0.5 outside), `outline_starts_top_left_clockwise`,
+  `region_top_corners_square`, `surface_top_is_work_top`.
+- [ ] **Step 2:** Run; expect failures.
+- [ ] **Step 3:** Implement.
+- [ ] **Step 4:** Five checks green, commit `feat(engine): square top and rounded bottom`.
+- [ ] **Step 5:** On-screen look (corner smoothness at the top edge) joins the Task 18 guarded run.
+
 ### Task 7: Painting the display list: page bitmaps, clip, live nodes
 
 **Files:**
