@@ -219,6 +219,13 @@ impl Served {
                 log.line(&format!("osd: {error}"));
             }
         }
+        // Hello decides whether the helper stays, so it waits for room like Disconnected.
+        if matches!(message, Message::Hello { .. }) {
+            return match events.send(Event::Message(message)) {
+                Ok(()) => Flow::Continue,
+                Err(_) => Flow::Stop,
+            };
+        }
         match events.try_send(Event::Message(message)) {
             Ok(()) => Flow::Continue,
             Err(TrySendError::Full(_)) => {

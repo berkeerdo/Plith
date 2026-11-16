@@ -84,3 +84,46 @@ fn labels_upper_case_the_turkish_way() {
     assert_eq!(upper_tr("Speakers"), "SPEAKERS");
     assert_eq!(upper_tr("şğüöç"), "ŞĞÜÖÇ");
 }
+
+const SCALES: [f32; 3] = [1.0, 1.25, 1.5];
+
+fn px(dip: f32, scale: f32) -> f32 {
+    dip * scale
+}
+
+#[test]
+fn every_tick_has_the_same_device_pixel_width() {
+    for scale in SCALES {
+        let want = scale.round().max(1.0);
+        for i in 0..=10 {
+            let (left, right) = tick_span(i, scale);
+            let width = px(right - left, scale);
+            assert!(
+                (width - want).abs() < 1e-3,
+                "tick {i} at {scale}: {width} px"
+            );
+            let edge = px(left, scale);
+            assert!(
+                (edge - edge.round()).abs() < 1e-3,
+                "tick {i} at {scale} off-pixel"
+            );
+            assert!((f32::midpoint(left, right) - tick_x(i)).abs() <= 0.5 / scale + 1e-3);
+        }
+    }
+}
+
+#[test]
+fn the_fill_is_twice_the_track_in_device_pixels() {
+    for scale in SCALES {
+        let t = scale.round().max(1.0);
+        let ((track_top, track_bottom), (fill_top, fill_bottom)) = ruler_rows(scale);
+        let track = px(track_bottom - track_top, scale);
+        let fill = px(fill_bottom - fill_top, scale);
+        assert!((track - t).abs() < 1e-3, "track at {scale}: {track} px");
+        assert!((fill - 2.0 * t).abs() < 1e-3, "fill at {scale}: {fill} px");
+        for edge in [track_top, track_bottom, fill_top, fill_bottom] {
+            let p = px(edge, scale);
+            assert!((p - p.round()).abs() < 1e-3, "edge {edge} at {scale}");
+        }
+    }
+}

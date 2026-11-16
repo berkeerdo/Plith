@@ -87,6 +87,34 @@ pub fn snap_span(start: f32, len: f32, scale: f32) -> (f32, f32) {
     }
 }
 
+/// The thinnest line in device pixels at `scale`: one DIP rounded, never under one pixel.
+#[must_use]
+pub fn line_px(scale: f32) -> f32 {
+    scale.round().max(1.0)
+}
+
+/// Tick `i` (0 to 10) as `(left, right)` in DIP: its centre snapped, every tick the same
+/// [`line_px`] wide, both edges on device pixels.
+#[must_use]
+pub fn tick_span(i: u8, scale: f32) -> (f32, f32) {
+    let width = line_px(scale) / scale;
+    let left = snap(tick_x(i) - width / 2.0, scale);
+    (left, left + width)
+}
+
+/// The track and fill rows as `((top, bottom), (top, bottom))` in DIP, centred on the
+/// OSD's middle: the track is [`line_px`] thick, the fill twice that, edges on device pixels.
+#[must_use]
+pub fn ruler_rows(scale: f32) -> ((f32, f32), (f32, f32)) {
+    let mid = HEIGHT / 2.0;
+    let row = |px: f32| {
+        let thick = px / scale;
+        let top = snap(mid - thick / 2.0, scale);
+        (top, top + thick)
+    };
+    (row(line_px(scale)), row(2.0 * line_px(scale)))
+}
+
 /// Upper case with the Turkish dotted and dotless i: `i` becomes `İ`, `ı` becomes `I`.
 #[must_use]
 pub fn upper_tr(text: &str) -> String {
@@ -220,7 +248,7 @@ impl Painter {
     /// above the surface, so its top corners and top border fall outside it: square top,
     /// round bottom.
     fn draw_seal(&self, gpu: &Gpu) {
-        let line = self.scale.round().max(1.0) / self.scale;
+        let line = line_px(self.scale) / self.scale;
         let half = line / 2.0;
         let shape = D2D1_ROUNDED_RECT {
             rect: rect(half, -RADIUS, WIDTH - half, HEIGHT - half),
@@ -236,27 +264,31 @@ impl Painter {
         }
     }
 
-    /// The 1 DIP track, a tick every 10 % below it and the 2 DIP fill (cut when muted), every
-    /// edge on a device pixel so nothing blurs at fractional scales.
+    /// The track ([`line_px`] thick), a tick every 10 % below it (all the same width) and the
+    /// fill (twice the track, cut when muted), every edge on a device pixel so nothing blurs
+    /// at fractional scales.
     fn draw_ruler(&self, gpu: &Gpu, frame: &OsdFrame) {
         let s = self.scale;
-        let mid = HEIGHT / 2.0;
         let ctx = gpu.context();
         let (left, right) = (snap(RULER.0, s), snap(RULER.1, s));
-        let (track_top, track_bottom) = snap_span(mid - 0.5, 1.0, s);
+        let ((track_top, track_bottom), (fill_top, fill_bottom)) = ruler_rows(s);
         let track = rect(left, track_top, right, track_bottom);
         let (tick_top, tick_bottom) = snap_span(track_bottom, TICK, s);
         // SAFETY: every rect is a live local; the brushes belong to this context.
         unsafe {
             ctx.FillRectangle(&raw const track, &self.track);
             for i in 0..=10 {
-                let (x0, x1) = snap_span(tick_x(i) - 0.5, 1.0, s);
+                let (x0, x1) = tick_span(i, s);
                 let tick = rect(x0, tick_top, x1, tick_bottom);
                 ctx.FillRectangle(&raw const tick, &self.track);
             }
             if !frame.muted && frame.level > 0.0 {
-                let (top, bottom) = snap_span(mid - 1.0, 2.0, s);
-                let fill = rect(left, top, snap(fill_right(frame.level), s), bottom);
+                let fill = rect(
+                    left,
+                    fill_top,
+                    snap(fill_right(frame.level), s),
+                    fill_bottom,
+                );
                 let brush = match frame.meter {
                     Meter::Volume => &self.lime,
                     Meter::Brightness => &self.ink,

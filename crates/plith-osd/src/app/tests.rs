@@ -85,3 +85,28 @@ fn connection_events_are_forwarded_or_logged() {
         Flow::Stop
     );
 }
+
+#[test]
+fn hello_waits_for_room_instead_of_being_dropped() {
+    let (events, inbox) = sync_channel(1);
+    let log = Arc::new(Log::closed());
+    let mut served = Served::default();
+    served.on(ServerEvent::Message(Ok(Message::Hide)), &events, &log);
+    let sender = std::thread::spawn(move || {
+        // pid 0 cannot be opened, so the watcher reports it gone at once; that is fine here.
+        served.on(
+            ServerEvent::Message(Ok(Message::Hello { client_pid: 0 })),
+            &events,
+            &log,
+        )
+    });
+    // Let the sender meet the full channel before any room is made.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+    assert!(matches!(inbox.recv(), Ok(Event::Message(Message::Hide))));
+    let mut got_hello = false;
+    while let Ok(event) = inbox.recv_timeout(std::time::Duration::from_secs(2)) {
+        got_hello |= matches!(event, Event::Message(Message::Hello { .. }));
+    }
+    assert!(got_hello, "a full channel must not drop Hello");
+    assert_eq!(sender.join().unwrap(), Flow::Continue);
+}
