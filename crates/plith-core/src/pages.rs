@@ -1,9 +1,11 @@
 //! Page layouts: pure functions that return display list nodes and hit targets for the render
 //! thread and the pointer router.
 
-use crate::draw::Rect;
+use crate::draw::{DisplayList, Rect};
+use crate::geometry::IslandShape;
 
 pub mod audio;
+pub mod media;
 pub mod tabbar;
 
 /// Page width in DIP.
@@ -64,6 +66,25 @@ impl PageId {
 pub enum Action {
     /// Switch to a page.
     Tab(PageId),
+    /// Toggle play and pause.
+    PlayPause,
+    /// Skip to the next track.
+    Next,
+    /// Skip to the previous track.
+    Previous,
+    /// Seek to a fraction (0 to 1) of the track.
+    Seek(f64),
+}
+
+/// A built page: what to draw, where to click and how big the island is.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PageBuild {
+    /// The display list, sized to the page.
+    pub list: DisplayList,
+    /// The hit targets, tab bar included.
+    pub targets: Vec<HitTarget>,
+    /// The island shape that holds the page.
+    pub shape: IslandShape,
 }
 
 /// A clickable area and its action.

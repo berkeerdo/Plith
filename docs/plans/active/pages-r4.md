@@ -444,12 +444,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   have no hit target. The played part of the ruler and the position text are `Live::Seek`.
   `pub fn format_time(secs: u64) -> String` (`m:ss`, `h:mm:ss` from an hour).
 
-- [ ] **Step 1: Failing tests:** `no_session_shows_empty`, `no_timeline_hides_ruler`,
+- [x] **Step 1: Failing tests:** `no_session_shows_empty`, `no_timeline_hides_ruler`,
   `seek_fraction_from_click_x`, `disabled_next_has_no_target`, `format_time_cases` (0 → `0:00`,
   102 → `1:42`, 3725 → `1:02:05`), `empty_title_shows_source_name`, `page_is_232_high`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Five checks green, commit `feat(core): add the media page`.
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Five checks green, commit `feat(core): add the media page`.
 
 ### Task 14: System page, shelf placeholder, pill seal
 
