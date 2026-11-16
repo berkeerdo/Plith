@@ -636,6 +636,23 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   keep their bitmap, seek live only while playing).
 - 2026-11-16: fix wave `45a3c54` to `68e7494` re-reviewed: approved. Left as a known minor: a
   playing stream with zero length rebuilds the media page on every wake (`derive.rs:151`).
+- 2026-11-16: master merge review at `f895939` (0 critical, 3 important, 8 minor); fix round
+  `f257836` to `2c7121f`, re-reviewed and approved:
+  - a click now needs a press on the island (capture);
+  - the media elapsed time is a live node;
+  - demo steps take the click path;
+  - changed page bitmaps are prewarmed outside motion frames, never while collapsed, and log
+    a `prewarm:` line with their cost;
+  - the idle-check watchdog covers the service start wait (92 s for a 60 s check);
+  - the audio page reads the debounced mixer signal, so the 4 Hz activity timer and the 1 Hz
+    media timer are gone;
+  - a route pick from another mixer edition drops its write;
+  - pre-feed shelf 170.
+
+  Minors left:
+  - prewarm marks pages warm after a partial failure;
+  - elapsed strings fill the shared layout cache (clears about every 8 minutes of play);
+  - hidden pages re-raster at rest while open (logged).
 - Not measured yet (all render tests ran offscreen on WARP, the owner was on RDP): anything on
   the real screen, `motion` and `ambient` lines and draw p99 with page bitmaps, the idle check
   since R4, `WM_MOUSELEAVE` and collapse on leave, real services feeding the pages live, any
