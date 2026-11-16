@@ -10,6 +10,7 @@ use plith_core::pages::fixtures;
 use plith_core::pages::media::MediaFacts;
 use plith_core::pages::system::{self, SystemFacts};
 use std::sync::Arc;
+use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant, SystemTime};
 
 /// The fixture microphone.
@@ -41,8 +42,20 @@ pub fn fixture_levels(muted: &[bool], buses: usize, t: f64) -> Levels {
     }
 }
 
+/// What a content variant swaps: everything the fixture shows besides the levels.
+#[derive(Clone)]
+struct Content {
+    audio: AudioFacts,
+    media: MediaFacts,
+    brightness: Option<(String, u8)>,
+    art: Arc<ArtPixels>,
+}
+
 /// The mock's data as a service.
 pub struct FixtureServices {
+    launched: Content,
+    variants: Option<Receiver<u8>>,
+    shown: u8,
     audio: AudioFacts,
     media: MediaFacts,
     brightness: Option<(String, u8)>,
@@ -74,11 +87,21 @@ impl FixtureServices {
         if let Some(timeline) = media.timeline.as_mut() {
             timeline.stamp = SystemTime::now();
         }
+        let brightness = fixtures::system().brightness;
+        let art = Arc::new(fixtures::art());
         Self {
+            launched: Content {
+                audio: audio.clone(),
+                media: media.clone(),
+                brightness: brightness.clone(),
+                art: Arc::clone(&art),
+            },
+            variants: None,
+            shown: 0,
             audio,
             media,
-            brightness: fixtures::system().brightness,
-            art: Arc::new(fixtures::art()),
+            brightness,
+            art,
             pending: Changes::NONE,
             origin: Instant::now(),
             wake: None,
@@ -91,6 +114,69 @@ impl FixtureServices {
         Self {
             wake: Some(wake),
             ..self
+        }
+    }
+
+    /// Takes content variant requests from `variants` on every drain (see [`Self::switch`]).
+    #[must_use]
+    pub fn with_content(self, variants: Receiver<u8>) -> Self {
+        Self {
+            variants: Some(variants),
+            ..self
+        }
+    }
+
+    /// The content of variant `n`: 0 the fixture as launched, 1 the next track with new art,
+    /// 2 a route toggled and one source muted, 3 the brightness changed. `None` for any other.
+    fn variant(&self, n: u8) -> Option<Content> {
+        let mut content = self.launched.clone();
+        match n {
+            0 => {}
+            1 => {
+                let mut next = fixtures::media_next();
+                next.output.clone_from(&content.media.output);
+                if let Some(timeline) = next.timeline.as_mut() {
+                    timeline.stamp = SystemTime::now();
+                }
+                content.media = next;
+                content.art = Arc::new(fixtures::art_next());
+            }
+            2 => {
+                let vm = content.audio.vm.as_mut()?;
+                let strip = vm.strips.get_mut(2)?;
+                strip.routes.resize(vm.buses.len(), false);
+                let bus = strip.routes.len().checked_sub(1)?;
+                strip.routes[bus] = !strip.routes[bus];
+                vm.strips.get_mut(3)?.muted = true;
+            }
+            3 => content.brightness.as_mut()?.1 = 35,
+            _ => return None,
+        }
+        Some(content)
+    }
+
+    /// Switches to variant `n` and marks what differs; an unknown or already shown variant
+    /// changes nothing.
+    fn switch(&mut self, n: u8) {
+        if n == self.shown {
+            return;
+        }
+        let Some(next) = self.variant(n) else { return };
+        self.shown = n;
+        let mut changes = Changes::NONE;
+        if next.audio != self.audio {
+            changes |= Changes::AUDIO;
+        }
+        if next.media != self.media || next.art.id != self.art.id {
+            changes |= Changes::MEDIA;
+        }
+        if next.brightness != self.brightness {
+            changes |= Changes::SYSTEM;
+        }
+        (self.audio, self.media) = (next.audio, next.media);
+        (self.brightness, self.art) = (next.brightness, next.art);
+        if changes.any() {
+            self.mark(changes);
         }
     }
 
@@ -139,6 +225,10 @@ impl FixtureServices {
 
 impl Services for FixtureServices {
     fn drain(&mut self) -> Changes {
+        let asked: Vec<u8> = self.variants.iter().flat_map(Receiver::try_iter).collect();
+        for n in asked {
+            self.switch(n);
+        }
         std::mem::take(&mut self.pending)
     }
 

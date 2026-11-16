@@ -547,8 +547,8 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   waits; a content swap mid-turn via a new `DemoStep::Content(u8)` that switches fixture
   variants; collapse; repeat 3), `crates/plith/src/demo.rs`
 
-- [ ] **Step 1: Failing tests:** `pages_demo_parses`, `content_step_out_of_range_rejected`.
-- [ ] **Step 2:** Implement; five checks green; commit `feat(demo): add the pages demo`.
+- [x] **Step 1: Failing tests:** `pages_demo_parses`, `content_step_out_of_range_rejected`.
+- [x] **Step 2:** Implement; five checks green; commit `feat(demo): add the pages demo`.
 - [ ] **Step 3:** Ask the master (batched with any other on-screen ask) for a guarded console run:
   `plith --demo pages --exit-after-demo --fixture banana` (about 60 s), release build, then the
   same with the island open on the audio page for 20 s of ambient. Acceptance from the log:

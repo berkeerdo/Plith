@@ -26,6 +26,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{self, Sender};
 use std::thread;
 
 /// Runs the app until its window closes and returns the process exit code.
@@ -99,7 +100,7 @@ fn run_shell(
     };
     shell.show();
     let quit = shell.quit_handle();
-    let levels = attach_feed(launch, &shell, log, &app);
+    let (levels, content) = attach_feed(launch, &shell, log, &app);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -131,6 +132,7 @@ fn run_shell(
         fired: &fired,
         quit,
         waker: shell.ui_waker(),
+        content,
     };
     let (loop_code, idle_ok) = drive(&helpers);
     // The `Closing` handler normally joined the renderer already (this call is then a no-op).
@@ -156,12 +158,19 @@ fn attach_feed(
     shell: &Shell,
     log: &Arc<LogFile>,
     app: &Rc<RefCell<App>>,
-) -> LevelSource {
+) -> (LevelSource, Option<Sender<u8>>) {
+    let mut content = None;
     let services: Box<dyn Services> = match launch.fixture {
         Some(kind) => {
             log.line(&format!("services: fixture {kind:?}"));
             let waker = shell.ui_waker();
-            Box::new(FixtureServices::new(kind).with_waker(Box::new(move || waker.wake())))
+            let (tx, rx) = mpsc::channel();
+            content = Some(tx);
+            Box::new(
+                FixtureServices::new(kind)
+                    .with_waker(Box::new(move || waker.wake()))
+                    .with_content(rx),
+            )
         }
         None => Box::new(RealServices::start(&shell.ui_waker(), Arc::clone(log))),
     };
@@ -174,7 +183,7 @@ fn attach_feed(
         &app.mailbox,
     );
     app.attach_feed(feed);
-    levels
+    (levels, content)
 }
 
 /// Everything the helper threads and the message loop share.
@@ -187,6 +196,7 @@ struct Helpers<'a> {
     fired: &'a Arc<AtomicBool>,
     quit: QuitHandle,
     waker: UiWaker,
+    content: Option<Sender<u8>>,
 }
 
 /// Starts the demo, idle and watchdog threads, runs the message loop, then stops and joins them.
@@ -208,7 +218,11 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
                 Arc::clone(h.mailbox),
                 Arc::clone(h.stop),
                 quit_after,
-                h.waker.clone(),
+                demo::Links {
+                    waker: h.waker.clone(),
+                    content: h.content.clone(),
+                    log: Arc::clone(h.log),
+                },
             )
         });
         let watchdog = (launch.demo.is_some() || launch.idle_check_secs.is_some())

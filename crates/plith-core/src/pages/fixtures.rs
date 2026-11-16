@@ -15,6 +15,8 @@ use crate::pages::system::{MicFacts, SystemFacts};
 pub const CLOCK: &str = "21:47";
 /// The identity of the generated cover art.
 pub const ART_ID: ArtId = ArtId(0x4D38_3301);
+/// The identity of the second track's cover art.
+pub const ART_NEXT_ID: ArtId = ArtId(0x4D38_3302);
 /// Side of the generated cover art in pixels.
 pub const ART_SIZE: u32 = 96;
 /// Samples per trace: 8 s at 4 samples a second, plus the closing sample.
@@ -176,6 +178,22 @@ pub fn media_playing() -> MediaFacts {
     }
 }
 
+/// The next track, "Wait" by M83, at 0:12 of 5:41, with its own art id.
+#[must_use]
+pub fn media_next() -> MediaFacts {
+    MediaFacts {
+        title: "Wait".to_string(),
+        art: Some(ART_NEXT_ID),
+        timeline: Some(SeekTimeline {
+            position_s: 12.0,
+            duration_s: 341.0,
+            stamp: stamp(),
+            playing: true,
+        }),
+        ..media_playing()
+    }
+}
+
 /// Nothing playing; the route still names the output.
 #[must_use]
 pub fn media_empty() -> MediaFacts {
@@ -214,6 +232,25 @@ pub fn art() -> ArtPixels {
         width: n,
         height: n,
         bgra: Arc::from(bgra),
+    }
+}
+
+/// The second cover: the first one mirrored left to right under another id.
+#[must_use]
+pub fn art_next() -> ArtPixels {
+    let first = art();
+    let n = ART_SIZE as usize;
+    let mut bgra = Vec::with_capacity(first.bgra.len());
+    for y in 0..n {
+        for x in (0..n).rev() {
+            let at = (y * n + x) * 4;
+            bgra.extend_from_slice(&first.bgra[at..at + 4]);
+        }
+    }
+    ArtPixels {
+        id: ART_NEXT_ID,
+        bgra: Arc::from(bgra),
+        ..first
     }
 }
 

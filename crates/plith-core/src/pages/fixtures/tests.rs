@@ -214,3 +214,18 @@ fn turkish_label_copy_comes_from_the_upper_cased_constants() {
     }
     assert!(seen >= 8, "the scan saw the Turkish labels ({seen})");
 }
+
+#[test]
+fn the_next_track_differs_in_title_art_and_timeline() {
+    let (first, next) = (media_playing(), media_next());
+    assert_ne!(first.title, next.title);
+    assert_ne!(first.art, next.art);
+    assert_ne!(
+        first.timeline.map(|t| t.duration_s),
+        next.timeline.map(|t| t.duration_s)
+    );
+    let second = art_next();
+    assert_eq!(second.id, ART_NEXT_ID);
+    assert_eq!(second.bgra.len(), (ART_SIZE * ART_SIZE * 4) as usize);
+    assert_ne!(second.bgra, art().bgra);
+}

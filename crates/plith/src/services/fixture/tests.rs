@@ -143,3 +143,86 @@ fn fixture_levels_are_deterministic_and_silent_when_muted() {
     assert!(a.strips[0][0] > 0.01, "an open strip carries signal");
     assert_ne!(a, fixture_levels(&muted, 4, 3.0), "the levels move");
 }
+
+fn with_content() -> (FixtureServices, std::sync::mpsc::Sender<u8>) {
+    let (tx, rx) = std::sync::mpsc::channel();
+    (FixtureServices::new(Fixture::Banana).with_content(rx), tx)
+}
+
+#[test]
+fn content_one_is_the_next_track_with_new_art() {
+    let (mut fixture, tx) = with_content();
+    let before = fixture.facts(0.0);
+    tx.send(1).unwrap();
+    assert_eq!(fixture.drain(), Changes::MEDIA);
+    let after = fixture.facts(0.0);
+    assert_ne!(after.media.title, before.media.title);
+    assert_ne!(after.media.art, before.media.art);
+    assert_eq!(
+        after.art.map(|a| a.id),
+        Some(plith_core::pages::fixtures::ART_NEXT_ID)
+    );
+    assert_eq!(after.audio, before.audio);
+    assert_eq!(after.system, before.system);
+}
+
+#[test]
+fn content_two_toggles_a_route_and_mutes_a_source() {
+    let (mut fixture, tx) = with_content();
+    let before = fixture.facts(0.0);
+    tx.send(2).unwrap();
+    assert_eq!(fixture.drain(), Changes::AUDIO);
+    let after = fixture.facts(0.0);
+    let (b, a) = (before.audio.vm.unwrap(), after.audio.vm.unwrap());
+    assert_ne!(a.strips, b.strips);
+    let routes = |vm: &plith_core::pages::audio::VmFacts| {
+        vm.strips
+            .iter()
+            .map(|s| s.routes.clone())
+            .collect::<Vec<_>>()
+    };
+    assert_ne!(routes(&a), routes(&b), "a route changed");
+    let muted =
+        |vm: &plith_core::pages::audio::VmFacts| vm.strips.iter().filter(|s| s.muted).count();
+    assert_ne!(muted(&a), muted(&b), "a source is muted");
+    assert_eq!(after.media.title, before.media.title);
+    assert_eq!(after.media.art, before.media.art);
+}
+
+#[test]
+fn content_three_changes_the_brightness_only() {
+    let (mut fixture, tx) = with_content();
+    let before = fixture.facts(0.0);
+    tx.send(3).unwrap();
+    assert_eq!(fixture.drain(), Changes::SYSTEM);
+    let after = fixture.facts(0.0);
+    assert_ne!(after.system.brightness, before.system.brightness);
+    assert_eq!(after.audio, before.audio);
+}
+
+#[test]
+fn content_zero_restores_the_fixture_as_launched() {
+    let (mut fixture, tx) = with_content();
+    let launched = fixture.facts(0.0);
+    for n in [1, 2, 3] {
+        tx.send(n).unwrap();
+        assert!(fixture.drain().any());
+    }
+    tx.send(0).unwrap();
+    assert!(fixture.drain().any());
+    let back = fixture.facts(0.0);
+    assert_eq!(back.audio, launched.audio);
+    assert_eq!(back.system, launched.system);
+    assert_eq!(back.media.title, launched.media.title);
+    assert_eq!(back.media.art, launched.media.art);
+}
+
+#[test]
+fn repeating_a_variant_or_an_unknown_one_changes_nothing() {
+    let (mut fixture, tx) = with_content();
+    tx.send(1).unwrap();
+    let _ = fixture.drain();
+    tx.send(1).unwrap();
+    tx.send(9).unwrap();
+    assert_eq!(fixture.drain(), Changes::NONE);
+}
