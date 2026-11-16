@@ -14,7 +14,7 @@ use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
 use plith_core::motion::{MotionKind, MotionStats};
-use plith_core::page::PageTurn;
+use plith_core::page::{PageLayers, PageTurn};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
 use plith_core::spring::Spring;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
@@ -52,9 +52,9 @@ pub(super) struct Engine<'a, C, P, O, N> {
     pub(super) painted: u64,
     /// The shape of the last frame presented; `None` at the start and after a snap.
     pub(super) last_shape: Option<IslandShape>,
-    /// The (shape, previous) pair of the last `on_shape` call; `None` at the start and after a
-    /// snap, so the first frame then always posts.
-    pub(super) posted: Option<(IslandShape, IslandShape)>,
+    /// The (shape, previous, pages) of the last `on_shape` call; `None` at the start and after
+    /// a snap, so the first frame then always posts.
+    pub(super) posted: Option<(IslandShape, IslandShape, PageLayers)>,
     pub(super) seen: u64,
 }
 
@@ -261,9 +261,9 @@ where
         Ok(times)
     }
 
-    /// One paint: publishes the shape on success (except a settled shape already published, so
-    /// an ambient run does not post the same shape every frame), feeds `GpuHealth` and runs its
-    /// action.
+    /// One paint: publishes the shape and page layers on success (except a settled frame
+    /// already published, so an ambient run does not post the same frame every time), feeds
+    /// `GpuHealth` and runs its action.
     /// Returns the frame times (on success) and whether `recover` ran.
     pub(super) fn paint_once(
         &mut self,
@@ -275,13 +275,14 @@ where
             Ok(times) => {
                 self.painted += 1;
                 let previous = self.last_shape.replace(frame.shape).unwrap_or(frame.shape);
-                let pair = (frame.shape, previous);
-                if previous != frame.shape || self.posted != Some(pair) {
-                    self.posted = Some(pair);
+                let drawn = (frame.shape, previous, frame.pages);
+                if previous != frame.shape || self.posted != Some(drawn) {
+                    self.posted = Some(drawn);
                     (self.sinks.on_shape)(ShapeFrame {
                         shape: frame.shape,
                         previous,
                         generation: self.painted,
+                        pages: frame.pages,
                     });
                 }
                 Some(times)

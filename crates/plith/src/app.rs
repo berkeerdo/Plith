@@ -3,6 +3,7 @@
 
 mod backstop;
 mod feed;
+mod input;
 mod state;
 mod wire;
 
@@ -77,8 +78,10 @@ fn run_shell(
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let closing = Arc::new(AtomicBool::new(false));
     let fatal = Arc::new(AtomicBool::new(false));
+    let shapes = Arc::new(ShapeCell::default());
     let app = Rc::new(RefCell::new(App::new(
         Arc::clone(&mailbox),
+        Arc::clone(&shapes),
         Arc::clone(log),
         Arc::clone(&closing),
     )));
@@ -87,7 +90,7 @@ fn run_shell(
         Box::new(move |event| app.borrow_mut().on_event(event))
     };
     let on_panic = wire::on_panic(log, &fatal, &app);
-    let shell = match Shell::create(layout, Arc::new(ShapeCell::default()), handler, on_panic) {
+    let shell = match Shell::create(layout, shapes, handler, on_panic) {
         Ok(shell) => shell,
         Err(error) => {
             log.line(&format!("cannot create the window: {error}"));

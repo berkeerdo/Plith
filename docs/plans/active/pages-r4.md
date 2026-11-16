@@ -533,12 +533,12 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   thread adds `pages` to `ShapeFrame`). `pub struct CollapseTimer` (pure: `leave(now)`,
   `enter()`, `due(now) -> bool`, delay 400 ms) if question 10 is answered that way.
 
-- [ ] **Step 1: Failing tests:** `click_on_pill_expands`, `click_during_turn_hits_incoming_page`,
+- [x] **Step 1: Failing tests:** `click_on_pill_expands`, `click_during_turn_hits_incoming_page`,
   `click_on_empty_space_cancels_pick`, `leave_then_return_cancels_collapse`.
-- [ ] **Step 2:** Run; expect failures.
-- [ ] **Step 3:** Implement; every `Action` that writes goes through `Services`, so with
+- [x] **Step 2:** Run; expect failures.
+- [x] **Step 3:** Implement; every `Action` that writes goes through `Services`, so with
   `--fixture` nothing touches hardware.
-- [ ] **Step 4:** Five checks green, commit `feat(app): handle clicks on pages`.
+- [x] **Step 4:** Five checks green, commit `feat(app): handle clicks on pages`.
 
 ### Task 18: Demo and the console measurement
 

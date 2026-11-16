@@ -3,6 +3,7 @@
 //! One fixed topmost window is placed once at the surface rectangle and never moves. Its window
 //! region follows the island shape, so clicks outside the shape fall through (see `hit`).
 
+pub(crate) mod mouse;
 pub(crate) mod state;
 
 use crate::handles::hwnd_of;
@@ -28,7 +29,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
     IDC_ARROW, IsWindow, LoadCursorW, MA_NOACTIVATE, MSG, PostQuitMessage, RegisterClassExW,
     SW_SHOWNOACTIVATE, SWP_NOACTIVATE, SetWindowPos, ShowWindow, TranslateMessage, WINDOW_EX_STYLE,
     WM_CLOSE, WM_DESTROY, WM_DISPLAYCHANGE, WM_DPICHANGED, WM_LBUTTONUP, WM_MOUSEACTIVATE,
-    WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
+    WM_MOUSEMOVE, WM_POWERBROADCAST, WM_TIMER, WM_WTSSESSION_CHANGE, WNDCLASSEXW, WS_EX_NOACTIVATE,
     WS_EX_NOREDIRECTIONBITMAP, WS_EX_TOOLWINDOW, WS_EX_TOPMOST, WS_POPUP,
 };
 use windows::core::{PCWSTR, w};
@@ -38,8 +39,18 @@ const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
 /// Something the app has to react to.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ShellEvent {
-    /// The left button was released inside the island shape.
-    Click,
+    /// The left button was released inside the drawn island shape, at `(x, y)` DIP relative
+    /// to the island's top-left.
+    Click {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
+    /// The pointer moved over the window for the first time since it last left.
+    Enter,
+    /// The pointer left the window region (the island shape, ADR 0004).
+    Leave,
     /// The DPI or the display configuration changed; relay the surface when the island is at rest.
     DisplayChanged,
     /// The window is about to be destroyed (`WM_CLOSE`): stop anything that presents to it.
@@ -306,22 +317,6 @@ pub fn run_message_loop() -> i32 {
     }
 }
 
-fn on_click(inner: &Inner, lparam: LPARAM) {
-    let Some(frame) = inner.shapes.latest() else {
-        return;
-    };
-    #[allow(clippy::cast_possible_truncation)]
-    let (x, y) = (
-        f64::from(lparam.0 as i16),
-        f64::from((lparam.0 >> 16) as i16),
-    );
-    let scale = inner.layout.scale;
-    let (ox, oy) = inner.layout.island_origin(frame.shape);
-    if frame.shape.contains(x / scale - ox, y / scale - oy) {
-        inner.emit(ShellEvent::Click);
-    }
-}
-
 fn on_destroy(inner: &Inner, hwnd: HWND) {
     topmost::kill_timer(inner);
     if let Some(hook) = inner.registrations.borrow_mut().win_event_hook.take() {
@@ -378,7 +373,15 @@ fn dispatch(
     match msg {
         WM_MOUSEACTIVATE => return Some(LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0))),
         WM_LBUTTONUP => {
-            on_click(inner, lparam);
+            mouse::on_click(inner, lparam);
+            return Some(LRESULT(0));
+        }
+        WM_MOUSEMOVE if is_visual => {
+            mouse::on_move(inner);
+            return Some(LRESULT(0));
+        }
+        mouse::WM_MOUSELEAVE if is_visual => {
+            mouse::note_leave(inner);
             return Some(LRESULT(0));
         }
         WM_DPICHANGED | WM_DISPLAYCHANGE if is_visual => {

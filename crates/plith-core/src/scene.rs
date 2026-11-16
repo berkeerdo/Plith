@@ -3,6 +3,7 @@
 
 use crate::draw::PageContent;
 use crate::geometry::IslandShape;
+use crate::page::PageLayers;
 use crate::shapes::{PAGES, REST};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
@@ -215,6 +216,9 @@ pub struct ShapeFrame {
     pub previous: IslandShape,
     /// The render thread's frame counter: 1 for its first painted frame, then increasing.
     pub generation: u64,
+    /// The page layers drawn in this frame, outgoing first; the click router reads which page
+    /// is on screen from them.
+    pub pages: PageLayers,
 }
 
 /// Holds the latest drawn shape.

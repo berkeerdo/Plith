@@ -1,5 +1,6 @@
 use super::*;
 use crate::draw::{DisplayList, Ink, Node, PageContent, Rect};
+use crate::page::PageLayer;
 use crate::shapes::{PAGES, REST};
 use std::sync::Arc;
 use std::sync::mpsc;
@@ -212,11 +213,17 @@ fn shape_cell_starts_empty_and_returns_the_latest_frame() {
         shape: REST,
         previous: REST,
         generation: 1,
+        pages: PageLayers::empty(),
     };
     let b = ShapeFrame {
         shape: PAGES[0],
         previous: REST,
         generation: 2,
+        pages: PageLayers::of(&[PageLayer {
+            page: 0,
+            offset: 0.0,
+            opacity: 1.0,
+        }]),
     };
     cell.publish(a);
     cell.publish(b);

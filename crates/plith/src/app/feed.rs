@@ -4,9 +4,9 @@
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
-use plith_core::pages::PageId;
 use plith_core::pages::audio::{Activity, PickMode};
 use plith_core::pages::tabbar::clock_text;
+use plith_core::pages::{HitTarget, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
 use std::time::Instant;
@@ -35,6 +35,8 @@ pub const ACTIVITY_TIMER: usize = FIRST_APP_TIMER;
 pub const MEDIA_TIMER: usize = FIRST_APP_TIMER + 1;
 /// A one-shot to the next minute boundary for the tab bar clock while open.
 pub const CLOCK_TIMER: usize = FIRST_APP_TIMER + 2;
+/// A one-shot that collapses the island after the pointer left it (owned by the app's input).
+pub const COLLAPSE_TIMER: usize = FIRST_APP_TIMER + 3;
 /// The activity period.
 pub const ACTIVITY_MS: u32 = 250;
 /// The media period.
@@ -112,6 +114,8 @@ pub struct Feed {
     pending: Dirty,
     /// The scene the feed last reacted to.
     seen: Option<SceneKey>,
+    /// The audio page's pick mode.
+    pick: PickMode,
 }
 
 impl Feed {
@@ -147,6 +151,7 @@ impl Feed {
             clock_text,
             pending: Dirty::default(),
             seen: None,
+            pick: PickMode::None,
         };
         feed.publish(mailbox);
         feed
@@ -165,7 +170,7 @@ impl Feed {
         let inputs = Inputs {
             facts: &self.facts,
             activity: &self.activity,
-            pick: PickMode::None,
+            pick: self.pick,
             now_s: self.now_s(),
             clock: &self.clock_text,
         };
@@ -209,8 +214,12 @@ impl Feed {
     }
 
     /// A UI timer ticked. A tick of a timer no longer armed (one queued before `KillTimer`)
-    /// does nothing.
+    /// does nothing, and so does any tick while the scene is not open (another publisher
+    /// collapsed it and its wake, which syncs the timers, is still queued).
     pub fn on_timer(&mut self, id: usize, mailbox: &SceneMailbox) {
+        if !is_open(&mailbox.latest().scene) {
+            return;
+        }
         let armed = match id {
             ACTIVITY_TIMER => self.armed.activity,
             MEDIA_TIMER => self.armed.media,
@@ -298,8 +307,38 @@ impl Feed {
     }
 
     /// The services, for the writes.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     pub fn services(&mut self) -> &mut dyn Services {
         self.services.as_mut()
+    }
+
+    /// The UI timers, for the app's collapse timer.
+    pub fn timers(&self) -> &dyn Timers {
+        self.timers.as_ref()
+    }
+
+    /// The facts the pages were last built from.
+    #[must_use]
+    pub fn facts(&self) -> &Facts {
+        &self.facts
+    }
+
+    /// The hit targets of the last built pages, in tab order.
+    #[must_use]
+    pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
+        self.pages.targets()
+    }
+
+    /// The audio page's pick mode.
+    #[must_use]
+    pub fn pick(&self) -> PickMode {
+        self.pick
+    }
+
+    /// Sets the pick mode and rebuilds the audio page when it changed.
+    pub fn set_pick(&mut self, pick: PickMode, mailbox: &SceneMailbox) {
+        if self.pick != pick {
+            self.pick = pick;
+            self.rebuild(Dirty::page(PageId::Audio), mailbox);
+        }
     }
 }

@@ -4,6 +4,7 @@
 
 pub mod fixture;
 mod start;
+pub mod writes;
 
 use crate::log::LogFile;
 use crate::model;
@@ -25,6 +26,7 @@ use std::ops::{BitOr, BitOrAssign};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant, SystemTime};
+use writes::{Write, Writer};
 
 /// Which groups of facts changed since the last drain, as bit flags.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -105,28 +107,20 @@ pub trait Services {
     /// A level reader for the render thread.
     fn level_source(&self) -> LevelSource;
     /// Makes the endpoint with this id the default output.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn set_default_endpoint(&mut self, id: &str);
     /// Flips the route from strip `strip` to bus `bus`.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn toggle_route(&mut self, strip: usize, bus: usize);
     /// Mutes or unmutes the microphone.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn toggle_mic(&mut self);
     /// Sets the monitor brightness in percent.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn set_brightness(&mut self, percent: u8);
     /// Toggles play and pause.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn play_pause(&mut self);
     /// Skips to the next track.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn next(&mut self);
     /// Skips to the previous track.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn previous(&mut self);
     /// Seeks to `position` in the track.
-    #[allow(dead_code, reason = "Task 17 routes clicks to the writes")]
     fn seek(&mut self, position: Duration);
     /// Stops the services at shutdown; nothing to stop by default.
     fn stop(&mut self) {}
@@ -171,6 +165,8 @@ pub struct RealServices {
     up: Vec<ServiceId>,
     /// Signal per strip with the activity hold, for the pill.
     activity: RefCell<Activity>,
+    /// Applies the writes off the UI thread; `None` when its thread did not start.
+    writer: Option<Writer>,
 }
 
 /// The newest value waiting on `rx`, if any.
@@ -221,6 +217,16 @@ impl RealServices {
                 brightness: Arc::clone(&brightness),
             },
         );
+        let writer = spawn_writer(
+            start::Set {
+                vm: Arc::clone(&vm),
+                endpoints: Arc::clone(&endpoints),
+                mic: Arc::clone(&mic),
+                media: Arc::clone(&media),
+                brightness: Arc::clone(&brightness),
+            },
+            &log,
+        );
         Self {
             vm,
             endpoints,
@@ -233,6 +239,14 @@ impl RealServices {
             log,
             up: Vec::new(),
             activity: RefCell::new(Activity::default()),
+            writer,
+        }
+    }
+
+    /// Queues a write for the writes thread.
+    fn write(&self, write: Write) {
+        if let Some(writer) = &self.writer {
+            writer.send(write);
         }
     }
 
@@ -309,41 +323,44 @@ impl Services for RealServices {
     }
 
     fn set_default_endpoint(&mut self, id: &str) {
-        let _ = self.endpoints.set_default_endpoint(id);
+        self.write(Write::DefaultEndpoint(id.to_string()));
     }
 
     fn toggle_route(&mut self, strip: usize, bus: usize) {
-        let _ = self.vm.toggle_route(strip, bus);
+        self.write(Write::Route { strip, bus });
     }
 
     fn toggle_mic(&mut self) {
-        let _ = self.mic.toggle_mute();
+        self.write(Write::ToggleMic);
     }
 
     fn set_brightness(&mut self, percent: u8) {
-        let _ = self.brightness.set_percent(percent);
+        self.write(Write::Brightness(percent));
     }
 
     fn play_pause(&mut self) {
-        let _ = self.media.toggle_play_pause();
+        self.write(Write::PlayPause);
     }
 
     fn next(&mut self) {
-        let _ = self.media.next();
+        self.write(Write::Next);
     }
 
     fn previous(&mut self) {
-        let _ = self.media.previous();
+        self.write(Write::Previous);
     }
 
     fn seek(&mut self, position: Duration) {
-        let _ = self.media.seek(position);
+        self.write(Write::Seek(position));
     }
 
     /// Stops every service whose start returned, logging how long each stop took. A service
     /// still inside `start()` is left to its starter thread (its `stop` would wait for the
     /// start, up to 15 s for brightness).
     fn stop(&mut self) {
+        if let Some(writer) = &mut self.writer {
+            writer.stop();
+        }
         while let Ok(started) = self.started.try_recv() {
             let _ = self.on_started(&started);
         }
@@ -368,6 +385,44 @@ impl Services for RealServices {
                 id.name(),
                 begun.elapsed().as_secs_f64() * 1000.0
             ));
+        }
+    }
+}
+
+/// Starts the writes thread over the services in `set`. Each write is one service call; its
+/// error is dropped, as a failed write simply publishes no change.
+fn spawn_writer(set: start::Set, log: &LogFile) -> Option<Writer> {
+    let spawned = Writer::spawn(move |write| match write {
+        Write::DefaultEndpoint(id) => {
+            let _ = set.endpoints.set_default_endpoint(&id);
+        }
+        Write::Route { strip, bus } => {
+            let _ = set.vm.toggle_route(strip, bus);
+        }
+        Write::ToggleMic => {
+            let _ = set.mic.toggle_mute();
+        }
+        Write::Brightness(percent) => {
+            let _ = set.brightness.set_percent(percent);
+        }
+        Write::PlayPause => {
+            let _ = set.media.toggle_play_pause();
+        }
+        Write::Next => {
+            let _ = set.media.next();
+        }
+        Write::Previous => {
+            let _ = set.media.previous();
+        }
+        Write::Seek(position) => {
+            let _ = set.media.seek(position);
+        }
+    });
+    match spawned {
+        Ok(writer) => Some(writer),
+        Err(error) => {
+            log.line(&format!("writes thread not started: {error}"));
+            None
         }
     }
 }

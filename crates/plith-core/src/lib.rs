@@ -6,6 +6,7 @@ pub mod demo;
 pub mod draw;
 pub mod geometry;
 pub mod gpu_health;
+pub mod input;
 pub mod island;
 pub mod launch;
 pub mod layout;

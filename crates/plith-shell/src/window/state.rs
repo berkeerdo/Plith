@@ -44,6 +44,8 @@ pub(crate) struct Inner {
     pub suppression: Cell<Suppression>,
     pub stats: Cell<HitStats>,
     pub hit_errors: Cell<u64>,
+    /// True while a `WM_MOUSELEAVE` is requested and not yet delivered.
+    pub tracking: Cell<bool>,
     pub registrations: RefCell<Registrations>,
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
@@ -72,6 +74,7 @@ impl Inner {
             suppression: Cell::new(Suppression::default()),
             stats: Cell::new(HitStats::default()),
             hit_errors: Cell::new(0),
+            tracking: Cell::new(false),
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),
             on_event: RefCell::new(on_event),

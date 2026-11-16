@@ -1,13 +1,15 @@
 //! The UI-thread state of the app: one [`App`] reached by the shell handler and the panic hook.
 
-use super::feed::Feed;
+use super::feed::{COLLAPSE_TIMER, Feed};
 use super::wire::raised_line;
 use crate::log::LogFile;
-use plith_core::scene::{Scene, SceneMailbox};
+use plith_core::input::CollapseTimer;
+use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_render::StopHandle;
 use plith_shell::ShellEvent;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::time::Instant;
 
 /// Something that stops and joins the render thread. A trait so tests can use a fake.
 pub trait Stopper {
@@ -30,25 +32,48 @@ impl Stopper for StopHandle {
 pub struct App {
     /// The scene the render thread reads.
     pub mailbox: Arc<SceneMailbox>,
+    /// The last frame the render thread drew: its shape and page layers.
+    pub shapes: Arc<ShapeCell>,
     /// The run log.
     pub log: Arc<LogFile>,
     /// Set on `Closing`; the render sinks read it from another thread, so it stays an `Arc`.
     pub closing: Arc<AtomicBool>,
     stop: Option<Box<dyn Stopper>>,
-    feed: Option<Feed>,
+    pub(super) feed: Option<Feed>,
+    /// Monotonic seconds, for the collapse delay.
+    pub(super) now: Box<dyn Fn() -> f64>,
+    /// Armed while the pointer is outside the open island.
+    pub(super) collapse: CollapseTimer,
 }
 
 impl App {
-    /// A new app with no render thread attached yet.
+    /// A new app with no render thread attached yet; `shapes` is the cell the shell and the
+    /// render thread share.
     #[must_use]
-    pub fn new(mailbox: Arc<SceneMailbox>, log: Arc<LogFile>, closing: Arc<AtomicBool>) -> Self {
+    pub fn new(
+        mailbox: Arc<SceneMailbox>,
+        shapes: Arc<ShapeCell>,
+        log: Arc<LogFile>,
+        closing: Arc<AtomicBool>,
+    ) -> Self {
+        let origin = Instant::now();
         Self {
             mailbox,
+            shapes,
             log,
             closing,
             stop: None,
             feed: None,
+            now: Box::new(move || origin.elapsed().as_secs_f64()),
+            collapse: CollapseTimer::default(),
         }
+    }
+
+    /// Replaces the monotonic clock (seconds) the collapse delay reads.
+    #[cfg(test)]
+    #[must_use]
+    pub fn with_clock(self, now: Box<dyn Fn() -> f64>) -> Self {
+        Self { now, ..self }
     }
 
     /// Starts feeding the pages from the services; until then a wake or a timer does nothing.
@@ -64,7 +89,7 @@ impl App {
     }
 
     /// Lets the feed react to a scene change.
-    fn scene_changed(&mut self) {
+    pub(super) fn scene_changed(&mut self) {
         if let Some(feed) = &mut self.feed {
             feed.on_scene(&self.mailbox);
         }
@@ -91,17 +116,10 @@ impl App {
                 self.closing.store(true, Ordering::Release);
                 self.close_render();
             }
-            ShellEvent::Click => {
-                let opening = !self.mailbox.latest().scene.expanded;
-                if let (true, Some(feed)) = (opening, &mut self.feed) {
-                    feed.flush(&self.mailbox);
-                }
-                let _ = self.mailbox.update(|scene| Scene {
-                    expanded: !scene.expanded,
-                    ..scene
-                });
-                self.scene_changed();
-            }
+            ShellEvent::Click { x, y } => self.on_click(x, y),
+            ShellEvent::Enter => self.on_enter(),
+            ShellEvent::Leave => self.on_leave(),
+            ShellEvent::Timer(COLLAPSE_TIMER) => self.on_collapse_tick(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,

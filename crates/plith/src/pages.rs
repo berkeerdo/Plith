@@ -139,11 +139,10 @@ impl Pages {
         self.shapes
     }
 
-    /// The hit targets of `page`.
-    #[allow(dead_code, reason = "Task 17 routes clicks through the targets")]
+    /// The hit targets of every page, in tab order.
     #[must_use]
-    pub fn targets(&self, page: PageId) -> &[HitTarget] {
-        &self.targets[page.index()]
+    pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
+        &self.targets
     }
 }
 

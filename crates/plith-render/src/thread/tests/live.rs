@@ -360,3 +360,34 @@ fn a_page_turn_between_live_pages_samples_every_motion_frame() {
     );
     let _ = run.stop();
 }
+
+#[test]
+fn a_page_turn_at_one_shape_posts_the_layers() {
+    let same = Scene {
+        shapes: [PAGES[0]; 4],
+        ..expanded(0)
+    };
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    run.mailbox.publish(same);
+    let _ = run.report();
+    let before = lock(&run.shapes).clone();
+    assert_eq!(
+        before
+            .last()
+            .map(|s| s.pages.iter().map(|l| l.page).collect()),
+        Some(vec![0])
+    );
+    run.mailbox.publish(Scene { page: 1, ..same });
+    let _ = run.report();
+    let shapes = lock(&run.shapes).clone();
+    let turn = &shapes[before.len()..];
+    assert!(
+        turn.len() > 1,
+        "the turn posts its layers although the shape stands still"
+    );
+    assert!(turn.iter().all(|s| s.shape == PAGES[0]));
+    let last = turn.last().expect("posted");
+    assert_eq!(last.pages.iter().map(|l| l.page).collect::<Vec<_>>(), [1]);
+    let _ = run.stop();
+}

@@ -77,7 +77,7 @@ fn content_holds_every_page_the_pill_and_the_art() {
         .iter()
         .any(|n| matches!(n, Node::Image { .. }));
     assert!(has_image);
-    assert!(!pages.targets(PageId::Audio).is_empty());
+    assert!(!pages.targets()[PageId::Audio.index()].is_empty());
 }
 
 #[test]
