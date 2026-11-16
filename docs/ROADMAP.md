@@ -13,7 +13,7 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R4 Pages | Tab bar, audio, media, system on the engine | lane `pages` | 4 sessions | 🔄 in progress (opened 2026-11-15) |
 | R4b Media output picker | Per-app output routing (undocumented IAudioPolicyConfig); R4 shows the route read-only | ⬜ | 1 session | ⬜ waiting on R4 |
 | R5 Shelf | In-process OLE drag in and out | ⬜ | 2 sessions | ⬜ waiting on R4 |
-| R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 in progress (opened 2026-11-15) |
+| R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 code merged (4aca03e, 1 lane session + 2 review rounds; ADR 0009); console run over a game left |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master | 3 sessions | ⬜ waiting on R4 to R6 |
 
 ## Settled scope (2026-11-14)

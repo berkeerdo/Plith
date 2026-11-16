@@ -41,10 +41,14 @@ Updated 2026-11-16.
 
 | Lane | Job | Branch, last commit | Last message | Waiting on |
 |---|---|---|---|---|
-| `pages` | R4: Tasks 1 to 3 done; Task 4 written, compiling; Task 8 writer running | `feature/pages-r4` @ `7c033a1` | 2026-11-16: status after restart; fonts bundled with `.upstream` | Berke: Q1 radius, Q2 Potato density, Q3 KAPALI, Q10 expand/collapse, Q11 footer copy (gate Task 9) |
-| `osd` | R6: Task 1 done; spike code done, review fix uncommitted; then Tasks 3 to 7 | `feature/osd-r6` @ `88d9e2a` | 2026-11-16: spike ran unsigned only (plain 238 fps, band refused as expected); never on screen | Berke: batch A (install + console game run), batch B (same + flyout Hide) |
+| `pages` | R4: Tasks 1 to 8 + 7a done (flush top, square top corners, bottom radius 24); Task 9 on | `feature/pages-r4` @ `f69f112` | 2026-11-16: owed console run: Task 4 idle check, square-top look, draw p99 with page bitmaps (1 ms bar unmeasured, all renders WARP offscreen) | nothing (Q1 to Q3, Q10, Q11 yes, Berke 2026-11-16) |
+| `osd` | R6 merged as `4aca03e` after two review rounds; lane stopped, worktree kept for Task 9 (console run over a game), restarted with `lanes restart osd` when Berke is at the console | `feature/osd-r6` @ `70c7300` (merged) | 2026-11-16: re-check fixes done (N1 serve panic, N3 to N5, M5/M6 rests) | Berke at the console; 9.8 flyout Hide plus a kill needs his separate yes |
+
+**Approvals (Berke 2026-11-16, "önerilerini uygula", "her şeyi onaylıyorum"):** merge of each lane into main after a clean master review; device names use invariant upper case, Turkish UI strings Turkish rules.
 
 **RDP (2026-11-16):** Berke is on RDP, no game, no console. Builds and tests are allowed; no on-screen run, motion measurement or install until he is back at the PC. PC restarted 2026-11-16, lanes resumed with `lanes restore`.
+
+Wiring job (after R4 merges): notes in `crates/plith-ipc/README.md` "Wiring" and the osd Record; `crates/plith` must stay single-instance before flyout Hide is wired. `pages` must rebase on `main` (it now has `MotionKind::OsdShow`/`OsdHide`, which may break an exhaustive match).
 
 R1b (`engine`) merged as `e20201c`, R2 (`services`) as `4b50e83`; both lanes stopped, worktrees
 removed. Master: `lanes watch --interval 300` runs in the background; restart it each time it fires.
