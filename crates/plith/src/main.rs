@@ -1,4 +1,6 @@
 //! The Plith app: composes the engine, the shell and the services.
+// Release runs without a console window; debug keeps it for eprintln and demo output.
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
 mod demo;
@@ -24,6 +26,10 @@ fn main() {
     match Launch::parse(std::env::args().skip(1)) {
         Ok(launch) => std::process::exit(app::run(&launch)),
         Err(error) => {
+            // The release build has no console, so the log file is where a bad flag shows.
+            if let Ok(log) = log::LogFile::open() {
+                log.line(&format!("launch error: {error}"));
+            }
             eprintln!("plith: {error}\n{USAGE}");
             std::process::exit(2);
         }
