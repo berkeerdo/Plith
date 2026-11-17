@@ -123,6 +123,14 @@ pub fn centred_top(height: f32) -> f32 {
     (HEIGHT - height) / 2.0
 }
 
+/// Records `note` the first time only: sets `latch` and pushes, then ignores every repeat.
+fn note_once(notes: &mut Vec<String>, latch: &mut bool, note: &str) {
+    if !*latch {
+        *latch = true;
+        notes.push(note.to_owned());
+    }
+}
+
 fn rgb(hex: u32) -> D2D1_COLOR_F {
     let channel = |shift: u32| f32::from(u8::try_from((hex >> shift) & 0xFF).unwrap_or(0)) / 255.0;
     D2D1_COLOR_F {
@@ -157,6 +165,8 @@ pub struct Painter {
     text: TextSystem,
     /// Log notes from building the text system, drained once by [`Painter::take_notes`].
     notes: Vec<String>,
+    /// Set once a text failure is noted, so a persistent failure logs one line, not one per frame.
+    text_failed: bool,
     floor: ID2D1SolidColorBrush,
     border: ID2D1SolidColorBrush,
     ink: ID2D1SolidColorBrush,
@@ -194,6 +204,7 @@ impl Painter {
             scale,
             text,
             notes,
+            text_failed: false,
             floor: brush(FLOOR)?,
             border: brush(BORDER)?,
             ink: brush(INK)?,
@@ -231,17 +242,16 @@ impl Painter {
         }
     }
 
-    /// Draws `frame` between `BeginDraw` and `EndDraw` (the caller brackets it).
-    ///
-    /// # Errors
-    /// Returns the failing DirectWrite call of the text.
-    pub fn draw(&mut self, gpu: &Gpu, frame: &OsdFrame) -> Result<()> {
+    /// Draws `frame` between `BeginDraw` and `EndDraw` (the caller brackets it). A DirectWrite
+    /// failure of a text drops that text from the frame and is noted once; it is not a device
+    /// error, so it never ends the render thread.
+    pub fn draw(&mut self, gpu: &Gpu, frame: &OsdFrame) {
         let ctx = gpu.context();
         let clear = D2D1_COLOR_F::default();
         // SAFETY: the context targets the swap chain back buffer; `clear` is a live local.
         unsafe { ctx.Clear(Some(&raw const clear)) };
         if frame.opacity <= 0.0 {
-            return Ok(());
+            return;
         }
         self.set_opacity(frame.opacity);
         self.draw_seal(gpu);
@@ -252,7 +262,8 @@ impl Painter {
             style: TextStyle::Label,
             align: DWRITE_TEXT_ALIGNMENT_LEADING,
         };
-        self.draw_text(gpu, &frame.label, &label, &self.muted.clone())?;
+        let muted = self.muted.clone();
+        self.draw_text(gpu, &frame.label, &label, &muted);
         let value = Slot {
             left: VALUE_LEFT,
             width: WIDTH - PAD - VALUE_LEFT,
@@ -260,7 +271,7 @@ impl Painter {
             align: DWRITE_TEXT_ALIGNMENT_TRAILING,
         };
         let brush = if frame.muted { &self.faint } else { &self.ink }.clone();
-        self.draw_text(gpu, &value_text(frame), &value, &brush)
+        self.draw_text(gpu, &value_text(frame), &value, &brush);
     }
 
     /// The floor and its 1 DIP border, whole device pixels wide. The shape starts `RADIUS`
@@ -317,9 +328,21 @@ impl Painter {
         }
     }
 
+    /// One line of `text` in `slot`; on a DirectWrite failure the text is skipped and the
+    /// first failure is noted for the log.
+    fn draw_text(&mut self, gpu: &Gpu, text: &str, slot: &Slot, brush: &ID2D1SolidColorBrush) {
+        if let Err(error) = self.try_draw_text(gpu, text, slot, brush) {
+            note_once(
+                &mut self.notes,
+                &mut self.text_failed,
+                &format!("paint: text skipped: {error}"),
+            );
+        }
+    }
+
     /// One line of `text` in `slot`, ended with an ellipsis when too long and vertically
     /// centred in the OSD.
-    fn draw_text(
+    fn try_draw_text(
         &mut self,
         gpu: &Gpu,
         text: &str,

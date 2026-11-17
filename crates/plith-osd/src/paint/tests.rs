@@ -11,6 +11,17 @@ fn frame(level: f32, muted: bool) -> OsdFrame {
 }
 
 #[test]
+fn a_repeated_text_failure_is_noted_once() {
+    let mut notes = Vec::new();
+    let mut latch = false;
+    for _ in 0..5 {
+        note_once(&mut notes, &mut latch, "paint: text skipped: boom");
+    }
+    assert_eq!(notes, ["paint: text skipped: boom"]);
+    assert!(latch);
+}
+
+#[test]
 fn value_is_a_whole_percent_or_the_mute_word() {
     assert_eq!(value_text(&frame(0.424, false)), "42");
     assert_eq!(value_text(&frame(1.0, false)), "100");

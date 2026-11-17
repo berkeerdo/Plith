@@ -369,7 +369,13 @@ impl Engine<'_> {
     fn paint(&mut self) -> Result<(f64, f64), String> {
         let frame = self.model.frame();
         let first = match self.stack.as_mut() {
-            Some(stack) => stack.paint(&frame),
+            Some(stack) => {
+                let result = stack.paint(&frame);
+                for note in stack.take_notes() {
+                    self.job.log.line(&note);
+                }
+                result
+            }
             None => return Err(String::from("no device")),
         };
         match first {

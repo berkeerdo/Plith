@@ -73,15 +73,15 @@ impl Stack {
     /// Draws `frame` and presents it. Returns draw and present times in ms.
     ///
     /// # Errors
-    /// Returns the `EndDraw` or `Present` error; [`is_device_lost`] tells a loss.
+    /// Returns the `EndDraw` or `Present` error; [`is_device_lost`] tells a loss. A text failure
+    /// is not an error: the frame draws without that text and [`Stack::take_notes`] has the note.
     pub fn paint(&mut self, frame: &OsdFrame) -> Result<(f64, f64), Error> {
         let start = Instant::now();
         // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
         unsafe { self.gpu.context().BeginDraw() };
-        let drawn = self.painter.draw(&self.gpu, frame);
+        self.painter.draw(&self.gpu, frame);
         // SAFETY: closes the BeginDraw above, on every path.
         unsafe { self.gpu.context().EndDraw(None, None) }?;
-        drawn?;
         let drawn = Instant::now();
         self.target.present()?;
         let ms = |d: Duration| d.as_secs_f64() * 1000.0;
