@@ -50,7 +50,10 @@ fn cut_label(text: &str) -> String {
 
 /// Rounds a 0 to 1 scalar to a percentage, clamped to 0 to 100.
 fn percent_of(scalar: f32) -> u8 {
-    (scalar * 100.0).round().clamp(0.0, 100.0) as u8
+    // Clamped to 0..=100 before the cast, so neither truncation nor sign loss can occur.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let percent = (scalar * 100.0).round().clamp(0.0, 100.0) as u8;
+    percent
 }
 
 /// Reads both meters from the page facts.
