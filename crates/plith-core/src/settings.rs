@@ -257,10 +257,14 @@ const KEYS: [&str; 11] = [
 ];
 
 /// Parses the settings text. Bad lines keep the default and add one entry to the problem list.
+/// A problem names the key and the length of a bad value, never the value: a misplaced line
+/// (`location=Ankara`) must not put a city into the log. A leading UTF-8 byte order mark (an
+/// editor's "UTF-8 with BOM") is skipped, or it would glue itself to the first key.
 #[must_use]
 pub fn parse(text: &str) -> (Settings, Vec<String>) {
     let mut settings = Settings::default();
     let mut problems = Vec::new();
+    let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     for (index, raw) in text.lines().enumerate() {
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -275,7 +279,10 @@ pub fn parse(text: &str) -> (Settings, Vec<String>) {
         if !KEYS.contains(&key) {
             problems.push(format!("line {number}: unknown key `{key}`"));
         } else if !apply(&mut settings, key, value) {
-            problems.push(format!("line {number}: bad value `{value}` for `{key}`"));
+            let length = value.chars().count();
+            problems.push(format!(
+                "line {number}: bad value ({length} characters) for `{key}`"
+            ));
         }
     }
     (settings, problems)

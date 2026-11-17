@@ -57,6 +57,23 @@ fn unknown_key_and_bad_value_are_reported_and_ignored() {
 }
 
 #[test]
+fn a_leading_byte_order_mark_does_not_hide_the_first_key() {
+    let (s, problems) = parse("\u{feff}look=clock\nweather=on\n");
+    assert_eq!(s.look, IdleLook::Clock);
+    assert!(s.weather);
+    assert!(problems.is_empty(), "{problems:?}");
+}
+
+#[test]
+fn a_bad_value_is_reported_by_key_and_length_only() {
+    let (_, problems) = parse("location=Ankara\n");
+    assert_eq!(problems.len(), 1);
+    assert!(problems[0].contains("`location`"));
+    assert!(problems[0].contains("6 characters"));
+    assert!(!problems[0].contains("Ankara"), "{problems:?}");
+}
+
+#[test]
 fn blank_lines_and_hash_comments_are_skipped() {
     let (s, problems) = parse("\n  \n# a comment\nlook=clock\n   # indented\n");
     assert_eq!(s.look, IdleLook::Clock);

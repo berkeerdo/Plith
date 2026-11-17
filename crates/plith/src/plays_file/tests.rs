@@ -22,3 +22,20 @@ fn a_saved_log_reads_back() {
     assert_eq!(load_at(&at).serialize(), plays.serialize());
     assert_eq!(load_at(&at).in_window(0, 1440).len(), 1);
 }
+
+#[test]
+fn saving_replaces_the_old_file_through_a_temp_file() {
+    let at = path("atomic");
+    let mut old = PlayLog::default();
+    old.observe((2026, 11, 17), 600, 0, Some(("Old", "Band")), true);
+    old.observe((2026, 11, 17), 650, 0, None, false);
+    save_at(&at, &old).unwrap();
+    let mut newer = PlayLog::default();
+    newer.observe((2026, 11, 17), 700, 0, Some(("New", "Band")), true);
+    newer.observe((2026, 11, 17), 760, 0, None, false);
+    save_at(&at, &newer).unwrap();
+    assert_eq!(load_at(&at).serialize(), newer.serialize());
+    let mut temp = at.as_os_str().to_owned();
+    temp.push(".tmp");
+    assert!(!PathBuf::from(temp).exists(), "the temp file is gone");
+}

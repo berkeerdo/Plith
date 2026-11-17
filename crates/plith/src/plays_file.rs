@@ -20,7 +20,10 @@ pub fn load_at(path: &Path) -> PlayLog {
     fs::read_to_string(path).map_or_else(|_| PlayLog::default(), |text| PlayLog::parse(&text))
 }
 
-/// Writes the play log to `path`, creating the folder.
+/// Writes the play log to `path`, creating the folder. The text goes to `plays.txt.tmp` first
+/// and is renamed over the old file, so a crash mid-write leaves the old log, never a cut one.
+/// It stays on the calling (UI) thread: a play closing is one small write, a few hundred bytes
+/// a day, and a saver thread would add a lifetime to manage for no measurable gain.
 ///
 /// # Errors
 /// Returns the I/O error when the folder or the file cannot be written.
@@ -28,7 +31,11 @@ pub fn save_at(path: &Path, plays: &PlayLog) -> io::Result<()> {
     if let Some(folder) = path.parent() {
         fs::create_dir_all(folder)?;
     }
-    fs::write(path, plays.serialize())
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = PathBuf::from(temp);
+    fs::write(&temp, plays.serialize())?;
+    fs::rename(&temp, path)
 }
 
 /// The saved play log, or an empty one.
