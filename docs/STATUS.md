@@ -16,7 +16,7 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   `plith-system` hook containment, flyout journal, key repeat collapse. Plan and Record:
   `plans/active/osd-r6.md`; reviews `quality/2026-11-16-osd-r6-merge-review.md` and
   `quality/2026-11-16-osd-r6-recheck.md`.
-- Wiring (2026-11-17, branch `feature/osd-wiring`, plan and Record `plans/active/wiring.md`,
+- Wiring merged as `3669f39` (2026-11-17, plan and Record `plans/done/wiring.md`,
   spec `specs/2026-11-17-osd-wiring-design.md`): `plith.exe` is single-instance, starts and
   supervises the installed helper, sends `Level` on volume, mute and brightness changes,
   `--flyout off|dry|hide` (default off), M8 done (OSD on `TextSystem`, bundled Martian Mono),
@@ -27,8 +27,9 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** merge `feature/osd-wiring` (Berke's yes). Then one console
-  session with Berke for every owed on-screen check: osd Task 9 (now through the real notch,
+- **Next:** the audio page clarity job (below). Batched for the next console session with
+  Berke, every owed on-screen check: a volume key press reaching the OSD (`osd msg: level`,
+  never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
   136 DIP); pages Task 4, 7a, 16 and 18
   on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
@@ -37,10 +38,14 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
 - Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
   18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
   hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.
-- **After wiring (Berke 2026-11-17):** audio page clarity job. The no-Voicemeeter view reads as
+- **Audio page clarity job (next):** the no-Voicemeeter view reads as
   "Logitech G733 62" with no label, unit or bar (Berke: "anlaşılmıyor hiç ne olduğunu"). Give
   each output an icon, a bar and a percent and a clear heading; keep route lines for Voicemeeter.
-  Design choice is Berke's (`praxvon-direction`). Oyenza reference:
+  Berke 2026-11-17 handed the design over: "voicemeeter çalışmıyor diye eşek gibi yazmasına da
+  gerek yok, devam ederiz işte, yaratıcılığı sana bıraktım, nasıl olmasını istiyorsan öyle yap".
+  So: no loud "Voicemeeter missing" notice, the Windows outputs are a first-class view of their
+  own; the master picks the direction (`praxvon-direction` run without a pick round, choice
+  recorded as an ADR), then builds and renders it. Oyenza reference:
   `research/2026-11-17-oyenza-settings-and-hud.md`.
 - R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
   OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme

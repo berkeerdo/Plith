@@ -51,7 +51,7 @@ Windows only unless marked "pure".
 
 ## Wiring into crates/plith
 
-Built 2026-11-17 (`docs/plans/active/wiring.md`, Record). `crates/plith/src/osd.rs` and its
+Built 2026-11-17 (`docs/plans/done/wiring.md`, Record). `crates/plith/src/osd.rs` and its
 `osd/` modules do the steps below in normal runs with real services only (no OSD in `--demo`,
 `--idle-check` or `--fixture` runs):
 - One supervisor thread (`plith-osd-supervisor`, COM apartment-threaded) launches the helper,

@@ -48,8 +48,8 @@ None.
 
 ### Important (Should Fix)
 
-1. **Task 8 docs are not on the branch** (`docs/plans/active/wiring.md:147-148`,
-   `docs/plans/active/wiring.md:45-146`, `docs/STATUS.md:26`, `crates/plith-ipc/README.md:52-85`).
+1. **Task 8 docs are not on the branch** (`docs/plans/done/wiring.md:147-148`,
+   `docs/plans/done/wiring.md:45-146`, `docs/STATUS.md:26`, `crates/plith-ipc/README.md:52-85`).
    - What: the plan's Record section is empty and no box is ticked although Tasks 1 to 7 are
      done; STATUS still lists the wiring job and M8 as next; the README "Wiring into
      crates/plith" section still reads as a to-do list and does not state what was built (3 s / 5

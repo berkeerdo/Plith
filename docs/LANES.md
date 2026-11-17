@@ -48,7 +48,7 @@ Updated 2026-11-16.
 
 **RDP (2026-11-16):** Berke is on RDP, no game, no console. Builds and tests are allowed; no on-screen run, motion measurement or install until he is back at the PC. PC restarted 2026-11-16, lanes resumed with `lanes restore`.
 
-Wiring job: done 2026-11-17 on `feature/osd-wiring` by the master with subagents (plan and Record `plans/active/wiring.md`); merge waits on Berke's yes.
+Wiring job: done 2026-11-17 on `feature/osd-wiring` by the master with subagents (plan and Record `plans/done/wiring.md`); merge waits on Berke's yes.
 
 R1b (`engine`) merged as `e20201c`, R2 (`services`) as `4b50e83`; both lanes stopped, worktrees
 removed. Master: `lanes watch --interval 300` runs in the background; restart it each time it fires.
