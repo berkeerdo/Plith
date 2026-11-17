@@ -27,7 +27,11 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** the idle-look direction pass for R7. Batched for the next console session with
+- **Next:** R7a Karot idle look, implementation (spec `specs/2026-11-17-idle-look-direction.md`,
+  plan `plans/active/idle-look-r7.md`), worktree `.claude/worktrees/idle-look` on
+  `feature/idle-look`: Tasks 1 to 4 done and reviewed, Task 5 (welcome view) in progress from a
+  WIP commit. The spec, plan and `design/r7` live on that branch (`093078f`); the untracked copies
+  in the main checkout are identical and go before the merge. Batched for the next console session with
   Berke, every owed on-screen check: a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
