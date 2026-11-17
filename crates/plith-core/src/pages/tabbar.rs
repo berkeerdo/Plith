@@ -32,9 +32,10 @@ pub fn clock_text(hour: u8, minute: u8) -> String {
     format!("{hour:02}:{minute:02}")
 }
 
-/// The tab bar nodes and one hit target per tab.
+/// The tab bar nodes and one hit target per tab. With `active` of `None` no station is filled, and
+/// an empty `clock` draws no clock text.
 #[must_use]
-pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
+pub fn tabbar(active: Option<PageId>, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
     let last_x = FIRST_X + STEP * 3.0;
     let mut nodes = vec![Node::Stroke {
         points: vec![(FIRST_X, LINE_Y), (last_x, LINE_Y)],
@@ -45,7 +46,7 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
     let mut targets = Vec::with_capacity(4);
     for (page, slot) in PageId::ALL.into_iter().zip([0.0, 1.0, 2.0, 3.0]) {
         let x = FIRST_X + STEP * slot;
-        let on = page == active;
+        let on = active == Some(page);
         let ink = if on { Ink::Ink } else { Ink::Faint };
         let left = x - LABEL_DX;
         nodes.push(Node::Station {
@@ -81,18 +82,20 @@ pub fn tabbar(active: PageId, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
         });
     }
     let right_edge = PAGE_W - MARGIN_RIGHT;
-    nodes.push(text(
-        rect(
-            right_edge - CLOCK_W,
-            LINE_Y - CLOCK_H / 2.0,
-            CLOCK_W,
-            CLOCK_H,
-        ),
-        clock,
-        TextStyle::Clock,
-        Ink::Muted,
-        Align::End,
-    ));
+    if !clock.is_empty() {
+        nodes.push(text(
+            rect(
+                right_edge - CLOCK_W,
+                LINE_Y - CLOCK_H / 2.0,
+                CLOCK_W,
+                CLOCK_H,
+            ),
+            clock,
+            TextStyle::Clock,
+            Ink::Muted,
+            Align::End,
+        ));
+    }
     (nodes, targets)
 }
 

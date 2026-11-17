@@ -102,7 +102,7 @@ fn whole_secs(s: f64) -> u64 {
 /// The media page nodes, hit targets and island shape.
 #[must_use]
 pub fn media_page(facts: &MediaFacts, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(PageId::Media, clock);
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Media), clock);
     let height = if facts.has_session {
         session_body(facts, &mut nodes, &mut targets);
         HEIGHT

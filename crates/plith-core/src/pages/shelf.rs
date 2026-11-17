@@ -21,7 +21,7 @@ const SIDING_Y: f64 = 146.0;
 /// The empty shelf: the drop box with its copy and the siding line.
 #[must_use]
 pub fn shelf_page(clock: &str) -> PageBuild {
-    let (mut nodes, targets) = tabbar(PageId::Shelf, clock);
+    let (mut nodes, targets) = tabbar(Some(PageId::Shelf), clock);
     let right = PAGE_W - 30.0;
     nodes.push(Node::Stroke {
         points: vec![
