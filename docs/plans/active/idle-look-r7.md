@@ -146,7 +146,7 @@ themes, the 12-hour clock layout and snow renders come later.
     The keys are `karot`, `clock`, `playing`, `seal`, `plain` and `hidden`, shared by the file
     and `--idle-look`.
 
-- [ ] **Step 1: Write the failing tests** in `settings/tests.rs`:
+- [x] **Step 1: Write the failing tests** in `settings/tests.rs`:
   - `defaults_are_karot_six_hours_weather_off`.
   - `round_trip`: `parse(&serialize(&s)).0 == s` for a non-default `s` with
     `city = "İstanbul"`.
@@ -155,12 +155,12 @@ themes, the 12-hour clock layout and snow renders come later.
     problems.
   - `blank_lines_and_hash_comments_are_skipped`.
   - `keys_are_trimmed_and_case_sensitive`.
-- [ ] **Step 2:** `node ~/.claude/bin/heavy-run.mjs -- cargo test -p plith-core settings`.
+- [x] **Step 2:** `node ~/.claude/bin/heavy-run.mjs -- cargo test -p plith-core settings`.
   Expected: FAIL (module missing).
-- [ ] **Step 3:** Implement. Booleans read `on` or `off`. The file keys are `look`, `span`,
+- [x] **Step 3:** Implement. Booleans read `on` or `off`. The file keys are `look`, `span`,
   `plays`, `weather`, `location`, `city`, `unit`, `clock24` and `open_on`.
-- [ ] **Step 4:** Run the same command. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): idle look settings and file format`.
+- [x] **Step 4:** Run the same command. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): idle look settings and file format`.
 
 ### Task 1b: Languages, text table
 
@@ -183,7 +183,7 @@ themes, the 12-hour clock layout and snow renders come later.
   - `pub fn upper(s: &str, lang: Lang) -> String`: Turkish rules (`i` to `İ`, `ı` to `I`) or
     invariant rules.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `every_text_has_every_language`: loop over all `Text` and `Lang::ALL`. Each string is
     non-empty, already upper-case under its own rules, and served without fallback.
   - `auto_follows_windows`: `tr-TR` gives Tr, `de-DE` gives En (fallback), and
@@ -192,10 +192,10 @@ themes, the 12-hour clock layout and snow renders come later.
   - `dates_both_languages`.
   - `upper_turkish_dotted_i`: `upper("çalan şarkı", Tr) == "ÇALAN ŞARKI"` and
     `upper("display", En) == "DISPLAY"`.
-- [ ] **Step 2:** Run `cargo test -p plith-core lang`. Expected: FAIL.
-- [ ] **Step 3:** Implement, with one `match` per language in `text`.
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): two-language text table`.
+- [x] **Step 2:** Run `cargo test -p plith-core lang`. Expected: FAIL.
+- [x] **Step 3:** Implement, with one `match` per language in `text`.
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): two-language text table`.
 
 From here on, every page function this plan adds takes `lang: Lang`. `IdleFacts` and
 `WelcomeFacts` carry it. `sky_word(Sky)` in Task 3 becomes `text(Text::Sky*, lang)`, so
@@ -221,7 +221,7 @@ case.
     `YYYY-MM-DD start end title<TAB>artist`.
   - `pub const MIN_PLAY_S: u32 = 10`.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `a_track_played_then_paused_is_one_interval`.
   - `pause_and_resume_same_track_within_a_minute_merges`.
   - `skip_under_ten_seconds_is_dropped`.
@@ -230,10 +230,10 @@ case.
     restarted at minute 0.
   - `round_trip_with_tab_in_title_is_sanitised`: a tab in a title becomes a space.
   - `in_window_handles_negative_from` (a run that starts before midnight).
-- [ ] **Step 2:** Run `cargo test -p plith-core plays`. Expected: FAIL.
-- [ ] **Step 3:** Implement. Store seconds internally so that `MIN_PLAY_S` holds.
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): play log for the welcome run`.
+- [x] **Step 2:** Run `cargo test -p plith-core plays`. Expected: FAIL.
+- [x] **Step 3:** Implement. Store seconds internally so that `MIN_PLAY_S` holds.
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): play log for the welcome run`.
 
 ### Task 3: Weather model and Open-Meteo parsing
 
@@ -263,7 +263,7 @@ case.
   - `pub fn is_stale(read_at, now) -> bool`: true past 90 min.
   - `pub fn temp_text(c: f32, unit: TempUnit) -> String`: `9°`, rounded.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `wmo_codes_map_to_four_skies`, covering every code boundary.
   - `parses_a_trimmed_open_meteo_body`, using a 6-hour fixture.
   - `mismatched_array_lengths_is_an_error`.
@@ -273,12 +273,12 @@ case.
   - `stale_after_ninety_minutes`, also across midnight.
   - `ip_and_geocode_bodies_parse`.
   - `fahrenheit_text`.
-- [ ] **Step 2:** Run `cargo test -p plith-core weather`. Expected: FAIL.
-- [ ] **Step 3:** Implement. The JSON reader is a small recursive descent over `&str`
+- [x] **Step 2:** Run `cargo test -p plith-core weather`. Expected: FAIL.
+- [x] **Step 3:** Implement. The JSON reader is a small recursive descent over `&str`
   returning `enum Json { Null, Bool, Num(f64), Str(String), Arr(Vec), Obj(Vec<(String, Json)>) }`.
   It handles `\uXXXX` escapes, so `İstanbul` survives.
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): forecast model and Open-Meteo parse`.
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): forecast model and Open-Meteo parse`.
 
 ### Task 4: Pill looks
 
@@ -298,7 +298,7 @@ case.
   - `pub fn rest_shape(look: IdleLook) -> IslandShape`: `REST_HIDDEN` for Hidden, `REST`
     otherwise.
 
-- [ ] **Step 1: Failing tests.** Positions come from the mock's `pill()`:
+- [x] **Step 1: Failing tests.** Positions come from the mock's `pill()`:
   - `karot_time_left_turn_right`: time `Clock` at x 16, turn `Value` aligned End with its right
     edge at 184.
   - `karot_falls_back_to_now_sky_then_nothing`.
@@ -309,10 +309,10 @@ case.
   - `seal_equals_pill`.
   - `plain_and_hidden_have_no_text`.
   - `no_node_uses_flow_except_playing_station`.
-- [ ] **Step 2:** Run `cargo test -p plith-core idle_pill`. Expected: FAIL.
-- [ ] **Step 3:** Implement with the `kit` helpers (`text`, `text_trim`, `station`, `rect`).
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): resting pill looks`.
+- [x] **Step 2:** Run `cargo test -p plith-core idle_pill`. Expected: FAIL.
+- [x] **Step 3:** Implement with the `kit` helpers (`text`, `text_trim`, `station`, `rect`).
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): resting pill looks`.
 
 ### Task 5: Welcome view
 
@@ -366,7 +366,7 @@ case.
     after it.
   - The tab bar has no active station.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `bit_sits_at_now`.
   - `only_the_playing_interval_is_flow`.
   - `paused_has_no_flow_and_says_durdu`.
@@ -383,10 +383,10 @@ case.
   - `playing_head_hides_run_song_label`.
   - `probe_overrides_any_head_slot`.
   - `no_node_outside_620x232`.
-- [ ] **Step 2:** Run `cargo test -p plith-core welcome`. Expected: FAIL.
-- [ ] **Step 3:** Implement. Keep `welcome.rs` and `run.rs` under 300 lines each.
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(core): welcome view on the Karot run`.
+- [x] **Step 2:** Run `cargo test -p plith-core welcome`. Expected: FAIL.
+- [x] **Step 3:** Implement. Keep `welcome.rs` and `run.rs` under 300 lines each.
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(core): welcome view on the Karot run`.
 
 ### Task 6: Fifth page without a tab
 
@@ -404,17 +404,17 @@ case.
 - Produces: `PageId::Welcome`, `PAGE_COUNT`, `PageId::TABS`, `Scene.rest`, and
   `tabbar(active: Option<PageId>, clock: &str)`.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `collapsed_target_is_scene_rest`, with Hidden giving 200 x 3.
   - `welcome_shape_is_620x232`.
   - `tabbar_on_welcome_has_no_filled_station`.
   - `page_turn_welcome_to_media_and_back`.
-- [ ] **Step 2:** Run `cargo test -p plith-core`. Expected: the new tests FAIL.
-- [ ] **Step 3:** Implement. A tab click from the welcome view turns to that page like any tab.
+- [x] **Step 2:** Run `cargo test -p plith-core`. Expected: the new tests FAIL.
+- [x] **Step 3:** Implement. A tab click from the welcome view turns to that page like any tab.
   Dirty flags and target arrays grow to `PAGE_COUNT`.
-- [ ] **Step 4:** Run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`. Expected:
+- [x] **Step 4:** Run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`. Expected:
   PASS.
-- [ ] **Step 5:** Commit `refactor(core): welcome as a page without a tab`.
+- [x] **Step 5:** Commit `refactor(core): welcome as a page without a tab`.
 
 ### Task 7: Pointer moves for the probe
 
@@ -431,14 +431,14 @@ case.
 - Consumes: `probe_hour` (Task 5).
 - Produces: `ShellEvent::Move { x: f64, y: f64 }`.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `moves_within_one_hour_cell_rebuild_once`.
   - `leave_clears_probe`.
   - `moves_while_collapsed_are_ignored`.
-- [ ] **Step 2:** Run `cargo test -p plith input`. Expected: FAIL.
-- [ ] **Step 3:** Implement. Do not add a hover-open or a timer.
-- [ ] **Step 4:** Run the tests. Expected: PASS.
-- [ ] **Step 5:** Commit `feat(shell): pointer moves for the welcome probe`.
+- [x] **Step 2:** Run `cargo test -p plith input`. Expected: FAIL.
+- [x] **Step 3:** Implement. Do not add a hover-open or a timer.
+- [x] **Step 4:** Run the tests. Expected: PASS.
+- [x] **Step 5:** Commit `feat(shell): pointer moves for the welcome probe`.
 
 ### Task 8: `plith-weather` crate
 
@@ -463,19 +463,19 @@ case.
   - The worker fetches at start and every 30 min, and at once after `reconfigure`. A failure
     keeps the last forecast. It never blocks the caller.
 
-- [ ] **Step 1: Failing tests** (no network):
+- [x] **Step 1: Failing tests** (no network):
   - `forecast_url_has_hourly_fields_and_timezone_auto`.
   - `geocode_url_escapes_city`: `İstanbul` is percent-encoded UTF-8.
   - `failed_fetch_keeps_last_forecast`, using a fake `Fetch` trait object.
   - `reconfigure_triggers_one_fetch`.
-- [ ] **Step 2:** Run `cargo test -p plith-weather`. Expected: FAIL.
-- [ ] **Step 3:** Implement. URL building and the fetch loop sit behind `trait Fetch`, so tests
+- [x] **Step 2:** Run `cargo test -p plith-weather`. Expected: FAIL.
+- [x] **Step 3:** Implement. URL building and the fetch loop sit behind `trait Fetch`, so tests
   use a fake. WinHTTP stays in `http.rs` only.
-- [ ] **Step 4:** Run the tests and `node scripts/check-deps.mjs`. Expected: PASS and no
+- [x] **Step 4:** Run the tests and `node scripts/check-deps.mjs`. Expected: PASS and no
   violations.
-- [ ] **Step 5:** Run `cargo run -p plith-weather --example probe` (a network GET with fixed
+- [x] **Step 5:** Run `cargo run -p plith-weather --example probe` (a network GET with fixed
   coordinates, not Berke's location). Expected: 24 or more hours printed.
-- [ ] **Step 6:** Commit `feat(weather): Open-Meteo service over WinHTTP`.
+- [x] **Step 6:** Commit `feat(weather): Open-Meteo service over WinHTTP`.
 
 ### Task 9: App wiring
 
@@ -500,18 +500,18 @@ case.
 **Interfaces:**
 - Consumes: everything above.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `clock_timer_armed_collapsed_for_karot_not_for_plain`.
   - `no_clock_timer_while_suppressed`.
   - `unsuppress_draws_once`.
   - `expand_lands_on_welcome_by_default_and_last_page_when_set`.
   - `weather_off_starts_no_weather_service`.
   - `missing_settings_file_gives_defaults_and_writes_one`.
-- [ ] **Step 2:** Run `cargo test -p plith`. Expected: FAIL.
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`. Expected:
+- [x] **Step 2:** Run `cargo test -p plith`. Expected: FAIL.
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`. Expected:
   PASS.
-- [ ] **Step 5:** Commit `feat(app): wire idle looks, welcome and weather`.
+- [x] **Step 5:** Commit `feat(app): wire idle looks, welcome and weather`.
 
 ### Task 10: Idle check allowance and renders
 
@@ -523,18 +523,18 @@ case.
   future probe, stale and paused, weather off, no plays) and the six pill looks with the
   banana fixture.
 
-- [ ] **Step 1: Failing tests:**
+- [x] **Step 1: Failing tests:**
   - `allowance_zero_for_plain`.
   - `allowance_two_for_sixty_seconds_karot`.
-- [ ] **Step 2:** Run `cargo test -p plith idle`. Expected: FAIL.
-- [ ] **Step 3:** Implement and run the renders into `docs/design/r7/engine-1/`.
-- [ ] **Step 4: Master:** compare the renders with `renders-3/sheet.png`, then run the five
+- [x] **Step 2:** Run `cargo test -p plith idle`. Expected: FAIL.
+- [x] **Step 3:** Implement and run the renders into `docs/design/r7/engine-1/`.
+- [x] **Step 4: Master:** compare the renders with `renders-3/sheet.png`, then run the five
   checks (fmt, clippy `-D warnings`, `cargo test --workspace`, `structure-check.mjs`,
   `check-deps.mjs`), all through `heavy-run`.
-- [ ] **Step 5:** Commit `test(app): idle allowance and Karot renders`.
+- [x] **Step 5:** Commit `test(app): idle allowance and Karot renders`.
 
 ### Task 11: Merge review and records
-- [ ] Code review (`superpowers:requesting-code-review`). Fix every Important finding.
+- [x] Code review (`superpowers:requesting-code-review`). Fix every Important finding.
 - [ ] Master writes ADR 0014 from "Decisions taken here", updates STATUS, and asks Berke
   before the merge commit.
 
@@ -545,4 +545,16 @@ case.
   `OKUMA`.
 
 ## Progress log
-(empty)
+- 2026-11-17, Tasks 1 to 10 on `feature/idle-look` (`093078f..13f2add`), each with a task
+  review; Tasks 5, 6, 9 and 10 needed one fix round each. Renders `design/r7/engine-1/`, after
+  the Karot pill fix `engine-2/`, compared with `renders-3/sheet.png` by the master.
+- Task 11: whole-branch review (`.superpowers` ledger, not in git): 0 Critical, 4 Important
+  (IP host differed from Decision 5, no retry or log on a failed fetch, `plays=off` did
+  nothing, two racy weather tests) and 9 Minor fixed in one wave (`0ab7be6`, `fc5992d`,
+  `c40cd8a`), re-review approved. Five checks on `c40cd8a` by the master: fmt, clippy
+  `-D warnings`, 1018 tests passed, structure-check 695 files 0 violations, check-deps clean.
+- Deviations: artists use `Value` (never cased) where the plan said `Label`; the Playing head
+  dropped its elapsed line; `--idle-look` is a launch option, not a lever. All in ADR 0014.
+- Deferred: percent format (`%62`) to the R7 languages plan; unknown settings keys are logged
+  raw; banana fixture duplicated in the render example; no hatch geometry tests.
+- Nothing measured on screen yet: Task 12 is the console session.
