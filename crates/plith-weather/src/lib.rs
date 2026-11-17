@@ -8,7 +8,7 @@ mod service;
 mod urls;
 
 pub use fetch::{Fetch, HttpFetch};
-pub use service::WeatherService;
+pub use service::{FailureLog, Hooks, Waker, WeatherService};
 
 use plith_core::settings::LocationMode;
 

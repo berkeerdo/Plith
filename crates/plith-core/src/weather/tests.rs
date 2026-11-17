@@ -158,6 +158,11 @@ fn stale_across_midnight_month_and_year() {
 fn ip_and_geocode_bodies_parse() {
     let ip = r#"{"ip":"203.0.113.9","city":"Istanbul","region":"Istanbul","latitude":41.01,"longitude":28.95,"timezone":"Europe/Istanbul"}"#;
     assert_eq!(parse_ip_location(ip), Some((41.01, 28.95)));
+    // A realistic ipapi.co/json body: root latitude and longitude among many other fields.
+    let ipapi = r#"{"ip":"203.0.113.9","network":"203.0.113.0/24","version":"IPv4","city":"Istanbul","region":"Istanbul","region_code":"34","country":"TR","country_name":"Turkey","postal":"34000","latitude":41.0138,"longitude":28.9497,"timezone":"Europe/Istanbul","utc_offset":"+0300","org":"Example ISP"}"#;
+    assert_eq!(parse_ip_location(ipapi), Some((41.0138, 28.9497)));
+    let limited = r#"{"error":true,"reason":"RateLimited","message":"Too many requests"}"#;
+    assert_eq!(parse_ip_location(limited), None);
     assert_eq!(parse_ip_location(r#"{"error":true}"#), None);
     assert_eq!(parse_ip_location("nope"), None);
     let geo = r#"{"results":[{"id":745044,"name":"İstanbul","latitude":41.01384,"longitude":28.94966,"country":"Türkiye"},{"name":"Other","latitude":1.0,"longitude":2.0}],"generationtime_ms":0.4}"#;

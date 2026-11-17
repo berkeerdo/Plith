@@ -3,12 +3,13 @@
 use std::fmt::Write;
 
 /// Where the public IP lookup lives.
-pub(crate) const IP_URL: &str = "https://ipwho.is/";
+pub(crate) const IP_URL: &str = "https://ipapi.co/json/";
 
-/// The hourly forecast for a point, in the point's own time zone.
+/// The hourly forecast for a point, in the point's own time zone. Two decimals (about 1 km) is
+/// all the forecast grid resolves and sends no more about where the user lives.
 pub(crate) fn forecast_url(latitude: f64, longitude: f64) -> String {
     format!(
-        "https://api.open-meteo.com/v1/forecast?latitude={latitude:.4}&longitude={longitude:.4}\
+        "https://api.open-meteo.com/v1/forecast?latitude={latitude:.2}&longitude={longitude:.2}\
          &hourly=temperature_2m,weather_code,precipitation_probability\
          &timezone=auto&forecast_days=2"
     )

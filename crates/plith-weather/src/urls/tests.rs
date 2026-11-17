@@ -2,10 +2,10 @@ use super::*;
 
 #[test]
 fn forecast_url_has_hourly_fields_and_timezone_auto() {
-    let url = forecast_url(41.01, 28.98);
+    let url = forecast_url(41.0138, 28.9497);
     assert!(url.starts_with("https://api.open-meteo.com/v1/forecast?"));
-    assert!(url.contains("latitude=41.0100"));
-    assert!(url.contains("longitude=28.9800"));
+    assert!(url.contains("latitude=41.01&"), "{url}");
+    assert!(url.contains("longitude=28.95&"), "{url}");
     for field in [
         "temperature_2m",
         "weather_code",

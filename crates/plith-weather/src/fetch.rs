@@ -4,14 +4,22 @@ use crate::{WeatherConfig, http, location, urls};
 use plith_core::weather::{Forecast, Stamp, parse_forecast};
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
-/// Produces one forecast for a configuration.
+/// The two steps of a forecast: where, then what. They are separate so the worker can keep the
+/// position and ask the location source (a third party for IP lookups) once per configuration.
 pub trait Fetch: Send + Sync {
-    /// Resolves the location and reads the forecast.
+    /// Finds the (latitude, longitude) for a configuration. Never logged.
     ///
     /// # Errors
     ///
-    /// Returns a short message when any step fails.
-    fn fetch(&self, config: &WeatherConfig) -> Result<Forecast, String>;
+    /// Returns a short message, free of coordinates and URLs, when the lookup fails.
+    fn locate(&self, config: &WeatherConfig) -> Result<(f64, f64), String>;
+
+    /// Reads the forecast for a point.
+    ///
+    /// # Errors
+    ///
+    /// Returns a short message, free of coordinates and URLs, when the read fails.
+    fn forecast(&self, point: (f64, f64)) -> Result<Forecast, String>;
 }
 
 /// The real thing: location, then `Open-Meteo`, over `WinHTTP`.
@@ -31,8 +39,11 @@ impl HttpFetch {
 }
 
 impl Fetch for HttpFetch {
-    fn fetch(&self, config: &WeatherConfig) -> Result<Forecast, String> {
-        let (latitude, longitude) = location::resolve(config)?;
+    fn locate(&self, config: &WeatherConfig) -> Result<(f64, f64), String> {
+        location::resolve(config)
+    }
+
+    fn forecast(&self, (latitude, longitude): (f64, f64)) -> Result<Forecast, String> {
         Self::forecast_at(latitude, longitude)
     }
 }
