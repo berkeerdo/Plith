@@ -142,3 +142,23 @@ fn a_motion_shows_its_start_page_and_its_target_page() {
     );
     assert!(motion_pages(0, false, 2).is_empty());
 }
+
+#[test]
+fn page_turn_welcome_to_media_and_back() {
+    use crate::pages::PageId;
+    let welcome = PageId::Welcome.index();
+    let media = PageId::Media.index();
+    let mut turn = PageTurn::new(welcome, R1);
+    turn.turn_to(media);
+    turn.step(H);
+    let layers = turn.layers();
+    assert_eq!(layers.len(), 2);
+    assert_eq!(layers[0].page, welcome);
+    assert_eq!(layers[1].page, media);
+    run_for(&mut turn, 1.0);
+    assert_eq!(turn.current(), media);
+    turn.turn_to(welcome);
+    run_for(&mut turn, 1.0);
+    assert_eq!(turn.current(), welcome);
+    assert_eq!(turn.layers().len(), 1);
+}

@@ -25,7 +25,10 @@ pub const MARGIN_LEFT: f64 = 30.0;
 /// Right margin of page content in DIP.
 pub const MARGIN_RIGHT: f64 = 24.0;
 
-/// One of the four pages.
+/// Number of pages: the four tab pages and the welcome view.
+pub const PAGE_COUNT: usize = 5;
+
+/// One of the pages: four with a tab, and the welcome view with none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum PageId {
     /// The audio routing page.
@@ -36,13 +39,24 @@ pub enum PageId {
     Shelf,
     /// The system controls page.
     System,
+    /// The welcome view: the island's opening page, with no tab.
+    Welcome,
 }
 
 impl PageId {
-    /// Every page in tab order.
-    pub const ALL: [PageId; 4] = [PageId::Audio, PageId::Media, PageId::Shelf, PageId::System];
+    /// Every page: the tab pages in tab order, then the welcome view.
+    pub const ALL: [PageId; PAGE_COUNT] = [
+        PageId::Audio,
+        PageId::Media,
+        PageId::Shelf,
+        PageId::System,
+        PageId::Welcome,
+    ];
 
-    /// The tab position, 0 to 3.
+    /// The pages that have a tab, in tab order.
+    pub const TABS: [PageId; 4] = [PageId::Audio, PageId::Media, PageId::Shelf, PageId::System];
+
+    /// The page position, 0 to 4; the tab pages come first, so a tab position is its page position.
     #[must_use]
     pub fn index(self) -> usize {
         match self {
@@ -50,16 +64,17 @@ impl PageId {
             PageId::Media => 1,
             PageId::Shelf => 2,
             PageId::System => 3,
+            PageId::Welcome => 4,
         }
     }
 
-    /// The page at a tab position, or `None` past the last tab.
+    /// The page at a position, or `None` past the last page.
     #[must_use]
     pub fn from_index(index: usize) -> Option<PageId> {
         Self::ALL.get(index).copied()
     }
 
-    /// The tab label shown to the user.
+    /// The tab label shown to the user; empty for the welcome view, which has no tab.
     #[must_use]
     pub fn label(self) -> &'static str {
         match self {
@@ -67,6 +82,7 @@ impl PageId {
             PageId::Media => copy::TAB_MEDIA,
             PageId::Shelf => copy::TAB_SHELF,
             PageId::System => copy::TAB_SYSTEM,
+            PageId::Welcome => "",
         }
     }
 }

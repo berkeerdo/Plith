@@ -126,7 +126,7 @@ fn page_labels_and_indices() {
         assert_eq!(page.index(), i);
         assert_eq!(PageId::from_index(i), Some(page));
     }
-    assert_eq!(PageId::from_index(4), None);
+    assert_eq!(PageId::from_index(5), None);
 }
 
 #[test]
@@ -173,4 +173,20 @@ fn empty_clock_draws_no_clock_text() {
         })
         .count();
     assert_eq!(clocks, 0);
+}
+
+#[test]
+fn tabbar_on_welcome_has_no_filled_station() {
+    let (nodes, targets) = tabbar(Some(PageId::Welcome), "21:47");
+    let marks = stations(&nodes);
+    assert_eq!(marks.len(), 4);
+    assert!(
+        marks
+            .iter()
+            .all(|s| s.1 == StationMark::Hollow && s.2 == Ink::Faint)
+    );
+    assert_eq!(targets.len(), 4);
+    assert_eq!(PageId::TABS.len(), 4);
+    assert!(!PageId::TABS.contains(&PageId::Welcome));
+    assert_eq!(PageId::ALL.len(), crate::pages::PAGE_COUNT);
 }

@@ -1,6 +1,7 @@
 //! Display lists: what the UI thread builds for a page and the render thread paints. Types only;
 //! painting lives in the render crate.
 
+use crate::pages::PAGE_COUNT;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -301,7 +302,7 @@ impl DisplayList {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageContent {
     /// One list per page.
-    pub pages: [Arc<DisplayList>; 4],
+    pub pages: [Arc<DisplayList>; PAGE_COUNT],
     /// The collapsed pill.
     pub pill: Arc<DisplayList>,
     /// Artwork referenced by `Node::Image`.
@@ -309,12 +310,12 @@ pub struct PageContent {
 }
 
 impl PageContent {
-    /// Four empty pages, an empty pill and no artwork.
+    /// Five empty pages, an empty pill and no artwork.
     #[must_use]
     pub fn empty() -> Self {
         let empty = || Arc::new(DisplayList::empty());
         Self {
-            pages: [empty(), empty(), empty(), empty()],
+            pages: std::array::from_fn(|_| empty()),
             pill: empty(),
             art: Vec::new(),
         }

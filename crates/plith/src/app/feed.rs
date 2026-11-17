@@ -10,7 +10,7 @@ use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
 use plith_core::pages::audio::PickMode;
 use plith_core::pages::tabbar::clock_text;
-use plith_core::pages::{HitTarget, PageId};
+use plith_core::pages::{HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
 
@@ -184,7 +184,7 @@ impl Feed {
                 }
                 self.rebuild(
                     Dirty {
-                        pages: [false; 4],
+                        pages: [false; PAGE_COUNT],
                         pill: dirty.pill,
                     },
                     mailbox,
@@ -238,7 +238,7 @@ impl Feed {
         let text = clock_of((self.clock)());
         if text != self.clock_text {
             self.clock_text = text;
-            self.pending.pages = [true; 4];
+            self.pending.pages = [true; PAGE_COUNT];
         }
         let pending = std::mem::take(&mut self.pending);
         self.rebuild(pending, mailbox);
@@ -278,7 +278,7 @@ impl Feed {
 
     /// The hit targets of the last built pages, in tab order.
     #[must_use]
-    pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
+    pub fn targets(&self) -> &[Vec<HitTarget>; PAGE_COUNT] {
         self.pages.targets()
     }
 

@@ -1,6 +1,6 @@
 use super::*;
 use crate::draw::Rect;
-use crate::pages::PageId;
+use crate::pages::{PAGE_COUNT, PageId};
 
 fn target(x: f64, y: f64, w: f64, h: f64, action: Action) -> HitTarget {
     HitTarget {
@@ -10,13 +10,14 @@ fn target(x: f64, y: f64, w: f64, h: f64, action: Action) -> HitTarget {
 }
 
 /// Page 0 has a tab and a pick target; page 1 a play button at the same place as page 0's pick.
-fn targets() -> [Vec<HitTarget>; 4] {
+fn targets() -> [Vec<HitTarget>; PAGE_COUNT] {
     [
         vec![
             target(10.0, 10.0, 40.0, 20.0, Action::Tab(PageId::Media)),
             target(100.0, 100.0, 40.0, 20.0, Action::PickSource(0)),
         ],
         vec![target(100.0, 100.0, 40.0, 20.0, Action::PlayPause)],
+        Vec::new(),
         Vec::new(),
         Vec::new(),
     ]
@@ -102,6 +103,7 @@ fn click_on_empty_space_cancels_pick() {
             target(100.0, 100.0, 40.0, 20.0, Action::PickSource(0)),
             target(200.0, 80.0, 200.0, 200.0, Action::CancelPick),
         ],
+        Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),

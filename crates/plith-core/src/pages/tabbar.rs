@@ -43,8 +43,8 @@ pub fn tabbar(active: Option<PageId>, clock: &str) -> (Vec<Node>, Vec<HitTarget>
         ink: Ink::FaintTrack,
         dashed: false,
     }];
-    let mut targets = Vec::with_capacity(4);
-    for (page, slot) in PageId::ALL.into_iter().zip([0.0, 1.0, 2.0, 3.0]) {
+    let mut targets = Vec::with_capacity(PageId::TABS.len());
+    for (page, slot) in PageId::TABS.into_iter().zip([0.0, 1.0, 2.0, 3.0]) {
         let x = FIRST_X + STEP * slot;
         let on = active == Some(page);
         let ink = if on { Ink::Ink } else { Ink::Faint };

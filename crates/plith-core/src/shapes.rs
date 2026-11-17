@@ -1,6 +1,7 @@
 //! The one constants table: island shapes and surface sizing (all DIP). Colours live in `theme`.
 
 use crate::geometry::IslandShape;
+use crate::pages::PAGE_COUNT;
 
 /// The collapsed island.
 pub const REST: IslandShape = IslandShape {
@@ -16,9 +17,9 @@ pub const REST_HIDDEN: IslandShape = IslandShape {
     radius: 0.0,
 };
 
-/// The four pages: audio, media, shelf and system. These are pre-feed defaults only: the feed
-/// publishes the shapes of the built pages at once (`pages::*::*_page().shape`).
-pub const PAGES: [IslandShape; 4] = [
+/// The pages: audio, media, shelf, system and the welcome view. These are pre-feed defaults
+/// only: the feed publishes the shapes of the built pages at once (`pages::*::*_page().shape`).
+pub const PAGES: [IslandShape; PAGE_COUNT] = [
     IslandShape {
         width: 620.0,
         height: 300.0,
@@ -39,9 +40,10 @@ pub const PAGES: [IslandShape; 4] = [
         height: 178.0,
         radius: 24.0,
     },
+    WELCOME,
 ];
 
-/// The welcome view. Not in `PAGES`: it is the island's opening view, not a tab.
+/// The welcome view, the fifth page: the island's opening view, with no tab.
 pub const WELCOME: IslandShape = IslandShape {
     width: 620.0,
     height: 232.0,

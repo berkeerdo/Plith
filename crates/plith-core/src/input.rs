@@ -3,7 +3,7 @@
 
 use crate::page::{PageLayer, PageLayers};
 use crate::pages::audio::{PickMode, VmFacts};
-use crate::pages::{Action, HitTarget, hit};
+use crate::pages::{Action, HitTarget, PAGE_COUNT, hit};
 
 /// Seconds the pointer must stay outside the island before it collapses.
 pub const COLLAPSE_DELAY_S: f64 = 0.4;
@@ -37,7 +37,7 @@ pub fn page_on_screen(layers: &PageLayers) -> Option<PageLayer> {
 pub fn route_click(
     expanded: bool,
     layers: &PageLayers,
-    targets: &[Vec<HitTarget>; 4],
+    targets: &[Vec<HitTarget>; PAGE_COUNT],
     x: f64,
     y: f64,
 ) -> ClickResult {

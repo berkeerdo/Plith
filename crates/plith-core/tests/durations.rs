@@ -41,7 +41,8 @@ fn scene(expanded: bool, page: usize) -> Scene {
         expanded,
         page,
         suppression: Suppression::default(),
-        shapes: R1_SHAPES,
+        shapes: std::array::from_fn(|i| R1_SHAPES[i.min(R1_SHAPES.len() - 1)]),
+        rest: plith_core::shapes::REST,
     }
 }
 

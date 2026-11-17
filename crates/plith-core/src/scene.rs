@@ -4,6 +4,7 @@
 use crate::draw::PageContent;
 use crate::geometry::IslandShape;
 use crate::page::PageLayers;
+use crate::pages::PAGE_COUNT;
 use crate::shapes::{PAGES, REST};
 use std::sync::{Arc, Condvar, Mutex, MutexGuard, PoisonError};
 
@@ -36,7 +37,9 @@ pub struct Scene {
     /// Why the island is hidden, if it is.
     pub suppression: Suppression,
     /// The shape of each page; `target` reads the one at `page`.
-    pub shapes: [IslandShape; 4],
+    pub shapes: [IslandShape; PAGE_COUNT],
+    /// The collapsed island's shape, set by the idle look; `target` returns it when collapsed.
+    pub rest: IslandShape,
 }
 
 impl Default for Scene {
@@ -46,6 +49,7 @@ impl Default for Scene {
             page: 0,
             suppression: Suppression::default(),
             shapes: PAGES,
+            rest: REST,
         }
     }
 }
@@ -55,7 +59,7 @@ impl Scene {
     #[must_use]
     pub fn target(&self) -> IslandShape {
         if !self.expanded {
-            return REST;
+            return self.rest;
         }
         debug_assert!(
             self.page < self.shapes.len(),

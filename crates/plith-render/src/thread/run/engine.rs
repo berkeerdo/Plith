@@ -58,7 +58,7 @@ pub(super) struct Engine<'a, C, P, O, N> {
     pub(super) seen: u64,
     /// Per page, the list its bitmap was last rastered from (by a prewarm or a frame that
     /// showed it); `None` before that and after a GPU recovery.
-    pub(super) warm: [Option<Arc<DisplayList>>; 4],
+    pub(super) warm: [Option<Arc<DisplayList>>; plith_core::pages::PAGE_COUNT],
     /// The pages the aimed motion shows, warmed before its first clock wait.
     pub(super) aim_pages: Vec<usize>,
     /// The content of the last presented frame.

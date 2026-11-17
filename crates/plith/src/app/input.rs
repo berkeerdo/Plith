@@ -7,7 +7,7 @@ use plith_core::demo::DemoStep;
 use plith_core::input::{COLLAPSE_DELAY_S, ClickResult, route_click, toggle_pick};
 use plith_core::page::PageLayers;
 use plith_core::pages::audio::PickMode;
-use plith_core::pages::{Action, HitTarget, PageId};
+use plith_core::pages::{Action, HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox};
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ impl App {
             .shapes
             .latest()
             .map_or_else(PageLayers::empty, |frame| frame.pages);
-        let none: [Vec<HitTarget>; 4] = Default::default();
+        let none: [Vec<HitTarget>; PAGE_COUNT] = Default::default();
         let targets = self.feed.as_ref().map_or(&none, Feed::targets);
         match route_click(expanded, &layers, targets, x, y) {
             ClickResult::Expand => self.expand(),
