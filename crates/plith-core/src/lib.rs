@@ -12,6 +12,7 @@ pub mod launch;
 pub mod layout;
 pub mod levers;
 pub mod motion;
+pub mod osd;
 pub mod outline;
 pub mod page;
 pub mod pages;
