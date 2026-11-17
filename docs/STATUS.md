@@ -37,7 +37,10 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
   Design choice is Berke's (`praxvon-direction`). Oyenza reference:
   `research/2026-11-17-oyenza-settings-and-hud.md`.
 - R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
-  OSD toggles there; the four-tab rule stays. Then R5 shelf, R4b media output picker; themes
+  OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme
+  cards with a live preview, idle look Clock/Eyes/Minimal/Hidden,
+  `research/img/2026-11-17-oyenza-appearance-settings.png`): "bizimki daha iyi olmalı". Idle
+  looks need a direction pass (`praxvon-direction`) before R7. Then R5 shelf, R4b media output picker; themes
   switch in settings (palettes exist, nothing calls `set_palette`).
 
 ## Open risks
