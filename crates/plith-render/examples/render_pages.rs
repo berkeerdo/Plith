@@ -3,7 +3,9 @@
 //! cells. Output goes to a new folder `%TEMP%\plith-renders-<unix seconds>-<pid>`; no window
 //! opens.
 //!
-//! Run: `cargo run --release -p plith-render --example render_pages`.
+//! Run: `cargo run --release -p plith-render --example render_pages`. With a folder argument
+//! (`-- <new folder>`) it renders only the idle look states of the R7 mock (the welcome view and
+//! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
 
 use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
@@ -22,6 +24,9 @@ use plith_render::{TextSystem, render_offscreen};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+#[path = "render_pages/idle_states.rs"]
+mod idle_states;
+
 use windows::Win32::Foundation::GENERIC_WRITE;
 use windows::Win32::Graphics::Imaging::{
     CLSID_WICImagingFactory, GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA,
@@ -100,7 +105,7 @@ impl Canvas {
 /// What one island shows.
 enum Content {
     Page(PageId, PageBuild),
-    Pill(DisplayList),
+    Pill(DisplayList, IslandShape),
 }
 
 /// Renders one island at the origin of a target its own size; returns rows and pixel size.
@@ -117,9 +122,9 @@ fn island(content: &Content, palette: Palette) -> Result<(Vec<u8>, usize, usize)
             };
             (build.shape, vec![layer], 1.0)
         }
-        Content::Pill(list) => {
+        Content::Pill(list, shape) => {
             page_content.pill = Arc::new(list.clone());
-            (REST, Vec::new(), 0.0)
+            (*shape, Vec::new(), 0.0)
         }
     };
     let frame = PaintFrame {
@@ -152,7 +157,7 @@ fn desk(theme: Theme) -> [f32; 4] {
 fn shape_of(content: &Content) -> IslandShape {
     match content {
         Content::Page(_, build) => build.shape,
-        Content::Pill(_) => REST,
+        Content::Pill(_, shape) => *shape,
     }
 }
 
@@ -246,7 +251,7 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
             "11-pills",
             fixtures::pills()
                 .iter()
-                .map(|p| Content::Pill(pill(p)))
+                .map(|p| Content::Pill(pill(p), REST))
                 .collect(),
         ),
     ]
@@ -262,9 +267,25 @@ fn out_dir() -> std::io::Result<PathBuf> {
     Ok(dir)
 }
 
+/// Renders the idle look states into the new folder `dir`.
+fn render_idle(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    std::fs::create_dir(dir)?;
+    for (name, contents) in idle_states::states() {
+        write_png(
+            &dir.join(format!("{name}.png")),
+            &cell(&contents, Theme::Gece)?,
+        )?;
+    }
+    println!("{}", dir.display());
+    Ok(())
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
+    if let Some(dir) = std::env::args_os().nth(1) {
+        return render_idle(Path::new(&dir));
+    }
     let dir = out_dir()?;
     for (name, contents) in gece_states() {
         write_png(

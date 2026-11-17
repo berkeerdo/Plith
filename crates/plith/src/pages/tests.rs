@@ -13,6 +13,9 @@ fn inputs(facts: &Facts) -> Inputs<'_> {
         facts,
         pick: PickMode::None,
         clock: "21:47",
+        welcome: None,
+        probe: None,
+        idle: None,
     }
 }
 
@@ -35,7 +38,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&start, &routed),
         Dirty {
-            pages: [true, false, false, false],
+            pages: [true, false, false, false, false],
             pill: false,
         }
     );
@@ -45,7 +48,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&routed, &muted),
         Dirty {
-            pages: [true, false, false, true],
+            pages: [true, false, false, true, false],
             pill: false,
         }
     );
@@ -55,7 +58,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&muted, &moved),
         Dirty {
-            pages: [true, true, false, false],
+            pages: [true, true, false, false, false],
             pill: true,
         }
     );
@@ -64,14 +67,14 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&moved, &fixture.facts()),
         Dirty {
-            pages: [false, false, false, true],
+            pages: [false, false, false, true, false],
             pill: false,
         }
     );
     assert_eq!(
         Dirty::page(PageId::Media),
         Dirty {
-            pages: [false, true, false, false],
+            pages: [false, true, false, false, false],
             pill: false,
         }
     );
@@ -84,12 +87,12 @@ fn an_equal_rebuild_keeps_every_arc() {
     let mut pages = Pages::new(&inputs(&facts));
     let before = pages.content();
     let all = Dirty {
-        pages: [true; 4],
+        pages: [true; PAGE_COUNT],
         pill: true,
     };
     pages.rebuild(all, &inputs(&facts));
     let after = pages.content();
-    for i in 0..4 {
+    for i in 0..PAGE_COUNT {
         assert!(Arc::ptr_eq(&before.pages[i], &after.pages[i]), "page {i}");
     }
     assert!(Arc::ptr_eq(&before.pill, &after.pill));
@@ -145,4 +148,21 @@ fn a_taller_audio_page_changes_its_shape() {
     let short = Pages::new(&inputs(&banana)).shapes()[0];
     let tall = Pages::new(&inputs(&potato)).shapes()[0];
     assert!(tall.height > short.height);
+}
+
+#[test]
+fn union_joins_two_dirty_sets() {
+    let a = Dirty::page(PageId::Audio);
+    let b = Dirty {
+        pill: true,
+        ..Dirty::page(PageId::Welcome)
+    };
+    assert_eq!(
+        a.union(b),
+        Dirty {
+            pages: [true, false, false, false, true],
+            pill: true,
+        }
+    );
+    assert_eq!(Dirty::default().union(Dirty::default()), Dirty::default());
 }

@@ -32,10 +32,13 @@ fn text_list(text: &str) -> Arc<DisplayList> {
     })
 }
 
-/// Four text pages and a text pill.
+/// Five text pages (the welcome view last) and a text pill.
 fn pages() -> Arc<PageContent> {
     let mut content = PageContent::empty();
-    for (page, text) in ["Audio", "Media", "Shelf", "System"].iter().enumerate() {
+    for (page, text) in ["Audio", "Media", "Shelf", "System", "Welcome"]
+        .iter()
+        .enumerate()
+    {
         content.pages[page] = text_list(text);
     }
     content.pill = text_list("Pill");
@@ -132,13 +135,17 @@ fn an_aimed_expand_prewarms_start_and_target_before_the_first_clock_wait() {
         (vec![0, 2], calls),
         "exactly the start and target pages, before the first clock wait"
     );
-    assert_eq!(warms[1].0, vec![1, 3], "the other pages after it settled");
+    assert_eq!(
+        warms[1].0,
+        vec![1, 3, 4],
+        "the other pages after it settled"
+    );
     assert!(warms[1].1 >= calls + report.frames as u64);
     assert_eq!(
         run.prewarm_notes(),
         vec![
             "prewarm: pages 0,2 0.75 ms (aim)".to_string(),
-            "prewarm: pages 1,3 0.75 ms (rest)".to_string(),
+            "prewarm: pages 1,3,4 0.75 ms (rest)".to_string(),
         ]
     );
     let _ = run.stop();
@@ -213,5 +220,22 @@ fn ambient_content_prewarms_between_ticks() {
         notes.last().map(String::as_str),
         Some("prewarm: pages 1 0.75 ms (ambient)")
     );
+    let _ = run.stop();
+}
+
+#[test]
+fn opening_warms_the_welcome_page_too() {
+    let run = start(Setup {
+        content: Some(pages()),
+        ..Setup::default()
+    });
+    run.wait_frames(1);
+    run.assert_parked();
+    let welcome = plith_core::pages::PageId::Welcome.index();
+    run.mailbox.publish(expanded(0));
+    let _ = run.report();
+    run.assert_parked();
+    let warmed: Vec<usize> = run.prewarms().into_iter().flat_map(|w| w.0).collect();
+    assert!(warmed.contains(&welcome), "{warmed:?}");
     let _ = run.stop();
 }

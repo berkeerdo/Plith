@@ -7,7 +7,7 @@ use plith_core::demo::DemoStep;
 use plith_core::input::{COLLAPSE_DELAY_S, ClickResult, route_click, toggle_pick};
 use plith_core::page::PageLayers;
 use plith_core::pages::audio::PickMode;
-use plith_core::pages::{Action, HitTarget, PageId};
+use plith_core::pages::{Action, HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox};
 use std::time::Duration;
 
@@ -25,7 +25,7 @@ impl App {
             .shapes
             .latest()
             .map_or_else(PageLayers::empty, |frame| frame.pages);
-        let none: [Vec<HitTarget>; 4] = Default::default();
+        let none: [Vec<HitTarget>; PAGE_COUNT] = Default::default();
         let targets = self.feed.as_ref().map_or(&none, Feed::targets);
         match route_click(expanded, &layers, targets, x, y) {
             ClickResult::Expand => self.expand(),
@@ -39,9 +39,11 @@ impl App {
         }
     }
 
-    /// Opens the island with the pages brought up to date first.
+    /// Opens the island with the pages brought up to date first: on the welcome view, or on the
+    /// page shown last when the settings say so.
     fn expand(&mut self) {
-        self.expand_on(None);
+        let page = self.feed.as_ref().and_then(Feed::open_page);
+        self.expand_on(page);
     }
 
     /// Opens the island (on `page`, when given) with the pages brought up to date first, in
@@ -71,7 +73,8 @@ impl App {
         };
         for step in steps {
             match step {
-                DemoStep::Expand => self.expand(),
+                // A demo expands on the page shown, so its measurements stay comparable.
+                DemoStep::Expand => self.expand_on(None),
                 DemoStep::Page(index) => {
                     let Some(page) = PageId::from_index(index) else {
                         continue;
@@ -100,8 +103,26 @@ impl App {
         self.scene_changed();
     }
 
-    /// The pointer left the window: an open island starts the collapse delay.
+    /// The pointer moved inside the island shape. Only an open island showing the welcome view
+    /// reads it: the hour under the pointer becomes the probe. No timer, no hover-open.
+    pub(super) fn on_move(&mut self, x: f64, y: f64) {
+        let scene = self.mailbox.latest().scene;
+        if !scene.expanded || scene.page != PageId::Welcome.index() {
+            return;
+        }
+        if let Some(feed) = self.feed.as_mut() {
+            feed.move_probe(x, y, &self.mailbox);
+        }
+    }
+
+    /// The pointer left the window: the probe ends, and an open island starts the collapse
+    /// delay.
     pub(super) fn on_leave(&mut self) {
+        if let Some(feed) = self.feed.as_mut()
+            && feed.probe().is_some()
+        {
+            feed.set_probe(None, &self.mailbox);
+        }
         if !self.mailbox.latest().scene.expanded {
             return;
         }
@@ -157,6 +178,7 @@ impl App {
         }
         if let Some(feed) = self.feed.as_mut() {
             feed.set_pick(PickMode::None, &self.mailbox);
+            feed.clear_probe();
         }
         let _ = self.mailbox.update(|scene| Scene {
             expanded: false,
@@ -165,6 +187,9 @@ impl App {
         self.scene_changed();
     }
 }
+
+#[cfg(test)]
+mod tests;
 
 /// Runs a page action other than a tab: pick mode changes on the feed, writes through the
 /// services (instant on the fixture, on the writes thread for the hardware).

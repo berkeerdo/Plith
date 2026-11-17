@@ -59,7 +59,7 @@ pub fn brightness_at(ruler: Rect, x: f64) -> u8 {
 /// The system page nodes, hit targets and island shape.
 #[must_use]
 pub fn system_page(facts: &SystemFacts, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(PageId::System, clock);
+    let (mut nodes, mut targets) = tabbar(Some(PageId::System), clock);
     brightness_row(facts.brightness.as_ref(), &mut nodes, &mut targets);
     if let Some(mic) = &facts.mic {
         mic_row(mic, facts.mic_bus.as_deref(), &mut nodes, &mut targets);

@@ -13,7 +13,7 @@ fn stations(nodes: &[Node]) -> Vec<(f64, StationMark, Ink)> {
 
 #[test]
 fn four_stations_one_line_between_ends() {
-    let (nodes, _) = tabbar(PageId::Audio, "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47");
     let xs: Vec<f64> = stations(&nodes).iter().map(|s| s.0).collect();
     assert_eq!(xs, vec![30.0, 142.0, 254.0, 366.0]);
     let lines: Vec<_> = nodes
@@ -34,7 +34,7 @@ fn four_stations_one_line_between_ends() {
 
 #[test]
 fn active_is_filled_ink() {
-    let (nodes, _) = tabbar(PageId::Shelf, "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Shelf), "21:47");
     let marks = stations(&nodes);
     for (i, (_, mark, ink)) in marks.iter().enumerate() {
         if i == 2 {
@@ -68,7 +68,7 @@ fn active_is_filled_ink() {
 
 #[test]
 fn tab_hit_targets_cover_labels() {
-    let (_, targets) = tabbar(PageId::Audio, "21:47");
+    let (_, targets) = tabbar(Some(PageId::Audio), "21:47");
     assert_eq!(targets.len(), 4);
     assert_eq!(hit(&targets, 40.0, 20.0), Some(Action::Tab(PageId::Audio)));
     assert_eq!(hit(&targets, 150.0, 38.0), Some(Action::Tab(PageId::Media)));
@@ -88,7 +88,7 @@ fn clock_pads_zero() {
 
 #[test]
 fn clock_is_right_aligned_at_the_margin() {
-    let (nodes, _) = tabbar(PageId::Audio, "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47");
     let clock = nodes
         .iter()
         .find_map(|n| match n {
@@ -110,7 +110,7 @@ fn clock_is_right_aligned_at_the_margin() {
 
 #[test]
 fn seam_between_two_tabs_goes_to_the_earlier() {
-    let (_, targets) = tabbar(PageId::Audio, "21:47");
+    let (_, targets) = tabbar(Some(PageId::Audio), "21:47");
     let first = targets[0].rect;
     let second = targets[1].rect;
     // Grown by 4 DIP each, the two rects touch exactly at this x.
@@ -126,7 +126,7 @@ fn page_labels_and_indices() {
         assert_eq!(page.index(), i);
         assert_eq!(PageId::from_index(i), Some(page));
     }
-    assert_eq!(PageId::from_index(4), None);
+    assert_eq!(PageId::from_index(5), None);
 }
 
 #[test]
@@ -144,4 +144,49 @@ fn hit_slack_four_dip() {
     assert!(hit(&targets, 34.0, 34.0).is_some());
     assert!(hit(&targets, 5.9, 20.0).is_none());
     assert!(hit(&targets, 20.0, 34.1).is_none());
+}
+
+#[test]
+fn no_active_page_fills_no_station() {
+    let (nodes, targets) = tabbar(None, "");
+    assert!(
+        stations(&nodes)
+            .iter()
+            .all(|s| s.1 == StationMark::Hollow && s.2 == Ink::Faint)
+    );
+    assert_eq!(targets.len(), 4);
+}
+
+#[test]
+fn empty_clock_draws_no_clock_text() {
+    let (nodes, _) = tabbar(None, "");
+    let clocks = nodes
+        .iter()
+        .filter(|n| {
+            matches!(
+                n,
+                Node::Text {
+                    style: TextStyle::Clock,
+                    ..
+                }
+            )
+        })
+        .count();
+    assert_eq!(clocks, 0);
+}
+
+#[test]
+fn tabbar_on_welcome_has_no_filled_station() {
+    let (nodes, targets) = tabbar(Some(PageId::Welcome), "21:47");
+    let marks = stations(&nodes);
+    assert_eq!(marks.len(), 4);
+    assert!(
+        marks
+            .iter()
+            .all(|s| s.1 == StationMark::Hollow && s.2 == Ink::Faint)
+    );
+    assert_eq!(targets.len(), 4);
+    assert_eq!(PageId::TABS.len(), 4);
+    assert!(!PageId::TABS.contains(&PageId::Welcome));
+    assert_eq!(PageId::ALL.len(), crate::pages::PAGE_COUNT);
 }

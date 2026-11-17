@@ -2,6 +2,7 @@
 
 use crate::demo::{DemoError, DemoScript};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::settings::IdleLook;
 use crate::tuning::TuningSet;
 use std::fmt;
 
@@ -61,6 +62,8 @@ pub struct Launch {
     pub fixture: Option<Fixture>,
     /// What to do with the Windows volume and brightness flyout.
     pub flyout: FlyoutMode,
+    /// The resting look for this run, replacing the settings file's (`--idle-look <key>`).
+    pub idle_look: Option<IdleLook>,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -227,6 +230,10 @@ impl Launch {
                 "--flyout" => {
                     let text = value()?;
                     launch.flyout = parse_flyout(&text).ok_or_else(|| bad(text))?;
+                }
+                "--idle-look" => {
+                    let text = value()?;
+                    launch.idle_look = Some(IdleLook::from_key(&text).ok_or_else(|| bad(text))?);
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

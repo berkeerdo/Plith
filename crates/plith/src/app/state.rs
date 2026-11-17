@@ -136,6 +136,7 @@ impl App {
             }
             ShellEvent::Click { x, y } => self.on_click(x, y),
             ShellEvent::Enter => self.on_enter(),
+            ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),
             ShellEvent::Timer(COLLAPSE_TIMER) => self.on_collapse_tick(),
             ShellEvent::Suppression(suppression) => {

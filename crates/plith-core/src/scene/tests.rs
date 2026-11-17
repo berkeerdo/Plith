@@ -341,3 +341,34 @@ fn publish_content_compares_outside_the_lock() {
     };
     assert!(rect.w >= 0.0);
 }
+
+#[test]
+fn collapsed_target_is_scene_rest() {
+    let hidden = Scene {
+        rest: crate::shapes::REST_HIDDEN,
+        ..Scene::default()
+    };
+    assert_eq!(hidden.target(), crate::shapes::REST_HIDDEN);
+    assert!((hidden.target().width - 200.0).abs() < 1e-9);
+    assert!((hidden.target().height - 3.0).abs() < 1e-9);
+    let open = Scene {
+        expanded: true,
+        rest: crate::shapes::REST_HIDDEN,
+        ..Scene::default()
+    };
+    assert_ne!(open.target(), crate::shapes::REST_HIDDEN);
+}
+
+#[test]
+fn welcome_shape_is_620x232() {
+    use crate::pages::PageId;
+    let shape = PAGES[PageId::Welcome.index()];
+    assert!((shape.width - 620.0).abs() < 1e-9);
+    assert!((shape.height - 232.0).abs() < 1e-9);
+    let scene = Scene {
+        expanded: true,
+        page: PageId::Welcome.index(),
+        ..Scene::default()
+    };
+    assert_eq!(scene.target(), crate::shapes::WELCOME);
+}

@@ -364,7 +364,8 @@ fn a_page_turn_between_live_pages_samples_every_motion_frame() {
 #[test]
 fn a_page_turn_at_one_shape_posts_the_layers() {
     let same = Scene {
-        shapes: [PAGES[0]; 4],
+        shapes: [PAGES[0]; plith_core::pages::PAGE_COUNT],
+        rest: REST,
         ..expanded(0)
     };
     let run = start(Setup::default());

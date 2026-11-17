@@ -1,6 +1,7 @@
 //! Display lists: what the UI thread builds for a page and the render thread paints. Types only;
 //! painting lives in the render crate.
 
+use crate::pages::PAGE_COUNT;
 use std::sync::Arc;
 use std::time::SystemTime;
 
@@ -59,6 +60,8 @@ pub enum TextStyle {
     Body,
     /// A strong line: semibold sans 14.
     Strong,
+    /// The welcome view clock: mono 30.
+    Hero,
 }
 
 /// Where an overlong line loses its characters.
@@ -299,7 +302,7 @@ impl DisplayList {
 #[derive(Debug, Clone, PartialEq)]
 pub struct PageContent {
     /// One list per page.
-    pub pages: [Arc<DisplayList>; 4],
+    pub pages: [Arc<DisplayList>; PAGE_COUNT],
     /// The collapsed pill.
     pub pill: Arc<DisplayList>,
     /// Artwork referenced by `Node::Image`.
@@ -307,12 +310,12 @@ pub struct PageContent {
 }
 
 impl PageContent {
-    /// Four empty pages, an empty pill and no artwork.
+    /// Five empty pages, an empty pill and no artwork.
     #[must_use]
     pub fn empty() -> Self {
         let empty = || Arc::new(DisplayList::empty());
         Self {
-            pages: [empty(), empty(), empty(), empty()],
+            pages: std::array::from_fn(|_| empty()),
             pill: empty(),
             art: Vec::new(),
         }
@@ -364,6 +367,7 @@ pub fn style_spec(style: TextStyle) -> StyleSpec {
         TextStyle::Clock => (Family::Mono, 12.0, 400, false, MONO_TRACKING),
         TextStyle::Body => (Family::Sans, 12.0, 400, false, 0.0),
         TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
+        TextStyle::Hero => (Family::Mono, 30.0, 400, false, MONO_TRACKING),
     };
     StyleSpec {
         family,

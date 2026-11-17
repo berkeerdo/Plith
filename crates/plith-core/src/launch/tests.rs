@@ -241,3 +241,27 @@ fn bad_or_missing_flyout_is_rejected() {
         Err(LaunchError::MissingValue("--flyout".to_string()))
     );
 }
+
+#[test]
+fn idle_look_takes_a_look_key() {
+    assert_eq!(parse(&[]).unwrap().idle_look, None);
+    for look in [
+        IdleLook::Karot,
+        IdleLook::Clock,
+        IdleLook::Playing,
+        IdleLook::Seal,
+        IdleLook::Plain,
+        IdleLook::Hidden,
+    ] {
+        let launch = parse(&["--idle-look", look.key()]).unwrap();
+        assert_eq!(launch.idle_look, Some(look));
+    }
+    assert!(matches!(
+        parse(&["--idle-look", "neon"]),
+        Err(LaunchError::BadValue { .. })
+    ));
+    assert!(matches!(
+        parse(&["--idle-look"]),
+        Err(LaunchError::MissingValue(_))
+    ));
+}

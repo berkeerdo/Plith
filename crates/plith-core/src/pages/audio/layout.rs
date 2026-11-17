@@ -148,7 +148,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
     if view.footer == Footer::Outputs {
         return super::outputs::page(view, clock);
     }
-    let (mut nodes, mut targets) = tabbar(PageId::Audio, clock);
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock);
     let (slots, hidden) = output_slots(view);
     let output_rows = view.outputs.len().min(MAX_OUTPUT_SLOTS);
     let rows = view.sources.len().max(output_rows).max(1);

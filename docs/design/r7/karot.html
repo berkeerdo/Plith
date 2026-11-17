@@ -1,0 +1,316 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Plith R7 Karot</title>
+<style>
+  @font-face { font-family: "Martian Mono"; src: url("../../../crates/plith-render/assets/fonts/MartianMono-StdRg.ttf"); font-weight: 400; }
+  @font-face { font-family: "Martian Mono"; src: url("../../../crates/plith-render/assets/fonts/MartianMono-StdMd.ttf"); font-weight: 500; }
+  @font-face { font-family: "Public Sans"; src: url("../../../crates/plith-render/assets/fonts/PublicSans-Regular.ttf"); font-weight: 400; }
+  @font-face { font-family: "Public Sans"; src: url("../../../crates/plith-render/assets/fonts/PublicSans-SemiBold.ttf"); font-weight: 600; }
+  /* Gece palette (R3). Lime means "sound flows here now", nothing else. */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101113; color: #ECE9E2; font-family: "Public Sans", sans-serif; padding: 40px; width: 1500px; }
+  h1 { font: 500 13px "Martian Mono", monospace; letter-spacing: .08em; color: #A39E94; margin-bottom: 6px; }
+  p.lede { font-size: 13px; color: #8A847A; margin-bottom: 28px; max-width: 980px; line-height: 1.5; }
+  .grid { display: grid; grid-template-columns: 680px 680px; gap: 36px 48px; }
+  .cell { background: #1B1D21; padding: 0 30px 34px; border-radius: 4px; position: relative; }
+  .cell.wide { grid-column: span 2; }
+  .cell .edge { height: 2px; background: #000; margin: 0 -30px; }
+  .cap { font: 400 10px "Martian Mono", monospace; letter-spacing: .08em; color: #8A847A; text-transform: uppercase; position: absolute; bottom: 12px; left: 30px; }
+  .island { margin: 0 auto; background: linear-gradient(#0B0B0A, #151412); border: 1px solid #2B2824; border-top: none; }
+  .island svg { display: block; }
+  .row { display: flex; gap: 28px; align-items: flex-start; justify-content: center; flex-wrap: wrap; }
+  .mono { font-family: "Martian Mono", monospace; font-variant-numeric: tabular-nums; }
+</style>
+</head>
+<body>
+<h1>PLITH R7 · KAROT · BOŞTA GÖRÜNÜM · LOFT GECE · 1:1 DIP</h1>
+<p class="lede">Günün tek bir karot koşusu. Matkap ucu şimdi: solu olmuş olan (düz), sağı tahmin (kesikli). Üst bant bugün çalanlar, şu an çalan tek lime aralık. Alt bant hava, jeoloji taramasıyla: boş açık, yatay çizgi bulut, nokta yağmur, çarpı kar. Hava değeri okuma saatini taşır.</p>
+<div class="grid" id="grid"></div>
+<script>
+const C = { floor: '#0B0B0A', border: '#2B2824', ink: '#ECE9E2', muted: '#A39E94', faint: '#8A847A',
+  track: '#4A463F', trackFaint: '#2E2B27', lime: '#CAFF33' };
+const W = 620, NS = 'http://www.w3.org/2000/svg';
+let uid = 0;
+
+function el(tag, attrs, text) {
+  const n = document.createElementNS(NS, tag);
+  for (const k in attrs) n.setAttribute(k, attrs[k]);
+  if (text !== undefined) n.textContent = text;
+  return n;
+}
+function label(svg, x, y, txt, o = {}) {
+  svg.appendChild(el('text', { x, y, fill: o.fill || C.ink, 'font-size': o.size || 13,
+    'font-weight': o.weight || 400, 'text-anchor': o.anchor || 'start',
+    'font-family': o.mono ? 'Martian Mono' : 'Public Sans',
+    'letter-spacing': o.mono ? '0.06em' : '0' }, txt));
+}
+function line(svg, pts, o = {}) {
+  svg.appendChild(el('polyline', { points: pts.map(p => p.join(',')).join(' '), fill: 'none',
+    stroke: o.stroke || C.track, 'stroke-width': o.w || 1, 'stroke-dasharray': o.dash || '' }));
+}
+function station(svg, x, y, state) {
+  const fill = state === 'lit' ? C.lime : state === 'ink' ? C.ink : C.floor;
+  const stroke = state === 'lit' ? C.lime : state === 'ink' ? C.ink : C.faint;
+  svg.appendChild(el('rect', { x: x - 3.5, y: y - 3.5, width: 7, height: 7, fill, stroke, 'stroke-width': 1 }));
+}
+// Lithology hatches, 1 px lines on a pixel grid. kind: clear, cloud, rain, snow.
+function hatch(svg, kind, color) {
+  const id = 'h' + (uid++);
+  const p = el('pattern', { id, width: 6, height: 4, patternUnits: 'userSpaceOnUse' });
+  if (kind === 'cloud') p.appendChild(el('rect', { x: 0, y: 1, width: 4, height: 1, fill: color }));
+  if (kind === 'rain') { p.setAttribute('height', 5); p.appendChild(el('rect', { x: 1, y: 1, width: 1, height: 1, fill: color }));
+    p.appendChild(el('rect', { x: 4, y: 3, width: 1, height: 1, fill: color })); }
+  if (kind === 'snow') { p.setAttribute('width', 8); p.setAttribute('height', 8);
+    p.appendChild(el('path', { d: 'M2 2 L5 5 M5 2 L2 5', stroke: color, 'stroke-width': 1 })); }
+  let defs = svg.querySelector('defs');
+  if (!defs) { defs = el('defs', {}); svg.prepend(defs); }
+  defs.appendChild(p);
+  return kind === 'clear' ? 'none' : `url(#${id})`;
+}
+function island(w, h, r) {
+  const d = document.createElement('div');
+  d.className = 'island';
+  d.style.width = w + 'px'; d.style.height = h + 'px';
+  d.style.borderRadius = `0 0 ${r}px ${r}px`;
+  const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+  d.appendChild(svg);
+  return [d, svg];
+}
+function cell(caption, nodes, wide) {
+  const c = document.createElement('div');
+  c.className = 'cell' + (wide ? ' wide' : '');
+  const e = document.createElement('div'); e.className = 'edge'; c.appendChild(e);
+  const row = document.createElement('div'); row.className = 'row'; c.appendChild(row);
+  nodes.forEach(n => row.appendChild(n));
+  const cap = document.createElement('div'); cap.className = 'cap'; cap.textContent = caption; c.appendChild(cap);
+  document.getElementById('grid').appendChild(c);
+}
+function tabs(svg) {
+  const names = ['SES', 'MEDYA', 'RAF', 'SİSTEM'];
+  const y = 34, x0 = 30, step = 112;
+  line(svg, [[x0, y], [x0 + step * 3, y]], { stroke: C.trackFaint });
+  names.forEach((n, i) => { station(svg, x0 + i * step, y, 'hollow');
+    label(svg, x0 + i * step - 3, y - 12, n, { mono: true, size: 10, fill: C.faint }); });
+}
+
+// Fixture: Tuesday 17 November, now 14:32, the run spans 08:32 to 20:32.
+const NOW = 14 + 32 / 60, SPAN = 6;
+const SONGS = [ // [start, end, title, artist]
+  [9.1, 9.9, 'Teardrop', 'Massive Attack'], [10.0, 10.7, 'Holocene', 'Bon Iver'],
+  [10.75, 11.4, 'Retrograde', 'James Blake'], [13.2, 13.9, 'Nightcall', 'Kavinsky'],
+  [14.0, 14.53, 'Avril 14th', 'Aphex Twin'],
+];
+const SKY = [ // [from hour, kind, temp at start]
+  [8, 'clear', 6], [10, 'cloud', 8], [13, 'cloud', 9], [15.5, 'rain', 8], [18, 'rain', 7], [19.5, 'cloud', 6], [21, 'cloud', 5],
+];
+
+function welcome(svg, o = {}) {
+  const x0 = 30, x1 = 590, axis = 150;
+  const hx = h => x0 + (h - (NOW - SPAN)) / (2 * SPAN) * (x1 - x0);
+  const nx = hx(NOW);
+  tabs(svg);
+  // Head: time and date left, weather reading right.
+  label(svg, 30, 92, '14:32', { mono: true, size: 30, weight: 400 });
+  label(svg, 32, 110, 'SAL 17 KAS', { mono: true, size: 10, fill: C.faint });
+  // The head reads whatever the pointer points at; at rest it reads the chosen slot.
+  // Slot Auto = weather when weather is on, else sound.
+  const slot = o.slot || (o.noWeather ? 'ses' : 'hava');
+  if (slot === 'ses' && o.probe === undefined) {
+    station(svg, 590 - 3.5, 74, 'lit');
+    label(svg, 578, 78, 'G733', { size: 13, anchor: 'end' });
+    label(svg, 590, 96, '%62 · KULAKLIK', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+    label(svg, 590, 112, 'VARSAYILAN ÇIKIŞ', { mono: true, size: 10, anchor: 'end', fill: C.faint });
+  }
+  if (slot === 'calan' && o.probe === undefined) {
+    label(svg, 590, 78, 'Avril 14th', { size: 13, anchor: 'end' });
+    label(svg, 590, 96, 'APHEX TWIN', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+    label(svg, 590, 112, '1:12 / 2:05', { mono: true, size: 10, anchor: 'end', fill: C.faint });
+  }
+  if (slot === 'hava' && !o.noWeather && o.probe === undefined) {
+    label(svg, 590, 78, o.stale ? '8° · BULUTLU' : '9° · BULUTLU', { size: 13, anchor: 'end', fill: o.stale ? C.muted : C.ink });
+    label(svg, 590, 96, '15:30 YAĞMUR · 8°', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+    label(svg, 590, 112, o.stale ? 'OKUMA 11:00 · ESKİ' : 'OKUMA 14:00', { mono: true, size: 10, anchor: 'end', fill: C.faint });
+  }
+  // Song band above the axis.
+  const songs = o.noSongs ? [] : SONGS;
+  if (!songs.length) label(svg, x0, axis - 14, 'BUGÜN ÇALAN YOK', { mono: true, size: 10, fill: C.faint });
+  songs.forEach(([a, b], i) => {
+    const xa = Math.max(x0, hx(a)), xb = Math.min(nx, hx(b));
+    const playing = i === songs.length - 1 && !o.paused;
+    svg.appendChild(el('rect', { x: xa, y: axis - 14, width: Math.max(1, xb - xa - 1), height: 8,
+      fill: playing ? C.lime : C.muted }));
+  });
+  if (songs.length && slot !== 'calan') {
+    const s = songs[songs.length - 1];
+    const lx = hx(s[0]) - 2;
+    label(svg, lx, axis - 22, s[2], { size: 12, anchor: 'end', fill: C.ink });
+    label(svg, lx, axis - 36, o.paused ? s[3].toUpperCase() + ' · DURDU' : s[3].toUpperCase(),
+      { mono: true, size: 10, anchor: 'end', fill: C.faint });
+  }
+  // Axis: logged solid to the bit, forecast dashed after it.
+  line(svg, [[x0, axis], [nx, axis]], { stroke: C.track });
+  line(svg, [[nx, axis], [x1, axis]], { stroke: C.track, dash: '3 3' });
+  // Weather band below the axis, as lithology.
+  if (!o.noWeather) {
+    for (let i = 0; i < SKY.length - 1; i++) {
+      const [a, kind] = SKY[i], b = SKY[i + 1][0];
+      const xa = Math.max(x0, hx(a)), xb = Math.min(x1, hx(b));
+      if (xb <= xa) continue;
+      const cut = Math.min(Math.max(nx, xa), xb);
+      // Logged core is a filled section; the forecast is open ground.
+      if (cut > xa) svg.appendChild(el('rect', { x: xa + 0.5, y: axis + 6.5, width: cut - xa - 1, height: 14, fill: '#24221E' }));
+      if (cut > xa) svg.appendChild(el('rect', { x: xa + 0.5, y: axis + 6.5, width: cut - xa - 1, height: 14,
+        fill: hatch(svg, kind, C.muted), stroke: C.track, 'stroke-width': 1 }));
+      if (xb > cut) svg.appendChild(el('rect', { x: cut + 0.5, y: axis + 6.5, width: xb - cut - 1, height: 14,
+        fill: hatch(svg, kind, C.faint), stroke: C.track, 'stroke-width': 1, 'stroke-dasharray': '3 3' }));
+    }
+    [[NOW, '9°'], [15.5, '8°'], [18, '7°'], [19.5, '6°']].forEach(([h, t]) => {
+      if (hx(h) < x1 - 10) label(svg, hx(h) + 3, axis + 34, t, { mono: true, size: 10, fill: h === NOW ? C.ink : C.faint });
+    });
+  }
+  // Depth blocks every hour, labels every two.
+  for (let h = Math.ceil(NOW - SPAN); h <= NOW + SPAN; h++) {
+    const x = hx(h);
+    line(svg, [[x, axis - 3], [x, axis + 3]], { stroke: C.track });
+    if (h % 2 === 0) label(svg, x, axis + 52, String(h).padStart(2, '0'), { mono: true, size: 10, anchor: 'middle', fill: C.faint });
+  }
+  // The bit: an ink station at now, with a rule through both bands.
+  line(svg, [[nx, axis - 18], [nx, axis + 22]], { stroke: C.ink });
+  station(svg, nx, axis, 'ink');
+  if (o.probe !== undefined) probe(svg, hx, o.probe, axis);
+}
+// Pointing at an hour: past reads what played, future reads the forecast.
+function probe(svg, hx, h, axis) {
+  const x = hx(h);
+  line(svg, [[x, axis - 18], [x, axis + 22]], { stroke: C.muted, dash: '2 2' });
+  const past = h < NOW;
+  const lines = past ? ['Holocene · Bon Iver', '10:00 – 11:00 · 3 ŞARKI', 'GEÇMİŞ']
+    : ['Yağmur · 7° · %80', '17:00 · TAHMİN', 'OKUMA 14:00'];
+  label(svg, 590, 78, lines[0], { size: 13, anchor: 'end' });
+  label(svg, 590, 96, lines[1], { mono: true, size: 10, anchor: 'end', fill: C.muted });
+  label(svg, 590, 112, lines[2], { mono: true, size: 10, anchor: 'end', fill: C.faint });
+}
+
+// Resting pills, 200 x 32, rounded bottom 16.
+function pill(kind) {
+  const [d, svg] = island(200, 32, 16);
+  if (kind === 'karot') {
+    label(svg, 16, 21, '14:32', { mono: true, size: 12 });
+    // Only the next turn of the weather, as words: the hatch strip read as noise at 1x.
+    // The next turn within 6 hours; with none coming, the temperature and sky now ("9° BULUTLU").
+    label(svg, 184, 20.5, 'YAĞMUR 15:30', { mono: true, size: 10, anchor: 'end', fill: C.muted });
+  }
+  if (kind === 'saat') label(svg, 100, 21, '14:32', { mono: true, size: 12, anchor: 'middle' });
+  if (kind === 'calan') { station(svg, 18, 16, 'lit'); label(svg, 30, 20.5, 'Avril 14th · Aphex Twin', { size: 12, fill: C.muted }); }
+  if (kind === 'gizli') { d.style.height = '3px'; d.style.borderRadius = '0'; d.style.borderColor = C.track; svg.setAttribute('height', 3); }
+  return d;
+}
+function pillCaption(node, txt) {
+  const w = document.createElement('div');
+  w.style.display = 'flex'; w.style.flexDirection = 'column'; w.style.alignItems = 'center'; w.style.gap = '10px';
+  w.appendChild(node);
+  const t = document.createElement('div');
+  t.className = 'mono'; t.style.cssText = 'font-size:10px;letter-spacing:.08em;color:#8A847A';
+  t.textContent = txt; w.appendChild(t);
+  return w;
+}
+
+// Settings window, section "Boşta". Toggles and choices in ink: filled station = on.
+function settings() {
+  const w = 840, h = 640;
+  const d = document.createElement('div');
+  d.style.cssText = `width:${w}px;height:${h}px;background:linear-gradient(#0B0B0A,#151412);border:1px solid ${C.border};border-radius:8px;margin-top:24px`;
+  const svg = el('svg', { width: w, height: h, viewBox: `0 0 ${w} ${h}` });
+  d.appendChild(svg);
+  label(svg, 24, 36, 'AYARLAR', { mono: true, size: 10, fill: C.faint });
+  const side = ['Genel', 'Görünüm', 'Boşta', 'Ada', 'OSD', 'Sekmeler', 'Hakkında'];
+  side.forEach((n, i) => {
+    const y = 76 + i * 32;
+    if (i === 2) station(svg, 28, y - 4, 'ink');
+    label(svg, 44, y, n, { size: 13, fill: i === 2 ? C.ink : C.muted });
+  });
+  line(svg, [[180, 0], [180, h]], { stroke: C.border });
+  const X = 212, R = 812;
+  label(svg, X, 44, 'Boşta', { size: 20, weight: 600 });
+  label(svg, X, 66, 'Ada kapalıyken ne gösterir, tıklayınca ne okursun.', { size: 12, fill: C.faint });
+  // Look picker: real pills at true size, fed by this PC's data.
+  label(svg, X, 104, 'KAPALI ADA', { mono: true, size: 10, fill: C.faint });
+  const looks = ['KAROT', 'SAAT', 'ÇALAN', 'SADE', 'GİZLİ'];
+  looks.forEach((n, i) => {
+    const cx = X + i * 120, cy = 116;
+    svg.appendChild(el('rect', { x: cx + 0.5, y: cy + 0.5, width: 108, height: 64, fill: 'none',
+      stroke: i === 0 ? C.ink : C.border }));
+    station(svg, cx + 12, cy + 52, i === 0 ? 'ink' : 'hollow');
+    label(svg, cx + 22, cy + 56, n, { mono: true, size: 10, fill: i === 0 ? C.ink : C.faint });
+    const pw = 84, px = cx + 12;
+    if (n !== 'GİZLİ') svg.appendChild(el('rect', { x: px, y: cy + 12, width: pw, height: 20, rx: 0, fill: '#060605', stroke: C.border }));
+    else line(svg, [[px, cy + 13], [px + pw, cy + 13]], { stroke: C.track, w: 2 });
+    if (n === 'KAROT') { label(svg, px + 6, cy + 26, '14:32', { mono: true, size: 8 }); label(svg, px + pw - 5, cy + 26, '15:30', { mono: true, size: 7, anchor: 'end', fill: C.muted }); }
+    if (n === 'SAAT') label(svg, px + pw / 2, cy + 26, '14:32', { mono: true, size: 8, anchor: 'middle' });
+    if (n === 'ÇALAN') { svg.appendChild(el('rect', { x: px + 6, y: cy + 20, width: 4, height: 4, fill: C.lime })); label(svg, px + 14, cy + 26, 'Avril 14th', { size: 8, fill: C.muted }); }
+  });
+  label(svg, X, 202, 'Önizleme küçültülmüş; ada üstündeki hali 200 x 32.', { size: 11, fill: C.faint });
+  // Rows: label, sub line, control at the right.
+  const rows = [
+    ['Şerit', 'Karşılamada kaç saat görünür', ['±3 SA', '±6 SA', 'TÜM GÜN'], 1],
+    ['Sağ üst', 'Karşılamanın sağ üstünde ne durur', ['OTOMATİK', 'HAVA', 'SES', 'ÇALAN', 'BOŞ'], 0],
+    ['Bugün çalanlar', 'Şeridin üstünde, yalnızca bu bilgisayarda tutulur', 'on'],
+    ['Hava', 'Açıkken konum Open-Meteo\'ya gider', 'on'],
+    ['Konum', 'Windows konumu, olmazsa IP, ya da elle', ['WINDOWS', 'IP', 'ŞEHİR'], 2, 'İstanbul'],
+    ['Birim', '', ['°C', '°F'], 0],
+    ['24 saat', '', 'on'],
+  ];
+  let y = 240;
+  line(svg, [[X, y - 14], [R, y - 14]], { stroke: C.border });
+  rows.forEach(([name, sub, ctl, sel, extra]) => {
+    label(svg, X, y + 6, name, { size: 13 });
+    if (sub) label(svg, X, y + 24, sub, { size: 11, fill: C.faint });
+    if (ctl === 'on') {
+      line(svg, [[R - 40, y + 2], [R - 4, y + 2]], { stroke: C.track });
+      station(svg, R - 4, y + 2, 'ink'); station(svg, R - 40, y + 2, 'hollow');
+      label(svg, R - 50, y + 6, 'AÇIK', { mono: true, size: 10, anchor: 'end', fill: C.ink });
+    } else {
+      let x = R;
+      [...ctl].reverse().forEach((c, ri) => {
+        const i = ctl.length - 1 - ri, on = i === sel;
+        const tw = c.length * 7.4 + 8;
+        x -= tw;
+        label(svg, x + tw - 4, y + 6, c, { mono: true, size: 10, anchor: 'end', fill: on ? C.ink : C.faint });
+        if (on) line(svg, [[x + 4, y + 12], [x + tw - 4, y + 12]], { stroke: C.ink });
+        x -= 10;
+      });
+      if (extra) { svg.appendChild(el('rect', { x: X + 250.5, y: y - 10.5, width: 140, height: 26, fill: '#060605', stroke: C.border }));
+        label(svg, X + 260, y + 7, extra, { size: 12 }); }
+    }
+    y += sub ? 52 : 40;
+    line(svg, [[X, y - 14], [R, y - 14]], { stroke: C.border });
+  });
+  return d;
+}
+
+let [d, svg] = island(W, 232, 24); welcome(svg);
+cell('Karşılama · tıklayınca açılır · 620 x 232 · şimdi 14:32, Avril 14th çalıyor', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { probe: 10.5 });
+cell('Geçmişe işaret · baş kısmı o saati okur', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { probe: 17.2 });
+cell('İleriye işaret · o saatin tahmini', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { stale: true, paused: true });
+cell('Eski okuma (11:00) + müzik durdu · lime yok', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { noWeather: true });
+cell('Hava kapalı · sağ üst yuva: SES (otomatik)', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { noSongs: true });
+cell('Bugün çalan yok', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { slot: 'calan' });
+cell('Sağ üst yuva: ÇALAN · şerit etiketi gizlenir', [d]);
+[d, svg] = island(W, 232, 24); welcome(svg, { slot: 'ses' });
+cell('Sağ üst yuva: SES · hava açıkken de seçilebilir', [d]);
+cell('Kapalı pill görünümleri · 200 x 32 · ayarlardan seçilir', [
+  pillCaption(pill('karot'), 'KAROT'), pillCaption(pill('saat'), 'SAAT'), pillCaption(pill('calan'), 'ÇALAN'),
+  pillCaption(pill('sade'), 'SADE'), pillCaption(pill('gizli'), 'GİZLİ'),
+], true);
+cell('Ayarlar penceresi · Boşta bölümü · 840 x 640', [settings()], true);
+</script>
+</body>
+</html>

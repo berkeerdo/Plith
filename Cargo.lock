@@ -13,6 +13,7 @@ dependencies = [
  "plith-render",
  "plith-shell",
  "plith-system",
+ "plith-weather",
  "windows",
 ]
 
@@ -75,6 +76,14 @@ dependencies = [
 name = "plith-system"
 version = "0.1.0"
 dependencies = [
+ "windows",
+]
+
+[[package]]
+name = "plith-weather"
+version = "0.1.0"
+dependencies = [
+ "plith-core",
  "windows",
 ]
 

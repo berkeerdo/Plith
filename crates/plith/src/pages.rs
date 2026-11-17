@@ -1,15 +1,20 @@
-//! Facts to page content: builds the four pages and the pill, keeps their hit targets and
+//! Facts to page content: builds the five pages and the pill, keeps their hit targets and
 //! shapes, and rebuilds only the pages a change touches.
 
 use crate::services::Facts;
 use plith_core::draw::{ArtPixels, DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
+use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::pages::media::media_page;
 use plith_core::pages::pill::pill;
 use plith_core::pages::shelf::shelf_page;
 use plith_core::pages::system::system_page;
-use plith_core::pages::{HitTarget, PageBuild, PageId};
+use plith_core::pages::tabbar::tabbar;
+use plith_core::pages::welcome::{WelcomeFacts, welcome_page};
+use plith_core::pages::{HitTarget, PAGE_COUNT, PAGE_W, PageBuild, PageId};
+use plith_core::settings::IdleLook;
+use plith_core::shapes::WELCOME;
 use std::sync::Arc;
 
 /// What a build reads besides the page id.
@@ -20,13 +25,19 @@ pub struct Inputs<'a> {
     pub pick: PickMode,
     /// The tab bar clock, `HH:MM`.
     pub clock: &'a str,
+    /// The welcome view's facts; `None` builds the placeholder (set by the app wiring).
+    pub welcome: Option<&'a WelcomeFacts>,
+    /// The hour cell under the pointer on the welcome view.
+    pub probe: Option<i32>,
+    /// The resting look and its facts; `None` draws the seal (before the app wiring sets them).
+    pub idle: Option<(IdleLook, &'a IdleFacts)>,
 }
 
 /// Which lists need a rebuild.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Dirty {
-    /// One flag per page, in tab order.
-    pub pages: [bool; 4],
+    /// One flag per page, in page order (the welcome view last).
+    pub pages: [bool; PAGE_COUNT],
     /// The pill.
     pub pill: bool,
 }
@@ -45,8 +56,24 @@ impl Dirty {
                 old.media != new.media || art(old) != art(new),
                 false,
                 old.system != new.system,
+                // The welcome view's facts mix services, the play log and the forecast, so the
+                // feed compares them itself and joins the result with `union`.
+                false,
             ],
             pill: old.pill != new.pill,
+        }
+    }
+
+    /// Every list either side names.
+    #[must_use]
+    pub fn union(self, other: Dirty) -> Dirty {
+        let mut pages = self.pages;
+        for (own, theirs) in pages.iter_mut().zip(other.pages) {
+            *own |= theirs;
+        }
+        Dirty {
+            pages,
+            pill: self.pill || other.pill,
         }
     }
 
@@ -77,14 +104,39 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
         PageId::Media => media_page(&facts.media, inputs.clock),
         PageId::Shelf => shelf_page(inputs.clock),
         PageId::System => system_page(&facts.system, inputs.clock),
+        PageId::Welcome => inputs
+            .welcome
+            .map_or_else(welcome_placeholder, |f| welcome_page(f, inputs.probe)),
+    }
+}
+
+/// The pill: the resting look when the app wiring set one, else the seal.
+fn pill_of(inputs: &Inputs) -> DisplayList {
+    match inputs.idle {
+        Some((look, facts)) => idle_pill(look, facts),
+        None => pill(&inputs.facts.pill),
+    }
+}
+
+/// The welcome slot until the app wiring builds the real view: the bare tab bar (no station
+/// filled, no clock) at the welcome size, so a click still reaches every tab.
+fn welcome_placeholder() -> PageBuild {
+    let (nodes, targets) = tabbar(None, "");
+    PageBuild {
+        list: DisplayList {
+            nodes,
+            size: (PAGE_W, WELCOME.height),
+        },
+        targets,
+        shape: WELCOME,
     }
 }
 
 /// The built pages and pill.
 pub struct Pages {
-    lists: [Arc<DisplayList>; 4],
-    targets: [Vec<HitTarget>; 4],
-    shapes: [IslandShape; 4],
+    lists: [Arc<DisplayList>; PAGE_COUNT],
+    targets: [Vec<HitTarget>; PAGE_COUNT],
+    shapes: [IslandShape; PAGE_COUNT],
     pill: Arc<DisplayList>,
     art: Vec<Arc<ArtPixels>>,
 }
@@ -93,12 +145,32 @@ impl Pages {
     /// Every page and the pill, built from `inputs`.
     #[must_use]
     pub fn new(inputs: &Inputs) -> Self {
-        let [a, b, c, d] = PageId::ALL.map(|page| build_page(page, inputs));
+        let [audio, media, shelf, system, welcome] =
+            PageId::ALL.map(|page| build_page(page, inputs));
         Self {
-            shapes: [a.shape, b.shape, c.shape, d.shape],
-            lists: [a.list, b.list, c.list, d.list].map(Arc::new),
-            targets: [a.targets, b.targets, c.targets, d.targets],
-            pill: Arc::new(pill(&inputs.facts.pill)),
+            shapes: [
+                audio.shape,
+                media.shape,
+                shelf.shape,
+                system.shape,
+                welcome.shape,
+            ],
+            lists: [
+                audio.list,
+                media.list,
+                shelf.list,
+                system.list,
+                welcome.list,
+            ]
+            .map(Arc::new),
+            targets: [
+                audio.targets,
+                media.targets,
+                shelf.targets,
+                system.targets,
+                welcome.targets,
+            ],
+            pill: Arc::new(pill_of(inputs)),
             art: art(inputs.facts),
         }
     }
@@ -117,7 +189,7 @@ impl Pages {
             keep_or_replace(&mut self.lists[i], build.list);
         }
         if dirty.pill {
-            keep_or_replace(&mut self.pill, pill(&inputs.facts.pill));
+            keep_or_replace(&mut self.pill, pill_of(inputs));
         }
         if dirty.pages[PageId::Media.index()] {
             self.art = art(inputs.facts);
@@ -136,13 +208,13 @@ impl Pages {
 
     /// The island shape of each page.
     #[must_use]
-    pub fn shapes(&self) -> [IslandShape; 4] {
+    pub fn shapes(&self) -> [IslandShape; PAGE_COUNT] {
         self.shapes
     }
 
-    /// The hit targets of every page, in tab order.
+    /// The hit targets of every page, in page order.
     #[must_use]
-    pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
+    pub fn targets(&self) -> &[Vec<HitTarget>; PAGE_COUNT] {
         &self.targets
     }
 }

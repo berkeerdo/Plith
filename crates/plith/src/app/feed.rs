@@ -2,16 +2,22 @@
 //! the tab bar current while the island is open. Collapsed, no timer runs (G2). The elapsed
 //! time and the seek are live nodes, so no timer rebuilds the media page.
 
+mod idle;
 mod osd;
 
+use super::idle_facts::Idle;
+use super::weather_link::WeatherLink;
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
 use plith_core::pages::audio::PickMode;
+use plith_core::pages::idle_pill::IdleFacts;
 use plith_core::pages::tabbar::clock_text;
-use plith_core::pages::{HitTarget, PageId};
+use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
+use plith_core::pages::{HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
+use plith_core::settings::IdleLook;
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
 
 /// Sets and kills UI timers. A trait so tests can record instead of calling Windows.
@@ -63,14 +69,22 @@ pub struct Armed {
     pub clock: bool,
 }
 
-/// The timers `scene` wants: none unless open and shown, then the clock on every page. The
-/// audio page needs no timer (the mixer's debounced signal flags arrive with a wake) and
-/// neither does the media page (its elapsed time and seek are live nodes).
+/// The timers `scene` wants. Open and shown, the clock runs on every page. Collapsed and shown,
+/// it runs only for a look that shows the time (`look` is `None` before the idle wiring).
+/// Suppressed, nothing runs (G2). The audio page needs no timer (the mixer's debounced signal
+/// flags arrive with a wake) and neither does the media page (its elapsed time and seek are
+/// live nodes).
 #[must_use]
-pub fn wanted(scene: &Scene) -> Armed {
+pub fn wanted(scene: &Scene, look: Option<IdleLook>) -> Armed {
+    let resting = !scene.suppression.any() && look.is_some_and(shows_time);
     Armed {
-        clock: is_open(scene),
+        clock: is_open(scene) || resting,
     }
+}
+
+/// True for the looks that print the time.
+fn shows_time(look: IdleLook) -> bool {
+    matches!(look, IdleLook::Karot | IdleLook::Clock)
 }
 
 /// True when the island shows its pages: expanded and not suppressed.
@@ -104,6 +118,17 @@ pub struct Feed {
     pick_mixer: Option<MixerShape>,
     /// The OSD sink and the last reading it saw.
     osd: osd::OsdFeed,
+    /// The facts the welcome view is built from; `None` until the app wiring sets them, and
+    /// the welcome slot then stays the placeholder.
+    welcome: Option<WelcomeFacts>,
+    /// The hour cell under the pointer on the welcome view.
+    probe: Option<i32>,
+    /// The idle look model; `None` keeps the seal pill and the placeholder welcome slot.
+    idle: Option<Idle>,
+    /// What the resting pill was last built from.
+    idle_facts: Option<IdleFacts>,
+    /// The weather service, when weather is on.
+    weather: Option<WeatherLink>,
 }
 
 impl Feed {
@@ -123,6 +148,9 @@ impl Feed {
             facts: &facts,
             pick: PickMode::None,
             clock: &clock_text,
+            welcome: None,
+            probe: None,
+            idle: None,
         });
         let feed = Self {
             services,
@@ -137,6 +165,11 @@ impl Feed {
             pick: PickMode::None,
             pick_mixer: None,
             osd: osd::OsdFeed::default(),
+            welcome: None,
+            probe: None,
+            idle: None,
+            idle_facts: None,
+            weather: None,
         };
         feed.publish(mailbox);
         feed
@@ -157,6 +190,13 @@ impl Feed {
             facts: &self.facts,
             pick: self.pick,
             clock: &self.clock_text,
+            welcome: self.welcome.as_ref(),
+            probe: self.probe,
+            idle: self
+                .idle
+                .as_ref()
+                .zip(self.idle_facts.as_ref())
+                .map(|(idle, facts)| (idle.look(), facts)),
         };
         self.pages.rebuild(dirty, &inputs);
         self.publish(mailbox);
@@ -172,24 +212,17 @@ impl Feed {
     /// publish it. While closed only the pill is rebuilt; the pages wait for the opening.
     pub fn on_wake(&mut self, mailbox: &SceneMailbox) {
         let changes = self.services.drain();
-        if changes.any() {
+        let forecast = self.take_forecast();
+        if changes.any() || forecast {
             let facts = self.services.facts();
             let dirty = Dirty::between(&self.facts, &facts);
+            let media = self.facts.media != facts.media;
             self.facts = facts;
-            if is_open(&mailbox.latest().scene) {
-                self.rebuild(dirty, mailbox);
-            } else {
-                for (wait, now) in self.pending.pages.iter_mut().zip(dirty.pages) {
-                    *wait |= now;
-                }
-                self.rebuild(
-                    Dirty {
-                        pages: [false; 4],
-                        pill: dirty.pill,
-                    },
-                    mailbox,
-                );
+            if media {
+                self.observe_plays();
             }
+            let dirty = dirty.union(self.refresh_idle());
+            self.apply(dirty, mailbox);
         }
         // The first drain takes the baseline even when no change is reported; later drains
         // read only after a reported change.
@@ -202,11 +235,12 @@ impl Feed {
     }
 
     /// A UI timer ticked. A tick of a timer no longer armed (one queued before `KillTimer`)
-    /// does nothing, and so does any tick while the scene is not open (another publisher
-    /// collapsed it); that tick syncs the timers itself, so a lost wake cannot leave them
-    /// running while collapsed.
+    /// does nothing, and so does any tick the scene no longer wants (another publisher
+    /// collapsed or suppressed it); that tick syncs the timers itself, so a lost wake cannot
+    /// leave them running. Open, the tick refreshes the pages; collapsed, it moves the pill.
     pub fn on_timer(&mut self, id: usize, mailbox: &SceneMailbox) {
-        if !is_open(&mailbox.latest().scene) {
+        let scene = mailbox.latest().scene;
+        if !wanted(&scene, self.look()).clock {
             self.sync_timers(mailbox);
             return;
         }
@@ -216,7 +250,11 @@ impl Feed {
         // One-shot: the next tick is armed for the next minute below.
         self.timers.kill(CLOCK_TIMER);
         self.armed.clock = false;
-        self.flush(mailbox);
+        if is_open(&scene) {
+            self.flush(mailbox);
+        } else {
+            self.minute(mailbox);
+        }
         self.sync_timers(mailbox);
     }
 
@@ -227,31 +265,43 @@ impl Feed {
         self.seen = Some(key(&scene));
         if is_open(&scene) {
             self.flush(mailbox);
+        } else if !scene.suppression.any() {
+            // Shown and resting: one catch-up draw of whatever moved while it was hidden.
+            self.minute(mailbox);
         }
         self.sync_timers(mailbox);
     }
 
-    /// Brings the pages up to date for an open island: the clock, then every page a change
-    /// reached while closed, in one publish. The app calls it before it publishes an expand,
-    /// so the first motion frames show current content.
+    /// Brings the pages up to date for an open island: the clock and the idle facts, then every
+    /// page a change reached while closed, in one publish. The app calls it before it publishes
+    /// an expand, so the first motion frames show current content.
     pub fn flush(&mut self, mailbox: &SceneMailbox) {
         let text = clock_of((self.clock)());
         if text != self.clock_text {
             self.clock_text = text;
-            self.pending.pages = [true; 4];
+            self.pending.pages = [true; PAGE_COUNT];
         }
+        self.observe_plays();
+        self.pending = self.pending.union(self.refresh_idle());
         let pending = std::mem::take(&mut self.pending);
         self.rebuild(pending, mailbox);
     }
 
-    /// Stops the services; called once at shutdown, after the render thread was joined.
+    /// Stops the services and saves the play log; called once at shutdown, after the render
+    /// thread was joined. The weather service is dropped, not joined: its worker may be inside
+    /// a fetch, and a stop would block the UI thread for that long.
     pub fn stop(&mut self) {
         self.services.stop();
+        self.observe_plays();
+        if let Some(idle) = &self.idle {
+            idle.save();
+        }
+        self.weather = None;
     }
 
     /// Starts and stops timers to match the scene.
     fn sync_timers(&mut self, mailbox: &SceneMailbox) {
-        let want = wanted(&mailbox.latest().scene);
+        let want = wanted(&mailbox.latest().scene, self.look());
         match (want.clock, self.armed.clock) {
             (true, false) => self.timers.set(CLOCK_TIMER, clock_ms((self.clock)())),
             (false, true) => self.timers.kill(CLOCK_TIMER),
@@ -278,7 +328,7 @@ impl Feed {
 
     /// The hit targets of the last built pages, in tab order.
     #[must_use]
-    pub fn targets(&self) -> &[Vec<HitTarget>; 4] {
+    pub fn targets(&self) -> &[Vec<HitTarget>; PAGE_COUNT] {
         self.pages.targets()
     }
 
@@ -298,6 +348,44 @@ impl Feed {
                 PickMode::None => None,
             };
             self.rebuild(Dirty::page(PageId::Audio), mailbox);
+        }
+    }
+
+    /// The hour cell under the pointer on the welcome view.
+    #[must_use]
+    pub fn probe(&self) -> Option<i32> {
+        self.probe
+    }
+
+    /// Ends the probe without a rebuild, for a collapse: the closed island builds nothing, so
+    /// the welcome page waits for the opening.
+    pub fn clear_probe(&mut self) {
+        if self.probe.take().is_some() {
+            self.pending.pages[PageId::Welcome.index()] = true;
+        }
+    }
+
+    /// Sets the probe and rebuilds the welcome page only when it changed.
+    pub fn set_probe(&mut self, probe: Option<i32>, mailbox: &SceneMailbox) {
+        if self.probe != probe {
+            self.probe = probe;
+            self.rebuild(Dirty::page(PageId::Welcome), mailbox);
+        }
+    }
+
+    /// The pointer is at `(x, y)` island DIP on the welcome view: sets the probe to the hour
+    /// cell under it. Without welcome facts there is nothing to probe.
+    pub fn move_probe(&mut self, x: f64, y: f64, mailbox: &SceneMailbox) {
+        let probe = self.welcome.as_ref().and_then(|f| probe_hour(f, x, y));
+        self.set_probe(probe, mailbox);
+    }
+
+    /// Sets the facts the welcome view is built from and rebuilds it. Until it is called, the
+    /// welcome slot is the placeholder.
+    pub fn set_welcome_facts(&mut self, facts: Option<WelcomeFacts>, mailbox: &SceneMailbox) {
+        if self.welcome != facts {
+            self.welcome = facts;
+            self.rebuild(Dirty::page(PageId::Welcome), mailbox);
         }
     }
 

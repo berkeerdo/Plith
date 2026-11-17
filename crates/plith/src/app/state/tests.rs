@@ -340,7 +340,7 @@ fn collapsed_changes_publish_only_the_pill_until_opening() {
     let collapsed = app.mailbox.latest();
     assert_eq!(collapsed.generation, first.generation + 1, "the pill only");
     assert_ne!(collapsed.content.pill, first.content.pill);
-    for i in 0..4 {
+    for i in 0..plith_core::pages::PAGE_COUNT {
         assert!(Arc::ptr_eq(
             &collapsed.content.pages[i],
             &first.content.pages[i]

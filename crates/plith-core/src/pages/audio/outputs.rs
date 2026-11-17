@@ -64,7 +64,7 @@ fn other_y(i: usize) -> f64 {
 
 /// The outputs page nodes, hit targets and island shape.
 pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(PageId::Audio, clock);
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock);
     let default = view.outputs.iter().find(|o| o.default);
     match default {
         Some(row) => default_row(row, &mut nodes, &mut targets),
