@@ -27,7 +27,7 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** merge `feature/audio-clarity` (below), then the idle-look direction pass for R7. Batched for the next console session with
+- **Next:** the idle-look direction pass for R7. Batched for the next console session with
   Berke, every owed on-screen check: a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
@@ -38,12 +38,12 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
 - Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
   18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
   hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.
-- **Audio page clarity:** built on `feature/audio-clarity` (ADR 0013, plan
+- **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan
   `plans/active/audio-clarity.md`). Without Voicemeeter the page is an outputs view: default
   output with glyph, `VARSAYILAN · KULAKLIK`, a volume ruler (click sets volume) and `%62`;
   other outputs under `DİĞER ÇIKIŞLAR`, click makes default; no Voicemeeter notice. Brightness
   shows `%70`. Offscreen renders reviewed, five checks green (858 tests), code review clean
-  (3 minors, recorded in the ADR). Merge into main waits on Berke's yes; on screen and a real
+  (3 minors, recorded in the ADR). On screen and a real
   volume click wait for the console (plan Task 8).
 - R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
   OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme

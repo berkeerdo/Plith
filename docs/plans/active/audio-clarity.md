@@ -18,7 +18,7 @@ wait for Berke at the console.
       the endpoint service's `set_volume`. Brightness value shows `%70`.
 - [x] 6. `crates/plith` model fills `kind`; fixtures gain a headset, a speaker and a display
       endpoint; `render_pages` renders the new states (default, muted, three outputs, none).
-- [ ] 7. Master: renders reviewed, five checks green, merge review.
+- [x] 7. Master: renders reviewed, five checks green, merge review.
 - [ ] 8. Console (Berke): the page on screen, a ruler click changes the volume (his yes).
 
 ## Progress log
