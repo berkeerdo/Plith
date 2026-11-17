@@ -152,6 +152,8 @@ impl Suppression {
         };
         if let Err(error) = active.flyout.stop() {
             log.line(&format!("osd: flyout hook did not stop: {error}"));
+            // The hook thread did not restore; show what it hid before the handle is let go.
+            active.flyout.restore_handle().restore_now();
         }
         if let Err(error) = active.keys.stop() {
             log.line(&format!("osd: volume key hook did not stop: {error}"));

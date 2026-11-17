@@ -197,6 +197,39 @@ fn the_link_is_not_trusted_after_our_helper_exits_until_it_goes_down() {
 }
 
 #[test]
+fn a_crash_behind_a_stale_link_relaunches_after_the_spacing_and_counts_once() {
+    let t0 = Instant::now();
+    let mut health = Health::new(t0);
+    tick_launch(&mut health, t0, false, true);
+    health.tick(t0 + SECOND, true, HelperState::Alive);
+    let crash = t0 + 2 * SECOND;
+    let step = health.tick(crash, true, HelperState::Exited);
+    assert_eq!(step.failure, Some(Failure::Exited));
+    // The link still looks connected, yet the due tick launches.
+    let mut now = crash + SECOND;
+    let mut failures = 0;
+    let mut launched_at = None;
+    while now <= crash + LAUNCH_SPACING {
+        let step = health.tick(now, true, HelperState::Absent);
+        failures += usize::from(step.failure.is_some());
+        if step.launch {
+            launched_at = Some(now);
+            health.launched(now, true);
+            break;
+        }
+        now += SECOND;
+    }
+    assert_eq!(launched_at, Some(crash + LAUNCH_SPACING));
+    assert_eq!(failures, 0);
+    // The stale link then notices the dead pipe and reconnects to the new helper in time.
+    let step = health.tick(now + SECOND, false, HelperState::Alive);
+    assert_eq!(step.failure, None);
+    let step = health.tick(now + 2 * SECOND, true, HelperState::Alive);
+    assert_eq!(step.failure, None);
+    assert!(health.link_up());
+}
+
+#[test]
 fn a_stale_link_earns_no_credit() {
     let t0 = Instant::now();
     let mut health = Health::new(t0);

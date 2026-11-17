@@ -123,9 +123,10 @@ impl Health {
         if let Phase::Due(at) = self.phase
             && now >= at
         {
-            if connected {
+            if self.link_up() {
                 // A helper already serves the pipe (a slow one of ours, or one started by
-                // hand): another launch would only exit and count as a failure.
+                // hand): another launch would only exit and count as a failure. A stale link
+                // (our helper died behind it) does not count: launch.
                 self.phase = Phase::Watching;
             } else {
                 step.launch = true;

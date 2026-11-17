@@ -6,7 +6,7 @@ use super::health::{Failure, Health, HelperState, Notes, failure_line, give_up_l
 use crate::log::LogFile;
 use plith_core::launch::FlyoutMode;
 use plith_core::osd::policy::wants_suppression;
-use plith_ipc::{HelperProcess, INSTALLED_HELPER, OsdLink, launch_helper};
+use plith_ipc::{HelperProcess, INSTALLED_HELPER, Message, OsdLink, launch_helper};
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -89,6 +89,12 @@ impl Supervisor {
             // Let the handle go; the helper is not stopped (it exits on its own).
             self.helper = None;
             self.note(&failure_line(failure, self.link.last_error().as_deref()));
+            if failure == Failure::Exited && connected {
+                // The link notices a dead server only at its next write: a `Ping` makes it
+                // find the dead pipe now instead of at the keepalive. It could replace a
+                // `Level` not yet taken by the worker, which was bound for the dead pipe.
+                let _ = self.link.send(Message::Ping);
+            }
         }
         if step.gave_up {
             self.log.line(&give_up_line());

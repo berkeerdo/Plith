@@ -17,7 +17,8 @@ use plith_ipc::security::own_integrity_above_medium;
 use plith_ipc::{Message, Meter, OsdLink, current_pipe_name};
 use std::sync::mpsc::{self, Sender};
 use std::sync::{Arc, Weak};
-use std::thread::JoinHandle;
+use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 /// Receives every level the OSD should show.
 pub type OsdSink = Box<dyn FnMut(OsdLevel)>;
@@ -25,6 +26,24 @@ pub type OsdSink = Box<dyn FnMut(OsdLevel)>;
 /// The line written when the notch runs elevated and the OSD is not started.
 pub const ELEVATED_LINE: &str = "osd: plith runs above medium integrity; the installed helper \
                                  would not be trusted, so the OSD is not started";
+
+/// How long exit waits for the supervisor before leaving it behind (the UI thread waits).
+pub const STOP_WAIT: Duration = Duration::from_millis(1500);
+
+/// How often [`join_within`] looks at the thread.
+const STOP_POLL: Duration = Duration::from_millis(10);
+
+/// Joins `thread` if it finishes within `timeout`; `None` (the thread detached) otherwise.
+fn join_within(thread: JoinHandle<()>, timeout: Duration) -> Option<thread::Result<()>> {
+    let deadline = Instant::now() + timeout;
+    while !thread.is_finished() {
+        if Instant::now() >= deadline {
+            return None;
+        }
+        thread::sleep(STOP_POLL);
+    }
+    Some(thread.join())
+}
 
 /// Pure. The wire message for one level.
 #[must_use]
@@ -101,12 +120,20 @@ impl Drop for OsdSide {
     fn drop(&mut self) {
         // Disconnecting the channel wakes the supervisor's wait at once.
         drop(self.stop.take());
-        if let Some(thread) = self.thread.take()
-            && thread.join().is_err()
-        {
-            self.log.line("osd: supervisor panicked");
+        if let Some(thread) = self.thread.take() {
+            match join_within(thread, STOP_WAIT) {
+                Some(Ok(())) => {}
+                Some(Err(_)) => self.log.line("osd: supervisor panicked"),
+                None => {
+                    // Stuck in a shell launch: left behind. It still stops suppression and
+                    // drops its link reference when the call returns; show hidden flyouts now.
+                    self.log.line("osd: supervisor did not stop in time");
+                    restore_now();
+                }
+            }
         }
-        // The last strong reference: sends `Bye` and returns within about 1 s.
+        // Normally the last strong reference: sends `Bye` and returns within about 1 s. A
+        // supervisor left behind holds the last one, and `Bye` goes when it ends.
         drop(self.link.take());
     }
 }
