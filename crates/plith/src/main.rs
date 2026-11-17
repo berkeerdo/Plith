@@ -7,6 +7,7 @@ mod instance;
 mod live;
 mod log;
 mod model;
+mod osd;
 mod pages;
 mod services;
 

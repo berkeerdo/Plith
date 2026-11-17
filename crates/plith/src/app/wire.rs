@@ -201,7 +201,9 @@ pub fn spawn_watchdog(
                 return;
             }
             log.line("watchdog: forced exit");
-            // `exit` skips destructors, so the queued lines would be lost without this.
+            // `exit` skips destructors: show any flyout the OSD suppression hid, and flush,
+            // or the queued lines would be lost.
+            crate::osd::restore_now();
             log.flush();
             std::process::exit(EXIT_WATCHDOG);
         }

@@ -1,12 +1,10 @@
 //! The OSD side of the feed: volume and brightness changes go to a sink.
 
 use super::{Feed, is_open};
-use plith_core::osd::{OsdLevel, OsdReading, changes, reading};
+use crate::osd::OsdSink;
+use plith_core::osd::{OsdReading, changes, reading};
 use plith_core::pages::PageId;
 use plith_core::scene::Scene;
-
-/// Receives every level the OSD should show.
-pub type OsdSink = Box<dyn FnMut(OsdLevel)>;
 
 /// The OSD state of a feed: the sink and the reading it last saw.
 #[derive(Default)]
@@ -18,10 +16,6 @@ pub struct OsdFeed {
 impl Feed {
     /// Hands volume and brightness changes to `sink` from now on. The next drain takes the
     /// first reading without showing anything.
-    #[cfg_attr(
-        not(test),
-        expect(dead_code, reason = "the OSD sink is wired in a later task")
-    )]
     pub fn set_osd(&mut self, sink: OsdSink) {
         self.osd.sink = Some(sink);
         self.osd.seen = None;

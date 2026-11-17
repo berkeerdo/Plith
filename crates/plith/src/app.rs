@@ -10,6 +10,7 @@ mod wire;
 use crate::instance;
 use crate::live;
 use crate::log::{self, LogFile};
+use crate::osd::OsdSide;
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
@@ -125,6 +126,7 @@ fn run_shell(
         content,
         board,
     } = attach_feed(launch, &shell, log, &app);
+    let osd = start_osd(launch, log, &app);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -169,6 +171,8 @@ fn run_shell(
     backstop::close_render(log, &render.stop_handle());
     render.shutdown();
     app.borrow_mut().stop_feed();
+    // Suppression off and flyouts shown first, then the link sends `Bye`.
+    drop(osd);
     log.line(&wire::hit_line(&shell));
     wire::exit_code(
         loop_code,
@@ -255,6 +259,19 @@ fn attach_feed(
         content,
         board,
     }
+}
+
+/// Starts the OSD side and hands its sink to the feed, in a normal run with real services
+/// only: demo, idle-check and fixture runs stay measurement runs without a helper process.
+fn start_osd(launch: &Launch, log: &Arc<LogFile>, app: &Rc<RefCell<App>>) -> Option<OsdSide> {
+    let normal =
+        launch.demo.is_none() && launch.idle_check_secs.is_none() && launch.fixture.is_none();
+    if !normal {
+        return None;
+    }
+    let side = OsdSide::start(launch.flyout, Arc::clone(log))?;
+    app.borrow_mut().set_osd(side.sink());
+    Some(side)
 }
 
 /// Everything the helper threads and the message loop share.
