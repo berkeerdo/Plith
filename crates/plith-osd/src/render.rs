@@ -87,7 +87,12 @@ fn hwnd_of(job: &Job) -> HWND {
 fn build_stack(job: &Job, layout: &SurfaceLayout) -> Result<Stack, String> {
     for warp in [false, true] {
         match Stack::build(hwnd_of(job), layout, warp) {
-            Ok(stack) => return Ok(stack),
+            Ok(mut stack) => {
+                for note in stack.take_notes() {
+                    job.log.line(&note);
+                }
+                return Ok(stack);
+            }
             Err(error) => job
                 .log
                 .line(&format!("osd device build (warp={warp}) failed: {error}")),
@@ -364,7 +369,13 @@ impl Engine<'_> {
     fn paint(&mut self) -> Result<(f64, f64), String> {
         let frame = self.model.frame();
         let first = match self.stack.as_mut() {
-            Some(stack) => stack.paint(&frame),
+            Some(stack) => {
+                let result = stack.paint(&frame);
+                for note in stack.take_notes() {
+                    self.job.log.line(&note);
+                }
+                result
+            }
             None => return Err(String::from("no device")),
         };
         match first {

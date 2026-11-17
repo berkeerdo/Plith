@@ -42,6 +42,8 @@ pub fn close_render(log: &LogFile, stop: &dyn Stopper) {
             log.line(&format!(
                 "close backstop: render join exceeded {CLOSE_BACKSTOP_MS} ms, forced exit"
             ));
+            // `exit` skips every `Drop`: show any flyout the OSD suppression hid.
+            crate::osd::restore_now();
             log.flush();
             std::process::exit(EXIT_RENDER_FATAL);
         },

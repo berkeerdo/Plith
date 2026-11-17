@@ -213,3 +213,31 @@ fn bad_or_missing_fixture_is_rejected() {
         Err(LaunchError::MissingValue("--fixture".to_string()))
     );
 }
+
+#[test]
+fn flyout_modes_parse_and_default_to_off() {
+    assert_eq!(parse(&[]).unwrap().flyout, FlyoutMode::Off);
+    let names = [
+        ("off", FlyoutMode::Off),
+        ("dry", FlyoutMode::DryRun),
+        ("hide", FlyoutMode::Hide),
+    ];
+    for (name, expected) in names {
+        assert_eq!(parse(&["--flyout", name]).unwrap().flyout, expected);
+    }
+}
+
+#[test]
+fn bad_or_missing_flyout_is_rejected() {
+    assert_eq!(
+        parse(&["--flyout", "x"]),
+        Err(LaunchError::BadValue {
+            flag: "--flyout".to_string(),
+            value: "x".to_string(),
+        })
+    );
+    assert_eq!(
+        parse(&["--flyout"]),
+        Err(LaunchError::MissingValue("--flyout".to_string()))
+    );
+}

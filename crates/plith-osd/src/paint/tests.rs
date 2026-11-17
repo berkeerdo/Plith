@@ -11,6 +11,17 @@ fn frame(level: f32, muted: bool) -> OsdFrame {
 }
 
 #[test]
+fn a_repeated_text_failure_is_noted_once() {
+    let mut notes = Vec::new();
+    let mut latch = false;
+    for _ in 0..5 {
+        note_once(&mut notes, &mut latch, "paint: text skipped: boom");
+    }
+    assert_eq!(notes, ["paint: text skipped: boom"]);
+    assert!(latch);
+}
+
+#[test]
 fn value_is_a_whole_percent_or_the_mute_word() {
     assert_eq!(value_text(&frame(0.424, false)), "42");
     assert_eq!(value_text(&frame(1.0, false)), "100");
@@ -35,17 +46,6 @@ fn fill_is_clamped_to_the_ruler() {
 fn slots_do_not_overlap() {
     assert!(PAD < LABEL_RIGHT && LABEL_RIGHT < RULER.0);
     assert!(RULER.1 < VALUE_LEFT && VALUE_LEFT < WIDTH - PAD);
-}
-
-#[test]
-fn family_falls_back_to_the_last_choice() {
-    assert_eq!(pick(|name| name == "Martian Mono"), "Martian Mono");
-    assert_eq!(pick(|name| name == "Consolas"), "Consolas");
-    assert_eq!(pick(|_| false), "Consolas");
-}
-
-fn pick(installed: impl Fn(&str) -> bool) -> &'static str {
-    text::pick_family(&text::MONO_FAMILIES, installed)
 }
 
 #[test]
@@ -78,20 +78,41 @@ fn snapped_span_is_at_least_one_device_pixel() {
 }
 
 #[test]
-fn own_turkish_words_upper_case_the_turkish_way() {
-    assert_eq!(upper_tr(MUTED_WORD), "SESSİZ");
-    assert_eq!(upper_tr("Mikrofon"), "MİKROFON");
-    assert_eq!(upper_tr("Kulaklık"), "KULAKLIK");
-    assert_eq!(upper_tr("şğüöç"), "ŞĞÜÖÇ");
+fn the_muted_word_is_the_shared_turkish_copy() {
+    assert_eq!(copy::MUTED_LABEL, "SESSİZ");
+    assert_eq!(value_text(&frame(0.5, true)), "SESSİZ");
 }
 
 #[test]
-fn names_from_windows_upper_case_with_invariant_rules() {
-    assert_eq!(upper_name("Display"), "DISPLAY");
-    assert_eq!(upper_name("Speakers (Realtek)"), "SPEAKERS (REALTEK)");
-    assert_eq!(upper_name("Voicemeeter Input"), "VOICEMEETER INPUT");
-    assert_eq!(upper_name("Mikrofon"), "MIKROFON", "no dotted capital I");
-    assert_eq!(upper_name("Kulaklık şğüöç"), "KULAKLIK ŞĞÜÖÇ");
+fn device_labels_upper_case_with_invariant_rules() {
+    let mut text = TextSystem::new().expect("text system");
+    let mut shown = |name: &str| {
+        text.display_text(name, TextStyle::Label, LABEL_RIGHT - PAD, Trim::End)
+            .expect("display text")
+    };
+    assert_eq!(shown("Display"), "DISPLAY");
+    assert_eq!(shown("Speakers (Realtek)"), "SPEAKERS (REALTEK)");
+    assert_eq!(shown("Mikrofon"), "MIKROFON", "no dotted capital I");
+    assert_eq!(shown("Kulaklık şğüöç"), "KULAKLIK ŞĞÜÖÇ");
+}
+
+#[test]
+fn the_value_slot_fits_the_muted_word_and_a_full_percent() {
+    let mut text = TextSystem::new().expect("text system");
+    let slot = WIDTH - PAD - VALUE_LEFT;
+    for shown in [copy::MUTED_LABEL, "100"] {
+        let width = text
+            .measure(shown, TextStyle::Value, f32::INFINITY, Trim::Middle)
+            .expect("measure");
+        eprintln!("measured {shown}: {width} DIP of {slot}");
+        assert!(width <= slot, "{shown} is {width} DIP, slot is {slot}");
+    }
+}
+
+#[test]
+fn text_is_centred_in_the_osd_height() {
+    assert!((centred_top(10.0) - 15.0).abs() < 1e-6);
+    assert!(centred_top(HEIGHT).abs() < 1e-6);
 }
 
 const SCALES: [f32; 3] = [1.0, 1.25, 1.5];

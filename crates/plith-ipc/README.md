@@ -36,6 +36,7 @@ Windows only unless marked "pure".
 | `MAX_MESSAGE` (128), `MAX_LABEL` (64), `PROTOCOL_VERSION` (1) | Pure. Limits and version. |
 | `latest::Slot<T>` | Pure. Latest-wins hand-off: `put` replaces, `take_wait(timeout)`, `close`, `is_closed`. Used inside `OsdLink`. |
 | `security::pipe_sddl(sid)` | Pure. The pipe's ACL text: this user only, with a no-write-up label. |
+| `security::own_integrity_above_medium() -> Result<bool, String>` | Whether this process runs above medium integrity (for example elevated). `ServerTrust::Installed` then refuses the helper, so the notch logs it and does not start the link (step 6). `security::is_above_medium(rid)` and `MEDIUM_RID` (`0x2000`) are the pure rule. |
 
 ## Threading
 
@@ -49,6 +50,27 @@ Windows only unless marked "pure".
   that ends right after the call.
 
 ## Wiring into crates/plith
+
+Built 2026-11-17 (`docs/plans/active/wiring.md`, Record). `crates/plith/src/osd.rs` and its
+`osd/` modules do the steps below in normal runs with real services only (no OSD in `--demo`,
+`--idle-check` or `--fixture` runs):
+- One supervisor thread (`plith-osd-supervisor`, COM apartment-threaded) launches the helper,
+  ticks once a second, relaunches per `plith_core::osd::policy` (3 s apart, gives up after 5
+  failures within 60 s for the rest of the session; credit only after 10 s of stable link) and
+  logs `osd:` lines, each failure text once until the state changes. It never posts to the UI
+  thread.
+- The feed sends `Level` through a `Weak` link only when a drain changed the volume, mute or
+  brightness (`plith_core::osd::changes`), not on the first reading and not while the open page
+  already shows that value.
+- `--flyout off|dry|hide` (default `off`): `hide` runs `FlyoutSuppressor` and the volume key hook
+  only while the link is up; brightness suppression is not wired (step 5).
+- An elevated notch logs that the link fails closed and starts no helper (step 6).
+- Exit: suppression stops (restoring flyouts), then the link drops (`Bye`); the join is bounded
+  at 1.5 s. Backstop and watchdog exits call `osd::restore_now()` first.
+- A dev `plith.exe` trusts only the installed helper, so the installed build must speak the
+  current protocol (a stale install fails with `open: ... cannot find the file`).
+
+The original notes the wiring follows:
 
 1. At start, `launch_helper(Path::new(INSTALLED_HELPER))` once, and keep the `HelperProcess`.
    A second helper on the same pipe exits by itself (`AlreadyRunning`). Still launch once: the

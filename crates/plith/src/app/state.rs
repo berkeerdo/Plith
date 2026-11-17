@@ -3,6 +3,7 @@
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::wire::raised_line;
 use crate::log::LogFile;
+use crate::osd::OsdSink;
 use plith_core::demo::DemoStep;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
@@ -84,6 +85,13 @@ impl App {
     /// Starts feeding the pages from the services; until then a wake or a timer does nothing.
     pub fn attach_feed(&mut self, feed: Feed) {
         self.feed = Some(feed);
+    }
+
+    /// Hands the feed's volume and brightness changes to `sink`; without a feed it is dropped.
+    pub fn set_osd(&mut self, sink: OsdSink) {
+        if let Some(feed) = &mut self.feed {
+            feed.set_osd(sink);
+        }
     }
 
     /// Takes the demo's scene steps from `steps`; each wake applies the queued ones.

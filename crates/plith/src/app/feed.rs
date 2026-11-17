@@ -2,6 +2,8 @@
 //! the tab bar current while the island is open. Collapsed, no timer runs (G2). The elapsed
 //! time and the seek are live nodes, so no timer rebuilds the media page.
 
+mod osd;
+
 use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
@@ -100,6 +102,8 @@ pub struct Feed {
     pick: PickMode,
     /// The mixer the pick was made in; a route write needs the same one.
     pick_mixer: Option<MixerShape>,
+    /// The OSD sink and the last reading it saw.
+    osd: osd::OsdFeed,
 }
 
 impl Feed {
@@ -132,6 +136,7 @@ impl Feed {
             seen: None,
             pick: PickMode::None,
             pick_mixer: None,
+            osd: osd::OsdFeed::default(),
         };
         feed.publish(mailbox);
         feed
@@ -186,6 +191,9 @@ impl Feed {
                 );
             }
         }
+        // The first drain takes the baseline even when no change is reported; later drains
+        // read only after a reported change.
+        self.feed_osd(&mailbox.latest().scene, changes.any());
         if self.seen != Some(key(&mailbox.latest().scene)) {
             self.on_scene(mailbox);
         } else if changes.any() {
@@ -309,3 +317,6 @@ impl Feed {
         MixerShape::of(self.facts.audio.vm.as_ref())
     }
 }
+
+#[cfg(test)]
+mod tests;

@@ -1,20 +1,23 @@
 //! Draws one OSD frame: the seal (square top, round bottom), the label, the ruler and the value,
 //! in three fixed slots that never reflow. Every length is in DIP; the target's DPI scales it.
-
-mod text;
+//! Text comes from the shared [`TextSystem`], the same fonts and styles the pages use.
 
 use crate::model::OsdFrame;
+use plith_core::draw::{Family, TextStyle, Trim};
+use plith_core::pages::copy;
 use plith_ipc::Meter;
-use plith_render::Gpu;
+use plith_render::{Gpu, TextSystem};
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
 use windows::Win32::Graphics::Direct2D::{
-    D2D1_DRAW_TEXT_OPTIONS_CLIP, D2D1_ROUNDED_RECT, D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE,
+    D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_ROUNDED_RECT, D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE,
     ID2D1SolidColorBrush,
 };
-use windows::Win32::Graphics::DirectWrite::{DWRITE_MEASURING_MODE_NATURAL, IDWriteTextFormat};
+use windows::Win32::Graphics::DirectWrite::{
+    DWRITE_TEXT_ALIGNMENT, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING,
+    DWRITE_TEXT_METRICS,
+};
 use windows::core::Result;
-
-pub use text::Fonts;
+use windows_numerics::Vector2;
 
 /// OSD width in DIP.
 pub const WIDTH: f32 = 300.0;
@@ -27,13 +30,12 @@ const PAD: f32 = 16.0;
 /// Left slot (label) right edge.
 const LABEL_RIGHT: f32 = 84.0;
 /// Ruler left and right edges.
-const RULER: (f32, f32) = (92.0, 236.0);
-/// Right slot (value) left edge.
-const VALUE_LEFT: f32 = 244.0;
+const RULER: (f32, f32) = (92.0, 228.0);
+/// Right slot (value) left edge: 48 DIP wide, room for the muted word in Martian Mono
+/// (45.6 DIP measured).
+const VALUE_LEFT: f32 = 236.0;
 /// Tick length below the track.
 const TICK: f32 = 3.0;
-/// The word shown in the value slot while muted, before [`upper_tr`] (Plith's own Turkish).
-pub const MUTED_WORD: &str = "sessiz";
 
 /// The Gece palette as `0xRRGGBB`.
 const FLOOR: u32 = 0x000B_0B0A;
@@ -48,7 +50,7 @@ const LIME: u32 = 0x00CA_FF33;
 #[must_use]
 pub fn value_text(frame: &OsdFrame) -> String {
     if frame.muted {
-        return upper_tr(MUTED_WORD);
+        return copy::MUTED_LABEL.to_owned();
     }
     // Allowed: the level is clamped to 0..=1, so the percent fits a u8 exactly.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -115,27 +117,18 @@ pub fn ruler_rows(scale: f32) -> ((f32, f32), (f32, f32)) {
     (row(line_px(scale)), row(2.0 * line_px(scale)))
 }
 
-/// Upper case for a name that comes from Windows or Voicemeeter (a device, an endpoint, an
-/// app, the brightness `Display`): invariant rules, so `i` becomes `I` and `Display` reads
-/// `DISPLAY`. Berke's rule (2026-11-16): only Plith's own Turkish words use [`upper_tr`].
+/// The top of a text line of `height` DIP centred in the OSD's height.
 #[must_use]
-pub fn upper_name(text: &str) -> String {
-    text.to_uppercase()
+pub fn centred_top(height: f32) -> f32 {
+    (HEIGHT - height) / 2.0
 }
 
-/// Upper case for Plith's own Turkish words, with the Turkish dotted and dotless i: `i`
-/// becomes `İ`, `ı` becomes `I`. Never for names from Windows (see [`upper_name`]).
-#[must_use]
-pub fn upper_tr(text: &str) -> String {
-    let mut upper = String::with_capacity(text.len());
-    for c in text.chars() {
-        match c {
-            'i' => upper.push('İ'),
-            'ı' => upper.push('I'),
-            other => upper.extend(other.to_uppercase()),
-        }
+/// Records `note` the first time only: sets `latch` and pushes, then ignores every repeat.
+fn note_once(notes: &mut Vec<String>, latch: &mut bool, note: &str) {
+    if !*latch {
+        *latch = true;
+        notes.push(note.to_owned());
     }
-    upper
 }
 
 fn rgb(hex: u32) -> D2D1_COLOR_F {
@@ -157,15 +150,23 @@ fn rect(left: f32, top: f32, right: f32, bottom: f32) -> D2D_RECT_F {
     }
 }
 
-fn wide(text: &str) -> Vec<u16> {
-    text.encode_utf16().collect()
+/// Where and how one line of text is drawn.
+struct Slot {
+    left: f32,
+    width: f32,
+    style: TextStyle,
+    align: DWRITE_TEXT_ALIGNMENT,
 }
 
-/// The device brushes and text formats; owned by the render thread.
+/// The device brushes and the shared text system; owned by the render thread.
 pub struct Painter {
     /// Device pixels per DIP, for snapping.
     scale: f32,
-    fonts: Fonts,
+    text: TextSystem,
+    /// Log notes from building the text system, drained once by [`Painter::take_notes`].
+    notes: Vec<String>,
+    /// Set once a text failure is noted, so a persistent failure logs one line, not one per frame.
+    text_failed: bool,
     floor: ID2D1SolidColorBrush,
     border: ID2D1SolidColorBrush,
     ink: ID2D1SolidColorBrush,
@@ -176,7 +177,7 @@ pub struct Painter {
 }
 
 impl Painter {
-    /// Creates the brushes on `gpu`'s context and the text formats, for a surface of `scale`
+    /// Creates the brushes on `gpu`'s context and the text system, for a surface of `scale`
     /// device pixels per DIP.
     ///
     /// # Errors
@@ -190,9 +191,20 @@ impl Painter {
         };
         // SAFETY: a plain state setter on the live context.
         unsafe { ctx.SetTextAntialiasMode(D2D1_TEXT_ANTIALIAS_MODE_GRAYSCALE) };
+        let mut text = TextSystem::new()?;
+        let mut notes: Vec<String> = text
+            .take_notes()
+            .into_iter()
+            .map(|note| format!("paint: {note}"))
+            .collect();
+        if !text.uses_bundled_fonts() && notes.is_empty() {
+            notes.push(String::from("paint: bundled fonts not in use"));
+        }
         Ok(Self {
             scale,
-            fonts: Fonts::new()?,
+            text,
+            notes,
+            text_failed: false,
             floor: brush(FLOOR)?,
             border: brush(BORDER)?,
             ink: brush(INK)?,
@@ -203,10 +215,16 @@ impl Painter {
         })
     }
 
-    /// The mono family the text formats use.
+    /// The mono family the text uses.
     #[must_use]
-    pub fn family(&self) -> &'static str {
-        self.fonts.family
+    pub fn family(&self) -> &str {
+        self.text.family_name(Family::Mono)
+    }
+
+    /// The `paint:` log notes recorded while building; empty after the first call.
+    #[must_use]
+    pub fn take_notes(&mut self) -> Vec<String> {
+        std::mem::take(&mut self.notes)
     }
 
     fn set_opacity(&self, opacity: f32) {
@@ -224,8 +242,10 @@ impl Painter {
         }
     }
 
-    /// Draws `frame` between `BeginDraw` and `EndDraw` (the caller brackets it).
-    pub fn draw(&self, gpu: &Gpu, frame: &OsdFrame) {
+    /// Draws `frame` between `BeginDraw` and `EndDraw` (the caller brackets it). A DirectWrite
+    /// failure of a text drops that text from the frame and is noted once; it is not a device
+    /// error, so it never ends the render thread.
+    pub fn draw(&mut self, gpu: &Gpu, frame: &OsdFrame) {
         let ctx = gpu.context();
         let clear = D2D1_COLOR_F::default();
         // SAFETY: the context targets the swap chain back buffer; `clear` is a live local.
@@ -236,21 +256,22 @@ impl Painter {
         self.set_opacity(frame.opacity);
         self.draw_seal(gpu);
         self.draw_ruler(gpu, frame);
-        let label = upper_name(&frame.label);
-        Self::text(
-            gpu,
-            &label,
-            &self.fonts.label,
-            (PAD, LABEL_RIGHT),
-            &self.muted,
-        );
-        let value = value_text(frame);
-        let (format, brush) = if frame.muted {
-            (&self.fonts.mute, &self.faint)
-        } else {
-            (&self.fonts.value, &self.ink)
+        let label = Slot {
+            left: PAD,
+            width: LABEL_RIGHT - PAD,
+            style: TextStyle::Label,
+            align: DWRITE_TEXT_ALIGNMENT_LEADING,
         };
-        Self::text(gpu, &value, format, (VALUE_LEFT, WIDTH - PAD), brush);
+        let muted = self.muted.clone();
+        self.draw_text(gpu, &frame.label, &label, &muted);
+        let value = Slot {
+            left: VALUE_LEFT,
+            width: WIDTH - PAD - VALUE_LEFT,
+            style: TextStyle::Value,
+            align: DWRITE_TEXT_ALIGNMENT_TRAILING,
+        };
+        let brush = if frame.muted { &self.faint } else { &self.ink }.clone();
+        self.draw_text(gpu, &value_text(frame), &value, &brush);
     }
 
     /// The floor and its 1 DIP border, whole device pixels wide. The shape starts `RADIUS`
@@ -307,25 +328,45 @@ impl Painter {
         }
     }
 
-    fn text(
-        gpu: &Gpu,
-        text: &str,
-        format: &IDWriteTextFormat,
-        (left, right): (f32, f32),
-        brush: &ID2D1SolidColorBrush,
-    ) {
-        let layout = rect(left, 0.0, right, HEIGHT);
-        // SAFETY: the text, format, rect and brush are live for the call.
-        unsafe {
-            gpu.context().DrawText(
-                &wide(text),
-                format,
-                &raw const layout,
-                brush,
-                D2D1_DRAW_TEXT_OPTIONS_CLIP,
-                DWRITE_MEASURING_MODE_NATURAL,
+    /// One line of `text` in `slot`; on a DirectWrite failure the text is skipped and the
+    /// first failure is noted for the log.
+    fn draw_text(&mut self, gpu: &Gpu, text: &str, slot: &Slot, brush: &ID2D1SolidColorBrush) {
+        if let Err(error) = self.try_draw_text(gpu, text, slot, brush) {
+            note_once(
+                &mut self.notes,
+                &mut self.text_failed,
+                &format!("paint: text skipped: {error}"),
             );
         }
+    }
+
+    /// One line of `text` in `slot`, ended with an ellipsis when too long and vertically
+    /// centred in the OSD.
+    fn try_draw_text(
+        &mut self,
+        gpu: &Gpu,
+        text: &str,
+        slot: &Slot,
+        brush: &ID2D1SolidColorBrush,
+    ) -> Result<()> {
+        let layout = self.text.layout(text, slot.style, slot.width, Trim::End)?;
+        let mut metrics = DWRITE_TEXT_METRICS::default();
+        // SAFETY: the out pointer refers to a live local; the layout and brush are live and
+        // the draw call is inside the caller's BeginDraw/EndDraw.
+        unsafe {
+            layout.GetMetrics(&raw mut metrics)?;
+            layout.SetTextAlignment(slot.align)?;
+            gpu.context().DrawTextLayout(
+                Vector2 {
+                    X: slot.left,
+                    Y: centred_top(metrics.height),
+                },
+                &layout,
+                brush,
+                D2D1_DRAW_TEXT_OPTIONS_NONE,
+            );
+        }
+        Ok(())
     }
 }
 

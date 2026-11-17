@@ -61,20 +61,26 @@ impl Stack {
 
     /// The mono family the painter uses.
     #[must_use]
-    pub fn family(&self) -> &'static str {
+    pub fn family(&self) -> &str {
         self.painter.family()
+    }
+
+    /// The `paint:` notes recorded while building the painter, for the log.
+    pub fn take_notes(&mut self) -> Vec<String> {
+        self.painter.take_notes()
     }
 
     /// Draws `frame` and presents it. Returns draw and present times in ms.
     ///
     /// # Errors
-    /// Returns the `EndDraw` or `Present` error; [`is_device_lost`] tells a loss.
+    /// Returns the `EndDraw` or `Present` error; [`is_device_lost`] tells a loss. A text failure
+    /// is not an error: the frame draws without that text and [`Stack::take_notes`] has the note.
     pub fn paint(&mut self, frame: &OsdFrame) -> Result<(f64, f64), Error> {
         let start = Instant::now();
         // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
         unsafe { self.gpu.context().BeginDraw() };
         self.painter.draw(&self.gpu, frame);
-        // SAFETY: closes the BeginDraw above.
+        // SAFETY: closes the BeginDraw above, on every path.
         unsafe { self.gpu.context().EndDraw(None, None) }?;
         let drawn = Instant::now();
         self.target.present()?;

@@ -51,6 +51,7 @@ dependencies = [
  "plith-ipc",
  "plith-render",
  "windows",
+ "windows-numerics",
 ]
 
 [[package]]
