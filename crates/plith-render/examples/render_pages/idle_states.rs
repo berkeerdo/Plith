@@ -77,6 +77,7 @@ fn rest() -> WelcomeFacts {
     WelcomeFacts {
         now: (DAY, u32::from(NOW_HOUR) * 60 + u32::from(NOW_MINUTE)),
         date: "SAL 17 KAS".into(),
+        plays_on: true,
         plays: plays(),
         playing: true,
         forecast: Some(forecast(NOW_HOUR)),
@@ -91,7 +92,7 @@ fn rest() -> WelcomeFacts {
             muted: false,
             flowing: true,
         }),
-        elapsed: Some((72, 125)),
+        paused_last: false,
         lang: Lang::Tr,
     }
 }
@@ -123,14 +124,13 @@ pub fn states() -> Vec<(String, Vec<Content>)> {
     let mut stale_paused = rest();
     stale_paused.forecast = Some(forecast(NOW_HOUR - 4));
     stale_paused.playing = false;
-    stale_paused.elapsed = None;
+    stale_paused.paused_last = true;
     let mut weather_off = rest();
     weather_off.weather_on = false;
     weather_off.forecast = None;
     let mut no_plays = rest();
     no_plays.plays = Vec::new();
     no_plays.playing = false;
-    no_plays.elapsed = None;
     let mut out = vec![
         ("welcome-rest".to_string(), welcome(&rest(), None)),
         ("welcome-probe-past".into(), welcome(&rest(), Some(10))),

@@ -53,6 +53,7 @@ pub(super) fn facts() -> WelcomeFacts {
     WelcomeFacts {
         now: (DAY, NOW_MIN),
         date: "SAL 17 KAS".into(),
+        plays_on: true,
         plays: vec![
             play(546, 594, "Teardrop", "Massive Attack"),
             play(600, 642, "Holocene", "Bon Iver"),
@@ -73,7 +74,7 @@ pub(super) fn facts() -> WelcomeFacts {
             muted: false,
             flowing: true,
         }),
-        elapsed: Some((72, 125)),
+        paused_last: false,
         lang: Lang::Tr,
     }
 }
@@ -175,11 +176,22 @@ fn only_the_playing_interval_is_flow() {
 fn paused_has_no_flow_and_says_durdu() {
     let mut f = facts();
     f.playing = false;
+    f.paused_last = true;
     let list = nodes(&f, None);
     assert!(song_fills(&list).iter().all(|(_, ink)| *ink != Ink::Flow));
     assert_eq!(flow_stations(&list), 0);
     assert!(has_text(&list, "Aphex Twin · DURDU"));
     assert!(!has_text(&nodes(&facts(), None), "Aphex Twin · DURDU"));
+}
+
+#[test]
+fn a_last_play_with_no_paused_session_has_no_durdu() {
+    let mut f = facts();
+    f.playing = false;
+    f.paused_last = false;
+    let list = nodes(&f, None);
+    assert!(has_text(&list, "Aphex Twin"));
+    assert!(!has_text(&list, "Aphex Twin · DURDU"));
 }
 
 #[test]
@@ -224,6 +236,20 @@ fn weather_off_has_no_weather_nodes() {
             .collect();
         assert_eq!(axis, vec![(false, 30.0, 310.0), (true, 310.0, 590.0)]);
     }
+}
+
+#[test]
+fn plays_off_draws_no_songs_and_no_empty_day_text() {
+    let mut f = facts();
+    f.plays_on = false;
+    f.plays.clear();
+    f.playing = false;
+    let list = nodes(&f, None);
+    assert!(song_fills(&list).is_empty());
+    assert!(!has_text(&list, "BUGÜN ÇALAN YOK"));
+    // A probe over a past hour has no songs to name either.
+    let probed = nodes(&f, Some(10));
+    assert!(!texts(&probed).iter().any(|t| t.contains("ŞARKI")));
 }
 
 #[test]

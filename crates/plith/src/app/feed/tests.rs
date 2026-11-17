@@ -1,4 +1,5 @@
 use super::*;
+use crate::app::idle_facts::Idle;
 use crate::services::fixture::FixtureServices;
 use crate::services::{Changes, LevelSource};
 use plith_core::launch::Fixture;
@@ -169,4 +170,72 @@ fn another_open_page_still_shows_volume() {
     set_volume(&rig, 0.8);
     rig.feed.on_wake(&rig.mailbox);
     assert_eq!(rig.shown.borrow().len(), 1);
+}
+
+fn playing_pill_texts(mailbox: &SceneMailbox) -> Vec<String> {
+    mailbox
+        .latest()
+        .content
+        .pill
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            plith_core::draw::Node::Text { text, .. } => Some(text.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+fn set_suppressed(rig: &Rig, fullscreen: bool) {
+    let _ = rig.mailbox.update(|scene| Scene {
+        suppression: plith_core::scene::Suppression {
+            fullscreen,
+            ..Default::default()
+        },
+        ..scene
+    });
+}
+
+#[test]
+fn a_media_wake_while_suppressed_publishes_nothing_and_unsuppress_publishes_once() {
+    use plith_core::lang::Lang;
+    use plith_core::settings::{IdleLook, Settings};
+    let mut rig = rig();
+    {
+        let mut facts = rig.facts.borrow_mut();
+        facts.media.has_session = true;
+        facts.media.playing = true;
+        facts.media.title = "First".to_string();
+        facts.media.artist = "Band".to_string();
+    }
+    let settings = Settings {
+        look: IdleLook::Playing,
+        ..Settings::default()
+    };
+    rig.feed
+        .set_idle(Idle::new(settings, Lang::En), &rig.mailbox);
+    rig.feed.on_wake(&rig.mailbox);
+    set_suppressed(&rig, true);
+    rig.feed.on_wake(&rig.mailbox);
+    let generation = rig.mailbox.latest().generation;
+    let before = playing_pill_texts(&rig.mailbox);
+
+    rig.facts.borrow_mut().media.title = "Second".to_string();
+    rig.drained.set(Changes::MEDIA);
+    rig.feed.on_wake(&rig.mailbox);
+    assert_eq!(rig.mailbox.latest().generation, generation, "no publish");
+    assert_eq!(playing_pill_texts(&rig.mailbox), before);
+
+    set_suppressed(&rig, false);
+    let scene_generation = rig.mailbox.latest().generation;
+    rig.drained.set(Changes::NONE);
+    rig.feed.on_wake(&rig.mailbox);
+    let after = playing_pill_texts(&rig.mailbox);
+    assert!(after.iter().any(|t| t.contains("Second")), "{after:?}");
+    let published = rig.mailbox.latest().generation - scene_generation;
+    assert!(published >= 1);
+    // Nothing more follows: the catch-up was taken once.
+    let settled = rig.mailbox.latest().generation;
+    rig.feed.on_wake(&rig.mailbox);
+    assert_eq!(rig.mailbox.latest().generation, settled);
 }

@@ -127,7 +127,6 @@ fn playing_head_hides_run_song_label() {
     assert_eq!(body(&list), 0);
     assert!(has_text(&list, "Avril 14th"));
     assert!(has_text(&list, "Aphex Twin"));
-    assert!(has_text(&list, "1:12 / 2:05"));
 }
 
 #[test]
@@ -213,6 +212,7 @@ fn paused_playing_slot_keeps_the_run_label() {
     let mut f = facts();
     f.head = HeadSlot::Playing;
     f.playing = false;
+    f.paused_last = true;
     let list = nodes(&f, None);
     assert!(has_text(&list, "Avril 14th"));
     assert!(has_text(&list, "Aphex Twin · DURDU"));
@@ -244,6 +244,7 @@ fn artists_are_never_set_in_an_upper_casing_style() {
     }
     let mut paused = facts();
     paused.playing = false;
+    paused.paused_last = true;
     let styles = artist_node(&nodes(&paused, None), "Aphex Twin · DURDU");
     assert!(
         !styles.is_empty()

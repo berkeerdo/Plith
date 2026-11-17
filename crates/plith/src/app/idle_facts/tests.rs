@@ -160,3 +160,68 @@ fn the_sound_head_kind_follows_the_language() {
         "{en}"
     );
 }
+
+fn plays_off() -> Settings {
+    Settings {
+        plays: false,
+        ..Settings::default()
+    }
+}
+
+#[test]
+fn plays_off_observes_nothing_saves_nothing_and_shows_no_song_band() {
+    let (mut idle, saves) = counting(Idle::new(plays_off(), Lang::En));
+    let first = facts();
+    let mut second = facts();
+    second.media.title = "Another".into();
+    idle.observe(&first, at(10, 0, 0));
+    idle.observe(&second, at(10, 4, 0));
+    idle.save();
+    assert_eq!(saves.get(), 0, "no history is written");
+    let welcome = idle.welcome_facts(&second, at(10, 4, 30));
+    assert!(!welcome.plays_on);
+    assert!(welcome.plays.is_empty());
+    assert!(!welcome.playing);
+    assert!(!welcome.paused_last);
+}
+
+#[test]
+fn plays_off_ignores_a_saved_log_in_the_view() {
+    let mut saved = PlayLog::default();
+    saved.observe((2026, 11, 17), 600, 0, Some(("Holocene", "Bon Iver")), true);
+    saved.observe((2026, 11, 17), 642, 0, None, false);
+    let idle = Idle::new(plays_off(), Lang::En).with_plays(saved);
+    let welcome = idle.welcome_facts(&silent(facts()), at(12, 0, 0));
+    assert!(welcome.plays.is_empty());
+}
+
+#[test]
+fn paused_is_said_only_for_a_paused_session_on_the_last_track() {
+    let f = facts();
+    let mut idle = Idle::new(Settings::default(), Lang::En);
+    idle.observe(&f, at(10, 0, 0));
+    idle.observe(&f, at(10, 5, 0));
+    let mut paused = f.clone();
+    paused.media.playing = false;
+    assert!(idle.welcome_facts(&paused, at(10, 6, 0)).paused_last);
+    // A different track on the paused session: the last play is just a past one.
+    let mut other = paused.clone();
+    other.media.title = "Other".into();
+    assert!(!idle.welcome_facts(&other, at(10, 6, 0)).paused_last);
+    // The player is closed.
+    let mut closed = paused.clone();
+    closed.media.has_session = false;
+    assert!(!idle.welcome_facts(&closed, at(10, 6, 0)).paused_last);
+    // Still playing: not paused.
+    assert!(!idle.welcome_facts(&f, at(10, 6, 0)).paused_last);
+}
+
+#[test]
+fn the_welcome_facts_do_not_change_while_a_track_plays() {
+    let mut idle = Idle::new(Settings::default(), Lang::En);
+    let f = facts();
+    idle.observe(&f, at(10, 0, 0));
+    let a = idle.welcome_facts(&f, at(10, 0, 20));
+    let b = idle.welcome_facts(&f, at(10, 0, 40));
+    assert_eq!(a, b, "no ticking field in the facts");
+}

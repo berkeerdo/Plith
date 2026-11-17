@@ -51,7 +51,8 @@ pub fn attach(
     let settings = settings_for(launch, log);
     let lang = resolve(&settings.lang, &locale::windows_language());
     let mut idle = Idle::new(settings.clone(), lang);
-    if is_normal(launch) {
+    // With plays=off nothing about listening is read, kept or written; the old file stays as is.
+    if is_normal(launch) && settings.plays {
         idle = idle
             .with_plays(plays_file::load(log))
             .with_saver(plays_file::saver(Arc::clone(log)));

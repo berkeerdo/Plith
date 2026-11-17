@@ -188,7 +188,8 @@ fn sound_lines(f: &WelcomeFacts, out: &mut Vec<Node>) -> Lines {
     ]
 }
 
-/// The playing track: title, artist and the elapsed time.
+/// The playing track: title and artist. No elapsed time: the facts are rebuilt only on an event,
+/// so a drawn time would freeze between them, and the head has no live text node to put it in.
 fn playing_lines(f: &WelcomeFacts) -> Lines {
     let Some(p) = f.plays.last().filter(|_| f.playing) else {
         return Lines::default();
@@ -196,18 +197,8 @@ fn playing_lines(f: &WelcomeFacts) -> Lines {
     [
         line(p.title.clone(), TextStyle::Name, Ink::Ink),
         line(p.artist.clone(), TextStyle::Value, Ink::Muted),
-        f.elapsed.and_then(|(at, total)| {
-            line(
-                format!("{} / {}", mmss(at), mmss(total)),
-                TextStyle::Value,
-                Ink::Faint,
-            )
-        }),
+        None,
     ]
-}
-
-fn mmss(s: u32) -> String {
-    format!("{}:{:02}", s / 60, s % 60)
 }
 
 /// What the hour under the pointer says: plays for a past hour, the forecast for a later one.
@@ -228,6 +219,9 @@ fn overlap(p: &Play, from: i32, to: i32) -> i32 {
 }
 
 fn past_lines(f: &WelcomeFacts, hour: i32) -> Lines {
+    if !f.plays_on {
+        return Lines::default();
+    }
     let (from, to) = (hour * 60, hour * 60 + 60);
     let inside: Vec<(i32, &Play)> = f
         .plays

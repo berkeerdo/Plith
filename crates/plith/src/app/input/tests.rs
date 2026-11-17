@@ -22,6 +22,7 @@ fn welcome_facts() -> WelcomeFacts {
     WelcomeFacts {
         now: ((2026, 11, 17), 14 * 60 + 32),
         date: "SAL 17 KAS".into(),
+        plays_on: true,
         plays: Vec::new(),
         playing: false,
         forecast: None,
@@ -30,7 +31,7 @@ fn welcome_facts() -> WelcomeFacts {
         unit: TempUnit::C,
         head: HeadSlot::Auto,
         sound: None,
-        elapsed: None,
+        paused_last: false,
         lang: Lang::Tr,
     }
 }

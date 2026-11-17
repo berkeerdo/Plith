@@ -5,7 +5,6 @@
 use crate::log::Stamp;
 use crate::services::Facts;
 use plith_core::lang::{Lang, date_short, device_kind, weekday};
-use plith_core::pages::derive::rebase;
 use plith_core::pages::idle_pill::{IdleFacts, weather_words};
 use plith_core::pages::pill::PillState;
 use plith_core::pages::tabbar::clock_text;
@@ -13,7 +12,6 @@ use plith_core::pages::welcome::{SoundHead, WelcomeFacts};
 use plith_core::plays::{Day, PlayLog};
 use plith_core::settings::{IdleLook, OpenOn, Settings};
 use plith_core::weather::{Forecast, Stamp as WeatherStamp};
-use std::time::SystemTime;
 
 /// Writes the play log to disk.
 pub type PlaySaver = Box<dyn Fn(&PlayLog)>;
@@ -97,8 +95,11 @@ impl Idle {
 
     /// Feeds the play log one media reading. The log is saved when the track that was playing
     /// ended (a skip, a pause or a stop), never on every call: an open play under ten seconds
-    /// is not a play yet.
+    /// is not a play yet. With `plays=off` it does nothing: no history is kept.
     pub fn observe(&mut self, facts: &Facts, now: Stamp) {
+        if !self.settings.plays {
+            return;
+        }
         let media = &facts.media;
         let track = (media.has_session && media.playing && !media.title.is_empty())
             .then(|| (media.title.clone(), media.artist.clone()));
@@ -121,6 +122,9 @@ impl Idle {
 
     /// Writes the play log now (at exit and when a play closes).
     pub fn save(&self) {
+        if !self.settings.plays {
+            return;
+        }
         if let Some(saver) = &self.saver {
             saver(&self.plays);
         }
@@ -167,9 +171,16 @@ impl Idle {
         let s = &self.settings;
         let (minute, _) = clock_of(now);
         let day = day_of(now);
-        let plays: Vec<_> = self.plays.in_window(0, 1440).into_iter().cloned().collect();
-        let playing = facts.media.playing && self.plays.current().is_some();
+        // With plays off the view gets no history and no song band at all.
+        let plays: Vec<_> = if s.plays {
+            self.plays.in_window(0, 1440).into_iter().cloned().collect()
+        } else {
+            Vec::new()
+        };
+        let playing = s.plays && facts.media.playing && self.plays.current().is_some();
+        let paused_last = paused_on_last(facts, &plays);
         WelcomeFacts {
+            plays_on: s.plays,
             now: (day, minute),
             date: date_short(weekday(day), now.day, now.month, self.lang),
             plays,
@@ -180,7 +191,7 @@ impl Idle {
             unit: s.unit,
             head: s.head,
             sound: sound_head(facts, self.lang),
-            elapsed: playing.then(|| elapsed(facts)).flatten(),
+            paused_last,
             lang: self.lang,
         }
     }
@@ -208,16 +219,16 @@ fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
     })
 }
 
-/// Elapsed and total whole seconds of the track, as of now.
-fn elapsed(facts: &Facts) -> Option<(u32, u32)> {
-    let timeline = rebase(facts.media.timeline?, SystemTime::now());
-    if !timeline.duration_s.is_finite() || timeline.duration_s <= 0.0 {
-        return None;
-    }
-    // Allowed: both values are clamped to the track and non-negative.
-    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
-    let whole = |s: f64| s.clamp(0.0, 86_400.0 * 7.0) as u32;
-    Some((whole(timeline.position_s), whole(timeline.duration_s)))
+/// True when a paused media session sits on the track of the last play: only then is that play
+/// "paused" rather than just a past one.
+fn paused_on_last(facts: &Facts, plays: &[plith_core::plays::Play]) -> bool {
+    let media = &facts.media;
+    media.has_session
+        && !media.playing
+        && !media.title.is_empty()
+        && plays
+            .last()
+            .is_some_and(|p| p.title == media.title && p.artist == media.artist)
 }
 
 #[cfg(test)]

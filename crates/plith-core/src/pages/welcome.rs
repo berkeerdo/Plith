@@ -42,12 +42,18 @@ pub struct SoundHead {
 }
 
 /// Everything the welcome view needs.
+#[allow(
+    clippy::struct_excessive_bools,
+    reason = "plain facts, each flag is an independent yes or no from the model"
+)]
 #[derive(Debug, Clone, PartialEq)]
 pub struct WelcomeFacts {
     /// Today and the minute of the day.
     pub now: (Day, u32),
     /// The short date, for example `SAL 17 KAS`.
     pub date: String,
+    /// Whether the song band shows. Off, the view draws no songs and no empty-day text.
+    pub plays_on: bool,
     /// Today's plays; the last one is the one playing now when `playing`.
     pub plays: Vec<Play>,
     /// Whether a track is playing.
@@ -64,8 +70,8 @@ pub struct WelcomeFacts {
     pub head: HeadSlot,
     /// The default output, for the sound head.
     pub sound: Option<SoundHead>,
-    /// Elapsed and total seconds of the playing track.
-    pub elapsed: Option<(u32, u32)>,
+    /// Whether a paused media session sits on the last play's track, so its label says paused.
+    pub paused_last: bool,
     /// The interface language.
     pub lang: Lang,
 }

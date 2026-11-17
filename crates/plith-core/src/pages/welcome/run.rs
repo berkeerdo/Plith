@@ -69,6 +69,9 @@ fn dashed(points: Vec<(f64, f64)>, ink: Ink) -> Node {
 }
 
 fn song_band(out: &mut Vec<Node>, f: &WelcomeFacts, ax: &Axis, hide_label: bool) {
+    if !f.plays_on {
+        return;
+    }
     let Some(last) = f.plays.len().checked_sub(1) else {
         out.push(text(
             rect(X0, AXIS - 24.0, LABEL_W, 12.0),
@@ -108,10 +111,11 @@ fn song_label(out: &mut Vec<Node>, f: &WelcomeFacts, ax: &Axis) {
     let Some(p) = f.plays.last() else { return };
     let right = (ax.x(f64::from(p.start_min)) - 2.0).clamp(X0 + 60.0, X1);
     let left = (right - LABEL_W).max(X0);
-    let artist = if f.playing {
-        p.artist.clone()
-    } else {
+    // Paused only when the session says so; a track that ended hours ago is just a past play.
+    let artist = if f.paused_last && !f.playing {
         format!("{} · {}", p.artist, word(Text::Paused, f.lang))
+    } else {
+        p.artist.clone()
     };
     out.push(text(
         rect(left, AXIS - 34.0, right - left, 14.0),

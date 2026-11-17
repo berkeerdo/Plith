@@ -93,21 +93,30 @@ impl Feed {
         dirty
     }
 
-    /// Rebuilds `dirty` for an open island. A closed one rebuilds only the pill; its pages wait
-    /// for the opening (G2).
+    /// Rebuilds `dirty` for an open island. A closed one rebuilds only the pill and its pages wait
+    /// for the opening (G2). A suppressed one rebuilds nothing, not even the pill: the whole of
+    /// `dirty` waits in `pending` for the catch-up when it is shown again.
     pub(super) fn apply(&mut self, dirty: Dirty, mailbox: &SceneMailbox) {
-        if is_open(&mailbox.latest().scene) {
+        let scene = mailbox.latest().scene;
+        if is_open(&scene) {
             self.rebuild(dirty, mailbox);
             return;
         }
+        if scene.suppression.any() {
+            self.pending = self.pending.union(dirty);
+            return;
+        }
+        // Shown and resting: the pill also takes what waited while it was hidden.
+        let pill = dirty.pill || self.pending.pill;
         self.pending = self.pending.union(Dirty {
             pill: false,
             ..dirty
         });
+        self.pending.pill = false;
         self.rebuild(
             Dirty {
                 pages: [false; PAGE_COUNT],
-                pill: dirty.pill,
+                pill,
             },
             mailbox,
         );
