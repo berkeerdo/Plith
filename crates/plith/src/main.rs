@@ -3,6 +3,7 @@
 mod app;
 mod demo;
 mod idle;
+mod instance;
 mod live;
 mod log;
 mod model;

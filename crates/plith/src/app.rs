@@ -7,6 +7,7 @@ mod input;
 mod state;
 mod wire;
 
+use crate::instance;
 use crate::live;
 use crate::log::{self, LogFile};
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
@@ -47,6 +48,24 @@ pub fn run(launch: &Launch) -> i32 {
 }
 
 fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
+    // Probing runs skip the guard so measurements work beside a running notch. The guard
+    // lives until this function returns.
+    let probing = launch.demo.is_some() || launch.idle_check_secs.is_some();
+    let _instance = if probing {
+        None
+    } else {
+        match instance::acquire(instance::INSTANCE_NAME) {
+            Ok(Some(guard)) => Some(guard),
+            Ok(None) => {
+                log.line("single instance: another plith runs");
+                return 0;
+            }
+            Err(error) => {
+                log.line(&format!("single instance check failed: {error}"));
+                None
+            }
+        }
+    };
     if let Err(error) = init_process() {
         log.line(&format!("dpi awareness not set: {error}"));
     }
@@ -54,7 +73,6 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     if let Err(error) = &ole {
         log.line(&format!("ole not initialized: {error}"));
     }
-    let probing = launch.demo.is_some() || launch.idle_check_secs.is_some();
     if probing && let Some(state) = user_busy() {
         log.line(&format!("skipped: user busy ({state})"));
         if ole.is_ok() {
