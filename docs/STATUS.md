@@ -27,26 +27,24 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** the audio page clarity job (below). Batched for the next console session with
+- **Next:** merge `feature/audio-clarity` (below), then the idle-look direction pass for R7. Batched for the next console session with
   Berke, every owed on-screen check: a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
-  136 DIP); pages Task 4, 7a, 16 and 18
+  136 DIP); audio-clarity Task 8 (outputs view, one volume click, his yes); pages Task 4, 7a, 16 and 18
   on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
   --fixture banana`, 20 s media ambient while playing, hover and leave, `prewarm:` lines).
   Later and separate: the guarded route write session (one route on Banana and back).
 - Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
   18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
   hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.
-- **Audio page clarity job (next):** the no-Voicemeeter view reads as
-  "Logitech G733 62" with no label, unit or bar (Berke: "anlaşılmıyor hiç ne olduğunu"). Give
-  each output an icon, a bar and a percent and a clear heading; keep route lines for Voicemeeter.
-  Berke 2026-11-17 handed the design over: "voicemeeter çalışmıyor diye eşek gibi yazmasına da
-  gerek yok, devam ederiz işte, yaratıcılığı sana bıraktım, nasıl olmasını istiyorsan öyle yap".
-  So: no loud "Voicemeeter missing" notice, the Windows outputs are a first-class view of their
-  own; the master picks the direction (`praxvon-direction` run without a pick round, choice
-  recorded as an ADR), then builds and renders it. Oyenza reference:
-  `research/2026-11-17-oyenza-settings-and-hud.md`.
+- **Audio page clarity:** built on `feature/audio-clarity` (ADR 0013, plan
+  `plans/active/audio-clarity.md`). Without Voicemeeter the page is an outputs view: default
+  output with glyph, `VARSAYILAN · KULAKLIK`, a volume ruler (click sets volume) and `%62`;
+  other outputs under `DİĞER ÇIKIŞLAR`, click makes default; no Voicemeeter notice. Brightness
+  shows `%70`. Offscreen renders reviewed, five checks green (858 tests), code review clean
+  (3 minors, recorded in the ADR). Merge into main waits on Berke's yes; on screen and a real
+  volume click wait for the console (plan Task 8).
 - R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
   OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme
   cards with a live preview, idle look Clock/Eyes/Minimal/Hidden,
@@ -82,8 +80,8 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
 - Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
 
 ## Recent decisions
+- ADR 0013 Windows outputs get their own view, not a one-route diagram
 - ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
 - ADR 0011 Click to expand, leave to collapse, no keyboard
 - ADR 0010 UI layer: display list, cached page bitmaps, prewarm
 - ADR 0009 OSD helper draws in a window created in the UIAccess band
-- ADR 0008 Frame latency 2, no priority levers
