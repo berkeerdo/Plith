@@ -184,7 +184,7 @@ writes this as `docs/plans/active/pages-r4-adr-drafts.md` P5 for the master to f
   `run_shell` builds `App`, creates the shell with a closure over the `Rc`, then attaches the
   render stop handle. The `Closing` path still stops and joins before `DefWindowProc` destroys
   the window.
-- [ ] **Step 4:** `cargo run --release -p plith -- --idle-check 20` through heavy-run: exit 0 and
+- [x] **Step 4:** `cargo run --release -p plith -- --idle-check 20` through heavy-run: exit 0 and
   `idle` passes in the log (no screen look needed; this is not motion).
 - [x] **Step 5:** Five checks green, commit `refactor(app): own UI state in one App`.
 
@@ -529,7 +529,7 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   (fixture + mailbox generation), `activity_timer_only_on_audio_page`, `fixture_writes_stay_in_fixture`.
 - [x] **Step 2:** Run; expect failures.
 - [x] **Step 3:** Implement.
-- [ ] **Step 4:** `--idle-check 60 --fixture banana` through heavy-run: 0 render wakes while
+- [x] **Step 4:** `--idle-check 60 --fixture banana` through heavy-run: 0 render wakes while
   collapsed with the fixture ticking.
 - [x] **Step 5:** Five checks green, commit `feat(app): feed pages from the services`.
 
@@ -658,3 +658,25 @@ work-area top. Missed in the first plan; done before Task 7 so the painter build
   since R4, `WM_MOUSELEAVE` and collapse on leave, real services feeding the pages live, any
   hardware write. These are Task 4 Step 4, Task 7a Step 5, Task 16 Step 4 and Task 18 Steps 3
   and 4, owed to one guarded console session.
+
+### Console run, 2026-11-16 (master, Berke at the console, release build `b6bd801`)
+Numbers copied from `%LOCALAPPDATA%\Plith\plith.log`; 240 Hz, no game.
+- Task 4 and 16 idle checks (60 s, collapsed): `--fixture banana` 0 render wake-ups, 93.8 ms
+  process CPU, exit 0; real services (Voicemeeter not installed, the other four running) 0
+  render wake-ups, 109.4 ms CPU, exit 0. Both ticked.
+- `--demo pages --exit-after-demo --fixture banana` (30.7 s): 18 motions, every one 240.0 fps,
+  0 hitches, worst gap 4.2 ms; draw p99 at most 0.76 ms; present p99 at most 0.21 ms. Ambient
+  lines about 59 fps, 0 hitches, draw p99 at most 0.68 ms. Prewarm 2.26 ms on the cold first
+  expand (aim), then 0.44 to 1.04 ms.
+- Manual run with real services (Berke clicked): 17 motions; 16 at 240 fps with 0 hitches; one
+  page turn at 235.2 fps with 2 hitches (gap 8.3 ms; present 4.1 ms on two frames, draw 0.3 ms),
+  so the 0 to 1 bar was missed once, on present, not draw. Collapse after leave fired. No
+  `ambient` line at all: either nothing was playing or the media page did not tick; not proven,
+  so Task 18 Step 3 stays open.
+- Task 7a Step 5 (square-top look): not asked yet, open.
+- Berke on the audio page (verbatim): "buna ayarlaar sayasını yapamk lazım logtech diye yazıyor
+  ama anlaşılmıyor hiç ne olduğunu ses seviyesi falan". Read: the no-Voicemeeter view shows
+  `Logitech G733 62` on a route line with no label, unit or bar, so nothing says it is the
+  output device and its volume. Design job, see STATUS.
+- Berke: "birde winbdows osd iside gözüküyor". Expected: the OSD helper is not wired and flyout
+  suppression stays off until his yes (wiring job).

@@ -28,8 +28,17 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
   on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
   --fixture banana`, 20 s media ambient while playing, hover and leave, `prewarm:` lines).
   Later and separate: the guarded route write session (one route on Banana and back).
-- After that: R5 shelf (drag in and out), R4b media output picker; themes switch in R7 settings
-  (palettes exist, nothing calls `set_palette`).
+- Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
+  18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
+  hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.
+- **After wiring (Berke 2026-11-17):** audio page clarity job. The no-Voicemeeter view reads as
+  "Logitech G733 62" with no label, unit or bar (Berke: "anlaşılmıyor hiç ne olduğunu"). Give
+  each output an icon, a bar and a percent and a clear heading; keep route lines for Voicemeeter.
+  Design choice is Berke's (`praxvon-direction`). Oyenza reference:
+  `research/2026-11-17-oyenza-settings-and-hud.md`.
+- R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
+  OSD toggles there; the four-tab rule stays. Then R5 shelf, R4b media output picker; themes
+  switch in settings (palettes exist, nothing calls `set_palette`).
 
 ## Open risks
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
