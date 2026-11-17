@@ -18,6 +18,7 @@ pub mod page;
 pub mod pages;
 pub mod panic_text;
 pub mod scene;
+pub mod settings;
 pub mod shapes;
 pub mod spring;
 pub mod theme;
