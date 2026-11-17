@@ -123,7 +123,7 @@ fn song_label(out: &mut Vec<Node>, f: &WelcomeFacts, ax: &Axis) {
     out.push(text(
         rect(left, AXIS - 46.0, right - left, 12.0),
         &artist,
-        TextStyle::Label,
+        TextStyle::Value,
         Ink::Faint,
         Align::End,
     ));

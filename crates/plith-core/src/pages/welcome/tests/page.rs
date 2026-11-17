@@ -198,3 +198,57 @@ fn no_node_outside_620x232() {
         }
     }
 }
+
+fn artist_node(list: &[Node], artist: &str) -> Vec<TextStyle> {
+    list.iter()
+        .filter_map(|n| match n {
+            Node::Text { text, style, .. } if &**text == artist => Some(*style),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn paused_playing_slot_keeps_the_run_label() {
+    let mut f = facts();
+    f.head = HeadSlot::Playing;
+    f.playing = false;
+    let list = nodes(&f, None);
+    assert!(has_text(&list, "Avril 14th"));
+    assert!(has_text(&list, "Aphex Twin · DURDU"));
+}
+
+#[test]
+fn probe_over_playing_slot_keeps_the_run_label() {
+    let mut f = facts();
+    f.head = HeadSlot::Playing;
+    let list = nodes(&f, Some(10));
+    assert!(has_text(&list, "Avril 14th"));
+    assert!(has_text(&list, "Aphex Twin"));
+}
+
+#[test]
+fn artists_are_never_set_in_an_upper_casing_style() {
+    let mut run_label = facts();
+    run_label.head = HeadSlot::Weather;
+    let mut head = facts();
+    head.head = HeadSlot::Playing;
+    for f in [run_label, head] {
+        let styles = artist_node(&nodes(&f, None), "Aphex Twin");
+        assert!(!styles.is_empty());
+        assert!(
+            styles
+                .iter()
+                .all(|s| !crate::draw::style_spec(*s).uppercase)
+        );
+    }
+    let mut paused = facts();
+    paused.playing = false;
+    let styles = artist_node(&nodes(&paused, None), "Aphex Twin · DURDU");
+    assert!(
+        !styles.is_empty()
+            && styles
+                .iter()
+                .all(|s| !crate::draw::style_spec(*s).uppercase)
+    );
+}

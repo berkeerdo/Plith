@@ -207,7 +207,7 @@ fn playing_lines(f: &WelcomeFacts) -> Lines {
     };
     [
         line(p.title.clone(), TextStyle::Name, Ink::Ink),
-        line(p.artist.clone(), TextStyle::Label, Ink::Muted),
+        line(p.artist.clone(), TextStyle::Value, Ink::Muted),
         f.elapsed.and_then(|(at, total)| {
             line(
                 format!("{} / {}", mmss(at), mmss(total)),
