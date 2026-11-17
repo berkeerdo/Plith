@@ -41,6 +41,9 @@ pub struct Endpoint {
     pub friendly_name: String,
     /// Device description, for example `Realtek Audio`; empty when it cannot be read.
     pub device_name: String,
+    /// Windows `EndpointFormFactor` (3 headphones, 5 headset, 9 display interface, ...);
+    /// `None` when the property store has none.
+    pub form_factor: Option<u32>,
 }
 
 /// Volume and mute of the attached endpoint.

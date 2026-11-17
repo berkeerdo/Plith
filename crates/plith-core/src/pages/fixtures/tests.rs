@@ -1,7 +1,7 @@
 #![allow(clippy::float_cmp)]
 
 use super::*;
-use crate::pages::audio::{PickMode, RouteState, audio_view};
+use crate::pages::audio::{DeviceKind, PickMode, RouteState, audio_view};
 
 #[test]
 fn banana_is_the_mock_diagram() {
@@ -45,11 +45,15 @@ fn potato_has_eight_by_eight() {
 }
 
 #[test]
-fn no_voicemeeter_routes_windows_to_the_default() {
+fn no_voicemeeter_flags_the_headset_as_default() {
     let view = audio_view(&no_voicemeeter(), PickMode::None);
-    assert_eq!(view.sources.len(), 1);
+    assert!(view.sources.is_empty());
+    assert_eq!(view.outputs.len(), 3);
     assert_eq!(view.outputs[0].name, "Logitech G733");
-    assert_eq!(view.routes[0].state, RouteState::Live);
+    assert!(view.outputs[0].default);
+    assert_eq!(view.outputs[0].kind, DeviceKind::Headphones);
+    assert_eq!(view.outputs[1].kind, DeviceKind::Speaker);
+    assert_eq!(view.outputs[2].kind, DeviceKind::Display);
 }
 
 #[test]
@@ -99,7 +103,14 @@ fn every_list() -> Vec<crate::draw::DisplayList> {
     use crate::pages::system::system_page;
     use crate::pages::{audio::audio_page, media::media_page, pill::pill, shelf::shelf_page};
     let mut lists = Vec::new();
-    for facts in [banana(), potato(), no_voicemeeter()] {
+    for facts in [
+        banana(),
+        potato(),
+        no_voicemeeter(),
+        no_voicemeeter_muted(),
+        no_voicemeeter_no_endpoints(),
+        no_voicemeeter_many(),
+    ] {
         for mode in [PickMode::None, PickMode::Picked(0)] {
             let view = audio_view(&lit(&facts), mode);
             lists.push(audio_page(&view, CLOCK).list);

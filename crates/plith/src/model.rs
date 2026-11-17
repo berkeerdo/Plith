@@ -7,7 +7,9 @@ use plith_audio::endpoints::EndpointState;
 use plith_audio::microphone::MicSnapshot;
 use plith_audio::voicemeeter::{ChannelSnapshot, VmSnapshot};
 use plith_core::draw::{ArtId, ArtPixels, SeekTimeline};
-use plith_core::pages::audio::{AudioFacts, ChannelFacts, EndpointFacts, MicFacts, VmFacts};
+use plith_core::pages::audio::{
+    AudioFacts, ChannelFacts, EndpointFacts, MicFacts, VmFacts, device_kind,
+};
 use plith_core::pages::derive;
 use plith_core::pages::media::MediaFacts;
 use plith_core::pages::system::{self, SystemFacts};
@@ -52,6 +54,7 @@ pub fn audio_facts(
             .map(|e| EndpointFacts {
                 id: e.id.clone(),
                 name: derive::short_name(&e.device_name, &e.friendly_name),
+                kind: device_kind(e.form_factor, &[&e.device_name, &e.friendly_name]),
             })
             .collect(),
         default_id: endpoints.default_id.clone(),

@@ -16,11 +16,12 @@ fn print_state(state: &plith_audio::endpoints::EndpointState) {
             format!(" volume={:.0}% muted={}", a.volume * 100.0, a.muted)
         });
         println!(
-            "  [{}{}] {} | {} | {}{volume}",
+            "  [{}{}] {} | {} | form_factor={:?} | {}{volume}",
             if is_default { "D" } else { " " },
             if attached.is_some() { "A" } else { " " },
             endpoint.friendly_name,
             endpoint.device_name,
+            endpoint.form_factor,
             endpoint.id,
         );
     }

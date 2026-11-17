@@ -10,7 +10,7 @@ use windows::Win32::Foundation::{E_FAIL, PROPERTYKEY, RPC_E_CHANGED_MODE};
 use windows::Win32::Media::Audio::Endpoints::{IAudioEndpointVolume, IAudioEndpointVolumeCallback};
 use windows::Win32::Media::Audio::{
     DEVICE_STATE_ACTIVE, EDataFlow, ERole, IMMDevice, IMMDeviceEnumerator, MMDeviceEnumerator,
-    eMultimedia, eRender,
+    PKEY_AudioEndpoint_FormFactor, eMultimedia, eRender,
 };
 use windows::Win32::System::Com::{
     CLSCTX_ALL, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx, CoTaskMemFree,
@@ -79,6 +79,16 @@ fn read_name(device: &IMMDevice, key: &PROPERTYKEY) -> Option<String> {
     (!text.is_empty()).then_some(text)
 }
 
+/// The endpoint form factor (`EndpointFormFactor`), or `None` when the store has none.
+fn read_form_factor(device: &IMMDevice) -> Option<u32> {
+    // SAFETY: the store and the variant are owned values released on drop; the key is valid.
+    let value = unsafe {
+        let store = device.OpenPropertyStore(STGM_READ).ok()?;
+        store.GetValue(&PKEY_AudioEndpoint_FormFactor).ok()?
+    };
+    u32::try_from(&value).ok()
+}
+
 /// Reads one endpoint completely or not at all. The id and the endpoint name are required;
 /// the device description is optional and falls back to empty.
 fn read_endpoint(device: &IMMDevice) -> Option<Endpoint> {
@@ -89,6 +99,7 @@ fn read_endpoint(device: &IMMDevice) -> Option<Endpoint> {
         id,
         friendly_name,
         device_name,
+        form_factor: read_form_factor(device),
     })
 }
 

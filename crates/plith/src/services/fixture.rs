@@ -358,6 +358,13 @@ impl Services for FixtureServices {
         }
     }
 
+    fn set_volume(&mut self, percent: u8) {
+        if let Some((volume, _)) = self.audio.attached.as_mut() {
+            *volume = f32::from(percent.min(100)) / 100.0;
+            self.mark(Changes::AUDIO);
+        }
+    }
+
     fn set_brightness(&mut self, percent: u8) {
         if let Some((_, level)) = self.brightness.as_mut() {
             *level = percent.min(100);

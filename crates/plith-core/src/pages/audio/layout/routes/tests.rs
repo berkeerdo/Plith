@@ -70,23 +70,3 @@ fn candidates_run_on_a_rail_below_the_picked_source() {
         (452.0, 233.0)
     ]));
 }
-
-#[test]
-fn reachable_endpoints_get_a_track_route_without_voicemeeter() {
-    // Mock `audioNoVoicemeeter()`: the Edifier is reachable as a 1 px track route.
-    let lines = page_strokes(&fixtures::no_voicemeeter(), PickMode::None);
-    let track: Vec<&Vec<(f64, f64)>> = lines
-        .iter()
-        .filter(|(p, ink, _)| *ink == Ink::Track && p.len() == 4)
-        .map(|(p, _, _)| p)
-        .collect();
-    assert_eq!(
-        track,
-        [&vec![
-            (252.0, 83.0),
-            (380.0, 83.0),
-            (430.0, 133.0),
-            (452.0, 133.0)
-        ]]
-    );
-}

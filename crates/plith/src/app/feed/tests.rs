@@ -31,6 +31,7 @@ impl Services for FakeServices {
     fn set_default_endpoint(&mut self, _id: &str) {}
     fn toggle_route(&mut self, _strip: usize, _bus: usize) {}
     fn toggle_mic(&mut self) {}
+    fn set_volume(&mut self, _percent: u8) {}
     fn set_brightness(&mut self, _percent: u8) {}
     fn play_pause(&mut self) {}
     fn next(&mut self) {}

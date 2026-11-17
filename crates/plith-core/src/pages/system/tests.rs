@@ -56,7 +56,7 @@ fn brightness_ruler_is_ink_not_flow() {
     });
     assert!(ink_station);
     let t = texts(&page.list.nodes);
-    assert!(t.contains(&("70".into(), TextStyle::Clock, Ink::Ink)));
+    assert!(t.contains(&("%70".into(), TextStyle::Clock, Ink::Ink)));
     assert!(t.contains(&("Parlaklık".into(), TextStyle::Name, Ink::Ink)));
     assert!(t.contains(&("DELL AW2725DF".into(), TextStyle::Sub, Ink::Faint)));
 }
@@ -164,7 +164,7 @@ fn brightness_over_100_is_clamped_once() {
     let mut f = facts();
     f.brightness = Some(("DELL AW2725DF".into(), 130));
     let page = system_page(&f, "09:41");
-    assert!(texts(&page.list.nodes).iter().any(|(s, _, _)| s == "100"));
+    assert!(texts(&page.list.nodes).iter().any(|(s, _, _)| s == "%100"));
     let fill_end = page.list.nodes.iter().find_map(|n| match n {
         Node::Station { x, y, .. } if *y == 80.0 => Some(*x),
         _ => None,

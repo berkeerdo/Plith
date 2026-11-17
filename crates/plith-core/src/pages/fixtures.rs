@@ -6,7 +6,7 @@ use std::time::{Duration, SystemTime};
 
 use crate::ambient::{LiveValues, TraceSamples};
 use crate::draw::{ArtId, ArtPixels, SeekTimeline};
-use crate::pages::audio::{AudioFacts, ChannelFacts, EndpointFacts, VmFacts};
+use crate::pages::audio::{AudioFacts, ChannelFacts, DeviceKind, EndpointFacts, VmFacts};
 use crate::pages::media::MediaFacts;
 use crate::pages::pill::{PillFacts, PillState};
 use crate::pages::system::{MicFacts, SystemFacts};
@@ -137,23 +137,55 @@ pub fn potato() -> AudioFacts {
     }
 }
 
-/// No Voicemeeter: Windows plays to the default G733 at 62; the Edifier is reachable.
+/// No Voicemeeter: Windows plays to the default G733 headset at 62; the Edifier speakers and a
+/// DELL display output are the other outputs.
 #[must_use]
 pub fn no_voicemeeter() -> AudioFacts {
-    let endpoint = |id: &str, name: &str| EndpointFacts {
+    let endpoint = |id: &str, name: &str, kind: DeviceKind| EndpointFacts {
         id: id.to_string(),
         name: name.to_string(),
+        kind,
     };
     AudioFacts {
         vm: None,
         endpoints: vec![
-            endpoint("g733", "Logitech G733"),
-            endpoint("r1280", "Edifier R1280"),
+            endpoint("g733", "Logitech G733", DeviceKind::Headphones),
+            endpoint("r1280", "Edifier R1280", DeviceKind::Speaker),
+            endpoint("dell", "DELL AW2725DF", DeviceKind::Display),
         ],
         default_id: Some("g733".to_string()),
         attached: Some((0.62, false)),
         mic: None,
     }
+}
+
+/// No Voicemeeter with the default headset muted.
+#[must_use]
+pub fn no_voicemeeter_muted() -> AudioFacts {
+    AudioFacts {
+        attached: Some((0.62, true)),
+        ..no_voicemeeter()
+    }
+}
+
+/// No Voicemeeter and no output device at all.
+#[must_use]
+pub fn no_voicemeeter_no_endpoints() -> AudioFacts {
+    AudioFacts::default()
+}
+
+/// No Voicemeeter with twelve outputs: more than the page holds, so the list ends in `+N`.
+#[must_use]
+pub fn no_voicemeeter_many() -> AudioFacts {
+    let mut facts = no_voicemeeter();
+    for n in 1..=9 {
+        facts.endpoints.push(EndpointFacts {
+            id: format!("extra{n}"),
+            name: format!("Speakers {n}"),
+            kind: DeviceKind::Speaker,
+        });
+    }
+    facts
 }
 
 /// Midnight City by M83, playing at 1:42 of 4:03 to A1 G733, with the generated art.

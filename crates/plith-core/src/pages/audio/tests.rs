@@ -114,66 +114,6 @@ fn pick_mode_marks_unrouted_outputs_as_candidates() {
 }
 
 #[test]
-fn no_voicemeeter_shows_windows_outputs() {
-    let facts = AudioFacts {
-        vm: None,
-        endpoints: vec![
-            EndpointFacts {
-                id: "a".into(),
-                name: "Speakers".into(),
-            },
-            EndpointFacts {
-                id: "b".into(),
-                name: "Headset".into(),
-            },
-        ],
-        default_id: Some("b".into()),
-        attached: Some((0.456, false)),
-        mic: None,
-    };
-    let view = audio_view(&facts, PickMode::None);
-    assert_eq!(view.sources.len(), 1);
-    assert_eq!(view.sources[0].name, "Windows");
-    assert_eq!(view.sources[0].sub, "VARSAYILAN ÇIKIŞ");
-    assert_eq!(view.outputs.len(), 2);
-    assert_eq!(view.outputs[0].value, OutputValue::None);
-    assert_eq!(view.outputs[1].value, OutputValue::Percent(46));
-    assert_eq!(view.outputs[1].tag, None);
-    assert_eq!(view.outputs[0].id.as_deref(), Some("a"));
-    assert_eq!(view.outputs[1].id.as_deref(), Some("b"));
-    assert!(!view.outputs[0].used);
-    assert!(view.outputs[1].used);
-    assert_eq!(
-        view.routes,
-        vec![Route {
-            source: 0,
-            output: 1,
-            state: RouteState::Live
-        }]
-    );
-    assert_eq!(view.footer, Footer::NoVoicemeeter);
-    assert_eq!(
-        Footer::NoVoicemeeter.text(),
-        "VOICEMEETER ÇALIŞMIYOR \u{B7} ÇIKIŞA TIKLA: VARSAYILAN OLUR"
-    );
-}
-
-#[test]
-fn no_voicemeeter_muted_default_is_cut() {
-    let facts = AudioFacts {
-        endpoints: vec![EndpointFacts {
-            id: "a".into(),
-            name: "Speakers".into(),
-        }],
-        default_id: Some("a".into()),
-        attached: Some((0.5, true)),
-        ..AudioFacts::default()
-    };
-    let view = audio_view(&facts, PickMode::None);
-    assert_eq!(view.routes[0].state, RouteState::Cut);
-}
-
-#[test]
 fn potato_rows_shrink_pitch() {
     let strips: Vec<ChannelFacts> = (1..=8)
         .map(|n| chan(&format!("S{n}"), false, &[]))
@@ -264,40 +204,6 @@ fn muted_bus_route_is_cut_and_output_muted() {
 }
 
 #[test]
-fn no_voicemeeter_ignores_pick_mode() {
-    let facts = AudioFacts {
-        endpoints: vec![EndpointFacts {
-            id: "a".into(),
-            name: "Speakers".into(),
-        }],
-        default_id: Some("a".into()),
-        attached: Some((0.5, false)),
-        ..AudioFacts::default()
-    };
-    let view = audio_view(&facts, PickMode::Picked(0));
-    assert_eq!(view.mode, PickMode::None);
-    assert!(!view.sources[0].picked);
-    assert!(view.routes.iter().all(|r| r.state != RouteState::Candidate));
-    assert_eq!(view.footer, Footer::NoVoicemeeter);
-}
-
-#[test]
-fn no_voicemeeter_muted_default_mutes_source_and_output() {
-    let facts = AudioFacts {
-        endpoints: vec![EndpointFacts {
-            id: "a".into(),
-            name: "Speakers".into(),
-        }],
-        default_id: Some("a".into()),
-        attached: Some((0.5, true)),
-        ..AudioFacts::default()
-    };
-    let view = audio_view(&facts, PickMode::None);
-    assert!(view.sources[0].muted);
-    assert!(view.outputs[0].muted);
-}
-
-#[test]
 fn out_of_range_pick_is_normalised() {
     let facts = banana(five_strips(&[]));
     let view = audio_view(&facts, PickMode::Picked(99));
@@ -316,4 +222,82 @@ fn unnamed_reads_the_facts_not_the_display_string() {
     assert_eq!(row.name, UNUSED_NAME);
     assert!(!row.unnamed);
     assert_eq!(row.value, OutputValue::Db(0.0));
+}
+
+fn endpoint(id: &str, name: &str, kind: DeviceKind) -> EndpointFacts {
+    EndpointFacts {
+        id: id.into(),
+        name: name.into(),
+        kind,
+    }
+}
+
+#[test]
+fn no_voicemeeter_is_the_outputs_view() {
+    let facts = AudioFacts {
+        vm: None,
+        endpoints: vec![
+            endpoint("a", "Speakers", DeviceKind::Speaker),
+            endpoint("b", "Headset", DeviceKind::Headphones),
+        ],
+        default_id: Some("b".into()),
+        attached: Some((0.456, false)),
+        mic: None,
+    };
+    let view = audio_view(&facts, PickMode::None);
+    assert!(view.sources.is_empty());
+    assert!(view.routes.is_empty());
+    assert_eq!(view.outputs.len(), 2);
+    assert_eq!(view.outputs[0].value, OutputValue::None);
+    assert_eq!(view.outputs[1].value, OutputValue::Percent(46));
+    assert_eq!(view.outputs[0].tag, None);
+    assert_eq!(view.outputs[0].id.as_deref(), Some("a"));
+    assert_eq!(view.outputs[1].id.as_deref(), Some("b"));
+    assert!(!view.outputs[0].default);
+    assert!(view.outputs[1].default);
+    assert_eq!(view.outputs[0].kind, DeviceKind::Speaker);
+    assert_eq!(view.outputs[1].kind, DeviceKind::Headphones);
+    assert_eq!(view.footer, Footer::Outputs);
+    assert_eq!(Footer::Outputs.text(), "ÇIKIŞA TIKLA: VARSAYILAN OLUR");
+}
+
+#[test]
+fn no_voicemeeter_muted_default_is_muted_on_its_row_only() {
+    let facts = AudioFacts {
+        endpoints: vec![
+            endpoint("a", "Speakers", DeviceKind::Speaker),
+            endpoint("b", "Headset", DeviceKind::Headphones),
+        ],
+        default_id: Some("a".into()),
+        attached: Some((0.5, true)),
+        ..AudioFacts::default()
+    };
+    let view = audio_view(&facts, PickMode::None);
+    assert!(view.outputs[0].muted);
+    assert!(!view.outputs[1].muted);
+}
+
+#[test]
+fn no_voicemeeter_ignores_pick_mode() {
+    let facts = AudioFacts {
+        endpoints: vec![endpoint("a", "Speakers", DeviceKind::Speaker)],
+        default_id: Some("a".into()),
+        attached: Some((0.5, false)),
+        ..AudioFacts::default()
+    };
+    let view = audio_view(&facts, PickMode::Picked(0));
+    assert_eq!(view.mode, PickMode::None);
+    assert!(view.routes.is_empty());
+    assert_eq!(view.footer, Footer::Outputs);
+}
+
+#[test]
+fn a_default_id_that_matches_no_endpoint_flags_no_row() {
+    let facts = AudioFacts {
+        endpoints: vec![endpoint("a", "Speakers", DeviceKind::Speaker)],
+        default_id: Some("gone".into()),
+        ..AudioFacts::default()
+    };
+    let view = audio_view(&facts, PickMode::None);
+    assert!(view.outputs.iter().all(|o| !o.default));
 }

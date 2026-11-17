@@ -8,6 +8,7 @@ fn endpoint(id: &str) -> Endpoint {
         id: id.to_string(),
         friendly_name: format!("name of {id}"),
         device_name: format!("device of {id}"),
+        form_factor: None,
     }
 }
 

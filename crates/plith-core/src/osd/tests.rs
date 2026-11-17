@@ -8,10 +8,12 @@ fn audio(attached: Option<(f32, bool)>) -> AudioFacts {
             EndpointFacts {
                 id: "a".to_string(),
                 name: "Speakers".to_string(),
+                ..EndpointFacts::default()
             },
             EndpointFacts {
                 id: "b".to_string(),
                 name: "Headset".to_string(),
+                ..EndpointFacts::default()
             },
         ],
         default_id: Some("a".to_string()),

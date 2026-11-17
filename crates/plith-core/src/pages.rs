@@ -8,6 +8,7 @@ pub mod audio;
 pub mod copy;
 pub mod derive;
 pub mod fixtures;
+mod glyphs;
 mod kit;
 pub mod media;
 pub mod pill;
@@ -91,6 +92,10 @@ pub enum Action {
     CancelPick,
     /// Make the Windows endpoint with this id the default output.
     SetDefaultEndpoint(String),
+    /// Set the volume of the default output to this percentage (0 to 100).
+    SetVolume(u8),
+    /// A press on the volume ruler: `hit` turns it into `SetVolume` at the click.
+    VolumeRuler(Rect),
     /// Set the brightness of the system monitor to this percentage (0 to 100).
     SetBrightness(u8),
     /// A press on the brightness ruler: `hit` turns it into `SetBrightness` at the click.
@@ -136,6 +141,7 @@ pub fn hit(targets: &[HitTarget], x: f64, y: f64) -> Option<Action> {
         })
         .map(|t| match &t.action {
             Action::SeekRuler(ruler) => Action::Seek(seek_fraction(*ruler, x)),
+            Action::VolumeRuler(ruler) => Action::SetVolume(system::brightness_at(*ruler, x)),
             Action::BrightnessRuler(ruler) => {
                 Action::SetBrightness(system::brightness_at(*ruler, x))
             }
