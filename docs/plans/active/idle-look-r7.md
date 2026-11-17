@@ -558,3 +558,19 @@ case.
 - Deferred: percent format (`%62`) to the R7 languages plan; unknown settings keys are logged
   raw; banana fixture duplicated in the render example; no hatch geometry tests.
 - Nothing measured on screen yet: Task 12 is the console session.
+- 2026-11-17 console attempt (master, release `8107e34`, 240 Hz), Task 12 still open:
+  - `--idle-check 120` cannot run: `launch.rs` caps it at `0..=70` for a 75 s watchdog, but
+    `wire::watchdog_secs` now scales with real services. Fix the cap (with a test), then rerun.
+  - Two 60 s Karot checks, both spoiled by Berke clicking during the window (exit 1, 2090 and
+    331 wakes). The second: one expand and collapse (311 frames) plus 14 probe prewarms while
+    open; after collapse 50 s with no motion or prewarm, only topmost and suppression lines.
+    The rest state is likely clean, not proven.
+  - Interaction from those runs: 15 motions all 240.0 fps, 0 hitches, worst gap 4.2 ms; click
+    opened welcome, tab turns worked; probe redraws (`prewarm: pages 4`, 0.4 to 0.8 ms) follow
+    the pointer. Unexplained: `prewarm: pages 3` lines while page 3 was shown, check later.
+  - Fullscreen `R6Game` was detected and suppressed, and alt-tab lifted it (osd Task 9 input).
+  - Berke: the Karot pill's right side is empty ("saatin sağında bişey gözükmüyor"). By design
+    it shows only weather, which is off by default. Proposal given: the pill right uses the
+    same Otomatik slot rule as the welcome head (weather when on, else sound or the track).
+    Not decided yet.
+  - Probe on screen and pill looks: Berke has not answered yet. Session ended for his game.

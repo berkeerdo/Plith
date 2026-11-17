@@ -35,8 +35,10 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
   (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Nothing on screen yet
   (plan Task 12). Worktree `idle-look` kept until the console run.
-- **Next:** the console session with Berke, every owed on-screen check batched: R7a Task 12
-  (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
+- **Next:** first the `--idle-check` cap fix (parser allows 70 s, Task 12 needs 120; see the
+  2026-11-17 console attempt in `plans/active/idle-look-r7.md`). Then the console session with
+  Berke, who must not touch the screen during idle checks, every owed on-screen check batched:
+  R7a Task 12 (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
   pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
