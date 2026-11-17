@@ -12,6 +12,7 @@ const RULES = {
   'plith-media': { plith: [], windows: true },
   'plith-system': { plith: [], windows: true },
   'plith-ipc': { plith: [], windows: true },
+  'plith-weather': { plith: ['plith-core'], windows: true },
   plith: { plith: ['*'], windows: true },
   'plith-osd': { plith: ['plith-render', 'plith-ipc', 'plith-core'], windows: true },
 };

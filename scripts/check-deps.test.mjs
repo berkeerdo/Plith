@@ -21,6 +21,7 @@ const real = {
   'plith-media': [],
   'plith-system': [],
   'plith-ipc': [],
+  'plith-weather': ['plith-core'],
   plith: ['plith-core', 'plith-render', 'plith-shell', 'plith-audio', 'plith-media', 'plith-system', 'plith-ipc'],
   'plith-osd': ['plith-render', 'plith-ipc'],
 };
