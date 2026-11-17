@@ -59,6 +59,8 @@ pub enum TextStyle {
     Body,
     /// A strong line: semibold sans 14.
     Strong,
+    /// The welcome view clock: mono 30.
+    Hero,
 }
 
 /// Where an overlong line loses its characters.
@@ -364,6 +366,7 @@ pub fn style_spec(style: TextStyle) -> StyleSpec {
         TextStyle::Clock => (Family::Mono, 12.0, 400, false, MONO_TRACKING),
         TextStyle::Body => (Family::Sans, 12.0, 400, false, 0.0),
         TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
+        TextStyle::Hero => (Family::Mono, 30.0, 400, false, MONO_TRACKING),
     };
     StyleSpec {
         family,

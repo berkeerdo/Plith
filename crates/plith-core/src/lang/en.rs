@@ -33,5 +33,7 @@ pub fn text(t: Text) -> Option<&'static str> {
         Text::SkyCloud => "CLOUDY",
         Text::SkyRain => "RAIN",
         Text::SkySnow => "SNOW",
+        Text::DefaultOutput => "DEFAULT OUTPUT",
+        Text::Off => "OFF",
     })
 }

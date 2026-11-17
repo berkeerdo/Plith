@@ -16,6 +16,7 @@ pub mod pill;
 pub mod shelf;
 pub mod system;
 pub mod tabbar;
+pub mod welcome;
 
 /// Page width in DIP.
 pub const PAGE_W: f64 = 620.0;

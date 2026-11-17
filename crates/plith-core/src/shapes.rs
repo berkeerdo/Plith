@@ -41,6 +41,13 @@ pub const PAGES: [IslandShape; 4] = [
     },
 ];
 
+/// The welcome view. Not in `PAGES`: it is the island's opening view, not a tab.
+pub const WELCOME: IslandShape = IslandShape {
+    width: 620.0,
+    height: 232.0,
+    radius: 24.0,
+};
+
 /// The widest page, in DIP; the surface is sized for it.
 pub const PAGE_MAX_WIDTH: f64 = 620.0;
 /// The tallest page the surface has room for, in DIP.

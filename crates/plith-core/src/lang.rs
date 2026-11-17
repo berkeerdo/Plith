@@ -66,11 +66,15 @@ pub enum Text {
     SkyRain,
     /// Snow.
     SkySnow,
+    /// The default output device label.
+    DefaultOutput,
+    /// A muted output.
+    Off,
 }
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 16] = [
+    pub const ALL: [Text; 18] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -87,6 +91,8 @@ impl Text {
         Text::SkyCloud,
         Text::SkyRain,
         Text::SkySnow,
+        Text::DefaultOutput,
+        Text::Off,
     ];
 }
 
