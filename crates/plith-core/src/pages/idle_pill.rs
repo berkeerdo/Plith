@@ -41,9 +41,9 @@ const TRACK_X: f64 = 30.0;
 /// Text box height.
 const TEXT_H: f64 = 14.0;
 /// Width of the time box in Karot.
-const TIME_W: f64 = 60.0;
+const TIME_W: f64 = 56.0;
 /// Width of the right-hand weather text in Karot.
-const TURN_W: f64 = 90.0;
+const TURN_W: f64 = 112.0;
 
 /// The display list of the resting pill for `look`.
 #[must_use]

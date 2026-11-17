@@ -160,3 +160,24 @@ fn no_node_uses_flow_except_playing_station() {
         }
     }
 }
+
+/// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
+const VALUE_ADVANCE: f64 = 7.6;
+
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn the_turn_box_fits_the_longest_turn_text_without_an_ellipsis() {
+    use crate::lang::sky_word;
+    use crate::weather::Sky;
+    for lang in [Lang::Tr, Lang::En] {
+        for sky in [Sky::Clear, Sky::Cloud, Sky::Rain, Sky::Snow] {
+            let text = format!("{} 15:30", sky_word(sky, lang));
+            #[allow(clippy::cast_precision_loss)]
+            let needed = text.chars().count() as f64 * VALUE_ADVANCE;
+            assert!(needed <= TURN_W, "{text} needs {needed}, box is {TURN_W}");
+        }
+    }
+    // The longest Turkish word, and the turn box stays clear of the time box.
+    assert!(TURN_W >= "BULUTLU 15:30".chars().count() as f64 * VALUE_ADVANCE);
+    const { assert!(PAD_LEFT + TIME_W <= RIGHT_EDGE - TURN_W) };
+}
