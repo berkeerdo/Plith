@@ -87,7 +87,12 @@ fn hwnd_of(job: &Job) -> HWND {
 fn build_stack(job: &Job, layout: &SurfaceLayout) -> Result<Stack, String> {
     for warp in [false, true] {
         match Stack::build(hwnd_of(job), layout, warp) {
-            Ok(stack) => return Ok(stack),
+            Ok(mut stack) => {
+                for note in stack.take_notes() {
+                    job.log.line(&note);
+                }
+                return Ok(stack);
+            }
             Err(error) => job
                 .log
                 .line(&format!("osd device build (warp={warp}) failed: {error}")),

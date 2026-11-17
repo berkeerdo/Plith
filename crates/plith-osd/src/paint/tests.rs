@@ -38,17 +38,6 @@ fn slots_do_not_overlap() {
 }
 
 #[test]
-fn family_falls_back_to_the_last_choice() {
-    assert_eq!(pick(|name| name == "Martian Mono"), "Martian Mono");
-    assert_eq!(pick(|name| name == "Consolas"), "Consolas");
-    assert_eq!(pick(|_| false), "Consolas");
-}
-
-fn pick(installed: impl Fn(&str) -> bool) -> &'static str {
-    text::pick_family(&text::MONO_FAMILIES, installed)
-}
-
-#[test]
 fn snap_lands_on_device_pixels() {
     for scale in [1.0_f32, 1.25, 1.5] {
         for dip in [0.0_f32, 19.5, 20.0, 20.4, 92.0, 236.0] {
@@ -78,20 +67,28 @@ fn snapped_span_is_at_least_one_device_pixel() {
 }
 
 #[test]
-fn own_turkish_words_upper_case_the_turkish_way() {
-    assert_eq!(upper_tr(MUTED_WORD), "SESSİZ");
-    assert_eq!(upper_tr("Mikrofon"), "MİKROFON");
-    assert_eq!(upper_tr("Kulaklık"), "KULAKLIK");
-    assert_eq!(upper_tr("şğüöç"), "ŞĞÜÖÇ");
+fn the_muted_word_is_the_shared_turkish_copy() {
+    assert_eq!(copy::MUTED_LABEL, "SESSİZ");
+    assert_eq!(value_text(&frame(0.5, true)), "SESSİZ");
 }
 
 #[test]
-fn names_from_windows_upper_case_with_invariant_rules() {
-    assert_eq!(upper_name("Display"), "DISPLAY");
-    assert_eq!(upper_name("Speakers (Realtek)"), "SPEAKERS (REALTEK)");
-    assert_eq!(upper_name("Voicemeeter Input"), "VOICEMEETER INPUT");
-    assert_eq!(upper_name("Mikrofon"), "MIKROFON", "no dotted capital I");
-    assert_eq!(upper_name("Kulaklık şğüöç"), "KULAKLIK ŞĞÜÖÇ");
+fn device_labels_upper_case_with_invariant_rules() {
+    let mut text = TextSystem::new().expect("text system");
+    let mut shown = |name: &str| {
+        text.display_text(name, TextStyle::Label, LABEL_RIGHT - PAD, Trim::End)
+            .expect("display text")
+    };
+    assert_eq!(shown("Display"), "DISPLAY");
+    assert_eq!(shown("Speakers (Realtek)"), "SPEAKERS (REALTEK)");
+    assert_eq!(shown("Mikrofon"), "MIKROFON", "no dotted capital I");
+    assert_eq!(shown("Kulaklık şğüöç"), "KULAKLIK ŞĞÜÖÇ");
+}
+
+#[test]
+fn text_is_centred_in_the_osd_height() {
+    assert!((centred_top(10.0) - 15.0).abs() < 1e-6);
+    assert!(centred_top(HEIGHT).abs() < 1e-6);
 }
 
 const SCALES: [f32; 3] = [1.0, 1.25, 1.5];

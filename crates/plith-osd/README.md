@@ -46,6 +46,6 @@ and repaints if the OSD is showing. The log gets one `osd relayout: rect=.. scal
 
 ## Fonts
 
-The design asks for Martian Mono (labels and numbers). It is not bundled yet: DirectWrite is
-asked for "Martian Mono" and the helper falls back to Consolas when it is not installed (the
-`osd render:` log line names the family in use). Bundling the font is a later job.
+The OSD draws with the shared `plith_render::TextSystem`: the bundled Martian Mono and the
+same `Label` and `Value` styles the pages use. When the bundled set cannot be built the system
+fonts are used and a `paint:` line says so in the log (the `osd render:` line names the family).

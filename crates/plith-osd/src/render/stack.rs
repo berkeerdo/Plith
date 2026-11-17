@@ -61,8 +61,13 @@ impl Stack {
 
     /// The mono family the painter uses.
     #[must_use]
-    pub fn family(&self) -> &'static str {
+    pub fn family(&self) -> &str {
         self.painter.family()
+    }
+
+    /// The `paint:` notes recorded while building the painter, for the log.
+    pub fn take_notes(&mut self) -> Vec<String> {
+        self.painter.take_notes()
     }
 
     /// Draws `frame` and presents it. Returns draw and present times in ms.
@@ -73,9 +78,10 @@ impl Stack {
         let start = Instant::now();
         // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
         unsafe { self.gpu.context().BeginDraw() };
-        self.painter.draw(&self.gpu, frame);
-        // SAFETY: closes the BeginDraw above.
+        let drawn = self.painter.draw(&self.gpu, frame);
+        // SAFETY: closes the BeginDraw above, on every path.
         unsafe { self.gpu.context().EndDraw(None, None) }?;
+        drawn?;
         let drawn = Instant::now();
         self.target.present()?;
         let ms = |d: Duration| d.as_secs_f64() * 1000.0;
