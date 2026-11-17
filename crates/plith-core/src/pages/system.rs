@@ -111,44 +111,53 @@ fn brightness_row(
         Ink::Faint,
         Align::Start,
     ));
-    draw_ruler(nodes, RULER_Y, f64::from(percent) / 100.0, Ink::Ink);
+    let span = (X0, X1);
+    draw_ruler(nodes, span, RULER_Y, f64::from(percent) / 100.0, Ink::Ink);
     nodes.push(percent_value(RULER_Y, percent, Ink::Ink));
     targets.push(ruler_target(
+        span,
         RULER_Y,
-        Action::BrightnessRuler(ruler_rect(RULER_Y)),
+        Action::BrightnessRuler(ruler_rect(span, RULER_Y)),
     ));
 }
 
-/// The ruler rectangle at line `y`: the hit area and the base of the percentage.
-pub(super) fn ruler_rect(y: f64) -> Rect {
+/// The ruler rectangle over `span` (start x, end x) at line `y`: the hit area and the base of
+/// the percentage.
+pub(super) fn ruler_rect(span: (f64, f64), y: f64) -> Rect {
     Rect {
-        x: X0,
+        x: span.0,
         y: y - 5.0,
-        w: X1 - X0,
+        w: span.1 - span.0,
         h: 10.0,
     }
 }
 
 /// The hit target of a ruler at line `y`, taller than the line by `RULER_GROW` each way.
-pub(super) fn ruler_target(y: f64, action: Action) -> HitTarget {
-    let r = ruler_rect(y);
+pub(super) fn ruler_target(span: (f64, f64), y: f64, action: Action) -> HitTarget {
+    let r = ruler_rect(span, y);
     HitTarget {
-        rect: rect(X0, r.y - RULER_GROW, r.w, r.h + 2.0 * RULER_GROW),
+        rect: rect(span.0, r.y - RULER_GROW, r.w, r.h + 2.0 * RULER_GROW),
         action,
     }
 }
 
 /// The ruler: track, eleven ticks, the filled part up to `fraction` (0 to 1) and the square
 /// station thumb, the fill and thumb in `ink`.
-pub(super) fn draw_ruler(nodes: &mut Vec<Node>, y: f64, fraction: f64, ink: Ink) {
-    let at = X0 + (X1 - X0) * fraction;
-    nodes.push(line(vec![(X0, y), (X1, y)], 1.0, Ink::Track));
+pub(super) fn draw_ruler(
+    nodes: &mut Vec<Node>,
+    (x0, x1): (f64, f64),
+    y: f64,
+    fraction: f64,
+    ink: Ink,
+) {
+    let at = x0 + (x1 - x0) * fraction;
+    nodes.push(line(vec![(x0, y), (x1, y)], 1.0, Ink::Track));
     for i in 0..=10u8 {
-        let x = X0 + (X1 - X0) * f64::from(i) / 10.0;
+        let x = x0 + (x1 - x0) * f64::from(i) / 10.0;
         let len = if i % 5 == 0 { 11.0 } else { 7.0 };
         nodes.push(line(vec![(x, y + 4.0), (x, y + len)], 1.0, Ink::Faint));
     }
-    nodes.push(line(vec![(X0, y), (at, y)], 2.0, ink));
+    nodes.push(line(vec![(x0, y), (at, y)], 2.0, ink));
     nodes.push(station(at, y, StationMark::Filled, ink));
 }
 

@@ -30,7 +30,7 @@ fn fill_ink(page: &PageBuild) -> Ink {
         .find_map(|n| match n {
             Node::Stroke {
                 width, ink, points, ..
-            } if *width == 2.0 && points.len() == 2 && points[0].0 == 200.0 => Some(*ink),
+            } if *width == 2.0 && points.len() == 2 && points[0].0 == 264.0 => Some(*ink),
             _ => None,
         })
         .expect("filled part")
@@ -58,7 +58,7 @@ fn default_row_names_the_device_and_the_volume() {
         } if *y == 80.0 => Some((*x, *y, *ink)),
         _ => None,
     });
-    let at = 200.0 + 350.0 * 0.62;
+    let at = 264.0 + 266.0 * 0.62;
     assert_eq!(thumb, Some((at, 80.0, Ink::Flow)));
 }
 
@@ -77,12 +77,12 @@ fn muted_default_greys_the_ruler_and_says_sessiz() {
 fn the_ruler_click_sets_the_volume() {
     let page = build(&fixtures::no_voicemeeter());
     assert_eq!(
-        hit(&page.targets, 200.0 + 350.0 * 0.5, 80.0),
+        hit(&page.targets, 264.0 + 266.0 * 0.5, 80.0),
         Some(Action::SetVolume(50))
     );
-    assert_eq!(hit(&page.targets, 200.0, 80.0), Some(Action::SetVolume(0)));
+    assert_eq!(hit(&page.targets, 264.0, 80.0), Some(Action::SetVolume(0)));
     assert_eq!(
-        hit(&page.targets, 550.0, 80.0),
+        hit(&page.targets, 530.0, 80.0),
         Some(Action::SetVolume(100))
     );
 }
@@ -115,13 +115,29 @@ fn other_outputs_sit_under_their_label_and_become_default_on_click() {
         hit(&page.targets, 300.0, 186.0),
         Some(Action::SetDefaultEndpoint("dell".into()))
     );
-    let hollow = page
+    let below_ruler = page
         .list
         .nodes
         .iter()
-        .filter(|n| matches!(n, Node::Station { mark: StationMark::Hollow, x, .. } if *x == 200.0))
+        .filter(|n| matches!(n, Node::Station { y, .. } if *y > 100.0))
         .count();
-    assert_eq!(hollow, 2);
+    assert_eq!(below_ruler, 0, "other rows draw no stations");
+}
+
+#[test]
+fn the_value_text_clears_the_ruler_end_by_twelve() {
+    for facts in [fixtures::no_voicemeeter(), fixtures::no_voicemeeter_muted()] {
+        let page = build(&facts);
+        for label in ["%62", "SESS\u{130}Z"] {
+            if let Some(Node::Text { rect, .. }) = text_node(&page.list.nodes, label) {
+                // End-aligned text: its start is the right edge minus its width.
+                let width = if label == "%62" { 22.2 } else { 39.6 };
+                let start = rect.x + rect.w - width;
+                assert!(start - 530.0 >= 12.0, "{label} starts at {start}");
+                assert_eq!(rect.x + rect.w, 590.0);
+            }
+        }
+    }
 }
 
 #[test]
@@ -155,6 +171,8 @@ fn no_endpoints_says_cikis_yok() {
         (Ink::Faint, TextStyle::Name)
     );
     assert!(text_node(&page.list.nodes, "DİĞER ÇIKIŞLAR").is_none());
+    assert!(text_node(&page.list.nodes, "ÇIKIŞA TIKLA: VARSAYILAN OLUR").is_none());
+    assert_eq!(page.list.size.1, 112.0);
     assert!(
         !page
             .targets
@@ -208,7 +226,10 @@ fn a_long_name_is_cut_in_the_middle_inside_its_column() {
         panic!("name missing");
     };
     assert_eq!(*trim, Trim::Middle);
-    assert!(rect.x + rect.w <= 200.0, "ends before the ruler start");
+    assert!(
+        rect.x + rect.w <= 256.0,
+        "ends 8 DIP before the ruler start"
+    );
 }
 
 #[test]

@@ -3,11 +3,11 @@
 //! from becoming the default.
 
 use super::{AudioView, OutputRow, OutputValue};
-use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle, Trim};
+use crate::draw::{Align, DisplayList, Ink, Node, TextStyle, Trim};
 use crate::pages::copy;
 use crate::pages::glyphs::{GLYPH, glyph};
-use crate::pages::kit::{rect, station, text, text_trim};
-use crate::pages::system::{RIGHT, X0, draw_ruler, percent_value, ruler_rect, ruler_target};
+use crate::pages::kit::{rect, text, text_trim};
+use crate::pages::system::{RIGHT, draw_ruler, percent_value, ruler_rect, ruler_target};
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
@@ -22,19 +22,22 @@ const FIRST_OTHER_Y: f64 = 146.0;
 const OTHER_PITCH: f64 = 40.0;
 /// Page height below the last row centre.
 const BOTTOM: f64 = 60.0;
+/// Ruler start x: far enough right for a `VARSAYILAN · KULAKLIK` caption to clear it.
+const RULER_X0: f64 = 264.0;
+/// Ruler end x: leaves room for `%62` and `SESSİZ` at the right margin.
+const RULER_X1: f64 = PAGE_W - 90.0;
+/// The ruler span.
+const SPAN: (f64, f64) = (RULER_X0, RULER_X1);
+/// Page height with no output at all.
+const HEIGHT_EMPTY: f64 = 112.0;
 /// Page height with the default output only.
 const HEIGHT_DEFAULT_ONLY: f64 = 146.0;
 /// Footer text top above the page bottom.
 const FOOTER_UP: f64 = 32.0;
 /// Left edge of a name and its caption, after the glyph.
 const NAME_X: f64 = MARGIN_LEFT + GLYPH + 6.0;
-/// Width of a name: up to 10 DIP before the ruler start.
-const NAME_W: f64 = X0 - 10.0 - NAME_X;
-/// Width of the default row's caption: it runs 16 DIP past the ruler start, since it sits
-/// below the tick marks (the longest tick ends at y 91, the caption text starts lower).
-const CAPTION_W: f64 = X0 + 16.0 - NAME_X;
-/// Right edge of the `SESSİZ` label: the page margin, so the label clears the ruler end.
-const MUTED_RIGHT: f64 = PAGE_W - 24.0;
+/// Width of a name or caption: up to 8 DIP before the ruler start.
+const NAME_W: f64 = RULER_X0 - 8.0 - NAME_X;
 /// Text heights.
 const NAME_H: f64 = 18.0;
 const SUB_H: f64 = 12.0;
@@ -74,20 +77,26 @@ pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
         )),
     }
     let others: Vec<&OutputRow> = view.outputs.iter().filter(|o| !o.default).collect();
-    let height = others_block(&others, &mut nodes, &mut targets);
-    nodes.push(text_trim(
-        rect(
-            MARGIN_LEFT,
-            height - FOOTER_UP,
-            PAGE_W - 2.0 * MARGIN_LEFT,
-            SUB_H,
-        ),
-        view.footer.text(),
-        TextStyle::Label,
-        Ink::Faint,
-        Align::Start,
-        Trim::End,
-    ));
+    let height = if view.outputs.is_empty() {
+        // Nothing to click: no footer, the page is just the empty-state line.
+        HEIGHT_EMPTY
+    } else {
+        let height = others_block(&others, &mut nodes, &mut targets);
+        nodes.push(text_trim(
+            rect(
+                MARGIN_LEFT,
+                height - FOOTER_UP,
+                PAGE_W - 2.0 * MARGIN_LEFT,
+                SUB_H,
+            ),
+            view.footer.text(),
+            TextStyle::Label,
+            Ink::Faint,
+            Align::Start,
+            Trim::End,
+        ));
+        height
+    };
     let mut shape = shapes::PAGES[PageId::Audio.index()];
     shape.width = PAGE_W;
     shape.height = height;
@@ -118,7 +127,7 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
         Trim::End,
     ));
     nodes.push(text_trim(
-        rect(NAME_X, 89.0, CAPTION_W, SUB_H),
+        rect(NAME_X, 87.0, NAME_W, SUB_H),
         &format!("{} \u{b7} {}", copy::DEFAULT_CAPTION, row.kind.caption()),
         TextStyle::Sub,
         Ink::Faint,
@@ -133,10 +142,10 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
     let Some(percent) = percent else {
         return;
     };
-    draw_ruler(nodes, DEFAULT_Y, f64::from(percent) / 100.0, ink);
+    draw_ruler(nodes, SPAN, DEFAULT_Y, f64::from(percent) / 100.0, ink);
     if row.muted {
         nodes.push(text(
-            rect(MUTED_RIGHT - 60.0, DEFAULT_Y - 6.0, 60.0, SUB_H),
+            rect(RIGHT - 60.0, DEFAULT_Y - 6.0, 60.0, SUB_H),
             copy::MUTED_LABEL,
             TextStyle::Label,
             Ink::Faint,
@@ -146,8 +155,9 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
         nodes.push(percent_value(DEFAULT_Y, percent, Ink::Ink));
     }
     targets.push(ruler_target(
+        SPAN,
         DEFAULT_Y,
-        Action::VolumeRuler(ruler_rect(DEFAULT_Y)),
+        Action::VolumeRuler(ruler_rect(SPAN, DEFAULT_Y)),
     ));
 }
 
@@ -187,8 +197,7 @@ fn others_block(others: &[&OutputRow], nodes: &mut Vec<Node>, targets: &mut Vec<
     (other_y(rows - 1) + BOTTOM).min(shapes::PAGE_MAX_HEIGHT)
 }
 
-/// One other output: glyph, name, kind caption, a hollow station at the ruler start; the whole
-/// row makes it the default.
+/// One other output: glyph, name and kind caption; the whole row makes it the default.
 fn other_row(i: usize, row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
     let y = other_y(i);
     nodes.extend(glyph(row.kind, MARGIN_LEFT, y - GLYPH / 2.0, Ink::Muted));
@@ -207,7 +216,6 @@ fn other_row(i: usize, row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec
         Ink::Faint,
         Align::Start,
     ));
-    nodes.push(station(X0, y, StationMark::Hollow, Ink::Faint));
     if let Some(id) = &row.id {
         targets.push(HitTarget {
             rect: rect(
