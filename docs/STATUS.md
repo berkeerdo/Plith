@@ -27,12 +27,17 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** R7a Karot idle look, implementation (spec `specs/2026-11-17-idle-look-direction.md`,
-  plan `plans/active/idle-look-r7.md`), worktree `.claude/worktrees/idle-look` on
-  `feature/idle-look`: Tasks 1 to 4 done and reviewed, Task 5 (welcome view) in progress from a
-  WIP commit. The spec, plan and `design/r7` live on that branch (`093078f`); the untracked copies
-  in the main checkout are identical and go before the merge. Batched for the next console session with
-  Berke, every owed on-screen check: a volume key press reaching the OSD (`osd msg: level`,
+- **R7a Karot idle look:** merged as `3ee8b05` (ADR 0014, spec
+  `specs/2026-11-17-idle-look-direction.md`, plan and progress log `plans/active/idle-look-r7.md`).
+  Six resting pill looks (Karot default), the welcome view as a fifth page without a tab (click
+  opens it, hover probes an hour), `settings.ini` and `plays.txt` in `%LOCALAPPDATA%\Plith\`, tr/en
+  text table, `plith-weather` (Open-Meteo over WinHTTP, off by default). Whole-branch review: 4
+  Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
+  (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Nothing on screen yet
+  (plan Task 12). Worktree `idle-look` kept until the console run.
+- **Next:** the console session with Berke, every owed on-screen check batched: R7a Task 12
+  (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
+  pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
   `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
   136 DIP); audio-clarity Task 8 (outputs view, one volume click, his yes); pages Task 4, 7a, 16 and 18
@@ -49,15 +54,11 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   shows `%70`. Offscreen renders reviewed, five checks green (858 tests), code review clean
   (3 minors, recorded in the ADR). On screen and a real
   volume click wait for the console (plan Task 8).
-- R7 settings: two layers like Oyenza (quick settings in the island, a full window), idle look and
-  OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme
-  cards with a live preview, idle look Clock/Eyes/Minimal/Hidden,
-  `research/img/2026-11-17-oyenza-appearance-settings.png`): "bizimki daha iyi olmalı". Idle
-  looks need a direction pass (`praxvon-direction`) before R7. Berke 2026-11-17: the WPF app
-  had a welcome view (clock, detailed animated weather, the playing song in small type); "yeni
-  yapacağımızda da benzer yaklaşım yapabiliriz, sadece düzenleme seçeneğimiz olur ayarlarda".
-  Fold it into that direction pass; weather needs a new service (source, location). Then R5 shelf, R4b media output picker; themes
-  switch in settings (palettes exist, nothing calls `set_palette`).
+- After the console: the "R7 languages" plan (R4 `copy.rs` into the lang table, percent format,
+  more languages, font fallback check), then the R7 settings window (two layers like Oyenza;
+  idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
+  Then R5 shelf, R4b media output picker; themes switch in settings (nothing calls
+  `set_palette`). Background of the R7 direction: `journal/2026-11.md`.
 
 ## Open risks
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
@@ -82,10 +83,14 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   first, then `snapshot()`; `set_waker` posts one WM_APP message.
 - Unverified on hardware: Voicemeeter (not installed here), WMI brightness, a second monitor.
 - Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
+- R7a unverified: the Windows location path (an unpackaged app may always be denied, then IP via
+  `ipapi.co` is the real path), `lang=auto` on a machine whose UI language differs from its
+  region, a real weather fetch through the app. Deferred minors: unknown settings keys logged
+  raw, `plays.txt` written on the UI thread (atomic), no hatch geometry tests.
 
 ## Recent decisions
+- ADR 0014 Karot idle look: click opens welcome, settings and play files, weather sources
 - ADR 0013 Windows outputs get their own view, not a one-route diagram
 - ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
 - ADR 0011 Click to expand, leave to collapse, no keyboard
 - ADR 0010 UI layer: display list, cached page bitmaps, prewarm
-- ADR 0009 OSD helper draws in a window created in the UIAccess band

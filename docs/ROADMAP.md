@@ -14,8 +14,10 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R4b Media output picker | Per-app output routing (undocumented IAudioPolicyConfig); R4 shows the route read-only | ⬜ | 1 session | ⬜ waiting on R4 |
 | R5 Shelf | In-process OLE drag in and out | ⬜ | 2 sessions | ⬜ waiting on R4 |
 | R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 code merged (4aca03e, 1 lane session + 2 review rounds; ADR 0009); console run over a game left |
+| R7a Karot idle look | Pill looks, welcome view, settings and play files, tr/en table, weather service | master + subagents | not estimated | 🔄 code merged (3ee8b05, 2 sessions incl. direction pass; ADR 0014); console run left |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master | 3 sessions | ⬜ waiting on R4 to R6 |
 
 ## Settled scope (2026-11-14)
 - Inside exclusive fullscreen games only the OSD shows (ADR 0002).
-- Weather and the accent picker are dropped; four fixed colour themes instead (ADR 0007).
+- The accent picker is dropped; four fixed colour themes instead (ADR 0007). Weather came back
+  with the idle look, off by default (ADR 0014, Berke 2026-11-17).
