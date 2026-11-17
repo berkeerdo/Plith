@@ -18,6 +18,7 @@ pub mod outline;
 pub mod page;
 pub mod pages;
 pub mod panic_text;
+pub mod plays;
 pub mod scene;
 pub mod settings;
 pub mod shapes;
