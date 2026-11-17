@@ -55,6 +55,14 @@ pub fn now() -> Stamp {
 
 /// `%LOCALAPPDATA%\Plith\plith.log` from the known-folder API.
 fn default_path() -> io::Result<PathBuf> {
+    Ok(data_dir()?.join("plith.log"))
+}
+
+/// `%LOCALAPPDATA%\Plith`, where the log, the settings and the play log live.
+///
+/// # Errors
+/// Returns the error of the known-folder call.
+pub fn data_dir() -> io::Result<PathBuf> {
     // SAFETY: the folder id is a static GUID; no token asks for the current user.
     let raw = unsafe { SHGetKnownFolderPath(&FOLDERID_LocalAppData, KF_FLAG_DEFAULT, None) }
         .map_err(io::Error::other)?;
@@ -64,7 +72,7 @@ fn default_path() -> io::Result<PathBuf> {
     // the last read above.
     unsafe { CoTaskMemFree(Some(raw.0.cast_const().cast())) };
     let folder = folder.map_err(io::Error::other)?;
-    Ok(PathBuf::from(folder).join("Plith").join("plith.log"))
+    Ok(PathBuf::from(folder).join("Plith"))
 }
 
 /// How long [`LogFile::flush`] waits for the writer before giving up.

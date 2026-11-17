@@ -1,6 +1,7 @@
 //! Interface languages and the text table. Every UI string comes from here.
 
 use crate::settings::LangChoice;
+use crate::weather::Sky;
 
 mod en;
 mod tr;
@@ -145,6 +146,38 @@ pub fn date_short(weekday: u8, day: u16, month: u16, lang: Lang) -> String {
         .copied()
         .unwrap_or("");
     format!("{wd} {day} {mo}")
+}
+
+/// The weekday of a calendar day, 0 for Monday.
+#[must_use]
+pub fn weekday((year, month, day): (u16, u16, u16)) -> u8 {
+    const OFFSET: [u16; 12] = [0, 3, 2, 5, 0, 3, 5, 1, 4, 6, 2, 4];
+    let month = month.clamp(1, 12);
+    let year = if month < 3 {
+        year.saturating_sub(1)
+    } else {
+        year
+    };
+    let from_sunday =
+        (year + year / 4 - year / 100 + year / 400 + OFFSET[usize::from(month - 1)] + day) % 7;
+    // Allowed: the remainder is below 7.
+    #[allow(clippy::cast_possible_truncation)]
+    let from_sunday = from_sunday as u8;
+    (from_sunday + 6) % 7
+}
+
+/// The word for a sky, for example `YAĞMUR`.
+#[must_use]
+pub fn sky_word(sky: Sky, lang: Lang) -> &'static str {
+    text(
+        match sky {
+            Sky::Clear => Text::SkyClear,
+            Sky::Cloud => Text::SkyCloud,
+            Sky::Rain => Text::SkyRain,
+            Sky::Snow => Text::SkySnow,
+        },
+        lang,
+    )
 }
 
 /// Upper-cases `s` under the language's rules: Turkish maps `i` to `İ` and `ı` to `I`.

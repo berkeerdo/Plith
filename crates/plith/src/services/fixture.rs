@@ -13,6 +13,7 @@ use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant, SystemTime};
 
+pub mod idle;
 mod tick;
 pub use tick::{TICK, Ticker};
 

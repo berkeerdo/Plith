@@ -5,6 +5,7 @@ use crate::services::Facts;
 use plith_core::draw::{ArtPixels, DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
+use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::pages::media::media_page;
 use plith_core::pages::pill::pill;
 use plith_core::pages::shelf::shelf_page;
@@ -12,6 +13,7 @@ use plith_core::pages::system::system_page;
 use plith_core::pages::tabbar::tabbar;
 use plith_core::pages::welcome::{WelcomeFacts, welcome_page};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PAGE_W, PageBuild, PageId};
+use plith_core::settings::IdleLook;
 use plith_core::shapes::WELCOME;
 use std::sync::Arc;
 
@@ -27,6 +29,8 @@ pub struct Inputs<'a> {
     pub welcome: Option<&'a WelcomeFacts>,
     /// The hour cell under the pointer on the welcome view.
     pub probe: Option<i32>,
+    /// The resting look and its facts; `None` draws the seal (before the app wiring sets them).
+    pub idle: Option<(IdleLook, &'a IdleFacts)>,
 }
 
 /// Which lists need a rebuild.
@@ -52,10 +56,24 @@ impl Dirty {
                 old.media != new.media || art(old) != art(new),
                 false,
                 old.system != new.system,
-                // The welcome view reads no service yet; the app wiring sets its facts.
+                // The welcome view's facts mix services, the play log and the forecast, so the
+                // feed compares them itself and joins the result with `union`.
                 false,
             ],
             pill: old.pill != new.pill,
+        }
+    }
+
+    /// Every list either side names.
+    #[must_use]
+    pub fn union(self, other: Dirty) -> Dirty {
+        let mut pages = self.pages;
+        for (own, theirs) in pages.iter_mut().zip(other.pages) {
+            *own |= theirs;
+        }
+        Dirty {
+            pages,
+            pill: self.pill || other.pill,
         }
     }
 
@@ -89,6 +107,14 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
         PageId::Welcome => inputs
             .welcome
             .map_or_else(welcome_placeholder, |f| welcome_page(f, inputs.probe)),
+    }
+}
+
+/// The pill: the resting look when the app wiring set one, else the seal.
+fn pill_of(inputs: &Inputs) -> DisplayList {
+    match inputs.idle {
+        Some((look, facts)) => idle_pill(look, facts),
+        None => pill(&inputs.facts.pill),
     }
 }
 
@@ -144,7 +170,7 @@ impl Pages {
                 system.targets,
                 welcome.targets,
             ],
-            pill: Arc::new(pill(&inputs.facts.pill)),
+            pill: Arc::new(pill_of(inputs)),
             art: art(inputs.facts),
         }
     }
@@ -163,7 +189,7 @@ impl Pages {
             keep_or_replace(&mut self.lists[i], build.list);
         }
         if dirty.pill {
-            keep_or_replace(&mut self.pill, pill(&inputs.facts.pill));
+            keep_or_replace(&mut self.pill, pill_of(inputs));
         }
         if dirty.pages[PageId::Media.index()] {
             self.art = art(inputs.facts);

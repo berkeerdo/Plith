@@ -11,6 +11,9 @@ use crate::lang::Lang;
 use crate::settings::IdleLook;
 use crate::shapes;
 
+mod weather;
+pub use weather::{WeatherWords, weather_words};
+
 /// What the resting looks can show.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IdleFacts {

@@ -3,9 +3,15 @@
 
 mod backstop;
 mod feed;
+mod idle_facts;
+mod idle_wiring;
 mod input;
 mod state;
+mod weather_link;
 mod wire;
+
+#[cfg(test)]
+mod tests;
 
 use crate::instance;
 use crate::live;
@@ -248,12 +254,13 @@ fn attach_feed(
     };
     let levels = services.level_source();
     let mut app = app.borrow_mut();
-    let feed = Feed::new(
+    let mut feed = Feed::new(
         services,
         Box::new(shell.timer_handle()),
         Box::new(log::now),
         &app.mailbox,
     );
+    idle_wiring::attach(launch, log, shell.ui_waker(), &mut feed, &app.mailbox);
     app.attach_feed(feed);
     Attached {
         levels,

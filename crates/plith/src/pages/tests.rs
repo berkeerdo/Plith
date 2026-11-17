@@ -15,6 +15,7 @@ fn inputs(facts: &Facts) -> Inputs<'_> {
         clock: "21:47",
         welcome: None,
         probe: None,
+        idle: None,
     }
 }
 
@@ -147,4 +148,21 @@ fn a_taller_audio_page_changes_its_shape() {
     let short = Pages::new(&inputs(&banana)).shapes()[0];
     let tall = Pages::new(&inputs(&potato)).shapes()[0];
     assert!(tall.height > short.height);
+}
+
+#[test]
+fn union_joins_two_dirty_sets() {
+    let a = Dirty::page(PageId::Audio);
+    let b = Dirty {
+        pill: true,
+        ..Dirty::page(PageId::Welcome)
+    };
+    assert_eq!(
+        a.union(b),
+        Dirty {
+            pages: [true, false, false, false, true],
+            pill: true,
+        }
+    );
+    assert_eq!(Dirty::default().union(Dirty::default()), Dirty::default());
 }

@@ -7,11 +7,14 @@ mod demo;
 mod idle;
 mod instance;
 mod live;
+mod locale;
 mod log;
 mod model;
 mod osd;
 mod pages;
+mod plays_file;
 mod services;
+mod settings_file;
 
 use plith_core::launch::Launch;
 
@@ -20,7 +23,8 @@ const USAGE: &str = "usage: plith [--demo <name|script>] [--exit-after-demo] [--
                      [--sched-class normal|above|high] [--latency <1..3>] [--sync <0|1>] \
                      [--mmcss normal|high|critical] [--tune r1|brisk] \
                      [--fixture banana|potato|bare|none] \
-                     [--flyout off|dry|hide]";
+                     [--flyout off|dry|hide] \
+                     [--idle-look karot|clock|playing|seal|plain|hidden]";
 
 fn main() {
     match Launch::parse(std::env::args().skip(1)) {

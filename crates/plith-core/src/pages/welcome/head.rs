@@ -6,12 +6,12 @@ use std::fmt::Write as _;
 use super::WelcomeFacts;
 use super::axis::Weather;
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
-use crate::lang::{Lang, Text, songs, text as word};
+use crate::lang::{Text, sky_word, songs, text as word};
 use crate::pages::kit::{rect, station, text};
 use crate::pages::tabbar::clock_text;
 use crate::plays::Play;
 use crate::settings::HeadSlot;
-use crate::weather::{Sky, Stamp, is_stale, next_turn, temp_text};
+use crate::weather::{Stamp, is_stale, next_turn, temp_text};
 
 /// Right edge of the right-hand lines.
 const RIGHT: f64 = 590.0;
@@ -105,18 +105,6 @@ fn to_u8(v: u32) -> u8 {
 
 fn hh(hour: i32) -> String {
     format!("{:02}:00", hour.rem_euclid(24))
-}
-
-fn sky_word(sky: Sky, lang: Lang) -> &'static str {
-    word(
-        match sky {
-            Sky::Clear => Text::SkyClear,
-            Sky::Cloud => Text::SkyCloud,
-            Sky::Rain => Text::SkyRain,
-            Sky::Snow => Text::SkySnow,
-        },
-        lang,
-    )
 }
 
 fn stamp(f: &WelcomeFacts) -> Stamp {

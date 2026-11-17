@@ -57,3 +57,18 @@ fn upper_turkish_dotted_i() {
     assert_eq!(upper("izle", Lang::Tr), "İZLE");
     assert_eq!(upper("display", Lang::En), "DISPLAY");
 }
+
+#[test]
+fn weekday_counts_from_monday() {
+    assert_eq!(weekday((2026, 11, 17)), 1, "a Tuesday");
+    assert_eq!(weekday((2026, 11, 16)), 0, "a Monday");
+    assert_eq!(weekday((2024, 2, 29)), 3, "a Thursday, after a leap day");
+    assert_eq!(weekday((2026, 1, 1)), 3);
+    assert_eq!(weekday((2026, 11, 22)), 6, "a Sunday");
+}
+
+#[test]
+fn sky_word_follows_the_language() {
+    assert_eq!(sky_word(Sky::Rain, Lang::Tr), "YAĞMUR");
+    assert_eq!(sky_word(Sky::Rain, Lang::En), "RAIN");
+}

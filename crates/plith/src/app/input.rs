@@ -39,9 +39,11 @@ impl App {
         }
     }
 
-    /// Opens the island with the pages brought up to date first.
+    /// Opens the island with the pages brought up to date first: on the welcome view, or on the
+    /// page shown last when the settings say so.
     fn expand(&mut self) {
-        self.expand_on(None);
+        let page = self.feed.as_ref().and_then(Feed::open_page);
+        self.expand_on(page);
     }
 
     /// Opens the island (on `page`, when given) with the pages brought up to date first, in
@@ -71,7 +73,8 @@ impl App {
         };
         for step in steps {
             match step {
-                DemoStep::Expand => self.expand(),
+                // A demo expands on the page shown, so its measurements stay comparable.
+                DemoStep::Expand => self.expand_on(None),
                 DemoStep::Page(index) => {
                     let Some(page) = PageId::from_index(index) else {
                         continue;
@@ -115,7 +118,9 @@ impl App {
     /// The pointer left the window: the probe ends, and an open island starts the collapse
     /// delay.
     pub(super) fn on_leave(&mut self) {
-        if let Some(feed) = self.feed.as_mut() {
+        if let Some(feed) = self.feed.as_mut()
+            && feed.probe().is_some()
+        {
             feed.set_probe(None, &self.mailbox);
         }
         if !self.mailbox.latest().scene.expanded {
@@ -173,6 +178,7 @@ impl App {
         }
         if let Some(feed) = self.feed.as_mut() {
             feed.set_pick(PickMode::None, &self.mailbox);
+            feed.clear_probe();
         }
         let _ = self.mailbox.update(|scene| Scene {
             expanded: false,
