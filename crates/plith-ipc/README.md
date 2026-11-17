@@ -36,6 +36,7 @@ Windows only unless marked "pure".
 | `MAX_MESSAGE` (128), `MAX_LABEL` (64), `PROTOCOL_VERSION` (1) | Pure. Limits and version. |
 | `latest::Slot<T>` | Pure. Latest-wins hand-off: `put` replaces, `take_wait(timeout)`, `close`, `is_closed`. Used inside `OsdLink`. |
 | `security::pipe_sddl(sid)` | Pure. The pipe's ACL text: this user only, with a no-write-up label. |
+| `security::own_integrity_above_medium() -> Result<bool, String>` | Whether this process runs above medium integrity (for example elevated). `ServerTrust::Installed` then refuses the helper, so the notch logs it and does not start the link (step 6). `security::is_above_medium(rid)` and `MEDIUM_RID` (`0x2000`) are the pure rule. |
 
 ## Threading
 
