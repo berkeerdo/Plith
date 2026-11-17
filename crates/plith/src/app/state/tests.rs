@@ -647,6 +647,9 @@ impl crate::services::Services for Swapping {
     fn toggle_mic(&mut self) {
         self.inner.toggle_mic();
     }
+    fn set_volume(&mut self, percent: u8) {
+        self.inner.set_volume(percent);
+    }
     fn set_brightness(&mut self, percent: u8) {
         self.inner.set_brightness(percent);
     }

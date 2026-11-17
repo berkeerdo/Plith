@@ -3,11 +3,14 @@
 //! Facts are copied from the service crates by the app; this module knows nothing about them.
 //! Layout (positions, nodes) is a separate step that reads this view.
 
+mod kind;
 mod layout;
 mod model;
+mod outputs;
 #[cfg(test)]
 mod tests;
 
+pub use kind::{DeviceKind, device_kind};
 pub use layout::{audio_page, route_path, row_pitch};
 
 use crate::pages::copy;
@@ -61,6 +64,8 @@ pub struct EndpointFacts {
     pub id: String,
     /// The display name.
     pub name: String,
+    /// What kind of device it is.
+    pub kind: DeviceKind,
 }
 
 /// The default microphone.
@@ -132,6 +137,10 @@ pub struct OutputRow {
     pub used: bool,
     /// Whether the bus has no label and no route, so its name is the unused placeholder.
     pub unnamed: bool,
+    /// What kind of device a Windows endpoint is (`Speaker` for a bus).
+    pub kind: DeviceKind,
+    /// Whether this is the default Windows endpoint (never set for a bus).
+    pub default: bool,
 }
 
 /// How a route is drawn.
@@ -174,8 +183,8 @@ pub enum Footer {
     Normal,
     /// A source is picked.
     Picking,
-    /// Voicemeeter is not running.
-    NoVoicemeeter,
+    /// The outputs view, shown while Voicemeeter is not running.
+    Outputs,
 }
 
 impl Footer {
@@ -185,7 +194,7 @@ impl Footer {
         match self {
             Footer::Normal => copy::FOOTER_NORMAL,
             Footer::Picking => copy::FOOTER_PICKING,
-            Footer::NoVoicemeeter => copy::FOOTER_NO_VM,
+            Footer::Outputs => copy::FOOTER_OUTPUTS,
         }
     }
 }

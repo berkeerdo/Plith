@@ -102,6 +102,8 @@ pub trait Services {
     fn toggle_route(&mut self, strip: usize, bus: usize);
     /// Mutes or unmutes the microphone.
     fn toggle_mic(&mut self);
+    /// Sets the volume of the attached (default) output in percent.
+    fn set_volume(&mut self, percent: u8);
     /// Sets the monitor brightness in percent.
     fn set_brightness(&mut self, percent: u8);
     /// Toggles play and pause.
@@ -309,6 +311,10 @@ impl Services for RealServices {
         self.write(Write::ToggleMic);
     }
 
+    fn set_volume(&mut self, percent: u8) {
+        self.write(Write::Volume(percent));
+    }
+
     fn set_brightness(&mut self, percent: u8) {
         self.write(Write::Brightness(percent));
     }
@@ -376,6 +382,11 @@ fn spawn_writer(set: start::Set, log: &LogFile) -> Option<Writer> {
         }
         Write::ToggleMic => {
             let _ = set.mic.toggle_mute();
+        }
+        Write::Volume(percent) => {
+            let _ = set
+                .endpoints
+                .set_volume(f32::from(percent.min(100)) / 100.0);
         }
         Write::Brightness(percent) => {
             let _ = set.brightness.set_percent(percent);

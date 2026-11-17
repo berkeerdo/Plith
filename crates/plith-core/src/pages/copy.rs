@@ -18,17 +18,27 @@ pub const OFF_LABEL: &str = "KAPALI";
 pub const DDC_OFF: &str = "DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI";
 /// The empty shelf's caption.
 pub const SHELF_HINT: &str = "RAFTA BEKLER, İSTEDİĞİN YERE GERİ SÜRÜKLERSİN";
-/// The Windows source's caption without Voicemeeter.
-pub const DEFAULT_OUTPUT: &str = "VARSAYILAN ÇIKIŞ";
+/// The first word of the default output's caption (`VARSAYILAN · KULAKLIK`).
+pub const DEFAULT_CAPTION: &str = "VARSAYILAN";
+/// The label above the other outputs.
+pub const OTHER_OUTPUTS: &str = "DİĞER ÇIKIŞLAR";
+/// Shown when there is no output device at all.
+pub const NO_OUTPUT: &str = "ÇIKIŞ YOK";
+/// Kind caption of headphones and headsets.
+pub const KIND_HEADPHONES: &str = "KULAKLIK";
+/// Kind caption of loudspeakers.
+pub const KIND_SPEAKER: &str = "HOPARLÖR";
+/// Kind caption of a display output.
+pub const KIND_DISPLAY: &str = "EKRAN";
 /// The audio footer at rest.
 pub const FOOTER_NORMAL: &str = "KAYNAĞA, SONRA ÇIKIŞA TIKLA";
 /// The audio footer while a source is picked.
 pub const FOOTER_PICKING: &str = "ÇIKIŞA TIKLA: YOL KURULUR · KAYNAĞA TEKRAR TIKLA: VAZGEÇ";
-/// The audio footer without Voicemeeter.
-pub const FOOTER_NO_VM: &str = "VOICEMEETER ÇALIŞMIYOR · ÇIKIŞA TIKLA: VARSAYILAN OLUR";
+/// The audio footer of the outputs view.
+pub const FOOTER_OUTPUTS: &str = "ÇIKIŞA TIKLA: VARSAYILAN OLUR";
 
 /// Every own label above, for the upper-case checks.
-pub const OWN_LABELS: [&str; 12] = [
+pub const OWN_LABELS: [&str; 17] = [
     TAB_AUDIO,
     TAB_MEDIA,
     TAB_SHELF,
@@ -37,10 +47,15 @@ pub const OWN_LABELS: [&str; 12] = [
     OFF_LABEL,
     DDC_OFF,
     SHELF_HINT,
-    DEFAULT_OUTPUT,
+    DEFAULT_CAPTION,
+    OTHER_OUTPUTS,
+    NO_OUTPUT,
+    KIND_HEADPHONES,
+    KIND_SPEAKER,
+    KIND_DISPLAY,
     FOOTER_NORMAL,
     FOOTER_PICKING,
-    FOOTER_NO_VM,
+    FOOTER_OUTPUTS,
 ];
 
 /// Upper-cases our own Turkish copy with Turkish rules: `i` becomes `İ`, `ı` becomes `I`, the

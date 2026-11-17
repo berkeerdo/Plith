@@ -22,6 +22,8 @@ pub enum Write {
     },
     /// Mute or unmute the microphone.
     ToggleMic,
+    /// Set the attached output volume in percent.
+    Volume(u8),
     /// Set the monitor brightness in percent.
     Brightness(u8),
     /// Toggle play and pause.

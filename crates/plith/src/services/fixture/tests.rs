@@ -42,7 +42,7 @@ fn potato_and_bare_differ_in_the_mixer() {
     let bare = FixtureServices::new(Fixture::Bare);
     let facts = bare.facts();
     assert!(facts.audio.vm.is_none());
-    assert_eq!(facts.audio.endpoints.len(), 2);
+    assert_eq!(facts.audio.endpoints.len(), 3);
     assert_eq!(facts.system.mic_bus, None);
     assert_eq!(
         facts.system.mic.as_ref().map(|m| m.name.as_str()),

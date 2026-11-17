@@ -184,6 +184,7 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         Action::CancelPick => feed.set_pick(PickMode::None, mailbox),
         Action::SetDefaultEndpoint(id) => feed.services().set_default_endpoint(&id),
         Action::ToggleMic => feed.services().toggle_mic(),
+        Action::SetVolume(percent) => feed.services().set_volume(percent),
         Action::SetBrightness(percent) => feed.services().set_brightness(percent),
         Action::PlayPause => feed.services().play_pause(),
         Action::Next => feed.services().next(),
@@ -198,6 +199,9 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
             }
         }
         // `hit` resolves the rulers and the app handles tabs before dispatch.
-        Action::Tab(_) | Action::SeekRuler(_) | Action::BrightnessRuler(_) => {}
+        Action::Tab(_)
+        | Action::SeekRuler(_)
+        | Action::BrightnessRuler(_)
+        | Action::VolumeRuler(_) => {}
     }
 }

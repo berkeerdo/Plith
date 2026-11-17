@@ -34,8 +34,6 @@ const FIRST_ROW_Y: f64 = 86.0;
 const STATION_DY: f64 = 3.0;
 /// Page height below the last row baseline (mock: 300 - 236).
 const BOTTOM: f64 = 64.0;
-/// The same without Voicemeeter (mock `audioNoVoicemeeter()`: 196 - 136).
-const BOTTOM_NO_VM: f64 = 60.0;
 /// Where a diagonal ends before the output station while the run fits (mock line 163: the
 /// Discord to A1 rise runs from x 280 to 430 with `XO = 452`).
 const DIAGONAL_END: f64 = 22.0;
@@ -45,8 +43,6 @@ const MIN_LEG: f64 = 6.0;
 const REACH: f64 = (OUTPUT_X - MIN_LEG) - (SOURCE_X + MIN_LEG);
 /// Footer baseline above the page bottom (mock: 284 on a 300 high page).
 const FOOTER_UP: f64 = 16.0;
-/// The same without Voicemeeter (mock `audioNoVoicemeeter()`: `h - 22`).
-const FOOTER_UP_NO_VM: f64 = 22.0;
 /// Trace slot left edge and width (mock `trace(svg, 168, ...)`, `w = 64`).
 const TRACE_X: f64 = 168.0;
 const TRACE_W: f64 = 64.0;
@@ -85,10 +81,6 @@ fn row_y(view: &AudioView, i: usize) -> f64 {
 /// Station centre y of row `i`.
 fn station_y(view: &AudioView, i: usize) -> f64 {
     row_y(view, i) - STATION_DY
-}
-
-fn has_voicemeeter(view: &AudioView) -> bool {
-    view.footer != Footer::NoVoicemeeter
 }
 
 /// The value copy: a gain as a bare signed whole number (`-6`, `0`, `+3`, like the mock's
@@ -153,16 +145,14 @@ fn output_slots(view: &AudioView) -> (Vec<Option<usize>>, usize) {
 /// The audio page nodes, hit targets and island shape.
 #[must_use]
 pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
+    if view.footer == Footer::Outputs {
+        return super::outputs::page(view, clock);
+    }
     let (mut nodes, mut targets) = tabbar(PageId::Audio, clock);
     let (slots, hidden) = output_slots(view);
     let output_rows = view.outputs.len().min(MAX_OUTPUT_SLOTS);
     let rows = view.sources.len().max(output_rows).max(1);
-    let (bottom, footer_up) = if has_voicemeeter(view) {
-        (BOTTOM, FOOTER_UP)
-    } else {
-        (BOTTOM_NO_VM, FOOTER_UP_NO_VM)
-    };
-    let height = (row_y(view, rows - 1) + bottom).min(shapes::PAGE_MAX_HEIGHT);
+    let height = (row_y(view, rows - 1) + BOTTOM).min(shapes::PAGE_MAX_HEIGHT);
     for (i, row) in view.sources.iter().enumerate() {
         source_row(view, i, row, &mut nodes, &mut targets);
     }
@@ -200,7 +190,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
             action: Action::CancelPick,
         });
     }
-    let footer_y = height - footer_up - 10.0;
+    let footer_y = height - FOOTER_UP - 10.0;
     nodes.push(text_trim(
         rect(MARGIN_LEFT, footer_y, PAGE_W - 2.0 * MARGIN_LEFT, LABEL_H),
         view.footer.text(),
@@ -254,9 +244,6 @@ fn source_row(
         Align::Start,
         Trim::End,
     ));
-    if !has_voicemeeter(view) {
-        return;
-    }
     if !row.muted {
         let sy = station_y(view, i);
         nodes.push(Node::Live(LiveNode::Trace {
@@ -311,13 +298,7 @@ fn output_row(
         ));
     }
     // The mock: a named bus reads in ink even with no route; only the unused bus is faint.
-    let name_ink = if !has_voicemeeter(view) {
-        if row.used { Ink::Ink } else { Ink::Muted }
-    } else if row.unnamed {
-        Ink::Faint
-    } else {
-        Ink::Ink
-    };
+    let name_ink = if row.unnamed { Ink::Faint } else { Ink::Ink };
     let name_x = match &row.tag {
         Some(tag) => {
             nodes.push(text_trim(
@@ -342,23 +323,16 @@ fn output_row(
             Trim::Middle,
         ));
     }
-    let action = if has_voicemeeter(view) {
-        Some(Action::PickOutput(o))
-    } else {
-        row.id.clone().map(Action::SetDefaultEndpoint)
-    };
-    if let Some(action) = action {
-        let left = OUTPUT_X - STATION_REACH;
-        targets.push(HitTarget {
-            rect: rect(
-                left,
-                y - ROW_HIT_HALF,
-                VALUE_RIGHT - left,
-                2.0 * ROW_HIT_HALF,
-            ),
-            action,
-        });
-    }
+    let left = OUTPUT_X - STATION_REACH;
+    targets.push(HitTarget {
+        rect: rect(
+            left,
+            y - ROW_HIT_HALF,
+            VALUE_RIGHT - left,
+            2.0 * ROW_HIT_HALF,
+        ),
+        action: Action::PickOutput(o),
+    });
 }
 
 /// Whether any route of `state` starts at source `s`.

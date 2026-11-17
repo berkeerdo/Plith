@@ -221,6 +221,18 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
             "04-audio-no-voicemeeter",
             audio(fixtures::no_voicemeeter(), PickMode::None),
         ),
+        (
+            "04b-audio-no-voicemeeter-muted",
+            audio(fixtures::no_voicemeeter_muted(), PickMode::None),
+        ),
+        (
+            "04c-audio-no-voicemeeter-no-outputs",
+            audio(fixtures::no_voicemeeter_no_endpoints(), PickMode::None),
+        ),
+        (
+            "04d-audio-no-voicemeeter-many",
+            audio(fixtures::no_voicemeeter_many(), PickMode::None),
+        ),
         ("05-media-playing", media(fixtures::media_playing())),
         ("06-media-empty", media(fixtures::media_empty())),
         (

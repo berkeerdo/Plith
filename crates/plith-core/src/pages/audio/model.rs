@@ -4,8 +4,8 @@
 use crate::pages::derive;
 
 use super::{
-    AudioFacts, AudioView, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode, Route,
-    RouteState, SourceRow, UNUSED_NAME, VmFacts, row_pitch,
+    AudioFacts, AudioView, DeviceKind, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode,
+    Route, RouteState, SourceRow, UNUSED_NAME, VmFacts, row_pitch,
 };
 
 /// Captions of the virtual strips, in order.
@@ -45,7 +45,7 @@ pub(super) fn build(facts: &AudioFacts, mode: PickMode) -> AudioView {
             .any(|r| r.output == o && r.state == RouteState::Live);
     }
     let footer = match (base_footer, picked) {
-        (Footer::NoVoicemeeter, _) => Footer::NoVoicemeeter,
+        (Footer::Outputs, _) => Footer::Outputs,
         (_, Some(_)) => Footer::Picking,
         _ => Footer::Normal,
     };
@@ -144,17 +144,14 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
         id: None,
         used: false,
         unnamed,
+        kind: DeviceKind::Speaker,
+        default: false,
     }
 }
 
+/// The outputs view: no sources and no routes, one row per endpoint with the default flagged.
 fn windows(facts: &AudioFacts) -> Parts {
     let muted = matches!(facts.attached, Some((_, true)));
-    let sources = vec![SourceRow {
-        name: "Windows".to_string(),
-        sub: crate::pages::copy::DEFAULT_OUTPUT.to_string(),
-        muted,
-        picked: false,
-    }];
     let default_idx = facts
         .default_id
         .as_ref()
@@ -164,7 +161,8 @@ fn windows(facts: &AudioFacts) -> Parts {
         .iter()
         .enumerate()
         .map(|(i, e)| {
-            let value = match (Some(i) == default_idx, facts.attached) {
+            let is_default = Some(i) == default_idx;
+            let value = match (is_default, facts.attached) {
                 (true, Some((v, _))) => OutputValue::Percent(derive::percent(v)),
                 _ => OutputValue::None,
             };
@@ -173,26 +171,14 @@ fn windows(facts: &AudioFacts) -> Parts {
                 name: e.name.clone(),
                 value,
                 live: false,
-                muted: Some(i) == default_idx && muted,
+                muted: is_default && muted,
                 id: Some(e.id.clone()),
                 used: false,
                 unnamed: false,
+                kind: e.kind,
+                default: is_default,
             }
         })
         .collect();
-    let routes = default_idx
-        .map(|o| {
-            let state = if muted {
-                RouteState::Cut
-            } else {
-                RouteState::Live
-            };
-            vec![Route {
-                source: 0,
-                output: o,
-                state,
-            }]
-        })
-        .unwrap_or_default();
-    (sources, outputs, routes, Footer::NoVoicemeeter)
+    (Vec::new(), outputs, Vec::new(), Footer::Outputs)
 }

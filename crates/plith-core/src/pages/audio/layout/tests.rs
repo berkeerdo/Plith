@@ -1,9 +1,10 @@
 #![allow(clippy::float_cmp)]
 
 use super::*;
-use crate::draw::{Ink, LiveNode, LiveRail, Node, StationMark, TextStyle, Trim};
+use crate::draw::{Ink, LiveNode, LiveRail, Node, StationMark, TextStyle};
 use crate::pages::audio::{
-    Footer, OutputRow, OutputValue, PITCH_NORMAL, PickMode, Route, RouteState, SourceRow,
+    DeviceKind, Footer, OutputRow, OutputValue, PITCH_NORMAL, PickMode, Route, RouteState,
+    SourceRow,
 };
 use crate::pages::{Action, hit};
 
@@ -26,6 +27,8 @@ fn bus(tag: &str, name: &str, value: OutputValue, live: bool) -> OutputRow {
         id: None,
         used: true,
         unnamed: false,
+        kind: DeviceKind::Speaker,
+        default: false,
     }
 }
 
@@ -81,33 +84,6 @@ fn picking_view() -> AudioView {
     view.routes.push(route(0, 1, RouteState::Candidate));
     view.routes.push(route(0, 3, RouteState::Candidate));
     view
-}
-
-fn endpoint(name: &str, id: &str, value: OutputValue) -> OutputRow {
-    OutputRow {
-        tag: None,
-        name: name.into(),
-        value,
-        live: false,
-        muted: false,
-        id: Some(id.into()),
-        used: false,
-        unnamed: false,
-    }
-}
-
-fn windows_view(second_name: &str) -> AudioView {
-    let mut first = endpoint("Logitech G733", "a", OutputValue::Percent(62));
-    first.live = true;
-    first.used = true;
-    AudioView {
-        sources: vec![source("Windows", "VARSAYILAN \u{c7}IKI\u{15e}", false)],
-        outputs: vec![first, endpoint(second_name, "b", OutputValue::None)],
-        routes: vec![route(0, 0, RouteState::Live)],
-        mode: PickMode::None,
-        footer: Footer::NoVoicemeeter,
-        row_pitch: PITCH_NORMAL,
-    }
 }
 
 fn rows(n: usize, pitch: f64) -> AudioView {
@@ -238,21 +214,6 @@ fn footer_sits_at_the_bottom() {
 }
 
 #[test]
-fn long_endpoint_name_truncates_in_middle() {
-    let long = "Hoparl\u{f6}r (Realtek High Definition Audio with a long name)";
-    let page = audio_page(&windows_view(long), "21:47");
-    let Some(Node::Text {
-        rect, trim, style, ..
-    }) = text_node(&page.list.nodes, long)
-    else {
-        panic!("endpoint name missing");
-    };
-    assert_eq!(*trim, Trim::Middle);
-    assert_eq!(*style, TextStyle::Body);
-    assert!(rect.x + rect.w <= VALUE_RIGHT);
-}
-
-#[test]
 fn live_route_is_two_px_flow() {
     let page = audio_page(&mock_view(), "21:47");
     let all = strokes(&page.list.nodes);
@@ -353,8 +314,6 @@ fn outputs_show_tag_name_and_value() {
         panic!("value missing");
     };
     assert_eq!(rect.x + rect.w, VALUE_RIGHT);
-    let page = audio_page(&windows_view("Edifier R1280"), "21:47");
-    assert!(text_node(&page.list.nodes, "62").is_some());
     // A bare signed integer, like the mock's 62 and 40: no unit to crowd the name.
     assert_eq!(format_value(OutputValue::Db(-6.4)), "-6");
     assert_eq!(format_value(OutputValue::Db(-0.3)), "0");
@@ -384,11 +343,6 @@ fn meters_and_traces_are_live_nodes() {
         (traces[0].0.x, traces[0].0.y, traces[0].0.w, traces[0].0.h),
         (168.0, 75.0, 64.0, 16.0)
     );
-    let page = audio_page(&windows_view("Edifier R1280"), "21:47");
-    assert!(
-        !page.list.nodes.iter().any(|n| matches!(n, Node::Live(_))),
-        "no levels without Voicemeeter"
-    );
 }
 
 #[test]
@@ -412,12 +366,6 @@ fn hit_source_then_output_actions() {
         hit(&page.targets, 500.0, row(1.0) - 5.0),
         Some(Action::PickOutput(1))
     );
-    let page = audio_page(&windows_view("Edifier R1280"), "21:47");
-    assert_eq!(
-        hit(&page.targets, 500.0, row(1.0) - 5.0),
-        Some(Action::SetDefaultEndpoint("b".into()))
-    );
-    assert_eq!(hit(&page.targets, 60.0, row(0.0) - 5.0), None);
     assert_eq!(
         hit(&page.targets, 30.0, 30.0),
         Some(Action::Tab(PageId::Audio))
@@ -477,33 +425,6 @@ fn tall_rise_slides_the_diagonal_end_then_runs_steeper() {
 }
 
 #[test]
-fn one_source_eight_endpoints_fit_the_shape() {
-    let mut view = windows_view("Edifier R1280");
-    for i in 2..8 {
-        view.outputs.push(endpoint(
-            &format!("Out {i}"),
-            &format!("id{i}"),
-            OutputValue::None,
-        ));
-    }
-    view.row_pitch = row_pitch(8);
-    let page = audio_page(&view, "21:47");
-    let h = page.list.size.1;
-    assert!(h <= shapes::PAGE_MAX_HEIGHT);
-    let footer_top = h - 26.0;
-    for n in &page.list.nodes {
-        if let Node::Text { rect, text, .. } = n
-            && text.starts_with("Out")
-        {
-            assert!(
-                rect.y + rect.h <= footer_top,
-                "row {text} overlaps the footer"
-            );
-        }
-    }
-}
-
-#[test]
 fn bus_muted_cut_keeps_the_source_clean() {
     let mut view = mock_view();
     view.outputs[1].muted = true;
@@ -551,107 +472,4 @@ fn unused_and_non_default_outputs_are_quiet() {
         panic!("unused bus missing");
     };
     assert_eq!(*ink, Ink::Faint);
-    let page = audio_page(&windows_view("Edifier R1280"), "21:47");
-    let ink_of = |name: &str| match text_node(&page.list.nodes, name) {
-        Some(Node::Text { ink, .. }) => *ink,
-        _ => panic!("{name} missing"),
-    };
-    assert_eq!(ink_of("Edifier R1280"), Ink::Muted);
-    assert_eq!(ink_of("Logitech G733"), Ink::Ink);
-}
-
-#[test]
-fn no_voicemeeter_muted_default_says_sessiz_only_at_the_output() {
-    let mut view = windows_view("Edifier R1280");
-    view.sources[0].muted = true;
-    view.outputs[0].muted = true;
-    view.outputs[0].live = false;
-    view.routes = vec![route(0, 0, RouteState::Cut)];
-    let page = audio_page(&view, "21:47");
-    let n = &page.list.nodes;
-    assert_eq!(text_count(n, "SESSİZ"), 1);
-    let Some(Node::Text { rect, .. }) = text_node(n, "SESSİZ") else {
-        unreachable!()
-    };
-    assert!(rect.x > OUTPUT_X, "the label is the output value");
-}
-
-#[test]
-fn no_voicemeeter_page_matches_its_mock() {
-    // Mock `audioNoVoicemeeter()`: two output rows, 196 high, footer baseline at h - 22.
-    let mut view = windows_view("Edifier R1280");
-    view.row_pitch = row_pitch(2);
-    let page = audio_page(&view, "21:47");
-    assert_eq!(page.list.size.1, 196.0);
-    let Some(Node::Text { rect, .. }) = text_node(&page.list.nodes, Footer::NoVoicemeeter.text())
-    else {
-        panic!("footer missing");
-    };
-    assert_eq!(rect.y + 10.0, 174.0);
-}
-
-#[test]
-fn many_endpoints_cap_at_ten_slots_and_keep_the_default() {
-    let mut view = windows_view("Edifier R1280");
-    view.outputs[0].live = false;
-    view.outputs[0].used = false;
-    view.outputs[0].value = OutputValue::None;
-    for i in 2..14 {
-        view.outputs.push(endpoint(
-            &format!("Out {i}"),
-            &format!("id{i}"),
-            OutputValue::None,
-        ));
-    }
-    view.outputs[12].live = true;
-    view.outputs[12].used = true;
-    view.outputs[12].value = OutputValue::Percent(62);
-    view.routes = vec![route(0, 12, RouteState::Live)];
-    view.row_pitch = row_pitch(10);
-    let page = audio_page(&view, "21:47");
-    let h = page.list.size.1;
-    let n = &page.list.nodes;
-    assert!(h <= shapes::PAGE_MAX_HEIGHT);
-    // Eight rows in order, the default in the ninth slot, `+5` in the tenth.
-    let slot_y = |i: f64| 86.0 + i * view.row_pitch;
-    assert!(text_node(n, "Out 7").is_some());
-    assert!(text_node(n, "Out 8").is_none());
-    assert!(text_node(n, "Out 13").is_none());
-    let Some(Node::Text { rect, .. }) = text_node(n, "Out 12") else {
-        panic!("default endpoint hidden");
-    };
-    assert_eq!(rect.y, slot_y(8.0) - 10.0);
-    let Some(Node::Text {
-        rect, ink, style, ..
-    }) = text_node(n, "+5")
-    else {
-        panic!("+N missing");
-    };
-    assert_eq!((*ink, *style), (Ink::Faint, TextStyle::Label));
-    assert_eq!(rect.y, slot_y(9.0) - 9.0);
-    let live = strokes(n)
-        .into_iter()
-        .find(|l| l.2 == Ink::Flow)
-        .expect("live route");
-    assert_eq!(live.0.last(), Some(&(OUTPUT_X, slot_y(8.0) - 3.0)));
-    assert!(live.0.iter().all(|p| p.1 < h));
-    let defaults: Vec<_> = page
-        .targets
-        .iter()
-        .filter(|t| matches!(t.action, Action::SetDefaultEndpoint(_)))
-        .collect();
-    assert_eq!(defaults.len(), 9);
-    assert!(page.targets.iter().all(|t| t.rect.y + t.rect.h <= h));
-    assert_eq!(
-        hit(&page.targets, 500.0, slot_y(8.0) - 5.0),
-        Some(Action::SetDefaultEndpoint("id12".into()))
-    );
-    assert_eq!(hit(&page.targets, 480.0, slot_y(9.0) - 5.0), None);
-    for node in n {
-        if let Node::Text { rect, text, .. } = node
-            && (text.starts_with("Out") || text.starts_with('+'))
-        {
-            assert!(rect.y + rect.h <= h - 22.0, "{text} below the footer line");
-        }
-    }
 }

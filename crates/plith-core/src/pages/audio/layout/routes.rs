@@ -2,7 +2,7 @@
 
 use super::{
     CUT_END_X, CUT_LABEL_X, DIAGONAL_END, LABEL_H, LABEL_TEXT, MIN_LEG, OUTPUT_X, SOURCE_X,
-    has_voicemeeter, source_has, station_y,
+    source_has, station_y,
 };
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
 use crate::pages::audio::{AudioView, RouteState};
@@ -125,7 +125,6 @@ fn look(state: RouteState) -> (u8, f64, Ink, bool) {
 /// hidden outputs (no slot) are not drawn.
 pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<Node>) {
     let backs = backs(view, slots);
-    reachable(view, slots, nodes);
     for order in 0..3 {
         for (k, r) in view.routes.iter().enumerate() {
             let Some(source) = view.sources.get(r.source) else {
@@ -151,7 +150,7 @@ pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<No
     }
     for (s, row) in view.sources.iter().enumerate() {
         if row.muted && source_has(view, s, RouteState::Cut) {
-            cut(station_y(view, s), has_voicemeeter(view), nodes);
+            cut(station_y(view, s), nodes);
         }
     }
     for (s, row) in view.sources.iter().enumerate() {
@@ -187,26 +186,8 @@ pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<No
     }
 }
 
-/// Without Voicemeeter every other endpoint is reachable: a 1 px track route from the Windows
-/// source (mock `audioNoVoicemeeter()`).
-fn reachable(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<Node>) {
-    if has_voicemeeter(view) || view.sources.is_empty() {
-        return;
-    }
-    let from = (SOURCE_X, station_y(view, 0));
-    for (o, slot) in slots.iter().enumerate() {
-        let Some(slot) = slot else { continue };
-        if view.routes.iter().any(|r| r.output == o) {
-            continue;
-        }
-        let to = (OUTPUT_X, station_y(view, *slot));
-        nodes.push(stroke(route_path(from, to), 1.0, Ink::Track, false));
-    }
-}
-
-/// The mock's cut line: a stub from the source station to a hollow station, then `SESSİZ`
-/// (without Voicemeeter the muted default output already says it, so no label).
-fn cut(y: f64, label: bool, nodes: &mut Vec<Node>) {
+/// The mock's cut line: a stub from the source station to a hollow station, then `SESSİZ`.
+fn cut(y: f64, nodes: &mut Vec<Node>) {
     nodes.push(stroke(
         vec![(SOURCE_X, y), (CUT_END_X, y)],
         1.0,
@@ -214,9 +195,6 @@ fn cut(y: f64, label: bool, nodes: &mut Vec<Node>) {
         false,
     ));
     nodes.push(station(CUT_END_X, y, StationMark::Hollow, Ink::Faint));
-    if !label {
-        return;
-    }
     nodes.push(text(
         rect(CUT_LABEL_X, y + 4.0 - 10.0, CUT_LABEL_W, LABEL_H),
         LABEL_TEXT,

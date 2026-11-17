@@ -77,6 +77,7 @@ fn pill_facts_without_a_known_default_show_no_name() {
         endpoints: vec![EndpointFacts {
             id: "a".to_string(),
             name: "A".to_string(),
+            ..EndpointFacts::default()
         }],
         default_id: Some("gone".to_string()),
         vm: Some(VmFacts {

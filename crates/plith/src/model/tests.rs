@@ -1,6 +1,7 @@
 use super::*;
 use plith_audio::endpoints::{AttachedState, Endpoint};
 use plith_audio::voicemeeter::{Rail, VmKind};
+use plith_core::pages::audio::DeviceKind;
 use plith_core::pages::pill::PillState;
 use plith_media::{Artwork, Timeline};
 use std::time::{Duration, SystemTime};
@@ -39,16 +40,17 @@ fn banana() -> VmSnapshot {
 }
 
 fn endpoints() -> EndpointState {
-    let endpoint = |id: &str, friendly: &str, device: &str| Endpoint {
+    let endpoint = |id: &str, friendly: &str, device: &str, form_factor: Option<u32>| Endpoint {
         id: id.to_string(),
         friendly_name: friendly.to_string(),
         device_name: device.to_string(),
+        form_factor,
     };
     EndpointState {
         default_id: Some("g733".to_string()),
         active: vec![
-            endpoint("g733", "Speakers (Logitech G733)", "Logitech G733"),
-            endpoint("hdmi", "DELL (NVIDIA High Definition Audio)", ""),
+            endpoint("g733", "Speakers (Logitech G733)", "Logitech G733", Some(5)),
+            endpoint("hdmi", "DELL (NVIDIA High Definition Audio)", "", Some(9)),
         ],
         attached: Some(AttachedState {
             id: "g733".to_string(),
@@ -100,6 +102,8 @@ fn audio_facts_copy_endpoints_with_short_names() {
         "DELL (NVIDIA High Definition Audio)"
     );
     assert_eq!(facts.endpoints[1].id, "hdmi");
+    assert_eq!(facts.endpoints[0].kind, DeviceKind::Headphones);
+    assert_eq!(facts.endpoints[1].kind, DeviceKind::Display);
     assert_eq!(facts.default_id.as_deref(), Some("g733"));
     assert_eq!(facts.attached, Some((0.62, false)));
     assert_eq!(

@@ -33,30 +33,23 @@ pub struct MicFacts {
 /// Page height (mock `systemPage`, `h = 178`).
 const HEIGHT: f64 = 178.0;
 /// Ruler and route line start x (mock `x0 = 200`).
-const X0: f64 = 200.0;
+pub(super) const X0: f64 = 200.0;
 /// Ruler and route line end x (mock `x1 = W - 70`).
-const X1: f64 = PAGE_W - 70.0;
+pub(super) const X1: f64 = PAGE_W - 70.0;
 /// Brightness row y (mock `y = 80`).
 const RULER_Y: f64 = 80.0;
 /// Mic row y (mock `my = 132`).
 const MIC_Y: f64 = 132.0;
 /// Right edge of the value and bus texts (mock `W - 30`).
-const RIGHT: f64 = PAGE_W - 30.0;
+pub(super) const RIGHT: f64 = PAGE_W - 30.0;
 /// Reach of the ruler target above and below the line.
 const RULER_GROW: f64 = 8.0;
 /// Cut in the muted route: the gap runs from `X0 + 120` to `X0 + 170` (mock `micRow`).
 const CUT_FROM: f64 = 120.0;
 const CUT_TO: f64 = 170.0;
 
-/// The ruler rectangle: the brightness hit area and the base of the percentage.
-const RULER: Rect = Rect {
-    x: X0,
-    y: RULER_Y - 5.0,
-    w: X1 - X0,
-    h: 10.0,
-};
-
-/// The brightness percentage (0 to 100, rounded) for a click at `x` on `ruler`.
+/// The percentage (0 to 100, rounded) for a click at `x` on `ruler`; brightness and volume
+/// share it.
 #[must_use]
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 pub fn brightness_at(ruler: Rect, x: f64) -> u8 {
@@ -118,37 +111,57 @@ fn brightness_row(
         Ink::Faint,
         Align::Start,
     ));
-    let fraction = f64::from(percent) / 100.0;
+    draw_ruler(nodes, RULER_Y, f64::from(percent) / 100.0, Ink::Ink);
+    nodes.push(percent_value(RULER_Y, percent, Ink::Ink));
+    targets.push(ruler_target(
+        RULER_Y,
+        Action::BrightnessRuler(ruler_rect(RULER_Y)),
+    ));
+}
+
+/// The ruler rectangle at line `y`: the hit area and the base of the percentage.
+pub(super) fn ruler_rect(y: f64) -> Rect {
+    Rect {
+        x: X0,
+        y: y - 5.0,
+        w: X1 - X0,
+        h: 10.0,
+    }
+}
+
+/// The hit target of a ruler at line `y`, taller than the line by `RULER_GROW` each way.
+pub(super) fn ruler_target(y: f64, action: Action) -> HitTarget {
+    let r = ruler_rect(y);
+    HitTarget {
+        rect: rect(X0, r.y - RULER_GROW, r.w, r.h + 2.0 * RULER_GROW),
+        action,
+    }
+}
+
+/// The ruler: track, eleven ticks, the filled part up to `fraction` (0 to 1) and the square
+/// station thumb, the fill and thumb in `ink`.
+pub(super) fn draw_ruler(nodes: &mut Vec<Node>, y: f64, fraction: f64, ink: Ink) {
     let at = X0 + (X1 - X0) * fraction;
-    nodes.push(line(vec![(X0, RULER_Y), (X1, RULER_Y)], 1.0, Ink::Track));
+    nodes.push(line(vec![(X0, y), (X1, y)], 1.0, Ink::Track));
     for i in 0..=10u8 {
         let x = X0 + (X1 - X0) * f64::from(i) / 10.0;
         let len = if i % 5 == 0 { 11.0 } else { 7.0 };
-        nodes.push(line(
-            vec![(x, RULER_Y + 4.0), (x, RULER_Y + len)],
-            1.0,
-            Ink::Faint,
-        ));
+        nodes.push(line(vec![(x, y + 4.0), (x, y + len)], 1.0, Ink::Faint));
     }
-    nodes.push(line(vec![(X0, RULER_Y), (at, RULER_Y)], 2.0, Ink::Ink));
-    nodes.push(station(at, RULER_Y, StationMark::Filled, Ink::Ink));
-    nodes.push(text(
-        rect(RIGHT - 60.0, RULER_Y - 8.0, 60.0, 14.0),
-        &percent.to_string(),
+    nodes.push(line(vec![(X0, y), (at, y)], 2.0, ink));
+    nodes.push(station(at, y, StationMark::Filled, ink));
+}
+
+/// The value at the right of a ruler: `%70`, Turkish putting the sign first.
+pub(super) fn percent_value(y: f64, percent: u8, ink: Ink) -> Node {
+    text(
+        rect(RIGHT - 60.0, y - 8.0, 60.0, 14.0),
+        &format!("%{percent}"),
         // The mock sets this value in mono 12, the clock's face and size.
         TextStyle::Clock,
-        Ink::Ink,
+        ink,
         Align::End,
-    ));
-    targets.push(HitTarget {
-        rect: rect(
-            X0,
-            RULER.y - RULER_GROW,
-            RULER.w,
-            RULER.h + 2.0 * RULER_GROW,
-        ),
-        action: Action::BrightnessRuler(RULER),
-    });
+    )
 }
 
 fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
