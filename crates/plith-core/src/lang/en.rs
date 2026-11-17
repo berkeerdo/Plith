@@ -35,5 +35,8 @@ pub fn text(t: Text) -> Option<&'static str> {
         Text::SkySnow => "SNOW",
         Text::DefaultOutput => "DEFAULT OUTPUT",
         Text::Off => "OFF",
+        Text::KindHeadphones => "HEADPHONES",
+        Text::KindSpeaker => "SPEAKER",
+        Text::KindDisplay => "DISPLAY",
     })
 }

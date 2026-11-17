@@ -147,3 +147,16 @@ fn a_new_forecast_is_news_once() {
     assert!(idle.set_forecast(mock::forecast(day, stamp)));
     assert!(!idle.set_forecast(mock::forecast(day, stamp)));
 }
+
+#[test]
+fn the_sound_head_kind_follows_the_language() {
+    let f = facts();
+    let tr = Idle::new(Settings::default(), Lang::Tr).welcome_facts(&f, at(12, 0, 0));
+    let en = Idle::new(Settings::default(), Lang::En).welcome_facts(&f, at(12, 0, 0));
+    let (tr, en) = (tr.sound.unwrap().kind, en.sound.unwrap().kind);
+    assert_ne!(tr, en);
+    assert!(
+        ["HEADPHONES", "SPEAKER", "DISPLAY"].contains(&en.as_str()),
+        "{en}"
+    );
+}

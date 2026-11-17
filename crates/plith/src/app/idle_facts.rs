@@ -4,7 +4,7 @@
 
 use crate::log::Stamp;
 use crate::services::Facts;
-use plith_core::lang::{Lang, date_short, weekday};
+use plith_core::lang::{Lang, date_short, device_kind, weekday};
 use plith_core::pages::derive::rebase;
 use plith_core::pages::idle_pill::{IdleFacts, weather_words};
 use plith_core::pages::pill::PillState;
@@ -179,7 +179,7 @@ impl Idle {
             span: s.span,
             unit: s.unit,
             head: s.head,
-            sound: sound_head(facts),
+            sound: sound_head(facts, self.lang),
             elapsed: playing.then(|| elapsed(facts)).flatten(),
             lang: self.lang,
         }
@@ -187,7 +187,7 @@ impl Idle {
 }
 
 /// The default output for the sound head slot; `None` while there is none.
-fn sound_head(facts: &Facts) -> Option<SoundHead> {
+fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
     let pill = &facts.pill;
     if pill.output.is_empty() {
         return None;
@@ -197,7 +197,7 @@ fn sound_head(facts: &Facts) -> Option<SoundHead> {
         .default_id
         .as_ref()
         .and_then(|id| facts.audio.endpoints.iter().find(|e| &e.id == id))
-        .map(|e| e.kind.caption().to_string())
+        .map(|e| device_kind(e.kind, lang).to_string())
         .unwrap_or_default();
     Some(SoundHead {
         output: pill.output.clone(),

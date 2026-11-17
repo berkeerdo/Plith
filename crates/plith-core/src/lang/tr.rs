@@ -35,5 +35,8 @@ pub fn text(t: Text) -> Option<&'static str> {
         Text::SkySnow => "KAR",
         Text::DefaultOutput => "VARSAYILAN ÇIKIŞ",
         Text::Off => "KAPALI",
+        Text::KindHeadphones => "KULAKLIK",
+        Text::KindSpeaker => "HOPARLÖR",
+        Text::KindDisplay => "EKRAN",
     })
 }

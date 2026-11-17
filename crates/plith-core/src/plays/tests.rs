@@ -98,6 +98,7 @@ fn round_trip_with_tab_in_title_is_sanitised() {
     log.observe(D, 600, 0, Some(("Tab\there", "Art\r\nist")), true);
     log.observe(D, 610, 0, Some(("Tab\there", "Art\r\nist")), false);
     log.observe(D, 700, 0, B, true);
+    log.observe(D, 700, 30, B, true);
     let text = log.serialize();
     assert!(text.starts_with("2026-11-17 600 610 Tab here\tArt  ist\n"));
     let back = PlayLog::parse(&text);
@@ -123,4 +124,28 @@ fn in_window_handles_negative_from() {
     assert_eq!(log.in_window(-120, 0).len(), 0);
     assert_eq!(log.in_window(30, 1600).len(), 0);
     assert_eq!(log.in_window(29, 1600).len(), 1);
+}
+
+#[test]
+fn an_open_play_under_ten_seconds_is_not_written() {
+    let mut log = PlayLog::default();
+    log.observe(D, 600, 0, A, true);
+    log.observe(D, 603, 0, A, false);
+    log.observe(D, 610, 0, B, true);
+    log.observe(D, 610, 4, B, true);
+    let text = log.serialize();
+    assert!(
+        text.contains("Song A") && !text.contains("Song B"),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_play_right_after_a_track_change_is_not_written_until_it_lasts() {
+    let mut log = PlayLog::default();
+    log.observe(D, 600, 0, A, true);
+    log.observe(D, 603, 0, B, true);
+    assert!(!log.serialize().contains("Song B"));
+    log.observe(D, 603, 12, B, true);
+    assert!(log.serialize().contains("Song B"));
 }

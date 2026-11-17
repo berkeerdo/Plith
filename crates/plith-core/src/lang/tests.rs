@@ -1,4 +1,5 @@
 use super::*;
+use crate::pages::audio::DeviceKind;
 use crate::settings::LangChoice;
 
 #[test]
@@ -71,4 +72,12 @@ fn weekday_counts_from_monday() {
 fn sky_word_follows_the_language() {
     assert_eq!(sky_word(Sky::Rain, Lang::Tr), "YAĞMUR");
     assert_eq!(sky_word(Sky::Rain, Lang::En), "RAIN");
+}
+
+#[test]
+fn device_kind_follows_the_language() {
+    assert_eq!(device_kind(DeviceKind::Headphones, Lang::En), "HEADPHONES");
+    assert_eq!(device_kind(DeviceKind::Headphones, Lang::Tr), "KULAKLIK");
+    assert_eq!(device_kind(DeviceKind::Speaker, Lang::En), "SPEAKER");
+    assert_eq!(device_kind(DeviceKind::Display, Lang::Tr), "EKRAN");
 }

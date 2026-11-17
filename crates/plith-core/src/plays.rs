@@ -32,6 +32,8 @@ pub struct Play {
 #[derive(Debug, Clone)]
 struct Open {
     start_s: u32,
+    /// The latest second the play was seen at.
+    seen_s: u32,
     play: Play,
 }
 
@@ -83,6 +85,7 @@ impl PlayLog {
             && open.play.artist == *artist
         {
             open.play.end_min = ceil_min(now).max(open.play.start_min + 1);
+            open.seen_s = now;
             return;
         }
         self.close(now);
@@ -104,6 +107,7 @@ impl PlayLog {
                 open.start_s = 0;
                 open.play.start_min = 0;
                 open.play.end_min = ceil_min(now).max(1);
+                open.seen_s = now;
             }
         } else {
             self.open = None;
@@ -135,6 +139,7 @@ impl PlayLog {
             self.last = None;
             self.open = Some(Open {
                 start_s: last.start_s,
+                seen_s: now,
                 play: Play {
                     end_min: ceil_min(now).max(play.start_min + 1),
                     ..play
@@ -145,6 +150,7 @@ impl PlayLog {
         let start_min = now / 60;
         self.open = Some(Open {
             start_s: now,
+            seen_s: now,
             play: Play {
                 start_min,
                 end_min: ceil_min(now).max(start_min + 1),
@@ -173,12 +179,18 @@ impl PlayLog {
             .collect()
     }
 
-    /// The text form: one `YYYY-MM-DD start end title<TAB>artist` line per play.
+    /// The text form: one `YYYY-MM-DD start end title<TAB>artist` line per play. An open play
+    /// is written only once it has lasted `MIN_PLAY_S`, so a skip never reaches the file.
     #[must_use]
     pub fn serialize(&self) -> String {
         let (y, m, d) = self.day;
         let mut out = String::new();
-        for p in self.plays.iter().chain(self.current()) {
+        let lasting = self
+            .open
+            .as_ref()
+            .filter(|o| o.seen_s.saturating_sub(o.start_s) >= MIN_PLAY_S)
+            .map(|o| &o.play);
+        for p in self.plays.iter().chain(lasting) {
             let _ = writeln!(
                 out,
                 "{y:04}-{m:02}-{d:02} {} {} {}\t{}",

@@ -1,5 +1,6 @@
 //! Interface languages and the text table. Every UI string comes from here.
 
+use crate::pages::audio::DeviceKind;
 use crate::settings::LangChoice;
 use crate::weather::Sky;
 
@@ -71,11 +72,17 @@ pub enum Text {
     DefaultOutput,
     /// A muted output.
     Off,
+    /// An output kind: headphones.
+    KindHeadphones,
+    /// An output kind: speaker.
+    KindSpeaker,
+    /// An output kind: display.
+    KindDisplay,
 }
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 18] = [
+    pub const ALL: [Text; 21] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -94,6 +101,9 @@ impl Text {
         Text::SkySnow,
         Text::DefaultOutput,
         Text::Off,
+        Text::KindHeadphones,
+        Text::KindSpeaker,
+        Text::KindDisplay,
     ];
 }
 
@@ -164,6 +174,19 @@ pub fn weekday((year, month, day): (u16, u16, u16)) -> u8 {
     #[allow(clippy::cast_possible_truncation)]
     let from_sunday = from_sunday as u8;
     (from_sunday + 6) % 7
+}
+
+/// The word for an output kind, for example `HEADPHONES`.
+#[must_use]
+pub fn device_kind(kind: DeviceKind, lang: Lang) -> &'static str {
+    text(
+        match kind {
+            DeviceKind::Headphones => Text::KindHeadphones,
+            DeviceKind::Speaker => Text::KindSpeaker,
+            DeviceKind::Display => Text::KindDisplay,
+        },
+        lang,
+    )
 }
 
 /// The word for a sky, for example `YAĞMUR`.
