@@ -8,6 +8,7 @@ use super::engine::{Engine, opacity_f32};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::clock_choice::ClockKind;
+use plith_core::pages::PAGE_COUNT;
 use std::sync::Arc;
 
 /// Why the pages were warmed, as the log line names it.
@@ -82,7 +83,8 @@ where
     /// Warms every stale page while the island is open; nothing while collapsed or hidden.
     pub(super) fn prewarm_open(&mut self, reason: Reason) {
         if self.is_open() {
-            self.prewarm(&[0, 1, 2, 3], reason);
+            let all: [usize; PAGE_COUNT] = std::array::from_fn(|page| page);
+            self.prewarm(&all, reason);
         }
     }
 
