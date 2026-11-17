@@ -10,6 +10,7 @@ use plith_core::pages::pill::pill;
 use plith_core::pages::shelf::shelf_page;
 use plith_core::pages::system::system_page;
 use plith_core::pages::tabbar::tabbar;
+use plith_core::pages::welcome::{WelcomeFacts, welcome_page};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PAGE_W, PageBuild, PageId};
 use plith_core::shapes::WELCOME;
 use std::sync::Arc;
@@ -22,6 +23,10 @@ pub struct Inputs<'a> {
     pub pick: PickMode,
     /// The tab bar clock, `HH:MM`.
     pub clock: &'a str,
+    /// The welcome view's facts; `None` builds the placeholder (set by the app wiring).
+    pub welcome: Option<&'a WelcomeFacts>,
+    /// The hour cell under the pointer on the welcome view.
+    pub probe: Option<i32>,
 }
 
 /// Which lists need a rebuild.
@@ -81,7 +86,9 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
         PageId::Media => media_page(&facts.media, inputs.clock),
         PageId::Shelf => shelf_page(inputs.clock),
         PageId::System => system_page(&facts.system, inputs.clock),
-        PageId::Welcome => welcome_placeholder(),
+        PageId::Welcome => inputs
+            .welcome
+            .map_or_else(welcome_placeholder, |f| welcome_page(f, inputs.probe)),
     }
 }
 

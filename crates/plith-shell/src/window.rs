@@ -50,6 +50,15 @@ pub enum ShellEvent {
     },
     /// The pointer moved over the window for the first time since it last left.
     Enter,
+    /// The pointer moved to a new point inside the drawn island shape, at `(x, y)` DIP relative
+    /// to the island's top-left. The shell does not know whether the island is open; the app
+    /// decides what a move means.
+    Move {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
     /// The pointer left the window region (the island shape, ADR 0004).
     Leave,
     /// The DPI or the display configuration changed; relay the surface when the island is at rest.
@@ -388,7 +397,7 @@ fn dispatch(
             return Some(LRESULT(0));
         }
         WM_MOUSEMOVE if is_visual => {
-            mouse::on_move(inner);
+            mouse::on_move(inner, lparam);
             return Some(LRESULT(0));
         }
         mouse::WM_MOUSELEAVE if is_visual => {

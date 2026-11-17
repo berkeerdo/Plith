@@ -13,6 +13,8 @@ fn inputs(facts: &Facts) -> Inputs<'_> {
         facts,
         pick: PickMode::None,
         clock: "21:47",
+        welcome: None,
+        probe: None,
     }
 }
 

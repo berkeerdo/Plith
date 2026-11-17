@@ -10,6 +10,7 @@ use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
 use plith_core::pages::audio::PickMode;
 use plith_core::pages::tabbar::clock_text;
+use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
@@ -104,6 +105,11 @@ pub struct Feed {
     pick_mixer: Option<MixerShape>,
     /// The OSD sink and the last reading it saw.
     osd: osd::OsdFeed,
+    /// The facts the welcome view is built from; `None` until the app wiring sets them, and
+    /// the welcome slot then stays the placeholder.
+    welcome: Option<WelcomeFacts>,
+    /// The hour cell under the pointer on the welcome view.
+    probe: Option<i32>,
 }
 
 impl Feed {
@@ -123,6 +129,8 @@ impl Feed {
             facts: &facts,
             pick: PickMode::None,
             clock: &clock_text,
+            welcome: None,
+            probe: None,
         });
         let feed = Self {
             services,
@@ -137,6 +145,8 @@ impl Feed {
             pick: PickMode::None,
             pick_mixer: None,
             osd: osd::OsdFeed::default(),
+            welcome: None,
+            probe: None,
         };
         feed.publish(mailbox);
         feed
@@ -157,6 +167,8 @@ impl Feed {
             facts: &self.facts,
             pick: self.pick,
             clock: &self.clock_text,
+            welcome: self.welcome.as_ref(),
+            probe: self.probe,
         };
         self.pages.rebuild(dirty, &inputs);
         self.publish(mailbox);
@@ -298,6 +310,39 @@ impl Feed {
                 PickMode::None => None,
             };
             self.rebuild(Dirty::page(PageId::Audio), mailbox);
+        }
+    }
+
+    /// The hour cell under the pointer on the welcome view.
+    #[cfg(test)]
+    #[must_use]
+    pub fn probe(&self) -> Option<i32> {
+        self.probe
+    }
+
+    /// Sets the probe and rebuilds the welcome page only when it changed.
+    pub fn set_probe(&mut self, probe: Option<i32>, mailbox: &SceneMailbox) {
+        if self.probe != probe {
+            self.probe = probe;
+            self.rebuild(Dirty::page(PageId::Welcome), mailbox);
+        }
+    }
+
+    /// The pointer is at `(x, y)` island DIP on the welcome view: sets the probe to the hour
+    /// cell under it. Without welcome facts there is nothing to probe.
+    pub fn move_probe(&mut self, x: f64, y: f64, mailbox: &SceneMailbox) {
+        let probe = self.welcome.as_ref().and_then(|f| probe_hour(f, x, y));
+        self.set_probe(probe, mailbox);
+    }
+
+    /// Sets the facts the welcome view is built from and rebuilds it. Until the app wiring
+    /// calls this, the welcome slot is the placeholder.
+    // Allowed: the app wiring is the only non-test caller and it is not written yet.
+    #[cfg_attr(not(test), allow(dead_code))]
+    pub fn set_welcome_facts(&mut self, facts: Option<WelcomeFacts>, mailbox: &SceneMailbox) {
+        if self.welcome != facts {
+            self.welcome = facts;
+            self.rebuild(Dirty::page(PageId::Welcome), mailbox);
         }
     }
 

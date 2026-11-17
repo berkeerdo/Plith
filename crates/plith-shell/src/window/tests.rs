@@ -125,6 +125,41 @@ fn first_move_enters_and_leave_leaves() {
 }
 
 #[test]
+fn a_move_reports_a_new_point_inside_the_shape_once() {
+    use plith_core::page::PageLayers;
+    use plith_core::scene::ShapeFrame;
+    use plith_core::shapes::REST;
+    let (inner, events) = recording();
+    let lparam_at = |dx: f64, dy: f64| {
+        let (ox, oy) = inner.layout.island_origin(REST);
+        // Allowed: the island point sits well inside the 1920 px wide test surface.
+        #[allow(clippy::cast_possible_truncation)]
+        let (x, y) = ((ox + dx).round() as i16, (oy + dy).round() as i16);
+        LPARAM((isize::from(y) << 16) | isize::from(x))
+    };
+    mouse::note_point(&inner, lparam_at(50.0, 10.0));
+    assert!(events.borrow().is_empty(), "no shape published yet");
+    inner.shapes.publish(ShapeFrame {
+        shape: REST,
+        previous: REST,
+        generation: 1,
+        pages: PageLayers::empty(),
+    });
+    mouse::note_point(&inner, lparam_at(50.0, 10.0));
+    mouse::note_point(&inner, lparam_at(50.0, 10.0));
+    mouse::note_point(&inner, lparam_at(-500.0, 10.0));
+    mouse::note_point(&inner, lparam_at(51.0, 10.0));
+    mouse::note_leave(&inner);
+    mouse::note_point(&inner, lparam_at(51.0, 10.0));
+    let got = events.borrow();
+    let moves: Vec<_> = got
+        .iter()
+        .filter(|e| matches!(e, ShellEvent::Move { .. }))
+        .collect();
+    assert_eq!(moves.len(), 3, "{got:?}");
+}
+
+#[test]
 fn a_click_carries_its_point() {
     let (inner, events) = recording();
     inner.emit(ShellEvent::Click { x: 1.0, y: 2.0 });

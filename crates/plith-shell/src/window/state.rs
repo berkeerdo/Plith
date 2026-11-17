@@ -50,6 +50,8 @@ pub(crate) struct Inner {
     pub applied: Cell<Option<IslandShape>>,
     /// True while a `WM_MOUSELEAVE` is requested and not yet delivered.
     pub tracking: Cell<bool>,
+    /// The island point of the last `Move` emitted; a move to the same point emits nothing.
+    pub last_point: Cell<Option<(f64, f64)>>,
     /// The left-button press waiting for its release (`WM_LBUTTONDOWN` inside the shape).
     pub press: crate::window::mouse::PressRecord,
     pub registrations: RefCell<Registrations>,
@@ -81,6 +83,7 @@ impl Inner {
             stats: Cell::new(HitStats::default()),
             hit_errors: Cell::new(0),
             tracking: Cell::new(false),
+            last_point: Cell::new(None),
             press: crate::window::mouse::PressRecord::default(),
             applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),

@@ -119,16 +119,34 @@ pub(crate) fn note_move(inner: &Inner) -> bool {
     true
 }
 
+/// Notes the pointer at `lparam`: a point inside the drawn shape that differs from the last one
+/// emitted becomes a `Move`. No timer and no repeat for a pointer at rest.
+pub(crate) fn note_point(inner: &Inner, lparam: LPARAM) {
+    let Some(point) = message_point(inner, lparam) else {
+        return;
+    };
+    if inner.last_point.replace(Some(point)) != Some(point) {
+        inner.emit(ShellEvent::Move {
+            x: point.0,
+            y: point.1,
+        });
+    }
+}
+
 /// Notes that the pointer left the window region and emits `Leave`.
 pub(crate) fn note_leave(inner: &Inner) {
     inner.tracking.set(false);
+    inner.last_point.set(None);
     inner.press.cancel();
     inner.emit(ShellEvent::Leave);
 }
 
-/// `WM_MOUSEMOVE`: on the first move since a leave, asks for one `WM_MOUSELEAVE`.
-pub(crate) fn on_move(inner: &Inner) {
-    if !note_move(inner) {
+/// `WM_MOUSEMOVE`: on the first move since a leave, asks for one `WM_MOUSELEAVE`; a new point
+/// inside the shape is reported as a `Move`.
+pub(crate) fn on_move(inner: &Inner, lparam: LPARAM) {
+    let first = note_move(inner);
+    note_point(inner, lparam);
+    if !first {
         return;
     }
     let mut track = TRACKMOUSEEVENT {
