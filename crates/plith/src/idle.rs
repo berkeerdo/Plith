@@ -3,6 +3,7 @@
 use crate::demo::sleep_stoppable;
 use crate::log::LogFile;
 use crate::services::start::{ServiceId, StartBoard};
+use plith_core::settings::IdleLook;
 use plith_render::RenderHandle;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};
@@ -94,18 +95,33 @@ fn process_cpu_ms() -> f64 {
     (ticks(kernel) + ticks(user)) as f64 / 10_000.0
 }
 
+/// The render wake-ups a pass allows over `secs` at rest. Time looks (Karot, Clock) redraw once
+/// a minute, so they get one wake-up per full minute plus one for the minute that rolls over.
+#[must_use]
+pub fn allowed(look: IdleLook, secs: u64) -> u64 {
+    match look {
+        IdleLook::Karot | IdleLook::Clock => secs / 60 + 1,
+        IdleLook::Playing | IdleLook::Seal | IdleLook::Plain | IdleLook::Hidden => 0,
+    }
+}
+
 /// The result line of a check.
 #[must_use]
-pub fn report_line(secs: u64, wakes: u64, cpu_ms: f64) -> String {
-    format!("idle {secs} s: {wakes} render wake-ups, {cpu_ms:.1} ms process CPU")
+pub fn report_line(look: IdleLook, secs: u64, wakes: u64, cpu_ms: f64) -> String {
+    format!(
+        "idle {secs} s ({}): {wakes} render wake-ups (allowed {}), {cpu_ms:.1} ms process CPU",
+        look.key(),
+        allowed(look, secs)
+    )
 }
 
 /// Waits `secs` at rest and logs the wake-ups and CPU time spent meanwhile. True when the render
-/// thread never woke. With real services (`board`), the first reading waits until every start
-/// returned (or [`START_CAP`]) and logs which were up, since a start may change the pill.
-/// Returns false without a line when `stop` ends the wait early.
+/// thread woke no more than [`allowed`] for `look`. With real services (`board`), the first
+/// reading waits until every start returned (or [`START_CAP`]) and logs which were up, since a
+/// start may change the pill. Returns false without a line when `stop` ends the wait early.
 #[must_use]
 pub fn run(
+    look: IdleLook,
     secs: u64,
     render: &RenderHandle,
     log: &LogFile,
@@ -127,14 +143,15 @@ pub fn run(
     }
     let wakes = render.wake_count().saturating_sub(wakes_before);
     let cpu = (process_cpu_ms() - cpu_before).max(0.0);
-    log.line(&report_line(secs, wakes, cpu));
-    wakes == 0
+    log.line(&report_line(look, secs, wakes, cpu));
+    wakes <= allowed(look, secs)
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{StartWait, report_line, start_line, wait_for_starts};
+    use super::{StartWait, allowed, report_line, start_line, wait_for_starts};
     use crate::services::start::{ServiceId, StartBoard};
+    use plith_core::settings::IdleLook;
     use std::sync::Arc;
     use std::sync::atomic::AtomicBool;
     use std::time::Duration;
@@ -142,9 +159,27 @@ mod tests {
     #[test]
     fn report_line_matches_the_pinned_format() {
         assert_eq!(
-            report_line(60, 0, 0.0),
-            "idle 60 s: 0 render wake-ups, 0.0 ms process CPU"
+            report_line(IdleLook::Karot, 60, 1, 0.0),
+            "idle 60 s (karot): 1 render wake-ups (allowed 2), 0.0 ms process CPU"
         );
+    }
+
+    #[test]
+    fn allowance_zero_for_plain() {
+        for look in [
+            IdleLook::Plain,
+            IdleLook::Playing,
+            IdleLook::Seal,
+            IdleLook::Hidden,
+        ] {
+            assert_eq!(allowed(look, 60), 0);
+        }
+    }
+
+    #[test]
+    fn allowance_two_for_sixty_seconds_karot() {
+        assert_eq!(allowed(IdleLook::Karot, 60), 2);
+        assert_eq!(allowed(IdleLook::Clock, 60), 2);
     }
 
     #[test]

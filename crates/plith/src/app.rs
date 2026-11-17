@@ -303,7 +303,8 @@ fn drive(h: &Helpers) -> (i32, Option<bool>) {
     thread::scope(|scope| {
         let idle_thread = launch.idle_check_secs.map(|secs| {
             scope.spawn(move || {
-                let ok = idle::run(secs, h.render, h.log, h.stop, h.board.as_deref());
+                let look = idle_wiring::settings_for(launch, h.log).look;
+                let ok = idle::run(look, secs, h.render, h.log, h.stop, h.board.as_deref());
                 quit.quit();
                 ok
             })
