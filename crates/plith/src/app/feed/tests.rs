@@ -3,7 +3,7 @@ use crate::services::fixture::FixtureServices;
 use crate::services::{Changes, LevelSource};
 use plith_core::launch::Fixture;
 use plith_core::osd::{OsdLevel, OsdMeter};
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use std::sync::Arc;
 use std::time::Duration;
@@ -11,11 +11,13 @@ use std::time::Duration;
 /// Services whose facts the test sets; every write is ignored.
 struct FakeServices {
     facts: Rc<RefCell<Facts>>,
+    /// What the next drain reports.
+    drained: Rc<Cell<Changes>>,
 }
 
 impl Services for FakeServices {
     fn drain(&mut self) -> Changes {
-        Changes::AUDIO
+        self.drained.get()
     }
 
     fn facts(&self) -> Facts {
@@ -59,6 +61,7 @@ struct Rig {
     feed: Feed,
     mailbox: SceneMailbox,
     facts: Rc<RefCell<Facts>>,
+    drained: Rc<Cell<Changes>>,
     shown: Rc<RefCell<Vec<OsdLevel>>>,
 }
 
@@ -67,10 +70,12 @@ fn rig() -> Rig {
     base.audio.attached = Some((0.5, false));
     base.system.brightness = None;
     let facts = Rc::new(RefCell::new(base));
+    let drained = Rc::new(Cell::new(Changes::AUDIO));
     let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
     let mut feed = Feed::new(
         Box::new(FakeServices {
             facts: Rc::clone(&facts),
+            drained: Rc::clone(&drained),
         }),
         Box::new(NoTimers),
         Box::new(stamp),
@@ -83,6 +88,7 @@ fn rig() -> Rig {
         feed,
         mailbox,
         facts,
+        drained,
         shown,
     }
 }
@@ -126,6 +132,32 @@ fn open_audio_page_keeps_volume_quiet() {
     set_volume(&rig, 0.8);
     rig.feed.on_wake(&rig.mailbox);
     assert!(rig.shown.borrow().is_empty());
+}
+
+#[test]
+fn a_wake_without_changes_takes_no_reading() {
+    let mut rig = rig();
+    rig.feed.on_wake(&rig.mailbox);
+    // The facts moved but no change is reported: nothing is read, so nothing is shown.
+    rig.drained.set(Changes::NONE);
+    set_volume(&rig, 0.8);
+    rig.feed.on_wake(&rig.mailbox);
+    assert!(rig.shown.borrow().is_empty());
+    // The next reported change still compares against the baseline of the first wake.
+    rig.drained.set(Changes::AUDIO);
+    rig.feed.on_wake(&rig.mailbox);
+    assert_eq!(rig.shown.borrow().len(), 1);
+}
+
+#[test]
+fn the_baseline_is_taken_on_a_wake_without_changes() {
+    let mut rig = rig();
+    rig.drained.set(Changes::NONE);
+    rig.feed.on_wake(&rig.mailbox);
+    rig.drained.set(Changes::AUDIO);
+    set_volume(&rig, 0.8);
+    rig.feed.on_wake(&rig.mailbox);
+    assert_eq!(rig.shown.borrow().len(), 1);
 }
 
 #[test]

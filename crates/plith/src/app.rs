@@ -49,10 +49,11 @@ pub fn run(launch: &Launch) -> i32 {
 }
 
 fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
-    // Probing runs skip the guard so measurements work beside a running notch. The guard
+    // Probing runs (demo, idle check) skip the busy-user check below. They and fixture dev runs
+    // also skip the guard, so measurements and dev runs work beside a running notch. The guard
     // lives until this function returns.
     let probing = launch.demo.is_some() || launch.idle_check_secs.is_some();
-    let _instance = if probing {
+    let _instance = if probing || launch.fixture.is_some() {
         None
     } else {
         match instance::acquire(instance::INSTANCE_NAME) {

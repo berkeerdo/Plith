@@ -21,12 +21,16 @@ impl Feed {
         self.osd.seen = None;
     }
 
-    /// Compares the facts with the last OSD reading and feeds the sink. Without a sink nothing
-    /// is computed. The page that shows a meter keeps that meter quiet.
-    pub(super) fn feed_osd(&mut self, scene: &Scene) {
+    /// Compares the facts with the last OSD reading and feeds the sink. Without a sink, or on a
+    /// wake that reported no change after the baseline, nothing is computed. The page that shows
+    /// a meter keeps that meter quiet.
+    pub(super) fn feed_osd(&mut self, scene: &Scene, changed: bool) {
         let Some(sink) = self.osd.sink.as_mut() else {
             return;
         };
+        if !changed && self.osd.seen.is_some() {
+            return;
+        }
         let next = reading(&self.facts.audio, &self.facts.system);
         let open = if is_open(scene) {
             PageId::from_index(scene.page)

@@ -191,8 +191,9 @@ impl Feed {
                 );
             }
         }
-        // Every drain, not only a changed one: the first reading is the baseline.
-        self.feed_osd(&mailbox.latest().scene);
+        // The first drain takes the baseline even when no change is reported; later drains
+        // read only after a reported change.
+        self.feed_osd(&mailbox.latest().scene, changes.any());
         if self.seen != Some(key(&mailbox.latest().scene)) {
             self.on_scene(mailbox);
         } else if changes.any() {
