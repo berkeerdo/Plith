@@ -30,9 +30,10 @@ const PAD: f32 = 16.0;
 /// Left slot (label) right edge.
 const LABEL_RIGHT: f32 = 84.0;
 /// Ruler left and right edges.
-const RULER: (f32, f32) = (92.0, 236.0);
-/// Right slot (value) left edge.
-const VALUE_LEFT: f32 = 244.0;
+const RULER: (f32, f32) = (92.0, 228.0);
+/// Right slot (value) left edge: 48 DIP wide, room for the muted word in Martian Mono
+/// (45.6 DIP measured).
+const VALUE_LEFT: f32 = 236.0;
 /// Tick length below the track.
 const TICK: f32 = 3.0;
 
@@ -210,6 +211,7 @@ impl Painter {
     }
 
     /// The `paint:` log notes recorded while building; empty after the first call.
+    #[must_use]
     pub fn take_notes(&mut self) -> Vec<String> {
         std::mem::take(&mut self.notes)
     }

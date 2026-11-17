@@ -86,6 +86,19 @@ fn device_labels_upper_case_with_invariant_rules() {
 }
 
 #[test]
+fn the_value_slot_fits_the_muted_word_and_a_full_percent() {
+    let mut text = TextSystem::new().expect("text system");
+    let slot = WIDTH - PAD - VALUE_LEFT;
+    for shown in [copy::MUTED_LABEL, "100"] {
+        let width = text
+            .measure(shown, TextStyle::Value, f32::INFINITY, Trim::Middle)
+            .expect("measure");
+        eprintln!("measured {shown}: {width} DIP of {slot}");
+        assert!(width <= slot, "{shown} is {width} DIP, slot is {slot}");
+    }
+}
+
+#[test]
 fn text_is_centred_in_the_osd_height() {
     assert!((centred_top(10.0) - 15.0).abs() < 1e-6);
     assert!(centred_top(HEIGHT).abs() < 1e-6);
