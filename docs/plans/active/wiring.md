@@ -42,9 +42,9 @@ blocks. `plith-osd` swaps its text stack for `plith_render::TextSystem`.
 **Interfaces:** Produces `pub enum FlyoutMode { Off, DryRun, Hide }` (`Default` = `Off`) in
 `plith_core::launch`, field `pub flyout: FlyoutMode` on `Launch`.
 
-- [ ] Tests: `--flyout off|dry|hide` parse to the three modes; no flag gives `Off`; `--flyout x` gives `LaunchError::BadValue { flag: "--flyout", value: "x" }`; missing value gives `MissingValue`.
-- [ ] Run, see them fail; implement `parse_flyout(value: &str) -> Option<FlyoutMode>` like `parse_clock`; add `[--flyout off|dry|hide]` to `USAGE` in `crates/plith/src/main.rs`.
-- [ ] Tests pass; commit `feat(core): add --flyout launch option`.
+- [x] Tests: `--flyout off|dry|hide` parse to the three modes; no flag gives `Off`; `--flyout x` gives `LaunchError::BadValue { flag: "--flyout", value: "x" }`; missing value gives `MissingValue`.
+- [x] Run, see them fail; implement `parse_flyout(value: &str) -> Option<FlyoutMode>` like `parse_clock`; add `[--flyout off|dry|hide]` to `USAGE` in `crates/plith/src/main.rs`.
+- [x] Tests pass; commit `feat(core): add --flyout launch option`.
 
 ### Task 2: OSD trigger diff
 
@@ -65,8 +65,8 @@ bytes at a char boundary. A change = same meter `Some` on both sides and percent
 differ. Volume is skipped when `open == Some(PageId::Audio)`, brightness when
 `open == Some(PageId::System)`.
 
-- [ ] Tests: `percent_and_mute_changes_fire`, `same_values_fire_nothing`, `appearing_meter_is_not_a_change` (None to Some), `device_switch_with_same_level_fires_nothing`, `open_audio_page_hides_volume_only`, `open_system_page_hides_brightness_only`, `long_label_is_cut_on_a_char_boundary` (70 bytes of `ğ` gives at most 64 bytes, valid UTF-8), `missing_default_name_uses_tab_audio`, `percent_rounds_and_clamps` (0.004 to 0, 0.995 to 100, 1.2 to 100).
-- [ ] Run, fail; implement; pass; commit `feat(core): add OSD trigger diff`.
+- [x] Tests: `percent_and_mute_changes_fire`, `same_values_fire_nothing`, `appearing_meter_is_not_a_change` (None to Some), `device_switch_with_same_level_fires_nothing`, `open_audio_page_hides_volume_only`, `open_system_page_hides_brightness_only`, `long_label_is_cut_on_a_char_boundary` (70 bytes of `ğ` gives at most 64 bytes, valid UTF-8), `missing_default_name_uses_tab_audio`, `percent_rounds_and_clamps` (0.004 to 0, 0.995 to 100, 1.2 to 100).
+- [x] Run, fail; implement; pass; commit `feat(core): add OSD trigger diff`.
 
 ### Task 3: Relaunch and suppression policy
 
@@ -77,8 +77,8 @@ differ. Volume is skipped when `open == Some(PageId::Audio)`, brightness when
 - `pub struct Relaunch` with `new() -> Self`, `fn on_failure(&mut self, now: Instant) -> Next`, `fn on_connected(&mut self)` (clears the failure history), where `pub enum Next { At(Instant), GiveUp }`.
 - `pub fn wants_suppression(mode: FlyoutMode, link_up: bool) -> Option<SuppressMode>` with `pub enum SuppressMode { DryRun, Hide }`: `Off` gives `None`; `DryRun` gives `DryRun` always; `Hide` gives `Hide` only while `link_up`, else `None`.
 
-- [ ] Tests: `first_failure_retries_after_spacing`, `fifth_failure_in_a_minute_gives_up`, `failures_older_than_the_window_do_not_count`, `connect_clears_history`, `hide_only_while_link_up`, `dry_run_ignores_link`, `off_is_none`.
-- [ ] Run, fail; implement; pass; commit `feat(core): add OSD relaunch policy`.
+- [x] Tests: `first_failure_retries_after_spacing`, `fifth_failure_in_a_minute_gives_up`, `failures_older_than_the_window_do_not_count`, `connect_clears_history`, `hide_only_while_link_up`, `dry_run_ignores_link`, `off_is_none`.
+- [x] Run, fail; implement; pass; commit `feat(core): add OSD relaunch policy`.
 
 ### Task 4: Single instance
 
@@ -88,9 +88,9 @@ differ. Volume is skipped when `open == Some(PageId::Audio)`, brightness when
 `pub fn acquire(name: &str) -> Result<Option<InstanceGuard>, String>` (`None` = another holder),
 `pub const INSTANCE_NAME: &str = "Local\\Plith.Notch";`.
 
-- [ ] Tests: `second_acquire_in_process_sees_the_first` (unique test name with the pid; second call `None`), `drop_releases` (acquire again after drop gives `Some`).
-- [ ] Implement with `CreateMutexW` and `GetLastError() == ERROR_ALREADY_EXISTS`. In `run_logged`: `None` logs `single instance: another plith runs` and returns 0; `Err` logs and continues. Probing runs (`--demo`, `--idle-check`) skip the guard so measurement runs keep working beside a running notch.
-- [ ] Pass; commit `feat(app): run a single notch per session`.
+- [x] Tests: `second_acquire_in_process_sees_the_first` (unique test name with the pid; second call `None`), `drop_releases` (acquire again after drop gives `Some`).
+- [x] Implement with `CreateMutexW` and `GetLastError() == ERROR_ALREADY_EXISTS`. In `run_logged`: `None` logs `single instance: another plith runs` and returns 0; `Err` logs and continues. Probing runs (`--demo`, `--idle-check`) skip the guard so measurement runs keep working beside a running notch.
+- [x] Pass; commit `feat(app): run a single notch per session`.
 
 ### Task 5: OSD sink in the feed
 
@@ -102,8 +102,8 @@ every drain it computes `reading(&facts.audio, &facts.system)`; with a previous 
 sink it calls the sink for each `changes(prev, next, open)` item (`open` = `Some(page)` only
 when `is_open(scene)`), then stores the reading. Without a sink nothing is computed.
 
-- [ ] Tests with a recording sink and a fake `Services`: `no_osd_on_first_drain`, `volume_change_reaches_the_sink`, `open_audio_page_keeps_volume_quiet`.
-- [ ] Implement; pass; commit `feat(app): feed volume and brightness to the OSD`.
+- [x] Tests with a recording sink and a fake `Services`: `no_osd_on_first_drain`, `volume_change_reaches_the_sink`, `open_audio_page_keeps_volume_quiet`.
+- [x] Implement; pass; commit `feat(app): feed volume and brightness to the OSD`.
 
 ### Task 6: Supervisor, link and flyout
 
@@ -123,8 +123,8 @@ launching (the link stays, a manually started helper still connects). Each tick 
 receiver each tick (keys only open the window). Log `failure()` of both hooks once when it
 appears. Log lines start with `osd:`. The thread wakes only itself, never the UI thread.
 
-- [ ] Tests for any pure helper extracted (for example the log line texts); the thread itself is verified in Task 7.
-- [ ] Implement; five checks green; commit `feat(app): start and supervise the OSD helper`.
+- [x] Tests for any pure helper extracted (for example the log line texts); the thread itself is verified in Task 7.
+- [x] Implement; five checks green; commit `feat(app): start and supervise the OSD helper`.
 
 ### Task 7: M8, the OSD on the shared text stack
 
@@ -132,17 +132,52 @@ appears. Log lines start with `osd:`. The thread wakes only itself, never the UI
 
 **Interfaces:** Consumes `plith_render::TextSystem` (`new`, `layout`, `measure`, `display_text`), `plith_core::draw::TextStyle`, `plith_core::pages::copy::{tr_upper, MUTED_LABEL}`.
 
-- [ ] `upper_tr` is deleted; the muted word is `copy::MUTED_LABEL`; tests that covered `upper_tr` move to asserting the shown muted word is `"SESSİZ"` and device labels stay invariant (`"display"` shows `"DISPLAY"`).
-- [ ] The painter owns a `TextSystem` built on the render thread; label = `TextStyle::Label`, end trim; value = `TextStyle::Value`, right-aligned by measuring; `uses_bundled_fonts()` false logs a `paint:` note once.
-- [ ] Five checks green; commit `refactor(osd): draw text with TextSystem`.
+- [x] `upper_tr` is deleted; the muted word is `copy::MUTED_LABEL`; tests that covered `upper_tr` move to asserting the shown muted word is `"SESSİZ"` and device labels stay invariant (`"display"` shows `"DISPLAY"`).
+- [x] The painter owns a `TextSystem` built on the render thread; label = `TextStyle::Label`, end trim; value = `TextStyle::Value`, right-aligned by measuring; `uses_bundled_fonts()` false logs a `paint:` note once.
+- [x] Five checks green; commit `refactor(osd): draw text with TextSystem`.
 
 ### Task 8: Run on this PC and record
 
-- [ ] Build release; run `plith.exe` (normal mode, real services). `plith.log` shows `osd:` launch and connect lines; `%LOCALAPPDATA%\Plith\plith-osd.log` shows an admitted client. Change nothing on the hardware; a volume change by Berke is optional.
-- [ ] A second `plith.exe` exits 0 with `single instance: another plith runs`.
-- [ ] `plith.exe --idle-check 60` with real services still reports 0 wakes (regression check of Tasks 4 and 5).
-- [ ] Close the notch; the helper logs `Bye` and exits.
-- [ ] Record below; update `docs/STATUS.md` (next job, single-instance wording) and the README "Wiring" section where behavior differs.
+- [x] Build release; run `plith.exe` (normal mode, real services). `plith.log` shows `osd:` launch and connect lines; `%LOCALAPPDATA%\Plith\plith-osd.log` shows an admitted client. Change nothing on the hardware; a volume change by Berke is optional.
+- [x] A second `plith.exe` exits 0 with `single instance: another plith runs`.
+- [x] `plith.exe --idle-check 60` with real services still reports 0 wakes (regression check of Tasks 4 and 5).
+- [x] Close the notch; the helper logs `Bye` and exits.
+- [x] Record below; update `docs/STATUS.md` (next job, single-instance wording) and the README "Wiring" section where behavior differs.
 
 ## Record
-(filled while the plan runs)
+
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, deliberate omissions and decisions are listed here and in STATUS.
+
+Run 2026-11-17, one session with subagents (Sonnet implementers, Opus for Task 6 and the final
+review). Commits `7f7da98` to `2e4dfca` on `feature/osd-wiring`.
+
+**Deviations and decisions (master rulings):**
+- Tasks 1 to 3 and 4 to 5 were each done by one implementer with one review.
+- Task 6: `restore_now` keeps a `Mutex<Option<RestoreHandle>>`, not a `OnceLock` (suppression
+  restarts with a new hidden set each time the link comes back). Extra pure `osd/health.rs`.
+  A link whose helper exited counts as down at once ("stale"). `Relaunch::on_connected` only
+  after 10 s of stable link. `plith-ipc` gained `own_integrity_above_medium`. Fix round 1: one
+  crash counts as one failure (was two, about 16 s recovery), restore on a failed suppressor
+  stop, supervisor join bounded at 1.5 s.
+- Task 7: the OSD value now uses the shared `Value` style (10 DIP regular, was 13 DIP medium).
+  "SESSİZ" measured 45.6 DIP, so the value slot grew to 48 DIP (`VALUE_LEFT` 236) and the ruler
+  shrank to 136 DIP.
+- Final review fix wave: the feed reads the OSD only after a change, a text failure no longer ends
+  the helper's render thread, `--fixture` runs skip the instance guard, and release `plith.exe` has
+  no console window (a bad flag is written to `plith.log` as `launch error:`).
+
+**Measured on this PC (console, Berke present):**
+- Installed helper was the 2026-11-16 16:09 build (pipe name without the user SID): the link
+  never connected and the second launch exited "already served". After a signed reinstall
+  (Berke's yes, SHA-256 `3C1ABB16...8711`): `osd: helper launched`, `osd: link connected` 1 s
+  later, helper logs `hello`, then `bye` and exits on close; helper font `Martian Mono`.
+- A second `plith.exe` logs `single instance: another plith runs` and exits 0 (179 to 210 ms).
+  Close by `WM_CLOSE` 85 to 97 ms.
+- Idle check 60 s with real services: one run during use (2145 wakes, all motions), one
+  hands-off run 2 wakes, `main` 0, this branch again 0 (78 ms CPU each). No OSD code runs in
+  probing runs, so the 2 are taken as noise.
+
+**Not measured:** a `Level` reaching the helper from a real key press, `--flyout hide`, the look
+of the new type and ruler, the background wake rate of a normal run (supervisor 1 Hz plus link
+worker 1 to 2 Hz, never on the UI or render thread).

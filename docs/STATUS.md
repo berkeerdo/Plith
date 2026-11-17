@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
@@ -15,16 +15,22 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
   signed under `C:\Program Files\Plith\osd\`; `plith-ipc` pipe with identity checks;
   `plith-system` hook containment, flyout journal, key repeat collapse. Plan and Record:
   `plans/active/osd-r6.md`; reviews `quality/2026-11-16-osd-r6-merge-review.md` and
-  `quality/2026-11-16-osd-r6-recheck.md`. The helper is not wired into `crates/plith` yet.
+  `quality/2026-11-16-osd-r6-recheck.md`.
+- Wiring (2026-11-17, branch `feature/osd-wiring`, plan and Record `plans/active/wiring.md`,
+  spec `specs/2026-11-17-osd-wiring-design.md`): `plith.exe` is single-instance, starts and
+  supervises the installed helper, sends `Level` on volume, mute and brightness changes,
+  `--flyout off|dry|hide` (default off), M8 done (OSD on `TextSystem`, bundled Martian Mono),
+  release build has no console window. Helper reinstalled signed 2026-11-17 (Berke's yes);
+  link connect, hello and bye measured on this PC. Final review clean after one fix wave.
 - **Running:** no lane. State in `LANES.md`.
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **Next:** the wiring job (helper and pipe into `crates/plith`, notes in
-  `crates/plith-ipc/README.md` "Wiring" and the osd Record; also OSD text stack vs
-  `plith_render::TextSystem` and OSD `upper_tr` to `tr_upper`, review M8). Then one console
-  session with Berke for every owed on-screen check: osd Task 9; pages Task 4, 7a, 16 and 18
+- **Next:** merge `feature/osd-wiring` (Berke's yes). Then one console
+  session with Berke for every owed on-screen check: osd Task 9 (now through the real notch,
+  `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
+  136 DIP); pages Task 4, 7a, 16 and 18
   on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
   --fixture banana`, 20 s media ambient while playing, hover and leave, `prewarm:` lines).
   Later and separate: the guarded route write session (one route on Banana and back).
@@ -40,7 +46,10 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
   OSD toggles there; the four-tab rule stays. Berke 2026-11-17 on Oyenza's Appearance page (theme
   cards with a live preview, idle look Clock/Eyes/Minimal/Hidden,
   `research/img/2026-11-17-oyenza-appearance-settings.png`): "bizimki daha iyi olmalı". Idle
-  looks need a direction pass (`praxvon-direction`) before R7. Then R5 shelf, R4b media output picker; themes
+  looks need a direction pass (`praxvon-direction`) before R7. Berke 2026-11-17: the WPF app
+  had a welcome view (clock, detailed animated weather, the playing song in small type); "yeni
+  yapacağımızda da benzer yaklaşım yapabiliriz, sadece düzenleme seçeneğimiz olur ayarlarda".
+  Fold it into that direction pass; weather needs a new service (source, location). Then R5 shelf, R4b media output picker; themes
   switch in settings (palettes exist, nothing calls `set_palette`).
 
 ## Open risks
@@ -53,7 +62,12 @@ Updated 2026-11-16. Rewritten, not appended; old content goes to `journal/`.
   fails closed too. Check before release (R7).
 - Brightness flyout suppression (G5, review I3) is unverified (no built-in panel here) and may
   hide Quick Settings while its slider moves: keep it off until measured on a laptop.
-- `crates/plith` must stay single-instance before flyout Hide is wired.
+- A normal run wakes about 3 times a second on background threads (OSD supervisor 1 Hz, link
+  worker 1 to 2 Hz, also after give-up); never on the UI or render thread, invisible to the idle
+  check. Give-up lasts the whole session (a failure burst at logon leaves no OSD). Deferred
+  minors and the final review: `quality/2026-11-17-osd-wiring-final-review.md`.
+- A dev `plith.exe` trusts only the installed helper: after a protocol change, rebuild and
+  reinstall the helper (`build-osd.ps1`, `install-osd.ps1` under sudo, Berke's yes).
 - Residuals, low: pipe name squattable by another user (SID is not secret; random `--pipe` per
   launch is the fix); a junction swapped on the log folder can leave an empty file.
 - Collapse full 812 ms against Oyenza's 658 ms. One game, one PC, one refresh rate.
