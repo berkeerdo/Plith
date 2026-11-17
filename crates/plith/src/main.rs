@@ -15,7 +15,8 @@ const USAGE: &str = "usage: plith [--demo <name|script>] [--exit-after-demo] [--
                      [--clock auto|dcomp|dxgi|timer] [--gpu-priority <-7..7>] \
                      [--sched-class normal|above|high] [--latency <1..3>] [--sync <0|1>] \
                      [--mmcss normal|high|critical] [--tune r1|brisk] \
-                     [--fixture banana|potato|bare|none]";
+                     [--fixture banana|potato|bare|none] \
+                     [--flyout off|dry|hide]";
 
 fn main() {
     match Launch::parse(std::env::args().skip(1)) {

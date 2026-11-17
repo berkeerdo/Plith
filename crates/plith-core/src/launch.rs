@@ -30,6 +30,18 @@ pub enum Fixture {
     Bare,
 }
 
+/// What to do with the Windows volume and brightness flyout (`--flyout`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FlyoutMode {
+    /// Leave the flyout alone.
+    #[default]
+    Off,
+    /// Find the flyout and log what would be hidden, without hiding it.
+    DryRun,
+    /// Hide the flyout while the OSD is connected.
+    Hide,
+}
+
 /// Parsed launch options.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
@@ -47,6 +59,8 @@ pub struct Launch {
     pub tune: TuningSet,
     /// Mock data instead of the real services; `None` runs the real services.
     pub fixture: Option<Fixture>,
+    /// What to do with the Windows volume and brightness flyout.
+    pub flyout: FlyoutMode,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -102,6 +116,15 @@ fn parse_fixture(value: &str) -> Option<Fixture> {
         "banana" => Some(Fixture::Banana),
         "potato" => Some(Fixture::Potato),
         "bare" => Some(Fixture::Bare),
+        _ => None,
+    }
+}
+
+fn parse_flyout(value: &str) -> Option<FlyoutMode> {
+    match value {
+        "off" => Some(FlyoutMode::Off),
+        "dry" => Some(FlyoutMode::DryRun),
+        "hide" => Some(FlyoutMode::Hide),
         _ => None,
     }
 }
@@ -200,6 +223,10 @@ impl Launch {
                     } else {
                         Some(parse_fixture(&text).ok_or_else(|| bad(text))?)
                     };
+                }
+                "--flyout" => {
+                    let text = value()?;
+                    launch.flyout = parse_flyout(&text).ok_or_else(|| bad(text))?;
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),
