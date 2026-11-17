@@ -9,6 +9,7 @@ pub mod copy;
 pub mod derive;
 pub mod fixtures;
 mod glyphs;
+pub mod idle_pill;
 mod kit;
 pub mod media;
 pub mod pill;

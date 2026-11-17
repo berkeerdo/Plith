@@ -9,6 +9,13 @@ pub const REST: IslandShape = IslandShape {
     radius: 16.0,
 };
 
+/// The collapsed island when the look is `Hidden`: a 3 DIP sliver, no rounding.
+pub const REST_HIDDEN: IslandShape = IslandShape {
+    width: 200.0,
+    height: 3.0,
+    radius: 0.0,
+};
+
 /// The four pages: audio, media, shelf and system. These are pre-feed defaults only: the feed
 /// publishes the shapes of the built pages at once (`pages::*::*_page().shape`).
 pub const PAGES: [IslandShape; 4] = [
