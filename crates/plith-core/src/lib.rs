@@ -29,3 +29,4 @@ pub mod topmost;
 pub mod trace;
 pub mod tuning;
 pub mod visible;
+pub mod weather;
