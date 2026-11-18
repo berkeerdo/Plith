@@ -7,7 +7,7 @@ pub const WEEKDAYS: [&str; 7] = ["LUN", "MAR", "MER", "JEU", "VEN", "SAM", "DIM"
 
 /// Month abbreviations, January first.
 pub const MONTHS: [&str; 12] = [
-    "JAN", "FÉV", "MAR", "AVR", "MAI", "JUN", "JUL", "AOÛ", "SEP", "OCT", "NOV", "DÉC",
+    "JAN", "FÉV", "MAR", "AVR", "MAI", "JUIN", "JUIL", "AOÛ", "SEP", "OCT", "NOV", "DÉC",
 ];
 
 /// The French string for `t`.

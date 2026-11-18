@@ -17,6 +17,7 @@ mod hatch;
 mod head;
 pub(crate) use head::LINE_W;
 mod run;
+pub(crate) use run::LABEL_W as RUN_LABEL_W;
 
 use axis::{Axis, Weather};
 

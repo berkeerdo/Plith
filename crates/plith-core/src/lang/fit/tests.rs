@@ -1,15 +1,14 @@
 use super::*;
 
-/// Strings no page draws yet: the look names wait for the settings page, and the two welcome
-/// lines for nothing played and a paused track are not built.
-const NOT_DRAWN: [Text; 8] = [
+/// Strings with no place of their own: the look names wait for the settings page, and `Paused`
+/// is appended to a user-content artist that the layout trims anyway.
+const NOT_DRAWN: [Text; 7] = [
     Text::LookKarot,
     Text::LookClock,
     Text::LookPlaying,
     Text::LookSeal,
     Text::LookPlain,
     Text::LookHidden,
-    Text::NothingPlayed,
     Text::Paused,
 ];
 

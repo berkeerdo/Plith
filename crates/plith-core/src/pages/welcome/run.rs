@@ -20,7 +20,7 @@ const BAND_H: f64 = 14.0;
 const BIT_UP: f64 = 18.0;
 const BIT_DOWN: f64 = 22.0;
 /// The widest song label, so it stays clear of the head.
-const LABEL_W: f64 = 220.0;
+pub(crate) const LABEL_W: f64 = 220.0;
 /// Closest two temperature labels may sit.
 const TEMP_GAP: f64 = 30.0;
 

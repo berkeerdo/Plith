@@ -13,7 +13,7 @@ use crate::pages::audio::{
 use crate::pages::idle_pill::{TURN_W, sound_words};
 use crate::pages::system::{CUT_FROM, CUT_TO, LABEL_W, RIGHT, VALUE_W as VALUE_BOX_W, X0};
 use crate::pages::tabbar::LABEL_W as TAB_W;
-use crate::pages::welcome::LINE_W;
+use crate::pages::welcome::{LINE_W, RUN_LABEL_W};
 use crate::pages::{MARGIN_LEFT, PAGE_W, pill};
 use crate::weather::Sky;
 
@@ -252,6 +252,12 @@ fn welcome_places(lang: Lang) -> Vec<Place> {
         ),
         place("welcome earlier", t(Text::Earlier), label, line),
         place(
+            "welcome nothing played",
+            t(Text::NothingPlayed),
+            label,
+            Budget::Dip(RUN_LABEL_W),
+        ),
+        place(
             "welcome read",
             format!("{} 23:59 \u{b7} {}", t(Text::Read), t(Text::Old)),
             label,
@@ -274,13 +280,21 @@ fn welcome_places(lang: Lang) -> Vec<Place> {
         let word = sky_word(sky, lang);
         out.push(place(
             &format!("welcome sky {sky:?}"),
-            format!("{word} \u{b7} -40\u{b0}C \u{b7} 88%"),
+            format!("{word} \u{b7} -40\u{b0}C \u{b7} {}", percent(88, lang)),
             TextStyle::Name,
             line,
         ));
         out.push(place(
             &format!("welcome turn {sky:?}"),
             format!("23:00 {word} \u{b7} -40\u{b0}C"),
+            label,
+            line,
+        ));
+    }
+    for kind in KINDS {
+        out.push(place(
+            &format!("welcome sound {kind:?}"),
+            format!("{} \u{b7} {}", percent(100, lang), device_kind(kind, lang)),
             label,
             line,
         ));
