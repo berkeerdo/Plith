@@ -16,7 +16,7 @@ const LINE_Y: f64 = 34.0;
 /// Top of the labels (mock baseline 22, mono 10).
 const LABEL_Y: f64 = 12.0;
 const LABEL_H: f64 = 12.0;
-const LABEL_W: f64 = STEP - 16.0;
+pub(crate) const LABEL_W: f64 = STEP - 16.0;
 const CLOCK_W: f64 = 80.0;
 /// Clock box height: its top lands on the mock baseline 38 minus the mono 12 size.
 const CLOCK_H: f64 = 16.0;

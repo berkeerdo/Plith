@@ -16,7 +16,7 @@ use crate::weather::{Stamp, is_stale, next_turn, temp_text};
 /// Right edge of the right-hand lines.
 const RIGHT: f64 = 590.0;
 /// Width of a right-hand line.
-const LINE_W: f64 = 240.0;
+pub(crate) const LINE_W: f64 = 240.0;
 /// Where the sound station sits and how far the output name stays clear of it.
 const STATION_X: f64 = 586.5;
 const STATION_Y: f64 = 74.0;

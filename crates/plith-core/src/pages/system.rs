@@ -34,7 +34,7 @@ pub struct MicFacts {
 /// Page height (mock `systemPage`, `h = 178`).
 const HEIGHT: f64 = 178.0;
 /// Ruler and route line start x (mock `x0 = 200`).
-pub(super) const X0: f64 = 200.0;
+pub(crate) const X0: f64 = 200.0;
 /// Ruler and route line end x (mock `x1 = W - 70`).
 pub(super) const X1: f64 = PAGE_W - 70.0;
 /// Brightness row y (mock `y = 80`).
@@ -42,12 +42,15 @@ const RULER_Y: f64 = 80.0;
 /// Mic row y (mock `my = 132`).
 const MIC_Y: f64 = 132.0;
 /// Right edge of the value and bus texts (mock `W - 30`).
-pub(super) const RIGHT: f64 = PAGE_W - 30.0;
+pub(crate) const RIGHT: f64 = PAGE_W - 30.0;
+/// Width of a row label and of the value boxes at the right margin.
+pub(crate) const LABEL_W: f64 = 160.0;
+pub(crate) const VALUE_W: f64 = 60.0;
 /// Reach of the ruler target above and below the line.
 const RULER_GROW: f64 = 8.0;
 /// Cut in the muted route: the gap runs from `X0 + 120` to `X0 + 170` (mock `micRow`).
-const CUT_FROM: f64 = 120.0;
-const CUT_TO: f64 = 170.0;
+pub(crate) const CUT_FROM: f64 = 120.0;
+pub(crate) const CUT_TO: f64 = 170.0;
 
 /// The percentage (0 to 100, rounded) for a click at `x` on `ruler`; brightness and volume
 /// share it.
@@ -96,7 +99,7 @@ fn brightness_row(
         Ink::Faint
     };
     nodes.push(text(
-        rect(30.0, 70.0, 160.0, 16.0),
+        rect(30.0, 70.0, LABEL_W, 16.0),
         word(Text::Brightness, lang),
         TextStyle::Name,
         name_ink,
@@ -172,7 +175,7 @@ pub(super) fn draw_ruler(
 /// The value at the right of a ruler: `%70` in Turkish, `70%` in English.
 pub(super) fn percent_value(y: f64, value: u8, lang: Lang, ink: Ink) -> Node {
     text(
-        rect(RIGHT - 60.0, y - 8.0, 60.0, 14.0),
+        rect(RIGHT - VALUE_W, y - 8.0, VALUE_W, 14.0),
         &percent(value, lang),
         // The mock sets this value in mono 12, the clock's face and size.
         TextStyle::Clock,
@@ -189,7 +192,7 @@ fn mic_row(
     targets: &mut Vec<HitTarget>,
 ) {
     nodes.push(text(
-        rect(30.0, MIC_Y - 10.0, 160.0, 16.0),
+        rect(30.0, MIC_Y - 10.0, LABEL_W, 16.0),
         word(Text::Microphone, lang),
         TextStyle::Name,
         Ink::Ink,

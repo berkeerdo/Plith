@@ -13,7 +13,7 @@ use crate::pages::kit::{rect, station, text};
 mod tests;
 
 /// Width of the `SESSİZ` label on a cut line.
-const CUT_LABEL_W: f64 = 64.0;
+pub(crate) const CUT_LABEL_W: f64 = 64.0;
 /// Extra distance back for each shorter route converging on the same output.
 const STAGGER: f64 = 30.0;
 /// The candidate rail's offset from the picked source station.

@@ -7,7 +7,7 @@ use crate::draw::{Align, DisplayList, Ink, Node, TextStyle, Trim};
 use crate::lang::{Lang, Text, text as word};
 use crate::pages::glyphs::{GLYPH, glyph};
 use crate::pages::kit::{rect, text, text_trim};
-use crate::pages::system::{RIGHT, draw_ruler, percent_value, ruler_rect, ruler_target};
+use crate::pages::system::{RIGHT, VALUE_W, draw_ruler, percent_value, ruler_rect, ruler_target};
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
@@ -37,7 +37,7 @@ const FOOTER_UP: f64 = 32.0;
 /// Left edge of a name and its caption, after the glyph.
 const NAME_X: f64 = MARGIN_LEFT + GLYPH + 6.0;
 /// Width of a name or caption: up to 8 DIP before the ruler start.
-const NAME_W: f64 = RULER_X0 - 8.0 - NAME_X;
+pub(crate) const NAME_W: f64 = RULER_X0 - 8.0 - NAME_X;
 /// Text heights.
 const NAME_H: f64 = 18.0;
 const SUB_H: f64 = 12.0;
@@ -149,7 +149,7 @@ fn default_row(row: &OutputRow, lang: Lang, nodes: &mut Vec<Node>, targets: &mut
     draw_ruler(nodes, SPAN, DEFAULT_Y, f64::from(percent) / 100.0, ink);
     if row.muted {
         nodes.push(text(
-            rect(RIGHT - 60.0, DEFAULT_Y - 6.0, 60.0, SUB_H),
+            rect(RIGHT - VALUE_W, DEFAULT_Y - 6.0, VALUE_W, SUB_H),
             word(Text::Muted, lang),
             TextStyle::Label,
             Ink::Faint,

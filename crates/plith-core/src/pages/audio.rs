@@ -11,7 +11,9 @@ mod outputs;
 mod tests;
 
 pub use kind::{DeviceKind, device_kind};
+pub(crate) use layout::{CUT_LABEL_W, SOURCE_NAME_W, VALUE_CHAR_W, VALUE_SLACK};
 pub use layout::{audio_page, route_path, row_pitch};
+pub(crate) use outputs::NAME_W as OUTPUT_NAME_W;
 
 use crate::lang::{Lang, Text, text};
 

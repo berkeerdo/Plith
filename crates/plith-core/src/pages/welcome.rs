@@ -15,6 +15,7 @@ use crate::weather::{Day, Forecast};
 mod axis;
 mod hatch;
 mod head;
+pub(crate) use head::LINE_W;
 mod run;
 
 use axis::{Axis, Weather};

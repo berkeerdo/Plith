@@ -45,7 +45,7 @@ const TEXT_H: f64 = 14.0;
 /// Width of the time box in Karot.
 const TIME_W: f64 = 56.0;
 /// Width of the right-hand text in Karot.
-const TURN_W: f64 = 112.0;
+pub(crate) const TURN_W: f64 = 112.0;
 /// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
 const VALUE_ADVANCE: f64 = 7.6;
 

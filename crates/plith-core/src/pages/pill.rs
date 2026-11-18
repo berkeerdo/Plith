@@ -37,7 +37,7 @@ const PAD_RIGHT: f64 = 14.0;
 /// Width of the name slot (mock `outW = 52`).
 const NAME_W: f64 = 52.0;
 /// Width of the value slot: wide enough for `KAPALI`.
-const VALUE_W: f64 = 48.0;
+pub(crate) const VALUE_W: f64 = 48.0;
 /// Route end x offset from the right edge: 64, or 76 when muted (mock `xb`).
 const ROUTE_END: f64 = 64.0;
 const ROUTE_END_MUTED: f64 = 76.0;

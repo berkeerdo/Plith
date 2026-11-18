@@ -8,6 +8,8 @@ mod count;
 mod de;
 mod en;
 mod es;
+#[doc(hidden)]
+pub mod fit;
 mod fr;
 mod it;
 mod pl;

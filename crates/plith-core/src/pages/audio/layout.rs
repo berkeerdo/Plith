@@ -17,6 +17,7 @@ use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
 
+pub(crate) use routes::CUT_LABEL_W;
 pub use routes::route_path;
 
 /// Source station x (mock `XS = 252`).
@@ -50,16 +51,16 @@ const TRACE_W: f64 = 64.0;
 /// Trace slot half height around the station line (mock clip notch `y - 8`, height 16).
 const TRACE_HALF: f64 = 8.0;
 /// Width of a source name, up to the trace slot.
-const SOURCE_NAME_W: f64 = TRACE_X - 8.0 - MARGIN_LEFT;
+pub(crate) const SOURCE_NAME_W: f64 = TRACE_X - 8.0 - MARGIN_LEFT;
 /// Output tag x (mock `XO + 14`) and name x after a tag: the mock's `XO + 38` moved in to
 /// `XO + 34` (the two-character mono tag ends near `XO + 29`), so device names keep 4 DIP more.
 const TAG_X: f64 = OUTPUT_X + 14.0;
 const TAG_NAME_X: f64 = OUTPUT_X + 34.0;
 /// Advance of one value character (Martian Mono 10 with 0.06 em tracking), used to keep the
 /// name clear of the value.
-const VALUE_CHAR_W: f64 = 7.4;
+pub(crate) const VALUE_CHAR_W: f64 = 7.4;
 /// Extra room on the value's left so DirectWrite never trims it; the text is end-aligned.
-const VALUE_SLACK: f64 = 8.0;
+pub(crate) const VALUE_SLACK: f64 = 8.0;
 /// Gap between an output name and its value.
 const VALUE_GAP: f64 = 8.0;
 /// Half height of a row hit target.
