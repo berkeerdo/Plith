@@ -574,3 +574,8 @@ case.
     same Otomatik slot rule as the welcome head (weather when on, else sound or the track).
     Not decided yet.
   - Probe on screen and pill looks: Berke has not answered yet. Session ended for his game.
+- 2026-11-18 `--idle-check` cap fix (on main): the parser takes `0..=600`, and the watchdog
+  now scales for every idle check (settle + window + 10 s margin, plus the 20 s start cap only
+  with real services, never under 75 s), so a 120 s fixture check is not cut at 75 s either.
+  Tests for 120, 600, 601 and a 120 s fixture budget (132 s). Five checks: fmt, clippy
+  `-D warnings`, 1019 tests passed, structure-check 695 files 0 violations, check-deps clean.
