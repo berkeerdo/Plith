@@ -3,10 +3,11 @@
 //! plays and its forecast) at a fixed day and time, so every render is the same.
 
 use super::Content;
-use plith_core::lang::Lang;
+use plith_core::lang::{Lang, Text, date_short, device_kind, text, weekday};
 use plith_core::pages::PageId;
+use plith_core::pages::audio::DeviceKind;
 use plith_core::pages::fixtures;
-use plith_core::pages::idle_pill::{IdleFacts, idle_pill, rest_shape, weather_words};
+use plith_core::pages::idle_pill::{IdleFacts, idle_pill, rest_shape, sound_words, weather_words};
 use plith_core::pages::welcome::{SoundHead, WelcomeFacts, welcome_page};
 use plith_core::plays::Play;
 use plith_core::settings::{HeadSlot, IdleLook, RunSpan, TempUnit};
@@ -19,6 +20,8 @@ const NEXT_DAY: Day = (2026, 11, 18);
 /// The fixed time of day: 14:32.
 const NOW_HOUR: u8 = 14;
 const NOW_MINUTE: u8 = 32;
+/// The kind of the default output.
+const KIND: DeviceKind = DeviceKind::Headphones;
 
 fn play(start_min: u32, end_min: u32, title: &str, artist: &str) -> Play {
     Play {
@@ -73,10 +76,10 @@ fn forecast(read_hour: u8) -> Forecast {
 }
 
 /// The welcome facts at rest: playing, weather on, forecast read at 14:00.
-fn rest() -> WelcomeFacts {
+fn rest(lang: Lang) -> WelcomeFacts {
     WelcomeFacts {
         now: (DAY, u32::from(NOW_HOUR) * 60 + u32::from(NOW_MINUTE)),
-        date: "SAL 17 KAS".into(),
+        date: date_short(weekday(DAY), DAY.2, DAY.1, lang),
         plays_on: true,
         plays: plays(),
         playing: true,
@@ -87,13 +90,13 @@ fn rest() -> WelcomeFacts {
         head: HeadSlot::Auto,
         sound: Some(SoundHead {
             output: "G733".into(),
-            kind: "KULAKLIK".into(),
+            kind: device_kind(KIND, lang).to_string(),
             value: Some(62),
             muted: false,
             flowing: true,
         }),
         paused_last: false,
-        lang: Lang::Tr,
+        lang,
     }
 }
 
@@ -102,45 +105,54 @@ fn welcome(facts: &WelcomeFacts, probe: Option<i32>) -> Vec<Content> {
 }
 
 /// The pill facts at the fixed time, with the forecast turn and the playing track.
-fn idle_facts() -> IdleFacts {
+fn idle_facts(lang: Lang) -> IdleFacts {
     let now = Stamp {
         day: DAY,
         hour: NOW_HOUR,
         minute: NOW_MINUTE,
     };
-    let words = weather_words(&forecast(NOW_HOUR), now, TempUnit::C, Lang::Tr);
+    let words = weather_words(&forecast(NOW_HOUR), now, TempUnit::C, lang);
     IdleFacts {
         time: format!("{NOW_HOUR:02}:{NOW_MINUTE:02}"),
         turn: words.turn,
         now_sky: words.now_sky,
         playing: Some(("Nightcall".into(), "Kavinsky".into())),
         seal: fixtures::pills()[0].clone(),
-        sound: Some("%62 · KULAKLIK".into()),
-        lang: Lang::Tr,
+        sound: sound_words(
+            Some(62),
+            false,
+            device_kind(KIND, lang),
+            text(Text::Off, lang),
+            lang,
+        ),
+        lang,
     }
 }
 
-/// Every welcome state and pill look, by file name.
-pub fn states() -> Vec<(String, Vec<Content>)> {
-    let mut stale_paused = rest();
+/// Every welcome state and pill look in `lang`, by file name.
+pub fn states(lang: Lang) -> Vec<(String, Vec<Content>)> {
+    let mut stale_paused = rest(lang);
     stale_paused.forecast = Some(forecast(NOW_HOUR - 4));
     stale_paused.playing = false;
     stale_paused.paused_last = true;
-    let mut weather_off = rest();
+    let mut weather_off = rest(lang);
     weather_off.weather_on = false;
     weather_off.forecast = None;
-    let mut no_plays = rest();
+    let mut no_plays = rest(lang);
     no_plays.plays = Vec::new();
     no_plays.playing = false;
     let mut out = vec![
-        ("welcome-rest".to_string(), welcome(&rest(), None)),
-        ("welcome-probe-past".into(), welcome(&rest(), Some(10))),
-        ("welcome-probe-future".into(), welcome(&rest(), Some(16))),
+        ("welcome-rest".to_string(), welcome(&rest(lang), None)),
+        ("welcome-probe-past".into(), welcome(&rest(lang), Some(10))),
+        (
+            "welcome-probe-future".into(),
+            welcome(&rest(lang), Some(16)),
+        ),
         ("welcome-stale-paused".into(), welcome(&stale_paused, None)),
         ("welcome-weather-off".into(), welcome(&weather_off, None)),
         ("welcome-no-plays".into(), welcome(&no_plays, None)),
     ];
-    let facts = idle_facts();
+    let facts = idle_facts(lang);
     for look in [
         IdleLook::Karot,
         IdleLook::Clock,
