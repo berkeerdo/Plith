@@ -10,17 +10,13 @@ pub const MONTHS: [&str; 12] = [
     "OCA", "ŞUB", "MAR", "NİS", "MAY", "HAZ", "TEM", "AĞU", "EYL", "EKİ", "KAS", "ARA",
 ];
 
-/// The Turkish string for `t`, or `None` to fall back to English.
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "the shared signature lets a partial language return None"
-)]
-pub fn text(t: Text) -> Option<&'static str> {
-    Some(match t {
+/// The Turkish string for `t`.
+pub fn text(t: Text) -> &'static str {
+    match t {
         Text::LookKarot => "KAROT",
         Text::LookClock => "SAAT",
         Text::LookPlaying => "ÇALAN",
-        Text::LookSeal => "SES",
+        Text::LookSeal | Text::TabAudio => "SES",
         Text::LookPlain => "SADE",
         Text::LookHidden => "GİZLİ",
         Text::NothingPlayed => "BUGÜN ÇALAN YOK",
@@ -38,5 +34,18 @@ pub fn text(t: Text) -> Option<&'static str> {
         Text::KindHeadphones => "KULAKLIK",
         Text::KindSpeaker => "HOPARLÖR",
         Text::KindDisplay => "EKRAN",
-    })
+        Text::TabMedia => "MEDYA",
+        Text::TabShelf => "RAF",
+        Text::TabSystem => "SİSTEM",
+        Text::Muted => "SESSİZ",
+        Text::DdcOff => "DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI",
+        Text::ShelfHint => "RAFTA BEKLER, İSTEDİĞİN YERE GERİ SÜRÜKLERSİN",
+        Text::DefaultCaption => "VARSAYILAN",
+        Text::OtherOutputs => "DİĞER ÇIKIŞLAR",
+        Text::NoOutput => "ÇIKIŞ YOK",
+        Text::FooterNormal => "KAYNAĞA, SONRA ÇIKIŞA TIKLA",
+        Text::FooterPicking => "ÇIKIŞA TIKLA: YOL KURULUR · KAYNAĞA TEKRAR TIKLA: VAZGEÇ",
+        Text::FooterOutputs => "ÇIKIŞA TIKLA: VARSAYILAN OLUR",
+        Text::Unused => "Kullanılmıyor",
+    }
 }
