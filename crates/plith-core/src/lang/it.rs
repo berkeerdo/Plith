@@ -30,7 +30,7 @@ pub fn text(t: Text) -> &'static str {
         Text::SkyRain => "PIOGGIA",
         Text::SkySnow => "NEVE",
         Text::DefaultOutput => "USCITA PREDEFINITA",
-        Text::Off => "OFF",
+        Text::Off => "SPENTO",
         Text::KindHeadphones => "CUFFIE",
         Text::KindSpeaker => "ALTOPARLANTE",
         Text::KindDisplay => "SCHERMO",

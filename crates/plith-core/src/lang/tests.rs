@@ -29,6 +29,13 @@ fn songs_plural_english() {
 }
 
 #[test]
+fn french_zero_and_one_are_singular() {
+    assert_eq!(songs(0, Lang::Fr), "0 TITRE");
+    assert_eq!(songs(1, Lang::Fr), "1 TITRE");
+    assert_eq!(songs(2, Lang::Fr), "2 TITRES");
+}
+
+#[test]
 fn dates_both_languages() {
     assert_eq!(date_short(1, 17, 11, Lang::Tr), "SAL 17 KAS");
     assert_eq!(date_short(1, 17, 11, Lang::En), "TUE 17 NOV");
@@ -78,10 +85,10 @@ fn every_language_has_every_string() {
 fn own_copy_is_upper_case() {
     for lang in Lang::ALL {
         for t in Text::ALL {
-            let s = text(t, lang);
             if t == Text::Unused {
                 continue;
             }
+            let s = text(t, lang);
             assert_eq!(upper(s, lang), s, "{lang:?} {t:?} is not upper-case");
             if lang == Lang::De {
                 assert!(!s.contains('ß'), "{t:?} keeps a sharp s");
@@ -180,5 +187,15 @@ fn dates_exist_in_every_language() {
         let parts: Vec<&str> = date.split(' ').collect();
         assert_eq!(parts.len(), 3, "{lang:?}: {date}");
         assert!(parts.iter().all(|p| !p.is_empty()), "{lang:?}: {date}");
+        for weekday in 0..7 {
+            let word = date_short(weekday, 1, 1, lang);
+            let word = word.split(' ').next().unwrap_or("");
+            assert_eq!(upper(word, lang), word, "{lang:?} weekday {weekday}");
+        }
+        for month in 1..=12 {
+            let date = date_short(0, 1, month, lang);
+            let word = date.rsplit(' ').next().unwrap_or("");
+            assert_eq!(upper(word, lang), word, "{lang:?} month {month}");
+        }
     }
 }

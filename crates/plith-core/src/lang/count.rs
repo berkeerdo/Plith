@@ -15,7 +15,9 @@ pub fn songs(n: usize, lang: Lang) -> String {
         Lang::It => ("BRANO", "BRANI"),
         Lang::Pl => return format!("{n} {}", polish_songs(n)),
     };
-    format!("{n} {}", if n == 1 { one } else { many })
+    // French treats zero as singular too.
+    let singular = n == 1 || (lang == Lang::Fr && n == 0);
+    format!("{n} {}", if singular { one } else { many })
 }
 
 /// The Polish noun form for `n`: 1 singular, 2 to 4 few (not 12 to 14), the rest many.
