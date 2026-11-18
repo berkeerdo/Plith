@@ -106,7 +106,7 @@ fn label_over_64_bytes_does_not_encode() {
 }
 
 #[test]
-fn an_overlong_muted_word_is_cut() {
+fn an_overlong_muted_word_is_refused_both_ways() {
     // Bounded like the label: the encoder refuses it, the decoder rejects it.
     assert_eq!(
         encode(&level_with_word("A", &"a".repeat(65))),

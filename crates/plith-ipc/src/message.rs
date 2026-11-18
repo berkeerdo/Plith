@@ -7,7 +7,8 @@ mod tests;
 
 /// Protocol version carried in every message.
 pub const PROTOCOL_VERSION: u8 = 2;
-/// Largest encoded message in bytes: the header, a full label and a full muted word.
+/// Largest encoded message in bytes. The longest legal one is 137 (the 8 byte header, a full
+/// label, a length byte and a full muted word); the rest is headroom for a later field.
 pub const MAX_MESSAGE: usize = 144;
 /// Largest label, and largest muted word, in bytes (UTF-8).
 pub const MAX_LABEL: usize = 64;

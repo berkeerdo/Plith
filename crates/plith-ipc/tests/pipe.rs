@@ -1,14 +1,15 @@
 //! Real pipe server and client in one process, on a private pipe name per test.
 #![cfg(windows)]
 
-use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, AtomicU32, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use plith_ipc::{
-    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, PROTOCOL_VERSION, Rejection,
-    ServerEvent, ServerTrust, Stopper, encode,
+    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Rejection, ServerEvent,
+    ServerTrust, Stopper, encode,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::ReadFile;
@@ -390,43 +391,96 @@ fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
     }
 }
 
-/// Plays a protocol 1 helper: accepts one client, reads its first frame, then does what the old
-/// decoder does with a frame of another version (a fatal error): disconnects. Returns the frame.
-fn old_helper_once(name: String) -> JoinHandle<Vec<u8>> {
+/// Plays a protocol 1 helper that keeps serving: it accepts a client, reads its first frame and,
+/// like the old decoder with a frame of another version (a fatal error), disconnects; then it
+/// listens again. Returns how many clients it rejected.
+fn old_helper(name: String, stop: Arc<AtomicBool>) -> JoinHandle<u32> {
     thread::spawn(move || {
-        let pipe = create_stuck_pipe(&name);
-        // SAFETY: the handle is valid; a client that connected first reports an error, which is
-        // fine, its data is still readable.
-        let _ = unsafe { ConnectNamedPipe(pipe, None) };
-        let mut buffer = [0u8; 256];
-        let mut read = 0u32;
-        // SAFETY: the buffer and the count outlive the call.
-        unsafe { ReadFile(pipe, Some(&mut buffer), Some(&raw mut read), None) }.expect("read");
-        // SAFETY: the handle is disconnected and closed once.
-        unsafe {
-            let _ = DisconnectNamedPipe(pipe);
-            let _ = CloseHandle(pipe);
+        let mut rejected = 0;
+        while !stop.load(Ordering::SeqCst) {
+            let pipe = create_stuck_pipe(&name);
+            // SAFETY: the handle is valid; a client that connected first reports an error,
+            // which is fine, its data is still readable.
+            let _ = unsafe { ConnectNamedPipe(pipe, None) };
+            let mut buffer = [0u8; 256];
+            let mut read = 0u32;
+            // SAFETY: the buffer and the count outlive the call.
+            let got = unsafe { ReadFile(pipe, Some(&mut buffer), Some(&raw mut read), None) };
+            // The version 1 decoder accepts only a version byte of 1 (written as a literal).
+            if got.is_ok() && read >= 3 && buffer[2] != 1 {
+                rejected += 1;
+            }
+            // SAFETY: the handle is disconnected and closed once.
+            unsafe {
+                let _ = DisconnectNamedPipe(pipe);
+                let _ = CloseHandle(pipe);
+            }
         }
-        buffer[..read as usize].to_vec()
+        rejected
     })
+}
+
+/// Connects and closes a raw client until the helper thread has ended, to free its accept.
+fn poke_until_finished(name: &str, helper: &JoinHandle<u32>) {
+    let wide: Vec<u16> = name.encode_utf16().chain(Some(0)).collect();
+    while !helper.is_finished() {
+        // SAFETY: the name is NUL-terminated and outlives the call.
+        let opened = unsafe {
+            CreateFileW(
+                PCWSTR(wide.as_ptr()),
+                GENERIC_WRITE.0,
+                FILE_SHARE_MODE(0),
+                None,
+                OPEN_EXISTING,
+                SECURITY_SQOS_PRESENT | SECURITY_IDENTIFICATION,
+                None,
+            )
+        };
+        if let Ok(handle) = opened {
+            // SAFETY: the handle is closed once.
+            unsafe {
+                let _ = CloseHandle(handle);
+            }
+        }
+        thread::sleep(Duration::from_millis(20));
+    }
 }
 
 #[test]
 fn an_old_helper_fails_closed() {
     let name = unique_name();
-    let helper = old_helper_once(name.clone());
-    let link = dev_link(name);
-    let frame = helper.join().expect("the old helper thread");
-    // A protocol 1 decoder reads byte 2 of the frame and refuses anything but 1 as fatal.
-    assert_eq!(&frame[..2], b"PO");
-    assert_eq!(frame[2], PROTOCOL_VERSION);
-    assert_ne!(frame[2], 1, "the client must not speak protocol 1 any more");
-    // The helper closed the pipe: the link notices at its next send, reports why and stays
-    // down, without panicking, while the notch goes on.
-    link.send(level(9)).unwrap();
-    assert!(eventually(|| !link.is_connected()), "down after the helper");
+    let stop = Arc::new(AtomicBool::new(false));
+    let helper = old_helper(name.clone(), Arc::clone(&stop));
+    let link = dev_link(name.clone());
+    // The helper keeps accepting and rejecting for the whole window: the link may reconnect
+    // again and again, but it must never read as up (no flyout suppression behind nothing).
+    let end = Instant::now() + Duration::from_secs(3);
+    while Instant::now() < end {
+        assert!(!link.is_connected(), "an old helper must never read as up");
+        link.send(level(9)).unwrap();
+        thread::sleep(Duration::from_millis(10));
+    }
     assert!(link.last_error().is_some(), "the failure is reported");
-    link.send(level(10)).unwrap();
+    stop.store(true, Ordering::SeqCst);
+    drop(link);
+    poke_until_finished(&name, &helper);
+    let rejected = helper.join().expect("the old helper thread");
+    assert!(rejected >= 2, "it was tried again and again: {rejected}");
+}
+
+#[test]
+fn a_real_server_is_reported_up_after_admission() {
+    let name = unique_name();
+    let server = Running::start(&name);
+    let link = dev_link(name);
+    assert!(matches!(server.next(), Ok(Message::Hello { .. })));
+    assert!(
+        eventually(|| link.is_connected()),
+        "up once the admission ping wrote"
+    );
+    assert_eq!(link.last_error(), None);
+    link.send(level(5)).unwrap();
+    assert_eq!(server.next(), Ok(level(5)));
 }
 
 #[test]
@@ -547,7 +601,8 @@ fn a_panicking_callback_unwinds_out_of_serve() {
 fn silent_admitted_client_is_dropped_after_the_idle_timeout() {
     let name = unique_name();
     let mut server = OsdServer::bind(&name).expect("bind");
-    server.set_idle_timeout(Duration::from_millis(400));
+    // Longer than the client's admission window, which the real link waits out before it writes.
+    server.set_idle_timeout(Duration::from_millis(900));
     let stopper = server.stopper();
     let (tx, events) = mpsc::channel();
     let thread = thread::spawn(move || {
