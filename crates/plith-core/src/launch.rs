@@ -185,9 +185,9 @@ impl Launch {
                 }
                 "--idle-check" => {
                     let text = value()?;
-                    // Above 70 s the run would outlive the 75 s watchdog.
+                    // The watchdog grows with the window; 600 s only bounds a typo.
                     launch.idle_check_secs =
-                        Some(parse_in(&text, 0..=70).ok_or_else(|| bad(text))?);
+                        Some(parse_in(&text, 0..=600).ok_or_else(|| bad(text))?);
                 }
                 "--clock" => {
                     let text = value()?;

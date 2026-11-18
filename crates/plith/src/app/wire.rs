@@ -163,23 +163,26 @@ pub fn on_panic(
 /// Slack on top of an idle check's worst case before the watchdog fires.
 pub const WATCHDOG_MARGIN_SECS: u64 = 10;
 
-/// The watchdog budget. An idle check with real services first waits up to
-/// [`idle::START_CAP`] for the starts and [`idle::SETTLE_MS`] to settle before it measures
-/// `secs`, so its budget covers all three plus [`WATCHDOG_MARGIN_SECS`]; it is never shorter
-/// than [`WATCHDOG_SECS`]. Fixture idle checks and demos keep [`WATCHDOG_SECS`].
+/// The watchdog budget. An idle check waits [`idle::SETTLE_MS`] to settle before it measures
+/// `secs`, and with real services first up to [`idle::START_CAP`] for the starts, so its budget
+/// covers those plus [`WATCHDOG_MARGIN_SECS`]; it is never shorter than [`WATCHDOG_SECS`].
+/// Demos keep [`WATCHDOG_SECS`].
 #[must_use]
 pub fn watchdog_secs(idle_secs: Option<u64>, real_services: bool) -> u64 {
     match idle_secs {
-        Some(secs) if real_services => {
-            let settle = idle::SETTLE_MS.div_ceil(1000);
-            let budget = idle::START_CAP
-                .as_secs()
-                .saturating_add(settle)
+        Some(secs) => {
+            let start = if real_services {
+                idle::START_CAP.as_secs()
+            } else {
+                0
+            };
+            let budget = start
+                .saturating_add(idle::SETTLE_MS.div_ceil(1000))
                 .saturating_add(secs)
                 .saturating_add(WATCHDOG_MARGIN_SECS);
             budget.max(WATCHDOG_SECS)
         }
-        _ => WATCHDOG_SECS,
+        None => WATCHDOG_SECS,
     }
 }
 

@@ -175,16 +175,20 @@ fn tune_flag_picks_a_preset_and_defaults_to_brisk() {
 }
 
 #[test]
-fn idle_check_over_70_is_rejected() {
+fn idle_check_over_600_is_rejected() {
     assert_eq!(
-        parse(&["--idle-check", "70"]).unwrap().idle_check_secs,
-        Some(70)
+        parse(&["--idle-check", "120"]).unwrap().idle_check_secs,
+        Some(120)
     );
     assert_eq!(
-        parse(&["--idle-check", "71"]),
+        parse(&["--idle-check", "600"]).unwrap().idle_check_secs,
+        Some(600)
+    );
+    assert_eq!(
+        parse(&["--idle-check", "601"]),
         Err(LaunchError::BadValue {
             flag: "--idle-check".to_string(),
-            value: "71".to_string()
+            value: "601".to_string()
         })
     );
 }

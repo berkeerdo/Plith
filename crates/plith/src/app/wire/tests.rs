@@ -92,7 +92,20 @@ fn a_real_services_idle_check_fits_its_watchdog() {
 }
 
 #[test]
-fn fixture_idle_checks_and_demos_keep_the_plain_watchdog() {
+fn a_long_fixture_idle_check_fits_its_watchdog() {
+    use crate::idle::SETTLE_MS;
+    // A fixture run has no start wait: the settle, then the full measured window.
+    let worst_ms = u128::from(SETTLE_MS) + 120_000;
+    let budget = watchdog_secs(Some(120), false);
+    assert!(
+        u128::from(budget) * 1000 > worst_ms,
+        "{budget} s must cover {worst_ms} ms"
+    );
+    assert_eq!(budget, 2 + 120 + WATCHDOG_MARGIN_SECS);
+}
+
+#[test]
+fn short_idle_checks_and_demos_keep_the_plain_watchdog() {
     assert_eq!(watchdog_secs(Some(60), false), WATCHDOG_SECS);
     assert_eq!(watchdog_secs(None, false), WATCHDOG_SECS);
     assert_eq!(watchdog_secs(None, true), WATCHDOG_SECS);
