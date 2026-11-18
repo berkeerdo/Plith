@@ -35,20 +35,22 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
   (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Nothing on screen yet
   (plan Task 12). Worktree `idle-look` kept until the console run.
-- **R7 languages:** branch `feature/r7-languages` (ADR 0015, plan and log
-  `plans/active/r7-languages.md`). Eight languages (`en tr de es fr pt it pl`), every own string
-  from the table, percent per language, measured fit and glyph tests, renders
-  `design/r7/lang-*/`; Turkish idle renders byte-identical. OSD protocol 2 sends the muted word;
-  the client reads the link up only after an admission probe. Nothing on screen yet.
-- **Next:** first the helper reinstall for protocol 2 (`build-osd.ps1`, `install-osd.ps1` under
-  sudo, Berke's yes): until then the installed v1 helper rejects the notch and there is no OSD.
-  Then the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
+- **R7 languages:** merged as `3a281c2` (ADR 0015, plan and log
+  `plans/active/r7-languages.md`, 1049 tests, five checks green on the merge). Eight languages
+  (`en tr de es fr pt it pl`), every own string from the table, percent per language, measured
+  fit and glyph tests, renders `design/r7/lang-*/`; Turkish idle renders byte-identical. OSD
+  protocol 2 sends the muted word; the client reads the link up only after an admission probe.
+  Helper for protocol 2 reinstalled signed 2026-11-18 (Berke's yes, SHA-256 `C3BF2E9C...`); a
+  normal run in the console logged `osd: helper launched` and `osd: link connected` 2 s later,
+  clean exit 0. No level sent yet.
+- **Next:** the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
   up to 600 s, watchdog scales; record in `plans/active/idle-look-r7.md`; open from the
   2026-11-17 attempt: `prewarm: pages 3` lines read as brightness ruler clicks, confirm with
   one click; the Karot pill right side now falls back to the track, then the output, check it
   on screen; a 120 s Karot idle check over RDP gave 0 wakes, not the console proof; one run
   with `lang=de` in `settings.ini` and the OSD muted word). Check `query session` first (an
-  RDP session reports `SESSIONNAME=Console`). Berke must not touch the screen during idle checks; every owed on-screen check batched:
+  RDP session reports `SESSIONNAME=Console`). Release `plith.exe` is a GUI exe: PowerShell does
+  not wait for it, read the log after its `exit` line. Berke must not touch the screen during idle checks; every owed on-screen check batched:
   R7a Task 12 (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
   pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
