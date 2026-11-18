@@ -8,6 +8,7 @@ use super::seek_fraction;
 use super::tabbar::tabbar;
 use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{Align, DisplayList, Ink, Node, Rect, StationMark, TextStyle};
+use crate::lang::{Lang, Text, percent, text as word};
 use crate::shapes;
 
 /// What the system page shows.
@@ -58,11 +59,17 @@ pub fn brightness_at(ruler: Rect, x: f64) -> u8 {
 
 /// The system page nodes, hit targets and island shape.
 #[must_use]
-pub fn system_page(facts: &SystemFacts, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(Some(PageId::System), clock);
-    brightness_row(facts.brightness.as_ref(), &mut nodes, &mut targets);
+pub fn system_page(facts: &SystemFacts, clock: &str, lang: Lang) -> PageBuild {
+    let (mut nodes, mut targets) = tabbar(Some(PageId::System), clock, lang);
+    brightness_row(facts.brightness.as_ref(), lang, &mut nodes, &mut targets);
     if let Some(mic) = &facts.mic {
-        mic_row(mic, facts.mic_bus.as_deref(), &mut nodes, &mut targets);
+        mic_row(
+            mic,
+            facts.mic_bus.as_deref(),
+            lang,
+            &mut nodes,
+            &mut targets,
+        );
     }
     let mut shape = shapes::PAGES[PageId::System.index()];
     shape.width = PAGE_W;
@@ -79,6 +86,7 @@ pub fn system_page(facts: &SystemFacts, clock: &str) -> PageBuild {
 
 fn brightness_row(
     brightness: Option<&(String, u8)>,
+    lang: Lang,
     nodes: &mut Vec<Node>,
     targets: &mut Vec<HitTarget>,
 ) {
@@ -97,7 +105,7 @@ fn brightness_row(
     let Some((monitor, percent)) = brightness.map(|(m, p)| (m, (*p).min(100))) else {
         nodes.push(text(
             rect(X0, RULER_Y - 6.0, RIGHT - X0, 12.0),
-            super::copy::DDC_OFF,
+            word(Text::DdcOff, lang),
             TextStyle::Label,
             Ink::Faint,
             Align::Start,
@@ -113,7 +121,7 @@ fn brightness_row(
     ));
     let span = (X0, X1);
     draw_ruler(nodes, span, RULER_Y, f64::from(percent) / 100.0, Ink::Ink);
-    nodes.push(percent_value(RULER_Y, percent, Ink::Ink));
+    nodes.push(percent_value(RULER_Y, percent, lang, Ink::Ink));
     targets.push(ruler_target(
         span,
         RULER_Y,
@@ -161,11 +169,11 @@ pub(super) fn draw_ruler(
     nodes.push(station(at, y, StationMark::Filled, ink));
 }
 
-/// The value at the right of a ruler: `%70`, Turkish putting the sign first.
-pub(super) fn percent_value(y: f64, percent: u8, ink: Ink) -> Node {
+/// The value at the right of a ruler: `%70` in Turkish, `70%` in English.
+pub(super) fn percent_value(y: f64, value: u8, lang: Lang, ink: Ink) -> Node {
     text(
         rect(RIGHT - 60.0, y - 8.0, 60.0, 14.0),
-        &format!("%{percent}"),
+        &percent(value, lang),
         // The mock sets this value in mono 12, the clock's face and size.
         TextStyle::Clock,
         ink,
@@ -173,7 +181,13 @@ pub(super) fn percent_value(y: f64, percent: u8, ink: Ink) -> Node {
     )
 }
 
-fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
+fn mic_row(
+    mic: &MicFacts,
+    bus: Option<&str>,
+    lang: Lang,
+    nodes: &mut Vec<Node>,
+    targets: &mut Vec<HitTarget>,
+) {
     nodes.push(text(
         rect(30.0, MIC_Y - 10.0, 160.0, 16.0),
         "Mikrofon",
@@ -203,7 +217,7 @@ fn mic_row(mic: &MicFacts, bus: Option<&str>, nodes: &mut Vec<Node>, targets: &m
         let mid = X0 + f64::midpoint(CUT_FROM, CUT_TO);
         nodes.push(text(
             rect(mid - 30.0, MIC_Y - 6.0, 60.0, 12.0),
-            super::copy::OFF_LABEL,
+            word(Text::Off, lang),
             TextStyle::Label,
             Ink::Ink,
             Align::Center,

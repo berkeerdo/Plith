@@ -82,7 +82,7 @@ pub fn welcome_page(f: &WelcomeFacts, probe: Option<i32>) -> PageBuild {
     let weather = Weather::of(f);
     let hide_label =
         probe.is_none() && f.playing && head::slot(f, weather.as_ref()) == HeadSlot::Playing;
-    let (mut nodes, targets) = tabbar(None, "");
+    let (mut nodes, targets) = tabbar(None, "", f.lang);
     nodes.extend(head::head(f, weather.as_ref(), probe));
     nodes.extend(run::run(f, weather.as_ref(), probe, hide_label));
     PageBuild {

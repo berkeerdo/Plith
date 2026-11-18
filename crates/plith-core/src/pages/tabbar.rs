@@ -3,6 +3,7 @@
 use super::kit::{rect, text};
 use super::{Action, HitTarget, MARGIN_LEFT, MARGIN_RIGHT, PAGE_W, PageId};
 use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle};
+use crate::lang::Lang;
 
 /// Centre x of the first station.
 const FIRST_X: f64 = MARGIN_LEFT;
@@ -34,8 +35,9 @@ pub fn clock_text(hour: u8, minute: u8) -> String {
 
 /// The tab bar nodes and one hit target per tab. With `active` of `None` no station is filled, and
 /// an empty `clock` draws no clock text.
+/// The labels read in `lang`.
 #[must_use]
-pub fn tabbar(active: Option<PageId>, clock: &str) -> (Vec<Node>, Vec<HitTarget>) {
+pub fn tabbar(active: Option<PageId>, clock: &str, lang: Lang) -> (Vec<Node>, Vec<HitTarget>) {
     let last_x = FIRST_X + STEP * 3.0;
     let mut nodes = vec![Node::Stroke {
         points: vec![(FIRST_X, LINE_Y), (last_x, LINE_Y)],
@@ -61,7 +63,7 @@ pub fn tabbar(active: Option<PageId>, clock: &str) -> (Vec<Node>, Vec<HitTarget>
         });
         nodes.push(text(
             rect(left, LABEL_Y, LABEL_W, LABEL_H),
-            page.label(),
+            page.label(lang),
             TextStyle::Label,
             ink,
             Align::Start,

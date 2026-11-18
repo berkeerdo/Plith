@@ -13,7 +13,7 @@ mod tests;
 pub use kind::{DeviceKind, device_kind};
 pub use layout::{audio_page, route_path, row_pitch};
 
-use crate::pages::copy;
+use crate::lang::{Lang, Text, text};
 
 /// Row pitch in DIP: the mock's rows sit 50 apart.
 pub const PITCH_NORMAL: f64 = 50.0;
@@ -23,8 +23,6 @@ pub const PITCH_DENSE: f64 = 40.0;
 pub const PITCH_MIN: f64 = 32.0;
 /// Row count (sources or outputs, whichever is more) above which the pitch is dense.
 pub const DENSE_ABOVE: usize = 5;
-/// The name of a bus with no label and no route.
-pub const UNUSED_NAME: &str = "Kullanılmıyor";
 /// Most output rows the page shows, the `+N` line for the hidden rest included.
 pub const MAX_OUTPUT_SLOTS: usize = 10;
 
@@ -188,13 +186,13 @@ pub enum Footer {
 }
 
 impl Footer {
-    /// The footer copy.
+    /// The footer copy in `lang`.
     #[must_use]
-    pub fn text(self) -> &'static str {
+    pub fn text(self, lang: Lang) -> &'static str {
         match self {
-            Footer::Normal => copy::FOOTER_NORMAL,
-            Footer::Picking => copy::FOOTER_PICKING,
-            Footer::Outputs => copy::FOOTER_OUTPUTS,
+            Footer::Normal => text(Text::FooterNormal, lang),
+            Footer::Picking => text(Text::FooterPicking, lang),
+            Footer::Outputs => text(Text::FooterOutputs, lang),
         }
     }
 }
@@ -216,8 +214,9 @@ pub struct AudioView {
     pub row_pitch: f64,
 }
 
-/// Maps facts (with the mixer's debounced signal flags) and the pick mode to the view.
+/// Maps facts (with the mixer's debounced signal flags) and the pick mode to the view; `lang`
+/// names the unused buses.
 #[must_use]
-pub fn audio_view(facts: &AudioFacts, mode: PickMode) -> AudioView {
-    model::build(facts, mode)
+pub fn audio_view(facts: &AudioFacts, mode: PickMode, lang: Lang) -> AudioView {
+    model::build(facts, mode, lang)
 }

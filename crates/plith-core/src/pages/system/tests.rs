@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
+use crate::lang::Lang;
 use crate::pages::{Action, hit};
 
 fn facts() -> SystemFacts {
@@ -47,7 +48,7 @@ fn strokes_at_y(nodes: &[Node], y: f64) -> Vec<(Ink, f64)> {
 
 #[test]
 fn brightness_ruler_is_ink_not_flow() {
-    let page = system_page(&facts(), "09:41");
+    let page = system_page(&facts(), "09:41", Lang::Tr);
     let row = strokes_at_y(&page.list.nodes, 80.0);
     assert!(row.contains(&(Ink::Ink, 2.0)));
     assert!(row.iter().all(|(ink, _)| *ink != Ink::Flow));
@@ -63,7 +64,7 @@ fn brightness_ruler_is_ink_not_flow() {
 
 #[test]
 fn brightness_click_sets_value() {
-    let page = system_page(&facts(), "09:41");
+    let page = system_page(&facts(), "09:41", Lang::Tr);
     // The ruler spans x 200 to 550: 375 is the middle.
     assert_eq!(
         hit(&page.targets, 375.0, 80.0),
@@ -87,7 +88,7 @@ fn brightness_click_sets_value() {
 fn brightness_unsupported() {
     let mut f = facts();
     f.brightness = None;
-    let page = system_page(&f, "09:41");
+    let page = system_page(&f, "09:41", Lang::Tr);
     let t = texts(&page.list.nodes);
     assert!(t.contains(&(
         "DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI".to_string(),
@@ -105,7 +106,7 @@ fn brightness_unsupported() {
 
 #[test]
 fn open_mic_is_a_flow_route_to_its_bus() {
-    let page = system_page(&facts(), "09:41");
+    let page = system_page(&facts(), "09:41", Lang::Tr);
     assert!(strokes_at_y(&page.list.nodes, 132.0).contains(&(Ink::Flow, 2.0)));
     let t = texts(&page.list.nodes);
     assert!(t.iter().any(|(s, _, _)| s == "B1"));
@@ -114,7 +115,7 @@ fn open_mic_is_a_flow_route_to_its_bus() {
 
 #[test]
 fn muted_mic_is_cut_with_kapali() {
-    let page = system_page(&muted(), "09:41");
+    let page = system_page(&muted(), "09:41", Lang::Tr);
     let row = strokes_at_y(&page.list.nodes, 132.0);
     assert_eq!(row, vec![(Ink::Track, 1.0), (Ink::Track, 1.0)]);
     let centred = page.list.nodes.iter().any(|n| {
@@ -127,7 +128,7 @@ fn muted_mic_is_cut_with_kapali() {
 #[test]
 fn mic_row_click_toggles() {
     for f in [facts(), muted()] {
-        let page = system_page(&f, "09:41");
+        let page = system_page(&f, "09:41", Lang::Tr);
         for x in [60.0, 345.0, 580.0] {
             assert_eq!(hit(&page.targets, x, 132.0), Some(Action::ToggleMic));
         }
@@ -138,7 +139,7 @@ fn mic_row_click_toggles() {
 fn no_mic_hides_mic_row() {
     let mut f = facts();
     f.mic = None;
-    let page = system_page(&f, "09:41");
+    let page = system_page(&f, "09:41", Lang::Tr);
     assert!(
         !texts(&page.list.nodes)
             .iter()
@@ -152,7 +153,7 @@ fn no_mic_hides_mic_row() {
 #[test]
 fn system_page_is_178_high() {
     for f in [facts(), muted()] {
-        let page = system_page(&f, "09:41");
+        let page = system_page(&f, "09:41", Lang::Tr);
         assert_eq!(page.list.size, (620.0, 178.0));
         assert_eq!(page.shape.height, 178.0);
         assert_eq!(page.shape.width, 620.0);
@@ -163,11 +164,25 @@ fn system_page_is_178_high() {
 fn brightness_over_100_is_clamped_once() {
     let mut f = facts();
     f.brightness = Some(("DELL AW2725DF".into(), 130));
-    let page = system_page(&f, "09:41");
+    let page = system_page(&f, "09:41", Lang::Tr);
     assert!(texts(&page.list.nodes).iter().any(|(s, _, _)| s == "%100"));
     let fill_end = page.list.nodes.iter().find_map(|n| match n {
         Node::Station { x, y, .. } if *y == 80.0 => Some(*x),
         _ => None,
     });
     assert_eq!(fill_end, Some(550.0));
+}
+
+#[test]
+fn system_ruler_percent_follows_the_language() {
+    let has = |lang, word: &str| {
+        texts(&system_page(&facts(), "09:41", lang).list.nodes)
+            .iter()
+            .any(|(t, ..)| t == word)
+    };
+    assert!(has(Lang::Tr, "%70"));
+    assert!(!has(Lang::Tr, "70%"));
+    assert!(has(Lang::En, "70%"));
+    assert!(!has(Lang::En, "%70"));
+    assert!(has(Lang::De, "70 %"));
 }

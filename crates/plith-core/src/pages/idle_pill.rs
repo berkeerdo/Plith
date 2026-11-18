@@ -7,7 +7,7 @@ use super::kit::{rect, station, text};
 use super::pill::{PillFacts, pill};
 use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
 use crate::geometry::IslandShape;
-use crate::lang::Lang;
+use crate::lang::{Lang, percent};
 use crate::settings::IdleLook;
 use crate::shapes;
 
@@ -52,19 +52,25 @@ const VALUE_ADVANCE: f64 = 7.6;
 /// The default output in short for the Karot right side: `off` when muted, else `%62 · kind`,
 /// or only `%62` when the kind is empty or would not fit the box. `None` without a volume.
 #[must_use]
-pub fn sound_words(value: Option<u8>, muted: bool, kind: &str, off: &str) -> Option<String> {
+pub fn sound_words(
+    value: Option<u8>,
+    muted: bool,
+    kind: &str,
+    off: &str,
+    lang: Lang,
+) -> Option<String> {
     if muted {
         return Some(off.to_string());
     }
-    let percent = format!("%{}", value?);
+    let short = percent(value?, lang);
     if kind.is_empty() {
-        return Some(percent);
+        return Some(short);
     }
-    let full = format!("{percent} · {kind}");
+    let full = format!("{short} · {kind}");
     // Allowed: a few dozen characters at most.
     #[allow(clippy::cast_precision_loss)]
     let needed = full.chars().count() as f64 * VALUE_ADVANCE;
-    Some(if needed <= TURN_W { full } else { percent })
+    Some(if needed <= TURN_W { full } else { short })
 }
 
 /// The display list of the resting pill for `look`.
@@ -76,7 +82,7 @@ pub fn idle_pill(look: IdleLook, f: &IdleFacts) -> DisplayList {
         IdleLook::Karot => karot(f, y),
         IdleLook::Clock => vec![clock(f, y, w)],
         IdleLook::Playing => playing(f, y, w),
-        IdleLook::Seal => return pill(&f.seal),
+        IdleLook::Seal => return pill(&f.seal, f.lang),
         IdleLook::Plain => Vec::new(),
         IdleLook::Hidden => {
             return DisplayList {

@@ -2,6 +2,7 @@ use super::*;
 use crate::app::idle_facts::Idle;
 use crate::services::fixture::FixtureServices;
 use crate::services::{Changes, LevelSource};
+use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::osd::{OsdLevel, OsdMeter};
 use std::cell::{Cell, RefCell};
@@ -81,6 +82,7 @@ fn rig() -> Rig {
         }),
         Box::new(NoTimers),
         Box::new(stamp),
+        Lang::Tr,
         &mailbox,
     );
     let shown = Rc::new(RefCell::new(Vec::new()));
@@ -198,7 +200,6 @@ fn set_suppressed(rig: &Rig, fullscreen: bool) {
 
 #[test]
 fn a_media_wake_while_suppressed_publishes_nothing_and_unsuppress_publishes_once() {
-    use plith_core::lang::Lang;
     use plith_core::settings::{IdleLook, Settings};
     let mut rig = rig();
     {
@@ -238,4 +239,41 @@ fn a_media_wake_while_suppressed_publishes_nothing_and_unsuppress_publishes_once
     let settled = rig.mailbox.latest().generation;
     rig.feed.on_wake(&rig.mailbox);
     assert_eq!(rig.mailbox.latest().generation, settled);
+}
+
+fn page_labels(mailbox: &SceneMailbox, page: usize) -> Vec<String> {
+    mailbox.latest().content.pages[page]
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            plith_core::draw::Node::Text {
+                text,
+                style: plith_core::draw::TextStyle::Label,
+                ..
+            } => Some(text.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn the_feed_builds_pages_in_its_language() {
+    let mailbox = SceneMailbox::new(Scene::default(), Arc::default());
+    let facts = Rc::new(RefCell::new(FixtureServices::new(Fixture::Bare).facts()));
+    let feed = Feed::new(
+        Box::new(FakeServices {
+            facts: Rc::clone(&facts),
+            drained: Rc::new(Cell::new(Changes::default())),
+        }),
+        Box::new(NoTimers),
+        Box::new(stamp),
+        Lang::De,
+        &mailbox,
+    );
+    assert_eq!(feed.lang(), Lang::De);
+    // No idle wiring: the pages and the seal pill still read the feed's language.
+    let tabs = page_labels(&mailbox, PageId::Shelf.index());
+    assert_eq!(&tabs[..4], ["AUDIO", "MEDIEN", "ABLAGE", "SYSTEM"]);
+    let welcome = page_labels(&mailbox, PageId::Welcome.index());
+    assert_eq!(&welcome[..4], ["AUDIO", "MEDIEN", "ABLAGE", "SYSTEM"]);
 }

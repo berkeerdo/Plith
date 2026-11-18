@@ -11,6 +11,7 @@ use super::{
     PITCH_MIN, PITCH_NORMAL, PickMode, RouteState, SourceRow,
 };
 use crate::draw::{Align, DisplayList, Ink, LiveNode, LiveRail, Node, TextStyle, Trim};
+use crate::lang::{Lang, Text, text};
 use crate::pages::kit::{rect, text_trim};
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
@@ -68,7 +69,6 @@ const STATION_REACH: f64 = 6.0;
 /// Text heights: Name, labels and values.
 const NAME_H: f64 = 18.0;
 const LABEL_H: f64 = 12.0;
-const LABEL_TEXT: &str = crate::pages::copy::MUTED_LABEL;
 
 /// Baseline of row `i`.
 fn row_y(view: &AudioView, i: usize) -> f64 {
@@ -144,11 +144,11 @@ fn output_slots(view: &AudioView) -> (Vec<Option<usize>>, usize) {
 
 /// The audio page nodes, hit targets and island shape.
 #[must_use]
-pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
+pub fn audio_page(view: &AudioView, clock: &str, lang: Lang) -> PageBuild {
     if view.footer == Footer::Outputs {
-        return super::outputs::page(view, clock);
+        return super::outputs::page(view, clock, lang);
     }
-    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock);
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock, lang);
     let (slots, hidden) = output_slots(view);
     let output_rows = view.outputs.len().min(MAX_OUTPUT_SLOTS);
     let rows = view.sources.len().max(output_rows).max(1);
@@ -158,7 +158,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
     }
     for (o, row) in view.outputs.iter().enumerate() {
         if let Some(slot) = slots[o] {
-            output_row(view, (o, slot), row, &mut nodes, &mut targets);
+            output_row(view, (o, slot), row, lang, &mut nodes, &mut targets);
         }
     }
     if hidden > 0 {
@@ -176,7 +176,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
             Trim::End,
         ));
     }
-    routes::draw(view, &slots, &mut nodes);
+    routes::draw(view, &slots, lang, &mut nodes);
     if let PickMode::Picked(_) = view.mode {
         let top = row_y(view, 0) - ROW_HIT_HALF;
         let left = SOURCE_X + 2.0 * STATION_REACH;
@@ -193,7 +193,7 @@ pub fn audio_page(view: &AudioView, clock: &str) -> PageBuild {
     let footer_y = height - FOOTER_UP - 10.0;
     nodes.push(text_trim(
         rect(MARGIN_LEFT, footer_y, PAGE_W - 2.0 * MARGIN_LEFT, LABEL_H),
-        view.footer.text(),
+        view.footer.text(lang),
         TextStyle::Label,
         Ink::Faint,
         Align::Start,
@@ -268,12 +268,17 @@ fn output_row(
     view: &AudioView,
     (o, slot): (usize, usize),
     row: &OutputRow,
+    lang: Lang,
     nodes: &mut Vec<Node>,
     targets: &mut Vec<HitTarget>,
 ) {
     let y = row_y(view, slot);
     let (value, style, ink) = if row.muted {
-        (LABEL_TEXT.to_string(), TextStyle::Label, Ink::Faint)
+        (
+            text(Text::Muted, lang).to_string(),
+            TextStyle::Label,
+            Ink::Faint,
+        )
     } else {
         (format_value(row.value), TextStyle::Value, Ink::Muted)
     };

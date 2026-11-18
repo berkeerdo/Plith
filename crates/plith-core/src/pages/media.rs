@@ -10,6 +10,7 @@ use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{
     Align, ArtId, DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, TextStyle,
 };
+use crate::lang::Lang;
 use crate::shapes;
 use std::time::SystemTime;
 
@@ -101,8 +102,8 @@ fn whole_secs(s: f64) -> u64 {
 
 /// The media page nodes, hit targets and island shape.
 #[must_use]
-pub fn media_page(facts: &MediaFacts, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(Some(PageId::Media), clock);
+pub fn media_page(facts: &MediaFacts, clock: &str, lang: Lang) -> PageBuild {
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Media), clock, lang);
     let height = if facts.has_session {
         session_body(facts, &mut nodes, &mut targets);
         HEIGHT

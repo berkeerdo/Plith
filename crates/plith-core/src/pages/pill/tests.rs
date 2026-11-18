@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::draw::{Ink, Node, Rect, StationMark, TextStyle};
+use crate::lang::Lang;
 
 fn facts(state: PillState) -> PillFacts {
     PillFacts {
@@ -24,15 +25,15 @@ fn text_rect(list: &DisplayList, s: &str) -> Rect {
 #[test]
 fn pill_is_200_by_32() {
     for s in [PillState::Live, PillState::Muted, PillState::Idle] {
-        assert_eq!(pill(&facts(s)).size, (200.0, 32.0));
+        assert_eq!(pill(&facts(s), Lang::Tr).size, (200.0, 32.0));
     }
 }
 
 #[test]
 fn pill_slots_do_not_move_between_states() {
-    let live = pill(&facts(PillState::Live));
-    let idle = pill(&facts(PillState::Idle));
-    let muted = pill(&facts(PillState::Muted));
+    let live = pill(&facts(PillState::Live), Lang::Tr);
+    let idle = pill(&facts(PillState::Idle), Lang::Tr);
+    let muted = pill(&facts(PillState::Muted), Lang::Tr);
     let name = text_rect(&live, "G733");
     assert_eq!(text_rect(&idle, "G733"), name);
     assert_eq!(text_rect(&muted, "G733"), name);
@@ -43,7 +44,7 @@ fn pill_slots_do_not_move_between_states() {
 
 #[test]
 fn pill_muted_is_cut_with_kapali() {
-    let list = pill(&facts(PillState::Muted));
+    let list = pill(&facts(PillState::Muted), Lang::Tr);
     let lines: Vec<_> = list
         .nodes
         .iter()
@@ -67,7 +68,7 @@ fn pill_muted_is_cut_with_kapali() {
 
 #[test]
 fn pill_live_is_flow_and_idle_is_hollow() {
-    let live = pill(&facts(PillState::Live));
+    let live = pill(&facts(PillState::Live), Lang::Tr);
     assert!(
         live.nodes
             .iter()
@@ -88,7 +89,7 @@ fn pill_live_is_flow_and_idle_is_hollow() {
         })
         .count();
     assert_eq!(filled, 2);
-    let idle = pill(&facts(PillState::Idle));
+    let idle = pill(&facts(PillState::Idle), Lang::Tr);
     let hollow = idle
         .nodes
         .iter()

@@ -9,6 +9,7 @@
 
 use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
+use plith_core::lang::Lang;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::fixtures;
@@ -210,11 +211,24 @@ fn write_png(path: &Path, canvas: &Canvas) -> Result<()> {
 fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
     let clock = fixtures::CLOCK;
     let audio = |facts, mode| {
-        let view = audio_view(&fixtures::lit(&facts), mode);
-        vec![Content::Page(PageId::Audio, audio_page(&view, clock))]
+        let view = audio_view(&fixtures::lit(&facts), mode, Lang::Tr);
+        vec![Content::Page(
+            PageId::Audio,
+            audio_page(&view, clock, Lang::Tr),
+        )]
     };
-    let media = |facts| vec![Content::Page(PageId::Media, media_page(&facts, clock))];
-    let system = |facts| vec![Content::Page(PageId::System, system_page(&facts, clock))];
+    let media = |facts| {
+        vec![Content::Page(
+            PageId::Media,
+            media_page(&facts, clock, Lang::Tr),
+        )]
+    };
+    let system = |facts| {
+        vec![Content::Page(
+            PageId::System,
+            system_page(&facts, clock, Lang::Tr),
+        )]
+    };
     vec![
         ("01-audio-banana", audio(fixtures::banana(), PickMode::None)),
         (
@@ -242,7 +256,7 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
         ("06-media-empty", media(fixtures::media_empty())),
         (
             "07-shelf-empty",
-            vec![Content::Page(PageId::Shelf, shelf_page(clock))],
+            vec![Content::Page(PageId::Shelf, shelf_page(clock, Lang::Tr))],
         ),
         ("08-system", system(fixtures::system())),
         ("09-system-mic-muted", system(fixtures::system_mic_muted())),
@@ -251,7 +265,7 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
             "11-pills",
             fixtures::pills()
                 .iter()
-                .map(|p| Content::Pill(pill(p), REST))
+                .map(|p| Content::Pill(pill(p, Lang::Tr), REST))
                 .collect(),
         ),
     ]
@@ -293,14 +307,18 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
             &cell(&contents, Theme::Gece)?,
         )?;
     }
-    let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None);
+    let view = audio_view(
+        &fixtures::lit(&fixtures::banana()),
+        PickMode::None,
+        Lang::Tr,
+    );
     let themes = [
         ("kagit", Theme::Kagit),
         ("york", Theme::York),
         ("sodyum", Theme::Sodyum),
     ];
     for (name, theme) in themes {
-        let page = audio_page(&view, fixtures::CLOCK);
+        let page = audio_page(&view, fixtures::CLOCK, Lang::Tr);
         let contents = [Content::Page(PageId::Audio, page)];
         write_png(
             &dir.join(format!("12-theme-{name}.png")),

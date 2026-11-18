@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::draw::{Ink, LiveNode, LiveRail, Node, StationMark, TextStyle};
+use crate::lang::Lang;
 use crate::pages::audio::{
     DeviceKind, Footer, OutputRow, OutputValue, PITCH_NORMAL, PickMode, Route, RouteState,
     SourceRow,
@@ -179,7 +180,7 @@ fn straight_route_has_two_points() {
 
 #[test]
 fn banana_page_is_300_high() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     assert_eq!(page.list.size, (620.0, 300.0));
     assert_eq!(page.shape.width, 620.0);
     assert_eq!(page.shape.height, 300.0);
@@ -192,19 +193,19 @@ fn banana_page_is_300_high() {
 
 #[test]
 fn potato_page_fits_max_height() {
-    let page = audio_page(&rows(8, row_pitch(8)), "21:47");
+    let page = audio_page(&rows(8, row_pitch(8)), "21:47", Lang::Tr);
     assert!(page.list.size.1 <= shapes::PAGE_MAX_HEIGHT);
     assert_eq!(page.shape.height, page.list.size.1);
-    let huge = audio_page(&rows(20, row_pitch(20)), "21:47");
+    let huge = audio_page(&rows(20, row_pitch(20)), "21:47", Lang::Tr);
     assert_eq!(huge.list.size.1, shapes::PAGE_MAX_HEIGHT);
 }
 
 #[test]
 fn footer_sits_at_the_bottom() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let Some(Node::Text {
         rect, style, ink, ..
-    }) = text_node(&page.list.nodes, Footer::Normal.text())
+    }) = text_node(&page.list.nodes, Footer::Normal.text(Lang::Tr))
     else {
         panic!("footer missing");
     };
@@ -215,7 +216,7 @@ fn footer_sits_at_the_bottom() {
 
 #[test]
 fn live_route_is_two_px_flow() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let all = strokes(&page.list.nodes);
     let mic = all
         .iter()
@@ -225,7 +226,7 @@ fn live_route_is_two_px_flow() {
     assert_eq!(mic.0.last(), Some(&(OUTPUT_X, 83.0 + 2.0 * PITCH_NORMAL)));
     let mut idle = mock_view();
     idle.routes = vec![route(0, 1, RouteState::Idle)];
-    let page = audio_page(&idle, "21:47");
+    let page = audio_page(&idle, "21:47", Lang::Tr);
     let line = strokes(&page.list.nodes)
         .into_iter()
         .find(|(p, ..)| p.first() == Some(&(SOURCE_X, 83.0)))
@@ -235,7 +236,7 @@ fn live_route_is_two_px_flow() {
 
 #[test]
 fn cut_route_is_a_stub_with_sessiz() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let y = 83.0 + PITCH_NORMAL;
     let stubs: Vec<_> = strokes(&page.list.nodes)
         .into_iter()
@@ -262,7 +263,7 @@ fn cut_route_is_a_stub_with_sessiz() {
 
 #[test]
 fn stations_follow_route_states() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let n = &page.list.nodes;
     let y = |i: f64| 83.0 + i * PITCH_NORMAL;
     let lit = Some((StationMark::Filled, Ink::Flow));
@@ -280,7 +281,7 @@ fn stations_follow_route_states() {
 
 #[test]
 fn pick_mode_draws_brackets_and_dashed_candidates() {
-    let page = audio_page(&picking_view(), "21:47");
+    let page = audio_page(&picking_view(), "21:47", Lang::Tr);
     let n = &page.list.nodes;
     let Some(Node::Text { ink, .. }) = text_node(n, "[ Mikrofon ]") else {
         panic!("picked name missing");
@@ -293,7 +294,7 @@ fn pick_mode_draws_brackets_and_dashed_candidates() {
         station_at(n, OUTPUT_X, 83.0 + PITCH_NORMAL),
         Some((StationMark::Hollow, Ink::Flow))
     );
-    assert!(text_node(n, Footer::Picking.text()).is_some());
+    assert!(text_node(n, Footer::Picking.text(Lang::Tr)).is_some());
 }
 
 #[test]
@@ -302,7 +303,7 @@ fn outputs_show_tag_name_and_value() {
     view.outputs[1].tag = Some("A2".into());
     view.outputs[1].name = "A2".into();
     view.outputs[2].muted = true;
-    let page = audio_page(&view, "21:47");
+    let page = audio_page(&view, "21:47", Lang::Tr);
     let n = &page.list.nodes;
     assert_eq!(text_count(n, "A2"), 1, "tag drawn once when it is the name");
     assert!(text_node(n, "A1").is_some());
@@ -323,7 +324,7 @@ fn outputs_show_tag_name_and_value() {
 
 #[test]
 fn meters_and_traces_are_live_nodes() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let traces: Vec<_> = page
         .list
         .nodes
@@ -347,7 +348,7 @@ fn meters_and_traces_are_live_nodes() {
 
 #[test]
 fn hit_source_then_output_actions() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let t = &page.targets;
     let row = |i: f64| 86.0 + i * PITCH_NORMAL;
     assert_eq!(hit(t, 60.0, row(0.0) - 5.0), Some(Action::PickSource(0)));
@@ -357,7 +358,7 @@ fn hit_source_then_output_actions() {
     );
     assert_eq!(hit(t, 500.0, row(2.0) - 5.0), Some(Action::PickOutput(2)));
     assert_eq!(hit(t, 350.0, row(1.0)), None, "no cancel while not picking");
-    let page = audio_page(&picking_view(), "21:47");
+    let page = audio_page(&picking_view(), "21:47", Lang::Tr);
     assert_eq!(
         hit(&page.targets, 350.0, row(1.0)),
         Some(Action::CancelPick)
@@ -385,9 +386,10 @@ fn pitch_follows_the_mock_and_the_reach() {
 
 #[test]
 fn mock_page_has_its_footer_at_284() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     assert_eq!(page.list.size.1, 300.0);
-    let Some(Node::Text { rect, .. }) = text_node(&page.list.nodes, Footer::Normal.text()) else {
+    let Some(Node::Text { rect, .. }) = text_node(&page.list.nodes, Footer::Normal.text(Lang::Tr))
+    else {
         panic!("footer missing");
     };
     // Label text rects sit 10 above the baseline.
@@ -404,7 +406,7 @@ fn banana_five_rows_keep_45_degrees() {
     view.routes = (0..5)
         .flat_map(|s| (0..5).map(move |o| route(s, o, RouteState::Live)))
         .collect();
-    let page = audio_page(&view, "21:47");
+    let page = audio_page(&view, "21:47", Lang::Tr);
     let lines = strokes(&page.list.nodes);
     let routes: Vec<_> = lines.iter().filter(|l| l.0[0].0 == SOURCE_X).collect();
     assert_eq!(routes.len(), 25);
@@ -430,7 +432,7 @@ fn bus_muted_cut_keeps_the_source_clean() {
     view.outputs[1].muted = true;
     view.routes = vec![route(0, 2, RouteState::Live), route(0, 1, RouteState::Cut)];
     view.sources[1].muted = false;
-    let page = audio_page(&view, "21:47");
+    let page = audio_page(&view, "21:47", Lang::Tr);
     let n = &page.list.nodes;
     let lines = strokes(n);
     let from = (SOURCE_X, 83.0);
@@ -467,7 +469,7 @@ fn bus_muted_cut_keeps_the_source_clean() {
 
 #[test]
 fn unused_and_non_default_outputs_are_quiet() {
-    let page = audio_page(&mock_view(), "21:47");
+    let page = audio_page(&mock_view(), "21:47", Lang::Tr);
     let Some(Node::Text { ink, .. }) = text_node(&page.list.nodes, "Kullanılmıyor") else {
         panic!("unused bus missing");
     };

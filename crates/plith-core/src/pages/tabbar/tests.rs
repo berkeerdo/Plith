@@ -1,4 +1,5 @@
 use super::*;
+use crate::lang::Lang;
 use crate::pages::hit;
 
 fn stations(nodes: &[Node]) -> Vec<(f64, StationMark, Ink)> {
@@ -13,7 +14,7 @@ fn stations(nodes: &[Node]) -> Vec<(f64, StationMark, Ink)> {
 
 #[test]
 fn four_stations_one_line_between_ends() {
-    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
     let xs: Vec<f64> = stations(&nodes).iter().map(|s| s.0).collect();
     assert_eq!(xs, vec![30.0, 142.0, 254.0, 366.0]);
     let lines: Vec<_> = nodes
@@ -34,7 +35,7 @@ fn four_stations_one_line_between_ends() {
 
 #[test]
 fn active_is_filled_ink() {
-    let (nodes, _) = tabbar(Some(PageId::Shelf), "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Shelf), "21:47", Lang::Tr);
     let marks = stations(&nodes);
     for (i, (_, mark, ink)) in marks.iter().enumerate() {
         if i == 2 {
@@ -68,7 +69,7 @@ fn active_is_filled_ink() {
 
 #[test]
 fn tab_hit_targets_cover_labels() {
-    let (_, targets) = tabbar(Some(PageId::Audio), "21:47");
+    let (_, targets) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
     assert_eq!(targets.len(), 4);
     assert_eq!(hit(&targets, 40.0, 20.0), Some(Action::Tab(PageId::Audio)));
     assert_eq!(hit(&targets, 150.0, 38.0), Some(Action::Tab(PageId::Media)));
@@ -88,7 +89,7 @@ fn clock_pads_zero() {
 
 #[test]
 fn clock_is_right_aligned_at_the_margin() {
-    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47");
+    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
     let clock = nodes
         .iter()
         .find_map(|n| match n {
@@ -110,7 +111,7 @@ fn clock_is_right_aligned_at_the_margin() {
 
 #[test]
 fn seam_between_two_tabs_goes_to_the_earlier() {
-    let (_, targets) = tabbar(Some(PageId::Audio), "21:47");
+    let (_, targets) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
     let first = targets[0].rect;
     let second = targets[1].rect;
     // Grown by 4 DIP each, the two rects touch exactly at this x.
@@ -121,7 +122,7 @@ fn seam_between_two_tabs_goes_to_the_earlier() {
 
 #[test]
 fn page_labels_and_indices() {
-    assert_eq!(PageId::System.label(), "S\u{130}STEM");
+    assert_eq!(PageId::System.label(Lang::Tr), "S\u{130}STEM");
     for (i, page) in PageId::ALL.into_iter().enumerate() {
         assert_eq!(page.index(), i);
         assert_eq!(PageId::from_index(i), Some(page));
@@ -148,7 +149,7 @@ fn hit_slack_four_dip() {
 
 #[test]
 fn no_active_page_fills_no_station() {
-    let (nodes, targets) = tabbar(None, "");
+    let (nodes, targets) = tabbar(None, "", Lang::Tr);
     assert!(
         stations(&nodes)
             .iter()
@@ -159,7 +160,7 @@ fn no_active_page_fills_no_station() {
 
 #[test]
 fn empty_clock_draws_no_clock_text() {
-    let (nodes, _) = tabbar(None, "");
+    let (nodes, _) = tabbar(None, "", Lang::Tr);
     let clocks = nodes
         .iter()
         .filter(|n| {
@@ -177,7 +178,7 @@ fn empty_clock_draws_no_clock_text() {
 
 #[test]
 fn tabbar_on_welcome_has_no_filled_station() {
-    let (nodes, targets) = tabbar(Some(PageId::Welcome), "21:47");
+    let (nodes, targets) = tabbar(Some(PageId::Welcome), "21:47", Lang::Tr);
     let marks = stations(&nodes);
     assert_eq!(marks.len(), 4);
     assert!(
@@ -189,4 +190,31 @@ fn tabbar_on_welcome_has_no_filled_station() {
     assert_eq!(PageId::TABS.len(), 4);
     assert!(!PageId::TABS.contains(&PageId::Welcome));
     assert_eq!(PageId::ALL.len(), crate::pages::PAGE_COUNT);
+}
+
+fn tab_labels(nodes: &[Node]) -> Vec<String> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Text {
+                text,
+                style: TextStyle::Label,
+                ..
+            } => Some(text.to_string()),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn tabs_follow_the_language() {
+    let (turkish, _) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
+    assert_eq!(
+        tab_labels(&turkish),
+        ["SES", "MEDYA", "RAF", "S\u{130}STEM"]
+    );
+    let (german, _) = tabbar(Some(PageId::Audio), "21:47", Lang::De);
+    assert_eq!(tab_labels(&german), ["AUDIO", "MEDIEN", "ABLAGE", "SYSTEM"]);
+    assert_eq!(PageId::Media.label(Lang::De), "MEDIEN");
+    assert_eq!(PageId::Welcome.label(Lang::De), "");
 }

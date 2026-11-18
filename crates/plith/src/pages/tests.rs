@@ -2,6 +2,7 @@ use super::*;
 use crate::services::Services;
 use crate::services::fixture::FixtureServices;
 use plith_core::draw::Node;
+use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 
 fn fixture_facts(kind: Fixture) -> Facts {
@@ -16,6 +17,7 @@ fn inputs(facts: &Facts) -> Inputs<'_> {
         welcome: None,
         probe: None,
         idle: None,
+        lang: Lang::Tr,
     }
 }
 

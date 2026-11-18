@@ -5,6 +5,7 @@
 
 use super::kit::{line, rect, station, text};
 use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
+use crate::lang::{Lang, Text, text as word};
 use crate::shapes;
 
 /// What the pill shows.
@@ -23,7 +24,7 @@ pub struct PillFacts {
 pub enum PillState {
     /// Sound flows to the output.
     Live,
-    /// The output is muted: the route is cut and the value slot reads `KAPALI` (`OFF_LABEL`).
+    /// The output is muted: the route is cut and the value slot reads the muted word (`Text::Off`).
     Muted,
     /// Nothing plays.
     Idle,
@@ -46,7 +47,7 @@ const CUT_TO: f64 = 0.6;
 
 /// The pill display list, 200 x 32.
 #[must_use]
-pub fn pill(facts: &PillFacts) -> DisplayList {
+pub fn pill(facts: &PillFacts, lang: Lang) -> DisplayList {
     let (w, h) = (shapes::REST.width, shapes::REST.height);
     let y = h / 2.0;
     let muted = facts.state == PillState::Muted;
@@ -64,7 +65,7 @@ pub fn pill(facts: &PillFacts) -> DisplayList {
     if muted {
         nodes.push(text(
             value_rect,
-            super::copy::OFF_LABEL,
+            word(Text::Off, lang),
             TextStyle::Label,
             Ink::Faint,
             Align::End,

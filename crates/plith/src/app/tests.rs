@@ -77,6 +77,7 @@ fn rig(name: &str, look: IdleLook, open_on: OpenOn) -> Rig {
         Box::new(FixtureServices::new(Fixture::Banana)),
         Box::new(timers.clone()),
         clock,
+        Lang::Tr,
         &mailbox,
     );
     let settings = Settings {
@@ -280,6 +281,7 @@ fn exit_saves_the_play_log() {
         Box::new(FixtureServices::new(Fixture::Banana)),
         Box::new(FakeTimers::default()),
         Box::new(|| stamp(47)),
+        Lang::Tr,
         &mailbox,
     );
     let saves = Rc::new(Cell::new(0));

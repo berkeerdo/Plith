@@ -1,11 +1,12 @@
 #![allow(clippy::float_cmp)]
 
 use super::*;
+use crate::lang::Lang;
 use crate::pages::audio::{DeviceKind, PickMode, RouteState, audio_view};
 
 #[test]
 fn banana_is_the_mock_diagram() {
-    let view = audio_view(&lit(&banana()), PickMode::None);
+    let view = audio_view(&lit(&banana()), PickMode::None, Lang::Tr);
     let names: Vec<&str> = view.sources.iter().map(|s| s.name.as_str()).collect();
     assert_eq!(
         names,
@@ -39,14 +40,14 @@ fn banana_is_the_mock_diagram() {
 
 #[test]
 fn potato_has_eight_by_eight() {
-    let view = audio_view(&lit(&potato()), PickMode::None);
+    let view = audio_view(&lit(&potato()), PickMode::None, Lang::Tr);
     assert_eq!(view.sources.len(), 8);
     assert_eq!(view.outputs.len(), 8);
 }
 
 #[test]
 fn no_voicemeeter_flags_the_headset_as_default() {
-    let view = audio_view(&no_voicemeeter(), PickMode::None);
+    let view = audio_view(&no_voicemeeter(), PickMode::None, Lang::Tr);
     assert!(view.sources.is_empty());
     assert_eq!(view.outputs.len(), 3);
     assert_eq!(view.outputs[0].name, "Logitech G733");
@@ -112,18 +113,18 @@ fn every_list() -> Vec<crate::draw::DisplayList> {
         no_voicemeeter_many(),
     ] {
         for mode in [PickMode::None, PickMode::Picked(0)] {
-            let view = audio_view(&lit(&facts), mode);
-            lists.push(audio_page(&view, CLOCK).list);
+            let view = audio_view(&lit(&facts), mode, Lang::Tr);
+            lists.push(audio_page(&view, CLOCK, Lang::Tr).list);
         }
     }
     for facts in [media_playing(), media_empty()] {
-        lists.push(media_page(&facts, CLOCK).list);
+        lists.push(media_page(&facts, CLOCK, Lang::Tr).list);
     }
     for facts in [system(), system_mic_muted(), system_no_ddc()] {
-        lists.push(system_page(&facts, CLOCK).list);
+        lists.push(system_page(&facts, CLOCK, Lang::Tr).list);
     }
-    lists.push(shelf_page(CLOCK).list);
-    lists.extend(pills().iter().map(pill));
+    lists.push(shelf_page(CLOCK, Lang::Tr).list);
+    lists.extend(pills().iter().map(|p| pill(p, Lang::Tr)));
     lists
 }
 
@@ -153,8 +154,8 @@ fn hollow_stations_are_faint_or_candidates_like_the_mock() {
 fn output_rows_use_the_mock_sizes() {
     // Mock `audioPage()`: output names in sans 12, values in mono 10.
     use crate::draw::{Node, TextStyle};
-    let view = audio_view(&lit(&banana()), PickMode::None);
-    let page = crate::pages::audio::audio_page(&view, CLOCK);
+    let view = audio_view(&lit(&banana()), PickMode::None, Lang::Tr);
+    let page = crate::pages::audio::audio_page(&view, CLOCK, Lang::Tr);
     let style_of = |wanted: &str| {
         page.list.nodes.iter().find_map(|n| match n {
             Node::Text { text, style, .. } if &**text == wanted => Some(*style),
@@ -171,8 +172,8 @@ fn named_buses_read_in_ink_and_the_unused_bus_stays_quiet() {
     // Mock `audioPage()`: A2 Edifier is ink with its value although nothing routes to it; only
     // the unused B2 is faint and shows no value.
     use crate::draw::{Ink, Node};
-    let view = audio_view(&lit(&banana()), PickMode::None);
-    let page = crate::pages::audio::audio_page(&view, CLOCK);
+    let view = audio_view(&lit(&banana()), PickMode::None, Lang::Tr);
+    let page = crate::pages::audio::audio_page(&view, CLOCK, Lang::Tr);
     let ink_of = |wanted: &str| {
         page.list.nodes.iter().find_map(|n| match n {
             Node::Text { text, ink, .. } if &**text == wanted => Some(*ink),
@@ -188,37 +189,6 @@ fn named_buses_read_in_ink_and_the_unused_bus_stays_quiet() {
         .filter(|n| matches!(n, Node::Text { text, .. } if &**text == "0"))
         .count();
     assert_eq!(zero_db, 1, "B1 only; the unused B2 has no value");
-}
-
-#[test]
-fn turkish_label_copy_comes_from_the_upper_cased_constants() {
-    // Every upper-case (Label or Sub) text with a Turkish letter is one of our own constants,
-    // and those are authored with Turkish upper-case rules. Foreign names never get them.
-    use crate::draw::{Node, TextStyle};
-    use crate::pages::copy::{OWN_LABELS, tr_upper};
-    let turkish = |t: &str| {
-        t.chars().any(|c| {
-            "\u{130}\u{131}\u{15e}\u{15f}\u{11e}\u{11f}\u{c7}\u{e7}\u{d6}\u{f6}\u{dc}\u{fc}"
-                .contains(c)
-        })
-    };
-    let mut seen = 0;
-    for list in every_list() {
-        for node in &list.nodes {
-            if let Node::Text {
-                text,
-                style: TextStyle::Label | TextStyle::Sub,
-                ..
-            } = node
-                && turkish(text)
-            {
-                assert!(OWN_LABELS.contains(&&**text), "not an own constant: {text}");
-                assert_eq!(&**text, tr_upper(text));
-                seen += 1;
-            }
-        }
-    }
-    assert!(seen >= 8, "the scan saw the Turkish labels ({seen})");
 }
 
 #[test]

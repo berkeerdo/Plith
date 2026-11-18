@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::draw::{Ink, LiveNode, Node, StationMark, TextStyle};
+use crate::lang::Lang;
 use crate::pages::{Action, hit};
 use std::time::SystemTime;
 
@@ -53,7 +54,7 @@ fn seeks(nodes: &[Node]) -> usize {
 
 #[test]
 fn page_is_232_high() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     assert_eq!(page.list.size, (620.0, 232.0));
     assert_eq!(page.shape.height, 232.0);
     assert_eq!(page.shape.width, 620.0);
@@ -68,6 +69,7 @@ fn no_session_shows_empty() {
             ..MediaFacts::default()
         },
         "21:47",
+        Lang::Tr,
     );
     assert!(has_text(&page.list.nodes, "\u{c7}alan bir \u{15f}ey yok"));
     assert_eq!(page.list.size, (620.0, 150.0));
@@ -103,6 +105,7 @@ fn no_timeline_hides_ruler() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert_eq!(seeks(&page.list.nodes), 0);
     assert!(!has_text(&page.list.nodes, "1:42"));
@@ -127,7 +130,7 @@ fn seek_fraction_from_click_x() {
 
 #[test]
 fn ruler_click_yields_seek_action() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     let got = hit(&page.targets, RULER.x + RULER.w * 0.25, RULER.y + 5.0);
     assert_eq!(got, Some(Action::Seek(0.25)));
 }
@@ -140,10 +143,11 @@ fn disabled_next_has_no_target() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert!(!page.targets.iter().any(|t| t.action == Action::Next));
     assert!(page.targets.iter().any(|t| t.action == Action::Previous));
-    let enabled = media_page(&facts(), "21:47");
+    let enabled = media_page(&facts(), "21:47", Lang::Tr);
     assert!(enabled.targets.iter().any(|t| t.action == Action::Next));
 }
 
@@ -155,6 +159,7 @@ fn disabled_transport_is_faint() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     let faint_strokes = page
         .list
@@ -183,6 +188,7 @@ fn empty_title_shows_source_name() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     let t = texts(&page.list.nodes);
     assert!(t.contains(&("Spotify".to_string(), TextStyle::Title)));
@@ -193,7 +199,7 @@ fn empty_title_shows_source_name() {
 #[test]
 fn route_is_flow_when_playing_track_when_paused() {
     let route_ink = |playing: bool| {
-        let page = media_page(&MediaFacts { playing, ..facts() }, "21:47");
+        let page = media_page(&MediaFacts { playing, ..facts() }, "21:47", Lang::Tr);
         page.list.nodes.iter().find_map(|n| match n {
             Node::Stroke { points, ink, .. } if points.first() == Some(&(96.0, 196.0)) => {
                 Some(*ink)
@@ -213,6 +219,7 @@ fn no_output_hides_route_row() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert!(!has_text(&page.list.nodes, "A1 \u{b7} G733"));
     assert!(!has_text(&page.list.nodes, "Spotify"));
@@ -226,6 +233,7 @@ fn art_is_image_or_placeholder() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert!(
         with.list
@@ -233,7 +241,7 @@ fn art_is_image_or_placeholder() {
             .iter()
             .any(|n| matches!(n, Node::Image { art: ArtId(7), .. }))
     );
-    let without = media_page(&facts(), "21:47");
+    let without = media_page(&facts(), "21:47", Lang::Tr);
     assert!(without.list.nodes.iter().any(|n| matches!(
         n,
         Node::Fill {
@@ -258,6 +266,7 @@ fn cannot_seek_draws_ruler_without_target() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert_eq!(seeks(&page.list.nodes), 1);
     assert_eq!(seek_targets(&page), 0);
@@ -273,6 +282,7 @@ fn zero_duration_is_no_timeline() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     assert_eq!(seeks(&page.list.nodes), 0);
     assert_eq!(seek_targets(&page), 0);
@@ -282,7 +292,7 @@ fn zero_duration_is_no_timeline() {
 #[test]
 fn enabled_transport_is_filled_ink() {
     // Mock lines 204 to 206: 1 DIP skip bars and filled triangles (fill plus a 1 DIP stroke).
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     let n = &page.list.nodes;
     let polygons: Vec<(&Vec<(f64, f64)>, Ink)> = n
         .iter()
@@ -316,6 +326,7 @@ fn enabled_transport_is_filled_ink() {
             ..facts()
         },
         "21:47",
+        Lang::Tr,
     );
     let play = paused
         .list
@@ -328,7 +339,7 @@ fn enabled_transport_is_filled_ink() {
 
 #[test]
 fn empty_state_uses_strong_and_body() {
-    let page = media_page(&MediaFacts::default(), "21:47");
+    let page = media_page(&MediaFacts::default(), "21:47", Lang::Tr);
     let t = texts(&page.list.nodes);
     assert!(t.contains(&("Çalan bir şey yok".to_string(), TextStyle::Strong)));
     assert!(t.iter().any(|(_, s)| *s == TextStyle::Body));
@@ -336,13 +347,13 @@ fn empty_state_uses_strong_and_body() {
 
 #[test]
 fn artist_uses_body_style() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     assert!(texts(&page.list.nodes).contains(&("M83".to_string(), TextStyle::Body)));
 }
 
 #[test]
 fn transport_wins_over_seek_where_they_touch() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     let y = 150.0 - 10.0 - 1.0;
     let got = hit(&page.targets, RULER.x + RULER.w / 2.0 - 2.0, y);
     assert_eq!(got, Some(Action::PlayPause));
@@ -350,7 +361,7 @@ fn transport_wins_over_seek_where_they_touch() {
 
 #[test]
 fn a_playing_seek_is_live_with_the_flow_ink() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     let inks: Vec<Ink> = page
         .list
         .nodes
@@ -373,7 +384,7 @@ fn a_paused_seek_is_drawn_statically_in_ink() {
         }),
         ..facts()
     };
-    let page = media_page(&paused, "21:47");
+    let page = media_page(&paused, "21:47", Lang::Tr);
     // Nothing moves on a paused page, so it has no live node and wants no ambient frames.
     assert_eq!(seeks(&page.list.nodes), 0);
     assert!(!page.list.nodes.iter().any(|n| matches!(n, Node::Live(_))));
@@ -400,7 +411,7 @@ fn elapsed_nodes(nodes: &[Node]) -> Vec<&LiveNode> {
 
 #[test]
 fn a_playing_elapsed_time_is_a_live_node() {
-    let page = media_page(&facts(), "21:47");
+    let page = media_page(&facts(), "21:47", Lang::Tr);
     let live = elapsed_nodes(&page.list.nodes);
     assert_eq!(live.len(), 1, "one live elapsed text");
     let LiveNode::Elapsed {
@@ -436,7 +447,7 @@ fn a_paused_elapsed_time_is_static_text() {
         playing: false,
         ..t
     });
-    let page = media_page(&paused, "21:47");
+    let page = media_page(&paused, "21:47", Lang::Tr);
     assert!(elapsed_nodes(&page.list.nodes).is_empty());
     assert!(has_text(&page.list.nodes, "1:42"));
 }

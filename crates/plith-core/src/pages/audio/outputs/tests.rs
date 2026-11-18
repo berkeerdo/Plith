@@ -1,13 +1,18 @@
 #![allow(clippy::float_cmp)]
 
 use crate::draw::{Ink, Node, StationMark, TextStyle, Trim};
+use crate::lang::Lang;
 use crate::pages::audio::{PickMode, audio_page, audio_view};
 use crate::pages::fixtures::{self, CLOCK};
 use crate::pages::{Action, PageBuild, hit};
 use crate::shapes;
 
 fn build(facts: &crate::pages::audio::AudioFacts) -> PageBuild {
-    audio_page(&audio_view(facts, PickMode::None), CLOCK)
+    audio_page(
+        &audio_view(facts, PickMode::None, Lang::Tr),
+        CLOCK,
+        Lang::Tr,
+    )
 }
 
 fn text_node<'a>(nodes: &'a [Node], wanted: &str) -> Option<&'a Node> {

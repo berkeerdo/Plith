@@ -2,7 +2,7 @@
 //! the glyph and the caption of an output row. Pure: the app passes the raw Windows form factor
 //! and names, and no Windows type enters this crate.
 
-use crate::pages::copy;
+use crate::lang::{Lang, Text, text};
 
 /// `EndpointFormFactor` value for headphones.
 const FORM_HEADPHONES: u32 = 3;
@@ -36,13 +36,13 @@ pub enum DeviceKind {
 }
 
 impl DeviceKind {
-    /// The upper-case caption shown under the name.
+    /// The upper-case caption shown under the name, in `lang`.
     #[must_use]
-    pub fn caption(self) -> &'static str {
+    pub fn caption(self, lang: Lang) -> &'static str {
         match self {
-            DeviceKind::Headphones => copy::KIND_HEADPHONES,
-            DeviceKind::Speaker => copy::KIND_SPEAKER,
-            DeviceKind::Display => copy::KIND_DISPLAY,
+            DeviceKind::Headphones => text(Text::KindHeadphones, lang),
+            DeviceKind::Speaker => text(Text::KindSpeaker, lang),
+            DeviceKind::Display => text(Text::KindDisplay, lang),
         }
     }
 }

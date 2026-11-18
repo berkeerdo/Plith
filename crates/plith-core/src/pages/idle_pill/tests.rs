@@ -2,6 +2,7 @@
 
 use super::*;
 use crate::draw::{Node, Rect, Trim};
+use crate::lang::Lang;
 use crate::pages::pill::{PillState, pill};
 
 fn facts() -> IdleFacts {
@@ -132,7 +133,7 @@ fn playing_without_track_shows_time() {
 #[test]
 fn seal_equals_pill() {
     let f = facts();
-    assert_eq!(idle_pill(IdleLook::Seal, &f), pill(&f.seal));
+    assert_eq!(idle_pill(IdleLook::Seal, &f), pill(&f.seal, f.lang));
 }
 
 #[test]
@@ -179,30 +180,33 @@ fn no_node_uses_flow_except_playing_station() {
 #[allow(clippy::cast_precision_loss)]
 fn sound_words_keep_the_kind_only_when_it_fits() {
     assert_eq!(
-        sound_words(Some(62), false, "KULAKLIK", "KAPALI").as_deref(),
+        sound_words(Some(62), false, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
         Some("%62 · KULAKLIK")
     );
     assert_eq!(
-        sound_words(Some(100), false, "KULAKLIK", "KAPALI").as_deref(),
+        sound_words(Some(100), false, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
         Some("%100")
     );
     assert_eq!(
-        sound_words(Some(62), false, "HEADPHONES", "OFF").as_deref(),
+        sound_words(Some(62), false, "HEADPHONES", "OFF", Lang::Tr).as_deref(),
         Some("%62")
     );
     assert_eq!(
-        sound_words(Some(62), false, "", "OFF").as_deref(),
+        sound_words(Some(62), false, "", "OFF", Lang::Tr).as_deref(),
         Some("%62")
     );
     assert_eq!(
-        sound_words(Some(62), true, "KULAKLIK", "KAPALI").as_deref(),
+        sound_words(Some(62), true, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
         Some("KAPALI")
     );
     assert_eq!(
-        sound_words(None, true, "KULAKLIK", "KAPALI").as_deref(),
+        sound_words(None, true, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
         Some("KAPALI")
     );
-    assert_eq!(sound_words(None, false, "KULAKLIK", "KAPALI"), None);
+    assert_eq!(
+        sound_words(None, false, "KULAKLIK", "KAPALI", Lang::Tr),
+        None
+    );
     for kind in [
         "KULAKLIK",
         "HOPARLÖR",
@@ -212,7 +216,7 @@ fn sound_words_keep_the_kind_only_when_it_fits() {
         "DISPLAY",
     ] {
         for v in [0, 9, 62, 100] {
-            let s = sound_words(Some(v), false, kind, "OFF").unwrap();
+            let s = sound_words(Some(v), false, kind, "OFF", Lang::Tr).unwrap();
             let needed = s.chars().count() as f64 * VALUE_ADVANCE;
             assert!(needed <= TURN_W, "{s} needs {needed}, box is {TURN_W}");
         }

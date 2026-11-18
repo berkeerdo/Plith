@@ -2,6 +2,7 @@ use super::*;
 use crate::app::feed::{Feed, Timers};
 use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
+use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
 use plith_core::scene::ShapeCell;
@@ -60,6 +61,7 @@ fn app_with_welcome(name: &str) -> App {
         Box::new(FixtureServices::new(Fixture::Banana)),
         Box::new(NoTimers),
         clock,
+        Lang::Tr,
         &mailbox,
     );
     feed.set_welcome_facts(Some(welcome_facts()), &mailbox);
