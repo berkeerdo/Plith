@@ -42,6 +42,7 @@ fn main() {
         percent,
         muted,
         label: label.to_string(),
+        muted_word: String::from("MUTED"),
     };
 
     println!("sending to {pipe:?} for at most {seconds} s ({trust:?})");

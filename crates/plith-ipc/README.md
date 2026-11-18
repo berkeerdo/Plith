@@ -30,10 +30,10 @@ Windows only unless marked "pure".
 | Admission, `ServerEvent::Rejected(Rejection)`, `HELLO_TIMEOUT` (1 s) | A client is admitted only when its first message, within `HELLO_TIMEOUT`, is a `Hello` naming the pid Windows reports for the pipe (`GetNamedPipeClientProcessId`); `Connected { pid }` carries that kernel pid. Otherwise it is dropped and reported once as `Rejected(Timeout | ClosedBeforeHello | NotHello | PidMismatch | NoClientPid)`, with no `Connected` or `Disconnected`. A silent client cannot hold the single instance, and a bind probe no longer counts as a connection. |
 | Keepalive: `KEEPALIVE` (10 s), `IDLE_TIMEOUT` (30 s), `OsdServer::set_idle_timeout` | Pure constants plus a test knob. The server drops an admitted client that sends nothing for `IDLE_TIMEOUT` (reported as `Disconnected`), so a client that sent `Hello` and went silent cannot hold the single instance. `OsdLink` sends `Message::Ping` after `KEEPALIVE` without a write, so a live notch is never dropped; `Ping` never reaches the `serve` callback. |
 | `OsdServer::stopper() -> Stopper`, `Stopper::stop()` | Ends `serve` from any thread within about 1 s. |
-| `Message` | Pure. `Hello { client_pid }`, `Level { meter, percent, muted, label }`, `Hide`, `Bye`, `Ping`. |
+| `Message` | Pure. `Hello { client_pid }`, `Level { meter, percent, muted, label, muted_word }`, `Hide`, `Bye`, `Ping`. |
 | `Meter` | Pure. `Volume`, `Brightness`. |
 | `encode`, `decode`, `EncodeError`, `DecodeError` | Pure. The wire format below. `DecodeError::is_fatal` is true for a bad magic or a newer version. |
-| `MAX_MESSAGE` (128), `MAX_LABEL` (64), `PROTOCOL_VERSION` (1) | Pure. Limits and version. |
+| `MAX_MESSAGE` (144), `MAX_LABEL` (64), `PROTOCOL_VERSION` (2) | Pure. Limits and version. |
 | `latest::Slot<T>` | Pure. Latest-wins hand-off: `put` replaces, `take_wait(timeout)`, `close`, `is_closed`. Used inside `OsdLink`. |
 | `security::pipe_sddl(sid)` | Pure. The pipe's ACL text: this user only, with a no-write-up label. |
 | `security::own_integrity_above_medium() -> Result<bool, String>` | Whether this process runs above medium integrity (for example elevated). `ServerTrust::Installed` then refuses the helper, so the notch logs it and does not start the link (step 6). `security::is_above_medium(rid)` and `MEDIUM_RID` (`0x2000`) are the pure rule. |
@@ -112,11 +112,12 @@ Little endian. Every message starts with `b'P' b'O' version kind`, then the payl
 | Kind | Name | Payload |
 |---|---|---|
 | 1 | Hello | `client_pid: u32` |
-| 2 | Level | `meter u8, percent u8 (0..=100), muted u8 (0 or 1), label_len u8, label UTF-8 (max 64 bytes)` |
+| 2 | Level | `meter u8, percent u8 (0..=100), muted u8 (0 or 1), label_len u8, label UTF-8 (max 64 bytes), word_len u8, muted word UTF-8 (max 64 bytes)` |
 | 3 | Hide | none |
 | 4 | Bye | none |
 | 5 | Ping | none. Keepalive; the server swallows it. |
 
-Meters: 0 volume, 1 brightness. A message is at most 128 bytes. The pipe is
-`\\.\pipe\plith-osd-<session_id>-<user_sid>`. A bad magic or a newer version is fatal
+Meters: 0 volume, 1 brightness. A message is at most 144 bytes. The pipe is
+`\\.\pipe\plith-osd-<session_id>-<user_sid>`. A bad magic or any other version (an old helper
+answers a version 2 client with a fatal version error and closes the pipe) is fatal
 (`DecodeError::is_fatal`); an unknown kind is not.

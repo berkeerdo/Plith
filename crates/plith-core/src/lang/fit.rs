@@ -17,7 +17,8 @@ use crate::pages::welcome::LINE_W;
 use crate::pages::{MARGIN_LEFT, PAGE_W, pill};
 use crate::weather::Sky;
 
-/// The OSD value slot (`plith-osd`, `VALUE_LEFT` 236 to the 284 edge).
+/// The OSD value slot (`plith-osd`, `VALUE_LEFT` 236 to the 284 edge). A test in `plith-osd`
+/// (`paint/tests.rs`) asserts its slot equals this.
 pub const OSD_VALUE_W: f64 = 48.0;
 /// The welcome date line box.
 const DATE_W: f64 = 140.0;
@@ -179,6 +180,7 @@ fn muted_places(lang: Lang) -> Vec<Place> {
     let muted = text(Text::Muted, lang);
     let off = text(Text::Off, lang);
     let label = TextStyle::Label;
+    let value = TextStyle::Value;
     // The output row sizes its value box from the character count, `VALUE_CHAR_W` each.
     #[allow(clippy::cast_precision_loss)]
     let row_box = muted.chars().count() as f64 * VALUE_CHAR_W + VALUE_SLACK;
@@ -192,8 +194,9 @@ fn muted_places(lang: Lang) -> Vec<Place> {
             Budget::Dip(VALUE_BOX_W),
         ),
         place("microphone off", off, label, Budget::Dip(CUT_TO - CUT_FROM)),
-        place("osd muted", muted, label, Budget::Dip(OSD_VALUE_W)),
-        place("osd off", off, label, Budget::Dip(OSD_VALUE_W)),
+        // The OSD draws its value slot in `TextStyle::Value` (`plith-osd`, `paint.rs`).
+        place("osd muted", muted, value, Budget::Dip(OSD_VALUE_W)),
+        place("osd off", off, value, Budget::Dip(OSD_VALUE_W)),
     ]
 }
 

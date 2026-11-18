@@ -4,7 +4,6 @@
 
 use crate::model::OsdFrame;
 use plith_core::draw::{Family, TextStyle, Trim};
-use plith_core::pages::copy;
 use plith_ipc::Meter;
 use plith_render::{Gpu, TextSystem};
 use windows::Win32::Graphics::Direct2D::Common::{D2D_RECT_F, D2D1_COLOR_F};
@@ -46,11 +45,12 @@ const FAINT: u32 = 0x008A_847A;
 const TRACK: u32 = 0x004A_463F;
 const LIME: u32 = 0x00CA_FF33;
 
-/// The text of the right slot: the level as a whole percent, or the mute word.
+/// The text of the right slot: the level as a whole percent, or the muted word the notch sent
+/// in the user's language.
 #[must_use]
 pub fn value_text(frame: &OsdFrame) -> String {
     if frame.muted {
-        return copy::MUTED_LABEL.to_owned();
+        return frame.muted_word.clone();
     }
     // Allowed: the level is clamped to 0..=1, so the percent fits a u8 exactly.
     #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]

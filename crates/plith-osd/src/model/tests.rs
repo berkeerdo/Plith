@@ -9,6 +9,7 @@ fn level(meter: Meter, percent: u8, muted: bool, label: &str) -> Message {
         percent,
         muted,
         label: label.to_string(),
+        muted_word: String::from("STUMM"),
     }
 }
 

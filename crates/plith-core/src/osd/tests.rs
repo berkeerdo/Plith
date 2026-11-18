@@ -1,6 +1,6 @@
 use super::*;
+use crate::lang::{Lang, Text, text};
 use crate::pages::audio::EndpointFacts;
-use crate::pages::copy::TAB_AUDIO;
 
 fn audio(attached: Option<(f32, bool)>) -> AudioFacts {
     AudioFacts {
@@ -30,7 +30,7 @@ fn system(brightness: Option<u8>) -> SystemFacts {
 }
 
 fn read(volume: Option<(f32, bool)>, brightness: Option<u8>) -> OsdReading {
-    reading(&audio(volume), &system(brightness))
+    reading(&audio(volume), &system(brightness), Lang::En)
 }
 
 #[test]
@@ -68,10 +68,10 @@ fn appearing_meter_is_not_a_change() {
 
 #[test]
 fn device_switch_with_same_level_fires_nothing() {
-    let prev = reading(&audio(Some((0.5, false))), &system(None));
+    let prev = read(Some((0.5, false)), None);
     let mut switched = audio(Some((0.5, false)));
     switched.default_id = Some("b".to_string());
-    let next = reading(&switched, &system(None));
+    let next = reading(&switched, &system(None), Lang::En);
     assert_eq!(next.volume.as_ref().unwrap().label, "Headset");
     assert!(changes(&prev, &next, None).is_empty());
 }
@@ -101,7 +101,7 @@ fn long_label_is_cut_on_a_char_boundary() {
     let mut facts = audio(Some((0.5, false)));
     facts.endpoints[0].name = "ğ".repeat(35);
     assert_eq!(facts.endpoints[0].name.len(), 70);
-    let level = reading(&facts, &system(None)).volume.unwrap();
+    let level = reading(&facts, &system(None), Lang::En).volume.unwrap();
     assert!(level.label.len() <= MAX_LABEL_BYTES);
     assert!(!level.label.is_empty());
     assert!(level.label.chars().all(|c| c == 'ğ'));
@@ -111,17 +111,39 @@ fn long_label_is_cut_on_a_char_boundary() {
 fn missing_default_name_uses_tab_audio() {
     let mut facts = audio(Some((0.5, false)));
     facts.default_id = None;
-    let level = reading(&facts, &system(None)).volume.unwrap();
-    assert_eq!(level.label, TAB_AUDIO);
+    let level = reading(&facts, &system(None), Lang::Tr).volume.unwrap();
+    assert_eq!(level.label, "SES");
     facts.default_id = Some("unknown".to_string());
-    let level = reading(&facts, &system(None)).volume.unwrap();
-    assert_eq!(level.label, TAB_AUDIO);
+    let level = reading(&facts, &system(None), Lang::Tr).volume.unwrap();
+    assert_eq!(level.label, "SES");
+}
+
+#[test]
+fn fallback_label_follows_the_language() {
+    let mut facts = audio(Some((0.5, false)));
+    facts.default_id = None;
+    for lang in Lang::ALL {
+        let level = reading(&facts, &system(None), lang).volume.unwrap();
+        assert_eq!(level.label, text(Text::TabAudio, lang), "{lang:?}");
+    }
+    let english = reading(&facts, &system(None), Lang::En).volume.unwrap();
+    assert_eq!(english.label, "AUDIO");
+}
+
+#[test]
+fn the_muted_word_follows_the_language_and_fits_the_wire() {
+    let facts = audio(Some((0.5, true)));
+    for lang in Lang::ALL {
+        let level = reading(&facts, &system(None), lang).volume.unwrap();
+        assert_eq!(level.muted_word, text(Text::Muted, lang), "{lang:?}");
+        assert!(level.muted_word.len() <= MAX_LABEL_BYTES);
+    }
 }
 
 #[test]
 fn percent_rounds_and_clamps() {
     let percent = |value: f32| {
-        reading(&audio(Some((value, false))), &system(None))
+        reading(&audio(Some((value, false))), &system(None), Lang::En)
             .volume
             .unwrap()
             .percent

@@ -7,15 +7,17 @@ use std::thread::{self, JoinHandle};
 use std::time::{Duration, Instant};
 
 use plith_ipc::{
-    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Rejection, ServerEvent,
-    ServerTrust, Stopper, encode,
+    BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, PROTOCOL_VERSION, Rejection,
+    ServerEvent, ServerTrust, Stopper, encode,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
+use windows::Win32::Storage::FileSystem::ReadFile;
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_SHARE_MODE, OPEN_EXISTING, SECURITY_IDENTIFICATION, SECURITY_SQOS_PRESENT,
     WriteFile,
 };
 use windows::Win32::Storage::FileSystem::{FILE_FLAGS_AND_ATTRIBUTES, PIPE_ACCESS_INBOUND};
+use windows::Win32::System::Pipes::{ConnectNamedPipe, DisconnectNamedPipe};
 use windows::Win32::System::Pipes::{
     CreateNamedPipeW, PIPE_READMODE_MESSAGE, PIPE_TYPE_MESSAGE, PIPE_WAIT, WaitNamedPipeW,
 };
@@ -110,6 +112,7 @@ fn level(percent: u8) -> Message {
         percent,
         muted: false,
         label: String::new(),
+        muted_word: String::new(),
     }
 }
 
@@ -364,6 +367,7 @@ fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
         percent: 1,
         muted: false,
         label: "x".repeat(60),
+        muted_word: String::new(),
     };
     // Fill the quota so the worker blocks inside WriteFile.
     for _ in 0..200 {
@@ -384,6 +388,45 @@ fn dropping_the_link_is_bounded_when_the_server_stops_reading() {
     unsafe {
         let _ = CloseHandle(stuck);
     }
+}
+
+/// Plays a protocol 1 helper: accepts one client, reads its first frame, then does what the old
+/// decoder does with a frame of another version (a fatal error): disconnects. Returns the frame.
+fn old_helper_once(name: String) -> JoinHandle<Vec<u8>> {
+    thread::spawn(move || {
+        let pipe = create_stuck_pipe(&name);
+        // SAFETY: the handle is valid; a client that connected first reports an error, which is
+        // fine, its data is still readable.
+        let _ = unsafe { ConnectNamedPipe(pipe, None) };
+        let mut buffer = [0u8; 256];
+        let mut read = 0u32;
+        // SAFETY: the buffer and the count outlive the call.
+        unsafe { ReadFile(pipe, Some(&mut buffer), Some(&raw mut read), None) }.expect("read");
+        // SAFETY: the handle is disconnected and closed once.
+        unsafe {
+            let _ = DisconnectNamedPipe(pipe);
+            let _ = CloseHandle(pipe);
+        }
+        buffer[..read as usize].to_vec()
+    })
+}
+
+#[test]
+fn an_old_helper_fails_closed() {
+    let name = unique_name();
+    let helper = old_helper_once(name.clone());
+    let link = dev_link(name);
+    let frame = helper.join().expect("the old helper thread");
+    // A protocol 1 decoder reads byte 2 of the frame and refuses anything but 1 as fatal.
+    assert_eq!(&frame[..2], b"PO");
+    assert_eq!(frame[2], PROTOCOL_VERSION);
+    assert_ne!(frame[2], 1, "the client must not speak protocol 1 any more");
+    // The helper closed the pipe: the link notices at its next send, reports why and stays
+    // down, without panicking, while the notch goes on.
+    link.send(level(9)).unwrap();
+    assert!(eventually(|| !link.is_connected()), "down after the helper");
+    assert!(link.last_error().is_some(), "the failure is reported");
+    link.send(level(10)).unwrap();
 }
 
 #[test]

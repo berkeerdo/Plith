@@ -10,10 +10,11 @@ fn messages_read_as_one_log_word_each() {
         percent: 50,
         muted: false,
         label: String::from("Display"),
+        muted_word: String::from("STUMM"),
     };
     assert_eq!(
         describe(&level),
-        "level brightness 50 muted=false label=\"Display\""
+        "level brightness 50 muted=false label=\"Display\" word=\"STUMM\""
     );
 }
 
@@ -27,6 +28,7 @@ fn a_full_channel_waits_for_room_and_drops_nothing() {
         percent: 7,
         muted: false,
         label: String::new(),
+        muted_word: String::new(),
     };
     let sent = vec![level, Message::Hide, Message::Bye];
     let expected = sent.clone();

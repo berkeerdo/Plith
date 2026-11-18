@@ -45,6 +45,7 @@ fn a_volume_level_maps_field_by_field() {
         percent: 42,
         muted: true,
         label: String::from("Speakers"),
+        muted_word: String::from("STUMM"),
     });
     assert_eq!(
         message,
@@ -53,6 +54,7 @@ fn a_volume_level_maps_field_by_field() {
             percent: 42,
             muted: true,
             label: String::from("Speakers"),
+            muted_word: String::from("STUMM"),
         }
     );
 }
@@ -64,6 +66,7 @@ fn a_brightness_level_maps_to_the_brightness_meter() {
         percent: 100,
         muted: false,
         label: String::from("PARLAKLIK"),
+        muted_word: String::new(),
     });
     assert!(matches!(
         message,
@@ -84,6 +87,7 @@ fn a_full_length_label_still_encodes() {
         percent: 0,
         muted: false,
         label,
+        muted_word: "é".repeat(plith_core::osd::MAX_LABEL_BYTES / 2),
     });
     assert!(encode(&message).is_ok());
 }

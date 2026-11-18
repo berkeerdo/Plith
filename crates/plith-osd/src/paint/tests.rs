@@ -1,4 +1,5 @@
 use super::*;
+use plith_core::lang::{Lang, Text};
 
 fn frame(level: f32, muted: bool) -> OsdFrame {
     OsdFrame {
@@ -7,6 +8,7 @@ fn frame(level: f32, muted: bool) -> OsdFrame {
         meter: Meter::Volume,
         muted,
         label: String::from("Speakers"),
+        muted_word: String::from("STUMM"),
     }
 }
 
@@ -26,7 +28,7 @@ fn value_is_a_whole_percent_or_the_mute_word() {
     assert_eq!(value_text(&frame(0.424, false)), "42");
     assert_eq!(value_text(&frame(1.0, false)), "100");
     assert_eq!(value_text(&frame(0.0, false)), "0");
-    assert_eq!(value_text(&frame(0.5, true)), "SESSİZ");
+    assert_eq!(value_text(&frame(0.5, true)), "STUMM");
 }
 
 #[test]
@@ -78,9 +80,27 @@ fn snapped_span_is_at_least_one_device_pixel() {
 }
 
 #[test]
-fn the_muted_word_is_the_shared_turkish_copy() {
-    assert_eq!(copy::MUTED_LABEL, "SESSİZ");
-    assert_eq!(value_text(&frame(0.5, true)), "SESSİZ");
+fn value_text_draws_the_sent_word() {
+    let mut muted = frame(0.5, true);
+    assert_eq!(value_text(&muted), "STUMM");
+    "SESSİZ".clone_into(&mut muted.muted_word);
+    assert_eq!(value_text(&muted), "SESSİZ");
+    let unmuted = frame(0.5, false);
+    assert_eq!(
+        value_text(&unmuted),
+        "50",
+        "the word shows only while muted"
+    );
+}
+
+#[test]
+fn the_value_slot_is_the_width_the_fit_test_budgets() {
+    // `plith_core::lang::fit` budgets every OSD word against this width; keep them equal.
+    let slot = f64::from(WIDTH - PAD - VALUE_LEFT);
+    assert!(
+        (slot - plith_core::lang::fit::OSD_VALUE_W).abs() < 1e-9,
+        "{slot}"
+    );
 }
 
 #[test]
@@ -97,10 +117,15 @@ fn device_labels_upper_case_with_invariant_rules() {
 }
 
 #[test]
-fn the_value_slot_fits_the_muted_word_and_a_full_percent() {
+fn the_value_slot_fits_every_muted_word_and_a_full_percent() {
     let mut text = TextSystem::new().expect("text system");
     let slot = WIDTH - PAD - VALUE_LEFT;
-    for shown in [copy::MUTED_LABEL, "100"] {
+    let mut shown_words: Vec<&str> = Lang::ALL
+        .iter()
+        .map(|lang| plith_core::lang::text(Text::Muted, *lang))
+        .collect();
+    shown_words.push("100");
+    for shown in shown_words {
         let width = text
             .measure(shown, TextStyle::Value, f32::INFINITY, Trim::Middle)
             .expect("measure");

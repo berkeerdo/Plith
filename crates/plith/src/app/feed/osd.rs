@@ -25,13 +25,14 @@ impl Feed {
     /// wake that reported no change after the baseline, nothing is computed. The page that shows
     /// a meter keeps that meter quiet.
     pub(super) fn feed_osd(&mut self, scene: &Scene, changed: bool) {
+        let lang = self.lang();
         let Some(sink) = self.osd.sink.as_mut() else {
             return;
         };
         if !changed && self.osd.seen.is_some() {
             return;
         }
-        let next = reading(&self.facts.audio, &self.facts.system);
+        let next = reading(&self.facts.audio, &self.facts.system, lang);
         let open = if is_open(scene) {
             PageId::from_index(scene.page)
         } else {

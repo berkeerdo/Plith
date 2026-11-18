@@ -197,12 +197,13 @@ pub fn describe(message: &Message) -> String {
             percent,
             muted,
             label,
+            muted_word,
         } => {
             let meter = match meter {
                 Meter::Volume => "volume",
                 Meter::Brightness => "brightness",
             };
-            format!("level {meter} {percent} muted={muted} label={label:?}")
+            format!("level {meter} {percent} muted={muted} label={label:?} word={muted_word:?}")
         }
         Message::Hide => String::from("hide"),
         Message::Bye => String::from("bye"),

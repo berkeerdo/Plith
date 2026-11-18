@@ -129,6 +129,18 @@ fn volume_change_reaches_the_sink() {
 }
 
 #[test]
+fn a_mute_carries_the_muted_word_of_the_feed_language() {
+    let mut rig = rig();
+    rig.feed.on_wake(&rig.mailbox);
+    rig.facts.borrow_mut().audio.attached = Some((0.5, true));
+    rig.feed.on_wake(&rig.mailbox);
+    let shown = rig.shown.borrow();
+    assert_eq!(shown.len(), 1);
+    assert!(shown[0].muted);
+    assert_eq!(shown[0].muted_word, "SESSİZ");
+}
+
+#[test]
 fn open_audio_page_keeps_volume_quiet() {
     let mut rig = rig();
     rig.feed.on_wake(&rig.mailbox);
