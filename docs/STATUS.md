@@ -37,8 +37,9 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   (plan Task 12). Worktree `idle-look` kept until the console run.
 - **Next:** the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
   up to 600 s, watchdog scales; record in `plans/active/idle-look-r7.md`; open from the
-  2026-11-17 attempt: `prewarm: pages 3` lines; the Karot pill right side now falls back to the
-  track, then the output, 2026-11-18, check it on screen). Berke, who must not touch the screen during idle checks, every owed on-screen check batched:
+  2026-11-17 attempt: `prewarm: pages 3` lines read as brightness ruler clicks, confirm with
+  one click; the Karot pill right side now falls back to the track, then the output, check it
+  on screen; a 120 s Karot idle check over RDP gave 0 wakes, not the console proof). Berke, who must not touch the screen during idle checks, every owed on-screen check batched:
   R7a Task 12 (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
   pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,

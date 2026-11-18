@@ -589,3 +589,8 @@ case.
   five up after 0 ms): 0 render wake-ups (allowed 3), 78.1 ms CPU, exit 0. **Over RDP**
   (`remote true`, 32 Hz; `SESSIONNAME` said Console but `query session` showed `rdp-tcp#0`),
   so Task 12 stays open for the console. Check `query session`, not `SESSIONNAME`.
+- 2026-11-18 the `prewarm: pages 3` lines of 2026-11-17 19:41:39 to :49: page 3 is System, and
+  real services ran (no fixture ticker). With no built-in panel the WMI listener never starts,
+  so brightness facts change only after a write, and the only writer is a click on the System
+  ruler (`Action::SetBrightness`); mic facts hold no level. So 12 irregular rebuilds in 10 s
+  read as Berke's ruler clicks: expected, not a leak. Console proof: one click, one line.
