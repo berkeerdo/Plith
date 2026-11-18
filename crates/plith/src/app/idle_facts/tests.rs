@@ -62,6 +62,31 @@ fn the_pill_reads_time_playing_and_seal() {
 }
 
 #[test]
+fn the_pill_sound_reads_percent_and_kind_or_off() {
+    let idle = Idle::new(Settings::default(), Lang::Tr);
+    let mut f = facts();
+    f.pill.value = Some(62);
+    f.pill.state = PillState::Live;
+    let kind = sound_head(&f, Lang::Tr).map(|s| s.kind).unwrap_or_default();
+    assert!(!kind.is_empty(), "the banana default output has a kind");
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 5, 0)).sound,
+        Some(format!("%62 · {kind}"))
+    );
+    f.pill.state = PillState::Muted;
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 5, 0)).sound.as_deref(),
+        Some("KAPALI")
+    );
+    f.pill.output.clear();
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 5, 0)).sound,
+        None,
+        "no output, no sound"
+    );
+}
+
+#[test]
 fn weather_words_need_weather_on_and_a_forecast() {
     let now = at(14, 32, 0);
     let forecast = mock::forecast(

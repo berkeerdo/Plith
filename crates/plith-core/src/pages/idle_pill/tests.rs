@@ -15,6 +15,7 @@ fn facts() -> IdleFacts {
             value: Some(62),
             state: PillState::Live,
         },
+        sound: Some("%62 · KULAKLIK".into()),
         lang: Lang::Tr,
     }
 }
@@ -54,16 +55,29 @@ fn karot_time_left_turn_right() {
 }
 
 #[test]
-fn karot_falls_back_to_now_sky_then_nothing() {
+fn karot_right_falls_back_weather_then_track_then_sound() {
+    let right = |f: &IdleFacts| {
+        let t = texts(&idle_pill(IdleLook::Karot, f));
+        assert_eq!(t[0].1, "14:05");
+        t.get(1).map(|r| {
+            assert_eq!((r.2, r.3, r.4), (TextStyle::Value, Ink::Muted, Align::End));
+            assert_eq!(r.0.x + r.0.w, 184.0);
+            r.1.clone()
+        })
+    };
     let mut f = facts();
     f.turn = None;
-    let t = texts(&idle_pill(IdleLook::Karot, &f));
-    assert_eq!(t.len(), 2);
-    assert_eq!(t[1].1, "9° BULUTLU");
+    assert_eq!(right(&f).as_deref(), Some("9° BULUTLU"));
     f.now_sky = None;
-    let t = texts(&idle_pill(IdleLook::Karot, &f));
-    assert_eq!(t.len(), 1);
-    assert_eq!(t[0].1, "14:05");
+    assert_eq!(
+        right(&f).as_deref(),
+        Some("Song"),
+        "the playing title, never cased"
+    );
+    f.playing = None;
+    assert_eq!(right(&f).as_deref(), Some("%62 · KULAKLIK"));
+    f.sound = None;
+    assert_eq!(right(&f), None);
 }
 
 #[test]
@@ -161,8 +175,49 @@ fn no_node_uses_flow_except_playing_station() {
     }
 }
 
-/// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
-const VALUE_ADVANCE: f64 = 7.6;
+#[test]
+#[allow(clippy::cast_precision_loss)]
+fn sound_words_keep_the_kind_only_when_it_fits() {
+    assert_eq!(
+        sound_words(Some(62), false, "KULAKLIK", "KAPALI").as_deref(),
+        Some("%62 · KULAKLIK")
+    );
+    assert_eq!(
+        sound_words(Some(100), false, "KULAKLIK", "KAPALI").as_deref(),
+        Some("%100")
+    );
+    assert_eq!(
+        sound_words(Some(62), false, "HEADPHONES", "OFF").as_deref(),
+        Some("%62")
+    );
+    assert_eq!(
+        sound_words(Some(62), false, "", "OFF").as_deref(),
+        Some("%62")
+    );
+    assert_eq!(
+        sound_words(Some(62), true, "KULAKLIK", "KAPALI").as_deref(),
+        Some("KAPALI")
+    );
+    assert_eq!(
+        sound_words(None, true, "KULAKLIK", "KAPALI").as_deref(),
+        Some("KAPALI")
+    );
+    assert_eq!(sound_words(None, false, "KULAKLIK", "KAPALI"), None);
+    for kind in [
+        "KULAKLIK",
+        "HOPARLÖR",
+        "EKRAN",
+        "HEADPHONES",
+        "SPEAKER",
+        "DISPLAY",
+    ] {
+        for v in [0, 9, 62, 100] {
+            let s = sound_words(Some(v), false, kind, "OFF").unwrap();
+            let needed = s.chars().count() as f64 * VALUE_ADVANCE;
+            assert!(needed <= TURN_W, "{s} needs {needed}, box is {TURN_W}");
+        }
+    }
+}
 
 #[test]
 #[allow(clippy::cast_precision_loss)]

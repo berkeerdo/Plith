@@ -4,8 +4,8 @@
 
 use crate::log::Stamp;
 use crate::services::Facts;
-use plith_core::lang::{Lang, date_short, device_kind, weekday};
-use plith_core::pages::idle_pill::{IdleFacts, weather_words};
+use plith_core::lang::{Lang, Text, date_short, device_kind, text, weekday};
+use plith_core::pages::idle_pill::{IdleFacts, sound_words, weather_words};
 use plith_core::pages::pill::PillState;
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::welcome::{SoundHead, WelcomeFacts};
@@ -161,6 +161,7 @@ impl Idle {
             playing: (media.has_session && media.playing && !media.title.is_empty())
                 .then(|| (media.title.clone(), media.artist.clone())),
             seal: facts.pill.clone(),
+            sound: pill_sound(facts, self.lang),
             lang: self.lang,
         }
     }
@@ -217,6 +218,13 @@ fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
         muted: pill.state == PillState::Muted,
         flowing: pill.state == PillState::Live,
     })
+}
+
+/// The default output in short for the resting pill (see `sound_words`); `None` while there is
+/// no output or no volume to show.
+fn pill_sound(facts: &Facts, lang: Lang) -> Option<String> {
+    let s = sound_head(facts, lang)?;
+    sound_words(s.value, s.muted, &s.kind, text(Text::Off, lang))
 }
 
 /// True when a paused media session sits on the track of the last play: only then is that play

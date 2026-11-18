@@ -115,6 +115,7 @@ fn idle_facts() -> IdleFacts {
         now_sky: words.now_sky,
         playing: Some(("Nightcall".into(), "Kavinsky".into())),
         seal: fixtures::pills()[0].clone(),
+        sound: Some("%62 · KULAKLIK".into()),
         lang: Lang::Tr,
     }
 }
@@ -151,6 +152,22 @@ pub fn states() -> Vec<(String, Vec<Content>)> {
         out.push((
             format!("pill-{}", look.key()),
             vec![Content::Pill(idle_pill(look, &facts), rest_shape(look))],
+        ));
+    }
+    // Weather off: the Karot right side falls back to the track, then to the output.
+    let mut no_weather = facts;
+    no_weather.turn = None;
+    no_weather.now_sky = None;
+    let mut silent = no_weather.clone();
+    silent.playing = None;
+    for (name, f) in [
+        ("pill-karot-track", no_weather),
+        ("pill-karot-sound", silent),
+    ] {
+        let list = idle_pill(IdleLook::Karot, &f);
+        out.push((
+            name.into(),
+            vec![Content::Pill(list, rest_shape(IdleLook::Karot))],
         ));
     }
     out

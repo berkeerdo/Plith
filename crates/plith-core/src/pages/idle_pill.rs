@@ -27,6 +27,8 @@ pub struct IdleFacts {
     pub playing: Option<(String, String)>,
     /// The facts of the R3 seal.
     pub seal: PillFacts,
+    /// The default output in short, for example `%62 · KULAKLIK` or `KAPALI`.
+    pub sound: Option<String>,
     /// The interface language.
     pub lang: Lang,
 }
@@ -42,8 +44,28 @@ const TRACK_X: f64 = 30.0;
 const TEXT_H: f64 = 14.0;
 /// Width of the time box in Karot.
 const TIME_W: f64 = 56.0;
-/// Width of the right-hand weather text in Karot.
+/// Width of the right-hand text in Karot.
 const TURN_W: f64 = 112.0;
+/// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
+const VALUE_ADVANCE: f64 = 7.6;
+
+/// The default output in short for the Karot right side: `off` when muted, else `%62 · kind`,
+/// or only `%62` when the kind is empty or would not fit the box. `None` without a volume.
+#[must_use]
+pub fn sound_words(value: Option<u8>, muted: bool, kind: &str, off: &str) -> Option<String> {
+    if muted {
+        return Some(off.to_string());
+    }
+    let percent = format!("%{}", value?);
+    if kind.is_empty() {
+        return Some(percent);
+    }
+    let full = format!("{percent} · {kind}");
+    // Allowed: a few dozen characters at most.
+    #[allow(clippy::cast_precision_loss)]
+    let needed = full.chars().count() as f64 * VALUE_ADVANCE;
+    Some(if needed <= TURN_W { full } else { percent })
+}
 
 /// The display list of the resting pill for `look`.
 #[must_use]
@@ -79,6 +101,16 @@ pub fn rest_shape(look: IdleLook) -> IslandShape {
     }
 }
 
+/// The Karot right-hand text, like the welcome head's `Auto` slot: the weather when it is on,
+/// else the playing title, else the default output.
+fn karot_right(f: &IdleFacts) -> Option<&String> {
+    f.turn
+        .as_ref()
+        .or(f.now_sky.as_ref())
+        .or(f.playing.as_ref().map(|(title, _)| title))
+        .or(f.sound.as_ref())
+}
+
 fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
     let mut nodes = vec![text(
         rect(PAD_LEFT, y, TIME_W, TEXT_H),
@@ -87,7 +119,7 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
         Ink::Ink,
         Align::Start,
     )];
-    if let Some(right) = f.turn.as_ref().or(f.now_sky.as_ref()) {
+    if let Some(right) = karot_right(f) {
         nodes.push(text(
             rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
             right,
