@@ -579,3 +579,9 @@ case.
   with real services, never under 75 s), so a 120 s fixture check is not cut at 75 s either.
   Tests for 120, 600, 601 and a 120 s fixture budget (132 s). Five checks: fmt, clippy
   `-D warnings`, 1019 tests passed, structure-check 695 files 0 violations, check-deps clean.
+- 2026-11-18 Karot pill right side (Berke took the proposal): weather when on, else the playing
+  title, else the default output (`%62 · KULAKLIK`, `KAPALI` when muted; the kind is dropped
+  when it would not fit the 112 DIP box, as with `%100 · KULAKLIK` or English `HEADPHONES`).
+  `IdleFacts.sound`, built by `sound_words` in `plith-core`; no new timer, it changes only on
+  a service event. Renders `docs/design/r7/engine-3/` (`pill-karot-track`, `pill-karot-sound`).
+  Five checks: 1021 tests passed, the rest as above.
