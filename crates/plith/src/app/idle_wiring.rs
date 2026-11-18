@@ -7,7 +7,7 @@ use super::weather_link;
 use crate::log::{self, LogFile};
 use crate::services::fixture::idle as mock;
 use crate::{locale, plays_file, settings_file};
-use plith_core::lang::resolve;
+use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
 use plith_core::settings::Settings;
@@ -40,16 +40,24 @@ pub fn settings_for(launch: &Launch, log: &LogFile) -> Settings {
     settings
 }
 
+/// The interface language of a run: the setting, or Windows' own for `Auto`. Resolved once at
+/// start; the feed and the idle model share the result.
+#[must_use]
+pub fn language_of(settings: &Settings) -> Lang {
+    resolve(&settings.lang, &locale::windows_language())
+}
+
 /// Attaches the idle model to `feed` and starts the weather service when this run allows it.
+/// `settings` are the run's (`settings_for`); the language is the one the feed was built with.
 pub fn attach(
     launch: &Launch,
     log: &Arc<LogFile>,
     waker: UiWaker,
     feed: &mut Feed,
     mailbox: &SceneMailbox,
+    settings: &Settings,
 ) {
-    let settings = settings_for(launch, log);
-    let lang = resolve(&settings.lang, &locale::windows_language());
+    let lang = feed.lang();
     let mut idle = Idle::new(settings.clone(), lang);
     // With plays=off nothing about listening is read, kept or written; the old file stays as is.
     if is_normal(launch) && settings.plays {
@@ -73,7 +81,7 @@ pub fn attach(
     }
     feed.set_idle(idle, mailbox);
     let link = weather_link::start(
-        &settings,
+        settings,
         is_normal(launch),
         log,
         Box::new(move || waker.wake()),

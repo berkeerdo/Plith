@@ -1,10 +1,11 @@
 //! Routes and stations of the track diagram.
 
 use super::{
-    CUT_END_X, CUT_LABEL_X, DIAGONAL_END, LABEL_H, LABEL_TEXT, MIN_LEG, OUTPUT_X, SOURCE_X,
-    source_has, station_y,
+    CUT_END_X, CUT_LABEL_X, DIAGONAL_END, LABEL_H, MIN_LEG, OUTPUT_X, SOURCE_X, source_has,
+    station_y,
 };
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
+use crate::lang::{Lang, Text, text as word};
 use crate::pages::audio::{AudioView, RouteState};
 use crate::pages::kit::{rect, station, text};
 
@@ -12,7 +13,7 @@ use crate::pages::kit::{rect, station, text};
 mod tests;
 
 /// Width of the `SESSİZ` label on a cut line.
-const CUT_LABEL_W: f64 = 64.0;
+pub(crate) const CUT_LABEL_W: f64 = 64.0;
 /// Extra distance back for each shorter route converging on the same output.
 const STAGGER: f64 = 30.0;
 /// The candidate rail's offset from the picked source station.
@@ -123,7 +124,7 @@ fn look(state: RouteState) -> (u8, f64, Ink, bool) {
 /// Routes by pass, the cut stubs of muted sources, then stations. A cut whose source is muted is
 /// drawn as the stub; a cut caused by a muted output keeps its full path in track ink. Routes to
 /// hidden outputs (no slot) are not drawn.
-pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<Node>) {
+pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], lang: Lang, nodes: &mut Vec<Node>) {
     let backs = backs(view, slots);
     for order in 0..3 {
         for (k, r) in view.routes.iter().enumerate() {
@@ -150,7 +151,7 @@ pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<No
     }
     for (s, row) in view.sources.iter().enumerate() {
         if row.muted && source_has(view, s, RouteState::Cut) {
-            cut(station_y(view, s), nodes);
+            cut(station_y(view, s), lang, nodes);
         }
     }
     for (s, row) in view.sources.iter().enumerate() {
@@ -186,8 +187,8 @@ pub(super) fn draw(view: &AudioView, slots: &[Option<usize>], nodes: &mut Vec<No
     }
 }
 
-/// The mock's cut line: a stub from the source station to a hollow station, then `SESSİZ`.
-fn cut(y: f64, nodes: &mut Vec<Node>) {
+/// The mock's cut line: a stub from the source station to a hollow station, then the muted word.
+fn cut(y: f64, lang: Lang, nodes: &mut Vec<Node>) {
     nodes.push(stroke(
         vec![(SOURCE_X, y), (CUT_END_X, y)],
         1.0,
@@ -197,7 +198,7 @@ fn cut(y: f64, nodes: &mut Vec<Node>) {
     nodes.push(station(CUT_END_X, y, StationMark::Hollow, Ink::Faint));
     nodes.push(text(
         rect(CUT_LABEL_X, y + 4.0 - 10.0, CUT_LABEL_W, LABEL_H),
-        LABEL_TEXT,
+        word(Text::Muted, lang),
         TextStyle::Label,
         Ink::Faint,
         Align::Start,

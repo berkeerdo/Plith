@@ -10,6 +10,7 @@ use super::{Action, HitTarget, PAGE_W, PageBuild, PageId};
 use crate::draw::{
     Align, ArtId, DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, TextStyle,
 };
+use crate::lang::{Lang, Text, text as word};
 use crate::shapes;
 use std::time::SystemTime;
 
@@ -101,13 +102,13 @@ fn whole_secs(s: f64) -> u64 {
 
 /// The media page nodes, hit targets and island shape.
 #[must_use]
-pub fn media_page(facts: &MediaFacts, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(Some(PageId::Media), clock);
+pub fn media_page(facts: &MediaFacts, clock: &str, lang: Lang) -> PageBuild {
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Media), clock, lang);
     let height = if facts.has_session {
         session_body(facts, &mut nodes, &mut targets);
         HEIGHT
     } else {
-        empty_body(facts, &mut nodes);
+        empty_body(facts, lang, &mut nodes);
         HEIGHT_EMPTY
     };
     let mut shape = shapes::PAGES[PageId::Media.index()];
@@ -158,17 +159,17 @@ fn route_row(nodes: &mut Vec<Node>, y: f64, source: Option<&str>, output: &str, 
     ));
 }
 
-fn empty_body(facts: &MediaFacts, nodes: &mut Vec<Node>) {
+fn empty_body(facts: &MediaFacts, lang: Lang, nodes: &mut Vec<Node>) {
     nodes.push(text(
         rect(30.0, 73.0, 560.0, 20.0),
-        "\u{c7}alan bir \u{15f}ey yok",
+        word(Text::NothingPlaying, lang),
         TextStyle::Strong,
         Ink::Ink,
         Align::Start,
     ));
     nodes.push(text(
         rect(30.0, 94.0, 560.0, 12.0),
-        "Spotify, taray\u{131}c\u{131} ya da bir oyun ses verdi\u{11f}inde burada g\u{f6}r\u{fc}n\u{fc}r.",
+        word(Text::MediaHint, lang),
         TextStyle::Body,
         Ink::Muted,
         Align::Start,

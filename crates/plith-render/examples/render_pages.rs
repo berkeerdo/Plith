@@ -6,9 +6,12 @@
 //! Run: `cargo run --release -p plith-render --example render_pages`. With a folder argument
 //! (`-- <new folder>`) it renders only the idle look states of the R7 mock (the welcome view and
 //! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
+//! `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
+//! error) and `--out <new folder>` names the folder of the page states.
 
 use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
+use plith_core::lang::Lang;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::fixtures;
@@ -207,14 +210,24 @@ fn write_png(path: &Path, canvas: &Canvas) -> Result<()> {
 }
 
 /// Every Gece state, by file name.
-fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
+fn gece_states(lang: Lang) -> Vec<(&'static str, Vec<Content>)> {
     let clock = fixtures::CLOCK;
     let audio = |facts, mode| {
-        let view = audio_view(&fixtures::lit(&facts), mode);
-        vec![Content::Page(PageId::Audio, audio_page(&view, clock))]
+        let view = audio_view(&fixtures::lit(&facts), mode, lang);
+        vec![Content::Page(PageId::Audio, audio_page(&view, clock, lang))]
     };
-    let media = |facts| vec![Content::Page(PageId::Media, media_page(&facts, clock))];
-    let system = |facts| vec![Content::Page(PageId::System, system_page(&facts, clock))];
+    let media = |facts| {
+        vec![Content::Page(
+            PageId::Media,
+            media_page(&facts, clock, lang),
+        )]
+    };
+    let system = |facts| {
+        vec![Content::Page(
+            PageId::System,
+            system_page(&facts, clock, lang),
+        )]
+    };
     vec![
         ("01-audio-banana", audio(fixtures::banana(), PickMode::None)),
         (
@@ -242,7 +255,7 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
         ("06-media-empty", media(fixtures::media_empty())),
         (
             "07-shelf-empty",
-            vec![Content::Page(PageId::Shelf, shelf_page(clock))],
+            vec![Content::Page(PageId::Shelf, shelf_page(clock, lang))],
         ),
         ("08-system", system(fixtures::system())),
         ("09-system-mic-muted", system(fixtures::system_mic_muted())),
@@ -251,26 +264,68 @@ fn gece_states() -> Vec<(&'static str, Vec<Content>)> {
             "11-pills",
             fixtures::pills()
                 .iter()
-                .map(|p| Content::Pill(pill(p), REST))
+                .map(|p| Content::Pill(pill(p, lang), REST))
                 .collect(),
         ),
     ]
 }
 
-/// A new, uniquely named output folder under `%TEMP%`.
-fn out_dir() -> std::io::Result<PathBuf> {
-    let secs = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_or(0, |d| d.as_secs());
-    let dir = std::env::temp_dir().join(format!("plith-renders-{secs}-{}", std::process::id()));
+/// A new folder: `dir` when named (its parents are made, the folder itself must not exist),
+/// else a uniquely named one under `%TEMP%`.
+fn out_dir(dir: Option<&Path>) -> std::io::Result<PathBuf> {
+    let dir = dir.map_or_else(
+        || {
+            let secs = SystemTime::now()
+                .duration_since(UNIX_EPOCH)
+                .map_or(0, |d| d.as_secs());
+            std::env::temp_dir().join(format!("plith-renders-{secs}-{}", std::process::id()))
+        },
+        Path::to_path_buf,
+    );
+    if let Some(parent) = dir.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
     std::fs::create_dir(&dir)?;
     Ok(dir)
 }
 
-/// Renders the idle look states into the new folder `dir`.
-fn render_idle(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
-    std::fs::create_dir(dir)?;
-    for (name, contents) in idle_states::states() {
+/// The command line: `--lang <code>`, `--out <dir>` and an optional folder for the idle mode.
+struct Args {
+    lang: Lang,
+    out: Option<PathBuf>,
+    idle: Option<PathBuf>,
+}
+
+fn parse_args() -> std::result::Result<Args, String> {
+    let mut args = Args {
+        lang: Lang::Tr,
+        out: None,
+        idle: None,
+    };
+    let mut it = std::env::args_os().skip(1);
+    while let Some(arg) = it.next() {
+        match arg.to_str() {
+            Some("--lang") => {
+                let code = it.next().ok_or("--lang needs a code")?;
+                let code = code.to_string_lossy();
+                args.lang = Lang::ALL
+                    .into_iter()
+                    .find(|l| l.code() == code)
+                    .ok_or_else(|| format!("unknown language code `{code}`"))?;
+            }
+            Some("--out") => args.out = Some(it.next().ok_or("--out needs a folder")?.into()),
+            Some(flag) if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
+            _ if args.idle.is_none() => args.idle = Some(arg.into()),
+            _ => return Err("only one idle folder may be given".into()),
+        }
+    }
+    Ok(args)
+}
+
+/// Renders the idle look states in `lang` into the new folder `dir`.
+fn render_idle(dir: &Path, lang: Lang) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let dir = out_dir(Some(dir))?;
+    for (name, contents) in idle_states::states(lang) {
         write_png(
             &dir.join(format!("{name}.png")),
             &cell(&contents, Theme::Gece)?,
@@ -283,24 +338,26 @@ fn render_idle(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error>
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
-    if let Some(dir) = std::env::args_os().nth(1) {
-        return render_idle(Path::new(&dir));
+    let args = parse_args()?;
+    let lang = args.lang;
+    if let Some(dir) = &args.idle {
+        return render_idle(dir, lang);
     }
-    let dir = out_dir()?;
-    for (name, contents) in gece_states() {
+    let dir = out_dir(args.out.as_deref())?;
+    for (name, contents) in gece_states(lang) {
         write_png(
             &dir.join(format!("{name}.png")),
             &cell(&contents, Theme::Gece)?,
         )?;
     }
-    let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None);
+    let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None, lang);
     let themes = [
         ("kagit", Theme::Kagit),
         ("york", Theme::York),
         ("sodyum", Theme::Sodyum),
     ];
     for (name, theme) in themes {
-        let page = audio_page(&view, fixtures::CLOCK);
+        let page = audio_page(&view, fixtures::CLOCK, lang);
         let contents = [Content::Page(PageId::Audio, page)];
         write_png(
             &dir.join(format!("12-theme-{name}.png")),

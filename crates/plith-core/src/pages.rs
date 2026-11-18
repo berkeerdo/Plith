@@ -3,6 +3,7 @@
 
 use crate::draw::{DisplayList, Rect};
 use crate::geometry::IslandShape;
+use crate::lang::{Lang, Text, text};
 
 pub mod audio;
 pub mod copy;
@@ -74,14 +75,14 @@ impl PageId {
         Self::ALL.get(index).copied()
     }
 
-    /// The tab label shown to the user; empty for the welcome view, which has no tab.
+    /// The tab label shown to the user in `lang`; empty for the welcome view, which has no tab.
     #[must_use]
-    pub fn label(self) -> &'static str {
+    pub fn label(self, lang: Lang) -> &'static str {
         match self {
-            PageId::Audio => copy::TAB_AUDIO,
-            PageId::Media => copy::TAB_MEDIA,
-            PageId::Shelf => copy::TAB_SHELF,
-            PageId::System => copy::TAB_SYSTEM,
+            PageId::Audio => text(Text::TabAudio, lang),
+            PageId::Media => text(Text::TabMedia, lang),
+            PageId::Shelf => text(Text::TabShelf, lang),
+            PageId::System => text(Text::TabSystem, lang),
             PageId::Welcome => "",
         }
     }

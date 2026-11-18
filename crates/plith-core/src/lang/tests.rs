@@ -3,25 +3,9 @@ use crate::pages::audio::DeviceKind;
 use crate::settings::LangChoice;
 
 #[test]
-fn every_text_has_every_language() {
-    for lang in Lang::ALL {
-        for t in Text::ALL {
-            let own = match lang {
-                Lang::En => en::text(t),
-                Lang::Tr => tr::text(t),
-            };
-            let s = own.unwrap_or_else(|| panic!("{lang:?} lacks {t:?}"));
-            assert!(!s.is_empty(), "{lang:?} {t:?} is empty");
-            assert_eq!(upper(s, lang), s, "{lang:?} {t:?} is not upper-case");
-            assert_eq!(text(t, lang), s);
-        }
-    }
-}
-
-#[test]
 fn auto_follows_windows() {
     assert_eq!(resolve(&LangChoice::Auto, "tr-TR"), Lang::Tr);
-    assert_eq!(resolve(&LangChoice::Auto, "de-DE"), Lang::En);
+    assert_eq!(resolve(&LangChoice::Auto, "ja-JP"), Lang::En);
     assert_eq!(resolve(&LangChoice::Auto, "en_US"), Lang::En);
     assert_eq!(resolve(&LangChoice::Code("en".into()), "tr-TR"), Lang::En);
     assert_eq!(resolve(&LangChoice::Code("TR".into()), "en-US"), Lang::Tr);
@@ -42,6 +26,13 @@ fn songs_plural_english() {
     assert_eq!(songs(3, Lang::En), "3 SONGS");
     assert_eq!(songs(1, Lang::Tr), "1 ŞARKI");
     assert_eq!(songs(3, Lang::Tr), "3 ŞARKI");
+}
+
+#[test]
+fn french_zero_and_one_are_singular() {
+    assert_eq!(songs(0, Lang::Fr), "0 TITRE");
+    assert_eq!(songs(1, Lang::Fr), "1 TITRE");
+    assert_eq!(songs(2, Lang::Fr), "2 TITRES");
 }
 
 #[test]
@@ -80,4 +71,152 @@ fn device_kind_follows_the_language() {
     assert_eq!(device_kind(DeviceKind::Headphones, Lang::Tr), "KULAKLIK");
     assert_eq!(device_kind(DeviceKind::Speaker, Lang::En), "SPEAKER");
     assert_eq!(device_kind(DeviceKind::Display, Lang::Tr), "EKRAN");
+}
+#[test]
+fn every_language_has_every_string() {
+    for lang in Lang::ALL {
+        for t in Text::ALL {
+            assert!(!text(t, lang).is_empty(), "{lang:?} {t:?} is empty");
+        }
+    }
+}
+
+/// The strings written in sentence case: the unused bus stands in for a bus name, the rest are
+/// page sentences and row names, not labels.
+const SENTENCE_CASE: [Text; 7] = [
+    Text::Unused,
+    Text::ShelfDrop,
+    Text::Brightness,
+    Text::Microphone,
+    Text::NothingPlaying,
+    Text::MediaHint,
+    Text::Source,
+];
+
+#[test]
+fn own_copy_is_upper_case() {
+    for lang in Lang::ALL {
+        for t in Text::ALL {
+            if SENTENCE_CASE.contains(&t) {
+                continue;
+            }
+            let s = text(t, lang);
+            assert_eq!(upper(s, lang), s, "{lang:?} {t:?} is not upper-case");
+            if lang == Lang::De {
+                assert!(!s.contains('ß'), "{t:?} keeps a sharp s");
+            }
+        }
+    }
+}
+
+#[test]
+fn muted_and_off_words_fit_the_value_slot() {
+    for lang in Lang::ALL {
+        for t in [Text::Muted, Text::Off] {
+            assert!(text(t, lang).chars().count() <= 6, "{lang:?} {t:?} is long");
+        }
+    }
+}
+
+#[test]
+fn turkish_copy_is_unchanged() {
+    let expected = [
+        (Text::TabAudio, "SES"),
+        (Text::TabMedia, "MEDYA"),
+        (Text::TabShelf, "RAF"),
+        (Text::TabSystem, "SİSTEM"),
+        (Text::Muted, "SESSİZ"),
+        (Text::Off, "KAPALI"),
+        (Text::DdcOff, "DESTEKLENMİYOR · MONİTÖRDE DDC/CI KAPALI"),
+        (
+            Text::ShelfHint,
+            "RAFTA BEKLER, İSTEDİĞİN YERE GERİ SÜRÜKLERSİN",
+        ),
+        (Text::DefaultCaption, "VARSAYILAN"),
+        (Text::OtherOutputs, "DİĞER ÇIKIŞLAR"),
+        (Text::NoOutput, "ÇIKIŞ YOK"),
+        (Text::FooterNormal, "KAYNAĞA, SONRA ÇIKIŞA TIKLA"),
+        (
+            Text::FooterPicking,
+            "ÇIKIŞA TIKLA: YOL KURULUR · KAYNAĞA TEKRAR TIKLA: VAZGEÇ",
+        ),
+        (Text::FooterOutputs, "ÇIKIŞA TIKLA: VARSAYILAN OLUR"),
+        (Text::Unused, "Kullanılmıyor"),
+        (Text::ShelfDrop, "Dosyaları buraya sürükle"),
+        (Text::Brightness, "Parlaklık"),
+        (Text::Microphone, "Mikrofon"),
+        (Text::NothingPlaying, "Çalan bir şey yok"),
+        (
+            Text::MediaHint,
+            "Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.",
+        ),
+        (Text::Source, "Kaynak"),
+    ];
+    for (t, s) in expected {
+        assert_eq!(text(t, Lang::Tr), s, "{t:?}");
+    }
+}
+
+#[test]
+fn percent_follows_the_language() {
+    let expected = [
+        (Lang::Tr, "%62"),
+        (Lang::En, "62%"),
+        (Lang::De, "62 %"),
+        (Lang::Fr, "62 %"),
+        (Lang::Es, "62 %"),
+        (Lang::Pt, "62%"),
+        (Lang::It, "62%"),
+        (Lang::Pl, "62%"),
+    ];
+    for (lang, s) in expected {
+        assert_eq!(percent(62, lang), s, "{lang:?}");
+    }
+}
+
+#[test]
+fn regions_resolve_by_primary_code() {
+    let auto = |tag| resolve(&LangChoice::Auto, tag);
+    assert_eq!(auto("pt-PT"), Lang::Pt);
+    assert_eq!(auto("de-CH"), Lang::De);
+    assert_eq!(auto("fr-CA"), Lang::Fr);
+    assert_eq!(auto("xx-YY"), Lang::En);
+    assert_eq!(resolve(&LangChoice::Code("pl".into()), "en-US"), Lang::Pl);
+}
+
+#[test]
+fn polish_counts_follow_the_teen_rule() {
+    let expected = [
+        (1, "1 UTWÓR"),
+        (2, "2 UTWORY"),
+        (4, "4 UTWORY"),
+        (5, "5 UTWORÓW"),
+        (12, "12 UTWORÓW"),
+        (14, "14 UTWORÓW"),
+        (22, "22 UTWORY"),
+        (25, "25 UTWORÓW"),
+    ];
+    for (n, s) in expected {
+        assert_eq!(songs(n, Lang::Pl), s);
+    }
+}
+
+#[test]
+fn dates_exist_in_every_language() {
+    for lang in Lang::ALL {
+        let date = date_short(1, 17, 11, lang);
+        let parts: Vec<&str> = date.split(' ').collect();
+        assert_eq!(parts.len(), 3, "{lang:?}: {date}");
+        assert!(parts.iter().all(|p| !p.is_empty()), "{lang:?}: {date}");
+        for weekday in 0..7 {
+            let word = date_short(weekday, 1, 1, lang);
+            let word = word.split(' ').next().unwrap_or("");
+            assert_eq!(upper(word, lang), word, "{lang:?} weekday {weekday}");
+        }
+        for month in 1..=12 {
+            let date = date_short(0, 1, month, lang);
+            let word = date.rsplit(' ').next().unwrap_or("");
+            assert_eq!(upper(word, lang), word, "{lang:?} month {month}");
+        }
+    }
 }

@@ -4,8 +4,19 @@ use crate::pages::audio::DeviceKind;
 use crate::settings::LangChoice;
 use crate::weather::Sky;
 
+mod count;
+mod de;
 mod en;
+mod es;
+#[doc(hidden)]
+pub mod fit;
+mod fr;
+mod it;
+mod pl;
+mod pt;
 mod tr;
+
+pub use count::{percent, songs};
 
 #[cfg(test)]
 mod tests;
@@ -17,11 +28,32 @@ pub enum Lang {
     En,
     /// Turkish.
     Tr,
+    /// German.
+    De,
+    /// Spanish.
+    Es,
+    /// French.
+    Fr,
+    /// Portuguese (Brazilian).
+    Pt,
+    /// Italian.
+    It,
+    /// Polish.
+    Pl,
 }
 
 impl Lang {
     /// Every supported language.
-    pub const ALL: [Lang; 2] = [Lang::En, Lang::Tr];
+    pub const ALL: [Lang; 8] = [
+        Lang::En,
+        Lang::Tr,
+        Lang::De,
+        Lang::Es,
+        Lang::Fr,
+        Lang::Pt,
+        Lang::It,
+        Lang::Pl,
+    ];
 
     /// The language code written to the settings file.
     #[must_use]
@@ -29,6 +61,12 @@ impl Lang {
         match self {
             Lang::En => "en",
             Lang::Tr => "tr",
+            Lang::De => "de",
+            Lang::Es => "es",
+            Lang::Fr => "fr",
+            Lang::Pt => "pt",
+            Lang::It => "it",
+            Lang::Pl => "pl",
         }
     }
 }
@@ -78,11 +116,51 @@ pub enum Text {
     KindSpeaker,
     /// An output kind: display.
     KindDisplay,
+    /// Tab label of the audio page.
+    TabAudio,
+    /// Tab label of the media page.
+    TabMedia,
+    /// Tab label of the shelf page.
+    TabShelf,
+    /// Tab label of the system page.
+    TabSystem,
+    /// A muted source or output.
+    Muted,
+    /// Brightness without DDC/CI.
+    DdcOff,
+    /// The empty shelf's caption.
+    ShelfHint,
+    /// The first word of the default output's caption.
+    DefaultCaption,
+    /// The label above the other outputs.
+    OtherOutputs,
+    /// Shown when there is no output device at all.
+    NoOutput,
+    /// The audio footer at rest.
+    FooterNormal,
+    /// The audio footer while a source is picked.
+    FooterPicking,
+    /// The audio footer of the outputs view.
+    FooterOutputs,
+    /// A Voicemeeter bus that is not in use. The one mixed-case string: it stands in for a bus name.
+    Unused,
+    /// The empty shelf's drop caption. Sentence case, not upper case.
+    ShelfDrop,
+    /// Label of the brightness row. Sentence case, not upper case.
+    Brightness,
+    /// Label of the microphone row. Sentence case, not upper case.
+    Microphone,
+    /// Media page title when nothing plays. Sentence case, not upper case.
+    NothingPlaying,
+    /// Media page hint when nothing plays. Sentence case, not upper case.
+    MediaHint,
+    /// Fallback name of an unlabelled Voicemeeter strip, followed by its number. Sentence case, not upper case.
+    Source,
 }
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 21] = [
+    pub const ALL: [Text; 41] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -104,6 +182,26 @@ impl Text {
         Text::KindHeadphones,
         Text::KindSpeaker,
         Text::KindDisplay,
+        Text::TabAudio,
+        Text::TabMedia,
+        Text::TabShelf,
+        Text::TabSystem,
+        Text::Muted,
+        Text::DdcOff,
+        Text::ShelfHint,
+        Text::DefaultCaption,
+        Text::OtherOutputs,
+        Text::NoOutput,
+        Text::FooterNormal,
+        Text::FooterPicking,
+        Text::FooterOutputs,
+        Text::Unused,
+        Text::ShelfDrop,
+        Text::Brightness,
+        Text::Microphone,
+        Text::NothingPlaying,
+        Text::MediaHint,
+        Text::Source,
     ];
 }
 
@@ -122,23 +220,18 @@ pub fn resolve(choice: &LangChoice, windows_ui: &str) -> Lang {
         .unwrap_or(Lang::En)
 }
 
-/// The string for `t` in `lang`, falling back to English when the language has none.
+/// The string for `t` in `lang`.
 #[must_use]
 pub fn text(t: Text, lang: Lang) -> &'static str {
-    let own = match lang {
+    match lang {
         Lang::En => en::text(t),
         Lang::Tr => tr::text(t),
-    };
-    own.or_else(|| en::text(t)).unwrap_or("")
-}
-
-/// A song count such as `3 ŞARKI`, `1 SONG` or `3 SONGS`.
-#[must_use]
-pub fn songs(n: usize, lang: Lang) -> String {
-    match lang {
-        Lang::Tr => format!("{n} ŞARKI"),
-        Lang::En if n == 1 => format!("{n} SONG"),
-        Lang::En => format!("{n} SONGS"),
+        Lang::De => de::text(t),
+        Lang::Es => es::text(t),
+        Lang::Fr => fr::text(t),
+        Lang::Pt => pt::text(t),
+        Lang::It => it::text(t),
+        Lang::Pl => pl::text(t),
     }
 }
 
@@ -148,6 +241,12 @@ pub fn date_short(weekday: u8, day: u16, month: u16, lang: Lang) -> String {
     let (weekdays, months) = match lang {
         Lang::En => (&en::WEEKDAYS, &en::MONTHS),
         Lang::Tr => (&tr::WEEKDAYS, &tr::MONTHS),
+        Lang::De => (&de::WEEKDAYS, &de::MONTHS),
+        Lang::Es => (&es::WEEKDAYS, &es::MONTHS),
+        Lang::Fr => (&fr::WEEKDAYS, &fr::MONTHS),
+        Lang::Pt => (&pt::WEEKDAYS, &pt::MONTHS),
+        Lang::It => (&it::WEEKDAYS, &it::MONTHS),
+        Lang::Pl => (&pl::WEEKDAYS, &pl::MONTHS),
     };
     let wd = weekdays.get(usize::from(weekday)).copied().unwrap_or("");
     let mo = usize::from(month)
@@ -203,11 +302,14 @@ pub fn sky_word(sky: Sky, lang: Lang) -> &'static str {
     )
 }
 
-/// Upper-cases `s` under the language's rules: Turkish maps `i` to `İ` and `ı` to `I`.
+/// Upper-cases `s` under the language's rules: Turkish maps `i` to `İ` and `ı` to `I`,
+/// every other language uses the standard mapping.
 #[must_use]
 pub fn upper(s: &str, lang: Lang) -> String {
     match lang {
-        Lang::En => s.to_uppercase(),
+        Lang::En | Lang::De | Lang::Es | Lang::Fr | Lang::Pt | Lang::It | Lang::Pl => {
+            s.to_uppercase()
+        }
         Lang::Tr => s
             .chars()
             .flat_map(|c| match c {

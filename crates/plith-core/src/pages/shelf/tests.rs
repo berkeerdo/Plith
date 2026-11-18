@@ -6,14 +6,14 @@ use crate::pages::Action;
 
 #[test]
 fn shelf_empty_is_170_high() {
-    let page = shelf_page("09:41");
+    let page = shelf_page("09:41", Lang::Tr);
     assert_eq!(page.list.size, (620.0, 170.0));
     assert_eq!(page.shape.height, 170.0);
 }
 
 #[test]
 fn shelf_empty_copy_and_siding() {
-    let page = shelf_page("09:41");
+    let page = shelf_page("09:41", Lang::Tr);
     let texts: Vec<_> = page
         .list
         .nodes
@@ -50,7 +50,7 @@ fn shelf_empty_copy_and_siding() {
 
 #[test]
 fn shelf_has_only_tab_targets() {
-    let page = shelf_page("09:41");
+    let page = shelf_page("09:41", Lang::Tr);
     assert_eq!(page.targets.len(), 4);
     assert!(
         page.targets
@@ -61,5 +61,5 @@ fn shelf_has_only_tab_targets() {
 
 #[test]
 fn the_pre_feed_default_matches_the_built_shelf() {
-    assert_eq!(shelf_page("09:41").shape, crate::shapes::PAGES[2]);
+    assert_eq!(shelf_page("09:41", Lang::Tr).shape, crate::shapes::PAGES[2]);
 }

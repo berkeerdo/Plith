@@ -224,7 +224,7 @@ fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
 /// no output or no volume to show.
 fn pill_sound(facts: &Facts, lang: Lang) -> Option<String> {
     let s = sound_head(facts, lang)?;
-    sound_words(s.value, s.muted, &s.kind, text(Text::Off, lang))
+    sound_words(s.value, s.muted, &s.kind, text(Text::Off, lang), lang)
 }
 
 /// True when a paused media session sits on the track of the last play: only then is that play

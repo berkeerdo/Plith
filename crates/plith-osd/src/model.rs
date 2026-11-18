@@ -31,6 +31,8 @@ pub struct OsdFrame {
     pub muted: bool,
     /// The device short name, as sent.
     pub label: String,
+    /// The word drawn instead of the percent while muted, as sent.
+    pub muted_word: String,
 }
 
 /// The OSD state machine.
@@ -42,6 +44,7 @@ pub struct OsdModel {
     meter: Meter,
     muted: bool,
     label: String,
+    muted_word: String,
     hide_at: Option<f64>,
     exit_at: Option<f64>,
     /// When `Bye` arrived.
@@ -76,6 +79,7 @@ impl OsdModel {
             meter: Meter::Volume,
             muted: false,
             label: String::new(),
+            muted_word: String::new(),
             hide_at: None,
             exit_at: Some(START_GRACE_S),
             bye: None,
@@ -99,7 +103,11 @@ impl OsdModel {
                 percent,
                 muted,
                 label,
-            } => self.show(*meter, f64::from(*percent), *muted, label, now),
+                muted_word,
+            } => {
+                muted_word.clone_into(&mut self.muted_word);
+                self.show(*meter, f64::from(*percent), *muted, label, now);
+            }
             Message::Hide => {
                 self.hide_at = None;
                 self.aim_opacity(0.0, now);
@@ -185,6 +193,7 @@ impl OsdModel {
             meter: self.meter,
             muted: self.muted,
             label: self.label.clone(),
+            muted_word: self.muted_word.clone(),
         }
     }
 

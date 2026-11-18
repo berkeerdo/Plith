@@ -1,6 +1,7 @@
 //! Text with DirectWrite: the bundled fonts, text formats, cached layouts, tabular numerals and
 //! middle trimming. Render thread only; no Direct2D object lives here.
 
+mod glyphs;
 mod trim;
 
 use std::collections::HashMap;

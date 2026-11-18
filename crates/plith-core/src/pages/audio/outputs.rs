@@ -4,10 +4,10 @@
 
 use super::{AudioView, OutputRow, OutputValue};
 use crate::draw::{Align, DisplayList, Ink, Node, TextStyle, Trim};
-use crate::pages::copy;
+use crate::lang::{Lang, Text, text as word};
 use crate::pages::glyphs::{GLYPH, glyph};
 use crate::pages::kit::{rect, text, text_trim};
-use crate::pages::system::{RIGHT, draw_ruler, percent_value, ruler_rect, ruler_target};
+use crate::pages::system::{RIGHT, VALUE_W, draw_ruler, percent_value, ruler_rect, ruler_target};
 use crate::pages::tabbar::tabbar;
 use crate::pages::{Action, HitTarget, MARGIN_LEFT, PAGE_W, PageBuild, PageId};
 use crate::shapes;
@@ -37,7 +37,7 @@ const FOOTER_UP: f64 = 32.0;
 /// Left edge of a name and its caption, after the glyph.
 const NAME_X: f64 = MARGIN_LEFT + GLYPH + 6.0;
 /// Width of a name or caption: up to 8 DIP before the ruler start.
-const NAME_W: f64 = RULER_X0 - 8.0 - NAME_X;
+pub(crate) const NAME_W: f64 = RULER_X0 - 8.0 - NAME_X;
 /// Text heights.
 const NAME_H: f64 = 18.0;
 const SUB_H: f64 = 12.0;
@@ -63,14 +63,14 @@ fn other_y(i: usize) -> f64 {
 }
 
 /// The outputs page nodes, hit targets and island shape.
-pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
-    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock);
+pub(super) fn page(view: &AudioView, clock: &str, lang: Lang) -> PageBuild {
+    let (mut nodes, mut targets) = tabbar(Some(PageId::Audio), clock, lang);
     let default = view.outputs.iter().find(|o| o.default);
     match default {
-        Some(row) => default_row(row, &mut nodes, &mut targets),
+        Some(row) => default_row(row, lang, &mut nodes, &mut targets),
         None => nodes.push(text(
             rect(MARGIN_LEFT, 70.0, RIGHT - MARGIN_LEFT, 16.0),
-            copy::NO_OUTPUT,
+            word(Text::NoOutput, lang),
             TextStyle::Name,
             Ink::Faint,
             Align::Start,
@@ -81,7 +81,7 @@ pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
         // Nothing to click: no footer, the page is just the empty-state line.
         HEIGHT_EMPTY
     } else {
-        let height = others_block(&others, &mut nodes, &mut targets);
+        let height = others_block(&others, lang, &mut nodes, &mut targets);
         nodes.push(text_trim(
             rect(
                 MARGIN_LEFT,
@@ -89,7 +89,7 @@ pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
                 PAGE_W - 2.0 * MARGIN_LEFT,
                 SUB_H,
             ),
-            view.footer.text(),
+            view.footer.text(lang),
             TextStyle::Label,
             Ink::Faint,
             Align::Start,
@@ -111,7 +111,7 @@ pub(super) fn page(view: &AudioView, clock: &str) -> PageBuild {
 }
 
 /// Glyph, name, caption, ruler and value of the default output.
-fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
+fn default_row(row: &OutputRow, lang: Lang, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
     nodes.extend(glyph(
         row.kind,
         MARGIN_LEFT,
@@ -128,7 +128,11 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
     ));
     nodes.push(text_trim(
         rect(NAME_X, 87.0, NAME_W, SUB_H),
-        &format!("{} \u{b7} {}", copy::DEFAULT_CAPTION, row.kind.caption()),
+        &format!(
+            "{} \u{b7} {}",
+            word(Text::DefaultCaption, lang),
+            row.kind.caption(lang)
+        ),
         TextStyle::Sub,
         Ink::Faint,
         Align::Start,
@@ -145,14 +149,14 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
     draw_ruler(nodes, SPAN, DEFAULT_Y, f64::from(percent) / 100.0, ink);
     if row.muted {
         nodes.push(text(
-            rect(RIGHT - 60.0, DEFAULT_Y - 6.0, 60.0, SUB_H),
-            copy::MUTED_LABEL,
+            rect(RIGHT - VALUE_W, DEFAULT_Y - 6.0, VALUE_W, SUB_H),
+            word(Text::Muted, lang),
             TextStyle::Label,
             Ink::Faint,
             Align::End,
         ));
     } else {
-        nodes.push(percent_value(DEFAULT_Y, percent, Ink::Ink));
+        nodes.push(percent_value(DEFAULT_Y, percent, lang, Ink::Ink));
     }
     targets.push(ruler_target(
         SPAN,
@@ -163,13 +167,18 @@ fn default_row(row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarg
 
 /// The label and the rows of the other outputs, with a `+N` line for rows past the page;
 /// returns the page height.
-fn others_block(others: &[&OutputRow], nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) -> f64 {
+fn others_block(
+    others: &[&OutputRow],
+    lang: Lang,
+    nodes: &mut Vec<Node>,
+    targets: &mut Vec<HitTarget>,
+) -> f64 {
     if others.is_empty() {
         return HEIGHT_DEFAULT_ONLY;
     }
     nodes.push(text(
         rect(MARGIN_LEFT, LABEL_Y - 6.0, RIGHT - MARGIN_LEFT, SUB_H),
-        copy::OTHER_OUTPUTS,
+        word(Text::OtherOutputs, lang),
         TextStyle::Label,
         Ink::Faint,
         Align::Start,
@@ -181,7 +190,7 @@ fn others_block(others: &[&OutputRow], nodes: &mut Vec<Node>, targets: &mut Vec<
         others.len()
     };
     for (i, row) in others.iter().take(shown).enumerate() {
-        other_row(i, row, nodes, targets);
+        other_row(i, row, lang, nodes, targets);
     }
     let mut rows = shown;
     if others.len() > shown {
@@ -198,7 +207,13 @@ fn others_block(others: &[&OutputRow], nodes: &mut Vec<Node>, targets: &mut Vec<
 }
 
 /// One other output: glyph, name and kind caption; the whole row makes it the default.
-fn other_row(i: usize, row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec<HitTarget>) {
+fn other_row(
+    i: usize,
+    row: &OutputRow,
+    lang: Lang,
+    nodes: &mut Vec<Node>,
+    targets: &mut Vec<HitTarget>,
+) {
     let y = other_y(i);
     nodes.extend(glyph(row.kind, MARGIN_LEFT, y - GLYPH / 2.0, Ink::Muted));
     nodes.push(text_trim(
@@ -211,7 +226,7 @@ fn other_row(i: usize, row: &OutputRow, nodes: &mut Vec<Node>, targets: &mut Vec
     ));
     nodes.push(text(
         rect(NAME_X, y + 4.0, NAME_W, SUB_H),
-        row.kind.caption(),
+        row.kind.caption(lang),
         TextStyle::Sub,
         Ink::Faint,
         Align::Start,

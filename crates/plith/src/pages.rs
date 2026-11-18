@@ -4,6 +4,7 @@
 use crate::services::Facts;
 use plith_core::draw::{ArtPixels, DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
+use plith_core::lang::Lang;
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::pages::media::media_page;
@@ -31,6 +32,8 @@ pub struct Inputs<'a> {
     pub probe: Option<i32>,
     /// The resting look and its facts; `None` draws the seal (before the app wiring sets them).
     pub idle: Option<(IdleLook, &'a IdleFacts)>,
+    /// The interface language, resolved once at start.
+    pub lang: Lang,
 }
 
 /// Which lists need a rebuild.
@@ -98,15 +101,16 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
     let facts = inputs.facts;
     match page {
         PageId::Audio => {
-            let view = audio_view(&facts.audio, inputs.pick);
-            audio_page(&view, inputs.clock)
+            let view = audio_view(&facts.audio, inputs.pick, inputs.lang);
+            audio_page(&view, inputs.clock, inputs.lang)
         }
-        PageId::Media => media_page(&facts.media, inputs.clock),
-        PageId::Shelf => shelf_page(inputs.clock),
-        PageId::System => system_page(&facts.system, inputs.clock),
-        PageId::Welcome => inputs
-            .welcome
-            .map_or_else(welcome_placeholder, |f| welcome_page(f, inputs.probe)),
+        PageId::Media => media_page(&facts.media, inputs.clock, inputs.lang),
+        PageId::Shelf => shelf_page(inputs.clock, inputs.lang),
+        PageId::System => system_page(&facts.system, inputs.clock, inputs.lang),
+        PageId::Welcome => inputs.welcome.map_or_else(
+            || welcome_placeholder(inputs.lang),
+            |f| welcome_page(f, inputs.probe),
+        ),
     }
 }
 
@@ -114,14 +118,14 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
 fn pill_of(inputs: &Inputs) -> DisplayList {
     match inputs.idle {
         Some((look, facts)) => idle_pill(look, facts),
-        None => pill(&inputs.facts.pill),
+        None => pill(&inputs.facts.pill, inputs.lang),
     }
 }
 
 /// The welcome slot until the app wiring builds the real view: the bare tab bar (no station
 /// filled, no clock) at the welcome size, so a click still reaches every tab.
-fn welcome_placeholder() -> PageBuild {
-    let (nodes, targets) = tabbar(None, "");
+fn welcome_placeholder(lang: Lang) -> PageBuild {
+    let (nodes, targets) = tabbar(None, "", lang);
     PageBuild {
         list: DisplayList {
             nodes,

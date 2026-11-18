@@ -1,11 +1,12 @@
 //! The rules behind the audio view: rows, route states and density. Signal comes from the
 //! mixer's debounced flags (`VmFacts::signal`), which change only on an edge.
 
+use crate::lang::{Lang, Text, text};
 use crate::pages::derive;
 
 use super::{
     AudioFacts, AudioView, DeviceKind, Footer, MAX_OUTPUT_SLOTS, OutputRow, OutputValue, PickMode,
-    Route, RouteState, SourceRow, UNUSED_NAME, VmFacts, row_pitch,
+    Route, RouteState, SourceRow, VmFacts, row_pitch,
 };
 
 /// Captions of the virtual strips, in order.
@@ -13,9 +14,9 @@ const VIRTUAL_SUBS: [&str; 3] = ["VAIO", "AUX", "VAIO3"];
 
 type Parts = (Vec<SourceRow>, Vec<OutputRow>, Vec<Route>, Footer);
 
-pub(super) fn build(facts: &AudioFacts, mode: PickMode) -> AudioView {
+pub(super) fn build(facts: &AudioFacts, mode: PickMode, lang: Lang) -> AudioView {
     let (mut sources, mut outputs, mut routes, base_footer) = match &facts.vm {
-        Some(vm) => voicemeeter(vm),
+        Some(vm) => voicemeeter(vm, lang),
         None => windows(facts),
     };
     for (o, row) in outputs.iter_mut().enumerate() {
@@ -60,14 +61,14 @@ pub(super) fn build(facts: &AudioFacts, mode: PickMode) -> AudioView {
     }
 }
 
-fn voicemeeter(vm: &VmFacts) -> Parts {
+fn voicemeeter(vm: &VmFacts, lang: Lang) -> Parts {
     let sources = vm
         .strips
         .iter()
         .enumerate()
         .map(|(i, s)| SourceRow {
             name: if s.label.is_empty() {
-                format!("Kaynak {}", i + 1)
+                format!("{} {}", text(Text::Source, lang), i + 1)
             } else {
                 s.label.clone()
             },
@@ -76,7 +77,7 @@ fn voicemeeter(vm: &VmFacts) -> Parts {
             picked: false,
         })
         .collect();
-    let outputs = (0..vm.buses.len()).map(|b| bus_row(vm, b)).collect();
+    let outputs = (0..vm.buses.len()).map(|b| bus_row(vm, b, lang)).collect();
     let mut routes = Vec::new();
     for (s, strip) in vm.strips.iter().enumerate() {
         for (b, bus) in vm.buses.iter().enumerate() {
@@ -112,7 +113,7 @@ fn strip_sub(vm: &VmFacts, i: usize) -> String {
     }
 }
 
-fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
+fn bus_row(vm: &VmFacts, b: usize, lang: Lang) -> OutputRow {
     let bus = &vm.buses[b];
     let tag = derive::bus_tag(vm, b);
     let used = vm
@@ -128,7 +129,7 @@ fn bus_row(vm: &VmFacts, b: usize) -> OutputRow {
     } else if used {
         tag.clone()
     } else {
-        UNUSED_NAME.to_string()
+        text(Text::Unused, lang).to_string()
     };
     let value = if unnamed {
         OutputValue::None

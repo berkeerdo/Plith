@@ -1,8 +1,8 @@
 //! The OSD trigger diff: which volume or brightness changes deserve an overlay.
 
+use crate::lang::{Lang, Text, text};
 use crate::pages::PageId;
 use crate::pages::audio::AudioFacts;
-use crate::pages::copy::TAB_AUDIO;
 use crate::pages::system::SystemFacts;
 
 /// The longest label, in bytes, the OSD protocol carries.
@@ -28,6 +28,8 @@ pub struct OsdLevel {
     pub muted: bool,
     /// The device name, at most [`MAX_LABEL_BYTES`] bytes.
     pub label: String,
+    /// The word for "muted" in the user's language, at most [`MAX_LABEL_BYTES`] bytes.
+    pub muted_word: String,
 }
 
 /// Both meters at one moment; `None` when a meter is unavailable.
@@ -56,20 +58,25 @@ fn percent_of(scalar: f32) -> u8 {
     percent
 }
 
-/// Reads both meters from the page facts.
+/// Reads both meters from the page facts. The fallback label and the muted word come from the
+/// text table in `lang`.
 #[must_use]
-pub fn reading(audio: &AudioFacts, system: &SystemFacts) -> OsdReading {
+pub fn reading(audio: &AudioFacts, system: &SystemFacts, lang: Lang) -> OsdReading {
     let volume = audio.attached.map(|(scalar, muted)| {
         let name = audio
             .default_id
             .as_ref()
             .and_then(|id| audio.endpoints.iter().find(|endpoint| &endpoint.id == id))
-            .map_or(TAB_AUDIO, |endpoint| endpoint.name.as_str());
+            .map_or_else(
+                || text(Text::TabAudio, lang),
+                |endpoint| endpoint.name.as_str(),
+            );
         OsdLevel {
             meter: OsdMeter::Volume,
             percent: percent_of(scalar),
             muted,
             label: cut_label(name),
+            muted_word: cut_label(text(Text::Muted, lang)),
         }
     });
     let brightness = system.brightness.as_ref().map(|(name, percent)| OsdLevel {
@@ -77,6 +84,7 @@ pub fn reading(audio: &AudioFacts, system: &SystemFacts) -> OsdReading {
         percent: (*percent).min(100),
         muted: false,
         label: cut_label(name),
+        muted_word: String::new(),
     });
     OsdReading { volume, brightness }
 }

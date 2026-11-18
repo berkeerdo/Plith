@@ -10,12 +10,3 @@ fn turkish_letters_follow_turkish_rules() {
     );
     assert_eq!(tr_upper("DDC/CI 4:03"), "DDC/CI 4:03");
 }
-
-#[test]
-fn own_labels_are_authored_upper_cased() {
-    for label in OWN_LABELS {
-        assert_eq!(*label, tr_upper(label), "{label}");
-    }
-    assert!(OWN_LABELS.contains(&"S\u{130}STEM"));
-    assert!(OWN_LABELS.contains(&OFF_LABEL));
-}

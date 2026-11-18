@@ -1,4 +1,5 @@
 use super::*;
+use crate::lang::Lang;
 
 #[test]
 fn form_factor_decides_first() {
@@ -60,7 +61,7 @@ fn unknown_defaults_to_speaker() {
 
 #[test]
 fn captions_are_the_copy_constants() {
-    assert_eq!(DeviceKind::Headphones.caption(), "KULAKLIK");
-    assert_eq!(DeviceKind::Speaker.caption(), "HOPARL\u{d6}R");
-    assert_eq!(DeviceKind::Display.caption(), "EKRAN");
+    assert_eq!(DeviceKind::Headphones.caption(Lang::Tr), "KULAKLIK");
+    assert_eq!(DeviceKind::Speaker.caption(Lang::Tr), "HOPARL\u{d6}R");
+    assert_eq!(DeviceKind::Display.caption(Lang::Tr), "EKRAN");
 }

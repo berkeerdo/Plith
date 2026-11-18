@@ -6,10 +6,11 @@ use std::fmt;
 mod tests;
 
 /// Protocol version carried in every message.
-pub const PROTOCOL_VERSION: u8 = 1;
-/// Largest encoded message in bytes.
-pub const MAX_MESSAGE: usize = 128;
-/// Largest label in bytes (UTF-8).
+pub const PROTOCOL_VERSION: u8 = 2;
+/// Largest encoded message in bytes. The longest legal one is 137 (the 8 byte header, a full
+/// label, a length byte and a full muted word); the rest is headroom for a later field.
+pub const MAX_MESSAGE: usize = 144;
+/// Largest label, and largest muted word, in bytes (UTF-8).
 pub const MAX_LABEL: usize = 64;
 
 const KIND_HELLO: u8 = 1;
@@ -45,6 +46,8 @@ pub enum Message {
         muted: bool,
         /// Short text, at most [`MAX_LABEL`] bytes.
         label: String,
+        /// The word for "muted" in the user's language, at most [`MAX_LABEL`] bytes.
+        muted_word: String,
     },
     /// Hide the overlay.
     Hide,
@@ -58,7 +61,7 @@ pub enum Message {
 /// Why a message could not be encoded.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum EncodeError {
-    /// The label is longer than [`MAX_LABEL`] bytes.
+    /// The label or the muted word is longer than [`MAX_LABEL`] bytes.
     LabelTooLong,
     /// The percent is above 100.
     PercentOutOfRange,
@@ -81,7 +84,7 @@ pub enum DecodeError {
     Meter(u8),
     /// A flag byte that is neither 0 nor 1.
     Flag(u8),
-    /// The label is longer than [`MAX_LABEL`] bytes or not valid UTF-8.
+    /// The label or the muted word is longer than [`MAX_LABEL`] bytes or not valid UTF-8.
     Label,
     /// Bytes remain after the message.
     Trailing,
@@ -98,7 +101,7 @@ impl DecodeError {
 impl fmt::Display for EncodeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::LabelTooLong => write!(f, "label is longer than {MAX_LABEL} bytes"),
+            Self::LabelTooLong => write!(f, "label or muted word is longer than {MAX_LABEL} bytes"),
             Self::PercentOutOfRange => write!(f, "percent is above 100"),
         }
     }
@@ -116,7 +119,7 @@ impl fmt::Display for DecodeError {
             Self::Percent(p) => write!(f, "percent {p} is above 100"),
             Self::Meter(m) => write!(f, "unknown meter {m}"),
             Self::Flag(b) => write!(f, "invalid flag byte {b}"),
-            Self::Label => write!(f, "label is too long or not valid UTF-8"),
+            Self::Label => write!(f, "label or muted word is too long or not valid UTF-8"),
             Self::Trailing => write!(f, "unexpected bytes after the message"),
         }
     }
@@ -140,14 +143,13 @@ pub fn encode(message: &Message) -> Result<Vec<u8>, EncodeError> {
             percent,
             muted,
             label,
+            muted_word,
         } => {
             if *percent > 100 {
                 return Err(EncodeError::PercentOutOfRange);
             }
-            let label_len = u8::try_from(label.len())
-                .ok()
-                .filter(|len| usize::from(*len) <= MAX_LABEL)
-                .ok_or(EncodeError::LabelTooLong)?;
+            let label_len = bounded_len(label)?;
+            let word_len = bounded_len(muted_word)?;
             out.extend_from_slice(&[
                 KIND_LEVEL,
                 *meter as u8,
@@ -156,12 +158,22 @@ pub fn encode(message: &Message) -> Result<Vec<u8>, EncodeError> {
                 label_len,
             ]);
             out.extend_from_slice(label.as_bytes());
+            out.push(word_len);
+            out.extend_from_slice(muted_word.as_bytes());
         }
         Message::Hide => out.push(KIND_HIDE),
         Message::Bye => out.push(KIND_BYE),
         Message::Ping => out.push(KIND_PING),
     }
     Ok(out)
+}
+
+/// The length byte of `text`, which must fit [`MAX_LABEL`].
+fn bounded_len(text: &str) -> Result<u8, EncodeError> {
+    u8::try_from(text.len())
+        .ok()
+        .filter(|len| usize::from(*len) <= MAX_LABEL)
+        .ok_or(EncodeError::LabelTooLong)
 }
 
 /// Decodes one message from exactly one frame of bytes.
@@ -225,17 +237,27 @@ fn decode_level(payload: &[u8]) -> Result<Message, DecodeError> {
         1 => true,
         other => return Err(DecodeError::Flag(other)),
     };
-    let label_len = usize::from(*label_len);
-    if label_len > MAX_LABEL {
-        return Err(DecodeError::Label);
-    }
-    let label = rest.get(..label_len).ok_or(DecodeError::Short)?;
-    no_trailing(&rest[label_len..])?;
-    let label = std::str::from_utf8(label).map_err(|_| DecodeError::Label)?;
+    let (label, rest) = take_text(rest, usize::from(*label_len))?;
+    let [word_len, rest @ ..] = rest else {
+        return Err(DecodeError::Short);
+    };
+    let (muted_word, rest) = take_text(rest, usize::from(*word_len))?;
+    no_trailing(rest)?;
     Ok(Message::Level {
         meter,
         percent: *percent,
         muted,
-        label: label.to_string(),
+        label,
+        muted_word,
     })
+}
+
+/// Splits `len` bytes of bounded UTF-8 text off the front of `bytes`.
+fn take_text(bytes: &[u8], len: usize) -> Result<(String, &[u8]), DecodeError> {
+    if len > MAX_LABEL {
+        return Err(DecodeError::Label);
+    }
+    let (text, rest) = bytes.split_at_checked(len).ok_or(DecodeError::Short)?;
+    let text = std::str::from_utf8(text).map_err(|_| DecodeError::Label)?;
+    Ok((text.to_string(), rest))
 }

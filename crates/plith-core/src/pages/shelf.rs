@@ -7,6 +7,7 @@ use super::kit::{line, rect, station, text};
 use super::tabbar::tabbar;
 use super::{PAGE_W, PageBuild, PageId};
 use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
+use crate::lang::{Lang, Text, text as word};
 use crate::shapes;
 
 /// Empty page height (mock `shelfEmpty`, `h = 170`).
@@ -20,8 +21,8 @@ const SIDING_Y: f64 = 146.0;
 
 /// The empty shelf: the drop box with its copy and the siding line.
 #[must_use]
-pub fn shelf_page(clock: &str) -> PageBuild {
-    let (mut nodes, targets) = tabbar(Some(PageId::Shelf), clock);
+pub fn shelf_page(clock: &str, lang: Lang) -> PageBuild {
+    let (mut nodes, targets) = tabbar(Some(PageId::Shelf), clock, lang);
     let right = PAGE_W - 30.0;
     nodes.push(Node::Stroke {
         points: vec![
@@ -37,14 +38,14 @@ pub fn shelf_page(clock: &str) -> PageBuild {
     });
     nodes.push(text(
         rect(BOX_X, 78.0, right - BOX_X, 16.0),
-        "Dosyalar\u{131} buraya s\u{fc}r\u{fc}kle",
+        word(Text::ShelfDrop, lang),
         TextStyle::Name,
         Ink::Ink,
         Align::Center,
     ));
     nodes.push(text(
         rect(BOX_X, 98.0, right - BOX_X, 12.0),
-        super::copy::SHELF_HINT,
+        word(Text::ShelfHint, lang),
         TextStyle::Label,
         Ink::Faint,
         Align::Center,

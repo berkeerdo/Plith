@@ -2,6 +2,7 @@ use super::*;
 use crate::app::feed::{CLOCK_TIMER, COLLAPSE_TIMER, Feed, Timers, clock_ms};
 use crate::log::Stamp;
 use crate::services::fixture::FixtureServices;
+use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::PickMode;
@@ -145,6 +146,7 @@ fn clocked(name: &str, kind: Fixture) -> (App, FakeTimers, Rc<Cell<u16>>, Rc<Cel
         Box::new(FixtureServices::new(kind)),
         Box::new(timers.clone()),
         clock,
+        Lang::Tr,
         &app.mailbox,
     );
     app.attach_feed(feed);
@@ -680,6 +682,7 @@ fn a_pick_from_another_mixer_edition_writes_nothing() {
         Box::new(services),
         Box::new(FakeTimers::default()),
         Box::new(|| stamp(47)),
+        Lang::Tr,
         &app.mailbox,
     );
     app.attach_feed(feed);

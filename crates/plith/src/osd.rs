@@ -56,6 +56,7 @@ pub fn level_message(level: OsdLevel) -> Message {
         percent: level.percent,
         muted: level.muted,
         label: level.label,
+        muted_word: level.muted_word,
     }
 }
 

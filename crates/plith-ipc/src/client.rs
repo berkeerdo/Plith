@@ -20,6 +20,10 @@ use crate::{EncodeError, Message, encode};
 
 const RETRY: Duration = Duration::from_secs(1);
 const POLL: Duration = Duration::from_millis(500);
+/// How long a fresh connection is only "admitting": the server needs this long to read the
+/// `Hello` and, for a version it does not speak, drop the client. The pipe is inbound only, so
+/// the proof of admission is a `Ping` that is still written after this window.
+pub const ADMIT: Duration = Duration::from_millis(500);
 /// How long drop waits for the worker before it cancels the worker's blocking call.
 const DROP_GRACE: Duration = Duration::from_millis(500);
 /// How long drop waits after cancelling before it gives up on the worker.
@@ -52,7 +56,8 @@ struct LinkStatus {
 }
 
 impl LinkStatus {
-    /// A connect (open, trust check, `Hello`) succeeded: up, and the error is cleared.
+    /// The connection is admitted (its `Hello` was followed by a `Ping` that still wrote): up,
+    /// and the error is cleared.
     fn connected(&self) {
         *WorkerState::lock(&self.error) = None;
         self.connected.store(true, Ordering::SeqCst);
@@ -167,9 +172,11 @@ impl OsdLink {
         }
     }
 
-    /// Whether the worker holds a connection to a trusted server that took `Hello`.
+    /// Whether the worker holds a connection to a trusted server that admitted it: the `Hello`
+    /// went out and, [`ADMIT`] later, a `Ping` still wrote (a helper that rejects the client,
+    /// for example one speaking another protocol version, has closed the pipe by then).
     ///
-    /// True from a successful connect until a write or the next connect fails. A server
+    /// True from that proof until a write or the next connect fails. A server
     /// that goes away while nothing is sent is noticed at the next send, so pair this with
     /// [`HelperProcess::has_exited`](crate::HelperProcess::has_exited). Never blocks.
     #[must_use]
@@ -221,6 +228,22 @@ impl Drop for OsdLink {
     }
 }
 
+/// Waits for the next connect attempt, keeping the latest message. True while it is not due yet.
+fn wait_for_retry(
+    next_attempt: Instant,
+    carry: &mut Option<Message>,
+    slot: &Slot<Message>,
+) -> bool {
+    let now = Instant::now();
+    if now >= next_attempt {
+        return false;
+    }
+    if let Some(newer) = slot.take_wait(next_attempt - now) {
+        *carry = Some(newer);
+    }
+    true
+}
+
 fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus) {
     let wide_name = wide(name);
     let mut connection: Option<OwnedHandle> = None;
@@ -228,6 +251,7 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
     let mut next_attempt = Instant::now();
     let mut connected_at = next_attempt;
     let mut last_write = next_attempt;
+    let mut admit_at: Option<Instant> = None; // set while a connection awaits admission
     loop {
         if let Some(newer) = slot.take_wait(Duration::ZERO) {
             carry = Some(newer);
@@ -236,19 +260,14 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
             if slot.is_closed() {
                 return;
             }
-            let now = Instant::now();
-            if now < next_attempt {
-                if let Some(newer) = slot.take_wait(next_attempt - now) {
-                    carry = Some(newer);
-                }
+            if wait_for_retry(next_attempt, &mut carry, slot) {
                 continue;
             }
             connected_at = Instant::now();
             match connect(&wide_name, trust) {
                 Ok(pipe) => {
-                    status.connected();
                     connection = Some(pipe);
-                    last_write = Instant::now();
+                    admit_at = Some(Instant::now() + ADMIT);
                 }
                 Err(error) => {
                     status.failed(error);
@@ -257,6 +276,24 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
             }
             continue;
         };
+        if let Some(at) = admit_at
+            && carry != Some(Message::Bye)
+        {
+            match admission_step(pipe, at, &mut carry, slot, status) {
+                Admission::Waiting => {}
+                Admission::Closed => return,
+                Admission::Admitted => {
+                    admit_at = None;
+                    last_write = Instant::now();
+                }
+                Admission::Dropped => {
+                    admit_at = None;
+                    connection = None;
+                    next_attempt = connected_at + RETRY;
+                }
+            }
+            continue;
+        }
         if carry.is_none() {
             carry = slot.take_wait(POLL);
             if carry.is_none() {
@@ -287,6 +324,48 @@ fn run(name: &str, trust: ServerTrust, slot: &Slot<Message>, status: &LinkStatus
                 // A lost ping is not worth resending: the reconnect's Hello does its job.
                 carry = (message != Message::Ping).then_some(message);
             }
+        }
+    }
+}
+
+/// Where a connection stands while it waits for its proof of admission.
+enum Admission {
+    /// The [`ADMIT`] window is still open.
+    Waiting,
+    /// The link was dropped meanwhile.
+    Closed,
+    /// The proof `Ping` wrote: the link is up.
+    Admitted,
+    /// The proof `Ping` failed: the server dropped the client.
+    Dropped,
+}
+
+/// One step of the admission wait. Inside the window nothing is written and the latest message
+/// waits in `carry`; after it, a `Ping` that still writes marks the link up.
+fn admission_step(
+    pipe: &OwnedHandle,
+    at: Instant,
+    carry: &mut Option<Message>,
+    slot: &Slot<Message>,
+    status: &LinkStatus,
+) -> Admission {
+    let now = Instant::now();
+    if now < at {
+        if let Some(newer) = slot.take_wait(at - now) {
+            *carry = Some(newer);
+        } else if slot.is_closed() {
+            return Admission::Closed;
+        }
+        return Admission::Waiting;
+    }
+    match write(pipe, &Message::Ping) {
+        Ok(()) => {
+            status.connected();
+            Admission::Admitted
+        }
+        Err(error) => {
+            status.failed(format!("admission: {error}"));
+            Admission::Dropped
         }
     }
 }

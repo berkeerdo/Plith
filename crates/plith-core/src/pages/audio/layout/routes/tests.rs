@@ -1,6 +1,7 @@
 #![allow(clippy::float_cmp)]
 
 use crate::draw::{Ink, Node};
+use crate::lang::Lang;
 use crate::pages::audio::{PickMode, audio_page, audio_view};
 use crate::pages::fixtures;
 
@@ -24,8 +25,8 @@ fn strokes(nodes: &[Node]) -> Vec<Line> {
 }
 
 fn page_strokes(facts: &crate::pages::audio::AudioFacts, mode: PickMode) -> Vec<Line> {
-    let view = audio_view(&fixtures::lit(facts), mode);
-    strokes(&audio_page(&view, fixtures::CLOCK).list.nodes)
+    let view = audio_view(&fixtures::lit(facts), mode, Lang::Tr);
+    strokes(&audio_page(&view, fixtures::CLOCK, Lang::Tr).list.nodes)
 }
 
 #[test]

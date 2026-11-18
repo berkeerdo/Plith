@@ -253,3 +253,20 @@ fn artists_are_never_set_in_an_upper_casing_style() {
                 .all(|s| !crate::draw::style_spec(*s).uppercase)
     );
 }
+
+#[test]
+fn welcome_page_shows_no_turkish_letters_in_another_language() {
+    for lang in [Lang::En, Lang::De] {
+        let f = WelcomeFacts { lang, ..facts() };
+        for probe in [None, Some(10), Some(17)] {
+            for text in texts(&nodes(&f, probe)) {
+                assert!(
+                    !text
+                        .chars()
+                        .any(|c| "\u{11f}\u{11e}\u{131}\u{130}\u{15f}\u{15e}".contains(c)),
+                    "{lang:?} welcome page shows Turkish copy: {text}"
+                );
+            }
+        }
+    }
+}

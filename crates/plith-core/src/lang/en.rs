@@ -1,4 +1,4 @@
-//! English strings. The fallback for every language: it covers every `Text`.
+//! English strings. The fallback for an unknown language code.
 
 use super::Text;
 
@@ -11,12 +11,8 @@ pub const MONTHS: [&str; 12] = [
 ];
 
 /// The English string for `t`.
-#[allow(
-    clippy::unnecessary_wraps,
-    reason = "the shared signature lets a partial language return None"
-)]
-pub fn text(t: Text) -> Option<&'static str> {
-    Some(match t {
+pub fn text(t: Text) -> &'static str {
+    match t {
         Text::LookKarot => "CORE",
         Text::LookClock => "CLOCK",
         Text::LookPlaying => "PLAYING",
@@ -38,5 +34,25 @@ pub fn text(t: Text) -> Option<&'static str> {
         Text::KindHeadphones => "HEADPHONES",
         Text::KindSpeaker => "SPEAKER",
         Text::KindDisplay => "DISPLAY",
-    })
+        Text::TabAudio => "AUDIO",
+        Text::TabMedia => "MEDIA",
+        Text::TabShelf => "SHELF",
+        Text::TabSystem => "SYSTEM",
+        Text::Muted => "MUTED",
+        Text::DdcOff => "UNSUPPORTED · DDC/CI IS OFF ON THE MONITOR",
+        Text::ShelfHint => "IT WAITS ON THE SHELF, DRAG IT BACK ANYWHERE",
+        Text::DefaultCaption => "DEFAULT",
+        Text::OtherOutputs => "OTHER OUTPUTS",
+        Text::NoOutput => "NO OUTPUT",
+        Text::FooterNormal => "CLICK A SOURCE, THEN AN OUTPUT",
+        Text::FooterPicking => "CLICK AN OUTPUT: ROUTES IT · CLICK THE SOURCE AGAIN: CANCEL",
+        Text::FooterOutputs => "CLICK AN OUTPUT: MAKES IT DEFAULT",
+        Text::Unused => "Unused",
+        Text::ShelfDrop => "Drop files here",
+        Text::Brightness => "Brightness",
+        Text::Microphone => "Microphone",
+        Text::NothingPlaying => "Nothing playing",
+        Text::MediaHint => "Appears here when Spotify, a browser or a game makes sound.",
+        Text::Source => "Source",
+    }
 }

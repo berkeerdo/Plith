@@ -11,6 +11,7 @@ use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
+use plith_core::lang::Lang;
 use plith_core::pages::audio::PickMode;
 use plith_core::pages::idle_pill::IdleFacts;
 use plith_core::pages::tabbar::clock_text;
@@ -129,6 +130,8 @@ pub struct Feed {
     idle_facts: Option<IdleFacts>,
     /// The weather service, when weather is on.
     weather: Option<WeatherLink>,
+    /// The interface language, resolved once at start for every run mode.
+    lang: Lang,
 }
 
 impl Feed {
@@ -139,6 +142,7 @@ impl Feed {
         mut services: Box<dyn Services>,
         timers: Box<dyn Timers>,
         clock: Clock,
+        lang: Lang,
         mailbox: &SceneMailbox,
     ) -> Self {
         let _ = services.drain();
@@ -151,6 +155,7 @@ impl Feed {
             welcome: None,
             probe: None,
             idle: None,
+            lang,
         });
         let feed = Self {
             services,
@@ -170,6 +175,7 @@ impl Feed {
             idle: None,
             idle_facts: None,
             weather: None,
+            lang,
         };
         feed.publish(mailbox);
         feed
@@ -197,9 +203,16 @@ impl Feed {
                 .as_ref()
                 .zip(self.idle_facts.as_ref())
                 .map(|(idle, facts)| (idle.look(), facts)),
+            lang: self.lang,
         };
         self.pages.rebuild(dirty, &inputs);
         self.publish(mailbox);
+    }
+
+    /// The interface language this feed builds its pages in.
+    #[must_use]
+    pub fn lang(&self) -> Lang {
+        self.lang
     }
 
     fn publish(&self, mailbox: &SceneMailbox) {

@@ -254,13 +254,24 @@ fn attach_feed(
     };
     let levels = services.level_source();
     let mut app = app.borrow_mut();
+    // The language is resolved once, here, for every run mode (normal, demo, fixture, idle check).
+    let settings = idle_wiring::settings_for(launch, log);
+    let lang = idle_wiring::language_of(&settings);
     let mut feed = Feed::new(
         services,
         Box::new(shell.timer_handle()),
         Box::new(log::now),
+        lang,
         &app.mailbox,
     );
-    idle_wiring::attach(launch, log, shell.ui_waker(), &mut feed, &app.mailbox);
+    idle_wiring::attach(
+        launch,
+        log,
+        shell.ui_waker(),
+        &mut feed,
+        &app.mailbox,
+        &settings,
+    );
     app.attach_feed(feed);
     Attached {
         levels,

@@ -6,7 +6,7 @@ use std::fmt::Write as _;
 use super::WelcomeFacts;
 use super::axis::Weather;
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
-use crate::lang::{Text, sky_word, songs, text as word};
+use crate::lang::{Text, percent, sky_word, songs, text as word};
 use crate::pages::kit::{rect, station, text};
 use crate::pages::tabbar::clock_text;
 use crate::plays::Play;
@@ -16,7 +16,7 @@ use crate::weather::{Stamp, is_stale, next_turn, temp_text};
 /// Right edge of the right-hand lines.
 const RIGHT: f64 = 590.0;
 /// Width of a right-hand line.
-const LINE_W: f64 = 240.0;
+pub(crate) const LINE_W: f64 = 240.0;
 /// Where the sound station sits and how far the output name stays clear of it.
 const STATION_X: f64 = 586.5;
 const STATION_Y: f64 = 74.0;
@@ -168,7 +168,7 @@ fn sound_lines(f: &WelcomeFacts, out: &mut Vec<Node>) -> Lines {
         word(Text::Off, f.lang).to_string()
     } else {
         match s.value {
-            Some(v) => format!("%{v} · {}", s.kind),
+            Some(v) => format!("{} · {}", percent(v, f.lang), s.kind),
             None => s.kind.clone(),
         }
     };
@@ -267,7 +267,7 @@ fn future_lines(f: &WelcomeFacts, w: &Weather, hour: i32) -> Lines {
         temp_text(h.temp_c, f.unit)
     );
     if let Some(pct) = h.rain_pct {
-        let _ = write!(first, " · %{pct}");
+        let _ = write!(first, " · {}", percent(pct, f.lang));
     }
     [
         line(first, TextStyle::Name, Ink::Ink),
