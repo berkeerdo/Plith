@@ -211,8 +211,10 @@ fn the_next_track_differs_in_title_art_and_timeline() {
     assert_ne!(second.bgra, art().bgra);
 }
 
-/// Names that come from the fixtures' Voicemeeter labels and Windows devices, not from our copy.
-const FIXTURE_NAMES: [&str; 2] = ["Mikrofon", "Hat giri\u{15f}i"];
+/// The one fixture name (a Voicemeeter strip label) that holds a Turkish-only letter. `Mikrofon`
+/// is a strip label too, but it holds none, so it needs no exclusion and the pages' own
+/// `Microphone` label stays checked.
+const FIXTURE_NAMES: [&str; 1] = ["Hat giri\u{15f}i"];
 
 /// Letters only Turkish uses; a page in another language must not show them in its own copy.
 pub(crate) const TURKISH_ONLY: &str = "\u{11f}\u{11e}\u{131}\u{130}\u{15f}\u{15e}";
@@ -239,4 +241,33 @@ fn no_page_leaks_turkish_copy_in_another_language() {
         }
         assert!(seen > 100, "the scan saw the pages ({seen})");
     }
+}
+
+#[test]
+fn letterless_own_copy_follows_the_language_too() {
+    use crate::draw::Node;
+    use crate::lang::{Text, text};
+    use crate::pages::system::system_page;
+    let has = |nodes: &[Node], word: &str| {
+        nodes
+            .iter()
+            .any(|n| matches!(n, Node::Text { text, .. } if &**text == word))
+    };
+    // `Mikrofon` and `Kaynak` hold no Turkish-only letter, so the letter scan cannot see them.
+    for lang in [Lang::En, Lang::De] {
+        let page = system_page(&system(), CLOCK, lang);
+        assert!(
+            has(&page.list.nodes, text(Text::Microphone, lang)),
+            "{lang:?}"
+        );
+        if lang == Lang::En {
+            assert!(!has(&page.list.nodes, "Mikrofon"));
+        }
+    }
+    let mut facts = banana();
+    facts.vm.as_mut().unwrap().strips[2].label.clear();
+    let view = audio_view(&lit(&facts), PickMode::None, Lang::En);
+    assert_eq!(view.sources[2].name, "Source 3");
+    let view = audio_view(&lit(&facts), PickMode::None, Lang::Tr);
+    assert_eq!(view.sources[2].name, "Kaynak 3");
 }
