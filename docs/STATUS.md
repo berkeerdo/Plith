@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
@@ -35,11 +35,20 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
   (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Nothing on screen yet
   (plan Task 12). Worktree `idle-look` kept until the console run.
-- **Next:** the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
+- **R7 languages:** branch `feature/r7-languages` (ADR 0015, plan and log
+  `plans/active/r7-languages.md`). Eight languages (`en tr de es fr pt it pl`), every own string
+  from the table, percent per language, measured fit and glyph tests, renders
+  `design/r7/lang-*/`; Turkish idle renders byte-identical. OSD protocol 2 sends the muted word;
+  the client reads the link up only after an admission probe. Nothing on screen yet.
+- **Next:** first the helper reinstall for protocol 2 (`build-osd.ps1`, `install-osd.ps1` under
+  sudo, Berke's yes): until then the installed v1 helper rejects the notch and there is no OSD.
+  Then the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
   up to 600 s, watchdog scales; record in `plans/active/idle-look-r7.md`; open from the
   2026-11-17 attempt: `prewarm: pages 3` lines read as brightness ruler clicks, confirm with
   one click; the Karot pill right side now falls back to the track, then the output, check it
-  on screen; a 120 s Karot idle check over RDP gave 0 wakes, not the console proof). Berke, who must not touch the screen during idle checks, every owed on-screen check batched:
+  on screen; a 120 s Karot idle check over RDP gave 0 wakes, not the console proof; one run
+  with `lang=de` in `settings.ini` and the OSD muted word). Check `query session` first (an
+  RDP session reports `SESSIONNAME=Console`). Berke must not touch the screen during idle checks; every owed on-screen check batched:
   R7a Task 12 (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
   pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
   never measured from a real key yet), osd Task 9 (now through the real notch,
@@ -58,8 +67,8 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   shows `%70`. Offscreen renders reviewed, five checks green (858 tests), code review clean
   (3 minors, recorded in the ADR). On screen and a real
   volume click wait for the console (plan Task 8).
-- After the console: the "R7 languages" plan (R4 `copy.rs` into the lang table, percent format,
-  more languages, font fallback check), then the R7 settings window (two layers like Oyenza;
+- After the console: the R7 settings window (two layers like Oyenza; language choice with a
+  live switch;
   idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
   Then R5 shelf, R4b media output picker; themes switch in settings (nothing calls
   `set_palette`). Background of the R7 direction: `journal/2026-11.md`.
@@ -93,8 +102,8 @@ Updated 2026-11-17. Rewritten, not appended; old content goes to `journal/`.
   raw, `plays.txt` written on the UI thread (atomic), no hatch geometry tests.
 
 ## Recent decisions
+- ADR 0015 Eight languages from one exhaustive table, the OSD word over the pipe
 - ADR 0014 Karot idle look: click opens welcome, settings and play files, weather sources
 - ADR 0013 Windows outputs get their own view, not a one-route diagram
 - ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
 - ADR 0011 Click to expand, leave to collapse, no keyboard
-- ADR 0010 UI layer: display list, cached page bitmaps, prewarm
