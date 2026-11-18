@@ -585,3 +585,7 @@ case.
   `IdleFacts.sound`, built by `sound_words` in `plith-core`; no new timer, it changes only on
   a service event. Renders `docs/design/r7/engine-3/` (`pill-karot-track`, `pill-karot-sound`).
   Five checks: 1021 tests passed, the rest as above.
+- 2026-11-18 11:37, release `b95af6a`, `--idle-check 120 --idle-look karot`, real services (all
+  five up after 0 ms): 0 render wake-ups (allowed 3), 78.1 ms CPU, exit 0. **Over RDP**
+  (`remote true`, 32 Hz; `SESSIONNAME` said Console but `query session` showed `rdp-tcp#0`),
+  so Task 12 stays open for the console. Check `query session`, not `SESSIONNAME`.
