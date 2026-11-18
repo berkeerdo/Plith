@@ -33,8 +33,9 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   opens it, hover probes an hour), `settings.ini` and `plays.txt` in `%LOCALAPPDATA%\Plith\`, tr/en
   text table, `plith-weather` (Open-Meteo over WinHTTP, off by default). Whole-branch review: 4
   Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
-  (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Nothing on screen yet
-  (plan Task 12). Worktree `idle-look` kept until the console run.
+  (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Console 2026-11-18:
+  Task 12 boxes 1 and 2 proven (120 s Karot idle 2 wakes, click opens welcome, probe, tabs);
+  box 3 (weather to `OKUMA`) open. Worktree `idle-look` can go after the fix round.
 - **R7 languages:** merged as `3a281c2` (ADR 0015, plan and log
   `plans/active/r7-languages.md`, 1049 tests, five checks green on the merge). Eight languages
   (`en tr de es fr pt it pl`), every own string from the table, percent per language, measured
@@ -42,23 +43,26 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   protocol 2 sends the muted word; the client reads the link up only after an admission probe.
   Helper for protocol 2 reinstalled signed 2026-11-18 (Berke's yes, SHA-256 `C3BF2E9C...`); a
   normal run in the console logged `osd: helper launched` and `osd: link connected` 2 s later,
-  clean exit 0. No level sent yet.
-- **Next:** the console session with Berke (the `--idle-check` cap fix is done 2026-11-18:
-  up to 600 s, watchdog scales; record in `plans/active/idle-look-r7.md`; open from the
-  2026-11-17 attempt: `prewarm: pages 3` lines read as brightness ruler clicks, confirm with
-  one click; the Karot pill right side now falls back to the track, then the output, check it
-  on screen; a 120 s Karot idle check over RDP gave 0 wakes, not the console proof; one run
-  with `lang=de` in `settings.ini` and the OSD muted word). Check `query session` first (an
-  RDP session reports `SESSIONNAME=Console`). Release `plith.exe` is a GUI exe: PowerShell does
-  not wait for it, read the log after its `exit` line. Berke must not touch the screen during idle checks; every owed on-screen check batched:
-  R7a Task 12 (`--idle-check 120 --idle-look karot` at most 3 wakes, click opens welcome, probe follows the
-  pointer, pill looks, weather on with his yes until `OKUMA`); a volume key press reaching the OSD (`osd msg: level`,
-  never measured from a real key yet), osd Task 9 (now through the real notch,
-  `--flyout hide` for suppression); OSD look with the new type (number 10 DIP regular, ruler
-  136 DIP); audio-clarity Task 8 (outputs view, one volume click, his yes); pages Task 4, 7a, 16 and 18
-  on-screen steps (`--idle-check 60 --fixture banana`, `--demo pages --exit-after-demo
-  --fixture banana`, 20 s media ambient while playing, hover and leave, `prewarm:` lines).
-  Later and separate: the guarded route write session (one route on Banana and back).
+  clean exit 0. Console 2026-11-18: a real volume key reached the OSD (`level volume 64..100`),
+  mute too, and `lang=de` sent `STUMM` (record in `plans/active/r7-languages.md`).
+- **Console session 2026-11-18 done** (records in `idle-look-r7.md`, `r7-languages.md`,
+  `pages-r4.md`): every motion 240 fps but three in a real-service run during his game; pages
+  demo 21 motions 0 hitches; fixture idle 60 s 1 wake; notch survives a display sleep and wake.
+- **Next: the console fix round** (Berke's findings on screen; he said "önerinle devam",
+  so the proposals below are decided). Brainstorm, then one plan in `plans/active/`:
+  1. Welcome has no way back after a tab turn: a home mark at the left of the tab row, a new
+     ADR amending 0014.
+  2. Karot pill right `%62` alone does not read as volume: a speaker glyph before it.
+  3. Long playing title in the idle pill: scroll left once on a track change and on hover,
+     then rest at the start with a fade edge (never a looping marquee: idle budget).
+  4. Audio volume ruler and media timeline: a smooth drag, not only a click.
+  5. The first OSD show of each run hitches (cold draw 5.9 and 9.6 ms): prewarm it.
+- Still owed on screen, another day: weather on (his yes) to `OKUMA`; osd Task 9 over a game
+  (`--flyout hide`); 20 s ambient on the audio and media page while playing (pages Task 18
+  Step 3) and his words on the square-top look (Task 7a Step 5); audio-clarity Task 8 box
+  (he used the ruler, "cetvel çalışıyor"). Later: the guarded route write session.
+- Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
+  `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
   18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
   hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.

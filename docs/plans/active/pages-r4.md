@@ -680,3 +680,11 @@ Numbers copied from `%LOCALAPPDATA%\Plith\plith.log`; 240 Hz, no game.
   output device and its volume. Design job, see STATUS.
 - Berke: "birde winbdows osd iside gözüküyor". Expected: the OSD helper is not wired and flyout
   suppression stays off until his yes (wiring job).
+- 2026-11-18 22:31 console (master, release from `96d99f2`, `remote false`, 240 Hz, hands
+  off): `--idle-check 60 --fixture banana` 1 render wake-up (allowed 2), 187.5 ms CPU, exit 0.
+  `--demo pages --exit-after-demo --fixture banana` (19 steps x3): 21 motions, every one 240.0
+  fps, 0 hitches, worst gap 4.2 ms, draw p99 at most 0.73 ms; 12 `ambient` lines 0 hitches,
+  worst 16.67 ms (60 fps), draw p99 at most 0.57 ms; prewarm before an expand 0.6 to 2.9 ms.
+  Task 18 Step 3 still owes 20 s of ambient on the audio and the media page while playing,
+  and Berke's words on the look (Task 7a Step 5). Real-service run the same evening: two
+  ambient bursts on page 1 of 0.5 s, 0 hitches (see `idle-look-r7.md`).

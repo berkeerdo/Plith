@@ -211,3 +211,8 @@ exhaustive `match`. The R4 page builders take a `Lang` and read the table instea
   fit places, ipc README, French `JUIN`/`JUIL`; 1049 tests. Turkish page renders from the base
   commit are pixel-identical to `lang-tr/pages` (17 of 17). Subject of `f691050` is 51 chars.
 - Not done here: the helper reinstall (protocol 2) and any on-screen check.
+- 2026-11-18 22:26 console (release from `96d99f2`, `lang=de` in `settings.ini`, restored to
+  `auto` after): a mute key (VK_VOLUME_MUTE twice, no pointer) gave `osd msg: level volume 58
+  muted=true ... word="STUMM"`, then `muted=false`; the pill showed clock and track. With
+  `lang=auto` the word was `MUTED`: Windows UI is `en-US` (culture `tr-TR`), so `auto` picks
+  English by design. The first OSD show of each run hitched (cold draw 5.9 and 9.6 ms).

@@ -539,8 +539,8 @@ case.
   before the merge commit.
 
 ### Task 12: Console (Berke)
-- [ ] `--idle-check 120 --idle-look karot`: wakes at most 3.
-- [ ] Click opens the welcome view, the probe follows the pointer, a tab turns the page.
+- [x] `--idle-check 120 --idle-look karot`: wakes at most 3.
+- [x] Click opens the welcome view, the probe follows the pointer, a tab turns the page.
 - [ ] The pill looks on screen. With his yes, turn weather on: a real fetch reaches
   `OKUMA`.
 
@@ -594,3 +594,43 @@ case.
   so brightness facts change only after a write, and the only writer is a click on the System
   ruler (`Action::SetBrightness`); mic facts hold no level. So 12 irregular rebuilds in 10 s
   read as Berke's ruler clicks: expected, not a leak. Console proof: one click, one line.
+- 2026-11-18 console session (release built 14:04 from `96d99f2`, `query session` showed
+  `>console`, log `remote false`, 240 Hz):
+  - 18:58 `--idle-check 120 --idle-look karot` spoiled: 3 clicks (expand and collapse, 933
+    frames) plus a fullscreen window, 981 wakes, exit 1. Its 6 motions: all 240.0 fps, 0
+    hitches, worst gap 4.2 ms, draw p99 at most 1.30 ms.
+  - 19:16 rerun hands off: **2 render wake-ups (allowed 3), 62.5 ms CPU, exit 0**. Task 12
+    box 1 proven on the console.
+  - Berke: the Karot pill right `%62` alone does not read as volume (the kind word drops when
+    it does not fit). Decision (Berke took the proposal): a speaker glyph before the percent,
+    the audio page's output glyph. Built after the console session.
+  - Berke: a long playing title in the idle pill is cut; he wants it to scroll left smoothly
+    like an LED panel. A marquee that never stops breaks the idle budget (3 wakes in 120 s),
+    so the proposal is: scroll once on a track change and on hover, then rest at the start
+    with a fade edge. Waits for his answer; built after the console session.
+  - 19:18 normal run (helper `osd start: inband band=2 uiaccess=true`, link connected 2 s
+    after launch). Click opened welcome (Berke saw it), probe redraws `prewarm: pages 4` at
+    0.3 to 0.8 ms follow the pointer, tab turns `motion page` 240.0 fps 0 hitches. 23 motions,
+    one collapse with 1 hitch (8.3 ms, present 4.1 ms). **First real volume key to the OSD:**
+    `plith-osd.log` has `osd msg: level volume 64..100` and 8 osd-show/hide motions at 240 fps
+    (the first show 1 hitch, cold draw 5.9 ms); Berke saw the OSD.
+  - Berke: the audio page volume ruler should follow a drag smoothly, not only a click.
+    Recorded for the audio page work after the console session. The same for the media page:
+    a smooth drag, not a click.
+  - Display slept 19:51 (`display_off=true`), woke 19:57, then `display changed: restart
+    needed` (the handler only logs it, `app/state.rs:164`). The notch kept working after it
+    (a wrong log filter first suggested otherwise): window `Plith.Notch` visible at 934,0
+    692x461, a screen grab shows the pill (`21:49`, `Desire`), 38 motions until 21:49. The
+    mute key at 20:06 reached the OSD (`muted=true`).
+  - Berke clicked the System ruler ("cetvel çalışıyor"); no lone `prewarm: pages 3` line
+    appeared. Likely no brightness fact changed on this desktop monitor; the 2026-11-17 lines
+    stay read as clicks, not proven either way. Low priority.
+  - 21:47:28 to :30 two page turns with hitches (213.9 and 223.4 fps, present p99 31.5 and
+    12.5 ms) and one collapse on `clock dxgi` with a retarget; fullscreen windows came and went
+    all evening (his game). Every other motion 240 fps, 0 hitches. Media `ambient` page 1:
+    30 to 34 frames in 0.5 s, 0 hitches (pages Task 16 input).
+  - 22:39 Berke: "diğer widgetlara geçiyorum ya oradan home widgheta ana görünüme
+    geçemiyorum". Confirmed by a screen grab: the welcome view sits above a tab row of AUDIO,
+    MEDIA, SHELF, SYSTEM with no entry for itself (ADR 0014 gave welcome no tab), so after a
+    tab turn the only way back is leave, collapse and click again. A real defect; the fix
+    needs a new ADR that amends 0014 (proposal: a home mark at the left of the tab row).
