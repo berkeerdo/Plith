@@ -48,5 +48,11 @@ pub fn text(t: Text) -> &'static str {
         Text::FooterPicking => "CLICCA UN'USCITA: SI COLLEGA · CLICCA ANCORA LA SORGENTE: ANNULLA",
         Text::FooterOutputs => "CLICCA UN'USCITA: DIVENTA PREDEFINITA",
         Text::Unused => "Inutilizzato",
+        Text::ShelfDrop => "Trascina qui i file",
+        Text::Brightness => "Luminosità",
+        Text::Microphone => "Microfono",
+        Text::NothingPlaying => "Niente in riproduzione",
+        Text::MediaHint => "Compare qui quando Spotify, un browser o un gioco emette audio.",
+        Text::Source => "Sorgente",
     }
 }

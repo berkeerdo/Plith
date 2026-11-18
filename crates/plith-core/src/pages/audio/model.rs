@@ -68,7 +68,7 @@ fn voicemeeter(vm: &VmFacts, lang: Lang) -> Parts {
         .enumerate()
         .map(|(i, s)| SourceRow {
             name: if s.label.is_empty() {
-                format!("Kaynak {}", i + 1)
+                format!("{} {}", text(Text::Source, lang), i + 1)
             } else {
                 s.label.clone()
             },

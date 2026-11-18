@@ -38,7 +38,7 @@ pub fn shelf_page(clock: &str, lang: Lang) -> PageBuild {
     });
     nodes.push(text(
         rect(BOX_X, 78.0, right - BOX_X, 16.0),
-        "Dosyalar\u{131} buraya s\u{fc}r\u{fc}kle",
+        word(Text::ShelfDrop, lang),
         TextStyle::Name,
         Ink::Ink,
         Align::Center,

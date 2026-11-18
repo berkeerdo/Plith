@@ -34,8 +34,7 @@ pub fn clock_text(hour: u8, minute: u8) -> String {
 }
 
 /// The tab bar nodes and one hit target per tab. With `active` of `None` no station is filled, and
-/// an empty `clock` draws no clock text.
-/// The labels read in `lang`.
+/// an empty `clock` draws no clock text. The labels read in `lang`.
 #[must_use]
 pub fn tabbar(active: Option<PageId>, clock: &str, lang: Lang) -> (Vec<Node>, Vec<HitTarget>) {
     let last_x = FIRST_X + STEP * 3.0;

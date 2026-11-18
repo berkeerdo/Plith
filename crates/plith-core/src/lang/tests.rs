@@ -81,11 +81,23 @@ fn every_language_has_every_string() {
     }
 }
 
+/// The strings written in sentence case: the unused bus stands in for a bus name, the rest are
+/// page sentences and row names, not labels.
+const SENTENCE_CASE: [Text; 7] = [
+    Text::Unused,
+    Text::ShelfDrop,
+    Text::Brightness,
+    Text::Microphone,
+    Text::NothingPlaying,
+    Text::MediaHint,
+    Text::Source,
+];
+
 #[test]
 fn own_copy_is_upper_case() {
     for lang in Lang::ALL {
         for t in Text::ALL {
-            if t == Text::Unused {
+            if SENTENCE_CASE.contains(&t) {
                 continue;
             }
             let s = text(t, lang);
@@ -130,6 +142,15 @@ fn turkish_copy_is_unchanged() {
         ),
         (Text::FooterOutputs, "ÇIKIŞA TIKLA: VARSAYILAN OLUR"),
         (Text::Unused, "Kullanılmıyor"),
+        (Text::ShelfDrop, "Dosyaları buraya sürükle"),
+        (Text::Brightness, "Parlaklık"),
+        (Text::Microphone, "Mikrofon"),
+        (Text::NothingPlaying, "Çalan bir şey yok"),
+        (
+            Text::MediaHint,
+            "Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.",
+        ),
+        (Text::Source, "Kaynak"),
     ];
     for (t, s) in expected {
         assert_eq!(text(t, Lang::Tr), s, "{t:?}");

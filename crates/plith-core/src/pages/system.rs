@@ -97,7 +97,7 @@ fn brightness_row(
     };
     nodes.push(text(
         rect(30.0, 70.0, 160.0, 16.0),
-        "Parlakl\u{131}k",
+        word(Text::Brightness, lang),
         TextStyle::Name,
         name_ink,
         Align::Start,
@@ -190,7 +190,7 @@ fn mic_row(
 ) {
     nodes.push(text(
         rect(30.0, MIC_Y - 10.0, 160.0, 16.0),
-        "Mikrofon",
+        word(Text::Microphone, lang),
         TextStyle::Name,
         Ink::Ink,
         Align::Start,

@@ -47,5 +47,11 @@ pub fn text(t: Text) -> &'static str {
         Text::FooterPicking => "ÇIKIŞA TIKLA: YOL KURULUR · KAYNAĞA TEKRAR TIKLA: VAZGEÇ",
         Text::FooterOutputs => "ÇIKIŞA TIKLA: VARSAYILAN OLUR",
         Text::Unused => "Kullanılmıyor",
+        Text::ShelfDrop => "Dosyaları buraya sürükle",
+        Text::Brightness => "Parlaklık",
+        Text::Microphone => "Mikrofon",
+        Text::NothingPlaying => "Çalan bir şey yok",
+        Text::MediaHint => "Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.",
+        Text::Source => "Kaynak",
     }
 }

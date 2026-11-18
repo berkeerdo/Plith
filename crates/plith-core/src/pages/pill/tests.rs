@@ -111,3 +111,19 @@ fn pill_live_is_flow_and_idle_is_hollow() {
             .any(|n| matches!(n, Node::Stroke { ink: Ink::Flow, .. }))
     );
 }
+
+#[test]
+fn a_muted_pill_reads_the_muted_word_of_its_language() {
+    let word = |lang| {
+        pill(&facts(PillState::Muted), lang)
+            .nodes
+            .iter()
+            .any(|n| matches!(n, Node::Text { text, .. } if &**text == crate::lang::text(crate::lang::Text::Off, lang)))
+    };
+    assert!(word(Lang::De));
+    assert!(word(Lang::Tr));
+    assert_ne!(
+        crate::lang::text(crate::lang::Text::Off, Lang::De),
+        crate::lang::text(crate::lang::Text::Off, Lang::Tr)
+    );
+}

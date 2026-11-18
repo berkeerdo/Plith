@@ -48,5 +48,11 @@ pub fn text(t: Text) -> &'static str {
         Text::FooterPicking => "CLIQUE NA SAÍDA: ROTA CRIADA · CLIQUE NA FONTE: CANCELAR",
         Text::FooterOutputs => "CLIQUE NA SAÍDA: VIRA PADRÃO",
         Text::Unused => "Sem uso",
+        Text::ShelfDrop => "Arraste os arquivos para cá",
+        Text::Brightness => "Brilho",
+        Text::Microphone => "Microfone",
+        Text::NothingPlaying => "Nada tocando",
+        Text::MediaHint => "Aparece aqui quando o Spotify, um navegador ou um jogo emite som.",
+        Text::Source => "Fonte",
     }
 }

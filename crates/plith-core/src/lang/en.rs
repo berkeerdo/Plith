@@ -48,5 +48,11 @@ pub fn text(t: Text) -> &'static str {
         Text::FooterPicking => "CLICK AN OUTPUT: ROUTES IT · CLICK THE SOURCE AGAIN: CANCEL",
         Text::FooterOutputs => "CLICK AN OUTPUT: MAKES IT DEFAULT",
         Text::Unused => "Unused",
+        Text::ShelfDrop => "Drop files here",
+        Text::Brightness => "Brightness",
+        Text::Microphone => "Microphone",
+        Text::NothingPlaying => "Nothing playing",
+        Text::MediaHint => "Appears here when Spotify, a browser or a game makes sound.",
+        Text::Source => "Source",
     }
 }

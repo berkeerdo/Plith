@@ -99,8 +99,13 @@ fn pills_are_live_muted_idle() {
     assert_eq!(states, [PillState::Live, PillState::Muted, PillState::Idle]);
 }
 
-/// Every display list the fixtures build, the pills included.
+/// Every display list the fixtures build, the pills included, in Turkish.
 fn every_list() -> Vec<crate::draw::DisplayList> {
+    every_list_in(Lang::Tr)
+}
+
+/// Every display list the fixtures build, the pills included, in `lang`.
+fn every_list_in(lang: Lang) -> Vec<crate::draw::DisplayList> {
     use crate::pages::system::system_page;
     use crate::pages::{audio::audio_page, media::media_page, pill::pill, shelf::shelf_page};
     let mut lists = Vec::new();
@@ -113,18 +118,18 @@ fn every_list() -> Vec<crate::draw::DisplayList> {
         no_voicemeeter_many(),
     ] {
         for mode in [PickMode::None, PickMode::Picked(0)] {
-            let view = audio_view(&lit(&facts), mode, Lang::Tr);
-            lists.push(audio_page(&view, CLOCK, Lang::Tr).list);
+            let view = audio_view(&lit(&facts), mode, lang);
+            lists.push(audio_page(&view, CLOCK, lang).list);
         }
     }
     for facts in [media_playing(), media_empty()] {
-        lists.push(media_page(&facts, CLOCK, Lang::Tr).list);
+        lists.push(media_page(&facts, CLOCK, lang).list);
     }
     for facts in [system(), system_mic_muted(), system_no_ddc()] {
-        lists.push(system_page(&facts, CLOCK, Lang::Tr).list);
+        lists.push(system_page(&facts, CLOCK, lang).list);
     }
-    lists.push(shelf_page(CLOCK, Lang::Tr).list);
-    lists.extend(pills().iter().map(|p| pill(p, Lang::Tr)));
+    lists.push(shelf_page(CLOCK, lang).list);
+    lists.extend(pills().iter().map(|p| pill(p, lang)));
     lists
 }
 
@@ -204,4 +209,34 @@ fn the_next_track_differs_in_title_art_and_timeline() {
     assert_eq!(second.id, ART_NEXT_ID);
     assert_eq!(second.bgra.len(), (ART_SIZE * ART_SIZE * 4) as usize);
     assert_ne!(second.bgra, art().bgra);
+}
+
+/// Names that come from the fixtures' Voicemeeter labels and Windows devices, not from our copy.
+const FIXTURE_NAMES: [&str; 2] = ["Mikrofon", "Hat giri\u{15f}i"];
+
+/// Letters only Turkish uses; a page in another language must not show them in its own copy.
+pub(crate) const TURKISH_ONLY: &str = "\u{11f}\u{11e}\u{131}\u{130}\u{15f}\u{15e}";
+
+#[test]
+fn no_page_leaks_turkish_copy_in_another_language() {
+    use crate::draw::Node;
+    for lang in [Lang::En, Lang::De] {
+        let mut seen = 0;
+        for list in every_list_in(lang) {
+            for node in &list.nodes {
+                let Node::Text { text, .. } = node else {
+                    continue;
+                };
+                seen += 1;
+                if FIXTURE_NAMES.iter().any(|n| text.contains(n)) {
+                    continue;
+                }
+                assert!(
+                    !text.chars().any(|c| TURKISH_ONLY.contains(c)),
+                    "{lang:?} page shows Turkish copy: {text}"
+                );
+            }
+        }
+        assert!(seen > 100, "the scan saw the pages ({seen})");
+    }
 }

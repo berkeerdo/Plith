@@ -142,11 +142,23 @@ pub enum Text {
     FooterOutputs,
     /// A Voicemeeter bus that is not in use. The one mixed-case string: it stands in for a bus name.
     Unused,
+    /// The empty shelf's drop caption. Sentence case, not upper case.
+    ShelfDrop,
+    /// Label of the brightness row. Sentence case, not upper case.
+    Brightness,
+    /// Label of the microphone row. Sentence case, not upper case.
+    Microphone,
+    /// Media page title when nothing plays. Sentence case, not upper case.
+    NothingPlaying,
+    /// Media page hint when nothing plays. Sentence case, not upper case.
+    MediaHint,
+    /// Fallback name of an unlabelled Voicemeeter strip, followed by its number. Sentence case, not upper case.
+    Source,
 }
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 35] = [
+    pub const ALL: [Text; 41] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -182,6 +194,12 @@ impl Text {
         Text::FooterPicking,
         Text::FooterOutputs,
         Text::Unused,
+        Text::ShelfDrop,
+        Text::Brightness,
+        Text::Microphone,
+        Text::NothingPlaying,
+        Text::MediaHint,
+        Text::Source,
     ];
 }
 
