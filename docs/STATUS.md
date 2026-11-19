@@ -26,14 +26,14 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
 - **R7a Karot idle look:** merged as `3ee8b05` (ADR 0014, plan `plans/active/idle-look-r7.md`).
   Six resting pill looks (Karot default), the welcome view as a fifth page, `settings.ini` and
   `plays.txt` in `%LOCALAPPDATA%\Plith\`, `plith-weather` (off by default). Task 12 boxes 1 and
-  2 proven on the console; box 3 (weather to `OKUMA`) open. Worktree `idle-look` can go now.
+  2 proven on the console; box 3 (weather to `OKUMA`) open. Worktree removed 2026-11-20.
 - **R7 languages:** merged as `3a281c2` (ADR 0015, plan `plans/active/r7-languages.md`). Eight
   languages, OSD protocol 2 sends the muted word; proven on the console 2026-11-18.
 - **Console fix round: merged as `397e7d9`** (2026-11-20, plan and log
   `plans/done/console-fix-round.md`): home mark (ADR 0016), speaker glyph level with the caps
   (fixed in the console check, `ec86288`), one-shot title scroll, ruler drag, OSD prewarm. Five
   checks on the merge, 1113 tests. Console 2026-11-19: Berke "çalışıyor hepsi"; Karot idle 60 s
-  1 wake (allowed 2). Worktree `fix-round` can go. Earlier console sessions: `journal/2026-11.md`.
+  1 wake (allowed 2). Worktree removed. Earlier console sessions: `journal/2026-11.md`.
 - **Next: the R7 settings window** (two layers like Oyenza; language choice with a live switch;
   idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
   New feature: brainstorming, spec, plan first. Background of the R7 direction:
