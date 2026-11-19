@@ -148,7 +148,8 @@ impl Idle {
     }
 
     /// The pointer is over the resting pill: starts the title scroll again when the title
-    /// scrolls at all and no run is under way. True when the start changed.
+    /// scrolls at all and no run is under way (`start <= now < start + run`; a start in the
+    /// future after the wall clock stepped back is no run). True when the start changed.
     pub fn restart_scroll(&mut self, facts: &Facts) -> bool {
         let Some((title, _)) = playing_track(facts) else {
             return false;
@@ -159,7 +160,7 @@ impl Idle {
         let now = (self.wall)();
         let running = self.scroll_start.is_some_and(|start| {
             now.duration_since(start)
-                .map_or(true, |elapsed| elapsed.as_secs_f64() < run_s)
+                .is_ok_and(|elapsed| elapsed.as_secs_f64() < run_s)
         });
         if running {
             return false;

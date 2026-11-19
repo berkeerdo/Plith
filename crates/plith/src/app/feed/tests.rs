@@ -367,6 +367,17 @@ fn hover_during_run_keeps_start() {
 }
 
 #[test]
+fn hover_restarts_after_clock_moved_back() {
+    let seconds = Rc::new(Cell::new(7200));
+    let mut rig = scroll_rig(&seconds);
+    assert_eq!(scroll_start(&rig.mailbox), Some(epoch(7200)));
+    // The wall clock steps back an hour: the old start lies in the future, which is no run.
+    seconds.set(3600);
+    rig.feed.hover_pill(&rig.mailbox);
+    assert_eq!(scroll_start(&rig.mailbox), Some(epoch(3600)));
+}
+
+#[test]
 fn hover_over_a_fitting_title_publishes_nothing() {
     let seconds = Rc::new(Cell::new(100));
     let mut rig = scroll_rig(&seconds);
