@@ -271,9 +271,13 @@ every stack build.
   idle check meets `allowed()`; drag on the volume, brightness and seek rulers (his hand); the
   first OSD show of a fresh run has no hitch (`motion` line, draw under 2 ms). Record in this
   plan's log.
-- [ ] **Step 5:** Merge after his yes; STATUS rewritten.
+- [x] **Step 5:** Merge after his yes; STATUS rewritten.
 
 ## Progress log
+
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, deliberate omissions and decisions are listed here and in STATUS. Step 4 was
+> ticked with one bar unmet: the first OSD show had a present hitch (ruled an open item).
 
 2026-11-19, subagent route (Sonnet implementers and reviewers, Opus for Task 8, the final
 review and its fix wave):
@@ -316,3 +320,6 @@ review and its fix wave):
   - 21:06 `--idle-check 60 --idle-look karot`, music playing: **1 render wake-up (allowed 2),
     93.8 ms CPU, exit 0**.
   - `lang=auto` sent the OSD word `MUTED` (English): auto picks the Windows UI language here.
+- 2026-11-20 merged on Berke's yes as `397e7d9` (glyph fix `ec86288` on top of `9da90fe`).
+  Five checks on the merge: fmt, clippy, 1113 tests 0 failed, structure 0 violations, deps
+  clean.

@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
@@ -9,81 +9,54 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   audio, media, system, shelf and pill pages as display lists drawn from cached page bitmaps
   with prewarm (ADR 0010), click to expand and leave to collapse (ADR 0011), upper-case rules
   (ADR 0012). Plan and progress log: `plans/active/pages-r4.md`; review
-  `quality/2026-11-16-pages-r4-merge-review.md` (3 Important fixed, re-reviewed). Nothing of R4
-  has been on the real screen yet. Lane `pages` stopped, worktree kept for the console run.
+  `quality/2026-11-16-pages-r4-merge-review.md`. Lane `pages` stopped, worktree kept.
 - R6: `plith-osd.exe` draws in a `CreateWindowInBand` window at band 2 (ADR 0009), installed and
   signed under `C:\Program Files\Plith\osd\`; `plith-ipc` pipe with identity checks;
   `plith-system` hook containment, flyout journal, key repeat collapse. Plan and Record:
   `plans/active/osd-r6.md`; reviews `quality/2026-11-16-osd-r6-merge-review.md` and
   `quality/2026-11-16-osd-r6-recheck.md`.
-- Wiring merged as `3669f39` (2026-11-17, plan and Record `plans/done/wiring.md`,
-  spec `specs/2026-11-17-osd-wiring-design.md`): `plith.exe` is single-instance, starts and
-  supervises the installed helper, sends `Level` on volume, mute and brightness changes,
-  `--flyout off|dry|hide` (default off), M8 done (OSD on `TextSystem`, bundled Martian Mono),
-  release build has no console window. Helper reinstalled signed 2026-11-17 (Berke's yes);
-  link connect, hello and bye measured on this PC. Final review clean after one fix wave.
+- Wiring merged as `3669f39` (plan and Record `plans/done/wiring.md`): `plith.exe` is
+  single-instance, starts and supervises the installed helper, sends `Level` on volume, mute and
+  brightness changes, `--flyout off|dry|hide` (default off), release build has no console window.
 - **Running:** no lane (`LANES.md` retired to `journal/2026-11.md` on 2026-11-19).
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
-- **R7a Karot idle look:** merged as `3ee8b05` (ADR 0014, spec
-  `specs/2026-11-17-idle-look-direction.md`, plan and progress log `plans/active/idle-look-r7.md`).
-  Six resting pill looks (Karot default), the welcome view as a fifth page without a tab (click
-  opens it, hover probes an hour), `settings.ini` and `plays.txt` in `%LOCALAPPDATA%\Plith\`, tr/en
-  text table, `plith-weather` (Open-Meteo over WinHTTP, off by default). Whole-branch review: 4
-  Important and 9 Minor fixed in one wave, re-review approved; five checks on the branch head
-  (1018 tests). Renders `design/r7/engine-2/` compared with the mock. Console 2026-11-18:
-  Task 12 boxes 1 and 2 proven (120 s Karot idle 2 wakes, click opens welcome, probe, tabs);
-  box 3 (weather to `OKUMA`) open. Worktree `idle-look` can go after the fix round.
-- **R7 languages:** merged as `3a281c2` (ADR 0015, plan and log
-  `plans/active/r7-languages.md`, 1049 tests, five checks green on the merge). Eight languages
-  (`en tr de es fr pt it pl`), every own string from the table, percent per language, measured
-  fit and glyph tests, renders `design/r7/lang-*/`; Turkish idle renders byte-identical. OSD
-  protocol 2 sends the muted word; the client reads the link up only after an admission probe.
-  Helper for protocol 2 reinstalled signed 2026-11-18 (Berke's yes, SHA-256 `C3BF2E9C...`); a
-  normal run in the console logged `osd: helper launched` and `osd: link connected` 2 s later,
-  clean exit 0. Console 2026-11-18: a real volume key reached the OSD (`level volume 64..100`),
-  mute too, and `lang=de` sent `STUMM` (record in `plans/active/r7-languages.md`).
-- **Console session 2026-11-18 done** (records in `idle-look-r7.md`, `r7-languages.md`,
-  `pages-r4.md`): every motion 240 fps but three in a real-service run during his game; pages
-  demo 21 motions 0 hitches; fixture idle 60 s 1 wake; notch survives a display sleep and wake.
-- **Console fix round: code done, not merged.** Branch `feature/console-fix-round` (worktree
-  `.claude/worktrees/fix-round`, head `9da90fe`): home mark (ADR 0016), speaker glyph, one-shot
-  title scroll, ruler drag, OSD prewarm. Nine task reviews, final review fix wave re-reviewed,
-  1113 tests and five checks green. Helper reinstalled signed 2026-11-19; prewarm line seen
-  over RDP. Spec `specs/2026-11-19-console-fix-round-design.md`; plan, log and two rulings
-  (Turkish pill drops `KULAKLIK`, scroll at display rate) in the branch's
-  `plans/active/console-fix-round.md`.
-- **Next: the fix round console check** (plan Task 10 Step 4, Berke at the PC, not RDP): home
-  mark round trip, glyph look, one scroll then a 60 s idle check, drag on three rulers by his
-  hand, first OSD show `motion` line, a late leave after a drag. Then merge on his yes.
+- **R7a Karot idle look:** merged as `3ee8b05` (ADR 0014, plan `plans/active/idle-look-r7.md`).
+  Six resting pill looks (Karot default), the welcome view as a fifth page, `settings.ini` and
+  `plays.txt` in `%LOCALAPPDATA%\Plith\`, `plith-weather` (off by default). Task 12 boxes 1 and
+  2 proven on the console; box 3 (weather to `OKUMA`) open. Worktree `idle-look` can go now.
+- **R7 languages:** merged as `3a281c2` (ADR 0015, plan `plans/active/r7-languages.md`). Eight
+  languages, OSD protocol 2 sends the muted word; proven on the console 2026-11-18.
+- **Console fix round: merged as `397e7d9`** (2026-11-20, plan and log
+  `plans/done/console-fix-round.md`): home mark (ADR 0016), speaker glyph level with the caps
+  (fixed in the console check, `ec86288`), one-shot title scroll, ruler drag, OSD prewarm. Five
+  checks on the merge, 1113 tests. Console 2026-11-19: Berke "çalışıyor hepsi"; Karot idle 60 s
+  1 wake (allowed 2). Worktree `fix-round` can go. Earlier console sessions: `journal/2026-11.md`.
+- **Next: the R7 settings window** (two layers like Oyenza; language choice with a live switch;
+  idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
+  New feature: brainstorming, spec, plan first. Background of the R7 direction:
+  `journal/2026-11.md`.
 - Still owed on screen, another day: weather on (his yes) to `OKUMA`; osd Task 9 over a game
-  (`--flyout hide`); 20 s ambient on the audio and media page while playing (pages Task 18
-  Step 3) and his words on the square-top look (Task 7a Step 5); audio-clarity Task 8 box
-  (he used the ruler, "cetvel çalışıyor"). Later: the guarded route write session.
+  (`--flyout hide`), with the first-show present hitch below; 20 s ambient on the audio and
+  media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
+  Step 5); audio-clarity Task 8 box (he used the ruler, "cetvel çalışıyor"). Later: the guarded
+  route write session.
+- Then R5 shelf, R4b media output picker; themes switch in settings (nothing calls
+  `set_palette`).
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
-- Console run 2026-11-16 (record in `plans/active/pages-r4.md`): idle checks 0 wakes; pages demo
-  18 motions at 240 fps, 0 hitches, draw p99 at most 0.76 ms; manual run one page turn with 2
-  hitches (present 4.1 ms). Still open: media `ambient` while playing, square-top look.
-- **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan
-  `plans/active/audio-clarity.md`). Without Voicemeeter the page is an outputs view: default
-  output with glyph, `VARSAYILAN · KULAKLIK`, a volume ruler (click sets volume) and `%62`;
-  other outputs under `DİĞER ÇIKIŞLAR`, click makes default; no Voicemeeter notice. Brightness
-  shows `%70`. Offscreen renders reviewed, five checks green (858 tests), code review clean
-  (3 minors, recorded in the ADR). On screen and a real
-  volume click wait for the console (plan Task 8).
-- After the console: the R7 settings window (two layers like Oyenza; language choice with a
-  live switch;
-  idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
-  Then R5 shelf, R4b media output picker; themes switch in settings (nothing calls
-  `set_palette`). Background of the R7 direction: `journal/2026-11.md`.
+- **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).
+  Without Voicemeeter the page is an outputs view; on screen and a real volume click wait for the
+  console (plan Task 8).
 
 ## Open risks
+- First OSD show of a run: draw p99 0.77 ms after the prewarm, but 1 hitch with present 11.6 ms
+  (2026-11-19). Ruled an open item; root cause measured with osd Task 9.
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
   elevated windows, motion, device-loss rebuild M7, click-through M8, flyout Hide plus a kill
-  needs his separate yes); pages idle check, square-top look, draw p99 with page bitmaps.
+  needs his separate yes); pages square-top look, draw p99 with page bitmaps.
 - Not measured: what reaches the display at latency 2; the game cost of anything.
 - Standard (non-admin) user: the UIAccess helper's integrity level is unmeasured; the client
   trusts only a server strictly above its own level, so it may fail closed. An elevated notch
@@ -98,19 +71,21 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   reinstall the helper (`build-osd.ps1`, `install-osd.ps1` under sudo, Berke's yes).
 - Residuals, low: pipe name squattable by another user (SID is not secret; random `--pipe` per
   launch is the fix); a junction swapped on the log folder can leave an empty file.
-- Collapse full 812 ms against Oyenza's 658 ms. One game, one PC, one refresh rate.
+- Collapse full 812 ms against Oyenza's 658 ms; one collapse hitch (8.3 ms) shows up in most
+  manual runs. One game, one PC, one refresh rate.
 - Services contract for `crates/plith`: `start()` blocks, call it off the UI thread; subscribe
   first, then `snapshot()`; `set_waker` posts one WM_APP message.
 - Unverified on hardware: Voicemeeter (not installed here), WMI brightness, a second monitor.
 - Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
 - R7a unverified: the Windows location path (an unpackaged app may always be denied, then IP via
   `ipapi.co` is the real path), `lang=auto` on a machine whose UI language differs from its
-  region, a real weather fetch through the app. Deferred minors: unknown settings keys logged
-  raw, `plays.txt` written on the UI thread (atomic), no hatch geometry tests.
+  region (here auto picks English: the OSD sent `MUTED`), a real weather fetch through the app.
+  Deferred minors: unknown settings keys logged raw, `plays.txt` written on the UI thread
+  (atomic), no hatch geometry tests.
 
 ## Recent decisions
+- ADR 0016 The welcome view is reachable from the tab row
 - ADR 0015 Eight languages from one exhaustive table, the OSD word over the pipe
 - ADR 0014 Karot idle look: click opens welcome, settings and play files, weather sources
 - ADR 0013 Windows outputs get their own view, not a one-route diagram
 - ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
-- ADR 0011 Click to expand, leave to collapse, no keyboard

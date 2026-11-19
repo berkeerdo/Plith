@@ -15,6 +15,8 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R5 Shelf | In-process OLE drag in and out | ⬜ | 2 sessions | ⬜ waiting on R4 |
 | R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 code merged (4aca03e, 1 lane session + 2 review rounds; ADR 0009); console run over a game left |
 | R7a Karot idle look | Pill looks, welcome view, settings and play files, tr/en table, weather service | master + subagents | not estimated | 🔄 code merged (3ee8b05, 2 sessions incl. direction pass; ADR 0014); console run left |
+| R7 languages | Eight languages from one table, OSD muted word over the pipe | master + subagents | not estimated | ✅ done (merged 3a281c2; ADR 0015; console 2026-11-18) |
+| Console fix round | Home mark, speaker glyph, title scroll, ruler drag, OSD prewarm (from the 2026-11-18 console) | master + subagents | not estimated | ✅ done, 2 sessions incl. console check (merged 397e7d9; ADR 0016) |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master | 3 sessions | ⬜ waiting on R4 to R6 |
 
 ## Settled scope (2026-11-14)
