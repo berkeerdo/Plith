@@ -22,7 +22,7 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   `--flyout off|dry|hide` (default off), M8 done (OSD on `TextSystem`, bundled Martian Mono),
   release build has no console window. Helper reinstalled signed 2026-11-17 (Berke's yes);
   link connect, hello and bye measured on this PC. Final review clean after one fix wave.
-- **Running:** no lane. State in `LANES.md`.
+- **Running:** no lane (`LANES.md` retired to `journal/2026-11.md` on 2026-11-19).
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
@@ -49,7 +49,8 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
   `pages-r4.md`): every motion 240 fps but three in a real-service run during his game; pages
   demo 21 motions 0 hitches; fixture idle 60 s 1 wake; notch survives a display sleep and wake.
 - **Next: the console fix round** (Berke's findings on screen; he said "önerinle devam",
-  so the proposals below are decided). Brainstorm, then one plan in `plans/active/`:
+  so the proposals below are decided). Spec `specs/2026-11-19-console-fix-round-design.md`,
+  plan and log `plans/active/console-fix-round.md` (approved 2026-11-19, subagent route):
   1. Welcome has no way back after a tab turn: a home mark at the left of the tab row, a new
      ADR amending 0014.
   2. Karot pill right `%62` alone does not read as volume: a speaker glyph before it.
