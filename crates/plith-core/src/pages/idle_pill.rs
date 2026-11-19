@@ -3,6 +3,8 @@
 //! Positions come from `pill(kind)` in `docs/design/r7/karot.html` (200 x 32 DIP). Strings
 //! arrive preformatted from the app, so nothing here reads the text table.
 
+use super::audio::DeviceKind;
+use super::glyphs;
 use super::kit::{rect, station, text};
 use super::pill::{PillFacts, pill};
 use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
@@ -28,7 +30,7 @@ pub struct IdleFacts {
     /// The facts of the R3 seal.
     pub seal: PillFacts,
     /// The default output in short, for example `%62 · KULAKLIK` or `KAPALI`.
-    pub sound: Option<String>,
+    pub sound: Option<SoundWords>,
     /// The interface language.
     pub lang: Lang,
 }
@@ -49,8 +51,23 @@ pub(crate) const TURN_W: f64 = 112.0;
 /// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
 const VALUE_ADVANCE: f64 = 7.6;
 
+/// Gap between the speaker glyph and the text.
+const GLYPH_GAP: f64 = 4.0;
+/// Room the speaker glyph takes from the right-hand box.
+pub(crate) const GLYPH_ROOM: f64 = glyphs::GLYPH + GLYPH_GAP;
+
+/// The default output in short for the Karot right side, and whether it is the off word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoundWords {
+    /// `%62 · kind`, `%62`, or the off word.
+    pub text: String,
+    /// True when `text` is the off word: it gets no speaker glyph.
+    pub muted: bool,
+}
+
 /// The default output in short for the Karot right side: `off` when muted, else `%62 · kind`,
-/// or only `%62` when the kind is empty or would not fit the box. `None` without a volume.
+/// or only `%62` when the kind is empty or would not leave room for the glyph. `None` without a
+/// volume.
 #[must_use]
 pub fn sound_words(
     value: Option<u8>,
@@ -58,19 +75,24 @@ pub fn sound_words(
     kind: &str,
     off: &str,
     lang: Lang,
-) -> Option<String> {
+) -> Option<SoundWords> {
     if muted {
-        return Some(off.to_string());
+        return Some(SoundWords {
+            text: off.to_string(),
+            muted: true,
+        });
     }
     let short = percent(value?, lang);
-    if kind.is_empty() {
-        return Some(short);
-    }
     let full = format!("{short} · {kind}");
     // Allowed: a few dozen characters at most.
     #[allow(clippy::cast_precision_loss)]
     let needed = full.chars().count() as f64 * VALUE_ADVANCE;
-    Some(if needed <= TURN_W { full } else { short })
+    let text = if kind.is_empty() || needed > TURN_W - GLYPH_ROOM {
+        short
+    } else {
+        full
+    };
+    Some(SoundWords { text, muted: false })
 }
 
 /// The display list of the resting pill for `look`.
@@ -108,13 +130,31 @@ pub fn rest_shape(look: IdleLook) -> IslandShape {
 }
 
 /// The Karot right-hand text, like the welcome head's `Auto` slot: the weather when it is on,
-/// else the playing title, else the default output.
-fn karot_right(f: &IdleFacts) -> Option<&String> {
-    f.turn
-        .as_ref()
-        .or(f.now_sky.as_ref())
-        .or(f.playing.as_ref().map(|(title, _)| title))
-        .or(f.sound.as_ref())
+/// else the playing title, else the default output (the only one that wears the speaker glyph,
+/// unless it is the off word).
+fn karot_right(f: &IdleFacts) -> Option<(&String, bool)> {
+    let plain = |s| Some((s, false));
+    if let Some(s) = f.turn.as_ref().or(f.now_sky.as_ref()) {
+        return plain(s);
+    }
+    if let Some((title, _)) = &f.playing {
+        return plain(title);
+    }
+    f.sound.as_ref().map(|s| (&s.text, !s.muted))
+}
+
+/// The speaker glyph left of the right-aligned `text`, centred on the text box.
+fn speaker_before(text: &str, y: f64) -> Vec<Node> {
+    // Allowed: a few dozen characters at most.
+    #[allow(clippy::cast_precision_loss)]
+    let width = text.chars().count() as f64 * VALUE_ADVANCE;
+    let x = RIGHT_EDGE - width - GLYPH_ROOM;
+    glyphs::glyph(
+        DeviceKind::Speaker,
+        x,
+        y + TEXT_H / 2.0 - glyphs::GLYPH / 2.0,
+        Ink::Muted,
+    )
 }
 
 fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
@@ -125,7 +165,7 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
         Ink::Ink,
         Align::Start,
     )];
-    if let Some(right) = karot_right(f) {
+    if let Some((right, glyph)) = karot_right(f) {
         nodes.push(text(
             rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
             right,
@@ -133,6 +173,9 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
             Ink::Muted,
             Align::End,
         ));
+        if glyph {
+            nodes.extend(speaker_before(right, y));
+        }
     }
     nodes
 }

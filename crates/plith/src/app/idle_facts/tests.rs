@@ -69,15 +69,15 @@ fn the_pill_sound_reads_percent_and_kind_or_off() {
     f.pill.state = PillState::Live;
     let kind = sound_head(&f, Lang::Tr).map(|s| s.kind).unwrap_or_default();
     assert!(!kind.is_empty(), "the banana default output has a kind");
-    assert_eq!(
-        idle.idle_facts(&f, at(9, 5, 0)).sound,
-        Some(format!("%62 · {kind}"))
-    );
+    // The kind rides along only when it leaves room for the speaker glyph.
+    let on = idle.idle_facts(&f, at(9, 5, 0)).sound.unwrap();
+    let full = format!("%62 · {kind}");
+    let fits = full.chars().count() <= 12;
+    assert_eq!(on.text, if fits { full } else { "%62".to_string() });
+    assert!(!on.muted);
     f.pill.state = PillState::Muted;
-    assert_eq!(
-        idle.idle_facts(&f, at(9, 5, 0)).sound.as_deref(),
-        Some("KAPALI")
-    );
+    let off = idle.idle_facts(&f, at(9, 5, 0)).sound.unwrap();
+    assert_eq!((off.text.as_str(), off.muted), ("KAPALI", true));
     f.pill.output.clear();
     assert_eq!(
         idle.idle_facts(&f, at(9, 5, 0)).sound,

@@ -5,7 +5,7 @@
 use crate::log::Stamp;
 use crate::services::Facts;
 use plith_core::lang::{Lang, Text, date_short, device_kind, text, weekday};
-use plith_core::pages::idle_pill::{IdleFacts, sound_words, weather_words};
+use plith_core::pages::idle_pill::{IdleFacts, SoundWords, sound_words, weather_words};
 use plith_core::pages::pill::PillState;
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::welcome::{SoundHead, WelcomeFacts};
@@ -222,7 +222,7 @@ fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
 
 /// The default output in short for the resting pill (see `sound_words`); `None` while there is
 /// no output or no volume to show.
-fn pill_sound(facts: &Facts, lang: Lang) -> Option<String> {
+fn pill_sound(facts: &Facts, lang: Lang) -> Option<SoundWords> {
     let s = sound_head(facts, lang)?;
     sound_words(s.value, s.muted, &s.kind, text(Text::Off, lang), lang)
 }

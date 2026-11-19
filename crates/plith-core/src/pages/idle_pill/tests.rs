@@ -16,9 +16,37 @@ fn facts() -> IdleFacts {
             value: Some(62),
             state: PillState::Live,
         },
-        sound: Some("%62 · KULAKLIK".into()),
+        sound: Some(SoundWords {
+            text: "%62 · KULAKLIK".into(),
+            muted: false,
+        }),
         lang: Lang::Tr,
     }
+}
+
+/// The words of `sound_words`, for the cases that only care about the text.
+fn words(value: Option<u8>, muted: bool, kind: &str, off: &str) -> Option<String> {
+    sound_words(value, muted, kind, off, Lang::Tr).map(|s| s.text)
+}
+
+/// Only the sound is set, so the Karot right side falls to the sound branch.
+fn sound_only(text: &str, muted: bool) -> IdleFacts {
+    let mut f = facts();
+    f.turn = None;
+    f.now_sky = None;
+    f.playing = None;
+    f.sound = Some(SoundWords {
+        text: text.into(),
+        muted,
+    });
+    f
+}
+
+fn strokes(list: &DisplayList) -> Vec<&Node> {
+    list.nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Stroke { .. } | Node::Polygon { .. }))
+        .collect()
 }
 
 type TextRow = (Rect, String, TextStyle, Ink, Align, Trim);
@@ -180,27 +208,24 @@ fn no_node_uses_flow_except_playing_station() {
 #[allow(clippy::cast_precision_loss)]
 fn sound_words_keep_the_kind_only_when_it_fits() {
     assert_eq!(
-        sound_words(Some(62), false, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
-        Some("%62 · KULAKLIK")
+        words(Some(62), false, "EKRAN", "KAPALI").as_deref(),
+        Some("%62 · EKRAN")
     );
     assert_eq!(
-        sound_words(Some(100), false, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
+        words(Some(100), false, "KULAKLIK", "KAPALI").as_deref(),
         Some("%100")
     );
     assert_eq!(
-        sound_words(Some(62), false, "HEADPHONES", "OFF", Lang::Tr).as_deref(),
+        words(Some(62), false, "HEADPHONES", "OFF").as_deref(),
         Some("%62")
     );
+    assert_eq!(words(Some(62), false, "", "OFF").as_deref(), Some("%62"));
+    let off = sound_words(Some(62), true, "KULAKLIK", "KAPALI", Lang::Tr).unwrap();
+    assert_eq!((off.text.as_str(), off.muted), ("KAPALI", true));
+    let on = sound_words(Some(62), false, "EKRAN", "KAPALI", Lang::Tr).unwrap();
+    assert!(!on.muted);
     assert_eq!(
-        sound_words(Some(62), false, "", "OFF", Lang::Tr).as_deref(),
-        Some("%62")
-    );
-    assert_eq!(
-        sound_words(Some(62), true, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
-        Some("KAPALI")
-    );
-    assert_eq!(
-        sound_words(None, true, "KULAKLIK", "KAPALI", Lang::Tr).as_deref(),
+        words(None, true, "KULAKLIK", "KAPALI").as_deref(),
         Some("KAPALI")
     );
     assert_eq!(
@@ -216,11 +241,64 @@ fn sound_words_keep_the_kind_only_when_it_fits() {
         "DISPLAY",
     ] {
         for v in [0, 9, 62, 100] {
-            let s = sound_words(Some(v), false, kind, "OFF", Lang::Tr).unwrap();
+            let s = words(Some(v), false, kind, "OFF").unwrap();
             let needed = s.chars().count() as f64 * VALUE_ADVANCE;
-            assert!(needed <= TURN_W, "{s} needs {needed}, box is {TURN_W}");
+            let room = TURN_W - GLYPH_ROOM;
+            assert!(needed <= room, "{s} needs {needed}, room is {room}");
         }
     }
+}
+
+#[test]
+fn karot_sound_has_speaker_glyph() {
+    let list = idle_pill(IdleLook::Karot, &sound_only("%62", false));
+    let right_edge = RIGHT_EDGE - 3.0 * VALUE_ADVANCE - GLYPH_GAP;
+    let y = shapes::REST.height / 2.0 - glyphs::GLYPH / 2.0;
+    let expected = glyphs::glyph(
+        DeviceKind::Speaker,
+        right_edge - glyphs::GLYPH,
+        y,
+        Ink::Muted,
+    );
+    assert!(!expected.is_empty());
+    let got = strokes(&list);
+    assert_eq!(got.len(), expected.len());
+    for (g, e) in got.into_iter().zip(&expected) {
+        assert_eq!(g, e);
+    }
+}
+
+#[test]
+fn karot_glyph_only_on_sound_branch() {
+    let mut f = sound_only("%62", false);
+    f.playing = Some(("Song".into(), "Artist".into()));
+    assert!(strokes(&idle_pill(IdleLook::Karot, &f)).is_empty());
+    f.playing = None;
+    f.now_sky = Some("9° BULUTLU".into());
+    assert!(strokes(&idle_pill(IdleLook::Karot, &f)).is_empty());
+    f.now_sky = None;
+    f.turn = Some("YAĞMUR 15:30".into());
+    assert!(strokes(&idle_pill(IdleLook::Karot, &f)).is_empty());
+}
+
+#[test]
+fn muted_has_no_glyph() {
+    let list = idle_pill(IdleLook::Karot, &sound_only("KAPALI", true));
+    assert!(strokes(&list).is_empty());
+    assert_eq!(texts(&list)[1].1, "KAPALI");
+}
+
+#[test]
+fn sound_words_fit_leaves_glyph_room() {
+    // 12 characters (91.2 DIP) still fit beside the glyph (room 92), 13 do not.
+    assert_eq!(
+        words(Some(62), false, "ABCDEF", "OFF").as_deref(),
+        Some("%62 · ABCDEF")
+    );
+    assert_eq!(
+        words(Some(62), false, "ABCDEFG", "OFF").as_deref(),
+        Some("%62")
+    );
 }
 
 #[test]
