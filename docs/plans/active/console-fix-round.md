@@ -266,7 +266,7 @@ every stack build.
   `node scripts/structure-check.mjs`, `node scripts/check-deps.mjs`. Record the test count.
 - [x] **Step 2:** Whole-branch review (`superpowers:requesting-code-review`), fix wave, re-review.
 - [x] **Step 3:** Rebuild the OSD helper; reinstall it signed after Berke's yes.
-- [ ] **Step 4 (console, Berke present, `query session` first):** home mark round trip from each
+- [x] **Step 4 (console, Berke present, `query session` first):** home mark round trip from each
   tab; Karot glyph look; a long title scrolls once on track change and on hover, then a 60 s
   idle check meets `allowed()`; drag on the volume, brightness and seek rulers (his hand); the
   first OSD show of a fresh run has no hitch (`motion` line, draw under 2 ms). Record in this
@@ -294,3 +294,25 @@ review and its fix wave):
   RDP (`remote true`, 32 Hz, so no motion numbers): `osd: helper launched`, `link connected`
   2 s later, helper log `prewarm: osd frames=2 draw_ms=6.24` before any show, clean `exit 0`.
   The cold cost now lands in the hidden prewarm; the first real show is measured in Step 4.
+- 2026-11-19 console session (release from `9da90fe` built 04:40, `query session` showed
+  `>console`, log `remote false`, 240 Hz, Berke at the PC):
+  - 17:16 normal run, real services: helper launched, `prewarm: osd frames=2 draw_ms=5.89`,
+    link connected. 22 pill motions (7 expand, 8 page, 7 collapse), all 240 fps but one
+    collapse with 1 hitch (8.3 ms, present 3.4 ms, the known collapse hitch); draw p99 at most
+    1.34 ms. Clean `exit 0` by `WM_CLOSE`, helper `osd done`.
+  - First OSD show of the run: draw p50 0.28 p99 0.77 ms (the prewarm moved the cold draw out),
+    but **1 hitch: gap 12.5 ms, present 11.6 ms** at frame 14. The draw bar is met, the "no
+    hitch" bar is not: the cold cost of a first show now sits in present, not draw. Hide 0
+    hitches. Ruling (Berke took the proposal): open item, not fixed in this round; its root
+    cause is measured with osd Task 9 over a game.
+  - Berke: home mark, scroll, three ruler drags and a drag released outside "çalışıyor hepsi"
+    (his eyes and hand; the log has no drag or leave lines to measure them by).
+  - Berke: the speaker glyph is not level with the number ("sayı ile aynı hiza değil").
+    Measured on a screen grab: glyph rows 11..20, `100%` caps rows 11..18. The glyph was
+    centred on the 14 DIP text box, whose centre is 1 DIP below the capitals (the box holds the
+    descender). Fix: centre it on the capitals (`CAP_RISE`). Renders at 2x: glyph centre 36
+    against digits 34 before, 34 and 34 after. Five checks green (1113 tests, 0 failed). On
+    screen at 21:31 (`remote false`): glyph rows 10..19 and digits rows 11..18, both centre 15.
+  - 21:06 `--idle-check 60 --idle-look karot`, music playing: **1 render wake-up (allowed 2),
+    93.8 ms CPU, exit 0**.
+  - `lang=auto` sent the OSD word `MUTED` (English): auto picks the Windows UI language here.

@@ -255,7 +255,8 @@ fn sound_words_keep_the_kind_only_when_it_fits() {
 fn karot_sound_has_speaker_glyph() {
     let list = idle_pill(IdleLook::Karot, &sound_only("%62", false));
     let right_edge = RIGHT_EDGE - 3.0 * VALUE_ADVANCE - GLYPH_GAP;
-    let y = shapes::REST.height / 2.0 - glyphs::GLYPH / 2.0;
+    // Centred on the capitals of the text, which sit CAP_RISE above the text box centre.
+    let y = shapes::REST.height / 2.0 - CAP_RISE - glyphs::GLYPH / 2.0;
     let expected = glyphs::glyph(
         DeviceKind::Speaker,
         right_edge - glyphs::GLYPH,

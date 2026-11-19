@@ -58,6 +58,10 @@ const VALUE_ADVANCE: f64 = 7.6;
 
 /// Gap between the speaker glyph and the text.
 const GLYPH_GAP: f64 = 4.0;
+/// How far the capitals of Martian Mono at 10 DIP sit above the centre of the text box: the
+/// box holds the descender too. Measured on screen 2026-11-19: caps on rows 11 to 18 of a box
+/// centred on 16, so a glyph centred on the box sat 1 DIP low.
+const CAP_RISE: f64 = 1.0;
 /// Room the speaker glyph takes from the right-hand box.
 pub(crate) const GLYPH_ROOM: f64 = glyphs::GLYPH + GLYPH_GAP;
 
@@ -196,7 +200,7 @@ fn title_scroll(text: &str, y: f64, start: Option<SystemTime>) -> Option<Node> {
     }))
 }
 
-/// The speaker glyph left of the right-aligned `text`, centred on the text box.
+/// The speaker glyph left of the right-aligned `text`, centred on its capitals.
 fn speaker_before(text: &str, y: f64) -> Vec<Node> {
     // Allowed: a few dozen characters at most.
     #[allow(clippy::cast_precision_loss)]
@@ -205,7 +209,7 @@ fn speaker_before(text: &str, y: f64) -> Vec<Node> {
     glyphs::glyph(
         DeviceKind::Speaker,
         x,
-        y + TEXT_H / 2.0 - glyphs::GLYPH / 2.0,
+        y + TEXT_H / 2.0 - CAP_RISE - glyphs::GLYPH / 2.0,
         Ink::Muted,
     )
 }
