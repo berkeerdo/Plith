@@ -31,8 +31,8 @@ type Writes = Rc<RefCell<Vec<Write>>>;
 struct Spy {
     inner: FixtureServices,
     writes: Writes,
-    /// Reports a track with no position.
-    no_timeline: bool,
+    /// Reports a track with no length.
+    zero_duration: bool,
 }
 
 impl Services for Spy {
@@ -41,8 +41,8 @@ impl Services for Spy {
     }
     fn facts(&self) -> Facts {
         let mut facts = self.inner.facts();
-        if self.no_timeline {
-            facts.media.timeline = None;
+        if let (true, Some(timeline)) = (self.zero_duration, facts.media.timeline.as_mut()) {
+            timeline.duration_s = 0.0;
         }
         facts
     }
@@ -108,7 +108,7 @@ fn rig(name: &str) -> Rig {
     rig_with(name, false)
 }
 
-fn rig_with(name: &str, no_timeline: bool) -> Rig {
+fn rig_with(name: &str, zero_duration: bool) -> Rig {
     let dir = std::env::temp_dir().join(format!("plith-drag-{name}-{}", std::process::id()));
     let log = LogFile::open_at(&dir.join("plith.log")).unwrap();
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
@@ -139,7 +139,7 @@ fn rig_with(name: &str, no_timeline: bool) -> Rig {
         Box::new(Spy {
             inner: FixtureServices::new(Fixture::Bare),
             writes: Rc::clone(&writes),
-            no_timeline,
+            zero_duration,
         }),
         Box::new(timers.clone()),
         clock,
@@ -250,19 +250,59 @@ fn drag_seek_writes_once_on_release() {
 }
 
 #[test]
-fn seek_drag_without_timeline_writes_nothing() {
-    // The geometry comes from a track with a position; the one under test has none.
-    let plain = rig("no-timeline-geometry");
-    open_on(&plain.app, PageId::Media);
-    let r = ruler(&plain.app, PageId::Media, is_seek);
-    let mut rig = rig_with("no-timeline", true);
+fn no_seek_ruler_is_built_on_a_zero_length_track() {
+    let rig = rig_with("zero-length", true);
     open_on(&rig.app, PageId::Media);
-    drag_along(&mut rig, r);
+    let feed = rig.app.feed.as_ref().unwrap();
+    assert!(
+        !feed.targets()[PageId::Media.index()]
+            .iter()
+            .any(|t| is_seek(&t.action))
+    );
+}
+
+#[test]
+fn a_seek_on_a_zero_length_track_is_not_dispatched() {
+    let mut rig = rig_with("zero-dispatch", true);
+    let feed = rig.app.feed.as_mut().unwrap();
+    assert_eq!(feed.facts().media.timeline.map(|t| t.duration_s), Some(0.0));
+    dispatch(feed, &rig.app.mailbox, Action::Seek(0.5));
+    assert!(rig.writes.borrow().is_empty());
+}
+
+#[test]
+fn a_held_still_press_keeps_the_override_until_one_second_after_release() {
+    let mut rig = rig("held");
+    open_on(&rig.app, PageId::Media);
+    let r = ruler(&rig.app, PageId::Media, is_seek);
+    rig.app.on_event(ShellEvent::Press {
+        x: r.0 + 1.0,
+        y: r.2,
+    });
+    rig.seconds.set(10.0);
+    rig.app.on_event(ShellEvent::Drag {
+        x: r.0 + r.1 * 0.5,
+        y: r.2,
+    });
+    // Held still past a second: the tick finds the press down and keeps the value.
+    rig.seconds.set(12.0);
+    rig.app.on_event(ShellEvent::Timer(DRAG_TIMER));
+    let feed = rig.app.feed.as_ref().unwrap();
+    assert_eq!(feed.override_kind(), Some(RulerKind::Seek));
+    assert!(rig.timers.0.borrow().contains(&DRAG_TIMER), "re-armed");
     rig.app.on_event(ShellEvent::Release {
         x: r.0 + r.1 * 0.5,
         y: r.2,
     });
-    assert!(rig.writes.borrow().is_empty());
+    rig.seconds.set(12.5);
+    rig.app.on_event(ShellEvent::Timer(DRAG_TIMER));
+    assert_eq!(
+        rig.app.feed.as_ref().unwrap().override_kind(),
+        Some(RulerKind::Seek)
+    );
+    rig.seconds.set(13.0);
+    rig.app.on_event(ShellEvent::Timer(DRAG_TIMER));
+    assert_eq!(rig.app.feed.as_ref().unwrap().override_kind(), None);
 }
 
 #[test]
@@ -306,6 +346,10 @@ fn override_ends_after_one_second_without_readback() {
     });
     rig.seconds.set(5.0);
     rig.app.on_event(ShellEvent::Drag {
+        x: r.0 + r.1 * 0.1,
+        y: r.2,
+    });
+    rig.app.on_event(ShellEvent::Release {
         x: r.0 + r.1 * 0.1,
         y: r.2,
     });

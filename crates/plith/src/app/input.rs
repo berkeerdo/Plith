@@ -219,7 +219,8 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         Action::Next => feed.services().next(),
         Action::Previous => feed.services().previous(),
         Action::Seek(fraction) => {
-            let Some(timeline) = feed.facts().media.timeline else {
+            // No session, or a track with no length: nothing to scale the fraction by.
+            let Some(timeline) = feed.facts().media.timeline.filter(|t| t.duration_s > 0.0) else {
                 return;
             };
             let seconds = timeline.duration_s * fraction.clamp(0.0, 1.0);

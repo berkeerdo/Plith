@@ -79,6 +79,7 @@ impl App {
         if let Some(value) = value_of(&action) {
             feed.set_override(drag.ruler.kind, value, now, &self.mailbox);
         }
+        feed.end_hold(now);
         dispatch(feed, &self.mailbox, action);
     }
 }

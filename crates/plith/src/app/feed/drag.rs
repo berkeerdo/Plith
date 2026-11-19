@@ -29,6 +29,10 @@ pub struct Override {
     /// A percent for volume and brightness, a fraction of the track for seek.
     value: f64,
     set_at_s: f64,
+    /// A press is still down: the override outlives its second until the release.
+    held: bool,
+    /// The expiry timer is running.
+    armed: bool,
 }
 
 /// The page a ruler's value is drawn on.
@@ -125,6 +129,8 @@ impl Feed {
             kind,
             value,
             set_at_s: now_s,
+            held: true,
+            armed: self.drag.is_some_and(|old| old.armed),
         };
         let moved = self.drag.is_none_or(|old| !old.same_look(next));
         let mut dirty = if moved {
@@ -136,8 +142,26 @@ impl Feed {
             dirty = dirty.union(dirty_of(old.kind));
         }
         self.drag = Some(next);
-        self.timers.set(DRAG_TIMER, OVERRIDE_LIFE_MS);
+        self.arm_expiry(OVERRIDE_LIFE_MS);
         self.rebuild(dirty, mailbox);
+    }
+
+    /// Starts the expiry timer unless it already runs: one timer per drag, not one per point.
+    fn arm_expiry(&mut self, ms: u32) {
+        if let Some(over) = self.drag.as_mut()
+            && !over.armed
+        {
+            over.armed = true;
+            self.timers.set(DRAG_TIMER, ms);
+        }
+    }
+
+    /// The press ended: the override now lives one second more from `now_s`, then drops.
+    pub fn end_hold(&mut self, now_s: f64) {
+        if let Some(over) = self.drag.as_mut() {
+            over.held = false;
+            over.set_at_s = now_s;
+        }
     }
 
     /// Ends the override once the reading in the facts caught up; returns the page to rebuild.
@@ -155,15 +179,23 @@ impl Feed {
     /// The override timer ticked: drops the override once a second passed since its last set.
     pub fn on_drag_timer(&mut self, now_s: f64, mailbox: &SceneMailbox) {
         self.timers.kill(DRAG_TIMER);
+        if let Some(over) = self.drag.as_mut() {
+            over.armed = false;
+        }
         let Some(over) = self.drag else {
             return;
         };
-        let left = OVERRIDE_LIFE_S - (now_s - over.set_at_s);
+        // The reading that lags the write must not snap the ruler back under a held press.
+        let left = if over.held {
+            OVERRIDE_LIFE_S
+        } else {
+            OVERRIDE_LIFE_S - (now_s - over.set_at_s)
+        };
         if left > 1e-9 {
             // Allowed: `left` is at most one second.
             #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
             let ms = (left * 1000.0).ceil().max(1.0) as u32;
-            self.timers.set(DRAG_TIMER, ms);
+            self.arm_expiry(ms);
             return;
         }
         self.drag = None;
