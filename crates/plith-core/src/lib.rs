@@ -20,6 +20,7 @@ pub mod pages;
 pub mod panic_text;
 pub mod plays;
 pub mod scene;
+pub mod scroll;
 pub mod settings;
 pub mod shapes;
 pub mod spring;

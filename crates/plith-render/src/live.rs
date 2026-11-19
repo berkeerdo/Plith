@@ -59,6 +59,8 @@ pub(crate) fn draw_live(
                 let node = (*rect, shown.as_str(), *style, *align, Trim::End);
                 let _ = kit.text(ctx, text, node, palette.resolve(*ink));
             }
+            // Drawn once the title scroll is painted (a later task).
+            LiveNode::Scroll { .. } => {}
         }
     }
 }

@@ -209,6 +209,23 @@ pub enum LiveNode {
         /// The alignment inside `rect`.
         align: Align,
     },
+    /// A title that scrolls left once from `start`, then rests at the start. Drawn left-aligned
+    /// from `rect.x`; `run_s` is core's estimate of the run, the painter clamps to the measured
+    /// overflow.
+    Scroll {
+        /// The visible box.
+        rect: Rect,
+        /// The whole title.
+        text: Arc<str>,
+        /// The text style.
+        style: TextStyle,
+        /// The colour role.
+        ink: Ink,
+        /// When the run began.
+        start: SystemTime,
+        /// The estimated run length in seconds.
+        run_s: f64,
+    },
 }
 
 /// One drawing command.

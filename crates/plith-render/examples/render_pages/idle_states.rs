@@ -126,6 +126,7 @@ fn idle_facts(lang: Lang) -> IdleFacts {
             lang,
         ),
         lang,
+        scroll_start: None,
     }
 }
 

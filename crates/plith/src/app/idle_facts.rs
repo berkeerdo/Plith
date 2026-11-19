@@ -163,6 +163,7 @@ impl Idle {
             seal: facts.pill.clone(),
             sound: pill_sound(facts, self.lang),
             lang: self.lang,
+            scroll_start: None,
         }
     }
 

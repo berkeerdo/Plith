@@ -1,11 +1,11 @@
 //! The ambient tick: when the open island repaints without motion (meters, seek fill), how
 //! often, the values sampled for it, and its `ambient` log line.
 
-use crate::draw::{DisplayList, LiveRail, Node, PageContent};
+use crate::draw::{DisplayList, LiveNode, LiveRail, Node, PageContent};
 use crate::page::PageLayers;
 use crate::scene::Scene;
 use std::fmt;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 /// A gap between ambient frames above this many ambient intervals is a hitch.
 const HITCH_INTERVALS: f64 = 1.5;
@@ -28,17 +28,32 @@ pub fn ambient_divisor(hz: f64) -> u32 {
     divisor
 }
 
-/// True when the settled island needs ambient frames: it is expanded, nothing suppresses it and
-/// the visible page's display list has a live node.
+/// True when the settled island needs ambient frames and nothing suppresses it: it is expanded
+/// and the visible page's display list has a live node, or it is collapsed and the pill has a
+/// title scroll still running at `now`.
 #[must_use]
-pub fn wants_ambient(scene: &Scene, content: &PageContent) -> bool {
-    if !scene.expanded || scene.suppression.any() {
+pub fn wants_ambient(scene: &Scene, content: &PageContent, now: SystemTime) -> bool {
+    if scene.suppression.any() {
         return false;
     }
-    content
-        .pages
-        .get(scene.page)
-        .is_some_and(|list| has_live(list))
+    if scene.expanded {
+        return content
+            .pages
+            .get(scene.page)
+            .is_some_and(|list| has_live(list));
+    }
+    content.pill.nodes.iter().any(|node| match node {
+        Node::Live(LiveNode::Scroll { start, run_s, .. }) => scroll_running(*start, *run_s, now),
+        _ => false,
+    })
+}
+
+/// True while `now` is before `start` plus `run_s` seconds.
+fn scroll_running(start: SystemTime, run_s: f64, now: SystemTime) -> bool {
+    Duration::try_from_secs_f64(run_s)
+        .ok()
+        .and_then(|run| start.checked_add(run))
+        .is_some_and(|end| now < end)
 }
 
 fn has_live(list: &DisplayList) -> bool {

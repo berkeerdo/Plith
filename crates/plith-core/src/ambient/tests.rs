@@ -2,6 +2,9 @@ use super::*;
 use crate::draw::{DisplayList, LiveNode, LiveRail, Node, Rect};
 use crate::scene::Suppression;
 use std::sync::Arc;
+use std::time::Duration;
+
+const NOW: SystemTime = SystemTime::UNIX_EPOCH;
 
 const RECT: Rect = Rect {
     x: 0.0,
@@ -60,16 +63,16 @@ fn divisor_is_at_least_one() {
 #[test]
 fn wants_ambient_needs_expanded_unsuppressed_and_a_live_node_on_the_page() {
     let live = content_live_on(1);
-    assert!(wants_ambient(&expanded(1), &live));
+    assert!(wants_ambient(&expanded(1), &live, NOW));
     assert!(
-        !wants_ambient(&expanded(0), &live),
+        !wants_ambient(&expanded(0), &live, NOW),
         "page 0 has no live node"
     );
     let collapsed = Scene {
         page: 1,
         ..Scene::default()
     };
-    assert!(!wants_ambient(&collapsed, &live));
+    assert!(!wants_ambient(&collapsed, &live, NOW));
     let suppressed = Scene {
         suppression: Suppression {
             fullscreen: true,
@@ -77,14 +80,14 @@ fn wants_ambient_needs_expanded_unsuppressed_and_a_live_node_on_the_page() {
         },
         ..expanded(1)
     };
-    assert!(!wants_ambient(&suppressed, &live));
-    assert!(!wants_ambient(&expanded(1), &PageContent::empty()));
+    assert!(!wants_ambient(&suppressed, &live, NOW));
+    assert!(!wants_ambient(&expanded(1), &PageContent::empty(), NOW));
 }
 
 #[test]
 fn wants_ambient_is_false_for_an_out_of_range_page() {
     let scene = expanded(9);
-    assert!(!wants_ambient(&scene, &content_live_on(3)));
+    assert!(!wants_ambient(&scene, &content_live_on(3), NOW));
 }
 
 #[test]
@@ -220,4 +223,50 @@ fn shows_live_needs_a_visible_layer_with_a_live_node() {
         &PageLayers::of(&[layer(0, 1.0)]),
         1.0
     ));
+}
+
+fn pill_scroll(start: SystemTime, run_s: f64) -> PageContent {
+    let mut content = PageContent::empty();
+    content.pill = Arc::new(DisplayList {
+        nodes: vec![Node::Live(LiveNode::Scroll {
+            rect: RECT,
+            text: Arc::from("a long title"),
+            style: crate::draw::TextStyle::Value,
+            ink: crate::draw::Ink::Muted,
+            start,
+            run_s,
+        })],
+        size: (10.0, 10.0),
+    });
+    content
+}
+
+#[test]
+fn ambient_for_pill_scroll_only_until_run_ends() {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let content = pill_scroll(start, 5.0);
+    let collapsed = Scene::default();
+    assert!(wants_ambient(&collapsed, &content, start));
+    let late = start + Duration::from_secs(4);
+    assert!(wants_ambient(&collapsed, &content, late));
+    let done = start + Duration::from_secs(5);
+    assert!(!wants_ambient(&collapsed, &content, done));
+    let suppressed = Scene {
+        suppression: Suppression {
+            fullscreen: true,
+            ..Suppression::default()
+        },
+        ..Scene::default()
+    };
+    assert!(!wants_ambient(&suppressed, &content, start));
+    assert!(
+        !wants_ambient(&expanded(1), &content, start),
+        "an expanded island ignores the pill"
+    );
+}
+
+#[test]
+fn ambient_none_for_pill_without_scroll() {
+    let content = PageContent::empty();
+    assert!(!wants_ambient(&Scene::default(), &content, NOW));
 }

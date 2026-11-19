@@ -21,6 +21,7 @@ use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::{Tuning, TuningSet};
 use plith_core::visible::{DrawnState, visibly_differs};
 use std::sync::Arc;
+use std::time::SystemTime;
 
 /// The loop's state between frames.
 pub(super) struct Engine<'a, C, P, O, N> {
@@ -134,7 +135,7 @@ where
 
     /// True when the settled island should tick ambient frames.
     pub(super) fn wants_ambient(&self) -> bool {
-        wants_ambient(&self.scene, &self.page_content)
+        wants_ambient(&self.scene, &self.page_content, SystemTime::now())
     }
 
     /// Back to the preferred clock with a fresh phase lock, before a motion or an ambient run.

@@ -7,11 +7,14 @@ use super::audio::DeviceKind;
 use super::glyphs;
 use super::kit::{rect, station, text};
 use super::pill::{PillFacts, pill};
-use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
+use crate::draw::{Align, DisplayList, Ink, LiveNode, Node, StationMark, TextStyle};
 use crate::geometry::IslandShape;
 use crate::lang::{Lang, percent};
+use crate::scroll::scroll_run_s;
 use crate::settings::IdleLook;
 use crate::shapes;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 mod weather;
 pub use weather::{WeatherWords, weather_words};
@@ -33,6 +36,8 @@ pub struct IdleFacts {
     pub sound: Option<SoundWords>,
     /// The interface language.
     pub lang: Lang,
+    /// When the playing title's one-shot scroll began; `None` while none runs.
+    pub scroll_start: Option<SystemTime>,
 }
 
 /// Left padding of the time.
@@ -132,15 +137,53 @@ pub fn rest_shape(look: IdleLook) -> IslandShape {
 /// The Karot right-hand text, like the welcome head's `Auto` slot: the weather when it is on,
 /// else the playing title, else the default output (the only one that wears the speaker glyph,
 /// unless it is the off word).
-fn karot_right(f: &IdleFacts) -> Option<(&String, bool)> {
-    let plain = |s| Some((s, false));
+fn karot_right(f: &IdleFacts) -> Option<Right<'_>> {
+    let plain = |text, title| {
+        Some(Right {
+            text,
+            glyph: false,
+            title,
+        })
+    };
     if let Some(s) = f.turn.as_ref().or(f.now_sky.as_ref()) {
-        return plain(s);
+        return plain(s, false);
     }
     if let Some((title, _)) = &f.playing {
-        return plain(title);
+        return plain(title, true);
     }
-    f.sound.as_ref().map(|s| (&s.text, !s.muted))
+    f.sound.as_ref().map(|s| Right {
+        text: &s.text,
+        glyph: !s.muted,
+        title: false,
+    })
+}
+
+/// The Karot right-hand text, and what wraps it.
+struct Right<'a> {
+    text: &'a String,
+    /// Wears the speaker glyph.
+    glyph: bool,
+    /// Is the playing title, the only text that may scroll.
+    title: bool,
+}
+
+/// The right-hand title as a one-shot scroll when it is too long for its box and a scroll was
+/// started; `None` when it fits or no scroll runs (plain text, cut at the end).
+fn title_scroll(text: &str, y: f64, start: Option<SystemTime>) -> Option<Node> {
+    // Allowed: a few dozen characters at most.
+    #[allow(clippy::cast_precision_loss)]
+    let overflow = text.chars().count() as f64 * VALUE_ADVANCE - TURN_W;
+    if overflow <= 0.0 {
+        return None;
+    }
+    Some(Node::Live(LiveNode::Scroll {
+        rect: rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
+        text: Arc::from(text),
+        style: TextStyle::Value,
+        ink: Ink::Muted,
+        start: start?,
+        run_s: scroll_run_s(overflow),
+    }))
 }
 
 /// The speaker glyph left of the right-aligned `text`, centred on the text box.
@@ -165,17 +208,24 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
         Ink::Ink,
         Align::Start,
     )];
-    if let Some((right, glyph)) = karot_right(f) {
-        nodes.push(text(
+    let Some(right) = karot_right(f) else {
+        return nodes;
+    };
+    let scroll = right
+        .title
+        .then(|| title_scroll(right.text, y, f.scroll_start))
+        .flatten();
+    nodes.push(scroll.unwrap_or_else(|| {
+        text(
             rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
-            right,
+            right.text,
             TextStyle::Value,
             Ink::Muted,
             Align::End,
-        ));
-        if glyph {
-            nodes.extend(speaker_before(right, y));
-        }
+        )
+    }));
+    if right.glyph {
+        nodes.extend(speaker_before(right.text, y));
     }
     nodes
 }

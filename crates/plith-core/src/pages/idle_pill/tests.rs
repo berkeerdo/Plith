@@ -1,9 +1,10 @@
 #![allow(clippy::float_cmp)]
 
 use super::*;
-use crate::draw::{Node, Rect, Trim};
+use crate::draw::{LiveNode, Node, Rect, Trim};
 use crate::lang::Lang;
 use crate::pages::pill::{PillState, pill};
+use std::time::{Duration, SystemTime};
 
 fn facts() -> IdleFacts {
     IdleFacts {
@@ -21,6 +22,7 @@ fn facts() -> IdleFacts {
             muted: false,
         }),
         lang: Lang::Tr,
+        scroll_start: None,
     }
 }
 
@@ -317,4 +319,74 @@ fn the_turn_box_fits_the_longest_turn_text_without_an_ellipsis() {
     // The longest Turkish word, and the turn box stays clear of the time box.
     assert!(TURN_W >= "BULUTLU 15:30".chars().count() as f64 * VALUE_ADVANCE);
     const { assert!(PAD_LEFT + TIME_W <= RIGHT_EDGE - TURN_W) };
+}
+
+/// Only the playing title is set on the right of Karot.
+fn title_only(title: &str, start: Option<SystemTime>) -> IdleFacts {
+    let mut f = facts();
+    f.turn = None;
+    f.now_sky = None;
+    f.playing = Some((title.into(), "Artist".into()));
+    f.scroll_start = start;
+    f
+}
+
+fn scrolls(list: &DisplayList) -> Vec<&LiveNode> {
+    list.nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Live(live @ LiveNode::Scroll { .. }) => Some(live),
+            _ => None,
+        })
+        .collect()
+}
+
+const LONG_TITLE: &str = "A Very Long Song Title That Cannot Fit";
+
+#[test]
+fn karot_title_fits_is_plain_text() {
+    let start = Some(SystemTime::UNIX_EPOCH);
+    let list = idle_pill(IdleLook::Karot, &title_only("Song", start));
+    assert!(scrolls(&list).is_empty());
+    assert!(list.nodes.iter().all(|n| !matches!(n, Node::Live(_))));
+    let t = texts(&list);
+    assert_eq!((t[1].1.as_str(), t[1].4), ("Song", Align::End));
+}
+
+#[test]
+fn karot_long_title_with_start_is_scroll() {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(5);
+    let list = idle_pill(IdleLook::Karot, &title_only(LONG_TITLE, Some(start)));
+    let found = scrolls(&list);
+    assert_eq!(found.len(), 1);
+    let LiveNode::Scroll {
+        rect,
+        text,
+        style,
+        ink,
+        start: at,
+        run_s,
+    } = found[0]
+    else {
+        unreachable!()
+    };
+    assert_eq!(&**text, LONG_TITLE);
+    assert_eq!((*style, *ink, *at), (TextStyle::Value, Ink::Muted, start));
+    assert_eq!((rect.x, rect.x + rect.w), (RIGHT_EDGE - TURN_W, RIGHT_EDGE));
+    let overflow =
+        f64::from(u32::try_from(LONG_TITLE.chars().count()).unwrap()) * VALUE_ADVANCE - TURN_W;
+    assert_eq!(*run_s, crate::scroll::scroll_run_s(overflow));
+    assert!(*run_s > 0.0);
+    assert_eq!(texts(&list).len(), 1, "only the time is plain text");
+}
+
+#[test]
+fn long_title_without_start_is_plain_text() {
+    let list = idle_pill(IdleLook::Karot, &title_only(LONG_TITLE, None));
+    assert!(scrolls(&list).is_empty());
+    let t = texts(&list);
+    assert_eq!(
+        (t[1].1.as_str(), t[1].4, t[1].5),
+        (LONG_TITLE, Align::End, Trim::End)
+    );
 }
