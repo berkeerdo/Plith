@@ -5,6 +5,8 @@ use crate::page::{PageLayer, PageLayers};
 use crate::pages::audio::{PickMode, VmFacts};
 use crate::pages::{Action, HitTarget, PAGE_COUNT, hit};
 
+pub mod drag;
+
 /// Seconds the pointer must stay outside the island before it collapses.
 pub const COLLAPSE_DELAY_S: f64 = 0.4;
 

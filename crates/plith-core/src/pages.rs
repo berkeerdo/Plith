@@ -150,22 +150,22 @@ const HIT_SLACK: f64 = 4.0;
 /// A `SeekRuler` target comes back as `Seek` with the fraction at `x`.
 #[must_use]
 pub fn hit(targets: &[HitTarget], x: f64, y: f64) -> Option<Action> {
-    targets
-        .iter()
-        .find(|t| {
-            x >= t.rect.x - HIT_SLACK
-                && x <= t.rect.x + t.rect.w + HIT_SLACK
-                && y >= t.rect.y - HIT_SLACK
-                && y <= t.rect.y + t.rect.h + HIT_SLACK
-        })
-        .map(|t| match &t.action {
-            Action::SeekRuler(ruler) => Action::Seek(seek_fraction(*ruler, x)),
-            Action::VolumeRuler(ruler) => Action::SetVolume(system::brightness_at(*ruler, x)),
-            Action::BrightnessRuler(ruler) => {
-                Action::SetBrightness(system::brightness_at(*ruler, x))
-            }
-            other => other.clone(),
-        })
+    target_at(targets, x, y).map(|t| match &t.action {
+        Action::SeekRuler(ruler) => Action::Seek(seek_fraction(*ruler, x)),
+        Action::VolumeRuler(ruler) => Action::SetVolume(system::brightness_at(*ruler, x)),
+        Action::BrightnessRuler(ruler) => Action::SetBrightness(system::brightness_at(*ruler, x)),
+        other => other.clone(),
+    })
+}
+
+/// The first target whose rect, grown by 4 DIP on each side, contains the point.
+pub(crate) fn target_at(targets: &[HitTarget], x: f64, y: f64) -> Option<&HitTarget> {
+    targets.iter().find(|t| {
+        x >= t.rect.x - HIT_SLACK
+            && x <= t.rect.x + t.rect.w + HIT_SLACK
+            && y >= t.rect.y - HIT_SLACK
+            && y <= t.rect.y + t.rect.h + HIT_SLACK
+    })
 }
 
 /// The played fraction for a click at `x` on `ruler`, clamped to 0..1.
