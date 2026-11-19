@@ -15,7 +15,8 @@ pub(crate) enum PressEnd {
     /// The press never passed the slop and was released inside the shape.
     Click(Point),
     /// The press was a drag: released at `at` (not clamped to the shape). `leave` is true when
-    /// a leave arrived during the drag and the pointer is now outside the shape.
+    /// the release lies outside the shape: the window region is the shape, so the pointer has
+    /// left the window whether or not a `WM_MOUSELEAVE` arrived during the capture.
     Release { at: Point, leave: bool },
 }
 
@@ -25,7 +26,8 @@ struct Active {
     origin: Point,
     /// The last drag point emitted, once the press has passed the slop.
     dragged: Option<Point>,
-    /// A `WM_MOUSELEAVE` arrived during the drag and waits for the release.
+    /// A `WM_MOUSELEAVE` arrived during the drag; a lost capture then ends with a leave (a
+    /// button-up decides by its own point).
     leave_pending: bool,
 }
 
@@ -68,7 +70,7 @@ impl PressRecord {
             None => PressEnd::Nothing,
             Some(active) if active.dragged.is_some() => PressEnd::Release {
                 at: raw,
-                leave: active.leave_pending && inside.is_none(),
+                leave: inside.is_none(),
             },
             Some(_) => inside.map_or(PressEnd::Nothing, PressEnd::Click),
         }
@@ -90,11 +92,14 @@ impl PressRecord {
         }
     }
 
-    /// The capture was lost. A drag ends at its last point: returns that point and whether a
-    /// leave is pending. A press that never dragged is forgotten.
-    pub(crate) fn lost(&self) -> Option<(Point, bool)> {
+    /// The capture was lost. A drag ends at its last point: returns that point and whether to
+    /// leave, which is when a leave is pending or `inside` says the point lies outside the
+    /// shape. A press that never dragged is forgotten.
+    pub(crate) fn lost(&self, inside: impl FnOnce(Point) -> bool) -> Option<(Point, bool)> {
         let active = self.0.take()?;
-        active.dragged.map(|at| (at, active.leave_pending))
+        active
+            .dragged
+            .map(|at| (at, active.leave_pending || !inside(at)))
     }
 
     /// Forgets the press.

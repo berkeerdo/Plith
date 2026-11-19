@@ -296,8 +296,9 @@ fn drag_outside_shape_continues() {
         press.up(None, (-90.0, 410.0)),
         PressEnd::Release {
             at: (-90.0, 410.0),
-            leave: false
-        }
+            leave: true
+        },
+        "outside the shape is outside the window: the release leaves"
     );
 }
 
@@ -355,12 +356,27 @@ fn leave_before_a_drag_cancels_the_press() {
 fn lost_capture_ends_a_drag_at_its_last_point() {
     let press = mouse::PressRecord::default();
     assert!(press.down(Some((10.0, 10.0))));
-    assert_eq!(press.lost(), None, "a plain press just ends");
+    assert_eq!(press.lost(|_| true), None, "a plain press just ends");
     assert!(press.down(Some((10.0, 10.0))));
     assert!(press.moved((30.0, 12.0)).is_some());
     assert!(press.leave());
-    assert_eq!(press.lost(), Some(((30.0, 12.0), true)));
-    assert_eq!(press.lost(), None);
+    assert_eq!(press.lost(|_| true), Some(((30.0, 12.0), true)));
+    assert_eq!(press.lost(|_| true), None);
+}
+
+#[test]
+fn lost_capture_outside_the_shape_leaves_without_a_pending_leave() {
+    let press = mouse::PressRecord::default();
+    assert!(press.down(Some((10.0, 10.0))));
+    assert!(press.moved((30.0, 400.0)).is_some());
+    assert_eq!(press.lost(|_| false), Some(((30.0, 400.0), true)));
+    assert!(press.down(Some((10.0, 10.0))));
+    assert!(press.moved((30.0, 12.0)).is_some());
+    assert_eq!(
+        press.lost(|_| true),
+        Some(((30.0, 12.0), false)),
+        "inside with no leave: no leave"
+    );
 }
 
 #[test]
@@ -445,4 +461,46 @@ fn a_lost_capture_during_a_drag_releases_at_the_last_point() {
         tail,
         [ShellEvent::Release { x: 90.0, y: 10.0 }, ShellEvent::Leave]
     );
+}
+
+#[test]
+fn drag_released_outside_always_leaves() {
+    // Button up outside the shape, with no WM_MOUSELEAVE during the capture.
+    let (inner, events) = recording();
+    publish_rest(&inner);
+    assert!(mouse::note_down(&inner, lparam_island(&inner, 50.0, 10.0)));
+    mouse::note_point(&inner, lparam_island(&inner, 80.0, 10.0));
+    mouse::note_point(&inner, lparam_island(&inner, 80.0, 300.0));
+    mouse::note_up(&inner, lparam_island(&inner, 80.0, 310.0));
+    {
+        let got = events.borrow();
+        let tail = &got[got.len() - 2..];
+        assert_eq!(
+            tail,
+            [ShellEvent::Release { x: 80.0, y: 310.0 }, ShellEvent::Leave]
+        );
+    }
+    // Lost capture with the last drag point outside, again with no leave.
+    events.borrow_mut().clear();
+    assert!(mouse::note_down(&inner, lparam_island(&inner, 50.0, 10.0)));
+    mouse::note_point(&inner, lparam_island(&inner, 80.0, 300.0));
+    mouse::note_capture_lost(&inner);
+    let got = events.borrow();
+    let tail = &got[got.len() - 2..];
+    assert_eq!(
+        tail,
+        [ShellEvent::Release { x: 80.0, y: 300.0 }, ShellEvent::Leave]
+    );
+}
+
+#[test]
+fn drag_released_inside_does_not_leave() {
+    let (inner, events) = recording();
+    publish_rest(&inner);
+    assert!(mouse::note_down(&inner, lparam_island(&inner, 50.0, 10.0)));
+    mouse::note_point(&inner, lparam_island(&inner, 80.0, 10.0));
+    mouse::note_up(&inner, lparam_island(&inner, 80.0, 10.0));
+    let got = events.borrow();
+    assert_eq!(got.last(), Some(&ShellEvent::Release { x: 80.0, y: 10.0 }));
+    assert!(!got.contains(&ShellEvent::Leave));
 }
