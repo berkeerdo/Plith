@@ -103,7 +103,7 @@ fn live_values_default_is_empty_at_the_epoch() {
 #[test]
 fn report_display_is_one_line() {
     let report = AmbientReport {
-        page: 2,
+        target: AmbientTarget::Page(2),
         secs: 12.34,
         frames: 740,
         hitches: 1,
@@ -125,7 +125,7 @@ fn stats_of_a_steady_run_have_no_hitches() {
         stats.record_frame(f64::from(i) * interval, 1.0);
     }
     let report = stats.finish();
-    assert_eq!(report.page, 1);
+    assert_eq!(report.target, AmbientTarget::Page(1));
     assert_eq!(report.frames, 100);
     assert_eq!(report.hitches, 0);
     assert!((report.worst_gap_ms - interval * 1000.0).abs() < 1e-9);
@@ -269,4 +269,54 @@ fn ambient_for_pill_scroll_only_until_run_ends() {
 fn ambient_none_for_pill_without_scroll() {
     let content = PageContent::empty();
     assert!(!wants_ambient(&Scene::default(), &content, NOW));
+}
+
+#[test]
+fn ambient_none_when_clock_is_before_start() {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(7200);
+    let content = pill_scroll(start, 5.0);
+    let collapsed = Scene::default();
+    let hour_before = start - Duration::from_secs(3600);
+    assert!(
+        !wants_ambient(&collapsed, &content, hour_before),
+        "a clock that moved back is not a running scroll"
+    );
+    let just_before = start - Duration::from_millis(1);
+    assert!(!wants_ambient(&collapsed, &content, just_before));
+    assert!(wants_ambient(&collapsed, &content, start), "the start runs");
+}
+
+#[test]
+fn pill_report_names_the_pill() {
+    let report = AmbientReport {
+        target: AmbientTarget::Pill,
+        secs: 1.0,
+        frames: 240,
+        hitches: 0,
+        worst_gap_ms: 4.17,
+        draw_p99_ms: 0.3,
+    };
+    assert_eq!(
+        report.to_string(),
+        "ambient: pill 1.0 s, 240 frames, 0 hitches, worst 4.17 ms, draw p99 0.30 ms"
+    );
+}
+
+#[test]
+fn pill_stats_paint_every_tick() {
+    let hz = 240.0;
+    let mut stats = AmbientStats::pill(hz);
+    assert_eq!(stats.divisor(), 1);
+    assert_eq!(
+        AmbientStats::new(2, hz).divisor(),
+        4,
+        "pages keep the divisor"
+    );
+    for i in 0..240_u32 {
+        stats.record_frame(f64::from(i) / hz, 0.5);
+    }
+    let report = stats.finish();
+    assert_eq!(report.target, AmbientTarget::Pill);
+    assert_eq!(report.hitches, 0, "one period apart is no hitch");
+    assert!((report.secs - 1.0).abs() < 1e-9, "secs {}", report.secs);
 }
