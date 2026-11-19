@@ -135,6 +135,8 @@ impl App {
                 self.close_render();
             }
             ShellEvent::Click { x, y } => self.on_click(x, y),
+            // Consumed by the drag handling later; ignored until then.
+            ShellEvent::Press { .. } | ShellEvent::Drag { .. } | ShellEvent::Release { .. } => {}
             ShellEvent::Enter => self.on_enter(),
             ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),

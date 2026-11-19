@@ -8,6 +8,9 @@ use crate::pages::{Action, HitTarget, PAGE_COUNT, hit};
 /// Seconds the pointer must stay outside the island before it collapses.
 pub const COLLAPSE_DELAY_S: f64 = 0.4;
 
+/// Island DIP a pressed pointer may travel before the press becomes a drag.
+pub const DRAG_SLOP: f64 = 3.0;
+
 /// What a click inside the drawn island does.
 #[derive(Debug, Clone, PartialEq)]
 pub enum ClickResult {
