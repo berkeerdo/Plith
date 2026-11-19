@@ -3,6 +3,7 @@
 //! Pure: no Windows calls, every time is an explicit `now` in seconds on one time base (the
 //! render thread uses seconds since its origin, the same base the compositor clock reports).
 
+use plith_core::lang::{Lang, Text, text};
 use plith_core::spring::Spring;
 use plith_core::tuning::{OPACITY, Tuning};
 use plith_ipc::{Message, Meter};
@@ -33,6 +34,24 @@ pub struct OsdFrame {
     pub label: String,
     /// The word drawn instead of the percent while muted, as sent.
     pub muted_word: String,
+}
+
+/// The label drawn before any `Level` has set one.
+const DEFAULT_LABEL: &str = "VOLUME";
+
+/// Two hidden frames that touch every text slot (the label, the percent, the muted word), so a
+/// prewarm pays the first-draw costs (text formats, layout cache, glyphs) before the first show.
+#[must_use]
+pub fn warm_frames(label: &str, muted_word: &str) -> [OsdFrame; 2] {
+    let frame = |muted: bool| OsdFrame {
+        opacity: 0.0,
+        level: 1.0,
+        meter: Meter::Volume,
+        muted,
+        label: label.to_owned(),
+        muted_word: muted_word.to_owned(),
+    };
+    [frame(false), frame(true)]
 }
 
 /// The OSD state machine.
@@ -195,6 +214,23 @@ impl OsdModel {
             label: self.label.clone(),
             muted_word: self.muted_word.clone(),
         }
+    }
+
+    /// The label and muted word a prewarm draws: the last ones sent, else `"VOLUME"` and the
+    /// English muted word.
+    #[must_use]
+    pub fn warm_words(&self) -> (&str, &str) {
+        let label = if self.label.is_empty() {
+            DEFAULT_LABEL
+        } else {
+            &self.label
+        };
+        let word = if self.muted_word.is_empty() {
+            text(Text::Muted, Lang::En)
+        } else {
+            &self.muted_word
+        };
+        (label, word)
     }
 
     /// Whether the helper should exit at `now`: after `Bye` once hidden (or `BYE_FADE_S`

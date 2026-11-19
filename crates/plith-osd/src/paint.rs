@@ -24,6 +24,9 @@ pub const WIDTH: f32 = 300.0;
 pub const HEIGHT: f32 = 40.0;
 /// Bottom corner radius in DIP.
 const RADIUS: f32 = 16.0;
+/// The opacity of a prewarm draw: below one 8-bit alpha step, so nothing shows, yet above zero so
+/// Direct2D does not skip the work.
+const WARM_OPACITY: f32 = 0.004;
 /// Side padding in DIP.
 const PAD: f32 = 16.0;
 /// Left slot (label) right edge.
@@ -253,7 +256,22 @@ impl Painter {
         if frame.opacity <= 0.0 {
             return;
         }
-        self.set_opacity(frame.opacity);
+        self.draw_body(gpu, frame, frame.opacity);
+    }
+
+    /// Draws `frame` at [`WARM_OPACITY`] whatever its own opacity is, so the text, the layout
+    /// cache and the fills all run (a draw at opacity 0 returns early and warms nothing). Only
+    /// for a hidden window: the result is a near-invisible frame in the back buffer.
+    pub fn draw_warm(&mut self, gpu: &Gpu, frame: &OsdFrame) {
+        let clear = D2D1_COLOR_F::default();
+        // SAFETY: the context targets the swap chain back buffer; `clear` is a live local.
+        unsafe { gpu.context().Clear(Some(&raw const clear)) };
+        self.draw_body(gpu, frame, WARM_OPACITY);
+    }
+
+    /// The seal, ruler and both texts at `opacity`, after the clear.
+    fn draw_body(&mut self, gpu: &Gpu, frame: &OsdFrame, opacity: f32) {
+        self.set_opacity(opacity);
         self.draw_seal(gpu);
         self.draw_ruler(gpu, frame);
         let label = Slot {

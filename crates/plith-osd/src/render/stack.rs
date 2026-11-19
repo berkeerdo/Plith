@@ -70,6 +70,27 @@ impl Stack {
         self.painter.take_notes()
     }
 
+    /// Draws each of `frames` through the text and fill paths at a near-zero opacity and
+    /// presents it, so the first real show finds the layout cache and glyphs warm. Meant for a
+    /// hidden window. Returns the total draw time in ms.
+    ///
+    /// # Errors
+    /// Returns the first `EndDraw` or `Present` error, like [`Stack::paint`].
+    pub fn prewarm(&mut self, frames: &[OsdFrame]) -> Result<f64, Error> {
+        let mut total = 0.0;
+        for frame in frames {
+            let start = Instant::now();
+            // SAFETY: BeginDraw on the live context; EndDraw follows on every path.
+            unsafe { self.gpu.context().BeginDraw() };
+            self.painter.draw_warm(&self.gpu, frame);
+            // SAFETY: closes the BeginDraw above, on every path.
+            unsafe { self.gpu.context().EndDraw(None, None) }?;
+            total += start.elapsed().as_secs_f64() * 1000.0;
+            self.target.present()?;
+        }
+        Ok(total)
+    }
+
     /// Draws `frame` and presents it. Returns draw and present times in ms.
     ///
     /// # Errors
