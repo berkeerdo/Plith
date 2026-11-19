@@ -368,7 +368,7 @@ fn hit_source_then_output_actions() {
         Some(Action::PickOutput(1))
     );
     assert_eq!(
-        hit(&page.targets, 30.0, 30.0),
+        hit(&page.targets, 64.0, 30.0),
         Some(Action::Tab(PageId::Audio))
     );
 }

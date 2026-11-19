@@ -1,12 +1,18 @@
-//! The tab bar: one hairline track with four stations and a clock at the right end.
+//! The tab bar: a home mark, one hairline track with four stations and a clock at the right end.
 
+use super::glyphs::{GLYPH, home};
 use super::kit::{rect, text};
 use super::{Action, HitTarget, MARGIN_LEFT, MARGIN_RIGHT, PAGE_W, PageId};
 use crate::draw::{Align, Ink, Node, Rect, StationMark, TextStyle};
 use crate::lang::Lang;
 
-/// Centre x of the first station.
-const FIRST_X: f64 = MARGIN_LEFT;
+/// Centre x and y of the home mark (y is the middle of the label and line band).
+const HOME_X: f64 = MARGIN_LEFT;
+const HOME_Y: f64 = 23.0;
+/// Half width of the home hit area minus its centre pixel.
+const HOME_REACH_X: f64 = 12.0;
+/// Centre x of the first station, one slot right of the home mark.
+const FIRST_X: f64 = MARGIN_LEFT + 24.0;
 /// Distance between station centres.
 const STEP: f64 = 112.0;
 /// Distance from a station centre to its label and hit area left edge.
@@ -33,8 +39,9 @@ pub fn clock_text(hour: u8, minute: u8) -> String {
     format!("{hour:02}:{minute:02}")
 }
 
-/// The tab bar nodes and one hit target per tab. With `active` of `None` no station is filled, and
-/// an empty `clock` draws no clock text. The labels read in `lang`.
+/// The tab bar nodes and a hit target for the home mark and each tab. With `active` of `None` no
+/// station is filled; `Some(PageId::Welcome)` inks the home mark instead. An empty `clock` draws
+/// no clock text. The labels read in `lang`.
 #[must_use]
 pub fn tabbar(active: Option<PageId>, clock: &str, lang: Lang) -> (Vec<Node>, Vec<HitTarget>) {
     let last_x = FIRST_X + STEP * 3.0;
@@ -44,7 +51,24 @@ pub fn tabbar(active: Option<PageId>, clock: &str, lang: Lang) -> (Vec<Node>, Ve
         ink: Ink::FaintTrack,
         dashed: false,
     }];
-    let mut targets = Vec::with_capacity(PageId::TABS.len());
+    let home_ink = if active == Some(PageId::Welcome) {
+        Ink::Ink
+    } else {
+        Ink::Faint
+    };
+    nodes.extend(home(HOME_X - GLYPH / 2.0, HOME_Y - GLYPH / 2.0, home_ink));
+    let mut targets = Vec::with_capacity(PageId::TABS.len() + 1);
+    // First in the list: `hit` returns the first target under a point, and the home area's slack
+    // reaches the first station's label.
+    targets.push(HitTarget {
+        rect: Rect {
+            x: HOME_X - HOME_REACH_X,
+            y: LABEL_Y,
+            w: HOME_REACH_X * 2.0 + 1.0,
+            h: LINE_Y + HIT_BELOW - LABEL_Y,
+        },
+        action: Action::Tab(PageId::Welcome),
+    });
     for (page, slot) in PageId::TABS.into_iter().zip([0.0, 1.0, 2.0, 3.0]) {
         let x = FIRST_X + STEP * slot;
         let on = active == Some(page);

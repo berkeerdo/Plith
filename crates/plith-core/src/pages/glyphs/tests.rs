@@ -28,6 +28,14 @@ fn every_point_stays_in_the_box() {
 }
 
 #[test]
+fn home_stays_in_its_box_at_the_origin() {
+    let (x, y) = (22.0, 15.0);
+    for p in home(x, y, Ink::Ink).iter().flat_map(points) {
+        assert!((x..=x + GLYPH).contains(&p.0) && (y..=y + GLYPH).contains(&p.1));
+    }
+}
+
+#[test]
 fn the_origin_moves_every_point() {
     for kind in KINDS {
         let at_zero = glyph(kind, 0.0, 0.0, Ink::Ink);
