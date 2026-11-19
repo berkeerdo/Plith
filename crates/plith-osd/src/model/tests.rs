@@ -298,3 +298,19 @@ fn warm_words_fall_back_to_defaults() {
     model.apply(&volume(40), 0.0);
     assert_eq!(model.warm_words(), ("Speakers", "STUMM"));
 }
+
+#[test]
+fn prewarm_only_while_hidden() {
+    let mut model = OsdModel::new();
+    assert!(model.wants_prewarm(), "the first build warms");
+    model.apply(&hello(), 0.0);
+    model.apply(&volume(40), 0.0);
+    assert!(model.step(FRAME));
+    assert!(
+        !model.wants_prewarm(),
+        "a rebuild while the OSD shows skips the warm draws"
+    );
+    run(&mut model, FRAME, 3.0);
+    assert!(model.is_hidden());
+    assert!(model.wants_prewarm(), "a hidden rebuild warms again");
+}

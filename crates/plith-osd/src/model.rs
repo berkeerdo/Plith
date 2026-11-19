@@ -276,6 +276,14 @@ impl OsdModel {
     pub fn is_hidden(&self) -> bool {
         self.opacity.target() == 0.0 && self.opacity.value() == 0.0
     }
+
+    /// Whether a new graphics stack should draw its warm frames: only while hidden (the first
+    /// build and hidden rebuilds). A rebuild while the OSD is on screen skips them, since the
+    /// warm present would blink over the shown frame until the repaint.
+    #[must_use]
+    pub fn wants_prewarm(&self) -> bool {
+        self.is_hidden()
+    }
 }
 
 #[cfg(test)]

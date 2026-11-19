@@ -84,7 +84,9 @@ fn hwnd_of(job: &Job) -> HWND {
 }
 
 /// Builds the graphics objects for `layout` on hardware, then on WARP; logs every failed try.
-/// Each new stack draws two hidden frames first, so the first show is not the first draw.
+/// A new stack built while the OSD is hidden draws two hidden frames first, so the first show
+/// is not the first draw; a rebuild while it is on screen skips them (no blink before the
+/// repaint).
 fn build_stack(job: &Job, layout: &SurfaceLayout, model: &OsdModel) -> Result<Stack, String> {
     for warp in [false, true] {
         match Stack::build(hwnd_of(job), layout, warp) {
@@ -92,17 +94,8 @@ fn build_stack(job: &Job, layout: &SurfaceLayout, model: &OsdModel) -> Result<St
                 for note in stack.take_notes() {
                     job.log.line(&note);
                 }
-                let (label, word) = model.warm_words();
-                let frames = warm_frames(label, word);
-                match stack.prewarm(&frames) {
-                    Ok(ms) => job.log.line(&format!(
-                        "prewarm: osd frames={} draw_ms={ms:.2}",
-                        frames.len()
-                    )),
-                    Err(error) => job.log.line(&format!("prewarm: osd failed: {error}")),
-                }
-                for note in stack.take_notes() {
-                    job.log.line(&note);
+                if model.wants_prewarm() {
+                    prewarm(job, &mut stack, model);
                 }
                 return Ok(stack);
             }
@@ -112,6 +105,22 @@ fn build_stack(job: &Job, layout: &SurfaceLayout, model: &OsdModel) -> Result<St
         }
     }
     Err(String::from("no device: hardware and WARP both failed"))
+}
+
+/// Draws the warm frames on a new `stack` and logs how long they took.
+fn prewarm(job: &Job, stack: &mut Stack, model: &OsdModel) {
+    let (label, word) = model.warm_words();
+    let frames = warm_frames(label, word);
+    match stack.prewarm(&frames) {
+        Ok(ms) => job.log.line(&format!(
+            "prewarm: osd frames={} draw_ms={ms:.2}",
+            frames.len()
+        )),
+        Err(error) => job.log.line(&format!("prewarm: osd failed: {error}")),
+    }
+    for note in stack.take_notes() {
+        job.log.line(&note);
+    }
 }
 
 struct Engine<'a> {

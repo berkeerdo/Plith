@@ -24,7 +24,8 @@ pub const WIDTH: f32 = 300.0;
 pub const HEIGHT: f32 = 40.0;
 /// Bottom corner radius in DIP.
 const RADIUS: f32 = 16.0;
-/// The opacity of a prewarm draw: below one 8-bit alpha step, so nothing shows, yet above zero so
+/// The opacity of a prewarm draw: 0.004 x 255 is about 1.02, so at most one 8-bit alpha step
+/// (1/255, invisible in practice) stays presented until the first show, yet above zero so
 /// Direct2D does not skip the work.
 const WARM_OPACITY: f32 = 0.004;
 /// Side padding in DIP.
