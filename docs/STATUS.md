@@ -48,16 +48,16 @@ Updated 2026-11-18. Rewritten, not appended; old content goes to `journal/`.
 - **Console session 2026-11-18 done** (records in `idle-look-r7.md`, `r7-languages.md`,
   `pages-r4.md`): every motion 240 fps but three in a real-service run during his game; pages
   demo 21 motions 0 hitches; fixture idle 60 s 1 wake; notch survives a display sleep and wake.
-- **Next: the console fix round** (Berke's findings on screen; he said "önerinle devam",
-  so the proposals below are decided). Spec `specs/2026-11-19-console-fix-round-design.md`,
-  plan and log `plans/active/console-fix-round.md` (approved 2026-11-19, subagent route):
-  1. Welcome has no way back after a tab turn: a home mark at the left of the tab row, a new
-     ADR amending 0014.
-  2. Karot pill right `%62` alone does not read as volume: a speaker glyph before it.
-  3. Long playing title in the idle pill: scroll left once on a track change and on hover,
-     then rest at the start with a fade edge (never a looping marquee: idle budget).
-  4. Audio volume ruler and media timeline: a smooth drag, not only a click.
-  5. The first OSD show of each run hitches (cold draw 5.9 and 9.6 ms): prewarm it.
+- **Console fix round: code done, not merged.** Branch `feature/console-fix-round` (worktree
+  `.claude/worktrees/fix-round`, head `9da90fe`): home mark (ADR 0016), speaker glyph, one-shot
+  title scroll, ruler drag, OSD prewarm. Nine task reviews, final review fix wave re-reviewed,
+  1113 tests and five checks green. Helper reinstalled signed 2026-11-19; prewarm line seen
+  over RDP. Spec `specs/2026-11-19-console-fix-round-design.md`; plan, log and two rulings
+  (Turkish pill drops `KULAKLIK`, scroll at display rate) in the branch's
+  `plans/active/console-fix-round.md`.
+- **Next: the fix round console check** (plan Task 10 Step 4, Berke at the PC, not RDP): home
+  mark round trip, glyph look, one scroll then a 60 s idle check, drag on three rulers by his
+  hand, first OSD show `motion` line, a late leave after a drag. Then merge on his yes.
 - Still owed on screen, another day: weather on (his yes) to `OKUMA`; osd Task 9 over a game
   (`--flyout hide`); 20 s ambient on the audio and media page while playing (pages Task 18
   Step 3) and his words on the square-top look (Task 7a Step 5); audio-clarity Task 8 box
