@@ -2,6 +2,9 @@ use super::*;
 use crate::draw::{DisplayList, LiveNode, LiveRail, Node, Rect};
 use crate::scene::Suppression;
 use std::sync::Arc;
+use std::time::Duration;
+
+const NOW: SystemTime = SystemTime::UNIX_EPOCH;
 
 const RECT: Rect = Rect {
     x: 0.0,
@@ -60,16 +63,16 @@ fn divisor_is_at_least_one() {
 #[test]
 fn wants_ambient_needs_expanded_unsuppressed_and_a_live_node_on_the_page() {
     let live = content_live_on(1);
-    assert!(wants_ambient(&expanded(1), &live));
+    assert!(wants_ambient(&expanded(1), &live, NOW));
     assert!(
-        !wants_ambient(&expanded(0), &live),
+        !wants_ambient(&expanded(0), &live, NOW),
         "page 0 has no live node"
     );
     let collapsed = Scene {
         page: 1,
         ..Scene::default()
     };
-    assert!(!wants_ambient(&collapsed, &live));
+    assert!(!wants_ambient(&collapsed, &live, NOW));
     let suppressed = Scene {
         suppression: Suppression {
             fullscreen: true,
@@ -77,14 +80,14 @@ fn wants_ambient_needs_expanded_unsuppressed_and_a_live_node_on_the_page() {
         },
         ..expanded(1)
     };
-    assert!(!wants_ambient(&suppressed, &live));
-    assert!(!wants_ambient(&expanded(1), &PageContent::empty()));
+    assert!(!wants_ambient(&suppressed, &live, NOW));
+    assert!(!wants_ambient(&expanded(1), &PageContent::empty(), NOW));
 }
 
 #[test]
 fn wants_ambient_is_false_for_an_out_of_range_page() {
     let scene = expanded(9);
-    assert!(!wants_ambient(&scene, &content_live_on(3)));
+    assert!(!wants_ambient(&scene, &content_live_on(3), NOW));
 }
 
 #[test]
@@ -100,7 +103,7 @@ fn live_values_default_is_empty_at_the_epoch() {
 #[test]
 fn report_display_is_one_line() {
     let report = AmbientReport {
-        page: 2,
+        target: AmbientTarget::Page(2),
         secs: 12.34,
         frames: 740,
         hitches: 1,
@@ -122,7 +125,7 @@ fn stats_of_a_steady_run_have_no_hitches() {
         stats.record_frame(f64::from(i) * interval, 1.0);
     }
     let report = stats.finish();
-    assert_eq!(report.page, 1);
+    assert_eq!(report.target, AmbientTarget::Page(1));
     assert_eq!(report.frames, 100);
     assert_eq!(report.hitches, 0);
     assert!((report.worst_gap_ms - interval * 1000.0).abs() < 1e-9);
@@ -220,4 +223,100 @@ fn shows_live_needs_a_visible_layer_with_a_live_node() {
         &PageLayers::of(&[layer(0, 1.0)]),
         1.0
     ));
+}
+
+fn pill_scroll(start: SystemTime, run_s: f64) -> PageContent {
+    let mut content = PageContent::empty();
+    content.pill = Arc::new(DisplayList {
+        nodes: vec![Node::Live(LiveNode::Scroll {
+            rect: RECT,
+            text: Arc::from("a long title"),
+            style: crate::draw::TextStyle::Value,
+            ink: crate::draw::Ink::Muted,
+            start,
+            run_s,
+        })],
+        size: (10.0, 10.0),
+    });
+    content
+}
+
+#[test]
+fn ambient_for_pill_scroll_only_until_run_ends() {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(100);
+    let content = pill_scroll(start, 5.0);
+    let collapsed = Scene::default();
+    assert!(wants_ambient(&collapsed, &content, start));
+    let late = start + Duration::from_secs(4);
+    assert!(wants_ambient(&collapsed, &content, late));
+    let done = start + Duration::from_secs(5);
+    assert!(!wants_ambient(&collapsed, &content, done));
+    let suppressed = Scene {
+        suppression: Suppression {
+            fullscreen: true,
+            ..Suppression::default()
+        },
+        ..Scene::default()
+    };
+    assert!(!wants_ambient(&suppressed, &content, start));
+    assert!(
+        !wants_ambient(&expanded(1), &content, start),
+        "an expanded island ignores the pill"
+    );
+}
+
+#[test]
+fn ambient_none_for_pill_without_scroll() {
+    let content = PageContent::empty();
+    assert!(!wants_ambient(&Scene::default(), &content, NOW));
+}
+
+#[test]
+fn ambient_none_when_clock_is_before_start() {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(7200);
+    let content = pill_scroll(start, 5.0);
+    let collapsed = Scene::default();
+    let hour_before = start - Duration::from_secs(3600);
+    assert!(
+        !wants_ambient(&collapsed, &content, hour_before),
+        "a clock that moved back is not a running scroll"
+    );
+    let just_before = start - Duration::from_millis(1);
+    assert!(!wants_ambient(&collapsed, &content, just_before));
+    assert!(wants_ambient(&collapsed, &content, start), "the start runs");
+}
+
+#[test]
+fn pill_report_names_the_pill() {
+    let report = AmbientReport {
+        target: AmbientTarget::Pill,
+        secs: 1.0,
+        frames: 240,
+        hitches: 0,
+        worst_gap_ms: 4.17,
+        draw_p99_ms: 0.3,
+    };
+    assert_eq!(
+        report.to_string(),
+        "ambient: pill 1.0 s, 240 frames, 0 hitches, worst 4.17 ms, draw p99 0.30 ms"
+    );
+}
+
+#[test]
+fn pill_stats_paint_every_tick() {
+    let hz = 240.0;
+    let mut stats = AmbientStats::pill(hz);
+    assert_eq!(stats.divisor(), 1);
+    assert_eq!(
+        AmbientStats::new(2, hz).divisor(),
+        4,
+        "pages keep the divisor"
+    );
+    for i in 0..240_u32 {
+        stats.record_frame(f64::from(i) / hz, 0.5);
+    }
+    let report = stats.finish();
+    assert_eq!(report.target, AmbientTarget::Pill);
+    assert_eq!(report.hitches, 0, "one period apart is no hitch");
+    assert!((report.secs - 1.0).abs() < 1e-9, "secs {}", report.secs);
 }

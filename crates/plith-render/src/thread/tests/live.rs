@@ -2,7 +2,7 @@
 
 use super::expanded;
 use super::harness::*;
-use plith_core::ambient::{AmbientReport, LiveValues};
+use plith_core::ambient::{AmbientReport, AmbientTarget, LiveValues};
 use plith_core::draw::{
     Align, DisplayList, Ink, LiveNode, LiveRail, Node, PageContent, Rect, TextStyle, Trim,
 };
@@ -12,7 +12,7 @@ use plith_core::shapes::{PAGES, REST};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 /// The clock call at which the ambient tests publish their next scene; well after the expand.
 const AT: u64 = 1000;
@@ -250,7 +250,7 @@ fn collapse_stops_ambient_and_reports() {
     assert_eq!(collapse.frames as u64, run.harness.total() - AT);
     run.assert_parked();
     assert_eq!(run.frames().last().map(|f| f.shape), Some(REST));
-    assert_eq!(ambient.page, 0);
+    assert_eq!(ambient.target, AmbientTarget::Page(0));
     assert_eq!(ambient.hitches, 0);
     let interval_ms = 4.0 * PERIOD * 1000.0;
     assert!((ambient.worst_gap_ms - interval_ms).abs() < 1e-6);
@@ -472,6 +472,73 @@ fn content_without_live_nodes_ends_ambient_after_one_frame() {
     );
     assert!(ambient.frames > 100);
     assert!(run.reports.try_recv().is_err(), "no motion line");
+    let _ = run.stop();
+}
+
+/// A pill whose only node is a title scroll started at the fake epoch, running `run_s` seconds.
+fn scroll_pill(run_s: f64) -> Arc<PageContent> {
+    let mut content = PageContent::empty();
+    content.pill = Arc::new(DisplayList {
+        nodes: vec![Node::Live(LiveNode::Scroll {
+            rect: RECT,
+            text: Arc::from("A title far too long for the pill slot"),
+            style: TextStyle::Value,
+            ink: Ink::Muted,
+            start: UNIX_EPOCH,
+            run_s,
+        })],
+        size: (300.0, 40.0),
+    });
+    Arc::new(content)
+}
+
+#[test]
+fn collapsed_scroll_ticks_then_parks() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    // New content on the still, collapsed island: painted once, then the ambient run starts.
+    let _ = run.mailbox.publish_content(scroll_pill(1.0));
+    let ambient = run.ambient_report();
+    run.assert_parked();
+    // 1 s at 240 Hz, painted on every tick (the display rate): the run ends on the first tick
+    // at or past the scroll's end.
+    let calls = run.harness.total();
+    assert!((240..=242).contains(&calls), "{calls} clock waits");
+    assert!(
+        (239..=242).contains(&ambient.frames),
+        "{} ambient frames",
+        ambient.frames
+    );
+    assert_eq!(ambient.target, AmbientTarget::Pill);
+    assert_eq!(ambient.hitches, 0);
+    let period_ms = PERIOD * 1000.0;
+    assert!(
+        (ambient.worst_gap_ms - period_ms).abs() < 1e-6,
+        "one period between frames, worst {}",
+        ambient.worst_gap_ms
+    );
+    assert!(ambient.to_string().starts_with("ambient: pill "));
+    let frames = run.frames();
+    let last = frames.last().expect("painted");
+    assert!(
+        last.live.now >= UNIX_EPOCH + Duration::from_secs(1),
+        "the parting frame is drawn at the end of the run, at rest"
+    );
+    let times: Vec<_> = frames.iter().skip(1).map(|f| f.live.now).collect();
+    assert!(
+        times.windows(2).all(|w| w[1] > w[0]),
+        "each pill frame carries a later wall time"
+    );
+    assert_eq!(
+        run.samples.load(Ordering::SeqCst),
+        0,
+        "the pill samples no levels"
+    );
+    assert!(run.ambient.recv_timeout(QUIET).is_err(), "one ambient line");
+    assert!(run.reports.try_recv().is_err(), "no motion line");
+    let wakes = run.wakes();
+    thread::sleep(Duration::from_millis(200));
+    assert_eq!(run.wakes(), wakes, "no wake after the run");
     let _ = run.stop();
 }
 

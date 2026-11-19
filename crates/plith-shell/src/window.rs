@@ -48,6 +48,29 @@ pub enum ShellEvent {
         /// Vertical island DIP.
         y: f64,
     },
+    /// The left button went down on the island shape, at `(x, y)` island DIP.
+    Press {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
+    /// The pressed pointer moved to a new point past the drag slop, at `(x, y)` island DIP. The
+    /// point is not clamped to the shape and may lie outside the window.
+    Drag {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
+    /// A drag ended (button up or lost capture) at `(x, y)` island DIP, not clamped to the
+    /// shape. A press that never passed the slop ends as a `Click` instead.
+    Release {
+        /// Horizontal island DIP.
+        x: f64,
+        /// Vertical island DIP.
+        y: f64,
+    },
     /// The pointer moved over the window for the first time since it last left.
     Enter,
     /// The pointer moved to a new point inside the drawn island shape, at `(x, y)` DIP relative
@@ -393,7 +416,7 @@ fn dispatch(
             return Some(LRESULT(0));
         }
         WM_CAPTURECHANGED => {
-            inner.press.cancel();
+            mouse::note_capture_lost(inner);
             return Some(LRESULT(0));
         }
         WM_MOUSEMOVE if is_visual => {

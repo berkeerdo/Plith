@@ -276,3 +276,41 @@ fn only_opacity_moves_are_fading() {
     model.apply(&Message::Hide, 0.6);
     assert!(model.is_fading(), "a hide fades out");
 }
+
+#[test]
+fn warm_frames_cover_both_slots() {
+    let frames = warm_frames("Speakers", "STUMM");
+    assert_eq!(frames.len(), 2);
+    for frame in &frames {
+        assert!(frame.opacity.abs() < f32::EPSILON);
+        assert_eq!(frame.label, "Speakers");
+        assert_eq!(frame.muted_word, "STUMM");
+    }
+    assert!((frames[0].level - 1.0).abs() < f32::EPSILON);
+    assert!(!frames[0].muted);
+    assert!(frames[1].muted);
+}
+
+#[test]
+fn warm_words_fall_back_to_defaults() {
+    let mut model = OsdModel::new();
+    assert_eq!(model.warm_words(), ("VOLUME", "MUTED"));
+    model.apply(&volume(40), 0.0);
+    assert_eq!(model.warm_words(), ("Speakers", "STUMM"));
+}
+
+#[test]
+fn prewarm_only_while_hidden() {
+    let mut model = OsdModel::new();
+    assert!(model.wants_prewarm(), "the first build warms");
+    model.apply(&hello(), 0.0);
+    model.apply(&volume(40), 0.0);
+    assert!(model.step(FRAME));
+    assert!(
+        !model.wants_prewarm(),
+        "a rebuild while the OSD shows skips the warm draws"
+    );
+    run(&mut model, FRAME, 3.0);
+    assert!(model.is_hidden());
+    assert!(model.wants_prewarm(), "a hidden rebuild warms again");
+}

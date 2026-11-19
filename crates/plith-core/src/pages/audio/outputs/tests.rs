@@ -241,7 +241,7 @@ fn a_long_name_is_cut_in_the_middle_inside_its_column() {
 fn the_page_has_a_tab_bar_and_the_audio_tab_hit() {
     let page = build(&fixtures::no_voicemeeter());
     assert_eq!(
-        hit(&page.targets, 30.0, 30.0),
+        hit(&page.targets, 64.0, 30.0),
         Some(Action::Tab(crate::pages::PageId::Audio))
     );
 }

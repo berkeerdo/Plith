@@ -69,15 +69,15 @@ fn the_pill_sound_reads_percent_and_kind_or_off() {
     f.pill.state = PillState::Live;
     let kind = sound_head(&f, Lang::Tr).map(|s| s.kind).unwrap_or_default();
     assert!(!kind.is_empty(), "the banana default output has a kind");
-    assert_eq!(
-        idle.idle_facts(&f, at(9, 5, 0)).sound,
-        Some(format!("%62 · {kind}"))
-    );
+    // The kind rides along only when it leaves room for the speaker glyph.
+    let on = idle.idle_facts(&f, at(9, 5, 0)).sound.unwrap();
+    let full = format!("%62 · {kind}");
+    let fits = full.chars().count() <= 12;
+    assert_eq!(on.text, if fits { full } else { "%62".to_string() });
+    assert!(!on.muted);
     f.pill.state = PillState::Muted;
-    assert_eq!(
-        idle.idle_facts(&f, at(9, 5, 0)).sound.as_deref(),
-        Some("KAPALI")
-    );
+    let off = idle.idle_facts(&f, at(9, 5, 0)).sound.unwrap();
+    assert_eq!((off.text.as_str(), off.muted), ("KAPALI", true));
     f.pill.output.clear();
     assert_eq!(
         idle.idle_facts(&f, at(9, 5, 0)).sound,
@@ -249,4 +249,57 @@ fn the_welcome_facts_do_not_change_while_a_track_plays() {
     let a = idle.welcome_facts(&f, at(10, 0, 20));
     let b = idle.welcome_facts(&f, at(10, 0, 40));
     assert_eq!(a, b, "no ticking field in the facts");
+}
+
+/// A wall clock the test moves, in seconds after the epoch.
+fn wall_at(seconds: &Rc<Cell<u64>>) -> Box<dyn Fn() -> SystemTime> {
+    let seconds = Rc::clone(seconds);
+    Box::new(move || SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds.get()))
+}
+
+fn epoch(seconds: u64) -> SystemTime {
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds)
+}
+
+#[test]
+fn track_change_starts_scroll() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut idle = Idle::new(Settings::default(), Lang::En).with_wall(wall_at(&seconds));
+    let f = facts();
+    assert_eq!(idle.idle_facts(&f, at(9, 0, 0)).scroll_start, None);
+    idle.observe(&f, at(9, 0, 0));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 0, 0)).scroll_start,
+        Some(epoch(100))
+    );
+    seconds.set(160);
+    let mut next = f.clone();
+    next.media.title = "Another track".into();
+    idle.observe(&next, at(9, 1, 0));
+    assert_eq!(
+        idle.idle_facts(&next, at(9, 1, 0)).scroll_start,
+        Some(epoch(160))
+    );
+}
+
+#[test]
+fn same_track_keeps_start() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut idle = Idle::new(Settings::default(), Lang::En).with_wall(wall_at(&seconds));
+    let f = facts();
+    idle.observe(&f, at(9, 0, 0));
+    seconds.set(130);
+    idle.observe(&f, at(9, 0, 30));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 0, 30)).scroll_start,
+        Some(epoch(100))
+    );
+    // A pause and a resume of the same track is no change either.
+    idle.observe(&silent(f.clone()), at(9, 1, 0));
+    seconds.set(200);
+    idle.observe(&f, at(9, 1, 10));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 1, 10)).scroll_start,
+        Some(epoch(100))
+    );
 }

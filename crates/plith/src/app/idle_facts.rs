@@ -5,13 +5,16 @@
 use crate::log::Stamp;
 use crate::services::Facts;
 use plith_core::lang::{Lang, Text, date_short, device_kind, text, weekday};
-use plith_core::pages::idle_pill::{IdleFacts, sound_words, weather_words};
+use plith_core::pages::idle_pill::{
+    IdleFacts, SoundWords, sound_words, title_run_s, weather_words,
+};
 use plith_core::pages::pill::PillState;
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::welcome::{SoundHead, WelcomeFacts};
 use plith_core::plays::{Day, PlayLog};
 use plith_core::settings::{IdleLook, OpenOn, Settings};
 use plith_core::weather::{Forecast, Stamp as WeatherStamp};
+use std::time::SystemTime;
 
 /// Writes the play log to disk.
 pub type PlaySaver = Box<dyn Fn(&PlayLog)>;
@@ -25,6 +28,12 @@ pub struct Idle {
     /// The track playing at the last observation, to see when a play closes.
     playing: Option<(String, String)>,
     saver: Option<PlaySaver>,
+    /// The last track the title scroll was started for; a pause keeps it.
+    scroll_track: Option<(String, String)>,
+    /// When the title's one-shot scroll last began.
+    scroll_start: Option<SystemTime>,
+    /// The wall clock the scroll start reads.
+    wall: Box<dyn Fn() -> SystemTime>,
 }
 
 /// The minute of the day and the second of `now`.
@@ -50,6 +59,9 @@ impl Idle {
             forecast: None,
             playing: None,
             saver: None,
+            scroll_track: None,
+            scroll_start: None,
+            wall: Box::new(SystemTime::now),
         }
     }
 
@@ -72,6 +84,13 @@ impl Idle {
             saver: Some(saver),
             ..self
         }
+    }
+
+    /// Replaces the wall clock the scroll start reads.
+    #[cfg(test)]
+    #[must_use]
+    pub fn with_wall(self, wall: Box<dyn Fn() -> SystemTime>) -> Self {
+        Self { wall, ..self }
     }
 
     /// The resting look.
@@ -97,12 +116,11 @@ impl Idle {
     /// ended (a skip, a pause or a stop), never on every call: an open play under ten seconds
     /// is not a play yet. With `plays=off` it does nothing: no history is kept.
     pub fn observe(&mut self, facts: &Facts, now: Stamp) {
+        let track = playing_track(facts);
+        self.note_track(track.as_ref());
         if !self.settings.plays {
             return;
         }
-        let media = &facts.media;
-        let track = (media.has_session && media.playing && !media.title.is_empty())
-            .then(|| (media.title.clone(), media.artist.clone()));
         let (minute, second) = clock_of(now);
         self.plays.observe(
             day_of(now),
@@ -118,6 +136,37 @@ impl Idle {
                 self.save();
             }
         }
+    }
+
+    /// A new playing track starts the title scroll; the same track keeps its start, and a pause
+    /// and resume of it is no change.
+    fn note_track(&mut self, track: Option<&(String, String)>) {
+        if track.is_some() && track != self.scroll_track.as_ref() {
+            self.scroll_track = track.cloned();
+            self.scroll_start = Some((self.wall)());
+        }
+    }
+
+    /// The pointer is over the resting pill: starts the title scroll again when the title
+    /// scrolls at all and no run is under way (`start <= now < start + run`; a start in the
+    /// future after the wall clock stepped back is no run). True when the start changed.
+    pub fn restart_scroll(&mut self, facts: &Facts) -> bool {
+        let Some((title, _)) = playing_track(facts) else {
+            return false;
+        };
+        let Some(run_s) = title_run_s(&title) else {
+            return false;
+        };
+        let now = (self.wall)();
+        let running = self.scroll_start.is_some_and(|start| {
+            now.duration_since(start)
+                .is_ok_and(|elapsed| elapsed.as_secs_f64() < run_s)
+        });
+        if running {
+            return false;
+        }
+        self.scroll_start = Some(now);
+        true
     }
 
     /// Writes the play log now (at exit and when a play closes).
@@ -150,7 +199,6 @@ impl Idle {
             .filter(|_| s.weather)
             .map(|f| weather_words(f, Self::weather_stamp(now), s.unit, self.lang))
             .unwrap_or_default();
-        let media = &facts.media;
         // Allowed: an hour and a minute are below 60.
         #[allow(clippy::cast_possible_truncation)]
         let time = clock_text(now.hour as u8, now.minute as u8);
@@ -158,11 +206,11 @@ impl Idle {
             time,
             turn: words.turn,
             now_sky: words.now_sky,
-            playing: (media.has_session && media.playing && !media.title.is_empty())
-                .then(|| (media.title.clone(), media.artist.clone())),
+            playing: playing_track(facts),
             seal: facts.pill.clone(),
             sound: pill_sound(facts, self.lang),
             lang: self.lang,
+            scroll_start: self.scroll_start,
         }
     }
 
@@ -198,6 +246,13 @@ impl Idle {
     }
 }
 
+/// The playing track as (title, artist); `None` when nothing plays.
+fn playing_track(facts: &Facts) -> Option<(String, String)> {
+    let media = &facts.media;
+    (media.has_session && media.playing && !media.title.is_empty())
+        .then(|| (media.title.clone(), media.artist.clone()))
+}
+
 /// The default output for the sound head slot; `None` while there is none.
 fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
     let pill = &facts.pill;
@@ -222,7 +277,7 @@ fn sound_head(facts: &Facts, lang: Lang) -> Option<SoundHead> {
 
 /// The default output in short for the resting pill (see `sound_words`); `None` while there is
 /// no output or no volume to show.
-fn pill_sound(facts: &Facts, lang: Lang) -> Option<String> {
+fn pill_sound(facts: &Facts, lang: Lang) -> Option<SoundWords> {
     let s = sound_head(facts, lang)?;
     sound_words(s.value, s.muted, &s.kind, text(Text::Off, lang), lang)
 }

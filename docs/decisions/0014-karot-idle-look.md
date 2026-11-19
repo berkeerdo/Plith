@@ -1,6 +1,6 @@
 # 0014 Karot idle look: click opens the welcome view, settings and weather sources
 
-Date: 2026-11-17. Status: accepted. Direction picked by Berke (spec
+Date: 2026-11-17. Status: accepted. Amended by 0016. Direction picked by Berke (spec
 `specs/2026-11-17-idle-look-direction.md`); the points below were decided in the plan
 `plans/done/idle-look-r7.md` and during its execution by the master.
 

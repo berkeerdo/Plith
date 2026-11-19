@@ -1,5 +1,10 @@
 //! Live nodes, drawn every frame on top of the incoming page from the sampled values: meters,
-//! level traces, the seek fill and the elapsed time. Group opacity scales each brush colour's alpha (no layer).
+//! level traces, the seek fill and the elapsed time; and on the pill, the title scroll (`scroll`).
+//! Group opacity scales each brush colour's alpha (no layer).
+
+mod scroll;
+
+pub(crate) use scroll::fade_brush;
 
 use crate::list::ListKit;
 use crate::paint::f;
@@ -8,6 +13,7 @@ use plith_core::ambient::LiveValues;
 use plith_core::draw::{DisplayList, Ink, LiveNode, Node, Rect, SeekTimeline, StationMark, Trim};
 use plith_core::pages::media::elapsed_text;
 use plith_core::theme::Palette;
+use scroll::{ScrollNode, scroll};
 use windows::Win32::Graphics::Direct2D::ID2D1DeviceContext;
 use windows_numerics::Vector2;
 
@@ -58,6 +64,24 @@ pub(crate) fn draw_live(
                 // elapsed text only; the next frame retries.
                 let node = (*rect, shown.as_str(), *style, *align, Trim::End);
                 let _ = kit.text(ctx, text, node, palette.resolve(*ink));
+            }
+            LiveNode::Scroll {
+                rect,
+                text: title,
+                style,
+                ink,
+                start,
+                run_s,
+            } => {
+                let node = ScrollNode {
+                    rect: *rect,
+                    text: title,
+                    style: *style,
+                    rgba: palette.resolve(*ink),
+                    start: *start,
+                    run_s: *run_s,
+                };
+                scroll(ctx, (kit, text), &node, live.now);
             }
         }
     }

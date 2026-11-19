@@ -13,7 +13,7 @@ mod stack;
 
 use crate::band;
 use crate::log::Log;
-use crate::model::OsdModel;
+use crate::model::{OsdModel, warm_frames};
 use motion::MotionTrack;
 use plith_core::clock_choice::ClockKind;
 use plith_core::layout::SurfaceLayout;
@@ -84,12 +84,18 @@ fn hwnd_of(job: &Job) -> HWND {
 }
 
 /// Builds the graphics objects for `layout` on hardware, then on WARP; logs every failed try.
-fn build_stack(job: &Job, layout: &SurfaceLayout) -> Result<Stack, String> {
+/// A new stack built while the OSD is hidden draws two hidden frames first, so the first show
+/// is not the first draw; a rebuild while it is on screen skips them (no blink before the
+/// repaint).
+fn build_stack(job: &Job, layout: &SurfaceLayout, model: &OsdModel) -> Result<Stack, String> {
     for warp in [false, true] {
         match Stack::build(hwnd_of(job), layout, warp) {
             Ok(mut stack) => {
                 for note in stack.take_notes() {
                     job.log.line(&note);
+                }
+                if model.wants_prewarm() {
+                    prewarm(job, &mut stack, model);
                 }
                 return Ok(stack);
             }
@@ -99,6 +105,22 @@ fn build_stack(job: &Job, layout: &SurfaceLayout) -> Result<Stack, String> {
         }
     }
     Err(String::from("no device: hardware and WARP both failed"))
+}
+
+/// Draws the warm frames on a new `stack` and logs how long they took.
+fn prewarm(job: &Job, stack: &mut Stack, model: &OsdModel) {
+    let (label, word) = model.warm_words();
+    let frames = warm_frames(label, word);
+    match stack.prewarm(&frames) {
+        Ok(ms) => job.log.line(&format!(
+            "prewarm: osd frames={} draw_ms={ms:.2}",
+            frames.len()
+        )),
+        Err(error) => job.log.line(&format!("prewarm: osd failed: {error}")),
+    }
+    for note in stack.take_notes() {
+        job.log.line(&note);
+    }
 }
 
 struct Engine<'a> {
@@ -124,7 +146,8 @@ struct Engine<'a> {
 /// Returns the failing call (device on hardware and WARP, clock or a non-loss draw error).
 pub fn run(job: &Job) -> Result<(), String> {
     let _exit = ExitPost(job.hwnd);
-    let stack = build_stack(job, &job.layout)?;
+    let model = OsdModel::new();
+    let stack = build_stack(job, &job.layout, &model)?;
     let clock = open_clock(ClockKind::Dcomp, job.origin, 0, job.hz)
         .map_err(|e| format!("open_clock(dcomp): {e}"))?;
     job.log.line(&format!(
@@ -139,7 +162,7 @@ pub fn run(job: &Job) -> Result<(), String> {
         relayout: None,
         stack: Some(stack),
         clock,
-        model: OsdModel::new(),
+        model,
         client: None,
         track: MotionTrack::default(),
         stats: None,
@@ -350,7 +373,9 @@ impl Engine<'_> {
         };
         self.layout = layout;
         self.stack = None;
-        let stack = self.stack.insert(build_stack(self.job, &self.layout)?);
+        let stack = self
+            .stack
+            .insert(build_stack(self.job, &self.layout, &self.model)?);
         self.job.log.line(&format!(
             "osd relayout rebuilt: warp={} {}x{} scale={}",
             stack.is_warp(),
@@ -385,7 +410,9 @@ impl Engine<'_> {
                     .log
                     .line(&format!("osd device lost ({error}), rebuilding"));
                 self.stack = None;
-                let stack = self.stack.insert(build_stack(self.job, &self.layout)?);
+                let stack = self
+                    .stack
+                    .insert(build_stack(self.job, &self.layout, &self.model)?);
                 self.job
                     .log
                     .line(&format!("osd device rebuilt: warp={}", stack.is_warp()));

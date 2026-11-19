@@ -12,6 +12,7 @@ use plith_core::pages::welcome::{SoundHead, WelcomeFacts, welcome_page};
 use plith_core::plays::Play;
 use plith_core::settings::{HeadSlot, IdleLook, RunSpan, TempUnit};
 use plith_core::weather::{Day, Forecast, Hour, Sky, Stamp};
+use std::time::Duration;
 
 /// The fixed day of every render.
 const DAY: Day = (2026, 11, 17);
@@ -22,6 +23,10 @@ const NOW_HOUR: u8 = 14;
 const NOW_MINUTE: u8 = 32;
 /// The kind of the default output.
 const KIND: DeviceKind = DeviceKind::Headphones;
+/// A playing title too long for the Karot slot.
+const LONG_TITLE: &str = "Midnight City (Eric Prydz Private Remix)";
+/// Seconds into the scroll run of the mid-run render: past the first hold, travelling left.
+const SCROLL_MID_S: f64 = 2.0;
 
 fn play(start_min: u32, end_min: u32, title: &str, artist: &str) -> Play {
     Play {
@@ -126,6 +131,7 @@ fn idle_facts(lang: Lang) -> IdleFacts {
             lang,
         ),
         lang,
+        scroll_start: None,
     }
 }
 
@@ -172,6 +178,8 @@ pub fn states(lang: Lang) -> Vec<(String, Vec<Content>)> {
     no_weather.now_sky = None;
     let mut silent = no_weather.clone();
     silent.playing = None;
+    let mut scroll_facts = no_weather.clone();
+    scroll_facts.playing = Some((LONG_TITLE.into(), "M83".into()));
     for (name, f) in [
         ("pill-karot-track", no_weather),
         ("pill-karot-sound", silent),
@@ -182,5 +190,24 @@ pub fn states(lang: Lang) -> Vec<(String, Vec<Content>)> {
             vec![Content::Pill(list, rest_shape(IdleLook::Karot))],
         ));
     }
+    out.extend(scroll_states(&scroll_facts));
     out
+}
+
+/// A long playing title as a title scroll: at rest (started at the render's wall time) and
+/// mid-run (started `SCROLL_MID_S` before it, while the title travels left).
+fn scroll_states(facts: &IdleFacts) -> Vec<(String, Vec<Content>)> {
+    let now = fixtures::live_values().now;
+    let at = |elapsed: f64| {
+        let mut f = facts.clone();
+        f.scroll_start = now.checked_sub(Duration::from_secs_f64(elapsed));
+        vec![Content::Pill(
+            idle_pill(IdleLook::Karot, &f),
+            rest_shape(IdleLook::Karot),
+        )]
+    };
+    vec![
+        ("pill-karot-scroll-rest".into(), at(0.0)),
+        ("pill-karot-scroll-mid".into(), at(SCROLL_MID_S)),
+    ]
 }

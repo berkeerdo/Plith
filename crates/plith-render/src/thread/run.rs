@@ -25,6 +25,7 @@ use plith_core::tuning::TuningSet;
 use prewarm::Reason;
 use std::panic::{AssertUnwindSafe, catch_unwind};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::time::SystemTime;
 
 /// State shared between the render loop and its owner: the wake counter and the stop flag.
 #[derive(Debug, Default)]
@@ -69,6 +70,8 @@ pub struct LoopParts<P, O, N> {
     pub open_clock: O,
     /// Raw seconds since the origin the clocks also use.
     pub now: N,
+    /// Wall time, for the title scroll's run (`SystemTime::now` outside tests).
+    pub wall: Box<dyn Fn() -> SystemTime>,
     /// Clock kinds to try, best first; the last one is never demoted.
     pub order: Vec<ClockKind>,
     /// Nominal display refresh rate.
@@ -125,6 +128,7 @@ pub fn run_loop<C, P, O, N>(
         paint: parts.paint,
         clocks: Clocks::new(parts.open_clock, parts.order),
         now: parts.now,
+        wall: parts.wall,
         wait_ms: 0.0,
         hz: parts.hz,
         period: 1.0 / parts.hz,

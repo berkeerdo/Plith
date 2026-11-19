@@ -65,6 +65,19 @@ impl Feed {
         }
     }
 
+    /// The pointer is over the resting pill: a finished title scroll starts again, and the pill
+    /// is republished only when that changed its list.
+    pub fn hover_pill(&mut self, mailbox: &SceneMailbox) {
+        let restarted = self
+            .idle
+            .as_mut()
+            .is_some_and(|idle| idle.restart_scroll(&self.facts));
+        if restarted {
+            let dirty = self.refresh_idle();
+            self.apply(dirty, mailbox);
+        }
+    }
+
     /// A forecast that arrived since the last call goes to the model; true when it is new.
     pub(super) fn take_forecast(&mut self) -> bool {
         let Some(forecast) = self.weather.as_mut().and_then(WeatherLink::take) else {

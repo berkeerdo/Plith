@@ -4,7 +4,7 @@
 //! follow the mock's baselines: the top of a rect is the baseline minus the font size.
 
 use super::tabbar::tabbar;
-use super::{PAGE_W, PageBuild};
+use super::{PAGE_W, PageBuild, PageId};
 use crate::draw::DisplayList;
 use crate::lang::Lang;
 use crate::plays::Play;
@@ -84,7 +84,7 @@ pub fn welcome_page(f: &WelcomeFacts, probe: Option<i32>) -> PageBuild {
     let weather = Weather::of(f);
     let hide_label =
         probe.is_none() && f.playing && head::slot(f, weather.as_ref()) == HeadSlot::Playing;
-    let (mut nodes, targets) = tabbar(None, "", f.lang);
+    let (mut nodes, targets) = tabbar(Some(PageId::Welcome), "", f.lang);
     nodes.extend(head::head(f, weather.as_ref(), probe));
     nodes.extend(run::run(f, weather.as_ref(), probe, hide_label));
     PageBuild {

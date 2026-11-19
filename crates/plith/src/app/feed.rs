@@ -2,6 +2,7 @@
 //! the tab bar current while the island is open. Collapsed, no timer runs (G2). The elapsed
 //! time and the seek are live nodes, so no timer rebuilds the media page.
 
+pub mod drag;
 mod idle;
 mod osd;
 
@@ -132,6 +133,8 @@ pub struct Feed {
     weather: Option<WeatherLink>,
     /// The interface language, resolved once at start for every run mode.
     lang: Lang,
+    /// The value a ruler drag shows until the reading catches up.
+    drag: Option<drag::Override>,
 }
 
 impl Feed {
@@ -176,6 +179,7 @@ impl Feed {
             idle_facts: None,
             weather: None,
             lang,
+            drag: None,
         };
         feed.publish(mailbox);
         feed
@@ -192,8 +196,9 @@ impl Feed {
         if !route_allowed(self.pick_mixer, self.mixer()) {
             self.pick = PickMode::None;
         }
+        let shown = self.shown_facts();
         let inputs = Inputs {
-            facts: &self.facts,
+            facts: shown.as_ref().unwrap_or(&self.facts),
             pick: self.pick,
             clock: &self.clock_text,
             welcome: self.welcome.as_ref(),
@@ -234,7 +239,9 @@ impl Feed {
             if media {
                 self.observe_plays();
             }
-            let dirty = dirty.union(self.refresh_idle());
+            let dirty = dirty
+                .union(self.refresh_idle())
+                .union(self.settle_override());
             self.apply(dirty, mailbox);
         }
         // The first drain takes the baseline even when no change is reported; later drains

@@ -23,7 +23,7 @@ use std::fmt;
 use std::sync::mpsc::{self, SyncSender};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::Instant;
+use std::time::{Instant, SystemTime};
 use windows::Win32::Foundation::{HANDLE, HWND};
 use windows::Win32::System::Threading::{
     AvRevertMmThreadCharacteristics, AvSetMmThreadCharacteristicsW,
@@ -277,6 +277,7 @@ fn render_main(
                 paint,
                 open_clock: |kind| open_clock(kind, origin, config.monitor, config.hz),
                 now: || seconds_since(origin),
+                wall: Box::new(SystemTime::now),
                 order: clock_order(config.clock, config.remote),
                 hz: config.hz,
                 layout: config.layout,

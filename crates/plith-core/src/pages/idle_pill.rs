@@ -3,13 +3,18 @@
 //! Positions come from `pill(kind)` in `docs/design/r7/karot.html` (200 x 32 DIP). Strings
 //! arrive preformatted from the app, so nothing here reads the text table.
 
+use super::audio::DeviceKind;
+use super::glyphs;
 use super::kit::{rect, station, text};
 use super::pill::{PillFacts, pill};
-use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
+use crate::draw::{Align, DisplayList, Ink, LiveNode, Node, StationMark, TextStyle};
 use crate::geometry::IslandShape;
 use crate::lang::{Lang, percent};
+use crate::scroll::scroll_run_s;
 use crate::settings::IdleLook;
 use crate::shapes;
+use std::sync::Arc;
+use std::time::SystemTime;
 
 mod weather;
 pub use weather::{WeatherWords, weather_words};
@@ -28,9 +33,11 @@ pub struct IdleFacts {
     /// The facts of the R3 seal.
     pub seal: PillFacts,
     /// The default output in short, for example `%62 · KULAKLIK` or `KAPALI`.
-    pub sound: Option<String>,
+    pub sound: Option<SoundWords>,
     /// The interface language.
     pub lang: Lang,
+    /// When the playing title's one-shot scroll began; `None` while none runs.
+    pub scroll_start: Option<SystemTime>,
 }
 
 /// Left padding of the time.
@@ -49,8 +56,27 @@ pub(crate) const TURN_W: f64 = 112.0;
 /// Martian Mono at 10 DIP with the tracking: a conservative advance per character.
 const VALUE_ADVANCE: f64 = 7.6;
 
+/// Gap between the speaker glyph and the text.
+const GLYPH_GAP: f64 = 4.0;
+/// How far the capitals of Martian Mono at 10 DIP sit above the centre of the text box: the
+/// box holds the descender too. Measured on screen 2026-11-19: caps on rows 11 to 18 of a box
+/// centred on 16, so a glyph centred on the box sat 1 DIP low.
+const CAP_RISE: f64 = 1.0;
+/// Room the speaker glyph takes from the right-hand box.
+pub(crate) const GLYPH_ROOM: f64 = glyphs::GLYPH + GLYPH_GAP;
+
+/// The default output in short for the Karot right side, and whether it is the off word.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SoundWords {
+    /// `%62 · kind`, `%62`, or the off word.
+    pub text: String,
+    /// True when `text` is the off word: it gets no speaker glyph.
+    pub muted: bool,
+}
+
 /// The default output in short for the Karot right side: `off` when muted, else `%62 · kind`,
-/// or only `%62` when the kind is empty or would not fit the box. `None` without a volume.
+/// or only `%62` when the kind is empty or would not leave room for the glyph. `None` without a
+/// volume.
 #[must_use]
 pub fn sound_words(
     value: Option<u8>,
@@ -58,19 +84,24 @@ pub fn sound_words(
     kind: &str,
     off: &str,
     lang: Lang,
-) -> Option<String> {
+) -> Option<SoundWords> {
     if muted {
-        return Some(off.to_string());
+        return Some(SoundWords {
+            text: off.to_string(),
+            muted: true,
+        });
     }
     let short = percent(value?, lang);
-    if kind.is_empty() {
-        return Some(short);
-    }
     let full = format!("{short} · {kind}");
     // Allowed: a few dozen characters at most.
     #[allow(clippy::cast_precision_loss)]
     let needed = full.chars().count() as f64 * VALUE_ADVANCE;
-    Some(if needed <= TURN_W { full } else { short })
+    let text = if kind.is_empty() || needed > TURN_W - GLYPH_ROOM {
+        short
+    } else {
+        full
+    };
+    Some(SoundWords { text, muted: false })
 }
 
 /// The display list of the resting pill for `look`.
@@ -108,13 +139,79 @@ pub fn rest_shape(look: IdleLook) -> IslandShape {
 }
 
 /// The Karot right-hand text, like the welcome head's `Auto` slot: the weather when it is on,
-/// else the playing title, else the default output.
-fn karot_right(f: &IdleFacts) -> Option<&String> {
-    f.turn
-        .as_ref()
-        .or(f.now_sky.as_ref())
-        .or(f.playing.as_ref().map(|(title, _)| title))
-        .or(f.sound.as_ref())
+/// else the playing title, else the default output (the only one that wears the speaker glyph,
+/// unless it is the off word).
+fn karot_right(f: &IdleFacts) -> Option<Right<'_>> {
+    let plain = |text, title| {
+        Some(Right {
+            text,
+            glyph: false,
+            title,
+        })
+    };
+    if let Some(s) = f.turn.as_ref().or(f.now_sky.as_ref()) {
+        return plain(s, false);
+    }
+    if let Some((title, _)) = &f.playing {
+        return plain(title, true);
+    }
+    f.sound.as_ref().map(|s| Right {
+        text: &s.text,
+        glyph: !s.muted,
+        title: false,
+    })
+}
+
+/// The Karot right-hand text, and what wraps it.
+struct Right<'a> {
+    text: &'a String,
+    /// Wears the speaker glyph.
+    glyph: bool,
+    /// Is the playing title, the only text that may scroll.
+    title: bool,
+}
+
+/// How far the right-hand `text` overflows its box, `None` when it fits.
+fn title_overflow(text: &str) -> Option<f64> {
+    // Allowed: a few dozen characters at most.
+    #[allow(clippy::cast_precision_loss)]
+    let overflow = text.chars().count() as f64 * VALUE_ADVANCE - TURN_W;
+    (overflow > 0.0).then_some(overflow)
+}
+
+/// The seconds a scroll of the playing `title` takes, `None` when it fits its box and never
+/// scrolls.
+#[must_use]
+pub fn title_run_s(title: &str) -> Option<f64> {
+    title_overflow(title).map(scroll_run_s)
+}
+
+/// The right-hand title as a one-shot scroll when it is too long for its box and a scroll was
+/// started; `None` when it fits or no scroll runs (plain text, cut at the end).
+fn title_scroll(text: &str, y: f64, start: Option<SystemTime>) -> Option<Node> {
+    let overflow = title_overflow(text)?;
+    Some(Node::Live(LiveNode::Scroll {
+        rect: rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
+        text: Arc::from(text),
+        style: TextStyle::Value,
+        ink: Ink::Muted,
+        start: start?,
+        run_s: scroll_run_s(overflow),
+    }))
+}
+
+/// The speaker glyph left of the right-aligned `text`, centred on its capitals.
+fn speaker_before(text: &str, y: f64) -> Vec<Node> {
+    // Allowed: a few dozen characters at most.
+    #[allow(clippy::cast_precision_loss)]
+    let width = text.chars().count() as f64 * VALUE_ADVANCE;
+    let x = RIGHT_EDGE - width - GLYPH_ROOM;
+    glyphs::glyph(
+        DeviceKind::Speaker,
+        x,
+        y + TEXT_H / 2.0 - CAP_RISE - glyphs::GLYPH / 2.0,
+        Ink::Muted,
+    )
 }
 
 fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
@@ -125,14 +222,24 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
         Ink::Ink,
         Align::Start,
     )];
-    if let Some(right) = karot_right(f) {
-        nodes.push(text(
+    let Some(right) = karot_right(f) else {
+        return nodes;
+    };
+    let scroll = right
+        .title
+        .then(|| title_scroll(right.text, y, f.scroll_start))
+        .flatten();
+    nodes.push(scroll.unwrap_or_else(|| {
+        text(
             rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
-            right,
+            right.text,
             TextStyle::Value,
             Ink::Muted,
             Align::End,
-        ));
+        )
+    }));
+    if right.glyph {
+        nodes.extend(speaker_before(right.text, y));
     }
     nodes
 }

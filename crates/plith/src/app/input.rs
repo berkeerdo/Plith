@@ -103,11 +103,18 @@ impl App {
         self.scene_changed();
     }
 
-    /// The pointer moved inside the island shape. Only an open island showing the welcome view
-    /// reads it: the hour under the pointer becomes the probe. No timer, no hover-open.
+    /// The pointer moved inside the island shape. A shown collapsed island restarts a finished
+    /// title scroll. An open island showing the welcome view reads the hour under the pointer
+    /// as the probe. No timer, no hover-open.
     pub(super) fn on_move(&mut self, x: f64, y: f64) {
         let scene = self.mailbox.latest().scene;
-        if !scene.expanded || scene.page != PageId::Welcome.index() {
+        if !scene.expanded {
+            if let (false, Some(feed)) = (scene.suppression.any(), self.feed.as_mut()) {
+                feed.hover_pill(&self.mailbox);
+            }
+            return;
+        }
+        if scene.page != PageId::Welcome.index() {
             return;
         }
         if let Some(feed) = self.feed.as_mut() {
@@ -188,6 +195,10 @@ impl App {
     }
 }
 
+pub(super) mod drag;
+#[cfg(test)]
+mod drag_tests;
+
 #[cfg(test)]
 mod tests;
 
@@ -215,7 +226,8 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         Action::Next => feed.services().next(),
         Action::Previous => feed.services().previous(),
         Action::Seek(fraction) => {
-            let Some(timeline) = feed.facts().media.timeline else {
+            // No session, or a track with no length: nothing to scale the fraction by.
+            let Some(timeline) = feed.facts().media.timeline.filter(|t| t.duration_s > 0.0) else {
                 return;
             };
             let seconds = timeline.duration_s * fraction.clamp(0.0, 1.0);

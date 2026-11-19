@@ -10,7 +10,7 @@ use crate::draw::TextStyle;
 use crate::pages::audio::{
     CUT_LABEL_W, DeviceKind, OUTPUT_NAME_W, SOURCE_NAME_W, VALUE_CHAR_W, VALUE_SLACK,
 };
-use crate::pages::idle_pill::{TURN_W, sound_words};
+use crate::pages::idle_pill::{GLYPH_ROOM, TURN_W, sound_words};
 use crate::pages::system::{CUT_FROM, CUT_TO, LABEL_W, RIGHT, VALUE_W as VALUE_BOX_W, X0};
 use crate::pages::tabbar::LABEL_W as TAB_W;
 use crate::pages::welcome::{LINE_W, RUN_LABEL_W};
@@ -229,9 +229,9 @@ fn pill_places(lang: Lang) -> Vec<Place> {
         if let Some(s) = sound_words(Some(100), false, words, off, lang) {
             out.push(place(
                 &format!("pill sound {kind:?}"),
-                s,
+                s.text,
                 value,
-                Budget::Dip(TURN_W),
+                Budget::Dip(TURN_W - GLYPH_ROOM),
             ));
         }
     }

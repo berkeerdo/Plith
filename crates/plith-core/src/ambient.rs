@@ -1,11 +1,11 @@
 //! The ambient tick: when the open island repaints without motion (meters, seek fill), how
 //! often, the values sampled for it, and its `ambient` log line.
 
-use crate::draw::{DisplayList, LiveRail, Node, PageContent};
+use crate::draw::{DisplayList, LiveNode, LiveRail, Node, PageContent};
 use crate::page::PageLayers;
 use crate::scene::Scene;
 use std::fmt;
-use std::time::SystemTime;
+use std::time::{Duration, SystemTime};
 
 /// A gap between ambient frames above this many ambient intervals is a hitch.
 const HITCH_INTERVALS: f64 = 1.5;
@@ -28,17 +28,34 @@ pub fn ambient_divisor(hz: f64) -> u32 {
     divisor
 }
 
-/// True when the settled island needs ambient frames: it is expanded, nothing suppresses it and
-/// the visible page's display list has a live node.
+/// True when the settled island needs ambient frames and nothing suppresses it: it is expanded
+/// and the visible page's display list has a live node, or it is collapsed and the pill has a
+/// title scroll running at `now` (`start <= now < start + run_s`).
 #[must_use]
-pub fn wants_ambient(scene: &Scene, content: &PageContent) -> bool {
-    if !scene.expanded || scene.suppression.any() {
+pub fn wants_ambient(scene: &Scene, content: &PageContent, now: SystemTime) -> bool {
+    if scene.suppression.any() {
         return false;
     }
-    content
-        .pages
-        .get(scene.page)
-        .is_some_and(|list| has_live(list))
+    if scene.expanded {
+        return content
+            .pages
+            .get(scene.page)
+            .is_some_and(|list| has_live(list));
+    }
+    content.pill.nodes.iter().any(|node| match node {
+        Node::Live(LiveNode::Scroll { start, run_s, .. }) => scroll_running(*start, *run_s, now),
+        _ => false,
+    })
+}
+
+/// True while `start <= now < start + run_s`. A `now` before `start` (the wall clock stepped
+/// back) is not running: the painter draws the rest offset there, so frames would show nothing
+/// new for as long as the step.
+fn scroll_running(start: SystemTime, run_s: f64, now: SystemTime) -> bool {
+    let Ok(run) = Duration::try_from_secs_f64(run_s) else {
+        return false;
+    };
+    now.duration_since(start).is_ok_and(|elapsed| elapsed < run)
 }
 
 fn has_live(list: &DisplayList) -> bool {
@@ -102,11 +119,30 @@ impl LiveValues {
     }
 }
 
+/// What an ambient run painted: a page of the open island, or the collapsed pill's title
+/// scroll.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum AmbientTarget {
+    /// The open island showing this page; painted every `ambient_divisor(hz)`-th tick.
+    Page(usize),
+    /// The collapsed pill's title scroll; painted every tick, at the display rate.
+    Pill,
+}
+
+impl fmt::Display for AmbientTarget {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Page(page) => write!(f, "page {page}"),
+            Self::Pill => f.write_str("pill"),
+        }
+    }
+}
+
 /// Final numbers of one ambient run, ready to log.
 #[derive(Debug, Clone, PartialEq)]
 pub struct AmbientReport {
-    /// The page shown.
-    pub page: usize,
+    /// What the run painted.
+    pub target: AmbientTarget,
     /// Seconds from the first ambient frame to one interval after the last.
     pub secs: f64,
     /// Frames painted.
@@ -123,8 +159,8 @@ impl fmt::Display for AmbientReport {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(
             f,
-            "ambient: page {} {:.1} s, {} frames, {} hitches, worst {:.2} ms, draw p99 {:.2} ms",
-            self.page, self.secs, self.frames, self.hitches, self.worst_gap_ms, self.draw_p99_ms
+            "ambient: {} {:.1} s, {} frames, {} hitches, worst {:.2} ms, draw p99 {:.2} ms",
+            self.target, self.secs, self.frames, self.hitches, self.worst_gap_ms, self.draw_p99_ms
         )
     }
 }
@@ -132,7 +168,8 @@ impl fmt::Display for AmbientReport {
 /// Collects the frames of one ambient run in fixed memory, however long it lasts.
 #[derive(Debug, Clone)]
 pub struct AmbientStats {
-    page: usize,
+    target: AmbientTarget,
+    divisor: u32,
     interval: f64,
     first: f64,
     last: f64,
@@ -143,12 +180,24 @@ pub struct AmbientStats {
 }
 
 impl AmbientStats {
-    /// Starts collecting for `page` on a display of `hz`.
+    /// Starts collecting for `page` on a display of `hz`, painted at the ambient rate.
     #[must_use]
     pub fn new(page: usize, hz: f64) -> Self {
+        Self::of(AmbientTarget::Page(page), ambient_divisor(hz), hz)
+    }
+
+    /// Starts collecting for the collapsed pill's title scroll on a display of `hz`, painted on
+    /// every tick so the scroll moves at the display rate.
+    #[must_use]
+    pub fn pill(hz: f64) -> Self {
+        Self::of(AmbientTarget::Pill, 1, hz)
+    }
+
+    fn of(target: AmbientTarget, divisor: u32, hz: f64) -> Self {
         Self {
-            page,
-            interval: f64::from(ambient_divisor(hz)) / hz,
+            target,
+            divisor,
+            interval: f64::from(divisor) / hz,
             first: 0.0,
             last: 0.0,
             frames: 0,
@@ -175,6 +224,13 @@ impl AmbientStats {
         self.draw_bins[bin] = self.draw_bins[bin].saturating_add(1);
     }
 
+    /// Clock ticks per painted frame in this run: 1 for the pill, `ambient_divisor(hz)` for a
+    /// page.
+    #[must_use]
+    pub fn divisor(&self) -> u32 {
+        self.divisor
+    }
+
     /// Frames recorded so far.
     #[must_use]
     pub fn frames(&self) -> usize {
@@ -190,7 +246,7 @@ impl AmbientStats {
             self.last - self.first + self.interval
         };
         AmbientReport {
-            page: self.page,
+            target: self.target,
             secs,
             frames: self.frames,
             hitches: self.hitches,

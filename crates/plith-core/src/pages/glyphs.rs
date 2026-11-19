@@ -33,6 +33,26 @@ pub fn glyph(kind: DeviceKind, x: f64, y: f64, ink: Ink) -> Vec<Node> {
     nodes
 }
 
+/// The home mark: a roof over a walled house with a door, box origin at (`x`, `y`).
+#[must_use]
+pub(crate) fn home(x: f64, y: f64, ink: Ink) -> Vec<Node> {
+    let strokes = [
+        vec![(1.5, 8.0), (8.0, 2.0), (14.5, 8.0)],
+        vec![(3.5, 7.0), (3.5, 14.0), (12.5, 14.0), (12.5, 7.0)],
+        vec![(6.5, 14.0), (6.5, 10.0), (9.5, 10.0), (9.5, 14.0)],
+    ];
+    strokes
+        .into_iter()
+        .map(|pts| {
+            line(
+                pts.into_iter().map(|p| (p.0 + x, p.1 + y)).collect(),
+                WIDTH,
+                ink,
+            )
+        })
+        .collect()
+}
+
 /// Points of an arc around (`cx`, `cy`) from `from` to `to` degrees (0 is right, 90 is up).
 fn arc(cx: f64, cy: f64, r: f64, from: f64, to: f64) -> Vec<(f64, f64)> {
     (0..=ARC_STEPS)
