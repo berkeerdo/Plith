@@ -1,6 +1,8 @@
 //! The UI-thread state of the app: one [`App`] reached by the shell handler and the panic hook.
 
+use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
+use super::input::drag::ActiveDrag;
 use super::wire::raised_line;
 use crate::log::LogFile;
 use crate::osd::OsdSink;
@@ -49,6 +51,8 @@ pub struct App {
     pub(super) collapse: CollapseTimer,
     /// Scene steps from the demo thread, applied on the next wake.
     pub(super) demo: Option<Receiver<DemoStep>>,
+    /// The ruler drag under way, from the press to the release.
+    pub(super) drag: Option<ActiveDrag>,
 }
 
 impl App {
@@ -72,6 +76,7 @@ impl App {
             now: Box::new(move || origin.elapsed().as_secs_f64()),
             collapse: CollapseTimer::default(),
             demo: None,
+            drag: None,
         }
     }
 
@@ -135,8 +140,15 @@ impl App {
                 self.close_render();
             }
             ShellEvent::Click { x, y } => self.on_click(x, y),
-            // Consumed by the drag handling later; ignored until then.
-            ShellEvent::Press { .. } | ShellEvent::Drag { .. } | ShellEvent::Release { .. } => {}
+            ShellEvent::Press { x, y } => self.on_press(x, y),
+            ShellEvent::Drag { x, y } => self.on_drag(x, y),
+            ShellEvent::Release { x, y } => self.on_release(x, y),
+            ShellEvent::Timer(DRAG_TIMER) => {
+                let now = (self.now)();
+                if let Some(feed) = &mut self.feed {
+                    feed.on_drag_timer(now, &self.mailbox);
+                }
+            }
             ShellEvent::Enter => self.on_enter(),
             ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),

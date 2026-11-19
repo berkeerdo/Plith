@@ -188,6 +188,10 @@ impl App {
     }
 }
 
+pub(super) mod drag;
+#[cfg(test)]
+mod drag_tests;
+
 #[cfg(test)]
 mod tests;
 
