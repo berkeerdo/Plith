@@ -427,6 +427,19 @@ impl TextSystem {
         self.cache.insert(key, layout.clone());
         Ok(layout)
     }
+
+    /// The cached layout of the whole of `text` on one unbounded line, and its width in DIP.
+    /// The same lifetime rule as [`Self::layout`] holds.
+    ///
+    /// # Errors
+    /// Returns the failing DirectWrite call.
+    pub fn line(&mut self, text: &str, style: TextStyle) -> Result<(IDWriteTextLayout, f32)> {
+        let layout = self.layout(text, style, UNBOUNDED, Trim::Middle)?;
+        let mut metrics = DWRITE_TEXT_METRICS::default();
+        // SAFETY: the out pointer refers to a live local.
+        unsafe { layout.GetMetrics(&raw mut metrics)? };
+        Ok((layout, metrics.widthIncludingTrailingWhitespace))
+    }
 }
 
 impl Drop for TextSystem {

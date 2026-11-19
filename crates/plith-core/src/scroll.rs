@@ -40,5 +40,17 @@ pub fn scroll_run_s(overflow: f64) -> f64 {
     2.0 * SCROLL_HOLD_S + 2.0 * overflow / SCROLL_SPEED
 }
 
+/// The offset for a run of `run_s` seconds (planned by [`scroll_run_s`] from an estimate) when
+/// the painter measured `overflow` DIP: the travel is the shorter of the two, so the text never
+/// moves past its end nor is still away from home when the run is over. 0 outside the run.
+#[must_use]
+pub fn scroll_offset_in_run(elapsed_s: f64, run_s: f64, overflow: f64) -> f64 {
+    if run_s.is_nan() || elapsed_s.is_nan() || elapsed_s >= run_s {
+        return 0.0;
+    }
+    let planned = (run_s - 2.0 * SCROLL_HOLD_S) * SCROLL_SPEED / 2.0;
+    scroll_offset(elapsed_s, overflow.min(planned))
+}
+
 #[cfg(test)]
 mod tests;

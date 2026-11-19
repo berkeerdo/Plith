@@ -8,7 +8,7 @@ use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::ambient::{LiveValues, shows_live, wants_ambient};
 use plith_core::clock_choice::ClockKind;
-use plith_core::draw::{DisplayList, PageContent};
+use plith_core::draw::{DisplayList, Node, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
@@ -28,6 +28,8 @@ pub(super) struct Engine<'a, C, P, O, N> {
     pub(super) paint: P,
     pub(super) clocks: Clocks<C, O>,
     pub(super) now: N,
+    /// Wall time, for the title scroll's run.
+    pub(super) wall: Box<dyn Fn() -> SystemTime>,
     pub(super) wait_ms: f64,
     pub(super) hz: f64,
     pub(super) period: f64,
@@ -87,6 +89,11 @@ fn same_art(a: &PageContent, b: &PageContent) -> bool {
     a.art.len() == b.art.len() && a.art.iter().zip(&b.art).all(|(x, y)| Arc::ptr_eq(x, y))
 }
 
+/// True when `list` has a live node.
+fn has_live(list: &DisplayList) -> bool {
+    list.nodes.iter().any(|node| matches!(node, Node::Live(_)))
+}
+
 pub(super) fn content_target(scene: Scene) -> f64 {
     if scene.expanded { 1.0 } else { 0.0 }
 }
@@ -135,7 +142,7 @@ where
 
     /// True when the settled island should tick ambient frames.
     pub(super) fn wants_ambient(&self) -> bool {
-        wants_ambient(&self.scene, &self.page_content, SystemTime::now())
+        wants_ambient(&self.scene, &self.page_content, (self.wall)())
     }
 
     /// Back to the preferred clock with a fresh phase lock, before a motion or an ambient run.
@@ -252,17 +259,21 @@ where
     }
 
     /// Paints the current state, with live values sampled once when a visible page layer has a
-    /// live node (the default values otherwise). After a failed paint and a successful `recover`, the same
+    /// live node (the default values otherwise), and the wall time when the visible pill has
+    /// one (the title scroll). After a failed paint and a successful `recover`, the same
     /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
     pub(super) fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
         let shape = self.island.shape();
         let pages = self.pages.layers();
         let content_opacity = opacity_f32(self.content.value());
-        let live = if shows_live(&self.page_content, &pages, f64::from(content_opacity)) {
+        let mut live = if shows_live(&self.page_content, &pages, f64::from(content_opacity)) {
             (self.sinks.sample)()
         } else {
             LiveValues::default()
         };
+        if content_opacity < 1.0 && has_live(&self.page_content.pill) {
+            live.now = (self.wall)();
+        }
         let frame = PaintFrame {
             shape,
             origin: self.layout.island_origin(shape),

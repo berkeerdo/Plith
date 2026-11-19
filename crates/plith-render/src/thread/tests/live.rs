@@ -12,7 +12,7 @@ use plith_core::shapes::{PAGES, REST};
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use std::thread;
-use std::time::Duration;
+use std::time::{Duration, UNIX_EPOCH};
 
 /// The clock call at which the ambient tests publish their next scene; well after the expand.
 const AT: u64 = 1000;
@@ -471,6 +471,60 @@ fn content_without_live_nodes_ends_ambient_after_one_frame() {
         "the new state is painted once, then the loop parks"
     );
     assert!(ambient.frames > 100);
+    assert!(run.reports.try_recv().is_err(), "no motion line");
+    let _ = run.stop();
+}
+
+/// A pill whose only node is a title scroll started at the fake epoch, running `run_s` seconds.
+fn scroll_pill(run_s: f64) -> Arc<PageContent> {
+    let mut content = PageContent::empty();
+    content.pill = Arc::new(DisplayList {
+        nodes: vec![Node::Live(LiveNode::Scroll {
+            rect: RECT,
+            text: Arc::from("A title far too long for the pill slot"),
+            style: TextStyle::Value,
+            ink: Ink::Muted,
+            start: UNIX_EPOCH,
+            run_s,
+        })],
+        size: (300.0, 40.0),
+    });
+    Arc::new(content)
+}
+
+#[test]
+fn collapsed_scroll_ticks_then_parks() {
+    let run = start(Setup::default());
+    run.wait_frames(1);
+    // New content on the still, collapsed island: painted once, then the ambient run starts.
+    let _ = run.mailbox.publish_content(scroll_pill(1.0));
+    let ambient = run.ambient_report();
+    run.assert_parked();
+    // 1 s at 240 Hz: the run ends on the first painted tick at or past the scroll's end.
+    let calls = run.harness.total();
+    assert!((240..=244).contains(&calls), "{calls} clock waits");
+    assert!(
+        (59..=62).contains(&ambient.frames),
+        "{} ambient frames",
+        ambient.frames
+    );
+    let frames = run.frames();
+    let last = frames.last().expect("painted");
+    assert!(
+        last.live.now >= UNIX_EPOCH + Duration::from_secs(1),
+        "the parting frame is drawn at the end of the run, at rest"
+    );
+    let times: Vec<_> = frames.iter().skip(1).map(|f| f.live.now).collect();
+    assert!(
+        times.windows(2).all(|w| w[1] > w[0]),
+        "each pill frame carries a later wall time"
+    );
+    assert_eq!(
+        run.samples.load(Ordering::SeqCst),
+        0,
+        "the pill samples no levels"
+    );
+    assert!(run.ambient.recv_timeout(QUIET).is_err(), "one ambient line");
     assert!(run.reports.try_recv().is_err(), "no motion line");
     let _ = run.stop();
 }

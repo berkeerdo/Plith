@@ -290,6 +290,57 @@ fn text_is_drawn_in_ink_and_aligned() {
     assert!(lit_columns(&end, 230, 330) > 20, "end: ink at the right");
 }
 
+/// A collapsed frame whose pill holds one long title scroll in a 120 DIP box at `elapsed` s.
+fn scroll_frame(elapsed: f64) -> PaintFrame {
+    let start = SystemTime::UNIX_EPOCH + Duration::from_secs(1000);
+    let mut content = PageContent::empty();
+    content.pill = list(vec![Node::Live(LiveNode::Scroll {
+        rect: Rect {
+            x: 20.0,
+            y: 40.0,
+            w: 120.0,
+            h: 24.0,
+        },
+        text: Arc::from("MMMMMMMMMMMMMMMMMMMMMMMM"),
+        style: TextStyle::Title,
+        ink: Ink::Ink,
+        start,
+        run_s: 60.0,
+    })]);
+    let mut f = frame(SHAPE, ORIGIN, &[]);
+    f.content_opacity = 0.0;
+    f.content = Arc::new(content);
+    f.live.now = start + Duration::from_secs_f64(elapsed);
+    f
+}
+
+/// The brightest red channel in columns `x0..x1` of the scroll's rows.
+fn peak_red(buf: &[u8], x0: u32, x1: u32) -> u8 {
+    (x0..x1)
+        .flat_map(|x| (50..74).map(move |y| (x, y)))
+        .map(|(x, y)| pixel(buf, W, x, y)[2])
+        .max()
+        .unwrap_or(0)
+}
+
+#[test]
+fn pill_scroll_is_clipped_faded_and_moves() {
+    let rest = render(&scroll_frame(0.0));
+    assert!(lit_columns(&rest, 30, 130) > 40, "ink inside the box");
+    assert_eq!(lit_columns(&rest, 151, 330), 0, "cut at the box's right");
+    assert!(
+        peak_red(&rest, 147, 150) < peak_red(&rest, 40, 120),
+        "the trailing edge fades"
+    );
+    // 1 s into the travel: 40 DIP to the left, still inside the box.
+    let mid = render(&scroll_frame(1.8));
+    assert_ne!(rest, mid, "the title moved");
+    assert_eq!(lit_columns(&mid, 0, 29), 0, "cut at the box's left");
+    assert_eq!(lit_columns(&mid, 151, 330), 0, "cut at the box's right");
+    // After the run the title is back at rest.
+    assert_eq!(render(&scroll_frame(61.0)), rest, "at rest after the run");
+}
+
 #[test]
 fn page_bitmap_reused_across_frames() {
     let text = TextSystem::new().unwrap();

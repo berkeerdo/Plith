@@ -10,7 +10,7 @@ use crate::pages::{PILL, PageCache};
 use crate::text::TextSystem;
 use island::Island;
 use plith_core::ambient::LiveValues;
-use plith_core::draw::{DisplayList, PageContent};
+use plith_core::draw::{DisplayList, Node, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::theme::Palette;
@@ -258,35 +258,39 @@ impl Painter {
     }
 
     /// Draws the live nodes of every visible page layer (outgoing first) at its offset and
-    /// opacity.
+    /// opacity, then the pill's (the title scroll) at `1 - content_opacity`.
     fn draw_layers_live(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame, scale: f64) {
+        let (ox, oy) = frame.origin;
         for layer in frame.pages.iter() {
-            self.draw_layer_live(ctx, frame, *layer, scale);
+            let PageLayer {
+                page,
+                offset,
+                opacity,
+            } = *layer;
+            if let Some(list) = frame.content.pages.get(page) {
+                let alpha = f(opacity) * frame.content_opacity;
+                self.draw_list_live(ctx, frame, (list, alpha), (ox + offset, oy), scale);
+            }
         }
+        let pill = &frame.content.pill;
+        let alpha = 1.0 - frame.content_opacity;
+        self.draw_list_live(ctx, frame, (pill, alpha), (ox, oy), scale);
     }
 
-    /// Draws the live nodes of one page layer, offset to the same snapped place as its bitmap.
-    fn draw_layer_live(
+    /// Draws the live nodes of `list` at `alpha`, offset to the same snapped place as its
+    /// bitmap at `(x, y)`. Nothing for a hidden list or one without live nodes.
+    fn draw_list_live(
         &mut self,
         ctx: &ID2D1DeviceContext,
         frame: &PaintFrame,
-        layer: PageLayer,
+        (list, alpha): (&DisplayList, f32),
+        (x, y): (f64, f64),
         scale: f64,
     ) {
-        let PageLayer {
-            page,
-            offset,
-            opacity,
-        } = layer;
-        let alpha = f(opacity) * frame.content_opacity;
-        let Some(list) = frame.content.pages.get(page) else {
-            return;
-        };
-        if alpha <= 0.0 {
+        if alpha <= 0.0 || !list.nodes.iter().any(|node| matches!(node, Node::Live(_))) {
             return;
         }
-        let (ox, oy) = frame.origin;
-        let shift = Matrix3x2::translation(f(snap(ox + offset, scale)), f(snap(oy, scale)));
+        let shift = Matrix3x2::translation(f(snap(x, scale)), f(snap(y, scale)));
         // SAFETY: plain state changes inside the frame's BeginDraw/EndDraw; restored below.
         unsafe { ctx.SetTransform(&raw const shift) };
         draw_live(

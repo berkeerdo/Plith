@@ -1,6 +1,7 @@
 //! Draws the cached nodes of a display list: fills, strokes, stations, text and artwork. Live
 //! nodes are skipped here; they are drawn every frame by `live`.
 
+use crate::live::fade_brush;
 use crate::paint::{color, f};
 use crate::text::TextSystem;
 use plith_core::draw::{
@@ -17,7 +18,8 @@ use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_NONE, D2D1_BITMAP_PROPERTIES1, D2D1_CAP_STYLE_FLAT, D2D1_DASH_STYLE_CUSTOM,
     D2D1_DRAW_TEXT_OPTIONS_NONE, D2D1_INTERPOLATION_MODE_LINEAR, D2D1_LINE_JOIN_MITER,
     D2D1_ROUNDED_RECT, D2D1_STROKE_STYLE_PROPERTIES, ID2D1Bitmap1, ID2D1DeviceContext,
-    ID2D1Factory, ID2D1Factory1, ID2D1PathGeometry1, ID2D1SolidColorBrush, ID2D1StrokeStyle,
+    ID2D1Factory, ID2D1Factory1, ID2D1LinearGradientBrush, ID2D1PathGeometry1,
+    ID2D1SolidColorBrush, ID2D1StrokeStyle,
 };
 use windows::Win32::Graphics::DirectWrite::{
     DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_TEXT_ALIGNMENT_LEADING, DWRITE_TEXT_ALIGNMENT_TRAILING,
@@ -49,6 +51,8 @@ pub(crate) struct ListEnv<'a> {
 pub(crate) struct ListKit {
     /// The one solid brush; its colour is set per node.
     pub(crate) brush: ID2D1SolidColorBrush,
+    /// The title scroll's trailing fade mask.
+    pub(crate) fade: ID2D1LinearGradientBrush,
     factory: ID2D1Factory1,
     /// Dash styles by stroke width bits: Direct2D dashes scale with the width, so each width
     /// gets the dash and gap divided by it.
@@ -107,6 +111,7 @@ impl ListKit {
         let brush = unsafe { ctx.CreateSolidColorBrush(&raw const initial, None)? };
         Ok(Self {
             brush,
+            fade: fade_brush(ctx)?,
             factory: factory.clone(),
             dashes: HashMap::new(),
             art: HashMap::new(),

@@ -1,6 +1,7 @@
-//! The ambient tick: while the settled island shows a page with live nodes, the loop waits on
-//! the frame clock every period and paints every `ambient_divisor(hz)`-th tick (each painted
-//! frame samples fresh values). It writes no motion line, and one `ambient` line when it ends.
+//! The ambient tick: while the settled island shows a page with live nodes (or the collapsed
+//! pill runs its title scroll), the loop waits on the frame clock every period and paints every
+//! `ambient_divisor(hz)`-th tick (each painted frame samples fresh values). It writes no motion
+//! line, and one `ambient` line when it ends.
 
 use super::super::Paint;
 use super::engine::{Engine, Taken};
@@ -55,10 +56,16 @@ where
                 continue;
             }
             phase = 0;
+            // A title scroll ends by time, with no new generation: this tick then paints the
+            // pill at rest as the run's last frame.
+            let running = self.wants_ambient();
             if let Some(times) = self.paint_frame()? {
                 stats.record_frame(anim_t, times.draw_ms);
             }
             self.wait_ms = 0.0;
+            if !running {
+                break AmbientEnd::Parked;
+            }
         };
         if stats.frames() > 0 {
             (self.sinks.on_ambient)(stats.finish());

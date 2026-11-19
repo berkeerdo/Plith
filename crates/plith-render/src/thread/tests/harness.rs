@@ -15,7 +15,7 @@ use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
 use std::thread::{self, JoinHandle};
-use std::time::{Duration, Instant};
+use std::time::{Duration, Instant, UNIX_EPOCH};
 use windows::Win32::Foundation::E_FAIL;
 
 pub(super) const PERIOD: f64 = 1.0 / 240.0;
@@ -296,6 +296,7 @@ pub(super) fn start(setup: Setup) -> Run {
         let instant = setup.instant;
         thread::spawn(move || {
             let clock_harness = Arc::clone(&harness);
+            let wall_harness = Arc::clone(&harness);
             let parts = LoopParts {
                 paint,
                 open_clock: move |kind| {
@@ -306,6 +307,8 @@ pub(super) fn start(setup: Setup) -> Run {
                     })
                 },
                 now: move || harness.now() + harness.lead,
+                // Fake wall time: the epoch plus the fake time, so scroll runs are exact.
+                wall: Box::new(move || UNIX_EPOCH + Duration::from_secs_f64(wall_harness.now())),
                 order: KINDS.to_vec(),
                 hz: 240.0,
                 layout: layout(),
