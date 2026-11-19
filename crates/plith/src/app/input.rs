@@ -103,11 +103,18 @@ impl App {
         self.scene_changed();
     }
 
-    /// The pointer moved inside the island shape. Only an open island showing the welcome view
-    /// reads it: the hour under the pointer becomes the probe. No timer, no hover-open.
+    /// The pointer moved inside the island shape. A shown collapsed island restarts a finished
+    /// title scroll. An open island showing the welcome view reads the hour under the pointer
+    /// as the probe. No timer, no hover-open.
     pub(super) fn on_move(&mut self, x: f64, y: f64) {
         let scene = self.mailbox.latest().scene;
-        if !scene.expanded || scene.page != PageId::Welcome.index() {
+        if !scene.expanded {
+            if let (false, Some(feed)) = (scene.suppression.any(), self.feed.as_mut()) {
+                feed.hover_pill(&self.mailbox);
+            }
+            return;
+        }
+        if scene.page != PageId::Welcome.index() {
             return;
         }
         if let Some(feed) = self.feed.as_mut() {

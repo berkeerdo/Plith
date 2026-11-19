@@ -289,3 +289,92 @@ fn the_feed_builds_pages_in_its_language() {
     let welcome = page_labels(&mailbox, PageId::Welcome.index());
     assert_eq!(&welcome[..4], ["AUDIO", "MEDIEN", "ABLAGE", "SYSTEM"]);
 }
+
+const LONG_TITLE: &str = "A title far too long for the Karot box";
+
+/// A Karot feed playing the long title, its wall clock set by `seconds`.
+fn scroll_rig(seconds: &Rc<Cell<u64>>) -> Rig {
+    use plith_core::settings::{IdleLook, Settings};
+    let mut rig = rig();
+    {
+        let mut facts = rig.facts.borrow_mut();
+        facts.media.has_session = true;
+        facts.media.playing = true;
+        facts.media.title = LONG_TITLE.to_string();
+    }
+    rig.drained.set(Changes::MEDIA);
+    rig.feed.on_wake(&rig.mailbox);
+    rig.drained.set(Changes::NONE);
+    let seconds = Rc::clone(seconds);
+    let idle = Idle::new(
+        Settings {
+            look: IdleLook::Karot,
+            ..Settings::default()
+        },
+        Lang::En,
+    )
+    .with_wall(Box::new(move || {
+        std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(seconds.get())
+    }));
+    rig.feed.set_idle(idle, &rig.mailbox);
+    rig
+}
+
+/// The start of the scroll node in the published pill, if there is one.
+fn scroll_start(mailbox: &SceneMailbox) -> Option<std::time::SystemTime> {
+    mailbox
+        .latest()
+        .content
+        .pill
+        .nodes
+        .iter()
+        .find_map(|n| match n {
+            plith_core::draw::Node::Live(plith_core::draw::LiveNode::Scroll { start, .. }) => {
+                Some(*start)
+            }
+            _ => None,
+        })
+}
+
+fn epoch(seconds: u64) -> std::time::SystemTime {
+    std::time::SystemTime::UNIX_EPOCH + Duration::from_secs(seconds)
+}
+
+#[test]
+fn hover_restarts_finished_scroll() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut rig = scroll_rig(&seconds);
+    assert_eq!(
+        scroll_start(&rig.mailbox),
+        Some(epoch(100)),
+        "set_idle saw the track"
+    );
+    // The run of this title is well under a hundred seconds.
+    seconds.set(200);
+    rig.feed.hover_pill(&rig.mailbox);
+    assert_eq!(scroll_start(&rig.mailbox), Some(epoch(200)));
+}
+
+#[test]
+fn hover_during_run_keeps_start() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut rig = scroll_rig(&seconds);
+    seconds.set(101);
+    let generation = rig.mailbox.latest().generation;
+    rig.feed.hover_pill(&rig.mailbox);
+    assert_eq!(scroll_start(&rig.mailbox), Some(epoch(100)));
+    assert_eq!(rig.mailbox.latest().generation, generation, "no publish");
+}
+
+#[test]
+fn hover_over_a_fitting_title_publishes_nothing() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut rig = scroll_rig(&seconds);
+    rig.facts.borrow_mut().media.title = "Short".to_string();
+    rig.drained.set(Changes::MEDIA);
+    rig.feed.on_wake(&rig.mailbox);
+    seconds.set(900);
+    let generation = rig.mailbox.latest().generation;
+    rig.feed.hover_pill(&rig.mailbox);
+    assert_eq!(rig.mailbox.latest().generation, generation);
+}

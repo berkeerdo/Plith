@@ -167,15 +167,25 @@ struct Right<'a> {
     title: bool,
 }
 
-/// The right-hand title as a one-shot scroll when it is too long for its box and a scroll was
-/// started; `None` when it fits or no scroll runs (plain text, cut at the end).
-fn title_scroll(text: &str, y: f64, start: Option<SystemTime>) -> Option<Node> {
+/// How far the right-hand `text` overflows its box, `None` when it fits.
+fn title_overflow(text: &str) -> Option<f64> {
     // Allowed: a few dozen characters at most.
     #[allow(clippy::cast_precision_loss)]
     let overflow = text.chars().count() as f64 * VALUE_ADVANCE - TURN_W;
-    if overflow <= 0.0 {
-        return None;
-    }
+    (overflow > 0.0).then_some(overflow)
+}
+
+/// The seconds a scroll of the playing `title` takes, `None` when it fits its box and never
+/// scrolls.
+#[must_use]
+pub fn title_run_s(title: &str) -> Option<f64> {
+    title_overflow(title).map(scroll_run_s)
+}
+
+/// The right-hand title as a one-shot scroll when it is too long for its box and a scroll was
+/// started; `None` when it fits or no scroll runs (plain text, cut at the end).
+fn title_scroll(text: &str, y: f64, start: Option<SystemTime>) -> Option<Node> {
+    let overflow = title_overflow(text)?;
     Some(Node::Live(LiveNode::Scroll {
         rect: rect(RIGHT_EDGE - TURN_W, y, TURN_W, TEXT_H),
         text: Arc::from(text),

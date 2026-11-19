@@ -250,3 +250,56 @@ fn the_welcome_facts_do_not_change_while_a_track_plays() {
     let b = idle.welcome_facts(&f, at(10, 0, 40));
     assert_eq!(a, b, "no ticking field in the facts");
 }
+
+/// A wall clock the test moves, in seconds after the epoch.
+fn wall_at(seconds: &Rc<Cell<u64>>) -> Box<dyn Fn() -> SystemTime> {
+    let seconds = Rc::clone(seconds);
+    Box::new(move || SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds.get()))
+}
+
+fn epoch(seconds: u64) -> SystemTime {
+    SystemTime::UNIX_EPOCH + std::time::Duration::from_secs(seconds)
+}
+
+#[test]
+fn track_change_starts_scroll() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut idle = Idle::new(Settings::default(), Lang::En).with_wall(wall_at(&seconds));
+    let f = facts();
+    assert_eq!(idle.idle_facts(&f, at(9, 0, 0)).scroll_start, None);
+    idle.observe(&f, at(9, 0, 0));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 0, 0)).scroll_start,
+        Some(epoch(100))
+    );
+    seconds.set(160);
+    let mut next = f.clone();
+    next.media.title = "Another track".into();
+    idle.observe(&next, at(9, 1, 0));
+    assert_eq!(
+        idle.idle_facts(&next, at(9, 1, 0)).scroll_start,
+        Some(epoch(160))
+    );
+}
+
+#[test]
+fn same_track_keeps_start() {
+    let seconds = Rc::new(Cell::new(100));
+    let mut idle = Idle::new(Settings::default(), Lang::En).with_wall(wall_at(&seconds));
+    let f = facts();
+    idle.observe(&f, at(9, 0, 0));
+    seconds.set(130);
+    idle.observe(&f, at(9, 0, 30));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 0, 30)).scroll_start,
+        Some(epoch(100))
+    );
+    // A pause and a resume of the same track is no change either.
+    idle.observe(&silent(f.clone()), at(9, 1, 0));
+    seconds.set(200);
+    idle.observe(&f, at(9, 1, 10));
+    assert_eq!(
+        idle.idle_facts(&f, at(9, 1, 10)).scroll_start,
+        Some(epoch(100))
+    );
+}
