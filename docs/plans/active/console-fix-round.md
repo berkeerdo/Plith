@@ -265,7 +265,7 @@ every stack build.
 - [x] **Step 1:** Five checks green on the branch head (heavy-run): fmt, clippy, workspace tests,
   `node scripts/structure-check.mjs`, `node scripts/check-deps.mjs`. Record the test count.
 - [x] **Step 2:** Whole-branch review (`superpowers:requesting-code-review`), fix wave, re-review.
-- [ ] **Step 3:** Rebuild the OSD helper; reinstall it signed after Berke's yes.
+- [x] **Step 3:** Rebuild the OSD helper; reinstall it signed after Berke's yes.
 - [ ] **Step 4 (console, Berke present, `query session` first):** home mark round trip from each
   tab; Karot glyph look; a long title scrolls once on track change and on hover, then a 60 s
   idle check meets `allowed()`; drag on the volume, brightness and seek rulers (his hand); the
@@ -289,3 +289,8 @@ review and its fix wave):
   and `%62` only. Berke judges it in the console.
 - Unmeasured until the console: every on-screen item of Step 4, plus whether Windows posts a
   late leave after a drag (a duplicate Leave only re-arms the 0.4 s collapse delay).
+- Helper reinstalled signed 2026-11-19 (Berke's yes, second sudo prompt; the first was
+  cancelled), SHA-256 `188722D6...484484`, signer `144A7919...AC0F`. A normal release run over
+  RDP (`remote true`, 32 Hz, so no motion numbers): `osd: helper launched`, `link connected`
+  2 s later, helper log `prewarm: osd frames=2 draw_ms=6.24` before any show, clean `exit 0`.
+  The cold cost now lands in the hidden prewarm; the first real show is measured in Step 4.
