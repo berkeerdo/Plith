@@ -105,6 +105,16 @@ impl Idle {
         self.settings.open_on
     }
 
+    /// Takes the settings the user changed while running.
+    pub fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+    }
+
+    /// Takes the interface language the user switched to while running.
+    pub fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
+    }
+
     /// Takes a new forecast; true when it differs from the one held.
     pub fn set_forecast(&mut self, forecast: Forecast) -> bool {
         let changed = self.forecast.as_ref() != Some(&forecast);

@@ -3,7 +3,7 @@
 
 use super::feed::Feed;
 use super::idle_facts::Idle;
-use super::weather_link;
+use super::weather_link::WeatherWiring;
 use crate::log::{self, LogFile};
 use crate::services::fixture::idle as mock;
 use crate::{locale, plays_file, settings_file};
@@ -49,6 +49,8 @@ pub fn language_of(settings: &Settings) -> Lang {
 
 /// Attaches the idle model to `feed` and starts the weather service when this run allows it.
 /// `settings` are the run's (`settings_for`); the language is the one the feed was built with.
+/// Returns the wiring that starts the weather again when the user turns it on.
+#[must_use]
 pub fn attach(
     launch: &Launch,
     log: &Arc<LogFile>,
@@ -56,7 +58,7 @@ pub fn attach(
     feed: &mut Feed,
     mailbox: &SceneMailbox,
     settings: &Settings,
-) {
+) -> WeatherWiring {
     let lang = feed.lang();
     let mut idle = Idle::new(settings.clone(), lang);
     // With plays=off nothing about listening is read, kept or written; the old file stays as is.
@@ -80,11 +82,11 @@ pub fn attach(
             .with_forecast(Some(mock::forecast(day, read_at)));
     }
     feed.set_idle(idle, mailbox);
-    let link = weather_link::start(
-        settings,
+    let wiring = WeatherWiring::new(
+        Arc::clone(log),
+        Arc::new(move || waker.wake()),
         is_normal(launch),
-        log,
-        Box::new(move || waker.wake()),
     );
-    feed.set_weather(link);
+    feed.set_weather(wiring.start(settings));
+    wiring
 }

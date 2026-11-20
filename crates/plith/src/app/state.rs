@@ -3,6 +3,7 @@
 use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::input::drag::ActiveDrag;
+use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
 use crate::log::LogFile;
 use crate::osd::OsdSink;
@@ -51,6 +52,10 @@ pub struct App {
     pub(super) collapse: CollapseTimer,
     /// Scene steps from the demo thread, applied on the next wake.
     pub(super) demo: Option<Receiver<DemoStep>>,
+    /// The weather wiring of the run, to start the weather when the user turns it on.
+    weather: Option<WeatherWiring>,
+    /// The OSD side of a normal run, switched by the settings.
+    osd: Option<OsdControl>,
     /// The ruler drag under way, from the press to the release.
     pub(super) drag: Option<ActiveDrag>,
 }
@@ -77,6 +82,8 @@ impl App {
             collapse: CollapseTimer::default(),
             demo: None,
             drag: None,
+            weather: None,
+            osd: None,
         }
     }
 
@@ -166,6 +173,7 @@ impl App {
             }
             ShellEvent::Wake => {
                 self.apply_demo_steps();
+                self.poll_osd();
                 if let Some(feed) = &mut self.feed {
                     feed.on_wake(&self.mailbox);
                 }
@@ -186,6 +194,10 @@ impl App {
         }
     }
 }
+
+mod live;
+
+pub use live::OsdControl;
 
 #[cfg(test)]
 mod tests;

@@ -87,6 +87,17 @@ impl WeatherService {
         Self::start_with(config, Arc::new(HttpFetch), hooks, Timing::real())
     }
 
+    /// Starts the worker over `fetcher` with the real timing, so a caller can test its wiring
+    /// without the network.
+    #[must_use]
+    pub fn start_over(
+        config: WeatherConfig,
+        fetcher: Arc<dyn Fetch>,
+        hooks: Hooks,
+    ) -> (Self, Receiver<Forecast>) {
+        Self::start_with(config, fetcher, hooks, Timing::real())
+    }
+
     /// Starts the worker over any `Fetch`.
     pub(crate) fn start_with(
         config: WeatherConfig,

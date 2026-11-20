@@ -5,6 +5,7 @@
 pub mod drag;
 mod idle;
 mod osd;
+mod settings;
 
 use super::idle_facts::Idle;
 use super::weather_link::WeatherLink;

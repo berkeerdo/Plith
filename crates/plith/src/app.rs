@@ -6,6 +6,7 @@ mod feed;
 mod idle_facts;
 mod idle_wiring;
 mod input;
+mod osd_slot;
 mod state;
 mod weather_link;
 mod wire;
@@ -16,22 +17,24 @@ mod tests;
 use crate::instance;
 use crate::live;
 use crate::log::{self, LogFile};
-use crate::osd::OsdSide;
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
 use crate::{demo, idle};
 use feed::Feed;
+use osd_slot::{OsdSlot, RealOsd};
 use plith_core::demo::DemoStep;
-use plith_core::launch::{Launch, flyout_mode};
+use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_core::settings::Settings;
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
     MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,
     primary_monitor, run_message_loop, uninit_ui_thread, user_busy,
 };
 use state::App;
+use state::OsdControl;
 use std::cell::RefCell;
 use std::rc::Rc;
 use std::sync::Arc;
@@ -132,8 +135,9 @@ fn run_shell(
         levels,
         content,
         board,
+        settings,
     } = attach_feed(launch, &shell, log, &app);
-    let osd = start_osd(launch, log, &app);
+    start_osd(launch, log, &shell, &app, &settings);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -179,7 +183,7 @@ fn run_shell(
     render.shutdown();
     app.borrow_mut().stop_feed();
     // Suppression off and flyouts shown first, then the link sends `Bye`.
-    drop(osd);
+    app.borrow_mut().stop_osd();
     log.line(&wire::hit_line(&shell));
     wire::exit_code(
         loop_code,
@@ -197,6 +201,8 @@ struct Attached {
     content: Option<Sender<u8>>,
     /// The finished starts of the real services; `None` with the fixture.
     board: Option<Arc<StartBoard>>,
+    /// The settings of the run, read once.
+    settings: Settings,
 }
 
 /// The fixture services; with an idle check they also tick every [`TICK`], as a service
@@ -264,7 +270,7 @@ fn attach_feed(
         lang,
         &app.mailbox,
     );
-    idle_wiring::attach(
+    let weather = idle_wiring::attach(
         launch,
         log,
         shell.ui_waker(),
@@ -273,25 +279,37 @@ fn attach_feed(
         &settings,
     );
     app.attach_feed(feed);
+    app.attach_weather(weather);
     Attached {
         levels,
         content,
         board,
+        settings,
     }
 }
 
-/// Starts the OSD side and hands its sink to the feed, in a normal run with real services
-/// only: demo, idle-check and fixture runs stay measurement runs without a helper process.
-fn start_osd(launch: &Launch, log: &Arc<LogFile>, app: &Rc<RefCell<App>>) -> Option<OsdSide> {
-    let normal =
-        launch.demo.is_none() && launch.idle_check_secs.is_none() && launch.fixture.is_none();
-    if !normal {
-        return None;
+/// Gives the app its OSD slot and starts the side when `settings` want it, in a normal run with
+/// real services only: demo, idle-check and fixture runs stay measurement runs without a helper
+/// process. The side's sink reaches the feed through the app.
+fn start_osd(
+    launch: &Launch,
+    log: &Arc<LogFile>,
+    shell: &Shell,
+    app: &Rc<RefCell<App>>,
+    settings: &Settings,
+) {
+    if !idle_wiring::is_normal(launch) {
+        return;
     }
-    let pref = idle_wiring::settings_for(launch, log).flyout;
-    let side = OsdSide::start(flyout_mode(launch.flyout, pref), Arc::clone(log))?;
-    app.borrow_mut().set_osd(side.sink());
-    Some(side)
+    let waker = shell.ui_waker();
+    let slot = OsdSlot::new(
+        RealOsd {
+            log: Arc::clone(log),
+        },
+        Arc::new(move || waker.wake()),
+    );
+    app.borrow_mut()
+        .attach_osd(OsdControl::new(slot, launch.flyout), settings);
 }
 
 /// Everything the helper threads and the message loop share.

@@ -34,7 +34,7 @@ pub const STOP_WAIT: Duration = Duration::from_millis(1500);
 const STOP_POLL: Duration = Duration::from_millis(10);
 
 /// Joins `thread` if it finishes within `timeout`; `None` (the thread detached) otherwise.
-fn join_within(thread: JoinHandle<()>, timeout: Duration) -> Option<thread::Result<()>> {
+pub(crate) fn join_within(thread: JoinHandle<()>, timeout: Duration) -> Option<thread::Result<()>> {
     let deadline = Instant::now() + timeout;
     while !thread.is_finished() {
         if Instant::now() >= deadline {
