@@ -182,3 +182,22 @@ fn caret_and_selection_are_drawn() {
     v.focus = None;
     assert_eq!(count(&v, Ink::Ink, 1.0), 0, "no caret without focus");
 }
+
+#[test]
+fn back_tab_out_of_field_commits_when_changed() {
+    let f = city_facts();
+    let mut v = focused_view(&f);
+    on_key(&f, &mut v, SheetKey::Char('!'));
+    assert_eq!(on_key(&f, &mut v, SheetKey::BackTab), city("Izmir!"));
+    assert_ne!(v.focus, Some(FIELD));
+    assert!(v.focus.is_some());
+}
+
+#[test]
+fn back_tab_out_of_field_unchanged_does_not_commit() {
+    let f = city_facts();
+    let mut v = focused_view(&f);
+    assert_eq!(on_key(&f, &mut v, SheetKey::BackTab), KeyOutcome::Redraw);
+    assert_ne!(v.focus, Some(FIELD));
+    assert!(v.focus.is_some());
+}

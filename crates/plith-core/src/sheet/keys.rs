@@ -83,6 +83,9 @@ pub fn focus_field(facts: &SheetFacts, view: &mut SheetView) {
 /// Commits the field and leaves it (focus cleared; the caller may set a new focus after). The text
 /// is returned only when it differs from the saved city, for the caller to apply as
 /// `SettingChange::City`. Does nothing when nothing has focus.
+///
+/// Invariant: whenever the field is not being edited, its text equals `saved` (`focus_field`,
+/// Escape and every commit set both), so calling this with another control focused returns `None`.
 pub fn commit_field(view: &mut SheetView) -> Option<String> {
     let text = take_commit(view);
     view.focus = None;
@@ -165,15 +168,12 @@ fn in_field(
     }
 }
 
-fn activate(facts: &SheetFacts, view: &mut SheetView, targets: &[SheetTarget]) -> KeyOutcome {
-    let Some(t) = targets.iter().find(|t| Some(t.id) == view.focus) else {
-        return KeyOutcome::Nothing;
-    };
-    if t.action == SheetAction::FocusField {
-        focus_field(facts, view);
-        return KeyOutcome::Redraw;
-    }
-    KeyOutcome::Act(t.action.clone())
+/// Space or Enter outside the field (the field itself is handled by `in_field`).
+fn activate(view: &SheetView, targets: &[SheetTarget]) -> KeyOutcome {
+    targets
+        .iter()
+        .find(|t| Some(t.id) == view.focus)
+        .map_or(KeyOutcome::Nothing, |t| KeyOutcome::Act(t.action.clone()))
 }
 
 /// Applies one key to the view.
@@ -199,7 +199,7 @@ pub fn on_key(facts: &SheetFacts, view: &mut SheetView, key: SheetKey) -> KeyOut
             view.focus = Some(next.id);
             KeyOutcome::Act(next.action.clone())
         }
-        SheetKey::Space | SheetKey::Enter => activate(facts, view, &targets),
+        SheetKey::Space | SheetKey::Enter => activate(view, &targets),
         _ => KeyOutcome::Nothing,
     }
 }

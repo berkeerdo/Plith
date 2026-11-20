@@ -70,3 +70,26 @@ fn field_escape_cancels() {
     assert_eq!(f.edit(&SheetKey::Enter), FieldOutcome::Commit("abc".into()));
     assert_eq!(f.edit(&SheetKey::Tab), FieldOutcome::Ignored);
 }
+
+#[test]
+fn select_all_then_empty_insert_keeps_text() {
+    let mut f = typed("Izmir");
+    f.edit(&SheetKey::SelectAll);
+    assert_eq!(f.edit(&SheetKey::Paste("\n".into())), FieldOutcome::Ignored);
+    assert_eq!(
+        f.edit(&SheetKey::Paste(String::new())),
+        FieldOutcome::Ignored
+    );
+    assert_eq!(f.edit(&SheetKey::Char('\t')), FieldOutcome::Ignored);
+    assert_eq!((f.text.as_str(), f.all), ("Izmir", true));
+    assert_eq!(f.edit(&SheetKey::Char('a')), FieldOutcome::Edited);
+    assert_eq!((f.text.as_str(), f.caret, f.all), ("a", 1, false));
+    f.edit(&SheetKey::SelectAll);
+    let full = "ü".repeat(70);
+    f.edit(&SheetKey::Paste(full));
+    assert_eq!(
+        f.text.chars().count(),
+        64,
+        "a replaced selection frees the room"
+    );
+}

@@ -57,15 +57,19 @@ impl TextField {
 
     /// Replaces the selection (if any) with `s`, cut to the room left.
     fn insert(&mut self, s: &str) -> FieldOutcome {
+        let room = if self.all {
+            FIELD_MAX
+        } else {
+            FIELD_MAX.saturating_sub(self.len())
+        };
+        let add: String = s.chars().filter(|c| !c.is_control()).take(room).collect();
+        if add.is_empty() {
+            return FieldOutcome::Ignored;
+        }
         if self.all {
             self.text.clear();
             self.caret = 0;
             self.all = false;
-        }
-        let room = FIELD_MAX.saturating_sub(self.len());
-        let add: String = s.chars().filter(|c| !c.is_control()).take(room).collect();
-        if add.is_empty() {
-            return FieldOutcome::Ignored;
         }
         let at = self.byte(self.caret);
         self.text.insert_str(at, &add);
