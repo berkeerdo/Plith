@@ -47,5 +47,26 @@ fn saving_strips_line_breaks_from_the_city() {
     save_at(&path, &settings).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("city=Istanbul\n"), "{text}");
-    assert_eq!(text.lines().count(), 11);
+    assert_eq!(text.lines().count(), 13);
+}
+
+#[test]
+fn save_is_atomic() {
+    let dir = folder("atomic");
+    let path = dir.join("settings.ini");
+    let log = log_in(&dir);
+    let first = Settings {
+        osd: false,
+        ..Settings::default()
+    };
+    save_at(&path, &first).unwrap();
+    assert!(!dir.join("settings.ini.tmp").exists());
+    assert_eq!(load_at(&path, &log), first);
+    let second = Settings {
+        city: "Izmir".to_string(),
+        ..first
+    };
+    save_at(&path, &second).unwrap();
+    assert!(!dir.join("settings.ini.tmp").exists());
+    assert_eq!(load_at(&path, &log), second);
 }

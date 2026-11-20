@@ -1,6 +1,7 @@
 use super::*;
 use crate::demo::{DemoScript, DemoStep};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
+use crate::settings::FlyoutPref;
 use crate::tuning::{BRISK, R1};
 
 fn parse(args: &[&str]) -> Result<Launch, LaunchError> {
@@ -220,15 +221,25 @@ fn bad_or_missing_fixture_is_rejected() {
 
 #[test]
 fn flyout_modes_parse_and_default_to_off() {
-    assert_eq!(parse(&[]).unwrap().flyout, FlyoutMode::Off);
+    assert_eq!(parse(&[]).unwrap().flyout, None);
     let names = [
         ("off", FlyoutMode::Off),
         ("dry", FlyoutMode::DryRun),
         ("hide", FlyoutMode::Hide),
     ];
     for (name, expected) in names {
-        assert_eq!(parse(&["--flyout", name]).unwrap().flyout, expected);
+        assert_eq!(parse(&["--flyout", name]).unwrap().flyout, Some(expected));
     }
+}
+
+#[test]
+fn cli_flyout_wins() {
+    assert_eq!(
+        flyout_mode(Some(FlyoutMode::DryRun), FlyoutPref::Hide),
+        FlyoutMode::DryRun
+    );
+    assert_eq!(flyout_mode(None, FlyoutPref::Hide), FlyoutMode::Hide);
+    assert_eq!(flyout_mode(None, FlyoutPref::Off), FlyoutMode::Off);
 }
 
 #[test]

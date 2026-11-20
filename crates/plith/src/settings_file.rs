@@ -54,7 +54,8 @@ pub fn load_at(path: &Path, log: &LogFile) -> Settings {
     }
 }
 
-/// Writes `settings` to `path`, creating the folder. Line breaks in the city would split its
+/// Writes `settings` to `path` through `settings.ini.tmp` and a rename, so a crash never leaves
+/// a half-written file. Creates the folder. Line breaks in the city would split its
 /// line in two, so they are dropped first.
 ///
 /// # Errors
@@ -67,7 +68,11 @@ pub fn save_at(path: &Path, settings: &Settings) -> io::Result<()> {
         city: settings.city.replace(['\r', '\n'], ""),
         ..settings.clone()
     };
-    fs::write(path, serialize(&clean))
+    let mut temp = path.as_os_str().to_owned();
+    temp.push(".tmp");
+    let temp = PathBuf::from(temp);
+    fs::write(&temp, serialize(&clean))?;
+    fs::rename(&temp, path)
 }
 
 #[cfg(test)]

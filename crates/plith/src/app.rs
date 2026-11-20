@@ -23,7 +23,7 @@ use crate::services::{LevelSource, RealServices, Services};
 use crate::{demo, idle};
 use feed::Feed;
 use plith_core::demo::DemoStep;
-use plith_core::launch::Launch;
+use plith_core::launch::{Launch, flyout_mode};
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_render::{RenderConfig, RenderHandle, spawn};
@@ -288,7 +288,8 @@ fn start_osd(launch: &Launch, log: &Arc<LogFile>, app: &Rc<RefCell<App>>) -> Opt
     if !normal {
         return None;
     }
-    let side = OsdSide::start(launch.flyout, Arc::clone(log))?;
+    let pref = idle_wiring::settings_for(launch, log).flyout;
+    let side = OsdSide::start(flyout_mode(launch.flyout, pref), Arc::clone(log))?;
     app.borrow_mut().set_osd(side.sink());
     Some(side)
 }
