@@ -5,8 +5,11 @@
 
 use super::{SheetText, sheet_text};
 use crate::draw::TextStyle;
-use crate::lang::Lang;
 use crate::lang::fit::{Budget, Place};
+use crate::lang::{Lang, Text, text};
+
+/// Room of a look name in a preview cell: 96 wide, minus the station and its gap, minus a margin.
+const LOOK_W: f64 = 70.0;
 
 /// Room of a row label.
 const LABEL_W: f64 = 300.0;
@@ -77,6 +80,21 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::SaveError,
     ] {
         out.push(place(id, lang, TextStyle::Body, LINE_W));
+    }
+    for (name, id) in [
+        ("sheet look karot", Text::LookKarot),
+        ("sheet look clock", Text::LookClock),
+        ("sheet look playing", Text::LookPlaying),
+        ("sheet look seal", Text::LookSeal),
+        ("sheet look plain", Text::LookPlain),
+        ("sheet look hidden", Text::LookHidden),
+    ] {
+        out.push(Place {
+            name: name.to_owned(),
+            text: text(id, lang).to_owned(),
+            style: TextStyle::Label,
+            budget: Budget::Dip(LOOK_W),
+        });
     }
     for id in S::ALL {
         if !id.is_caption() {
