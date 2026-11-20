@@ -291,6 +291,18 @@ pub enum Node {
         /// Which artwork.
         art: ArtId,
     },
+    /// A list drawn at `(x, y)` scaled by `scale`, for true-size previews. Its live nodes are
+    /// skipped.
+    Inset {
+        /// The list drawn inside.
+        list: Arc<DisplayList>,
+        /// Where its origin lands.
+        x: f64,
+        /// Where its origin lands.
+        y: f64,
+        /// The uniform scale.
+        scale: f64,
+    },
     /// A live node.
     Live(LiveNode),
 }
