@@ -400,8 +400,8 @@ DirectComposition, DWM).
 - [ ] **Step 1:** Idle check after opening and closing the window: `plith.exe --idle-check 60`
   equivalent per STATUS how-to, wakes on UI and render threads as before the change (record the
   number from the run's own output).
-- [ ] **Step 2:** Whole-branch review (`superpowers:requesting-code-review`, opus), fix findings.
-- [ ] **Step 3:** Five checks on a trial merge (fmt, clippy, tests via heavy-run or the office VM,
+- [x] **Step 2:** Whole-branch review (`superpowers:requesting-code-review`, opus), fix findings.
+- [x] **Step 3:** Five checks on a trial merge (fmt, clippy, tests via heavy-run or the office VM,
   structure-check, release build).
 - [ ] **Step 4:** STATUS rewritten (settings merged, console owed), ROADMAP row with actual
   duration. Merge to `main` only with Berke's yes.
