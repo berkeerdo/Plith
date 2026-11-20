@@ -56,6 +56,8 @@ pub struct App {
     weather: Option<WeatherWiring>,
     /// The OSD side of a normal run, switched by the settings.
     osd: Option<OsdControl>,
+    /// True in a normal run: only it reads and writes the play log.
+    normal_run: bool,
     /// The ruler drag under way, from the press to the release.
     pub(super) drag: Option<ActiveDrag>,
 }
@@ -84,6 +86,7 @@ impl App {
             drag: None,
             weather: None,
             osd: None,
+            normal_run: false,
         }
     }
 

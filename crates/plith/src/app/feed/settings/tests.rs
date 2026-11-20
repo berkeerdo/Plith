@@ -147,3 +147,55 @@ fn a_look_change_moves_the_rest_shape() {
         rest_shape(IdleLook::Hidden)
     );
 }
+
+#[test]
+fn a_place_change_drops_the_old_forecast() {
+    let mut rig = rig();
+    rig.feed
+        .set_idle(idle_with_forecast(weather_on(), Lang::En), &rig.mailbox);
+    open_page(&rig, PageId::Welcome.index());
+    rig.feed.on_wake(&rig.mailbox);
+    let before = rig.mailbox.latest().content;
+    let settings = Settings {
+        city: "Elsewhere".into(),
+        ..weather_on()
+    };
+    let effects = Effects {
+        weather: true,
+        ..Effects::default()
+    };
+    rig.feed
+        .apply_settings(&settings, Lang::En, effects, &rig.mailbox);
+    let idle = rig.feed.idle.as_ref().unwrap();
+    let facts = rig.facts.borrow().clone();
+    assert!(idle.welcome_facts(&facts, stamp()).forecast.is_none());
+    let welcome = PageId::Welcome.index();
+    let after = rig.mailbox.latest().content;
+    assert!(
+        !Arc::ptr_eq(&before.pages[welcome], &after.pages[welcome]),
+        "the welcome view lost its temperatures"
+    );
+}
+
+#[test]
+fn plays_turned_on_load_the_saved_history() {
+    let mut rig = rig();
+    let off = Settings {
+        plays: false,
+        ..Settings::default()
+    };
+    rig.feed.set_idle(Idle::new(off, Lang::En), &rig.mailbox);
+    let now = stamp();
+    let day = (now.year, now.month, now.day);
+    rig.feed
+        .enable_plays(|| (mock::plays(day), Box::new(|_| {})));
+    let effects = Effects {
+        welcome: true,
+        ..Effects::default()
+    };
+    rig.feed
+        .apply_settings(&Settings::default(), Lang::En, effects, &rig.mailbox);
+    let idle = rig.feed.idle.as_ref().unwrap();
+    let facts = rig.facts.borrow().clone();
+    assert!(!idle.welcome_facts(&facts, stamp()).plays.is_empty());
+}

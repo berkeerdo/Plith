@@ -184,3 +184,37 @@ fn shutdown_stops_a_running_side() {
     rig.slot.shutdown();
     assert_eq!(rig.live(), 0);
 }
+
+#[test]
+fn a_running_side_keeps_its_mode_until_a_restart() {
+    let mut rig = rig(Duration::from_millis(20));
+    rig.slot.set(true, FlyoutMode::Off);
+    rig.slot.set(true, FlyoutMode::Hide);
+    assert_eq!(rig.starts(), [FlyoutMode::Off]);
+    // The slot still knows the side runs in Off, so the wish for Hide restarts it.
+    rig.slot.apply(true, FlyoutMode::Hide);
+    rig.settle();
+    assert_eq!(rig.starts(), [FlyoutMode::Off, FlyoutMode::Hide]);
+}
+
+#[test]
+fn wait_until_stops_when_gone_or_at_the_limit() {
+    let calls = std::cell::Cell::new(0);
+    let gone = wait_until(
+        || {
+            calls.set(calls.get() + 1);
+            calls.get() >= 3
+        },
+        WAIT,
+        Duration::from_millis(1),
+    );
+    assert!(gone);
+    assert_eq!(calls.get(), 3);
+    let begun = Instant::now();
+    assert!(!wait_until(
+        || false,
+        Duration::from_millis(30),
+        Duration::from_millis(5)
+    ));
+    assert!(begun.elapsed() >= Duration::from_millis(30));
+}

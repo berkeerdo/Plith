@@ -4,7 +4,8 @@ use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
 use std::path::Path;
 
-use windows::Win32::Foundation::WAIT_TIMEOUT;
+use windows::Win32::Foundation::{ERROR_FILE_NOT_FOUND, GetLastError, WAIT_TIMEOUT};
+use windows::Win32::System::Pipes::WaitNamedPipeW;
 use windows::Win32::System::RemoteDesktop::ProcessIdToSessionId;
 use windows::Win32::System::Threading::{GetCurrentProcessId, GetProcessId, WaitForSingleObject};
 use windows::Win32::UI::Shell::{
@@ -37,6 +38,21 @@ pub fn current_pipe_name() -> String {
     }
     let sid = current_user_sid().unwrap_or_else(|_| String::from("nosid"));
     pipe_name(session, &sid)
+}
+
+/// True while any server instance of the pipe `name` exists, busy or not. Never connects:
+/// `WaitNamedPipeW` returns at once with `ERROR_FILE_NOT_FOUND` when no instance exists, and
+/// otherwise waits at most 1 ms (a busy instance answers with a timeout, which still exists).
+#[must_use]
+pub fn pipe_exists(name: &str) -> bool {
+    let wide = crate::win::wide(name);
+    // SAFETY: `wide` is NUL-terminated and outlives the call.
+    if unsafe { WaitNamedPipeW(PCWSTR(wide.as_ptr()), 1) }.as_bool() {
+        return true;
+    }
+    // SAFETY: reads this thread's last error, set by the call above.
+    let error = unsafe { GetLastError() };
+    error != ERROR_FILE_NOT_FOUND
 }
 
 /// A started helper process. Its handle is closed on drop; dropping it does not stop the

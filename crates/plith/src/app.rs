@@ -279,7 +279,7 @@ fn attach_feed(
         &settings,
     );
     app.attach_feed(feed);
-    app.attach_weather(weather);
+    app.attach_weather(weather, idle_wiring::is_normal(launch));
     Attached {
         levels,
         content,

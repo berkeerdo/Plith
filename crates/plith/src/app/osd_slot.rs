@@ -5,18 +5,41 @@
 use crate::log::LogFile;
 use crate::osd::{OsdSide, OsdSink, STOP_WAIT, join_within};
 use plith_core::launch::FlyoutMode;
+use plith_ipc::{current_pipe_name, pipe_exists};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::thread::{self, JoinHandle};
+use std::time::{Duration, Instant};
 
 /// Starts one OSD side. A trait so tests can use a fake.
-pub trait OsdStart {
+pub trait OsdStart: 'static {
     /// The running side; dropping it stops it, which may take a while.
     type Side: Send + 'static;
     /// Starts a side in `mode`; `None` when it cannot run.
     fn start(&self, mode: FlyoutMode) -> Option<Self::Side>;
     /// The sink the feed sends levels to.
     fn sink(side: &Self::Side) -> OsdSink;
+    /// Runs on the stopping thread after the side dropped, before a new side may start.
+    fn after_stop() {}
+}
+
+/// How long a stop waits for the old helper's pipe to go away.
+const GONE_WAIT: Duration = Duration::from_secs(1);
+/// How often it looks.
+const GONE_POLL: Duration = Duration::from_millis(50);
+
+/// Polls `gone` every `step` until it is true or `limit` passed; true when it went.
+fn wait_until(gone: impl Fn() -> bool, limit: Duration, step: Duration) -> bool {
+    let deadline = Instant::now() + limit;
+    loop {
+        if gone() {
+            return true;
+        }
+        if Instant::now() >= deadline {
+            return false;
+        }
+        thread::sleep(step);
+    }
 }
 
 /// Posts a wake to the UI thread; called from the stopping thread.
@@ -37,6 +60,13 @@ impl OsdStart for RealOsd {
 
     fn sink(side: &OsdSide) -> OsdSink {
         side.sink()
+    }
+
+    /// The old helper fades out after `Bye` and still serves the pipe meanwhile; a new helper
+    /// started then finds the name taken and exits. Waits (bounded) until no instance exists.
+    fn after_stop() {
+        let name = current_pipe_name();
+        let _ = wait_until(|| !pipe_exists(&name), GONE_WAIT, GONE_POLL);
     }
 }
 
@@ -88,9 +118,12 @@ impl<S: OsdStart> OsdSlot<S> {
     }
 
     /// Turns the side on or off; `mode` is used by the next start. A side already running keeps
-    /// its mode (see [`Self::restart`]). Never waits for a stop.
-    pub fn set(&mut self, on: bool, mode: FlyoutMode) {
-        self.mode = mode;
+    /// its mode, and the slot keeps recording it (a new mode goes through [`Self::restart`]).
+    /// Never waits for a stop.
+    fn set(&mut self, on: bool, mode: FlyoutMode) {
+        if !matches!(self.state, State::Running(_)) {
+            self.mode = mode;
+        }
         match &mut self.state {
             State::Off if on => self.start(),
             State::Running(_) if !on => self.stop(false),
@@ -171,6 +204,7 @@ impl<S: OsdStart> OsdSlot<S> {
             .name("plith-osd-stop".to_string())
             .spawn(move || {
                 drop(side);
+                S::after_stop();
                 flag.store(true, Ordering::Release);
                 wake();
             });

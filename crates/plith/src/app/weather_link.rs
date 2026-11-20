@@ -145,7 +145,9 @@ impl WeatherWiring {
     pub fn apply(&self, link: Option<WeatherLink>, settings: &Settings) -> Option<WeatherLink> {
         let on = settings.weather && self.network;
         match link {
-            Some(link) if on => {
+            Some(mut link) if on => {
+                // A forecast of the old place still queued is dropped; the new one follows.
+                let _ = link.take();
                 link.reconfigure(config_of(settings));
                 Some(link)
             }

@@ -6,9 +6,11 @@ use super::App;
 use crate::app::idle_wiring::language_of;
 use crate::app::osd_slot::{OsdSlot, RealOsd};
 use crate::app::weather_link::WeatherWiring;
+use crate::plays_file;
 use plith_core::launch::{FlyoutMode, flyout_mode};
 use plith_core::settings::Settings;
 use plith_core::settings::change::Effects;
+use std::sync::Arc;
 
 /// The OSD slot of a normal run and the `--flyout` that wins over the settings file.
 pub struct OsdControl {
@@ -25,9 +27,11 @@ impl OsdControl {
 }
 
 impl App {
-    /// Keeps the wiring that starts the weather again when the user turns it on.
-    pub fn attach_weather(&mut self, wiring: WeatherWiring) {
+    /// Keeps the wiring that starts the weather again when the user turns it on. `normal` is
+    /// true in a normal run, the only one that reads and writes the play log.
+    pub fn attach_weather(&mut self, wiring: WeatherWiring, normal: bool) {
         self.weather = Some(wiring);
+        self.normal_run = normal;
     }
 
     /// Takes the OSD slot and switches it to `settings`; a normal run only.
@@ -41,6 +45,11 @@ impl App {
     #[expect(dead_code, reason = "the settings window calls it (plan Task 10)")]
     pub fn apply_settings(&mut self, settings: &Settings, effects: Effects) {
         if let Some(feed) = &mut self.feed {
+            // Only a normal run reads and writes the play log.
+            if settings.plays && self.normal_run {
+                let log = Arc::clone(&self.log);
+                feed.enable_plays(move || (plays_file::load(&log), plays_file::saver(log)));
+            }
             let lang = if effects.lang {
                 language_of(settings)
             } else {
