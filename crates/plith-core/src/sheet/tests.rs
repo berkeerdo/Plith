@@ -38,11 +38,11 @@ fn facts_in(lang: Lang) -> SheetFacts {
     }
 }
 
-fn facts() -> SheetFacts {
+pub(super) fn facts() -> SheetFacts {
     facts_in(Lang::Tr)
 }
 
-fn view(section: Section) -> SheetView {
+pub(super) fn view(section: Section) -> SheetView {
     SheetView {
         section,
         ..SheetView::default()

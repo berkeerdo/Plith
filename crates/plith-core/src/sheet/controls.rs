@@ -37,6 +37,15 @@ pub(super) struct Word {
     pub action: SheetAction,
 }
 
+/// What is drawn inside a focused text field besides its text, as offsets from the text start.
+#[derive(Debug, Clone, Copy, Default)]
+pub(super) struct FieldMark {
+    /// Width of the selection fill behind the text.
+    pub select_w: Option<f64>,
+    /// Where the caret is.
+    pub caret_x: Option<f64>,
+}
+
 /// The nodes and targets built so far.
 pub(super) struct Page {
     pub nodes: Vec<Node>,
@@ -214,8 +223,9 @@ impl Page {
         );
     }
 
-    /// A one line text field box at `(x, y)`, 240 wide, showing `shown`.
-    pub fn field(&mut self, row: u8, ctl: u8, at: (f64, f64), shown: &str) {
+    /// A one line text field box at `(x, y)`, 240 wide, showing `shown`, with the selection
+    /// behind the text and the caret over it when `mark` has them.
+    pub fn field(&mut self, id: (u8, u8), at: (f64, f64), shown: &str, mark: FieldMark) {
         let (x, y) = at;
         let r = rect(x, y, 240.0, 26.0);
         self.nodes.push(Node::Fill {
@@ -224,6 +234,13 @@ impl Page {
             ink: Ink::Floor,
         });
         self.nodes.push(super::outline(r, Ink::Border));
+        if let Some(w) = mark.select_w {
+            self.nodes.push(Node::Fill {
+                rect: rect(x + 10.0, y + 4.0, w.clamp(0.0, 220.0), 18.0),
+                radius: 0.0,
+                ink: Ink::Track,
+            });
+        }
         self.text(
             rect(x + 10.0, y + 5.0, 220.0, 16.0),
             shown,
@@ -231,7 +248,14 @@ impl Page {
             Ink::Ink,
             Align::Start,
         );
-        self.target(r, FocusId::Row(row, ctl), SheetAction::FocusField);
+        if let Some(cx) = mark.caret_x {
+            self.nodes.push(Node::Fill {
+                rect: rect(x + 10.0 + cx.clamp(0.0, 220.0), y + 5.0, 1.0, 16.0),
+                radius: 0.0,
+                ink: Ink::Ink,
+            });
+        }
+        self.target(r, FocusId::Row(id.0, id.1), SheetAction::FocusField);
     }
 }
 

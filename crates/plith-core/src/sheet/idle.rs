@@ -1,6 +1,6 @@
 //! The Idle section: the six look previews and the welcome view settings.
 
-use super::controls::{Page, Word, rect, word};
+use super::controls::{FieldMark, Page, Word, rect, word};
 use super::layout::X;
 use super::{SheetAction, SheetFacts, SheetView};
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
@@ -219,7 +219,11 @@ fn location_row(p: &mut Page, facts: &SheetFacts, view: &SheetView, mut t: f64) 
     if s.location == LocationMode::City {
         let editing = view.focus == Some(super::FocusId::Row(5, 3));
         let shown = if editing { &view.field.text } else { &s.city };
-        p.field(5, 3, (X, t - 6.0), shown);
+        let mark = FieldMark {
+            select_w: (editing && view.field.all).then_some(view.text_w),
+            caret_x: (editing && view.caret_on).then_some(view.caret_x),
+        };
+        p.field((5, 3), (X, t - 6.0), shown, mark);
         t += 34.0;
     }
     p.rule(t);

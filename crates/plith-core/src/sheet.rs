@@ -14,10 +14,12 @@ mod controls;
 mod field;
 mod general;
 mod idle;
+mod keys;
 mod layout;
 mod osd;
 
-pub use field::TextField;
+pub use field::{FIELD_MAX, FieldOutcome, TextField};
+pub use keys::{KeyOutcome, SheetKey, commit_field, focus_field, on_key};
 
 #[cfg(test)]
 mod tests;
@@ -88,6 +90,14 @@ pub struct SheetView {
     pub hover: Option<FocusId>,
     /// The city field being edited.
     pub field: TextField,
+    /// Whether the caret is shown now. Core has no clock: the window flips it (about every half
+    /// second while the field has focus) and resets it on a key.
+    pub caret_on: bool,
+    /// Width in DIP of the field text before the caret, measured by the window with the field's
+    /// font (core has no text measurement).
+    pub caret_x: f64,
+    /// Width in DIP of the whole field text, for the selection fill; measured like `caret_x`.
+    pub text_w: f64,
 }
 
 /// What a click does.
