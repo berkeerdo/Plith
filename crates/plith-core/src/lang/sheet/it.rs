@@ -50,7 +50,7 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::WordAllDay => "GIORNATA",
         SheetText::WordWeather => "METEO",
         SheetText::WordSound => "SUONO",
-        SheetText::WordPlaying => "IN ASCOLTO",
+        SheetText::WordPlaying => "IN CORSO",
         SheetText::WordEmpty => "VUOTO",
         SheetText::WordWindows => "WINDOWS",
         SheetText::WordIp => "IP",

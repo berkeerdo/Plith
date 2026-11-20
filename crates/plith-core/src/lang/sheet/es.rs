@@ -25,7 +25,7 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubStrip => "Cuántas horas muestra la bienvenida",
         SheetText::RowTopRight => "Arriba a la derecha",
         SheetText::SubTopRight => "Qué hay arriba a la derecha de la bienvenida",
-        SheetText::RowPlayed => "Reproducido hoy",
+        SheetText::RowPlayed => "Reproducidas hoy",
         SheetText::SubPlayed => "Sobre la franja, se guarda solo en este PC",
         SheetText::RowWeather => "Clima",
         SheetText::SubWeather => "Si está activo, la ubicación va a Open-Meteo",
