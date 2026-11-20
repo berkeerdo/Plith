@@ -120,3 +120,9 @@ fn quick_gear_is_inked_and_goes_home() {
         Node::Stroke { ink: Ink::Ink, width, .. } if *width > 1.0
     )));
 }
+
+#[test]
+fn looks_follow_idle_look_all() {
+    let order: Vec<IdleLook> = LOOKS.iter().map(|l| l.0).collect();
+    assert_eq!(order, IdleLook::ALL.to_vec());
+}
