@@ -425,3 +425,58 @@ fn heading_is_twenty_dip() {
     )));
     assert!((crate::draw::style_spec(TextStyle::Heading).size_dip - 20.0).abs() < f32::EPSILON);
 }
+
+/// The radius and ink of every fill whose rect equals `r`.
+fn fills_at(list: &DisplayList, r: Rect) -> Vec<(f64, Ink)> {
+    let near = |a: f64, b: f64| (a - b).abs() < 1e-9;
+    list.nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Fill { rect, radius, ink }
+                if near(rect.x, r.x)
+                    && near(rect.y, r.y)
+                    && near(rect.w, r.w)
+                    && near(rect.h, r.h) =>
+            {
+                Some((*radius, *ink))
+            }
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn preview_pills_are_raised_and_outlined() {
+    let (list, _) = sheet_build(&facts(), &view(Section::Idle));
+    let insets: Vec<(f64, f64, f64)> = list
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Inset { x, y, scale, .. } => Some((*x, *y, *scale)),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(insets.len(), 6);
+    for (i, (x, y, scale)) in insets.into_iter().enumerate() {
+        let shape = crate::pages::idle_pill::rest_shape(LOOKS[i]);
+        let (w, h) = (shape.width * scale, shape.height * scale);
+        let outer = fills_at(&list, Rect { x, y, w, h });
+        let inner = fills_at(
+            &list,
+            Rect {
+                x: x + 1.0,
+                y: y + 1.0,
+                w: w - 2.0,
+                h: h - 2.0,
+            },
+        );
+        if LOOKS[i] == IdleLook::Hidden {
+            assert!(outer.is_empty() && inner.is_empty(), "hidden has no pill");
+            continue;
+        }
+        let inks = |f: &[(f64, Ink)]| f.iter().map(|x| x.1).collect::<Vec<_>>();
+        assert_eq!(inks(&outer), [Ink::Border], "preview {i}");
+        assert_eq!(inks(&inner), [Ink::FloorHigh], "preview {i}");
+        assert!((outer[0].0 - shape.drawn_radius() * scale).abs() < 1e-9);
+    }
+}

@@ -2,12 +2,12 @@
 
 use super::controls::{FieldMark, Page, Word, rect, word};
 use super::layout::X;
+use super::preview::pill_preview;
 use super::{SheetAction, SheetFacts, SheetView};
-use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
+use crate::draw::{Align, Ink, StationMark, TextStyle};
 use crate::lang::Text;
 use crate::lang::sheet::{SheetText as S, sheet_text};
 use crate::lang::text;
-use crate::pages::idle_pill::rest_shape;
 use crate::settings::change::SettingChange;
 use crate::settings::{HeadSlot, IdleLook, LocationMode, RunSpan, Settings, TempUnit};
 
@@ -46,28 +46,12 @@ fn previews(p: &mut Page, facts: &SheetFacts) {
             cell,
             if on { Ink::Ink } else { Ink::Border },
         ));
-        let shape = rest_shape(look);
-        let (px, py) = (x + 3.0, CELL_Y + 12.0);
-        if look == IdleLook::Hidden {
-            p.stroke(vec![(px, py + 1.0), (px + 90.0, py + 1.0)], Ink::Faint);
-        } else {
-            p.nodes.push(Node::Fill {
-                rect: rect(
-                    px,
-                    py,
-                    shape.width * PREVIEW_SCALE,
-                    shape.height * PREVIEW_SCALE,
-                ),
-                radius: shape.drawn_radius() * PREVIEW_SCALE,
-                ink: Ink::Floor,
-            });
-        }
-        p.nodes.push(Node::Inset {
-            list: facts.previews[i].clone(),
-            x: px,
-            y: py,
-            scale: PREVIEW_SCALE,
-        });
+        p.nodes.extend(pill_preview(
+            look,
+            facts.previews[i].clone(),
+            (x + 3.0, CELL_Y + 12.0),
+            PREVIEW_SCALE,
+        ));
         let mark = if on {
             StationMark::Filled
         } else {

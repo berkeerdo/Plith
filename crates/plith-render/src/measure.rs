@@ -25,10 +25,17 @@ impl TextMeasure {
     }
 
     /// The width of `text` in `style` in DIP, trailing spaces included, as the renderer lays it
-    /// out on one line (upper-cased for upper-case styles). Zero when DirectWrite fails.
+    /// out on one line (upper-cased for upper-case styles). Zero when DirectWrite fails; debug
+    /// builds (and so tests) panic on that failure instead, so it cannot pass unseen.
+    ///
+    /// # Panics
+    /// In debug builds only, when DirectWrite fails.
     pub fn width(&mut self, text: &str, style: TextStyle) -> f64 {
-        self.text
-            .measure(text, style, UNBOUNDED, Trim::End)
-            .map_or(0.0, f64::from)
+        let measured = self.text.measure(text, style, UNBOUNDED, Trim::End);
+        debug_assert!(
+            measured.is_ok(),
+            "text measure failed for {style:?}: {measured:?}"
+        );
+        measured.map_or(0.0, f64::from)
     }
 }

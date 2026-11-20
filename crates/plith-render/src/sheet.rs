@@ -5,6 +5,8 @@
 
 mod paint;
 mod target;
+#[cfg(test)]
+mod tests;
 
 use crate::device::Gpu;
 use crate::thread::RenderError;
@@ -130,7 +132,8 @@ impl SheetRender {
         self.shared.post(|inbox| inbox.list = Some(list));
     }
 
-    /// The client area is now `width_px` by `height_px` at `scale`; a zero size is ignored.
+    /// The client area is now `width_px` by `height_px` at `scale`; a zero size or a
+    /// non-finite or non-positive scale is ignored.
     pub fn resize(&self, width_px: u32, height_px: u32, scale: f64) {
         self.shared
             .post(|inbox| inbox.size = Some((width_px, height_px, scale)));
@@ -252,10 +255,13 @@ fn sheet_main(
     }
 }
 
-/// True when `next` is a usable size other than `current`.
+/// True when `next` is usable (non-zero pixels, a finite positive scale) and differs from
+/// `current`.
 fn is_new_size(next: Size, current: Size) -> bool {
     next.0 > 0
         && next.1 > 0
+        && next.2.is_finite()
+        && next.2 > 0.0
         && (next.0, next.1, next.2.to_bits()) != (current.0, current.1, current.2.to_bits())
 }
 

@@ -4,13 +4,13 @@
 #[path = "../examples/render_sheet/facts.rs"]
 mod facts;
 
-use plith_core::draw::{DisplayList, TextStyle, Trim};
+use plith_core::draw::{DisplayList, Node, TextStyle, Trim};
 use plith_core::lang::Lang;
 use plith_core::sheet::{Section, SheetView, sheet_build};
 use plith_core::theme::{Palette, Theme};
 use plith_render::sheet::{SheetConfig, SheetRender, render_sheet_offscreen};
 use plith_render::{TextMeasure, TextSystem};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::HWND;
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -59,15 +59,34 @@ fn sheet_floor_is_opaque() {
 
 #[test]
 fn inset_preview_visible() {
-    // The first preview (Karot) is inset at (187, 128) DIP, 90 x 14.4 DIP; at scale 2 that is
-    // pixels 374..554 by 256..284. Its time and turn text must put ink there.
-    let rows = render_sheet_offscreen(&idle_list(Lang::Tr), 2.0, palette()).unwrap();
-    let floor = palette().floor;
+    // The first preview (Karot): its time and turn text must put ink inside the inset, 2 DIP in
+    // from its edges (clear of the pill's outline), against the pill's raised floor.
+    let list = idle_list(Lang::Tr);
+    let inset = list
+        .nodes
+        .iter()
+        .find_map(|n| match n {
+            Node::Inset {
+                x,
+                y,
+                scale,
+                list: inner,
+            } => Some((*x, *y, inner.size.0 * scale, inner.size.1 * scale)),
+            _ => None,
+        })
+        .expect("an inset");
+    let rows = render_sheet_offscreen(&list, 2.0, palette()).unwrap();
+    let floor = palette().floor_high;
     let base = [byte(floor[2]), byte(floor[1]), byte(floor[0])];
-    let inked = (256..284)
-        .flat_map(|y| (374..554).map(move |x| (x, y)))
-        .filter(|&(x, y)| {
-            let p = pixel(&rows, 1680, x, y);
+    // Inset coordinates are a few hundred positive DIP.
+    #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
+    let px = |dip: f64| (dip * 2.0).round() as usize;
+    let (left, top, width, height) = inset;
+    let cols = px(left + 2.0)..px(left + width - 2.0);
+    let inked = (px(top + 2.0)..px(top + height - 2.0))
+        .flat_map(|row| cols.clone().map(move |col| (col, row)))
+        .filter(|&(col, row)| {
+            let p = pixel(&rows, 1680, col, row);
             (0..3).any(|k| p[k].abs_diff(base[k]) > 64)
         })
         .count();
@@ -131,7 +150,10 @@ fn sheet_thread_paints_on_demand() {
         scale: 1.0,
         palette: palette(),
     };
-    let render = SheetRender::spawn(config, Box::new(|e| panic!("fatal: {e}"))).unwrap();
+    let fatal: Arc<Mutex<Option<String>>> = Arc::default();
+    let sink = Arc::clone(&fatal);
+    let render =
+        SheetRender::spawn(config, Box::new(move |e| *sink.lock().unwrap() = Some(e))).unwrap();
     // Nothing to paint yet: the thread waits.
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(render.paints(), 0);
@@ -147,6 +169,7 @@ fn sheet_thread_paints_on_demand() {
     render.publish(list);
     wait_paints(&render, 3);
     render.stop_and_join();
+    assert_eq!(*fatal.lock().unwrap(), None);
     // SAFETY: the window was created on this thread and is destroyed once.
     unsafe { DestroyWindow(hwnd).unwrap() };
 }

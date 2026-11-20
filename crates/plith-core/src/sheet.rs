@@ -17,6 +17,7 @@ mod idle;
 mod keys;
 mod layout;
 mod osd;
+mod preview;
 
 pub use field::{FIELD_MAX, FieldOutcome, TextField};
 pub use keys::{KeyOutcome, SheetKey, commit_field, focus_field, on_key};
