@@ -17,6 +17,7 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     t += h;
     p.rule(t);
 
+    let flyout_on = s.osd && !facts.flyout_locked;
     let hide = s.flyout == FlyoutPref::Hide;
     let to = if hide {
         FlyoutPref::Off
@@ -27,9 +28,9 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
         t,
         p.word(S::RowHideWindows),
         Some(p.word(S::SubHideWindows)),
-        s.osd,
+        flyout_on,
     );
-    p.toggle(1, t, hide, SettingChange::Flyout(to), s.osd);
+    p.toggle(1, t, hide, SettingChange::Flyout(to), flyout_on);
     t += h;
     p.rule(t);
 }

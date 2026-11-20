@@ -149,3 +149,92 @@ fn a_change_without_a_saver_still_applies() {
     app.flush_saver();
     clean(app, "nosave");
 }
+
+/// Saves go to the returned path; the app shows `Clock` while the file holds `Karot`.
+fn pinned(name: &str) -> (App, PathBuf) {
+    let mut app = fed(name);
+    let path = folder(name).join("settings.ini");
+    app.attach_saver(Saver::start(
+        path.clone(),
+        Box::new(|| {}),
+        Box::new(|_| {}),
+    ));
+    app.settings.look = IdleLook::Clock;
+    app.keep_file_look(Some(IdleLook::Karot));
+    (app, path)
+}
+
+fn saved_look(path: &std::path::Path) -> IdleLook {
+    parse(&std::fs::read_to_string(path).unwrap()).0.look
+}
+
+#[test]
+fn the_command_line_look_is_not_saved_with_another_change() {
+    let (mut app, path) = pinned("cli-look");
+    app.change(SettingChange::Plays(false));
+    app.flush_saver();
+    assert_eq!(saved_look(&path), IdleLook::Karot, "the file's own look");
+    assert_eq!(
+        app.settings.look,
+        IdleLook::Clock,
+        "this run still shows it"
+    );
+    clean(app, "cli-look");
+}
+
+#[test]
+fn picking_a_look_saves_it_even_when_it_is_the_one_shown() {
+    let (mut app, path) = pinned("cli-pick");
+    app.change(SettingChange::Look(IdleLook::Clock));
+    app.change(SettingChange::Plays(false));
+    app.flush_saver();
+    assert_eq!(saved_look(&path), IdleLook::Clock);
+    clean(app, "cli-pick");
+}
+
+#[test]
+fn every_change_refreshes_an_open_settings_window() {
+    let mut app = fed("refresh");
+    let before = app.sheet.refreshes;
+    app.change(SettingChange::Look(IdleLook::Plain));
+    assert_eq!(app.sheet.refreshes, before + 1);
+    app.change(SettingChange::Look(IdleLook::Plain));
+    assert_eq!(app.sheet.refreshes, before + 1, "nothing changed");
+    clean(app, "refresh");
+}
+
+/// Weather on with a running link and no network, so applying a change stops the link.
+fn without_network(name: &str) -> App {
+    let mut app = with_link(name);
+    let wiring = WeatherWiring::new(Arc::clone(&app.log), Arc::new(|| {}), false);
+    app.attach_weather(wiring, false);
+    app
+}
+
+#[test]
+fn a_city_committed_at_exit_is_saved_but_not_applied() {
+    let mut app = without_network("exit-city");
+    let path = folder("exit-city").join("settings.ini");
+    app.attach_saver(Saver::start(
+        path.clone(),
+        Box::new(|| {}),
+        Box::new(|_| {}),
+    ));
+    app.save_change(SettingChange::City(String::from("Bursa")));
+    assert!(
+        app.feed.as_mut().unwrap().take_weather().is_some(),
+        "the weather was not reconfigured"
+    );
+    app.flush_saver();
+    let saved = parse(&std::fs::read_to_string(&path).unwrap()).0;
+    assert_eq!(saved.city, "Bursa");
+    clean(app, "exit-city");
+}
+
+#[test]
+fn a_city_change_while_running_does_apply() {
+    let mut app = without_network("run-city");
+    app.change(SettingChange::City(String::from("Bursa")));
+    assert!(app.feed.as_mut().unwrap().take_weather().is_none());
+    clean(app, "run-city");
+}

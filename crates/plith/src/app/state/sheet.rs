@@ -5,7 +5,7 @@
 //! the app. Opening happens inside the app's own event handling, which is safe because
 //! `SheetWindow::open` never calls back, and the island's shell queues nested events.
 
-use super::App;
+use super::{App, OsdControl};
 use crate::app::feed::Feed;
 use crate::app::idle_wiring::language_of;
 use crate::app::sheet_side::{Opening, SheetSide, Step, blank};
@@ -60,6 +60,9 @@ pub struct SheetHost {
     previews: Option<Previews>,
     shown: Option<Shown>,
     caret_armed: bool,
+    /// How often `refresh_sheet` ran, for the tests.
+    #[cfg(test)]
+    pub(in crate::app) refreshes: u32,
 }
 
 impl Default for SheetHost {
@@ -75,6 +78,8 @@ impl Default for SheetHost {
             previews: None,
             shown: None,
             caret_armed: false,
+            #[cfg(test)]
+            refreshes: 0,
         }
     }
 }
@@ -184,6 +189,10 @@ impl App {
     /// language, a failed save, the previews when the pill rebuilt), keeps its title in the
     /// current language and the caret timer in step with the field focus.
     pub(super) fn refresh_sheet(&mut self) {
+        #[cfg(test)]
+        {
+            self.sheet.refreshes += 1;
+        }
         if self.sheet.side.is_none() {
             return;
         }
@@ -239,6 +248,11 @@ impl App {
     /// Closes the window, if open: a city still being typed is committed and applied first.
     /// Remembers the section for the next opening.
     pub fn close_sheet(&mut self) {
+        self.close_sheet_with(true);
+    }
+
+    /// `close_sheet`; with `apply` false (at exit) the committed city is only saved.
+    pub(super) fn close_sheet_with(&mut self, apply: bool) {
         let Some(mut side) = self.sheet.side.take() else {
             return;
         };
@@ -251,7 +265,11 @@ impl App {
         self.sync_caret();
         self.log.line("settings window: closed");
         if let Some(city) = city {
-            self.change(SettingChange::City(city));
+            if apply {
+                self.change(SettingChange::City(city));
+            } else {
+                self.save_change(SettingChange::City(city));
+            }
         }
     }
 
@@ -268,7 +286,7 @@ impl App {
         {
             return false;
         }
-        let lists = IdleLook::ALL.map(|look| Arc::new(idle_pill(look, facts)));
+        let lists = static_previews(facts);
         self.sheet.previews = Some((facts.clone(), lists));
         true
     }
@@ -288,6 +306,8 @@ impl App {
             lang,
             previews,
             version: env!("CARGO_PKG_VERSION"),
+            build_date: env!("PLITH_BUILD_DATE"),
+            flyout_locked: self.osd.as_ref().is_some_and(OsdControl::flyout_locked),
             settings_path: self.sheet.settings_path.clone(),
             save_failed: self.save_failed(),
         }
@@ -311,6 +331,16 @@ impl App {
                 .line(&format!("settings window: cannot open the folder: {error}"));
         }
     }
+}
+
+/// The six previews of `facts`, with no running title scroll: a scrolling title is a live node,
+/// which a preview skips, so the title would vanish for the seconds the scroll runs.
+fn static_previews(facts: &IdleFacts) -> [Arc<DisplayList>; 6] {
+    let still = IdleFacts {
+        scroll_start: None,
+        ..facts.clone()
+    };
+    IdleLook::ALL.map(|look| Arc::new(idle_pill(look, &still)))
 }
 
 fn shown(facts: &SheetFacts) -> Shown {

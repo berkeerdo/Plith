@@ -87,6 +87,8 @@ pub fn sheet_facts(lang: Lang) -> SheetFacts {
         lang,
         previews: LOOKS.map(|look| Arc::new(idle_pill(look, &idle))),
         version: "0.1.0",
+        build_date: "2026-11-20",
+        flyout_locked: false,
         settings_path: "C:\\Users\\someone\\AppData\\Local\\Plith\\settings.ini".into(),
         save_failed: false,
     }

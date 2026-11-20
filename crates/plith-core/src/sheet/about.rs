@@ -13,7 +13,7 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     let h = p.head(t, p.word(S::RowVersion), None, true);
     p.text(
         rect(R - 200.0, t + 9.0, 200.0, 14.0),
-        facts.version,
+        &format!("{}  {}", facts.version, facts.build_date),
         TextStyle::Value,
         Ink::Muted,
         Align::End,

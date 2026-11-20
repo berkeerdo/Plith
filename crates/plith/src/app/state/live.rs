@@ -9,8 +9,8 @@ use crate::app::saver::Saver;
 use crate::app::weather_link::WeatherWiring;
 use crate::plays_file;
 use plith_core::launch::{FlyoutMode, flyout_mode};
-use plith_core::settings::Settings;
 use plith_core::settings::change::{Effects, SettingChange, apply_change};
+use plith_core::settings::{IdleLook, Settings};
 use std::sync::Arc;
 
 /// The OSD slot of a normal run and the `--flyout` that wins over the settings file.
@@ -20,6 +20,12 @@ pub struct OsdControl {
 }
 
 impl OsdControl {
+    /// Whether `--flyout` is on the command line (it wins over the setting).
+    #[must_use]
+    pub fn flyout_locked(&self) -> bool {
+        self.cli.is_some()
+    }
+
     /// Wraps `slot`; `cli` is the command line's flyout mode, if any.
     #[must_use]
     pub fn new(slot: OsdSlot<RealOsd>, cli: Option<FlyoutMode>) -> Self {
@@ -61,7 +67,7 @@ impl App {
     /// At exit: the settings window first (a city still being typed is committed), then the
     /// file.
     pub fn finish_settings(&mut self) {
-        self.close_sheet();
+        self.close_sheet_with(false);
         self.flush_saver();
     }
 
@@ -70,20 +76,46 @@ impl App {
         self.saver.as_ref().is_some_and(Saver::failed)
     }
 
+    /// Remembers the look the settings file holds while `--idle-look` shows another one for
+    /// this run, so saves keep the file's value until the user picks a look.
+    pub fn keep_file_look(&mut self, look: Option<IdleLook>) {
+        self.file_look = look;
+    }
+
     /// The one path of a setting change, from the settings window or the quick page: update
     /// the settings, apply what changed while running, then save. A value already set does
     /// nothing.
     pub fn change(&mut self, change: SettingChange) {
+        self.change_with(change, true);
+    }
+
+    /// Commits a city typed in the window at exit: saved, not applied (the weather is going
+    /// away).
+    pub(super) fn save_change(&mut self, change: SettingChange) {
+        self.change_with(change, false);
+    }
+
+    /// The change path; `apply` false only records and saves the change.
+    fn change_with(&mut self, change: SettingChange, apply: bool) {
+        // Picking a look ends the command line's override, even to the look already shown.
+        let unpinned = matches!(change, SettingChange::Look(_)) && self.file_look.take().is_some();
         let effects = apply_change(&mut self.settings, change);
         // Every field that changed reports at least one effect.
-        if effects == Effects::default() {
+        if effects == Effects::default() && !unpinned {
             return;
         }
         let settings = self.settings.clone();
-        self.apply_settings(&settings, effects);
-        if let Some(saver) = &self.saver {
-            saver.save(settings);
+        if apply {
+            self.apply_settings(&settings, effects);
         }
+        if let Some(saver) = &self.saver {
+            let mut saved = settings;
+            if let Some(look) = self.file_look {
+                saved.look = look;
+            }
+            saver.save(saved);
+        }
+        self.refresh_sheet();
     }
 
     /// Applies `settings` after a change with `effects` (see `apply_change`): the feed, then

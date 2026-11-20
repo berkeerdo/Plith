@@ -11,7 +11,7 @@ use crate::osd::OsdSink;
 use plith_core::demo::DemoStep;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
-use plith_core::settings::Settings;
+use plith_core::settings::{IdleLook, Settings};
 use plith_render::StopHandle;
 use plith_shell::ShellEvent;
 use std::sync::Arc;
@@ -64,6 +64,9 @@ pub struct App {
     pub(super) drag: Option<ActiveDrag>,
     /// The settings of the run; the app is their one owner and applies every change.
     settings: Settings,
+    /// The look the settings file holds while `--idle-look` overrides it for this run: saves
+    /// write it until the user picks a look.
+    file_look: Option<IdleLook>,
     /// Writes the settings file; a normal run only.
     saver: Option<Saver>,
     /// The settings window.
@@ -96,6 +99,7 @@ impl App {
             osd: None,
             normal_run: false,
             settings: Settings::default(),
+            file_look: None,
             saver: None,
             sheet: SheetHost::default(),
         }

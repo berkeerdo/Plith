@@ -10,7 +10,7 @@ use crate::{locale, plays_file, settings_file};
 use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
-use plith_core::settings::Settings;
+use plith_core::settings::{IdleLook, Settings};
 use plith_core::weather::Stamp;
 use plith_shell::UiWaker;
 use std::sync::Arc;
@@ -26,18 +26,27 @@ pub fn is_normal(launch: &Launch) -> bool {
 /// on top. The banana fixture shows the mock's forecast, so its weather is on (no network).
 #[must_use]
 pub fn settings_for(launch: &Launch, log: &LogFile) -> Settings {
+    settings_and_file_look(launch, log).0
+}
+
+/// `settings_for`, and the look the file holds when `--idle-look` overrides it for this run
+/// (the app keeps writing that one, not the override).
+#[must_use]
+pub fn settings_and_file_look(launch: &Launch, log: &LogFile) -> (Settings, Option<IdleLook>) {
     let mut settings = if is_normal(launch) {
         settings_file::load(log)
     } else {
         Settings::default()
     };
+    let mut file_look = None;
     if let Some(look) = launch.idle_look {
+        file_look = Some(settings.look);
         settings.look = look;
     }
     if launch.fixture == Some(Fixture::Banana) {
         settings.weather = true;
     }
-    settings
+    (settings, file_look)
 }
 
 /// The interface language of a run: the setting, or Windows' own for `Auto`. Resolved once at

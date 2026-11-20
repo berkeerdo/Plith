@@ -101,3 +101,43 @@ fn the_open_window_runs_the_minute_clock_for_its_previews() {
     drop(app);
     std::fs::remove_dir_all(folder()).unwrap();
 }
+
+fn long_title_facts(scroll_start: Option<std::time::SystemTime>) -> IdleFacts {
+    IdleFacts {
+        time: String::from("10:05"),
+        turn: None,
+        now_sky: None,
+        playing: Some((
+            String::from("A Very Long Song Title That Cannot Fit"),
+            String::from("Artist"),
+        )),
+        seal: plith_core::pages::pill::PillFacts {
+            output: String::from("G733"),
+            value: Some(62),
+            state: plith_core::pages::pill::PillState::Live,
+        },
+        sound: None,
+        lang: Lang::En,
+        scroll_start,
+    }
+}
+
+fn has_live(list: &DisplayList) -> bool {
+    list.nodes
+        .iter()
+        .any(|n| matches!(n, plith_core::draw::Node::Live(_)))
+}
+
+#[test]
+fn previews_show_the_title_while_its_scroll_runs() {
+    let running = long_title_facts(Some(std::time::SystemTime::UNIX_EPOCH));
+    let karot = IdleLook::ALL.iter().position(|l| *l == IdleLook::Karot);
+    let live = idle_pill(IdleLook::Karot, &running);
+    assert!(has_live(&live), "the real pill scrolls");
+    let previews = static_previews(&running);
+    assert!(previews.iter().all(|list| !has_live(list)));
+    assert_eq!(
+        previews[karot.unwrap()].as_ref(),
+        &idle_pill(IdleLook::Karot, &long_title_facts(None))
+    );
+}

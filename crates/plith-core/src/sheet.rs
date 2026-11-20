@@ -65,8 +65,12 @@ pub struct SheetFacts {
     pub previews: [Arc<DisplayList>; 6],
     /// The version shown in the About section.
     pub version: &'static str,
+    /// The UTC build date (`YYYY-MM-DD`), shown next to the version.
+    pub build_date: &'static str,
     /// The path of the settings file.
     pub settings_path: String,
+    /// Whether `--flyout` is on the command line, so the flyout row has no effect.
+    pub flyout_locked: bool,
     /// Whether the last save failed.
     pub save_failed: bool,
 }

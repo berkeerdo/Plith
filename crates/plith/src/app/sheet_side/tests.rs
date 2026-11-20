@@ -11,6 +11,8 @@ fn facts(settings: Settings) -> SheetFacts {
         lang: Lang::En,
         previews: std::array::from_fn(|_| Arc::new(blank())),
         version: "0.0.0",
+        build_date: "2026-11-20",
+        flyout_locked: false,
         settings_path: String::from("C:\\x\\settings.ini"),
         save_failed: false,
     }

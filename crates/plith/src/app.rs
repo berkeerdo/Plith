@@ -264,7 +264,7 @@ fn attach_feed(
     let levels = services.level_source();
     let mut app = app.borrow_mut();
     // The language is resolved once, here, for every run mode (normal, demo, fixture, idle check).
-    let settings = idle_wiring::settings_for(launch, log);
+    let (settings, file_look) = idle_wiring::settings_and_file_look(launch, log);
     let lang = idle_wiring::language_of(&settings);
     let mut feed = Feed::new(
         services,
@@ -284,6 +284,7 @@ fn attach_feed(
     app.attach_feed(feed);
     app.attach_weather(weather, idle_wiring::is_normal(launch));
     app.set_settings(settings.clone());
+    app.keep_file_look(file_look);
     Attached {
         levels,
         content,
