@@ -5,11 +5,12 @@
 use super::App;
 use crate::app::idle_wiring::language_of;
 use crate::app::osd_slot::{OsdSlot, RealOsd};
+use crate::app::saver::Saver;
 use crate::app::weather_link::WeatherWiring;
 use crate::plays_file;
 use plith_core::launch::{FlyoutMode, flyout_mode};
 use plith_core::settings::Settings;
-use plith_core::settings::change::Effects;
+use plith_core::settings::change::{Effects, SettingChange, apply_change};
 use std::sync::Arc;
 
 /// The OSD slot of a normal run and the `--flyout` that wins over the settings file.
@@ -40,9 +41,53 @@ impl App {
         self.apply_osd(settings);
     }
 
+    /// Takes the settings of the run; the app owns them from here on.
+    pub fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+    }
+
+    /// Saves every later change through `saver`; a normal run only.
+    pub fn attach_saver(&mut self, saver: Saver) {
+        self.saver = Some(saver);
+    }
+
+    /// Writes the settings still queued and ends the saver, at exit.
+    pub fn flush_saver(&mut self) {
+        if let Some(saver) = self.saver.take() {
+            saver.flush_and_join();
+        }
+    }
+
+    /// At exit: the settings window first (a city still being typed is committed), then the
+    /// file.
+    pub fn finish_settings(&mut self) {
+        self.close_sheet();
+        self.flush_saver();
+    }
+
+    /// Whether the last save failed.
+    pub(super) fn save_failed(&self) -> bool {
+        self.saver.as_ref().is_some_and(Saver::failed)
+    }
+
+    /// The one path of a setting change, from the settings window or the quick page: update
+    /// the settings, apply what changed while running, then save. A value already set does
+    /// nothing.
+    pub fn change(&mut self, change: SettingChange) {
+        let effects = apply_change(&mut self.settings, change);
+        // Every field that changed reports at least one effect.
+        if effects == Effects::default() {
+            return;
+        }
+        let settings = self.settings.clone();
+        self.apply_settings(&settings, effects);
+        if let Some(saver) = &self.saver {
+            saver.save(settings);
+        }
+    }
+
     /// Applies `settings` after a change with `effects` (see `apply_change`): the feed, then
     /// the weather link, then the OSD side.
-    #[expect(dead_code, reason = "the settings window calls it (plan Task 10)")]
     pub fn apply_settings(&mut self, settings: &Settings, effects: Effects) {
         if let Some(feed) = &mut self.feed {
             // Only a normal run reads and writes the play log.
@@ -100,3 +145,6 @@ impl App {
         }
     }
 }
+
+#[cfg(test)]
+mod tests;

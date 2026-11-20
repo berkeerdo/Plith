@@ -7,6 +7,8 @@ mod idle_facts;
 mod idle_wiring;
 mod input;
 mod osd_slot;
+mod saver;
+mod sheet_side;
 mod state;
 mod weather_link;
 mod wire;
@@ -20,6 +22,7 @@ use crate::log::{self, LogFile};
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
+use crate::settings_file;
 use crate::{demo, idle};
 use feed::Feed;
 use osd_slot::{OsdSlot, RealOsd};
@@ -33,6 +36,7 @@ use plith_shell::{
     MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,
     primary_monitor, run_message_loop, uninit_ui_thread, user_busy,
 };
+use saver::Saver;
 use state::App;
 use state::OsdControl;
 use std::cell::RefCell;
@@ -137,7 +141,7 @@ fn run_shell(
         board,
         settings,
     } = attach_feed(launch, &shell, log, &app);
-    start_osd(launch, log, &shell, &app, &settings);
+    start_sides(launch, log, &shell, &app, &settings, monitor);
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
@@ -157,9 +161,7 @@ fn run_shell(
             return 1;
         }
     };
-    app.borrow_mut().attach_render(render.stop_handle());
-    let (steps, demo_steps) = mpsc::channel();
-    app.borrow_mut().attach_demo(demo_steps);
+    let steps = attach_render_and_demo(&app, &render);
     let stop = Arc::new(AtomicBool::new(false));
     let fired = Arc::new(AtomicBool::new(false));
     let helpers = Helpers {
@@ -175,6 +177,7 @@ fn run_shell(
         board,
     };
     let (loop_code, idle_ok) = drive(&helpers);
+    app.borrow_mut().finish_settings();
     // The `Closing` handler normally joined the renderer already (this call is then a no-op).
     // Otherwise the window may already be gone: join before the `Shell` drops, and treat a
     // failure from here on as part of the close.
@@ -280,6 +283,7 @@ fn attach_feed(
     );
     app.attach_feed(feed);
     app.attach_weather(weather, idle_wiring::is_normal(launch));
+    app.set_settings(settings.clone());
     Attached {
         levels,
         content,
@@ -310,6 +314,52 @@ fn start_osd(
     );
     app.borrow_mut()
         .attach_osd(OsdControl::new(slot, launch.flyout), settings);
+}
+
+/// Tells the app how to stop the render thread and hands it the demo's scene steps; returns
+/// the sender the demo thread posts them through.
+fn attach_render_and_demo(app: &Rc<RefCell<App>>, render: &RenderHandle) -> Sender<DemoStep> {
+    let mut app = app.borrow_mut();
+    app.attach_render(render.stop_handle());
+    let (steps, demo_steps) = mpsc::channel();
+    app.attach_demo(demo_steps);
+    steps
+}
+
+/// Starts the OSD side and attaches the settings side.
+fn start_sides(
+    launch: &Launch,
+    log: &Arc<LogFile>,
+    shell: &Shell,
+    app: &Rc<RefCell<App>>,
+    settings: &Settings,
+    monitor: &MonitorInfo,
+) {
+    start_osd(launch, log, shell, app, settings);
+    attach_settings_side(launch, log, shell, app, monitor);
+}
+
+/// Lets the quick page open the settings window, and in a normal run saves every change: probing
+/// runs never write the settings file.
+fn attach_settings_side(
+    launch: &Launch,
+    log: &Arc<LogFile>,
+    shell: &Shell,
+    app: &Rc<RefCell<App>>,
+    monitor: &MonitorInfo,
+) {
+    let mut app = app.borrow_mut();
+    let waker = shell.ui_waker();
+    app.attach_sheet(monitor.handle, Arc::new(move || waker.wake()));
+    if !idle_wiring::is_normal(launch) {
+        return;
+    }
+    match settings_file::default_path() {
+        Ok(path) => app.attach_saver(Saver::spawn(path, shell.ui_waker(), Arc::clone(log))),
+        Err(error) => log.line(&format!(
+            "settings: no folder, changes are not saved: {error}"
+        )),
+    }
 }
 
 /// Everything the helper threads and the message loop share.

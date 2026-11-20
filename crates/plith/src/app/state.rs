@@ -3,6 +3,7 @@
 use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::input::drag::ActiveDrag;
+use super::saver::Saver;
 use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
 use crate::log::LogFile;
@@ -10,6 +11,7 @@ use crate::osd::OsdSink;
 use plith_core::demo::DemoStep;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_core::settings::Settings;
 use plith_render::StopHandle;
 use plith_shell::ShellEvent;
 use std::sync::Arc;
@@ -60,6 +62,12 @@ pub struct App {
     normal_run: bool,
     /// The ruler drag under way, from the press to the release.
     pub(super) drag: Option<ActiveDrag>,
+    /// The settings of the run; the app is their one owner and applies every change.
+    settings: Settings,
+    /// Writes the settings file; a normal run only.
+    saver: Option<Saver>,
+    /// The settings window.
+    sheet: SheetHost,
 }
 
 impl App {
@@ -87,6 +95,9 @@ impl App {
             weather: None,
             osd: None,
             normal_run: false,
+            settings: Settings::default(),
+            saver: None,
+            sheet: SheetHost::default(),
         }
     }
 
@@ -163,6 +174,7 @@ impl App {
             ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),
             ShellEvent::Timer(COLLAPSE_TIMER) => self.on_collapse_tick(),
+            ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,
@@ -180,11 +192,14 @@ impl App {
                 if let Some(feed) = &mut self.feed {
                     feed.on_wake(&self.mailbox);
                 }
+                self.drain_sheet();
             }
             ShellEvent::Timer(id) => {
                 if let Some(feed) = &mut self.feed {
                     feed.on_timer(id, &self.mailbox);
                 }
+                // The minute tick rebuilds the pill; the window's previews follow it.
+                self.refresh_sheet();
             }
             ShellEvent::DisplayChanged => self.log.line("display changed: restart needed"),
             ShellEvent::Raised {
@@ -199,8 +214,10 @@ impl App {
 }
 
 mod live;
+mod sheet;
 
 pub use live::OsdControl;
+use sheet::{CARET_TIMER, SheetHost};
 
 #[cfg(test)]
 mod tests;

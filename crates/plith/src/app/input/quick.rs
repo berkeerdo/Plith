@@ -1,18 +1,22 @@
-//! The quick page's clicks. Task 10 wires the settings window; until then both only log.
+//! The quick page's clicks: a look applies and is saved at once, the settings row opens the
+//! settings window.
 
 use crate::app::state::App;
 use plith_core::pages::PageId;
 use plith_core::settings::IdleLook;
+use plith_core::settings::change::SettingChange;
 
 impl App {
-    /// A look was picked on the quick page. It will apply the look and save it; for now it logs.
+    /// A look was picked on the quick page: the same change path as the settings window.
     pub(in crate::app) fn on_look(&mut self, look: IdleLook) {
         self.log.line(&format!("quick: look {}", look.key()));
+        self.change(SettingChange::Look(look));
     }
 
-    /// The settings row was clicked. It will open the settings window; for now it logs.
+    /// The settings row was clicked: opens the settings window, or raises the open one.
     pub(in crate::app) fn on_open_settings(&mut self) {
         self.log.line("quick: open settings");
+        self.open_sheet();
     }
 
     /// The page an opening with no page of its own lands on. `open_on = LastPage` never records

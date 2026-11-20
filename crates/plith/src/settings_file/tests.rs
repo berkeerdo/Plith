@@ -70,3 +70,13 @@ fn save_is_atomic() {
     assert!(!dir.join("settings.ini.tmp").exists());
     assert_eq!(load_at(&path, &log), second);
 }
+
+#[test]
+fn a_failed_rename_leaves_no_temp_file() {
+    let dir = folder("rename");
+    // A folder where the file should be: the rename onto it fails.
+    let path = dir.join("settings.ini");
+    std::fs::create_dir_all(&path).unwrap();
+    assert!(save_at(&path, &Settings::default()).is_err());
+    assert!(!dir.join("settings.ini.tmp").exists());
+}

@@ -5,7 +5,7 @@
 use super::{Dirty, Feed, PAGE_COUNT, WeatherLink, is_open};
 use crate::app::idle_facts::Idle;
 use plith_core::pages::PageId;
-use plith_core::pages::idle_pill::rest_shape;
+use plith_core::pages::idle_pill::{IdleFacts, rest_shape};
 use plith_core::scene::{Scene, SceneMailbox};
 use plith_core::settings::{IdleLook, OpenOn};
 
@@ -41,6 +41,12 @@ impl Feed {
     /// Hands the feed the weather service it reads forecasts from.
     pub fn set_weather(&mut self, weather: Option<WeatherLink>) {
         self.weather = weather;
+    }
+
+    /// What the resting pill was last built from; the settings window's previews follow it.
+    #[must_use]
+    pub fn idle_facts(&self) -> Option<&IdleFacts> {
+        self.idle_facts.as_ref()
     }
 
     /// The resting look; `None` before the idle model is attached.

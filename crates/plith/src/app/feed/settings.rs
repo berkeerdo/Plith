@@ -66,7 +66,6 @@ impl Feed {
     }
 
     /// Takes the weather link out, to reconfigure, stop or replace it.
-    #[expect(dead_code, reason = "the settings window reaches it (plan Task 10)")]
     pub fn take_weather(&mut self) -> Option<WeatherLink> {
         self.weather.take()
     }
