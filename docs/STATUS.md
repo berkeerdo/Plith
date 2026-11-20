@@ -34,10 +34,10 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   (fixed in the console check, `ec86288`), one-shot title scroll, ruler drag, OSD prewarm. Five
   checks on the merge, 1113 tests. Console 2026-11-19: Berke "çalışıyor hepsi"; Karot idle 60 s
   1 wake (allowed 2). Worktree removed. Earlier console sessions: `journal/2026-11.md`.
-- **Next: the R7 settings window** (two layers like Oyenza; language choice with a live switch;
-  idle look, weather, location and OSD toggles; gives `WeatherService::reconfigure` its caller).
-  New feature: brainstorming, spec, plan first. Background of the R7 direction:
-  `journal/2026-11.md`.
+- **Now running: the R7 settings window.** Spec `specs/2026-11-20-r7-settings-window-design.md`
+  (approved 2026-11-20), plan `plans/active/r7-settings.md` (12 tasks, subagent-driven, branch
+  `feature/settings-window` in `.claude/worktrees/settings`; Berke allowed task commits there,
+  merge to `main` asks). Sections Genel, Boşta, OSD, Hakkında; quick page behind a gear mark.
 - Still owed on screen, another day: weather on (his yes) to `OKUMA`; osd Task 9 over a game
   (`--flyout hide`), with the first-show present hitch below; 20 s ambient on the audio and
   media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
