@@ -284,7 +284,7 @@ fn page_has_hero_clock_date_home_active_and_no_station_active() {
     let page = welcome_page(&facts(), None);
     assert_eq!(page.shape, shapes::WELCOME);
     assert_eq!(page.list.size, (620.0, 232.0));
-    assert_eq!(page.targets.len(), 5, "home plus four tabs");
+    assert_eq!(page.targets.len(), 6, "home, four tabs and the gear");
     // ADR 0016: the tab bar drawn as on the welcome page, its home mark inked active.
     let (bar, _) = crate::pages::tabbar::tabbar(Some(PageId::Welcome), "", facts().lang);
     assert_eq!(page.list.nodes[..bar.len()], bar[..], "home mark active");

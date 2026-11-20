@@ -20,6 +20,16 @@ pub enum IdleLook {
 }
 
 impl IdleLook {
+    /// Every look, in the order the previews show them.
+    pub const ALL: [IdleLook; 6] = [
+        Self::Karot,
+        Self::Clock,
+        Self::Playing,
+        Self::Seal,
+        Self::Plain,
+        Self::Hidden,
+    ];
+
     /// The key shared by the settings file and `--idle-look`.
     #[must_use]
     pub fn key(self) -> &'static str {

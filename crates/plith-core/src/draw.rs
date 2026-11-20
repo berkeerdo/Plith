@@ -341,7 +341,7 @@ pub struct PageContent {
 }
 
 impl PageContent {
-    /// Five empty pages, an empty pill and no artwork.
+    /// One empty list per page, an empty pill and no artwork.
     #[must_use]
     pub fn empty() -> Self {
         let empty = || Arc::new(DisplayList::empty());

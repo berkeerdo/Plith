@@ -17,7 +17,8 @@ pub const REST_HIDDEN: IslandShape = IslandShape {
     radius: 0.0,
 };
 
-/// The pages: audio, media, shelf, system and the welcome view. These are pre-feed defaults
+/// The pages: audio, media, shelf, system, the welcome view and the quick page. These are
+/// pre-feed defaults
 /// only: the feed publishes the shapes of the built pages at once (`pages::*::*_page().shape`).
 pub const PAGES: [IslandShape; PAGE_COUNT] = [
     IslandShape {
@@ -41,6 +42,7 @@ pub const PAGES: [IslandShape; PAGE_COUNT] = [
         radius: 24.0,
     },
     WELCOME,
+    QUICK,
 ];
 
 /// The welcome view, the fifth page: the island's opening view, with no tab.
@@ -61,3 +63,11 @@ pub const TOP_GAP: f64 = 0.0;
 pub const SURFACE_MARGIN: f64 = 20.0;
 /// Room reserved for spring overshoot, as a factor of the page size.
 pub const OVERSHOOT: f64 = 1.05;
+
+/// The quick settings page behind the gear mark: the tab row, the closed island caption, six look
+/// previews, a rule and one row that opens the settings window.
+pub const QUICK: IslandShape = IslandShape {
+    width: 620.0,
+    height: 208.0,
+    radius: 24.0,
+};

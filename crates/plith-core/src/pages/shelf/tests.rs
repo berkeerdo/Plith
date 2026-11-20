@@ -51,7 +51,7 @@ fn shelf_empty_copy_and_siding() {
 #[test]
 fn shelf_has_only_tab_targets() {
     let page = shelf_page("09:41", Lang::Tr);
-    assert_eq!(page.targets.len(), 5, "home plus four tabs");
+    assert_eq!(page.targets.len(), 6, "home, four tabs and the gear");
     assert!(
         page.targets
             .iter()

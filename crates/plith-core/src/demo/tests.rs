@@ -53,7 +53,7 @@ fn repeat_must_be_last_and_page_index_must_exist() {
         Err(DemoError::RepeatNotLast(_))
     ));
     assert!(matches!(
-        DemoScript::parse("page 5"),
+        DemoScript::parse("page 6"),
         Err(DemoError::PageOutOfRange(_))
     ));
     assert!(DemoScript::parse("page 3").is_ok());

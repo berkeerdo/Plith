@@ -137,7 +137,7 @@ fn an_aimed_expand_prewarms_start_and_target_before_the_first_clock_wait() {
     );
     assert_eq!(
         warms[1].0,
-        vec![1, 3, 4],
+        vec![1, 3, 4, 5],
         "the other pages after it settled"
     );
     assert!(warms[1].1 >= calls + report.frames as u64);
@@ -145,7 +145,7 @@ fn an_aimed_expand_prewarms_start_and_target_before_the_first_clock_wait() {
         run.prewarm_notes(),
         vec![
             "prewarm: pages 0,2 0.75 ms (aim)".to_string(),
-            "prewarm: pages 1,3,4 0.75 ms (rest)".to_string(),
+            "prewarm: pages 1,3,4,5 0.75 ms (rest)".to_string(),
         ]
     );
     let _ = run.stop();

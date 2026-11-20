@@ -30,6 +30,8 @@ impl App {
         match route_click(expanded, &layers, targets, x, y) {
             ClickResult::Expand => self.expand(),
             ClickResult::Action(Action::Tab(page)) => self.turn_to(page),
+            ClickResult::Action(Action::Look(look)) => self.on_look(look),
+            ClickResult::Action(Action::OpenSettings) => self.on_open_settings(),
             ClickResult::Action(action) => {
                 if let Some(feed) = self.feed.as_mut() {
                     dispatch(feed, &self.mailbox, action);
@@ -42,7 +44,11 @@ impl App {
     /// Opens the island with the pages brought up to date first: on the welcome view, or on the
     /// page shown last when the settings say so.
     fn expand(&mut self) {
-        let page = self.feed.as_ref().and_then(Feed::open_page);
+        let page = self
+            .feed
+            .as_ref()
+            .and_then(Feed::open_page)
+            .or_else(|| self.last_page());
         self.expand_on(page);
     }
 
@@ -196,6 +202,8 @@ impl App {
 }
 
 pub(super) mod drag;
+mod quick;
+
 #[cfg(test)]
 mod drag_tests;
 
@@ -237,6 +245,8 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         }
         // `hit` resolves the rulers and the app handles tabs before dispatch.
         Action::Tab(_)
+        | Action::Look(_)
+        | Action::OpenSettings
         | Action::SeekRuler(_)
         | Action::BrightnessRuler(_)
         | Action::VolumeRuler(_) => {}

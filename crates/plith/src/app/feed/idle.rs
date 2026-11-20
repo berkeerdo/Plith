@@ -31,7 +31,8 @@ impl Feed {
             Dirty {
                 pages: [false; PAGE_COUNT],
                 pill: true,
-            },
+            }
+            .with_quick(),
             mailbox,
         );
         self.sync_timers(mailbox);
@@ -101,6 +102,7 @@ impl Feed {
             ..Dirty::default()
         };
         dirty.pages[PageId::Welcome.index()] = self.welcome != welcome;
+        dirty = dirty.with_quick();
         self.idle_facts = pill;
         self.welcome = welcome;
         dirty

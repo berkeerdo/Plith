@@ -53,6 +53,28 @@ pub(crate) fn home(x: f64, y: f64, ink: Ink) -> Vec<Node> {
         .collect()
 }
 
+/// Teeth of the gear mark.
+const GEAR_TEETH: u32 = 8;
+
+/// The gear mark: a toothed wheel around a hub circle, box origin at (`x`, `y`).
+#[must_use]
+pub(crate) fn gear(x: f64, y: f64, ink: Ink) -> Vec<Node> {
+    let (cx, cy) = (x + GLYPH / 2.0, y + GLYPH / 2.0);
+    let (outer, inner) = (7.25, 5.5);
+    let step = 360.0 / f64::from(GEAR_TEETH);
+    let mut wheel = Vec::new();
+    for tooth in 0..GEAR_TEETH {
+        let a = step * f64::from(tooth);
+        for (r, da) in [(inner, -14.0), (outer, -8.0), (outer, 8.0), (inner, 14.0)] {
+            let rad = (a + da).to_radians();
+            wheel.push((cx + r * rad.cos(), cy - r * rad.sin()));
+        }
+    }
+    wheel.push(wheel[0]);
+    let hub = arc(cx, cy, 2.25, 0.0, 360.0);
+    vec![line(wheel, WIDTH, ink), line(hub, WIDTH, ink)]
+}
+
 /// Points of an arc around (`cx`, `cy`) from `from` to `to` degrees (0 is right, 90 is up).
 fn arc(cx: f64, cy: f64, r: f64, from: f64, to: f64) -> Vec<(f64, f64)> {
     (0..=ARC_STEPS)

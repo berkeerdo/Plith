@@ -1,6 +1,7 @@
 # 0016 The welcome view is reachable from the tab row
 
-Date: 2026-11-19. Status: accepted. Amends 0014 (point 1 and the "fifth page without a tab"
+Date: 2026-11-19. Status: accepted, amended by 0017 for the tab row (the gear mark at the right end
+and the clock 24 DIP left). Amends 0014 (point 1 and the "fifth page without a tab"
 consequence). Decided in the console fix round design
 (`specs/2026-11-19-console-fix-round-design.md`, section 1).
 
