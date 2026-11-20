@@ -110,6 +110,7 @@ impl App {
                 side.publish(&facts);
                 self.sheet.side = Some(side);
                 self.sheet.shown = Some(shown(&facts));
+                self.sheet_clock(true);
                 self.log.line("settings window: open");
             }
             Err(line) => self.log.line(&line),
@@ -208,7 +209,13 @@ impl App {
             side.blink();
         }
         self.refresh_sheet();
-        self.sync_caret();
+    }
+
+    /// Runs the feed's minute clock while the window is open, for the previews.
+    pub(super) fn sheet_clock(&mut self, open: bool) {
+        if let Some(feed) = &mut self.feed {
+            feed.set_sheet_open(open, &self.mailbox);
+        }
     }
 
     fn sync_caret(&mut self) {
@@ -239,6 +246,8 @@ impl App {
         let view = side.close();
         self.sheet.section = view.section;
         self.sheet.shown = None;
+        self.sheet.previews = None;
+        self.sheet_clock(false);
         self.sync_caret();
         self.log.line("settings window: closed");
         if let Some(city) = city {
@@ -307,3 +316,6 @@ impl App {
 fn shown(facts: &SheetFacts) -> Shown {
     (facts.settings.clone(), facts.lang, facts.save_failed)
 }
+
+#[cfg(test)]
+mod tests;

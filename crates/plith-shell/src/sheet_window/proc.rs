@@ -254,12 +254,13 @@ fn on_dpi_changed(state: &State, hwnd: HWND, lparam: LPARAM) {
     state.emit_resized(hwnd);
 }
 
-fn on_close(state: &State, hwnd: HWND) {
+/// The close request (caption button, Alt+F4) is only reported: the owner stops the render
+/// thread that presents to this window, then destroys it with [`SheetWindow::close`]. A muted
+/// window (its handler panicked) reports nothing; its owner closes it after the panic report.
+///
+/// [`SheetWindow::close`]: super::SheetWindow::close
+fn on_close(state: &State) {
     state.emit(SheetEvent::Closed);
-    // SAFETY: `hwnd` is this window; destroying it from its own procedure is the standard close.
-    if unsafe { IsWindow(Some(hwnd)) }.as_bool() {
-        let _ = unsafe { DestroyWindow(hwnd) };
-    }
 }
 
 fn handle(state: &State, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -> Option<LRESULT> {
@@ -281,7 +282,7 @@ fn handle(state: &State, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -
         WM_KEYDOWN => on_key_down(state, hwnd, wparam, lparam),
         WM_CHAR => on_char(state, wparam),
         WM_CLOSE => {
-            on_close(state, hwnd);
+            on_close(state);
             return Some(LRESULT(0));
         }
         WM_APP_FLUSH => state.flush(),

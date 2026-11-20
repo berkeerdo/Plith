@@ -3,9 +3,12 @@
 
 use crate::log::LogFile;
 use crate::settings_file::save_at;
+use plith_core::panic_text::payload_text;
 use plith_core::settings::Settings;
 use plith_shell::UiWaker;
-use std::path::PathBuf;
+use std::io;
+use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{self, Receiver, Sender};
@@ -15,6 +18,8 @@ use std::thread::JoinHandle;
 type Wake = Box<dyn Fn() + Send>;
 /// Called on the worker with a failure's log line.
 type Report = Box<dyn Fn(&str) + Send>;
+/// Writes the file; `save_at` outside tests.
+type WriteFile = Box<dyn Fn(&Path, &Settings) -> io::Result<()> + Send>;
 
 /// The settings writer of a normal run.
 pub struct Saver {
@@ -39,17 +44,29 @@ impl Saver {
     /// for the run and [`Self::failed`] says so from the start.
     #[must_use]
     pub fn start(path: PathBuf, wake: Wake, report: Report) -> Saver {
-        let (tx, rx) = mpsc::channel();
-        let failed = Arc::new(AtomicBool::new(false));
         let worker = Worker {
             path,
-            failed: Arc::clone(&failed),
+            failed: Arc::new(AtomicBool::new(false)),
             wake,
             report,
+            write_file: Box::new(save_at),
         };
+        Self::launch(worker, None)
+    }
+
+    /// Runs `worker` on its thread; with a `gate` the worker waits for one message (or the
+    /// gate's end) before it reads the queue.
+    fn launch(worker: Worker, gate: Option<Receiver<()>>) -> Saver {
+        let (tx, rx) = mpsc::channel();
+        let failed = Arc::clone(&worker.failed);
         let join = std::thread::Builder::new()
             .name(String::from("plith-settings-save"))
-            .spawn(move || worker.run(&rx))
+            .spawn(move || {
+                if let Some(gate) = gate {
+                    let _ = gate.recv();
+                }
+                worker.run_guarded(&rx);
+            })
             .ok();
         if join.is_none() {
             failed.store(true, Ordering::Release);
@@ -62,13 +79,15 @@ impl Saver {
     }
 
     /// Queues `settings` for writing; a newer value queued before the worker runs replaces it.
+    /// A worker that is gone (it panicked) marks the save as failed.
     pub fn save(&self, settings: Settings) {
-        if let Some(tx) = &self.tx {
-            let _ = tx.send(settings);
+        let sent = self.tx.as_ref().is_some_and(|tx| tx.send(settings).is_ok());
+        if !sent {
+            self.failed.store(true, Ordering::Release);
         }
     }
 
-    /// Whether the last write failed.
+    /// Whether the last write failed, or the worker is gone.
     #[must_use]
     pub fn failed(&self) -> bool {
         self.failed.load(Ordering::Acquire)
@@ -89,9 +108,23 @@ struct Worker {
     failed: Arc<AtomicBool>,
     wake: Wake,
     report: Report,
+    write_file: WriteFile,
 }
 
 impl Worker {
+    /// Runs the loop; a panic marks the saver failed, is logged and wakes the UI, so the window
+    /// shows the error instead of dropping changes unseen.
+    fn run_guarded(&self, rx: &Receiver<Settings>) {
+        if let Err(payload) = catch_unwind(AssertUnwindSafe(|| self.run(rx))) {
+            self.failed.store(true, Ordering::Release);
+            (self.report)(&format!(
+                "settings: the saver stopped: {}",
+                payload_text(payload.as_ref())
+            ));
+            (self.wake)();
+        }
+    }
+
     /// Writes the newest queued value until the sender is gone; the queue drains first.
     fn run(&self, rx: &Receiver<Settings>) {
         while let Ok(first) = rx.recv() {
@@ -101,7 +134,7 @@ impl Worker {
     }
 
     fn write(&self, settings: &Settings) {
-        let result = save_at(&self.path, settings);
+        let result = (self.write_file)(&self.path, settings);
         if let Err(error) = &result {
             (self.report)(&format!("settings: cannot save the file: {error}"));
         }

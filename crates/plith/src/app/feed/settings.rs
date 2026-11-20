@@ -1,7 +1,7 @@
 //! Settings changed while running: the language, the idle look and the welcome view follow at
 //! once, without a collapse or a page change.
 
-use super::{Dirty, Feed, PAGE_COUNT, WeatherLink};
+use super::{Armed, Dirty, Feed, PAGE_COUNT, WeatherLink, wanted};
 use crate::app::idle_facts::PlaySaver;
 use plith_core::lang::Lang;
 use plith_core::pages::PageId;
@@ -63,6 +63,21 @@ impl Feed {
         if let Some(idle) = self.idle.as_mut() {
             idle.enable_plays(load);
         }
+    }
+
+    /// The settings window opened or closed. While it is open the minute clock runs for every
+    /// look and island state, so its pill previews (the Karot clock) follow the time.
+    pub fn set_sheet_open(&mut self, open: bool, mailbox: &SceneMailbox) {
+        self.sheet_open = open;
+        self.sync_timers(mailbox);
+    }
+
+    /// The timers this feed wants for `scene`: [`wanted`], plus the clock while the settings
+    /// window is open.
+    pub(super) fn want(&self, scene: &Scene) -> Armed {
+        let mut armed = wanted(scene, self.look());
+        armed.clock |= self.sheet_open;
+        armed
     }
 
     /// Takes the weather link out, to reconfigure, stop or replace it.

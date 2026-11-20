@@ -8,8 +8,8 @@ use windows::Win32::UI::HiDpi::{
     DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2, SetProcessDpiAwarenessContext,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
-    DispatchMessageW, MSG, PM_REMOVE, PeekMessageW, SendMessageW, TranslateMessage, WM_CLOSE,
-    WM_LBUTTONDOWN, WM_LBUTTONUP,
+    DispatchMessageW, IsWindow, MSG, PM_REMOVE, PeekMessageW, SendMessageW, TranslateMessage,
+    WM_CLOSE, WM_LBUTTONDOWN, WM_LBUTTONUP,
 };
 
 fn pump() {
@@ -72,7 +72,19 @@ fn hidden_open_queues_events_and_closes_once() {
             .count(),
         1
     );
+    // Only reported: the owner destroys the window after stopping its render thread.
+    let hwnd = hwnd_of(window.hwnd());
+    // SAFETY: IsWindow accepts any handle value.
+    assert!(
+        unsafe { IsWindow(Some(hwnd)) }.as_bool(),
+        "alive after WM_CLOSE"
+    );
     window.close();
+    // SAFETY: as above.
+    assert!(
+        !unsafe { IsWindow(Some(hwnd)) }.as_bool(),
+        "destroyed by close"
+    );
 }
 
 fn quiet_state(events: &Rc<RefCell<Vec<SheetEvent>>>, reports: &Rc<RefCell<Vec<String>>>) -> State {

@@ -64,7 +64,8 @@ pub enum SheetEvent {
         /// Pixels per DIP.
         scale: f64,
     },
-    /// The window was closed (caption button, Alt+F4) and is destroyed.
+    /// The user asked to close the window (caption button, Alt+F4). It stays alive until the
+    /// owner calls [`SheetWindow::close`], after stopping what presents to it.
     Closed,
 }
 

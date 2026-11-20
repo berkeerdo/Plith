@@ -59,6 +59,12 @@ fn fed(name: &str) -> App {
     app
 }
 
+/// Drops `app` (it holds the log file open) and removes the test's folder.
+fn clean(app: App, name: &str) {
+    drop(app);
+    std::fs::remove_dir_all(folder(name)).unwrap();
+}
+
 fn lang_of(app: &App) -> Lang {
     app.feed.as_ref().unwrap().lang()
 }
@@ -84,6 +90,7 @@ fn the_language_is_resolved_again_only_for_a_language_change() {
     assert_eq!(lang_of(&app), Lang::De);
     app.change(SettingChange::Lang(LangChoice::Code(String::from("fr"))));
     assert_eq!(lang_of(&app), Lang::Fr);
+    clean(app, "lang");
 }
 
 /// An app whose feed reads `link`, with weather on and a network wiring.
@@ -113,6 +120,7 @@ fn a_place_change_keeps_the_link_and_weather_off_drops_it() {
     app.feed.as_mut().unwrap().set_weather(link);
     app.change(SettingChange::Weather(false));
     assert!(app.feed.as_mut().unwrap().take_weather().is_none());
+    clean(app, "swap");
 }
 
 #[test]
@@ -130,6 +138,7 @@ fn a_change_applies_at_once_and_is_saved() {
     app.flush_saver();
     let saved = parse(&std::fs::read_to_string(&path).unwrap()).0;
     assert_eq!(saved.look, IdleLook::Clock);
+    clean(app, "save");
 }
 
 #[test]
@@ -138,4 +147,5 @@ fn a_change_without_a_saver_still_applies() {
     app.change(SettingChange::Look(IdleLook::Plain));
     assert_eq!(app.settings.look, IdleLook::Plain);
     app.flush_saver();
+    clean(app, "nosave");
 }
