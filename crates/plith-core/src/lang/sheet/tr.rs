@@ -1,0 +1,66 @@
+//! Turkish settings window strings.
+
+use super::SheetText;
+
+/// The Turkish string for `t`.
+pub fn text(t: SheetText) -> &'static str {
+    match t {
+        SheetText::WindowTitle => "Plith · Ayarlar",
+        SheetText::Caption => "AYARLAR",
+        SheetText::SectionGeneral => "Genel",
+        SheetText::SectionIdle => "Boşta",
+        SheetText::SectionOsd => "OSD",
+        SheetText::SectionAbout => "Hakkında",
+        SheetText::LineGeneral => "Dil ve adanın nasıl açılacağı.",
+        SheetText::LineIdle => "Ada kapalıyken ne gösterir, tıklayınca ne okursun.",
+        SheetText::LineOsd => "Ses ve parlaklık göstergesi, oyunların üstünde.",
+        SheetText::LineAbout => "Sürüm ve dosyalar.",
+        SheetText::RowLanguage => "Dil",
+        SheetText::SubLanguage => "Otomatik, Windows dilini izler",
+        SheetText::RowOpens => "Ada açılınca",
+        SheetText::SubOpens => "Tıklayınca ilk görünen",
+        SheetText::CaptionClosed => "KAPALI ADA",
+        SheetText::PreviewNote => "Önizleme küçültülmüş; ada üstündeki hali 200 x 32.",
+        SheetText::RowStrip => "Şerit",
+        SheetText::SubStrip => "Karşılamada kaç saat görünür",
+        SheetText::RowTopRight => "Sağ üst",
+        SheetText::SubTopRight => "Karşılamanın sağ üstünde ne durur",
+        SheetText::RowPlayed => "Bugün çalanlar",
+        SheetText::SubPlayed => "Şeridin üstünde, yalnızca bu bilgisayarda tutulur",
+        SheetText::RowWeather => "Hava",
+        SheetText::SubWeather => "Açıkken konum Open-Meteo'ya gider",
+        SheetText::RowLocation => "Konum",
+        SheetText::SubLocation => "Windows konumu, olmazsa IP, ya da elle",
+        SheetText::RowUnit => "Birim",
+        SheetText::RowOsd => "Ekran göstergesi",
+        SheetText::SubOsd => "Ses ve parlaklık değişince, oyunların üstünde",
+        SheetText::RowHideWindows => "Windows göstergesini gizle",
+        SheetText::SubHideWindows => {
+            "Plith'in göstergesi çalışırken Windows'un kendi göstergesini gizler"
+        }
+        SheetText::RowVersion => "Sürüm",
+        SheetText::RowFile => "Ayar dosyası",
+        SheetText::RowData => "Veri",
+        SheetText::SubData => "Hava Open-Meteo'dan, IP konumu ipapi.co'dan (yalnızca seçilirse)",
+        SheetText::WordAuto => "OTOMATİK",
+        SheetText::WordWelcome => "KARŞILAMA",
+        SheetText::WordLastPage => "SON SAYFA",
+        SheetText::WordHours3 => "±3 SA",
+        SheetText::WordHours6 => "±6 SA",
+        SheetText::WordAllDay => "TÜM GÜN",
+        SheetText::WordWeather => "HAVA",
+        SheetText::WordSound => "SES",
+        SheetText::WordPlaying => "ÇALAN",
+        SheetText::WordEmpty => "BOŞ",
+        SheetText::WordWindows => "WINDOWS",
+        SheetText::WordIp => "IP",
+        SheetText::WordCity => "ŞEHİR",
+        SheetText::WordCelsius => "°C",
+        SheetText::WordFahrenheit => "°F",
+        SheetText::WordOn => "AÇIK",
+        SheetText::WordOff => "KAPALI",
+        SheetText::WordOpen => "AÇ",
+        SheetText::WordAllSettings => "TÜM AYARLAR",
+        SheetText::SaveError => "Ayarlar kaydedilemedi, bu oturumda geçerli.",
+    }
+}

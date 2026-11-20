@@ -1,0 +1,66 @@
+//! Spanish settings window strings.
+
+use super::SheetText;
+
+/// The Spanish string for `t`.
+pub fn text(t: SheetText) -> &'static str {
+    match t {
+        SheetText::WindowTitle => "Plith · Ajustes",
+        SheetText::Caption => "AJUSTES",
+        SheetText::SectionGeneral => "General",
+        SheetText::SectionIdle => "Reposo",
+        SheetText::SectionOsd => "OSD",
+        SheetText::SectionAbout => "Acerca de",
+        SheetText::LineGeneral => "Idioma y cómo se abre la isla.",
+        SheetText::LineIdle => "Qué muestra la isla cerrada y qué lees al hacer clic.",
+        SheetText::LineOsd => "Indicador de volumen y brillo, sobre los juegos.",
+        SheetText::LineAbout => "Versión y archivos.",
+        SheetText::RowLanguage => "Idioma",
+        SheetText::SubLanguage => "Automático, sigue el idioma de Windows",
+        SheetText::RowOpens => "Al abrir la isla",
+        SheetText::SubOpens => "Lo primero que se ve al hacer clic",
+        SheetText::CaptionClosed => "ISLA CERRADA",
+        SheetText::PreviewNote => "Vista previa reducida; en la isla mide 200 x 32.",
+        SheetText::RowStrip => "Franja",
+        SheetText::SubStrip => "Cuántas horas muestra la bienvenida",
+        SheetText::RowTopRight => "Arriba a la derecha",
+        SheetText::SubTopRight => "Qué hay arriba a la derecha de la bienvenida",
+        SheetText::RowPlayed => "Reproducido hoy",
+        SheetText::SubPlayed => "Sobre la franja, se guarda solo en este PC",
+        SheetText::RowWeather => "Clima",
+        SheetText::SubWeather => "Si está activo, la ubicación va a Open-Meteo",
+        SheetText::RowLocation => "Ubicación",
+        SheetText::SubLocation => "Ubicación de Windows, si no IP, o manual",
+        SheetText::RowUnit => "Unidad",
+        SheetText::RowOsd => "Indicador en pantalla",
+        SheetText::SubOsd => "Al cambiar volumen o brillo, sobre los juegos",
+        SheetText::RowHideWindows => "Ocultar el indicador de Windows",
+        SheetText::SubHideWindows => {
+            "Oculta el indicador propio de Windows mientras funciona el de Plith"
+        }
+        SheetText::RowVersion => "Versión",
+        SheetText::RowFile => "Archivo de ajustes",
+        SheetText::RowData => "Datos",
+        SheetText::SubData => "Clima de Open-Meteo, ubicación IP de ipapi.co (solo si se elige)",
+        SheetText::WordAuto => "AUTOMÁTICO",
+        SheetText::WordWelcome => "BIENVENIDA",
+        SheetText::WordLastPage => "ÚLTIMA",
+        SheetText::WordHours3 => "±3 H",
+        SheetText::WordHours6 => "±6 H",
+        SheetText::WordAllDay => "TODO EL DÍA",
+        SheetText::WordWeather => "CLIMA",
+        SheetText::WordSound => "SONIDO",
+        SheetText::WordPlaying => "SONANDO",
+        SheetText::WordEmpty => "VACÍO",
+        SheetText::WordWindows => "WINDOWS",
+        SheetText::WordIp => "IP",
+        SheetText::WordCity => "CIUDAD",
+        SheetText::WordCelsius => "°C",
+        SheetText::WordFahrenheit => "°F",
+        SheetText::WordOn => "ACTIVO",
+        SheetText::WordOff => "INACTIVO",
+        SheetText::WordOpen => "ABRIR",
+        SheetText::WordAllSettings => "TODOS LOS AJUSTES",
+        SheetText::SaveError => "No se pudieron guardar los ajustes, valen solo en esta sesión.",
+    }
+}
