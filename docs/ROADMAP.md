@@ -17,7 +17,7 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R7a Karot idle look | Pill looks, welcome view, settings and play files, tr/en table, weather service | master + subagents | not estimated | 🔄 code merged (3ee8b05, 2 sessions incl. direction pass; ADR 0014); console run left |
 | R7 languages | Eight languages from one table, OSD muted word over the pipe | master + subagents | not estimated | ✅ done (merged 3a281c2; ADR 0015; console 2026-11-18) |
 | Console fix round | Home mark, speaker glyph, title scroll, ruler drag, OSD prewarm (from the 2026-11-18 console) | master + subagents | not estimated | ✅ done, 2 sessions incl. console check (merged 397e7d9; ADR 0016) |
-| R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code done on `feature/settings-window` (1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); merge and console run left |
+| R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code merged (c7e693a, 1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); console run left |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master | 3 sessions | ⬜ waiting on R4 to R6 |
 
 ## Settled scope (2026-11-14)

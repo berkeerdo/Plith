@@ -34,14 +34,15 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   (fixed in the console check, `ec86288`), one-shot title scroll, ruler drag, OSD prewarm. Five
   checks on the merge, 1113 tests. Console 2026-11-19: Berke "çalışıyor hepsi"; Karot idle 60 s
   1 wake (allowed 2). Worktree removed. Earlier console sessions: `journal/2026-11.md`.
-- **R7 settings window: code done on `feature/settings-window`** (worktree
-  `.claude/worktrees/settings`), not merged. Spec `specs/2026-11-20-r7-settings-window-design.md`,
-  plan and progress log `plans/active/r7-settings.md` (Tasks 1 to 10 ticked), ADR 0017. Window
-  with Genel, Boşta, OSD, Hakkında on its own render thread; quick page behind a gear; live apply,
-  atomic save, new keys `osd` and `flyout`. Final review (opus): ready to merge, fix wave done.
-  Five checks on the branch (main has not moved): fmt, clippy, 1237 tests, structure 0, release.
+- **R7 settings window: merged as `c7e693a`** (2026-11-20). Spec
+  `specs/2026-11-20-r7-settings-window-design.md`, plan and progress log
+  `plans/active/r7-settings.md` (Tasks 1 to 10 ticked), ADR 0017, review
+  `quality/2026-11-20-settings-window-final-review.md`. Window with Genel, Boşta, OSD, Hakkında
+  on its own render thread; quick page behind a gear; live apply, atomic save, new keys `osd`
+  and `flyout`. Five checks on the merge: fmt, clippy, 1237 tests, structure 0, release.
   Idle check 2026-11-20 console: Karot 60 s, 0 render wakes (allowed 2), 93.8 ms CPU.
-- **Next: merge the settings branch (Berke's yes), then its console session** (plan Task 12):
+  Worktree and branch removed.
+- **Next: the settings console session** (plan Task 12, Task 11 Step 1):
   open from the gear with a real click, every row live, German and back, city and a real fetch,
   OSD off and on (one `osd start` per switch, no `exited` line), click-to-window delay, caret.
   Known open: on the quick page the Playing preview title can vanish while its one-shot scroll
