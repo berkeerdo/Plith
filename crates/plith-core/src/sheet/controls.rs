@@ -20,7 +20,7 @@ const WORD_PAD: f64 = 8.0;
 /// Gap between choice words.
 const WORD_GAP: f64 = 10.0;
 /// Distance between wrapped lines of a choice group.
-const LINE_STEP: f64 = 22.0;
+const LINE_STEP: f64 = 40.0;
 
 /// A rectangle from its parts.
 pub(super) fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
@@ -122,6 +122,7 @@ impl Page {
 
     /// A choice group right-aligned at the content edge, wrapped onto more lines when it does
     /// not fit. Returns the extra height of the wrapped lines.
+    #[allow(clippy::cast_precision_loss)] // a handful of lines
     pub fn choice(&mut self, row: u8, t: f64, words: Vec<Word>, live: bool) -> f64 {
         let widths: Vec<f64> = words.iter().map(|w| cell_w(w.text)).collect();
         let lines = wrap(&widths);
@@ -141,9 +142,7 @@ impl Page {
                 x += w + WORD_GAP;
             }
         }
-        #[allow(clippy::cast_precision_loss)]
-        let extra = (lines.len() - 1) as f64 * LINE_STEP;
-        extra
+        (lines.len() - 1) as f64 * LINE_STEP
     }
 
     fn choice_word(&mut self, row: u8, ctl: u8, at: (f64, f64, f64), word: &Word, live: bool) {
@@ -168,7 +167,7 @@ impl Page {
         }
     }
 
-    /// A toggle: the word, then a track with two stations; the filled station on the right is on.
+    /// A toggle: the word, then a track with two stations; filled on the right is on, both hollow is off.
     pub fn toggle(&mut self, row: u8, t: f64, on: bool, to: SettingChange, live: bool) {
         let y = t + 16.0;
         let (ink, hollow) = if live {
@@ -181,12 +180,7 @@ impl Page {
             self.station(R - 40.0, y, StationMark::Hollow, hollow);
             self.station(R - 4.0, y, StationMark::Filled, ink);
         } else {
-            self.station(
-                R - 40.0,
-                y,
-                StationMark::Filled,
-                if live { Ink::Muted } else { hollow },
-            );
+            self.station(R - 40.0, y, StationMark::Hollow, ink);
             self.station(R - 4.0, y, StationMark::Hollow, hollow);
         }
         let word = self.word(if on { S::WordOn } else { S::WordOff });
@@ -267,4 +261,13 @@ fn wrap(widths: &[f64]) -> Vec<Vec<f64>> {
         }
     }
     lines
+}
+
+/// A choice word that changes a setting.
+pub(super) fn word(text: &'static str, on: bool, change: SettingChange) -> Word {
+    Word {
+        text,
+        on,
+        action: SheetAction::Change(change),
+    }
 }

@@ -1,20 +1,12 @@
 //! The General section: language and the page the island opens on.
 
-use super::controls::{Page, Word};
+use super::SheetFacts;
+use super::controls::{Page, word};
 use super::layout::FIRST_ROW;
-use super::{SheetAction, SheetFacts};
 use crate::lang::Lang;
 use crate::lang::sheet::{SheetText as S, lang_name};
 use crate::settings::change::SettingChange;
 use crate::settings::{LangChoice, OpenOn};
-
-fn word(text: &'static str, on: bool, change: SettingChange) -> Word {
-    Word {
-        text,
-        on,
-        action: SheetAction::Change(change),
-    }
-}
 
 pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     let s = &facts.settings;

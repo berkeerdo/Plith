@@ -68,9 +68,9 @@ pub(super) fn chrome(p: &mut Page, facts: &SheetFacts, view: &SheetView) {
     }
     p.stroke(vec![(SIDEBAR_W, 0.0), (SIDEBAR_W, SHEET_H)], Ink::Border);
     p.text(
-        rect(X, 34.0, 500.0, 24.0),
+        rect(X, 32.0, 500.0, 26.0),
         sheet_text(section_text(view.section), lang),
-        TextStyle::Title,
+        TextStyle::Heading,
         Ink::Ink,
         Align::Start,
     );

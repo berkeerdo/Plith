@@ -43,6 +43,9 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::SectionAbout,
     ] {
         out.push(place(id, lang, TextStyle::Name, SECTION_W));
+        let mut heading = place(id, lang, TextStyle::Heading, LINE_W);
+        heading.name = format!("sheet heading {id:?}");
+        out.push(heading);
     }
     for id in [
         S::RowLanguage,

@@ -1,7 +1,7 @@
 //! The Idle section: the six look previews and the welcome view settings.
 
-use super::controls::{Page, Word, rect};
-use super::layout::{FIRST_ROW, X};
+use super::controls::{Page, Word, rect, word};
+use super::layout::X;
 use super::{SheetAction, SheetFacts, SheetView};
 use crate::draw::{Align, Ink, Node, StationMark, TextStyle};
 use crate::lang::Text;
@@ -27,14 +27,6 @@ const CELL_H: f64 = 64.0;
 const CELL_Y: f64 = 116.0;
 /// Where the first rule of the rows sits, under the preview note.
 const ROWS_Y: f64 = 226.0;
-
-fn word(text: &'static str, on: bool, change: SettingChange) -> Word {
-    Word {
-        text,
-        on,
-        action: SheetAction::Change(change),
-    }
-}
 
 fn previews(p: &mut Page, facts: &SheetFacts) {
     p.text(
@@ -123,7 +115,6 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts, view: &SheetView) {
     let s = &facts.settings;
     previews(p, facts);
     let mut t = ROWS_Y;
-    debug_assert!(t > FIRST_ROW);
     p.rule(t);
 
     let lang = p.lang;

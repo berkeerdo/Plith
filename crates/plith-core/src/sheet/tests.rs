@@ -1,5 +1,5 @@
 use super::*;
-use crate::draw::{Ink, Node, Rect, StationMark};
+use crate::draw::{Ink, Node, Rect, StationMark, TextStyle};
 use crate::pages::idle_pill::{IdleFacts, idle_pill};
 use crate::pages::pill::{PillFacts, PillState};
 use crate::settings::{FlyoutPref, HeadSlot, IdleLook, LangChoice, LocationMode, RunSpan};
@@ -366,4 +366,62 @@ fn hit_has_no_slack_and_takes_the_first() {
     );
     assert!(sheet_hit(&targets, 15.0, 5.0).is_none());
     assert!(sheet_hit(&targets, 5.0, 10.0).is_none());
+}
+
+fn overlaps(a: Rect, b: Rect) -> bool {
+    a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+}
+
+#[test]
+fn wrapped_language_line_clears_the_sub_line() {
+    for lang in [Lang::De, Lang::Tr] {
+        let (list, targets) = sheet_build(&facts_in(lang), &view(Section::General));
+        let sub = crate::lang::sheet::sheet_text(crate::lang::sheet::SheetText::SubLanguage, lang);
+        let sub_rect = list
+            .nodes
+            .iter()
+            .find_map(|n| match n {
+                Node::Text { rect, text, .. } if &**text == sub => Some(*rect),
+                _ => None,
+            })
+            .expect("sub line drawn");
+        let lang_rects = targets
+            .iter()
+            .filter(|t| matches!(t.action, SheetAction::Change(SettingChange::Lang(_))))
+            .map(|t| t.rect)
+            .collect::<Vec<_>>();
+        let first_y = lang_rects.iter().map(|r| r.y).fold(f64::MAX, f64::min);
+        assert!(lang_rects.iter().any(|r| r.y > first_y), "{lang:?} wraps");
+        for r in lang_rects.iter().filter(|r| r.y > first_y) {
+            assert!(!overlaps(*r, sub_rect), "{lang:?} {r:?} over {sub_rect:?}");
+        }
+    }
+}
+
+fn filled_stations(list: &DisplayList) -> usize {
+    list.nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Station { x, mark: StationMark::Filled, .. } if *x > 700.0))
+        .count()
+}
+
+#[test]
+fn toggle_off_has_no_filled_station() {
+    let mut f = facts();
+    f.settings.osd = false;
+    let (off, _) = sheet_build(&f, &view(Section::Osd));
+    assert_eq!(filled_stations(&off), 0);
+    f.settings.osd = true;
+    let (on, _) = sheet_build(&f, &view(Section::Osd));
+    assert_eq!(filled_stations(&on), 1);
+}
+
+#[test]
+fn heading_is_twenty_dip() {
+    let (list, _) = sheet_build(&facts(), &view(Section::Idle));
+    assert!(list.nodes.iter().any(|n| matches!(
+        n,
+        Node::Text { style: TextStyle::Heading, text, .. } if &**text == "Bo\u{15f}ta"
+    )));
+    assert!((crate::draw::style_spec(TextStyle::Heading).size_dip - 20.0).abs() < f32::EPSILON);
 }
