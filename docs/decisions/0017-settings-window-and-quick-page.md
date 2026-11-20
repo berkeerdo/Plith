@@ -35,7 +35,9 @@ set needs room that a 620 DIP island page cannot give.
   previews of every look. While the island is closed the quick page waits with the other pages.
 - The quick page's previews are the pill's own lists at scale 0.4, built from the same idle
   facts, so a preview cannot drift from the real pill.
-- The look click and the settings row only log a line until the window and the live-apply path
-  are wired (R7 task 10).
+- The look click and the settings row reach the same change path as the window: the setting is
+  applied at once while running and saved.
+- The UI thread measures text with its own DirectWrite factory (`TextMeasure`), only for the
+  city field's caret; it never draws, the sheet's own render thread does.
 - Unverified until the console session: the gear glyph weight at 100 and 200 percent scale, and
   the click with a real pointer.
