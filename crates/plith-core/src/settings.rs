@@ -20,6 +20,16 @@ pub enum IdleLook {
 }
 
 impl IdleLook {
+    /// Every look, in the order the previews show them.
+    pub const ALL: [IdleLook; 6] = [
+        Self::Karot,
+        Self::Clock,
+        Self::Playing,
+        Self::Seal,
+        Self::Plain,
+        Self::Hidden,
+    ];
+
     /// The key shared by the settings file and `--idle-look`.
     #[must_use]
     pub fn key(self) -> &'static str {
@@ -120,8 +130,19 @@ pub enum LangChoice {
     Code(String),
 }
 
+/// What to do with the Windows volume and brightness flyout while the OSD runs.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum FlyoutPref {
+    /// Leave the flyout alone.
+    #[default]
+    Off,
+    /// Hide the flyout while the OSD is connected.
+    Hide,
+}
+
 /// Every idle look and welcome view setting.
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[allow(clippy::struct_excessive_bools)] // one independent on/off switch per settings key
 pub struct Settings {
     /// The look of the collapsed island.
     pub look: IdleLook,
@@ -145,6 +166,10 @@ pub struct Settings {
     pub lang: LangChoice,
     /// What fills the top right of the welcome view.
     pub head: HeadSlot,
+    /// Whether the volume and brightness OSD is on.
+    pub osd: bool,
+    /// What to do with the Windows flyout.
+    pub flyout: FlyoutPref,
 }
 
 impl Default for Settings {
@@ -161,6 +186,8 @@ impl Default for Settings {
             open_on: OpenOn::default(),
             lang: LangChoice::default(),
             head: HeadSlot::default(),
+            osd: true,
+            flyout: FlyoutPref::default(),
         }
     }
 }
@@ -230,6 +257,14 @@ fn parse_lang(value: &str) -> Option<LangChoice> {
     }
 }
 
+fn parse_flyout(value: &str) -> Option<FlyoutPref> {
+    match value {
+        "off" => Some(FlyoutPref::Off),
+        "hide" => Some(FlyoutPref::Hide),
+        _ => None,
+    }
+}
+
 /// Applies one value to the field named by `key`. Returns `false` when the value is bad.
 fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
     match key {
@@ -247,13 +282,15 @@ fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
         "open_on" => parse_open_on(value).map(|v| s.open_on = v).is_some(),
         "lang" => parse_lang(value).map(|v| s.lang = v).is_some(),
         "head" => parse_head(value).map(|v| s.head = v).is_some(),
+        "osd" => parse_bool(value).map(|v| s.osd = v).is_some(),
+        "flyout" => parse_flyout(value).map(|v| s.flyout = v).is_some(),
         _ => false,
     }
 }
 
-const KEYS: [&str; 11] = [
+const KEYS: [&str; 13] = [
     "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on", "lang",
-    "head",
+    "head", "osd", "flyout",
 ];
 
 /// Parses the settings text. Bad lines keep the default and add one entry to the problem list.
@@ -320,16 +357,23 @@ pub fn serialize(s: &Settings) -> String {
         HeadSlot::Playing => "playing",
         HeadSlot::Empty => "empty",
     };
+    let flyout = match s.flyout {
+        FlyoutPref::Off => "off",
+        FlyoutPref::Hide => "hide",
+    };
     format!(
         "look={}\nspan={span}\nplays={}\nweather={}\nlocation={location}\ncity={}\nunit={unit}\n\
-         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\n",
+         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\n",
         s.look.key(),
         on_off(s.plays),
         on_off(s.weather),
         s.city,
         on_off(s.clock24),
+        on_off(s.osd),
     )
 }
+
+pub mod change;
 
 #[cfg(test)]
 mod tests;

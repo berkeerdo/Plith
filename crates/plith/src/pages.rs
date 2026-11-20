@@ -1,4 +1,4 @@
-//! Facts to page content: builds the five pages and the pill, keeps their hit targets and
+//! Facts to page content: builds the six pages and the pill, keeps their hit targets and
 //! shapes, and rebuilds only the pages a change touches.
 
 use crate::services::Facts;
@@ -9,13 +9,14 @@ use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::pages::media::media_page;
 use plith_core::pages::pill::pill;
+use plith_core::pages::quick::{QuickFacts, quick_page};
 use plith_core::pages::shelf::shelf_page;
 use plith_core::pages::system::system_page;
 use plith_core::pages::tabbar::tabbar;
 use plith_core::pages::welcome::{WelcomeFacts, welcome_page};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PAGE_W, PageBuild, PageId};
 use plith_core::settings::IdleLook;
-use plith_core::shapes::WELCOME;
+use plith_core::shapes::{QUICK, WELCOME};
 use std::sync::Arc;
 
 /// What a build reads besides the page id.
@@ -39,7 +40,7 @@ pub struct Inputs<'a> {
 /// Which lists need a rebuild.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct Dirty {
-    /// One flag per page, in page order (the welcome view last).
+    /// One flag per page, in page order (the welcome view, then the quick page last).
     pub pages: [bool; PAGE_COUNT],
     /// The pill.
     pub pill: bool,
@@ -62,9 +63,19 @@ impl Dirty {
                 // The welcome view's facts mix services, the play log and the forecast, so the
                 // feed compares them itself and joins the result with `union`.
                 false,
+                false,
             ],
             pill: old.pill != new.pill,
         }
+        .with_quick()
+    }
+
+    /// The same, with the quick page marked whenever the pill is: it shows the picked look and
+    /// live previews of every look, so it changes with the pill.
+    #[must_use]
+    pub fn with_quick(mut self) -> Dirty {
+        self.pages[PageId::Quick.index()] |= self.pill;
+        self
     }
 
     /// Every list either side names.
@@ -78,6 +89,7 @@ impl Dirty {
             pages,
             pill: self.pill || other.pill,
         }
+        .with_quick()
     }
 
     /// Only `page`.
@@ -111,6 +123,33 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
             || welcome_placeholder(inputs.lang),
             |f| welcome_page(f, inputs.probe),
         ),
+        PageId::Quick => inputs.idle.map_or_else(
+            || quick_placeholder(inputs.lang),
+            |(look, facts)| quick_page(&quick_facts(look, facts, inputs.lang)),
+        ),
+    }
+}
+
+/// The quick page's facts: the picked look and the resting pill of every look, built from the
+/// same idle facts the pill uses.
+fn quick_facts(look: IdleLook, facts: &IdleFacts, lang: Lang) -> QuickFacts {
+    QuickFacts {
+        look,
+        previews: IdleLook::ALL.map(|each| Arc::new(idle_pill(each, facts))),
+        lang,
+    }
+}
+
+/// The quick slot until the idle look model is attached: the bare tab bar at the quick size.
+fn quick_placeholder(lang: Lang) -> PageBuild {
+    let (nodes, targets) = tabbar(None, "", lang);
+    PageBuild {
+        list: DisplayList {
+            nodes,
+            size: (PAGE_W, QUICK.height),
+        },
+        targets,
+        shape: QUICK,
     }
 }
 
@@ -149,7 +188,7 @@ impl Pages {
     /// Every page and the pill, built from `inputs`.
     #[must_use]
     pub fn new(inputs: &Inputs) -> Self {
-        let [audio, media, shelf, system, welcome] =
+        let [audio, media, shelf, system, welcome, quick] =
             PageId::ALL.map(|page| build_page(page, inputs));
         Self {
             shapes: [
@@ -158,6 +197,7 @@ impl Pages {
                 shelf.shape,
                 system.shape,
                 welcome.shape,
+                quick.shape,
             ],
             lists: [
                 audio.list,
@@ -165,6 +205,7 @@ impl Pages {
                 shelf.list,
                 system.list,
                 welcome.list,
+                quick.list,
             ]
             .map(Arc::new),
             targets: [
@@ -173,6 +214,7 @@ impl Pages {
                 shelf.targets,
                 system.targets,
                 welcome.targets,
+                quick.targets,
             ],
             pill: Arc::new(pill_of(inputs)),
             art: art(inputs.facts),

@@ -78,7 +78,7 @@ fn active_is_filled_ink() {
 #[test]
 fn tab_hit_targets_cover_labels() {
     let (_, targets) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
-    assert_eq!(targets.len(), 5);
+    assert_eq!(targets.len(), 6);
     assert_eq!(hit(&targets, 64.0, 20.0), Some(Action::Tab(PageId::Audio)));
     assert_eq!(hit(&targets, 174.0, 38.0), Some(Action::Tab(PageId::Media)));
     assert_eq!(hit(&targets, 286.0, 20.0), Some(Action::Tab(PageId::Shelf)));
@@ -111,7 +111,7 @@ fn clock_is_right_aligned_at_the_margin() {
             _ => None,
         })
         .expect("clock node");
-    assert!((clock.0.x + clock.0.w - 596.0).abs() < 1e-9);
+    assert!((clock.0.x + clock.0.w - 572.0).abs() < 1e-9);
     assert!((clock.0.y + clock.0.h / 2.0 - 34.0).abs() < 1e-9);
     assert_eq!(clock.1, Align::End);
     assert_eq!(clock.2, Ink::Muted);
@@ -135,7 +135,7 @@ fn page_labels_and_indices() {
         assert_eq!(page.index(), i);
         assert_eq!(PageId::from_index(i), Some(page));
     }
-    assert_eq!(PageId::from_index(5), None);
+    assert_eq!(PageId::from_index(6), None);
 }
 
 #[test]
@@ -163,7 +163,7 @@ fn no_active_page_fills_no_station() {
             .iter()
             .all(|s| s.1 == StationMark::Hollow && s.2 == Ink::Faint)
     );
-    assert_eq!(targets.len(), 5);
+    assert_eq!(targets.len(), 6);
 }
 
 #[test]
@@ -194,7 +194,7 @@ fn tabbar_on_welcome_has_no_filled_station() {
             .iter()
             .all(|s| s.1 == StationMark::Hollow && s.2 == Ink::Faint)
     );
-    assert_eq!(targets.len(), 5);
+    assert_eq!(targets.len(), 6);
     assert_eq!(PageId::TABS.len(), 4);
     assert!(!PageId::TABS.contains(&PageId::Welcome));
     assert_eq!(PageId::ALL.len(), crate::pages::PAGE_COUNT);
@@ -232,7 +232,9 @@ fn home_inks(nodes: &[Node]) -> Vec<Ink> {
     nodes
         .iter()
         .filter_map(|n| match n {
-            Node::Stroke { ink, width, .. } if *width > 1.0 => Some(*ink),
+            Node::Stroke {
+                ink, width, points, ..
+            } if *width > 1.0 && points[0].0 < 100.0 => Some(*ink),
             _ => None,
         })
         .collect()
@@ -260,4 +262,65 @@ fn tabs_follow_the_language() {
     assert_eq!(tab_labels(&german), ["AUDIO", "MEDIEN", "ABLAGE", "SYSTEM"]);
     assert_eq!(PageId::Media.label(Lang::De), "MEDIEN");
     assert_eq!(PageId::Welcome.label(Lang::De), "");
+}
+
+#[test]
+fn gear_target_last() {
+    let (nodes, targets) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
+    let gear = targets.last().expect("gear target");
+    assert_eq!(gear.action, Action::Tab(PageId::Quick));
+    assert_eq!((gear.rect.x, gear.rect.x + gear.rect.w), (578.0, 603.0));
+    assert_eq!(hit(&targets, 590.0, 24.0), Some(Action::Tab(PageId::Quick)));
+    assert_eq!(targets.len(), 6);
+    let inks = gear_inks(&nodes);
+    assert!(!inks.is_empty() && inks.iter().all(|i| *i == Ink::Faint));
+
+    let (on, targets) = tabbar(Some(PageId::Quick), "", Lang::Tr);
+    assert_eq!(
+        targets.last().map(|t| t.action.clone()),
+        Some(Action::Tab(PageId::Welcome))
+    );
+    let inks = gear_inks(&on);
+    assert!(!inks.is_empty() && inks.iter().all(|i| *i == Ink::Ink));
+    assert!(stations(&on).iter().all(|s| s.1 == StationMark::Hollow));
+}
+
+/// Inks of the gear strokes: the strokes wider than the hairline track that sit at the right end.
+fn gear_inks(nodes: &[Node]) -> Vec<Ink> {
+    nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Stroke {
+                ink, width, points, ..
+            } if *width > 1.0 && points[0].0 > 500.0 => Some(*ink),
+            _ => None,
+        })
+        .collect()
+}
+
+#[test]
+fn clock_moves_for_gear() {
+    let (nodes, _) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
+    let clock = nodes
+        .iter()
+        .find_map(|n| match n {
+            Node::Text {
+                rect,
+                style: TextStyle::Clock,
+                ..
+            } => Some(*rect),
+            _ => None,
+        })
+        .expect("clock node");
+    assert!((clock.x + clock.w - 572.0).abs() < 1e-9);
+}
+
+#[test]
+fn page_count_six() {
+    assert_eq!(crate::pages::PAGE_COUNT, 6);
+    assert_eq!(PageId::Quick.index(), 5);
+    assert_eq!(PageId::from_index(5), Some(PageId::Quick));
+    assert_eq!(PageId::from_index(6), None);
+    assert!(!PageId::TABS.contains(&PageId::Quick));
+    assert_eq!(PageId::Quick.label(Lang::Tr), "");
 }

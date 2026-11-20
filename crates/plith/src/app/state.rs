@@ -3,12 +3,15 @@
 use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::input::drag::ActiveDrag;
+use super::saver::Saver;
+use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
 use crate::log::LogFile;
 use crate::osd::OsdSink;
 use plith_core::demo::DemoStep;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_core::settings::{IdleLook, Settings};
 use plith_render::StopHandle;
 use plith_shell::ShellEvent;
 use std::sync::Arc;
@@ -51,8 +54,23 @@ pub struct App {
     pub(super) collapse: CollapseTimer,
     /// Scene steps from the demo thread, applied on the next wake.
     pub(super) demo: Option<Receiver<DemoStep>>,
+    /// The weather wiring of the run, to start the weather when the user turns it on.
+    weather: Option<WeatherWiring>,
+    /// The OSD side of a normal run, switched by the settings.
+    osd: Option<OsdControl>,
+    /// True in a normal run: only it reads and writes the play log.
+    normal_run: bool,
     /// The ruler drag under way, from the press to the release.
     pub(super) drag: Option<ActiveDrag>,
+    /// The settings of the run; the app is their one owner and applies every change.
+    settings: Settings,
+    /// The look the settings file holds while `--idle-look` overrides it for this run: saves
+    /// write it until the user picks a look.
+    file_look: Option<IdleLook>,
+    /// Writes the settings file; a normal run only.
+    saver: Option<Saver>,
+    /// The settings window.
+    sheet: SheetHost,
 }
 
 impl App {
@@ -77,6 +95,13 @@ impl App {
             collapse: CollapseTimer::default(),
             demo: None,
             drag: None,
+            weather: None,
+            osd: None,
+            normal_run: false,
+            settings: Settings::default(),
+            file_look: None,
+            saver: None,
+            sheet: SheetHost::default(),
         }
     }
 
@@ -153,6 +178,7 @@ impl App {
             ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),
             ShellEvent::Timer(COLLAPSE_TIMER) => self.on_collapse_tick(),
+            ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,
@@ -166,14 +192,18 @@ impl App {
             }
             ShellEvent::Wake => {
                 self.apply_demo_steps();
+                self.poll_osd();
                 if let Some(feed) = &mut self.feed {
                     feed.on_wake(&self.mailbox);
                 }
+                self.drain_sheet();
             }
             ShellEvent::Timer(id) => {
                 if let Some(feed) = &mut self.feed {
                     feed.on_timer(id, &self.mailbox);
                 }
+                // The minute tick rebuilds the pill; the window's previews follow it.
+                self.refresh_sheet();
             }
             ShellEvent::DisplayChanged => self.log.line("display changed: restart needed"),
             ShellEvent::Raised {
@@ -186,6 +216,12 @@ impl App {
         }
     }
 }
+
+mod live;
+mod sheet;
+
+pub use live::OsdControl;
+use sheet::{CARET_TIMER, SheetHost};
 
 #[cfg(test)]
 mod tests;

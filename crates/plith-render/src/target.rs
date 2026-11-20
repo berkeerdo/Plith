@@ -34,7 +34,7 @@ pub struct CompositionTarget {
 }
 
 /// Wraps the swap chain back buffer as the Direct2D target of the context.
-fn bind_back_buffer(gpu: &Gpu, swap_chain: &IDXGISwapChain1, scale: f64) -> Result<()> {
+pub(crate) fn bind_back_buffer(gpu: &Gpu, swap_chain: &IDXGISwapChain1, scale: f64) -> Result<()> {
     let props = D2D1_BITMAP_PROPERTIES1 {
         pixelFormat: D2D1_PIXEL_FORMAT {
             format: DXGI_FORMAT_B8G8R8A8_UNORM,

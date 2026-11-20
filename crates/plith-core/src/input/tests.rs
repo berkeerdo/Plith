@@ -20,6 +20,7 @@ fn targets() -> [Vec<HitTarget>; PAGE_COUNT] {
         Vec::new(),
         Vec::new(),
         Vec::new(),
+        Vec::new(),
     ]
 }
 
@@ -103,6 +104,7 @@ fn click_on_empty_space_cancels_pick() {
             target(100.0, 100.0, 40.0, 20.0, Action::PickSource(0)),
             target(200.0, 80.0, 200.0, 200.0, Action::CancelPick),
         ],
+        Vec::new(),
         Vec::new(),
         Vec::new(),
         Vec::new(),

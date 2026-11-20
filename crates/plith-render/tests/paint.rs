@@ -703,3 +703,45 @@ fn outgoing_page_keeps_its_live_nodes() {
         "outgoing meter",
     );
 }
+
+#[test]
+fn inset_draws_scaled() {
+    let p = gece();
+    let inner = Arc::new(DisplayList {
+        nodes: vec![Node::Fill {
+            rect: Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 200.0,
+                h: 32.0,
+            },
+            radius: 0.0,
+            ink: Ink::Ink,
+        }],
+        size: (200.0, 32.0),
+    });
+    let inset = Node::Inset {
+        list: inner,
+        x: 10.0,
+        y: 10.0,
+        scale: 0.5,
+    };
+    let buf = render(&page_frame(vec![inset]));
+    // The page sits at ORIGIN: the inset covers list x 10..110, y 10..26.
+    near(
+        pixel(&buf, W, 59 + 10, 25 + 10),
+        bgra(p.ink),
+        2,
+        "inside the inset",
+    );
+    assert_ne!(
+        pixel(&buf, W, 111 + 10, 25 + 10),
+        bgra(p.ink),
+        "right of the inset"
+    );
+    assert_ne!(
+        pixel(&buf, W, 59 + 10, 27 + 10),
+        bgra(p.ink),
+        "below the inset"
+    );
+}

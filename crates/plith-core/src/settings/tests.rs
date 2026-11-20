@@ -1,6 +1,20 @@
 use super::*;
 
 #[test]
+fn osd_and_flyout_round_trip() {
+    let (s, problems) = parse("osd=off\nflyout=hide\n");
+    assert!(problems.is_empty());
+    assert!(!s.osd);
+    assert_eq!(s.flyout, FlyoutPref::Hide);
+    let text = serialize(&s);
+    assert!(text.contains("osd=off\n"));
+    assert!(text.contains("flyout=hide\n"));
+    let defaults = serialize(&Settings::default());
+    assert!(defaults.contains("osd=on\n"));
+    assert!(defaults.contains("flyout=off\n"));
+}
+
+#[test]
 fn defaults_are_karot_six_hours_weather_off() {
     let s = Settings::default();
     assert_eq!(s.look, IdleLook::Karot);
@@ -28,6 +42,8 @@ fn round_trip() {
         open_on: OpenOn::LastPage,
         lang: LangChoice::Code("tr".to_string()),
         head: HeadSlot::Playing,
+        osd: false,
+        flyout: FlyoutPref::Hide,
     };
     let (back, problems) = parse(&serialize(&s));
     assert_eq!(back, s);
@@ -42,7 +58,7 @@ fn serialize_writes_every_key_in_order() {
         keys,
         [
             "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on",
-            "lang", "head"
+            "lang", "head", "osd", "flyout"
         ]
     );
     assert!(text.ends_with('\n'));

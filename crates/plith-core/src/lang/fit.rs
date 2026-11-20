@@ -5,7 +5,7 @@
 //! of being cut with an ellipsis on screen. A budget is the box width the layout states, else
 //! the room the layout leaves, else the width of the Turkish string the R4 renders proved.
 
-use super::{Lang, Text, date_short, device_kind, percent, sky_word, songs, text};
+use super::{Lang, Text, date_short, device_kind, percent, sheet, sky_word, songs, text};
 use crate::draw::TextStyle;
 use crate::pages::audio::{
     CUT_LABEL_W, DeviceKind, OUTPUT_NAME_W, SOURCE_NAME_W, VALUE_CHAR_W, VALUE_SLACK,
@@ -107,6 +107,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
     out.extend(page_places(lang));
     out.extend(pill_places(lang));
     out.extend(welcome_places(lang));
+    out.extend(sheet::fit::places(lang));
     out
 }
 

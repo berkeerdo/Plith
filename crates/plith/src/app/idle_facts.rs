@@ -105,6 +105,34 @@ impl Idle {
         self.settings.open_on
     }
 
+    /// Takes the settings the user changed while running.
+    pub fn set_settings(&mut self, settings: Settings) {
+        self.settings = settings;
+    }
+
+    /// Takes the interface language the user switched to while running.
+    pub fn set_lang(&mut self, lang: Lang) {
+        self.lang = lang;
+    }
+
+    /// Plays turned on while running in a run that started with them off: `load` gives the
+    /// saved log and its saver, once. True when it loaded; a model that has a saver keeps it.
+    pub fn enable_plays(&mut self, load: impl FnOnce() -> (PlayLog, PlaySaver)) -> bool {
+        if self.saver.is_some() {
+            return false;
+        }
+        let (plays, saver) = load();
+        self.plays = plays;
+        self.saver = Some(saver);
+        true
+    }
+
+    /// Forgets the forecast: weather went off, or the place changed. The views show no
+    /// temperature until the next fetch.
+    pub fn clear_forecast(&mut self) {
+        self.forecast = None;
+    }
+
     /// Takes a new forecast; true when it differs from the one held.
     pub fn set_forecast(&mut self, forecast: Forecast) -> bool {
         let changed = self.forecast.as_ref() != Some(&forecast);

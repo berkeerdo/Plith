@@ -48,7 +48,7 @@ impl Timers for NoTimers {
     fn kill(&self, _id: usize) {}
 }
 
-fn stamp() -> Stamp {
+pub(super) fn stamp() -> Stamp {
     Stamp {
         year: 2026,
         month: 11,
@@ -60,15 +60,15 @@ fn stamp() -> Stamp {
     }
 }
 
-struct Rig {
-    feed: Feed,
-    mailbox: SceneMailbox,
-    facts: Rc<RefCell<Facts>>,
-    drained: Rc<Cell<Changes>>,
-    shown: Rc<RefCell<Vec<OsdLevel>>>,
+pub(super) struct Rig {
+    pub(super) feed: Feed,
+    pub(super) mailbox: SceneMailbox,
+    pub(super) facts: Rc<RefCell<Facts>>,
+    pub(super) drained: Rc<Cell<Changes>>,
+    pub(super) shown: Rc<RefCell<Vec<OsdLevel>>>,
 }
 
-fn rig() -> Rig {
+pub(super) fn rig() -> Rig {
     let mut base = FixtureServices::new(Fixture::Bare).facts();
     base.audio.attached = Some((0.5, false));
     base.system.brightness = None;
@@ -101,7 +101,7 @@ fn set_volume(rig: &Rig, scalar: f32) {
     rig.facts.borrow_mut().audio.attached = Some((scalar, false));
 }
 
-fn open_page(rig: &Rig, page: usize) {
+pub(super) fn open_page(rig: &Rig, page: usize) {
     let _ = rig.mailbox.update(|scene| Scene {
         expanded: true,
         page,
@@ -253,7 +253,7 @@ fn a_media_wake_while_suppressed_publishes_nothing_and_unsuppress_publishes_once
     assert_eq!(rig.mailbox.latest().generation, settled);
 }
 
-fn page_labels(mailbox: &SceneMailbox, page: usize) -> Vec<String> {
+pub(super) fn page_labels(mailbox: &SceneMailbox, page: usize) -> Vec<String> {
     mailbox.latest().content.pages[page]
         .nodes
         .iter()

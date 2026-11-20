@@ -9,7 +9,7 @@ use std::time::{Duration, Instant};
 
 use plith_ipc::{
     BindError, DecodeError, Flow, Message, Meter, OsdLink, OsdServer, Rejection, ServerEvent,
-    ServerTrust, Stopper, encode,
+    ServerTrust, Stopper, encode, pipe_exists,
 };
 use windows::Win32::Foundation::{CloseHandle, ERROR_PIPE_BUSY, GENERIC_WRITE, HANDLE};
 use windows::Win32::Storage::FileSystem::ReadFile;
@@ -214,6 +214,20 @@ fn second_bind_reports_already_running() {
         OsdServer::bind(&name),
         Err(BindError::AlreadyRunning)
     ));
+}
+
+#[test]
+fn pipe_exists_follows_the_server() {
+    let name = unique_name();
+    assert!(!pipe_exists(&name), "nothing serves it yet");
+    let mut server = Running::start(&name);
+    assert!(pipe_exists(&name));
+    // A busy instance (a client connected) still exists.
+    let _link = dev_link(name.clone());
+    assert!(matches!(server.next_event(), ServerEvent::Connected { .. }));
+    assert!(pipe_exists(&name));
+    server.shut_down();
+    assert!(!pipe_exists(&name), "gone once the server ends");
 }
 
 #[test]

@@ -3,14 +3,14 @@
 
 use super::feed::Feed;
 use super::idle_facts::Idle;
-use super::weather_link;
+use super::weather_link::WeatherWiring;
 use crate::log::{self, LogFile};
 use crate::services::fixture::idle as mock;
 use crate::{locale, plays_file, settings_file};
 use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
-use plith_core::settings::Settings;
+use plith_core::settings::{IdleLook, Settings};
 use plith_core::weather::Stamp;
 use plith_shell::UiWaker;
 use std::sync::Arc;
@@ -26,18 +26,27 @@ pub fn is_normal(launch: &Launch) -> bool {
 /// on top. The banana fixture shows the mock's forecast, so its weather is on (no network).
 #[must_use]
 pub fn settings_for(launch: &Launch, log: &LogFile) -> Settings {
+    settings_and_file_look(launch, log).0
+}
+
+/// `settings_for`, and the look the file holds when `--idle-look` overrides it for this run
+/// (the app keeps writing that one, not the override).
+#[must_use]
+pub fn settings_and_file_look(launch: &Launch, log: &LogFile) -> (Settings, Option<IdleLook>) {
     let mut settings = if is_normal(launch) {
         settings_file::load(log)
     } else {
         Settings::default()
     };
+    let mut file_look = None;
     if let Some(look) = launch.idle_look {
+        file_look = Some(settings.look);
         settings.look = look;
     }
     if launch.fixture == Some(Fixture::Banana) {
         settings.weather = true;
     }
-    settings
+    (settings, file_look)
 }
 
 /// The interface language of a run: the setting, or Windows' own for `Auto`. Resolved once at
@@ -49,6 +58,8 @@ pub fn language_of(settings: &Settings) -> Lang {
 
 /// Attaches the idle model to `feed` and starts the weather service when this run allows it.
 /// `settings` are the run's (`settings_for`); the language is the one the feed was built with.
+/// Returns the wiring that starts the weather again when the user turns it on.
+#[must_use]
 pub fn attach(
     launch: &Launch,
     log: &Arc<LogFile>,
@@ -56,7 +67,7 @@ pub fn attach(
     feed: &mut Feed,
     mailbox: &SceneMailbox,
     settings: &Settings,
-) {
+) -> WeatherWiring {
     let lang = feed.lang();
     let mut idle = Idle::new(settings.clone(), lang);
     // With plays=off nothing about listening is read, kept or written; the old file stays as is.
@@ -80,11 +91,11 @@ pub fn attach(
             .with_forecast(Some(mock::forecast(day, read_at)));
     }
     feed.set_idle(idle, mailbox);
-    let link = weather_link::start(
-        settings,
+    let wiring = WeatherWiring::new(
+        Arc::clone(log),
+        Arc::new(move || waker.wake()),
         is_normal(launch),
-        log,
-        Box::new(move || waker.wake()),
     );
-    feed.set_weather(link);
+    feed.set_weather(wiring.start(settings));
+    wiring
 }

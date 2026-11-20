@@ -205,6 +205,21 @@ fn expand_lands_on_welcome_by_default_and_last_page_when_set() {
     );
 }
 
+#[test]
+fn last_page_never_records_the_quick_page() {
+    let mut rig = rig("open-last-quick", IdleLook::Karot, OpenOn::LastPage);
+    let _ = rig.app.mailbox.update(|scene| Scene {
+        page: PageId::Quick.index(),
+        ..scene
+    });
+    rig.app.on_event(CLICK);
+    assert_eq!(
+        rig.app.mailbox.latest().scene.page,
+        PageId::Welcome.index(),
+        "the quick page is not a last page"
+    );
+}
+
 fn collapse_by_demo(app: &mut App) {
     let (steps, queue) = std::sync::mpsc::channel();
     app.attach_demo(queue);

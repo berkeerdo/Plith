@@ -1,0 +1,66 @@
+//! French settings window strings.
+
+use super::SheetText;
+
+/// The French string for `t`.
+pub fn text(t: SheetText) -> &'static str {
+    match t {
+        SheetText::WindowTitle => "Plith · Réglages",
+        SheetText::Caption => "RÉGLAGES",
+        SheetText::SectionGeneral => "Général",
+        SheetText::SectionIdle => "Repos",
+        SheetText::SectionOsd => "OSD",
+        SheetText::SectionAbout => "À propos",
+        SheetText::LineGeneral => "Langue et ouverture de l'île.",
+        SheetText::LineIdle => "Ce que montre l'île fermée, ce qu'on lit au clic.",
+        SheetText::LineOsd => "Indicateur de volume et de luminosité, au-dessus des jeux.",
+        SheetText::LineAbout => "Version et fichiers.",
+        SheetText::RowLanguage => "Langue",
+        SheetText::SubLanguage => "Automatique, suit la langue de Windows",
+        SheetText::RowOpens => "À l'ouverture de l'île",
+        SheetText::SubOpens => "Ce qui s'affiche d'abord au clic",
+        SheetText::CaptionClosed => "ÎLE FERMÉE",
+        SheetText::PreviewNote => "Aperçu réduit ; sur l'île, il fait 200 x 32.",
+        SheetText::RowStrip => "Bandeau",
+        SheetText::SubStrip => "Combien d'heures l'accueil affiche",
+        SheetText::RowTopRight => "En haut à droite",
+        SheetText::SubTopRight => "Ce qui se trouve en haut à droite de l'accueil",
+        SheetText::RowPlayed => "Écoutés aujourd'hui",
+        SheetText::SubPlayed => "Au-dessus du bandeau, conservé sur ce PC uniquement",
+        SheetText::RowWeather => "Météo",
+        SheetText::SubWeather => "Activée, la position est envoyée à Open-Meteo",
+        SheetText::RowLocation => "Position",
+        SheetText::SubLocation => "Position Windows, sinon IP, ou manuelle",
+        SheetText::RowUnit => "Unité",
+        SheetText::RowOsd => "Indicateur à l'écran",
+        SheetText::SubOsd => "Au changement de volume ou de luminosité, au-dessus des jeux",
+        SheetText::RowHideWindows => "Masquer l'indicateur Windows",
+        SheetText::SubHideWindows => {
+            "Masque l'indicateur propre à Windows quand celui de Plith tourne"
+        }
+        SheetText::RowVersion => "Version",
+        SheetText::RowFile => "Fichier de réglages",
+        SheetText::RowData => "Données",
+        SheetText::SubData => "Météo d'Open-Meteo, position IP d'ipapi.co (seulement si choisie)",
+        SheetText::WordAuto => "AUTOMATIQUE",
+        SheetText::WordWelcome => "ACCUEIL",
+        SheetText::WordLastPage => "DERNIÈRE",
+        SheetText::WordHours3 => "±3 H",
+        SheetText::WordHours6 => "±6 H",
+        SheetText::WordAllDay => "JOURNÉE",
+        SheetText::WordWeather => "MÉTÉO",
+        SheetText::WordSound => "SON",
+        SheetText::WordPlaying => "EN LECTURE",
+        SheetText::WordEmpty => "VIDE",
+        SheetText::WordWindows => "WINDOWS",
+        SheetText::WordIp => "IP",
+        SheetText::WordCity => "VILLE",
+        SheetText::WordCelsius => "°C",
+        SheetText::WordFahrenheit => "°F",
+        SheetText::WordOn => "ACTIVÉ",
+        SheetText::WordOff => "DÉSACTIVÉ",
+        SheetText::WordOpen => "OUVRIR",
+        SheetText::WordAllSettings => "TOUS LES RÉGLAGES",
+        SheetText::SaveError => "Réglages non enregistrés, valables pour cette session seulement.",
+    }
+}

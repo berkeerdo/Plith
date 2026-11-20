@@ -23,6 +23,7 @@ pub mod scene;
 pub mod scroll;
 pub mod settings;
 pub mod shapes;
+pub mod sheet;
 pub mod spring;
 pub mod theme;
 pub mod timeline;

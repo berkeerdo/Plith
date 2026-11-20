@@ -30,7 +30,7 @@ pub use client::OsdLink;
 pub use identity::ServerTrust;
 pub use keepalive::{IDLE_TIMEOUT, KEEPALIVE};
 #[cfg(windows)]
-pub use launch::{HelperProcess, INSTALLED_HELPER, current_pipe_name, launch_helper};
+pub use launch::{HelperProcess, INSTALLED_HELPER, current_pipe_name, launch_helper, pipe_exists};
 pub use message::{
     DecodeError, EncodeError, MAX_LABEL, MAX_MESSAGE, Message, Meter, PROTOCOL_VERSION, decode,
     encode,

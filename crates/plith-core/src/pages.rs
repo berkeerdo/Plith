@@ -4,6 +4,7 @@
 use crate::draw::{DisplayList, Rect};
 use crate::geometry::IslandShape;
 use crate::lang::{Lang, Text, text};
+use crate::settings::IdleLook;
 
 pub mod audio;
 pub mod copy;
@@ -14,6 +15,7 @@ pub mod idle_pill;
 mod kit;
 pub mod media;
 pub mod pill;
+pub mod quick;
 pub mod shelf;
 pub mod system;
 pub mod tabbar;
@@ -26,8 +28,8 @@ pub const MARGIN_LEFT: f64 = 30.0;
 /// Right margin of page content in DIP.
 pub const MARGIN_RIGHT: f64 = 24.0;
 
-/// Number of pages: the four tab pages and the welcome view.
-pub const PAGE_COUNT: usize = 5;
+/// Number of pages: the four tab pages, the welcome view and the quick page.
+pub const PAGE_COUNT: usize = 6;
 
 /// One of the pages: four with a tab, and the welcome view with none.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
@@ -42,22 +44,25 @@ pub enum PageId {
     System,
     /// The welcome view: the island's opening page, with no tab.
     Welcome,
+    /// The quick settings page behind the gear mark, with no tab.
+    Quick,
 }
 
 impl PageId {
-    /// Every page: the tab pages in tab order, then the welcome view.
+    /// Every page: the tab pages in tab order, then the welcome view and the quick page.
     pub const ALL: [PageId; PAGE_COUNT] = [
         PageId::Audio,
         PageId::Media,
         PageId::Shelf,
         PageId::System,
         PageId::Welcome,
+        PageId::Quick,
     ];
 
     /// The pages that have a tab, in tab order.
     pub const TABS: [PageId; 4] = [PageId::Audio, PageId::Media, PageId::Shelf, PageId::System];
 
-    /// The page position, 0 to 4; the tab pages come first, so a tab position is its page position.
+    /// The page position, 0 to 5; the tab pages come first, so a tab position is its page position.
     #[must_use]
     pub fn index(self) -> usize {
         match self {
@@ -66,6 +71,7 @@ impl PageId {
             PageId::Shelf => 2,
             PageId::System => 3,
             PageId::Welcome => 4,
+            PageId::Quick => 5,
         }
     }
 
@@ -75,7 +81,7 @@ impl PageId {
         Self::ALL.get(index).copied()
     }
 
-    /// The tab label shown to the user in `lang`; empty for the welcome view, which has no tab.
+    /// The tab label shown to the user in `lang`; empty for the pages with no tab.
     #[must_use]
     pub fn label(self, lang: Lang) -> &'static str {
         match self {
@@ -83,7 +89,7 @@ impl PageId {
             PageId::Media => text(Text::TabMedia, lang),
             PageId::Shelf => text(Text::TabShelf, lang),
             PageId::System => text(Text::TabSystem, lang),
-            PageId::Welcome => "",
+            PageId::Welcome | PageId::Quick => "",
         }
     }
 }
@@ -121,6 +127,10 @@ pub enum Action {
     BrightnessRuler(Rect),
     /// Mute or unmute the capture device.
     ToggleMic,
+    /// Pick this resting look (on the quick page); applies at once.
+    Look(IdleLook),
+    /// Open the settings window (on the quick page).
+    OpenSettings,
 }
 
 /// A built page: what to draw, where to click and how big the island is.

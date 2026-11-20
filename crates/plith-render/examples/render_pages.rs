@@ -6,7 +6,8 @@
 //! Run: `cargo run --release -p plith-render --example render_pages`. With a folder argument
 //! (`-- <new folder>`) it renders only the idle look states of the R7 mock (the welcome view and
 //! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
-//! `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
+//! `--quick <new folder>` renders the quick page and every tab row at 1x and 2x in Turkish and
+//! German. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
 //! error) and `--out <new folder>` names the folder of the page states.
 
 use plith_core::draw::{DisplayList, PageContent};
@@ -29,6 +30,8 @@ use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
 #[path = "render_pages/idle_states.rs"]
 mod idle_states;
+#[path = "render_pages/quick_states.rs"]
+mod quick_states;
 
 use windows::Win32::Foundation::GENERIC_WRITE;
 use windows::Win32::Graphics::Imaging::{
@@ -40,8 +43,14 @@ use windows::Win32::System::Com::{
 };
 use windows::core::{HSTRING, Result};
 
-/// Pixels per DIP.
-const SCALE: f64 = 2.0;
+thread_local! {
+    static SCALE_CELL: std::cell::Cell<f64> = const { std::cell::Cell::new(2.0) };
+}
+
+/// The scale of this run (2 unless the quick check sets another).
+fn scale() -> f64 {
+    SCALE_CELL.with(std::cell::Cell::get)
+}
 /// Cell width in DIP (the mock's grid column).
 const CELL_W: f64 = 680.0;
 /// The black screen edge above the island, in DIP (the mock's `.edge`).
@@ -61,7 +70,7 @@ struct Canvas {
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 fn px(dip: f64) -> usize {
     // DIP sizes are small positive values; ceil keeps the edge pixels.
-    (dip * SCALE).ceil() as usize
+    (dip * scale()).ceil() as usize
 }
 
 #[allow(clippy::cast_possible_truncation, clippy::cast_sign_loss)]
@@ -143,7 +152,7 @@ fn island(content: &Content, palette: Palette) -> Result<(Vec<u8>, usize, usize)
     let text = TextSystem::new()?;
     #[allow(clippy::cast_possible_truncation)]
     // Island sizes are a few hundred DIP.
-    let rows = render_offscreen(w as u32, h as u32, SCALE, &frame, palette, text)?;
+    let rows = render_offscreen(w as u32, h as u32, scale(), &frame, palette, text)?;
     Ok((rows, w, h))
 }
 
@@ -294,6 +303,7 @@ struct Args {
     lang: Lang,
     out: Option<PathBuf>,
     idle: Option<PathBuf>,
+    quick: Option<PathBuf>,
 }
 
 fn parse_args() -> std::result::Result<Args, String> {
@@ -301,6 +311,7 @@ fn parse_args() -> std::result::Result<Args, String> {
         lang: Lang::Tr,
         out: None,
         idle: None,
+        quick: None,
     };
     let mut it = std::env::args_os().skip(1);
     while let Some(arg) = it.next() {
@@ -313,6 +324,7 @@ fn parse_args() -> std::result::Result<Args, String> {
                     .find(|l| l.code() == code)
                     .ok_or_else(|| format!("unknown language code `{code}`"))?;
             }
+            Some("--quick") => args.quick = Some(it.next().ok_or("--quick needs a folder")?.into()),
             Some("--out") => args.out = Some(it.next().ok_or("--out needs a folder")?.into()),
             Some(flag) if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ if args.idle.is_none() => args.idle = Some(arg.into()),
@@ -335,11 +347,31 @@ fn render_idle(dir: &Path, lang: Lang) -> std::result::Result<(), Box<dyn std::e
     Ok(())
 }
 
+/// Renders the quick page and every tab row at 1x and 2x, Turkish and German, into the new
+/// folder `dir`.
+fn render_quick(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let dir = out_dir(Some(dir))?;
+    for (code, lang) in [("tr", Lang::Tr), ("de", Lang::De)] {
+        for factor in [1.0, 2.0] {
+            SCALE_CELL.with(|s| s.set(factor));
+            for (name, contents) in quick_states::states(lang) {
+                let file = format!("{name}-{code}-{factor}x.png");
+                write_png(&dir.join(file), &cell(&contents, Theme::Gece)?)?;
+            }
+        }
+    }
+    println!("{}", dir.display());
+    Ok(())
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     let args = parse_args()?;
     let lang = args.lang;
+    if let Some(dir) = &args.quick {
+        return render_quick(dir);
+    }
     if let Some(dir) = &args.idle {
         return render_idle(dir, lang);
     }

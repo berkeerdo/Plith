@@ -81,7 +81,7 @@ fn forecast(read_hour: u8) -> Forecast {
 }
 
 /// The welcome facts at rest: playing, weather on, forecast read at 14:00.
-fn rest(lang: Lang) -> WelcomeFacts {
+pub(super) fn rest(lang: Lang) -> WelcomeFacts {
     WelcomeFacts {
         now: (DAY, u32::from(NOW_HOUR) * 60 + u32::from(NOW_MINUTE)),
         date: date_short(weekday(DAY), DAY.2, DAY.1, lang),
@@ -110,7 +110,7 @@ fn welcome(facts: &WelcomeFacts, probe: Option<i32>) -> Vec<Content> {
 }
 
 /// The pill facts at the fixed time, with the forecast turn and the playing track.
-fn idle_facts(lang: Lang) -> IdleFacts {
+pub(super) fn idle_facts(lang: Lang) -> IdleFacts {
     let now = Stamp {
         day: DAY,
         hour: NOW_HOUR,

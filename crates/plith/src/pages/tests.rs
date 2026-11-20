@@ -40,7 +40,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&start, &routed),
         Dirty {
-            pages: [true, false, false, false, false],
+            pages: [true, false, false, false, false, false],
             pill: false,
         }
     );
@@ -50,7 +50,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&routed, &muted),
         Dirty {
-            pages: [true, false, false, true, false],
+            pages: [true, false, false, true, false, false],
             pill: false,
         }
     );
@@ -60,7 +60,7 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&muted, &moved),
         Dirty {
-            pages: [true, true, false, false, false],
+            pages: [true, true, false, false, false, true],
             pill: true,
         }
     );
@@ -69,14 +69,14 @@ fn dirty_follows_the_facts_that_changed() {
     assert_eq!(
         Dirty::between(&moved, &fixture.facts()),
         Dirty {
-            pages: [false, false, false, true, false],
+            pages: [false, false, false, true, false, false],
             pill: false,
         }
     );
     assert_eq!(
         Dirty::page(PageId::Media),
         Dirty {
-            pages: [false, true, false, false, false],
+            pages: [false, true, false, false, false, false],
             pill: false,
         }
     );
@@ -162,9 +162,68 @@ fn union_joins_two_dirty_sets() {
     assert_eq!(
         a.union(b),
         Dirty {
-            pages: [true, false, false, false, true],
+            pages: [true, false, false, false, true, true],
             pill: true,
         }
     );
     assert_eq!(Dirty::default().union(Dirty::default()), Dirty::default());
+}
+
+fn idle_facts() -> IdleFacts {
+    IdleFacts {
+        time: "14:05".into(),
+        turn: None,
+        now_sky: None,
+        playing: None,
+        seal: plith_core::pages::pill::PillFacts {
+            output: "G733".into(),
+            value: Some(62),
+            state: plith_core::pages::pill::PillState::Live,
+        },
+        sound: None,
+        lang: Lang::Tr,
+        scroll_start: None,
+    }
+}
+
+#[test]
+fn a_dirty_pill_dirties_the_quick_page() {
+    let pill = Dirty {
+        pill: true,
+        ..Dirty::default()
+    };
+    assert!(pill.with_quick().pages[PageId::Quick.index()]);
+    assert!(!Dirty::default().with_quick().pages[PageId::Quick.index()]);
+    let merged = Dirty::default().union(pill);
+    assert!(merged.pages[PageId::Quick.index()]);
+}
+
+#[test]
+fn the_quick_page_shows_the_look_and_six_previews() {
+    let facts = fixture_facts(Fixture::Banana);
+    let idle = idle_facts();
+    let mut with = inputs(&facts);
+    with.idle = Some((IdleLook::Seal, &idle));
+    let build = build_page(PageId::Quick, &with);
+    let looks = build
+        .targets
+        .iter()
+        .filter(|t| matches!(t.action, plith_core::pages::Action::Look(_)))
+        .count();
+    assert_eq!(looks, 6);
+    let insets = build
+        .list
+        .nodes
+        .iter()
+        .filter(|n| matches!(n, Node::Inset { .. }))
+        .count();
+    assert_eq!(insets, 6);
+    // Before the idle model is attached the slot is the bare tab bar at the quick size.
+    let bare = build_page(PageId::Quick, &inputs(&facts));
+    assert_eq!(bare.shape, plith_core::shapes::QUICK);
+    assert!(
+        bare.targets
+            .iter()
+            .all(|t| !matches!(t.action, plith_core::pages::Action::Look(_)))
+    );
 }

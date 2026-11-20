@@ -17,8 +17,8 @@ use windows::Win32::Graphics::Direct2D::{
 use windows::Win32::Graphics::Dxgi::Common::DXGI_FORMAT_B8G8R8A8_UNORM;
 use windows::core::Result;
 
-/// The cache slot of the pill; slots 0 to 3 are the pages.
-pub(crate) const PILL: usize = 4;
+/// The cache slot of the pill; the slots before it are the pages, one per `PageId`.
+pub(crate) const PILL: usize = plith_core::pages::PAGE_COUNT;
 /// The largest bitmap side in pixels; a list larger than this is clipped.
 const MAX_PX: f64 = 8192.0;
 

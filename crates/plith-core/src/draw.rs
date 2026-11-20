@@ -62,6 +62,8 @@ pub enum TextStyle {
     Strong,
     /// The welcome view clock: mono 30.
     Hero,
+    /// A section heading: semibold sans 20.
+    Heading,
 }
 
 /// Where an overlong line loses its characters.
@@ -291,6 +293,18 @@ pub enum Node {
         /// Which artwork.
         art: ArtId,
     },
+    /// A list drawn at `(x, y)` scaled by `scale`, for true-size previews. Its live nodes are
+    /// skipped.
+    Inset {
+        /// The list drawn inside.
+        list: Arc<DisplayList>,
+        /// Where its origin lands.
+        x: f64,
+        /// Where its origin lands.
+        y: f64,
+        /// The uniform scale.
+        scale: f64,
+    },
     /// A live node.
     Live(LiveNode),
 }
@@ -327,7 +341,7 @@ pub struct PageContent {
 }
 
 impl PageContent {
-    /// Five empty pages, an empty pill and no artwork.
+    /// One empty list per page, an empty pill and no artwork.
     #[must_use]
     pub fn empty() -> Self {
         let empty = || Arc::new(DisplayList::empty());
@@ -385,6 +399,7 @@ pub fn style_spec(style: TextStyle) -> StyleSpec {
         TextStyle::Body => (Family::Sans, 12.0, 400, false, 0.0),
         TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
         TextStyle::Hero => (Family::Mono, 30.0, 400, false, MONO_TRACKING),
+        TextStyle::Heading => (Family::Sans, 20.0, 600, false, 0.0),
     };
     StyleSpec {
         family,

@@ -1,6 +1,8 @@
 //! Draws the cached nodes of a display list: fills, strokes, stations, text and artwork. Live
 //! nodes are skipped here; they are drawn every frame by `live`.
 
+mod inset;
+
 use crate::live::fade_brush;
 use crate::paint::{color, f};
 use crate::text::TextSystem;
@@ -434,6 +436,12 @@ pub(crate) fn draw_list(
                     missing.push(*art);
                 }
             }
+            Node::Inset {
+                list: inner,
+                x,
+                y,
+                scale,
+            } => missing.extend(inset::draw(ctx, kit, env, inner, (*x, *y, *scale))?),
             Node::Live(_) => {}
         }
     }

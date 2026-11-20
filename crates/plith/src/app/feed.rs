@@ -5,6 +5,7 @@
 pub mod drag;
 mod idle;
 mod osd;
+mod settings;
 
 use super::idle_facts::Idle;
 use super::weather_link::WeatherLink;
@@ -135,6 +136,8 @@ pub struct Feed {
     lang: Lang,
     /// The value a ruler drag shows until the reading catches up.
     drag: Option<drag::Override>,
+    /// The settings window is open: its pill previews need the minute clock.
+    sheet_open: bool,
 }
 
 impl Feed {
@@ -180,6 +183,7 @@ impl Feed {
             weather: None,
             lang,
             drag: None,
+            sheet_open: false,
         };
         feed.publish(mailbox);
         feed
@@ -260,7 +264,7 @@ impl Feed {
     /// leave them running. Open, the tick refreshes the pages; collapsed, it moves the pill.
     pub fn on_timer(&mut self, id: usize, mailbox: &SceneMailbox) {
         let scene = mailbox.latest().scene;
-        if !wanted(&scene, self.look()).clock {
+        if !self.want(&scene).clock {
             self.sync_timers(mailbox);
             return;
         }
@@ -321,7 +325,7 @@ impl Feed {
 
     /// Starts and stops timers to match the scene.
     fn sync_timers(&mut self, mailbox: &SceneMailbox) {
-        let want = wanted(&mailbox.latest().scene, self.look());
+        let want = self.want(&mailbox.latest().scene);
         match (want.clock, self.armed.clock) {
             (true, false) => self.timers.set(CLOCK_TIMER, clock_ms((self.clock)())),
             (false, true) => self.timers.kill(CLOCK_TIMER),

@@ -17,7 +17,7 @@ use crate::device::Gpu;
 use crate::paint::{PaintFrame, Painter};
 use crate::text::TextSystem;
 
-fn make_bitmap(
+pub(crate) fn make_bitmap(
     ctx: &ID2D1DeviceContext,
     width: u32,
     height: u32,
@@ -36,6 +36,30 @@ fn make_bitmap(
     };
     // SAFETY: `props` is live for the call; no initial data is passed.
     unsafe { ctx.CreateBitmap(D2D_SIZE_U { width, height }, None, 0, &raw const props) }
+}
+
+/// Copies `target` into the CPU-readable `staging` bitmap (both `width` by `height` pixels) and
+/// returns tightly packed premultiplied BGRA rows.
+pub(crate) fn read_back(
+    staging: &ID2D1Bitmap1,
+    target: &ID2D1Bitmap1,
+    width: u32,
+    height: u32,
+) -> Result<Vec<u8>> {
+    let row = width as usize * 4;
+    let mut out = Vec::with_capacity(row * height as usize);
+    // SAFETY: the mapped region is `pitch * height` bytes and stays valid until Unmap; each
+    // row copy reads `row <= pitch` bytes inside it.
+    unsafe {
+        staging.CopyFromBitmap(None, target, None)?;
+        let mapped = staging.Map(D2D1_MAP_OPTIONS_READ)?;
+        let pitch = mapped.pitch as usize;
+        for y in 0..height as usize {
+            out.extend_from_slice(std::slice::from_raw_parts(mapped.bits.add(y * pitch), row));
+        }
+        staging.Unmap()?;
+    }
+    Ok(out)
 }
 
 /// A WARP device, a target bitmap and a painter kept across frames, so tests can see what the
@@ -99,20 +123,7 @@ impl Offscreen {
     /// Returns the first failing Windows call.
     pub fn render(&mut self, frame: &PaintFrame) -> Result<Vec<u8>> {
         self.painter.paint(self.gpu.context(), frame)?;
-        let row = self.width as usize * 4;
-        let mut out = Vec::with_capacity(row * self.height as usize);
-        // SAFETY: the mapped region is `pitch * height` bytes and stays valid until Unmap; each
-        // row copy reads `row <= pitch` bytes inside it.
-        unsafe {
-            self.staging.CopyFromBitmap(None, &self.target, None)?;
-            let mapped = self.staging.Map(D2D1_MAP_OPTIONS_READ)?;
-            let pitch = mapped.pitch as usize;
-            for y in 0..self.height as usize {
-                out.extend_from_slice(std::slice::from_raw_parts(mapped.bits.add(y * pitch), row));
-            }
-            self.staging.Unmap()?;
-        }
-        Ok(out)
+        read_back(&self.staging, &self.target, self.width, self.height)
     }
 
     /// Switches the painter's palette.

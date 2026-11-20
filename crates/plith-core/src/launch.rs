@@ -2,7 +2,7 @@
 
 use crate::demo::{DemoError, DemoScript};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
-use crate::settings::IdleLook;
+use crate::settings::{FlyoutPref, IdleLook};
 use crate::tuning::TuningSet;
 use std::fmt;
 
@@ -43,6 +43,15 @@ pub enum FlyoutMode {
     Hide,
 }
 
+/// The flyout mode of a run: `--flyout` when given, else the settings file's choice.
+#[must_use]
+pub fn flyout_mode(cli: Option<FlyoutMode>, pref: FlyoutPref) -> FlyoutMode {
+    cli.unwrap_or(match pref {
+        FlyoutPref::Off => FlyoutMode::Off,
+        FlyoutPref::Hide => FlyoutMode::Hide,
+    })
+}
+
 /// Parsed launch options.
 #[derive(Debug, Clone, PartialEq, Default)]
 pub struct Launch {
@@ -61,7 +70,7 @@ pub struct Launch {
     /// Mock data instead of the real services; `None` runs the real services.
     pub fixture: Option<Fixture>,
     /// What to do with the Windows volume and brightness flyout.
-    pub flyout: FlyoutMode,
+    pub flyout: Option<FlyoutMode>,
     /// The resting look for this run, replacing the settings file's (`--idle-look <key>`).
     pub idle_look: Option<IdleLook>,
 }
@@ -229,7 +238,7 @@ impl Launch {
                 }
                 "--flyout" => {
                     let text = value()?;
-                    launch.flyout = parse_flyout(&text).ok_or_else(|| bad(text))?;
+                    launch.flyout = Some(parse_flyout(&text).ok_or_else(|| bad(text))?);
                 }
                 "--idle-look" => {
                     let text = value()?;

@@ -303,3 +303,58 @@ fn same_track_keeps_start() {
         Some(epoch(100))
     );
 }
+
+fn saved_log() -> PlayLog {
+    let mut saved = PlayLog::default();
+    saved.observe((2026, 11, 17), 600, 0, Some(("Holocene", "Bon Iver")), true);
+    saved.observe((2026, 11, 17), 642, 0, None, false);
+    saved
+}
+
+#[test]
+fn plays_turned_on_while_running_load_the_log_once_and_save() {
+    let mut idle = Idle::new(plays_off(), Lang::En);
+    let saves = Rc::new(Cell::new(0));
+    let loads = Rc::new(Cell::new(0));
+    for _ in 0..2 {
+        let (seen, loaded) = (Rc::clone(&saves), Rc::clone(&loads));
+        idle.enable_plays(move || {
+            loaded.set(loaded.get() + 1);
+            let writer: PlaySaver = Box::new(move |_| seen.set(seen.get() + 1));
+            (saved_log(), writer)
+        });
+    }
+    assert_eq!(loads.get(), 1, "the log loads once");
+    idle.set_settings(Settings::default());
+    let welcome = idle.welcome_facts(&silent(facts()), at(12, 0, 0));
+    assert_eq!(welcome.plays.len(), 1, "the saved play shows");
+    idle.save();
+    assert_eq!(saves.get(), 1, "the history is written again");
+}
+
+#[test]
+fn a_model_with_a_saver_keeps_its_log() {
+    let (mut idle, _) = counting(Idle::new(Settings::default(), Lang::En));
+    let loaded = idle.enable_plays(|| (saved_log(), Box::new(|_| {})));
+    assert!(!loaded);
+}
+
+#[test]
+fn a_cleared_forecast_shows_no_weather() {
+    let on = Settings {
+        weather: true,
+        ..Settings::default()
+    };
+    let day = (2026, 11, 17);
+    let read_at = plith_core::weather::Stamp {
+        day,
+        hour: 9,
+        minute: 0,
+    };
+    let mut idle = Idle::new(on, Lang::En).with_forecast(Some(mock::forecast(day, read_at)));
+    assert!(idle.welcome_facts(&facts(), at(9, 5, 0)).forecast.is_some());
+    idle.clear_forecast();
+    let f = facts();
+    assert!(idle.welcome_facts(&f, at(9, 5, 0)).forecast.is_none());
+    assert!(idle.idle_facts(&f, at(9, 5, 0)).now_sky.is_none());
+}
