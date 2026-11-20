@@ -214,7 +214,9 @@ impl SheetWindow {
     /// Opens the window centered on `monitor` (an `HMONITOR` value; 0 or an invalid one falls
     /// back to the primary monitor), titled `title`, brings it to the front, and reports through
     /// `on_event` on the UI thread. `on_event` is never called from inside this function: events
-    /// raised while the window is created are delivered from the next message.
+    /// raised while the window is created are delivered from the next message. `on_panic` is
+    /// called once, with the message, when `on_event` or a window callback panics; the window
+    /// then sends no more events (the app decides whether to close it).
     ///
     /// # Errors
     /// Returns the Win32 error when the class or the window cannot be created.
@@ -222,17 +224,19 @@ impl SheetWindow {
         monitor: isize,
         title: &str,
         on_event: Box<dyn FnMut(SheetEvent)>,
+        on_panic: Box<dyn Fn(String)>,
     ) -> Result<Self, ShellError> {
-        Self::open_with(monitor, title, on_event, true)
+        Self::open_with(monitor, title, on_event, on_panic, true)
     }
 
     fn open_with(
         monitor: isize,
         title: &str,
         on_event: Box<dyn FnMut(SheetEvent)>,
+        on_panic: Box<dyn Fn(String)>,
         show: bool,
     ) -> Result<Self, ShellError> {
-        let state = Rc::new(State::new(on_event));
+        let state = Rc::new(State::new(on_event, on_panic));
         let hwnd = create(&state, title, monitor)?;
         let window = Self {
             hwnd: hwnd.0 as isize,

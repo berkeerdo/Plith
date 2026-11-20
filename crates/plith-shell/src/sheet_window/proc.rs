@@ -2,7 +2,7 @@
 //! its own per-window state behind `GWLP_USERDATA`.
 
 use super::SheetEvent;
-use super::clipboard::read_text;
+use super::clipboard::{clear_owner, read_text};
 use super::keys::{CharAssembler, KeyMap, map_char, map_keydown};
 use crate::handles::hwnd_of;
 use crate::window::guard;
@@ -15,13 +15,14 @@ use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Gdi::ValidateRect;
 use windows::Win32::UI::HiDpi::GetDpiForWindow;
 use windows::Win32::UI::Input::KeyboardAndMouse::{
-    GetKeyState, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent, VK_CONTROL, VK_MENU, VK_SHIFT,
+    GetKeyState, ReleaseCapture, SetCapture, TME_LEAVE, TRACKMOUSEEVENT, TrackMouseEvent,
+    VK_CONTROL, VK_MENU, VK_SHIFT,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     CREATESTRUCTW, DefWindowProcW, DestroyWindow, GWLP_USERDATA, GetClientRect, GetWindowLongPtrW,
     IsWindow, SIZE_MINIMIZED, SWP_NOACTIVATE, SWP_NOZORDER, SetWindowLongPtrW, SetWindowPos,
-    WM_CHAR, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN, WM_MOUSEMOVE,
-    WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SIZE,
+    WM_CAPTURECHANGED, WM_CHAR, WM_CLOSE, WM_DPICHANGED, WM_ERASEBKGND, WM_KEYDOWN, WM_LBUTTONDOWN,
+    WM_LBUTTONUP, WM_MOUSEMOVE, WM_NCCREATE, WM_NCDESTROY, WM_PAINT, WM_SIZE,
 };
 
 /// Posted by `open` so events queued while the window was being created are delivered from a
@@ -35,8 +36,15 @@ pub(super) struct State {
     /// False while `open` runs: events are queued, not delivered.
     ready: Cell<bool>,
     dispatching: Cell<bool>,
+    on_panic: Box<dyn Fn(String)>,
     /// True once the callback panicked or the handle was dropped: no further events.
     muted: Cell<bool>,
+    /// True once a panic was reported; later panics are covered by the first report.
+    panicked: Cell<bool>,
+    /// True while a left press that began in this window is held (the window has capture).
+    pressed: Cell<bool>,
+    /// Pixels per DIP as of the last `Resized`, so mouse moves need no query.
+    scale: Cell<f64>,
     /// True once `WM_NCCREATE` stored the pointer that the window owns.
     pub(super) attached: Cell<bool>,
     tracking: Cell<bool>,
@@ -45,9 +53,13 @@ pub(super) struct State {
 }
 
 impl State {
-    pub(super) fn new(on_event: Box<dyn FnMut(SheetEvent)>) -> Self {
+    pub(super) fn new(on_event: Box<dyn FnMut(SheetEvent)>, on_panic: Box<dyn Fn(String)>) -> Self {
         Self {
             on_event: RefCell::new(on_event),
+            on_panic,
+            panicked: Cell::new(false),
+            pressed: Cell::new(false),
+            scale: Cell::new(1.0),
             queue: RefCell::new(VecDeque::new()),
             ready: Cell::new(false),
             dispatching: Cell::new(false),
@@ -60,7 +72,7 @@ impl State {
     }
 
     /// Queues `event`; delivers it at once unless `open` is still running.
-    fn emit(&self, event: SheetEvent) {
+    pub(super) fn emit(&self, event: SheetEvent) {
         self.queue.borrow_mut().push_back(event);
         if self.ready.get() {
             self.flush();
@@ -81,11 +93,22 @@ impl State {
             }
             let mut callback = self.on_event.borrow_mut();
             if let Err(message) = guard("settings window callback", || callback(event)) {
-                eprintln!("{message}");
-                self.muted.set(true);
+                drop(callback);
+                self.fail(message);
             }
         }
         self.dispatching.set(false);
+    }
+
+    /// Records a caught panic: reports it once through `on_panic` and mutes the handler. Later
+    /// panics are covered by the first report.
+    pub(super) fn fail(&self, message: String) {
+        self.muted.set(true);
+        if self.panicked.replace(true) {
+            return;
+        }
+        // A panic inside the report itself has nowhere left to go.
+        let _ = guard("settings window panic report", || (self.on_panic)(message));
     }
 
     pub(super) fn set_ready(&self) {
@@ -117,6 +140,7 @@ impl State {
         let (width_px, height_px, scale) = client_metrics(hwnd);
         // SAFETY: as in `client_metrics`.
         let dpi = unsafe { GetDpiForWindow(hwnd) };
+        self.scale.set(scale);
         let key = (width_px, height_px, dpi);
         if self.last_size.replace(Some(key)) == Some(key) {
             return;
@@ -140,11 +164,11 @@ fn signed_word(value: isize) -> i16 {
     i16::from_ne_bytes(word.to_ne_bytes())
 }
 
-fn point(lparam: LPARAM, hwnd: HWND) -> (f64, f64) {
+fn point(state: &State, lparam: LPARAM) -> (f64, f64) {
     // The low and high words are signed 16-bit client coordinates.
     let x = f64::from(signed_word(lparam.0));
     let y = f64::from(signed_word(lparam.0 >> 16));
-    let scale = client_metrics(hwnd).2;
+    let scale = state.scale.get();
     (x / scale, y / scale)
 }
 
@@ -161,15 +185,40 @@ fn on_mouse_move(state: &State, hwnd: HWND, lparam: LPARAM) {
             state.tracking.set(false);
         }
     }
-    let (x, y) = point(lparam, hwnd);
+    let (x, y) = point(state, lparam);
     state.emit(SheetEvent::Move(x, y));
 }
 
-fn on_key_down(state: &State, hwnd: HWND, wparam: WPARAM) {
+/// A click is a release inside the client area of a press that began in this window.
+fn on_button_up(state: &State, hwnd: HWND, lparam: LPARAM) {
+    let began_here = state.pressed.replace(false);
+    // SAFETY: releases the capture taken at the press; harmless when there is none.
+    let _ = unsafe { ReleaseCapture() };
+    if !began_here {
+        return;
+    }
+    let (width, height, scale) = client_metrics(hwnd);
+    let (x, y) = (signed_word(lparam.0), signed_word(lparam.0 >> 16));
+    let inside = x >= 0
+        && y >= 0
+        && u32::try_from(x).is_ok_and(|x| x < width)
+        && u32::try_from(y).is_ok_and(|y| y < height);
+    if inside {
+        state.emit(SheetEvent::Click(
+            f64::from(x) / scale,
+            f64::from(y) / scale,
+        ));
+    }
+}
+
+fn on_key_down(state: &State, hwnd: HWND, wparam: WPARAM, lparam: LPARAM) {
     let vk = u16::try_from(wparam.0).unwrap_or(0);
     let mapped = map_keydown(vk, pressed(VK_CONTROL), pressed(VK_SHIFT), pressed(VK_MENU));
+    // Bit 30 of `lparam` is set for auto-repeat: a held Ctrl+V pastes once.
+    let repeat = lparam.0 & (1 << 30) != 0;
     match mapped {
         Some(KeyMap::Key(key)) => state.emit(SheetEvent::Key(key)),
+        Some(KeyMap::Paste) if repeat => {}
         Some(KeyMap::Paste) => {
             if let Some(text) = read_text(hwnd) {
                 state.emit(SheetEvent::Key(SheetKey::Paste(text)));
@@ -223,10 +272,13 @@ fn handle(state: &State, hwnd: HWND, msg: u32, wparam: WPARAM, lparam: LPARAM) -
             state.emit(SheetEvent::Leave);
         }
         WM_LBUTTONDOWN => {
-            let (x, y) = point(lparam, hwnd);
-            state.emit(SheetEvent::Click(x, y));
+            state.pressed.set(true);
+            // SAFETY: captures the mouse for this window so the release arrives here.
+            let _ = unsafe { SetCapture(hwnd) };
         }
-        WM_KEYDOWN => on_key_down(state, hwnd, wparam),
+        WM_LBUTTONUP => on_button_up(state, hwnd, lparam),
+        WM_CAPTURECHANGED => state.pressed.set(false),
+        WM_KEYDOWN => on_key_down(state, hwnd, wparam, lparam),
         WM_CHAR => on_char(state, wparam),
         WM_CLOSE => {
             on_close(state, hwnd);
@@ -280,10 +332,10 @@ pub(super) unsafe extern "system" fn window_proc(
         result = handle(&state, hwnd, msg, wparam, lparam);
     });
     if let Err(message) = outcome {
-        eprintln!("{message}");
-        state.mute();
+        state.fail(message);
     }
     if msg == WM_NCDESTROY {
+        clear_owner(hwnd.0 as isize);
         // SAFETY: the window is gone; clear the slot and release the count it owned.
         unsafe {
             SetWindowLongPtrW(hwnd, GWLP_USERDATA, 0);
