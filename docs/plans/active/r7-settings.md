@@ -77,7 +77,7 @@ DirectComposition, DWM).
   FlyoutMode` (cli wins; `Off`→`Off`, `Hide`→`Hide`).
 - Produces in `settings_file.rs`: `save_at` writes `settings.ini.tmp` then `fs::rename`.
 
-- [ ] **Step 1: Write the failing tests.**
+- [x] **Step 1: Write the failing tests.**
   `osd_and_flyout_round_trip`: `parse("osd=off\nflyout=hide\n")` gives `osd == false`,
   `flyout == FlyoutPref::Hide`, no warnings; `serialize` of it contains `osd=off` and
   `flyout=hide`; defaults serialize `osd=on`, `flyout=off`.
@@ -87,12 +87,12 @@ DirectComposition, DWM).
   `cli_flyout_wins`: `flyout_mode(Some(DryRun), Hide) == DryRun`; `flyout_mode(None, Hide) == Hide`.
   `save_is_atomic`: after `save_at`, no `settings.ini.tmp` remains and `load_at` returns the
   saved value; a second `save_at` over an existing file succeeds.
-- [ ] **Step 2: Run them, expect compile failures.**
+- [x] **Step 2: Run them, expect compile failures.**
   `node ~/.claude/bin/heavy-run.mjs -- cargo test -p plith-core settings launch` and `-p plith settings_file`.
-- [ ] **Step 3: Implement** the fields, `FlyoutPref`, `change.rs`, `flyout_mode`, atomic save;
+- [x] **Step 3: Implement** the fields, `FlyoutPref`, `change.rs`, `flyout_mode`, atomic save;
   `app.rs` passes `flyout_mode(launch.flyout, settings.flyout)` to `OsdSide::start`.
-- [ ] **Step 4: Run the tests and the workspace checks, expect PASS.**
-- [ ] **Step 5: Commit** `feat(core): add osd keys and change effects`.
+- [x] **Step 4: Run the tests and the workspace checks, expect PASS.**
+- [x] **Step 5: Commit** `feat(core): add osd keys and change effects`.
 
 ### Task 2: Sheet strings in eight languages
 
@@ -123,14 +123,14 @@ DirectComposition, DWM).
   `AÇIK`, `KAPALI`, `AÇ`, `TÜM AYARLAR`; save error `Ayarlar kaydedilemedi, bu oturumda geçerli.`
   Look names reuse `Text::Look*`.
 
-- [ ] **Step 1: Write the failing tests:** `every_sheet_text_in_every_language` (no empty
+- [x] **Step 1: Write the failing tests:** `every_sheet_text_in_every_language` (no empty
   string for any `(SheetText::ALL, Lang::ALL)` pair); `turkish_copy_exact` (spot-check five
   strings above verbatim); `captions_are_upper` (each caption word equals `upper(word, lang)`).
   Fit: German row labels fit 300 DIP, choice words fit their cell (budgets in the fit test).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement** the enum and the eight tables.
-- [ ] **Step 4: Run tests and checks, expect PASS.**
-- [ ] **Step 5: Commit** `feat(core): add settings sheet strings`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement** the enum and the eight tables.
+- [x] **Step 4: Run tests and checks, expect PASS.**
+- [x] **Step 5: Commit** `feat(core): add settings sheet strings`.
 
 ### Task 3: Inset node (a scaled display list inside another)
 
@@ -145,14 +145,14 @@ DirectComposition, DWM).
   with its origin at `(x, y)` scaled by `scale`, composing with the current transform and
   restoring it afterwards; `Live` nodes inside are skipped as today; art ids are collected.
 
-- [ ] **Step 1: Write the failing test** `inset_draws_scaled`: an offscreen frame whose list
+- [x] **Step 1: Write the failing test** `inset_draws_scaled`: an offscreen frame whose list
   holds `Node::Inset` of a 200 x 32 list with one `Fill` of `Ink::Ink` over its whole size, at
   `(10, 10)`, scale `0.5`: the pixel at DIP `(59, 25)` is ink, `(111, 25)` is floor.
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement** with `ID2D1DeviceContext::GetTransform`/`SetTransform`
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement** with `ID2D1DeviceContext::GetTransform`/`SetTransform`
   (`Matrix3x2::scale * translation * current`).
-- [ ] **Step 4: Run, expect PASS.**
-- [ ] **Step 5: Commit** `feat(render): draw a scaled inset list`.
+- [x] **Step 4: Run, expect PASS.**
+- [x] **Step 5: Commit** `feat(render): draw a scaled inset list`.
 
 ### Task 4: Sheet model: sections, layout, hit test
 
@@ -184,7 +184,7 @@ DirectComposition, DWM).
   the heading line while `save_failed`. Each Boşta preview card is an `Inset` at scale 0.45 with
   the rest shape's floor under it; Hidden draws a faint line.
 
-- [ ] **Step 1: Write the failing tests:** `four_sections_in_sidebar` (targets for the four
+- [x] **Step 1: Write the failing tests:** `four_sections_in_sidebar` (targets for the four
   sections, `Section::Idle` marked); `idle_rows_in_order` (labels Kapalı ada, Şerit, Sağ üst,
   Bugün çalanlar, Hava, Konum, Birim in Turkish); `six_preview_insets` (six `Node::Inset` with
   scale 0.45 on Boşta); `click_span_changes` (hit at the `TÜM GÜN` word gives
@@ -192,10 +192,10 @@ DirectComposition, DWM).
   `Change(Weather(true))`); `flyout_row_dead_while_osd_off`; `city_field_only_for_city`;
   `no_lime_in_sheet` (no node uses `Ink::Flow` except inside previews); `fits_840_by_640` (all
   nodes inside the list size for every section in German).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement** the builders; one file per section, shared controls in `controls.rs`.
-- [ ] **Step 4: Run tests and checks, expect PASS.**
-- [ ] **Step 5: Commit** `feat(core): build the settings sheet`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement** the builders; one file per section, shared controls in `controls.rs`.
+- [x] **Step 4: Run tests and checks, expect PASS.**
+- [x] **Step 5: Commit** `feat(core): build the settings sheet`.
 
 ### Task 5: Focus, keys and the text field
 
@@ -215,14 +215,14 @@ DirectComposition, DWM).
   Escape closes unless the field is focused (then `Cancel` restores the saved city and leaves the
   field); Enter in the field `Commit`s; leaving the field by Tab or click also commits.
 
-- [ ] **Step 1: Write the failing tests:** `field_basic_editing` (type "İst", Backspace, Home,
+- [x] **Step 1: Write the failing tests:** `field_basic_editing` (type "İst", Backspace, Home,
   Char, caret positions in chars, not bytes); `field_paste_cut_at_64`; `field_escape_cancels`;
   `tab_walks_in_order`; `arrows_pick_in_group`; `escape_closes_outside_field`;
   `enter_in_field_commits_once` (Commit carries the text; no `Act` per typed char).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run, expect PASS.**
-- [ ] **Step 5: Commit** `feat(core): add sheet keys and text field`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run, expect PASS.**
+- [x] **Step 5: Commit** `feat(core): add sheet keys and text field`.
 
 ### Task 6: Sheet render thread (model: opus)
 
@@ -248,15 +248,15 @@ DirectComposition, DWM).
   only when a newer list or a resize arrives: no clock, no loop at rest. Device loss rebuilds
   the stack once, then reports `on_fatal`. Thread name `plith-sheet`.
 
-- [ ] **Step 1: Write the failing tests:** `sheet_offscreen_size` (840 x 640 list at scale 2 gives
+- [x] **Step 1: Write the failing tests:** `sheet_offscreen_size` (840 x 640 list at scale 2 gives
   1680 x 1280 x 4 bytes); `sheet_floor_is_opaque` (corner pixel alpha 255);
   `inset_preview_visible` (a Task 4 Boşta build has ink inside the first preview card).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement**; add the example output: each section in `tr` and `de` at scale 1
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement**; add the example output: each section in `tr` and `de` at scale 1
   and 2 as PNG into a fresh folder `docs/design/r7/settings-1/`.
-- [ ] **Step 4: Run tests; run the example; open the PNGs and compare with `renders-3/sheet.png`
+- [x] **Step 4: Run tests; run the example; open the PNGs and compare with `renders-3/sheet.png`
   (Boşta): rows, rules, controls, previews readable at 1x.**
-- [ ] **Step 5: Commit** `feat(render): add the settings sheet renderer`.
+- [x] **Step 5: Commit** `feat(render): add the settings sheet renderer`.
 
 ### Task 7: Settings window in the shell
 
@@ -281,12 +281,12 @@ DirectComposition, DWM).
   callback must not be called re-entrantly from inside `open` (queue events until `open`
   returns).
 
-- [ ] **Step 1: Write the failing test** `keys_map` (VK_TAB+shift → BackTab, 'A'+ctrl →
+- [x] **Step 1: Write the failing test** `keys_map` (VK_TAB+shift → BackTab, 'A'+ctrl →
   SelectAll, VK_ESCAPE → Escape, WM_CHAR 'ş' → Char('ş'), control chars below 0x20 ignored).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run tests and checks, expect PASS.**
-- [ ] **Step 5: Commit** `feat(shell): add the settings window`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run tests and checks, expect PASS.**
+- [x] **Step 5: Commit** `feat(shell): add the settings window`.
 
 ### Task 8: Quick page and gear mark (+ ADR 0017)
 
@@ -311,14 +311,14 @@ DirectComposition, DWM).
   each, picked one with a filled square); a rule; row `TÜM AYARLAR` with an open glyph.
   `open_on = LastPage` never records `Quick`.
 
-- [ ] **Step 1: Write the failing tests:** `gear_target_last` (gear rect at x 590, action
+- [x] **Step 1: Write the failing tests:** `gear_target_last` (gear rect at x 590, action
   `Tab(Quick)`; on Quick it is `Tab(Welcome)` and the gear draws `Ink::Ink`);
   `clock_moves_for_gear`; `quick_has_six_looks` (six `Action::Look` targets in `IdleLook`
   order, six insets); `quick_open_settings_row`; `page_count_six`.
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement**, fix every pinned 5 (`rg "PAGE_COUNT|\[_; 5\]|PILL" crates`).
-- [ ] **Step 4: Run the full plith-core, plith-render and plith tests, expect PASS.**
-- [ ] **Step 5: Commit** `feat(pages): add the quick page and gear`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement**, fix every pinned 5 (`rg "PAGE_COUNT|\[_; 5\]|PILL" crates`).
+- [x] **Step 4: Run the full plith-core, plith-render and plith tests, expect PASS.**
+- [x] **Step 5: Commit** `feat(pages): add the quick page and gear`.
 
 ### Task 9: Runtime setters: language, idle settings, weather, OSD slot (model: opus)
 
@@ -345,17 +345,17 @@ DirectComposition, DWM).
   mode: FlyoutMode) -> Option<Self::Side>; fn sink(side: &Self::Side) -> OsdSink; }`, real impl
   over `OsdSide`, fake in tests.
 
-- [ ] **Step 1: Write the failing tests:** `off_on_quickly_starts_once` (fake: set(false), set(true)
+- [x] **Step 1: Write the failing tests:** `off_on_quickly_starts_once` (fake: set(false), set(true)
   before the stop finishes → one start after `poll` sees the join done, never two live sides);
   `restart_changes_mode`; `set_never_blocks` (fake side whose drop sleeps 1 s: `set(false)`
   returns in under 50 ms); `lang_switch_keeps_page` (feed on Audio, expanded, `apply_settings`
   with `lang` → still Audio and expanded, the page list differs from before);
   `unit_change_rebuilds_welcome_only`; `weather_reconfigure_reaches_service` (link test with the
   existing service fake).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement.** `app.rs` moves the `OsdSide` local into an `OsdSlot` owned by `App`.
-- [ ] **Step 4: Run tests and checks, expect PASS.**
-- [ ] **Step 5: Commit** `feat(app): apply settings while running`.
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement.** `app.rs` moves the `OsdSide` local into an `OsdSlot` owned by `App`.
+- [x] **Step 4: Run tests and checks, expect PASS.**
+- [x] **Step 5: Commit** `feat(app): apply settings while running`.
 
 ### Task 10: App wiring: open, act, save, close
 
@@ -383,15 +383,15 @@ DirectComposition, DWM).
 - Shutdown order in `app.rs`: close the sheet, `saver.flush_and_join()`, then the existing order.
 - Only a normal run (`idle_wiring::is_normal`) saves; probing runs never write the file.
 
-- [ ] **Step 1: Write the failing tests:** `saver_latest_wins` (three saves before the worker
+- [x] **Step 1: Write the failing tests:** `saver_latest_wins` (three saves before the worker
   runs → file holds the third); `saver_flush_writes_pending`; `saver_reports_failure` (path in a
   missing read-only dir → `failed()` true, waker called); `sheet_events_route` (Click on a
   target → `change` called with its `SettingChange`; `Key(Escape)` → close).
-- [ ] **Step 2: Run, expect FAIL.**
-- [ ] **Step 3: Implement.**
-- [ ] **Step 4: Run tests; build release; start `plith.exe` on this PC (no mouse from scripts):
+- [x] **Step 2: Run, expect FAIL.**
+- [x] **Step 3: Implement.**
+- [x] **Step 4: Run tests; build release; start `plith.exe` on this PC (no mouse from scripts):
   check the log for a clean start, then close with `WM_CLOSE` to `Plith.Notch`, exit 0.**
-- [ ] **Step 5: Commit** `feat(app): wire the settings window`.
+- [x] **Step 5: Commit** `feat(app): wire the settings window`.
 
 ### Task 11: Records and merge review
 
@@ -419,3 +419,20 @@ DirectComposition, DWM).
 
 ## Progress log
 (written while the plan runs, never back-filled)
+
+The live log ran in the git-ignored SDD ledger (`.superpowers/sdd/r7-settings/progress.md`); this
+is its summary, written 2026-11-20 at the end of Task 10 and the final review.
+- Tasks 1 to 10 done on 2026-11-20, each with a task review (fix rounds: T4, T5, T7, T9, T10
+  one round each; T6, T8 one follow-up round). Commits `6d68820` to `8f5306b`.
+- Final whole-branch review (opus): ready to merge, 0 Critical, 0 Important, 10 Minor; fix wave
+  `22541c0`, `4e6798a`, `de6025d` for Minors 1, 2, 3, 4, 5, 7, 8, 9.
+- Deviations from the plan text (rulings): heading style `TextStyle::Heading` 20 DIP added (T4);
+  off toggle = two hollow stations (T4); city field on its own line under Konum (T4); caret and
+  selection drawn in T5, measured by a UI-thread `TextMeasure` (T6) and filled in T10; preview
+  pills raised with an outline (T6); `Click` on release with capture (T7); the settings window no
+  longer destroys itself on `WM_CLOSE`, the app stops the render thread first (T10); the stop
+  thread waits for the old OSD pipe to vanish before a restart (T9); the island's minute clock
+  runs while the window is open so the Karot preview keeps time (T10); the render page cache
+  `PILL` slot was 4, shared with Welcome, now `PAGE_COUNT` (T8).
+- Not measured yet (Task 11 Step 1 and Task 12): idle wakes, the window opened from a real click,
+  the click-to-window delay, a real save, the caret blink, an OSD restart on the helper.
