@@ -403,7 +403,7 @@ DirectComposition, DWM).
 - [x] **Step 2:** Whole-branch review (`superpowers:requesting-code-review`, opus), fix findings.
 - [x] **Step 3:** Five checks on a trial merge (fmt, clippy, tests via heavy-run or the office VM,
   structure-check, release build).
-- [ ] **Step 4:** STATUS rewritten (settings merged, console owed), ROADMAP row with actual
+- [x] **Step 4:** STATUS rewritten (settings merged, console owed), ROADMAP row with actual
   duration. Merge to `main` only with Berke's yes.
 
 ### Task 12: Console session (Berke present, console not RDP)
@@ -434,5 +434,12 @@ is its summary, written 2026-11-20 at the end of Task 10 and the final review.
   thread waits for the old OSD pipe to vanish before a restart (T9); the island's minute clock
   runs while the window is open so the Karot preview keeps time (T10); the render page cache
   `PILL` slot was 4, shared with Welcome, now `PAGE_COUNT` (T8).
+- Console session 2026-11-21/22 (in progress): real gear click opened the window,
+  `quick: open settings` to `settings window: open` 39 ms; expand, page and collapse 240 fps,
+  0 hitches. Berke: "saçma olmuş, güzel durmuyor", accepted to continue; looks owed to a design
+  pass (light system title bar over a black body, About page mostly empty space, text about
+  10 px at 1x and low contrast, the `AÇ` action floats far right). Per-thread wake counters
+  (`\Thread(plith/*)`) fail with PDH 800007d2 while threads come and go; normal run CPU
+  406 ms per 60 s before the window opened.
 - Not measured yet (Task 11 Step 1 and Task 12): idle wakes, the window opened from a real click,
   the click-to-window delay, a real save, the caret blink, an OSD restart on the helper.

@@ -42,7 +42,10 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   and `flyout`. Five checks on the merge: fmt, clippy, 1237 tests, structure 0, release.
   Idle check 2026-11-20 console: Karot 60 s, 0 render wakes (allowed 2), 93.8 ms CPU.
   Worktree and branch removed.
-- **Next: the settings console session** (plan Task 12, Task 11 Step 1):
+- **Next, small job first: relayout on a display change** (see Open risks): move and resize the
+  notch surface on `WM_DISPLAYCHANGE`/`WM_DPICHANGED`, measured on the console and over RDP.
+- **Then: finish the settings console session** (started 2026-11-21, a real click opened the
+  window in 39 ms; progress note in the plan; plan Task 12, Task 11 Step 1):
   open from the gear with a real click, every row live, German and back, city and a real fetch,
   OSD off and on (one `osd start` per switch, no `exited` line), click-to-window delay, caret.
   Known open: on the quick page the Playing preview title can vanish while its one-shot scroll
@@ -61,6 +64,9 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   console (plan Task 8).
 
 ## Open risks
+- No relayout on a display change: `WM_DISPLAYCHANGE`/`WM_DPICHANGED` only log `display changed:
+  restart needed` (`app/state.rs:208`); the notch keeps the old centre after an RDP connect, a
+  resolution or DPI change (seen 2026-11-22 over RDP). Deferred in R1 "to R4", never done.
 - First OSD show of a run: draw p99 0.77 ms after the prewarm, but 1 hitch with present 11.6 ms
   (2026-11-19). Ruled an open item; root cause measured with osd Task 9.
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
