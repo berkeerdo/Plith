@@ -26,6 +26,6 @@ pub use sheet::{SheetConfig, SheetRender, render_sheet_offscreen};
 pub use target::CompositionTarget;
 pub use text::TextSystem;
 pub use thread::{
-    Fatal, FrameTimes, Paint, RenderConfig, RenderError, RenderHandle, RenderSinks, StopHandle,
-    spawn,
+    Fatal, FrameTimes, Paint, RelayoutHandle, RenderConfig, RenderError, RenderHandle, RenderSinks,
+    StopHandle, spawn,
 };

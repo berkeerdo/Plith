@@ -148,12 +148,12 @@ stack in `plith-render`.
 - Produces: `pub trait Relayouter { fn relayout(&self, display: Display); }` implemented for
   `RelayoutHandle`; `App::attach_relayout(&mut self, r: impl Relayouter + 'static)`.
 
-- [ ] **Step 1: Failing test** `display_change_logs_and_forwards` (fake relayouter records the
+- [x] **Step 1: Failing test** `display_change_logs_and_forwards` (fake relayouter records the
   display, the log has the `Display::log_line` text).
-- [ ] **Step 2:** Fails. **Step 3:** Implement; remove `display changed: restart needed`.
-- [ ] **Step 4:** Five checks through heavy-run: fmt, clippy `--workspace -D warnings`, full
+- [x] **Step 2:** Fails. **Step 3:** Implement; remove `display changed: restart needed`.
+- [x] **Step 4:** Five checks through heavy-run: fmt, clippy `--workspace -D warnings`, full
   tests, `node scripts/structure-check.mjs` 0, release build.
-- [ ] **Step 5:** Commit `feat(app): relayout the notch on a display change`.
+- [x] **Step 5:** Commit `feat(app): relayout the notch on a display change`.
 
 ### Task 5: Measure on screen (Berke present)
 - [ ] Console (`query session` first): change resolution, then scale 100/150 in Settings; the

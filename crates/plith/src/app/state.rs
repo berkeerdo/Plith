@@ -9,10 +9,11 @@ use super::wire::raised_line;
 use crate::log::LogFile;
 use crate::osd::OsdSink;
 use plith_core::demo::DemoStep;
+use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::{IdleLook, Settings};
-use plith_render::StopHandle;
+use plith_render::{RelayoutHandle, StopHandle};
 use plith_shell::ShellEvent;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -28,6 +29,19 @@ pub trait Stopper {
 impl Stopper for StopHandle {
     fn stop_and_join(&self) {
         StopHandle::stop_and_join(self);
+    }
+}
+
+/// Something that makes the render thread follow a new display. A trait so tests can use a
+/// fake.
+pub trait Relayouter {
+    /// Asks the render thread to paint for `display`.
+    fn relayout(&self, display: Display);
+}
+
+impl Relayouter for RelayoutHandle {
+    fn relayout(&self, display: Display) {
+        RelayoutHandle::relayout(self, display);
     }
 }
 
@@ -47,6 +61,8 @@ pub struct App {
     /// Set on `Closing`; the render sinks read it from another thread, so it stays an `Arc`.
     pub closing: Arc<AtomicBool>,
     stop: Option<Box<dyn Stopper>>,
+    /// Sends display changes to the render thread, once it has been spawned.
+    relayout: Option<Box<dyn Relayouter>>,
     pub(super) feed: Option<Feed>,
     /// Monotonic seconds, for the collapse delay.
     pub(super) now: Box<dyn Fn() -> f64>,
@@ -90,6 +106,7 @@ impl App {
             log,
             closing,
             stop: None,
+            relayout: None,
             feed: None,
             now: Box::new(move || origin.elapsed().as_secs_f64()),
             collapse: CollapseTimer::default(),
@@ -146,6 +163,20 @@ impl App {
     /// Records how to stop the render thread, once it has been spawned.
     pub fn attach_render(&mut self, stop: impl Stopper + 'static) {
         self.stop = Some(Box::new(stop));
+    }
+
+    /// Records how to send display changes to the render thread.
+    pub fn attach_relayout(&mut self, relayout: impl Relayouter + 'static) {
+        self.relayout = Some(Box::new(relayout));
+    }
+
+    /// The window already moved to `display` (the shell did it); log it and let the render
+    /// thread follow.
+    fn on_display_changed(&self, display: Display) {
+        self.log.line(&display.log_line());
+        if let Some(relayout) = &self.relayout {
+            relayout.relayout(display);
+        }
     }
 
     /// Stops and joins the render thread under the close backstop, if one is attached.
@@ -205,7 +236,7 @@ impl App {
                 // The minute tick rebuilds the pill; the window's previews follow it.
                 self.refresh_sheet();
             }
-            ShellEvent::DisplayChanged(display) => self.log.line(&display.log_line()),
+            ShellEvent::DisplayChanged(display) => self.on_display_changed(display),
             ShellEvent::Raised {
                 foreground,
                 above,

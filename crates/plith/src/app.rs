@@ -324,6 +324,7 @@ fn start_osd(
 fn attach_render_and_demo(app: &Rc<RefCell<App>>, render: &RenderHandle) -> Sender<DemoStep> {
     let mut app = app.borrow_mut();
     app.attach_render(render.stop_handle());
+    app.attach_relayout(render.relayouter());
     let (steps, demo_steps) = mpsc::channel();
     app.attach_demo(demo_steps);
     steps
