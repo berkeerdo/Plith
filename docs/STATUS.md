@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
@@ -42,9 +42,17 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   and `flyout`. Five checks on the merge: fmt, clippy, 1237 tests, structure 0, release.
   Idle check 2026-11-20 console: Karot 60 s, 0 render wakes (allowed 2), 93.8 ms CPU.
   Worktree and branch removed.
-- **Next, small job first: relayout on a display change** (see Open risks): move and resize the
-  notch surface on `WM_DISPLAYCHANGE`/`WM_DPICHANGED`, measured on the console and over RDP.
-- **Then: finish the settings console session** (started 2026-11-21, a real click opened the
+- **Display relayout: merged as `42f29ac`** (2026-11-22). Spec
+  `specs/2026-11-22-display-relayout-design.md`, plan and progress log
+  `plans/active/display-relayout.md` (Tasks 1 to 4 ticked), review
+  `quality/2026-11-22-display-relayout-final-review.md` (1 important, fixed in `51b0b30`).
+  The shell re-reads the primary monitor, moves the window and rebuilds the hit region; the
+  render thread rebuilds the stack (recover path, WARP on failure) and reopens the clock on a
+  new monitor, rate or remote state. Five checks on the branch head (merge tree identical):
+  fmt, clippy, 1262 tests, structure 0, release. Not yet seen on screen (plan Task 5).
+- **Next: one console session, Berke present.** First the relayout check (plan Task 5):
+  resolution and scale on the console, then an RDP connect from the Mac (count the
+  `render relayout:` lines). Then finish the settings console session (started 2026-11-21, a real click opened the
   window in 39 ms; progress note in the plan; plan Task 12, Task 11 Step 1):
   open from the gear with a real click, every row live, German and back, city and a real fetch,
   OSD off and on (one `osd start` per switch, no `exited` line), click-to-window delay, caret.
@@ -64,9 +72,13 @@ Updated 2026-11-20. Rewritten, not appended; old content goes to `journal/`.
   console (plan Task 8).
 
 ## Open risks
-- No relayout on a display change: `WM_DISPLAYCHANGE`/`WM_DPICHANGED` only log `display changed:
-  restart needed` (`app/state.rs:208`); the notch keeps the old centre after an RDP connect, a
-  resolution or DPI change (seen 2026-11-22 over RDP). Deferred in R1 "to R4", never done.
+- Relayout unmeasured on screen (seen broken 2026-11-22 over RDP before the fix). Unknown until
+  then: a DXGI vblank wait on an output RDP removed, the hardware rebuild during the RDP adapter
+  switch, the flash of a rebuild. Deferred minors from the review: an hz change keeps the old
+  ambient divisor and stats rate until the run ends; a `DisplayChanged` before
+  `attach_relayout` is dropped (startup only); coalescing merges only queued messages (decide a
+  debounce from the RDP line count); the settings window keeps the start monitor handle (falls
+  back to primary); two relayout tests assert an origin that is equal by design.
 - First OSD show of a run: draw p99 0.77 ms after the prewarm, but 1 hitch with present 11.6 ms
   (2026-11-19). Ruled an open item; root cause measured with osd Task 9.
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
