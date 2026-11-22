@@ -56,14 +56,14 @@ stack in `plith-render`.
   remote differ) and `pub fn log_line(&self) -> String` returning
   `relayout: rect=X,Y WxH scale=S hz=H remote=R` (scale and hz with two decimals).
 
-- [ ] **Step 1: Write failing tests** `same_monitor_new_scale_keeps_clock` (only layout
+- [x] **Step 1: Write failing tests** `same_monitor_new_scale_keeps_clock` (only layout
   differs: `clock_changed` false), `remote_flip_changes_clock`, `hz_change_changes_clock`,
   `log_line_format` (rect 1280,0 960x400 scale 1.50 hz 240.00 remote false gives exactly
   `relayout: rect=1280,0 960x400 scale=1.50 hz=240.00 remote=false`).
-- [ ] **Step 2:** `cargo test -p plith-core display` fails (module missing).
-- [ ] **Step 3:** Implement.
-- [ ] **Step 4:** Tests pass.
-- [ ] **Step 5:** Commit `feat(core): display value for relayouts`.
+- [x] **Step 2:** `cargo test -p plith-core display` fails (module missing).
+- [x] **Step 3:** Implement.
+- [x] **Step 4:** Tests pass.
+- [x] **Step 5:** Commit `feat(core): display value for relayouts`.
 
 ### Task 2: Shell moves the window and emits the change
 
@@ -84,19 +84,19 @@ stack in `plith-render`.
   `pub(crate) fn next_display(current: Display, monitor: MonitorInfo, remote: bool) ->
   Option<Display>` (pure, `None` when equal).
 
-- [ ] **Step 1: Failing tests** in `window/tests.rs`: `next_display_equal_is_none`,
+- [x] **Step 1: Failing tests** in `window/tests.rs`: `next_display_equal_is_none`,
   `next_display_new_rect_recentres` (monitor 3840 wide at scale 1.5 gives the same surface as
   `SurfaceLayout::new` for it), `relayout_message_burst_posts_once` (two `on_message` calls
   with the pending flag set post one `WM_APP_RELAYOUT`, use the existing poster test seam),
   `relayout_clears_applied_region` (after `on_relayout` with a new scale `inner.applied` is
   `None` before `apply_latest`, so the region is rebuilt).
-- [ ] **Step 2:** `cargo test -p plith-shell window` fails.
-- [ ] **Step 3:** Implement. `on_message` sets `relayout_pending` and posts once (reset the
+- [x] **Step 2:** `cargo test -p plith-shell window` fails.
+- [x] **Step 3:** Implement. `on_message` sets `relayout_pending` and posts once (reset the
   flag if the post fails); returns `LRESULT(0)`. `on_relayout` clears the flag, computes
   `next_display`, on `Some`: store it and its layout, `place(hwnd, layout.surface)`,
   `applied.set(None)`, `apply_latest`, emit the event.
-- [ ] **Step 4:** Tests pass; `cargo clippy -p plith-shell -- -D warnings` clean.
-- [ ] **Step 5:** Commit `feat(shell): move the notch on a display change`.
+- [x] **Step 4:** Tests pass; `cargo clippy -p plith-shell -- -D warnings` clean.
+- [x] **Step 5:** Commit `feat(shell): move the notch on a display change`.
 
 ### Task 3: Render loop takes a relayout
 

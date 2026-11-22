@@ -205,7 +205,7 @@ impl App {
                 // The minute tick rebuilds the pill; the window's previews follow it.
                 self.refresh_sheet();
             }
-            ShellEvent::DisplayChanged => self.log.line("display changed: restart needed"),
+            ShellEvent::DisplayChanged(display) => self.log.line(&display.log_line()),
             ShellEvent::Raised {
                 foreground,
                 above,

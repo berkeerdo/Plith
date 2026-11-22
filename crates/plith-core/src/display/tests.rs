@@ -42,10 +42,7 @@ fn hz_change_changes_clock() {
 #[test]
 fn new_monitor_changes_clock() {
     let old = display(1.0, 240.0, false);
-    let next = Display {
-        monitor: 8,
-        ..old
-    };
+    let next = Display { monitor: 8, ..old };
     assert!(old.clock_changed(&next));
 }
 
