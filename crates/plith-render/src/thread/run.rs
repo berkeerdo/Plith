@@ -6,6 +6,9 @@
 mod ambient;
 mod engine;
 mod prewarm;
+mod relayout;
+
+pub use relayout::Relayout;
 
 use super::clocks::Clocks;
 use super::{Fatal, Paint, RenderSinks};
@@ -24,14 +27,18 @@ use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::TuningSet;
 use prewarm::Reason;
 use std::panic::{AssertUnwindSafe, catch_unwind};
+use std::sync::Mutex;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::SystemTime;
 
-/// State shared between the render loop and its owner: the wake counter and the stop flag.
+/// State shared between the render loop and its owner: the wake counter, the stop flag, a
+/// pending relayout and the monitor and rate the next clock opens for.
 #[derive(Debug, Default)]
 pub struct LoopShared {
     wakes: AtomicU64,
     stop: AtomicBool,
+    relayout: Mutex<Option<Relayout>>,
+    clock_target: Mutex<(isize, f64)>,
 }
 
 impl LoopShared {
@@ -196,7 +203,11 @@ where
             let Some(snapshot) = next else {
                 return Ok(());
             };
-            match self.take(snapshot) {
+            let taken = self.take(snapshot);
+            // Only a still island needs its own repaint; every other branch paints or is
+            // suppressed.
+            self.apply_relayout(taken == Taken::ContentOnly)?;
+            match taken {
                 Taken::Snapped => continue,
                 // New content on a still island: warm what changed, present only when a shown
                 // list changed; no clock wait, no motion.
@@ -251,8 +262,10 @@ where
             let Some(tick) = self.timeline.lock(raw) else {
                 continue;
             };
-            // `needs_rate_reread` is ignored in R1: a display change restarts the thread (Task 9).
+            // `needs_rate_reread` is ignored: a display change arrives as a relayout with the
+            // new rate (`relayout.rs`), applied here before the frame it shapes.
             let (anim_t, dt) = self.stamper.stamp(tick);
+            self.apply_relayout(false)?;
             let snapshot = mailbox.latest();
             // New content alone keeps the motion as it is; it shows from this frame on.
             if snapshot.generation != self.seen && self.take(snapshot) == Taken::Snapped {

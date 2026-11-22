@@ -117,23 +117,23 @@ stack in `plith-render`.
   RelayoutHandle`; `SceneMailbox::nudge(&self) -> u64` (bumps the generation, always wakes);
   `LoopShared::request_relayout(&self, display: Display, order: Vec<ClockKind>)`.
 
-- [ ] **Step 1: Failing tests** in `thread/tests` with the fake paint and fake clock:
+- [x] **Step 1: Failing tests** in `thread/tests` with the fake paint and fake clock:
   `relayout_at_rest_repaints_once_with_new_origin` (frame origin equals
   `new_layout.island_origin(shape)`), `relayout_mid_motion_keeps_animating` (motion report
   still written, no fatal), `relayout_while_suppressed_paints_nothing`,
   `relayout_with_new_hz_reopens_clock` (fake `open_clock` called again, period 1/new hz),
   `relayout_failure_reports_fatal` (fake `relayout` errors twice: `GpuHealth` path, then
   `on_fatal`), `nudge_wakes_waiter` in `scene` tests.
-- [ ] **Step 2:** `cargo test -p plith-render thread` and `-p plith-core scene` fail.
-- [ ] **Step 3:** Implement `apply_relayout(&mut self) -> Result<(), String>` in
+- [x] **Step 2:** `cargo test -p plith-render thread` and `-p plith-core scene` fail.
+- [x] **Step 3:** Implement `apply_relayout(&mut self) -> Result<(), String>` in
   `relayout.rs`: take the pending value; store `layout`; `paint.relayout` (on error feed
   `GpuHealth` as a failed paint and follow its action); clear `warm` and `presented`; when
   the clock changed set `hz`, `period`, `timeline = VsyncTimeline::new(hz)`, replace
   `clocks.order` and drop the current source; log through `on_note`
   `render relayout: WxH scale=S clock=...`. Fix the stale R1 comment in `animate` about
   `needs_rate_reread`.
-- [ ] **Step 4:** Tests pass; clippy clean.
-- [ ] **Step 5:** Commit `feat(render): rebuild the stack on a relayout`.
+- [x] **Step 4:** Tests pass; clippy clean.
+- [x] **Step 5:** Commit `feat(render): rebuild the stack on a relayout`.
 
 ### Task 4: App wiring
 

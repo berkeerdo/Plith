@@ -120,9 +120,21 @@ pub(super) struct FakePaint {
     pub(super) panic_at: Option<usize>,
     /// Every prewarm call: the pages asked for and the clock call count at the time.
     pub(super) prewarms: Prewarms,
+    /// Every relayout call, in order.
+    pub(super) relayouts: Arc<Mutex<Vec<SurfaceLayout>>>,
+    pub(super) relayout_fails: bool,
 }
 
 impl Paint for FakePaint {
+    fn relayout(&mut self, layout: SurfaceLayout) -> windows::core::Result<()> {
+        lock(&self.relayouts).push(layout);
+        if self.relayout_fails {
+            Err(E_FAIL.into())
+        } else {
+            Ok(())
+        }
+    }
+
     fn paint(&mut self, frame: &PaintFrame) -> windows::core::Result<FrameTimes> {
         assert!(
             self.panic_at != Some(lock(&self.frames).len() + 1),
@@ -173,9 +185,14 @@ pub(super) struct Setup {
     /// The page content the mailbox starts with (empty when `None`).
     pub(super) content: Option<Arc<PageContent>>,
     pub(super) content_script: Vec<(u64, Arc<PageContent>)>,
+    pub(super) relayout_fails: bool,
 }
 
 pub(super) struct Run {
+    /// Every relayout the painter was asked for.
+    pub(super) relayouts: Arc<Mutex<Vec<SurfaceLayout>>>,
+    /// How many clocks were opened.
+    pub(super) opens: Arc<AtomicU64>,
     pub(super) mailbox: Arc<SceneMailbox>,
     pub(super) shared: Arc<LoopShared>,
     pub(super) harness: Arc<Harness>,
@@ -253,28 +270,35 @@ pub(super) fn sinks(
     (sinks, ends)
 }
 
-pub(super) fn start(setup: Setup) -> Run {
-    let content = setup.content.clone().unwrap_or_default();
-    let mailbox = Arc::new(SceneMailbox::new(Scene::default(), content));
-    let shared = Arc::new(LoopShared::new());
-    let harness = Arc::new(Harness {
+/// The shared fake time and scripts of `setup`, publishing into `mailbox`.
+fn harness(setup: &mut Setup, mailbox: &Arc<SceneMailbox>) -> Arc<Harness> {
+    Arc::new(Harness {
         time: Mutex::new(0.0),
         total: AtomicU64::new(0),
         calls: [AtomicU64::new(0), AtomicU64::new(0), AtomicU64::new(0)],
-        script: setup.script,
-        content_script: setup.content_script,
-        mailbox: Arc::clone(&mailbox),
+        script: std::mem::take(&mut setup.script),
+        content_script: std::mem::take(&mut setup.content_script),
+        mailbox: Arc::clone(mailbox),
         delay: setup.delay,
         fail_once: setup.fail_once,
         failed: AtomicBool::new(false),
         lead: setup.lead,
-    });
+    })
+}
+
+pub(super) fn start(mut setup: Setup) -> Run {
+    let content = setup.content.clone().unwrap_or_default();
+    let mailbox = Arc::new(SceneMailbox::new(Scene::default(), content));
+    let shared = Arc::new(LoopShared::new());
+    let harness = harness(&mut setup, &mailbox);
     let frames = Arc::new(Mutex::new(Vec::new()));
     let shapes = Arc::new(Mutex::new(Vec::new()));
     let recovers = Arc::new(Mutex::new(Vec::new()));
     let calls_at = Arc::new(Mutex::new(Vec::new()));
     let samples = Arc::new(AtomicU64::new(0));
     let prewarms = Arc::new(Mutex::new(Vec::new()));
+    let relayouts = Arc::new(Mutex::new(Vec::new()));
+    let opens = Arc::new(AtomicU64::new(0));
     let (mut sinks, ends) = sinks(Arc::clone(&shapes), Arc::clone(&samples));
     let paint = FakePaint {
         frames: Arc::clone(&frames),
@@ -285,6 +309,8 @@ pub(super) fn start(setup: Setup) -> Run {
         recover_fails: setup.recover_fails,
         panic_at: setup.panic_at,
         prewarms: Arc::clone(&prewarms),
+        relayouts: Arc::clone(&relayouts),
+        relayout_fails: setup.relayout_fails,
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
@@ -294,12 +320,14 @@ pub(super) fn start(setup: Setup) -> Run {
             Arc::clone(&harness),
         );
         let instant = setup.instant;
+        let opened = Arc::clone(&opens);
         thread::spawn(move || {
             let clock_harness = Arc::clone(&harness);
             let wall_harness = Arc::clone(&harness);
             let parts = LoopParts {
                 paint,
                 open_clock: move |kind| {
+                    opened.fetch_add(1, Ordering::SeqCst);
                     Ok::<_, ClockError>(FakeClock {
                         kind,
                         instant: instant.contains(&kind),
@@ -319,6 +347,8 @@ pub(super) fn start(setup: Setup) -> Run {
         })
     };
     Run {
+        relayouts,
+        opens,
         mailbox,
         shared,
         harness,

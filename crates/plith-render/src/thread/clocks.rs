@@ -53,6 +53,18 @@ impl<C: FrameSource, O: FnMut(ClockKind) -> Result<C, ClockError>> Clocks<C, O> 
         self.health = ClockHealth::default();
     }
 
+    /// Drops the open clock and tries `order` from its best kind: the display changed, so the
+    /// next source opens for the new monitor and rate.
+    /// An empty `order` keeps the old one, which is never empty.
+    pub(super) fn replace_order(&mut self, order: Vec<ClockKind>) {
+        if !order.is_empty() {
+            self.order = order;
+        }
+        self.current = None;
+        self.index = 0;
+        self.health = ClockHealth::default();
+    }
+
     /// The current source, opening kinds in order until one opens.
     pub(super) fn source(&mut self) -> Result<&mut C, String> {
         while self.current.is_none() {

@@ -129,6 +129,13 @@ impl Paint for GpuPaint {
         }
     }
 
+    fn relayout(&mut self, layout: SurfaceLayout) -> Result<()> {
+        // The swap chain, the page bitmaps and the text formats all depend on the size and the
+        // scale: the device-loss rebuild makes them again (a display change is rare).
+        self.layout = layout;
+        self.recover(false)
+    }
+
     fn recover(&mut self, warp: bool) -> Result<()> {
         if let Some(stack) = self.stack.take() {
             stack.target.release_target(&stack.gpu);
