@@ -4,6 +4,7 @@
 use crate::handles::hwnd_of;
 use crate::poster::Coalesce;
 use crate::window::ShellEvent;
+use plith_core::display::Display;
 use plith_core::geometry::IslandShape;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{ShapeCell, Suppression};
@@ -34,7 +35,10 @@ pub(crate) struct Registrations {
 }
 
 pub(crate) struct Inner {
-    pub layout: SurfaceLayout,
+    /// The display the window is placed for; replaced by a relayout.
+    pub display: Cell<Display>,
+    /// Coalescer of the relayout request; cleared when `WM_APP_RELAYOUT` is handled.
+    pub relayout: Coalesce,
     pub shapes: Arc<ShapeCell>,
     pub pending: Arc<Coalesce>,
     /// Coalescer of the generic UI wake; cleared when `WM_APP_WAKE` is handled.
@@ -66,13 +70,14 @@ pub(crate) struct Inner {
 
 impl Inner {
     pub(crate) fn new(
-        layout: SurfaceLayout,
+        display: Display,
         shapes: Arc<ShapeCell>,
         on_event: Box<dyn FnMut(ShellEvent)>,
         on_panic: Box<dyn Fn(String)>,
     ) -> Self {
         Self {
-            layout,
+            display: Cell::new(display),
+            relayout: Coalesce::default(),
             shapes,
             pending: Arc::new(Coalesce::default()),
             wake: Arc::new(Coalesce::default()),
@@ -94,6 +99,11 @@ impl Inner {
             queue: RefCell::new(VecDeque::new()),
             draining: Cell::new(false),
         }
+    }
+
+    /// The surface layout of the current display.
+    pub(crate) fn layout(&self) -> SurfaceLayout {
+        self.display.get().layout
     }
 
     /// Delivers an event to the app callback. If the callback itself triggers another event

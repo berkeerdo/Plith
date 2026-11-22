@@ -372,3 +372,22 @@ fn welcome_shape_is_620x232() {
     };
     assert_eq!(scene.target(), crate::shapes::WELCOME);
 }
+
+#[test]
+fn nudge_wakes_waiter_with_the_same_scene() {
+    let mailbox = Arc::new(mailbox(Scene::default()));
+    let (tx, rx) = mpsc::channel();
+    let waiter = {
+        let mailbox = Arc::clone(&mailbox);
+        thread::spawn(move || {
+            tx.send(mailbox.wait_newer(0)).unwrap();
+        })
+    };
+    thread::sleep(Duration::from_millis(20));
+    assert_eq!(mailbox.nudge(), 1);
+    let got = rx.recv_timeout(TIMEOUT).expect("waiter did not wake");
+    let snapshot = got.expect("a snapshot, not a stop");
+    assert_eq!(snapshot.generation, 1);
+    assert_eq!(snapshot.scene, Scene::default());
+    waiter.join().unwrap();
+}

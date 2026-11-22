@@ -203,6 +203,12 @@ impl SceneMailbox {
         }
     }
 
+    /// Bumps the generation with the scene and content unchanged and wakes the waiter, for a
+    /// request the render thread reads beside the mailbox (a relayout). Returns the generation.
+    pub fn nudge(&self) -> u64 {
+        self.bump(lock(&self.state))
+    }
+
     /// Releases every waiter; later waits return `None`.
     pub fn stop(&self) {
         lock(&self.state).stopped = true;

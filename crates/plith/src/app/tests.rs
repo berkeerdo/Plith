@@ -309,3 +309,48 @@ fn exit_saves_the_play_log() {
     assert_eq!(saves.get(), 1);
     drop(log);
 }
+
+/// Records every display it is asked to follow.
+struct RecordingRelayouter(Rc<RefCell<Vec<plith_core::display::Display>>>);
+
+impl super::state::Relayouter for RecordingRelayouter {
+    fn relayout(&self, display: plith_core::display::Display) {
+        self.0.borrow_mut().push(display);
+    }
+}
+
+#[test]
+fn display_change_logs_and_forwards() {
+    let dir = std::env::temp_dir().join(format!("plith-wiring-relayout-{}", std::process::id()));
+    let path = dir.join("plith.log");
+    let log = Arc::new(LogFile::open_at(&path).unwrap());
+    let mut app = App::new(
+        Arc::new(SceneMailbox::new(Scene::default(), Arc::default())),
+        Arc::new(ShapeCell::default()),
+        Arc::clone(&log),
+        Arc::new(AtomicBool::new(false)),
+    );
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    app.attach_relayout(RecordingRelayouter(Rc::clone(&seen)));
+    let display = plith_core::display::Display {
+        layout: plith_core::layout::SurfaceLayout::new(
+            plith_core::layout::RectPx {
+                x: 0,
+                y: 0,
+                width: 3840,
+                height: 2160,
+            },
+            0,
+            1.5,
+        ),
+        monitor: 9,
+        hz: 120.0,
+        remote: true,
+    };
+    app.on_event(ShellEvent::DisplayChanged(display));
+    assert_eq!(*seen.borrow(), vec![display]);
+    log.flush();
+    let text = std::fs::read_to_string(&path).unwrap();
+    assert!(text.contains(&display.log_line()), "{text}");
+    assert!(!text.contains("restart needed"), "{text}");
+}

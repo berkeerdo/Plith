@@ -27,6 +27,7 @@ use crate::{demo, idle};
 use feed::Feed;
 use osd_slot::{OsdSlot, RealOsd};
 use plith_core::demo::DemoStep;
+use plith_core::display::Display;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
@@ -98,19 +99,20 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     let monitor = primary_monitor();
     let layout = SurfaceLayout::new(monitor.rect, monitor.work_top_px, monitor.scale);
     log.line(&wire::start_line(launch, &monitor, &layout));
-    let code = run_shell(launch, log, &monitor, layout);
+    let display = Display {
+        layout,
+        monitor: monitor.handle,
+        hz: monitor.hz,
+        remote: is_remote_session(),
+    };
+    let code = run_shell(launch, log, &monitor, display);
     if ole.is_ok() {
         uninit_ui_thread();
     }
     code
 }
 
-fn run_shell(
-    launch: &Launch,
-    log: &Arc<LogFile>,
-    monitor: &MonitorInfo,
-    layout: SurfaceLayout,
-) -> i32 {
+fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display: Display) -> i32 {
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let closing = Arc::new(AtomicBool::new(false));
     let fatal = Arc::new(AtomicBool::new(false));
@@ -126,7 +128,7 @@ fn run_shell(
         Box::new(move |event| app.borrow_mut().on_event(event))
     };
     let on_panic = wire::on_panic(log, &fatal, &app);
-    let shell = match Shell::create(layout, shapes, handler, on_panic) {
+    let shell = match Shell::create(display, shapes, handler, on_panic) {
         Ok(shell) => shell,
         Err(error) => {
             log.line(&format!("cannot create the window: {error}"));
@@ -145,9 +147,9 @@ fn run_shell(
     let config = RenderConfig {
         hwnd: shell.hwnd(),
         monitor: monitor.handle,
-        layout,
+        layout: display.layout,
         clock: launch.clock,
-        remote: is_remote_session(),
+        remote: display.remote,
         hz: monitor.hz,
         levers: launch.levers,
         tune: launch.tune,
@@ -322,6 +324,7 @@ fn start_osd(
 fn attach_render_and_demo(app: &Rc<RefCell<App>>, render: &RenderHandle) -> Sender<DemoStep> {
     let mut app = app.borrow_mut();
     app.attach_render(render.stop_handle());
+    app.attach_relayout(render.relayouter());
     let (steps, demo_steps) = mpsc::channel();
     app.attach_demo(demo_steps);
     steps

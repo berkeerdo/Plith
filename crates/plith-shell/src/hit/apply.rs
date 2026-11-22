@@ -50,7 +50,7 @@ fn build_region(r: &RegionPx) -> windows::core::Result<HRGN> {
 }
 
 fn set_region(inner: &Inner, shape: IslandShape) -> windows::core::Result<()> {
-    let r = region_px(shape, &inner.layout, OUTSET_PX);
+    let r = region_px(shape, &inner.layout(), OUTSET_PX);
     let rgn = build_region(&r)?;
     let hwnd = hwnd_of(inner.visual.get());
     // SAFETY: `hwnd` is a window of this thread. On success the system owns `rgn`.

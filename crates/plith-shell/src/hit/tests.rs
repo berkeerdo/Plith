@@ -90,7 +90,7 @@ fn an_unchanged_covered_shape_is_not_applied_again() {
     use std::sync::Arc;
     let cell = Arc::new(ShapeCell::default());
     let inner = Inner::new(
-        layout(1920, 1.0),
+        crate::window::display::test_display(layout(1920, 1.0)),
         Arc::clone(&cell),
         Box::new(|_| {}),
         Box::new(|_| {}),

@@ -54,6 +54,8 @@ where
                 continue;
             };
             let (anim_t, _) = self.stamper.stamp(tick);
+            // The next painted tick, or the news below, shows a new layout.
+            self.apply_relayout(false)?;
             if let Some(end) = self.ambient_news(mailbox)? {
                 break end;
             }

@@ -40,7 +40,7 @@ fn a_panic_is_reported_once_and_mutes_the_handler() {
     let entered = Rc::new(std::cell::Cell::new(0_u32));
     let counter = Rc::clone(&entered);
     let inner = Inner::new(
-        layout,
+        super::display::test_display(layout),
         Arc::new(ShapeCell::default()),
         Box::new(move |_| {
             counter.set(counter.get() + 1);
@@ -101,7 +101,7 @@ fn recording() -> (Inner, Rc<RefCell<Vec<ShellEvent>>>) {
     let events = Rc::new(RefCell::new(Vec::new()));
     let sink = Rc::clone(&events);
     let inner = Inner::new(
-        layout_at(1.0),
+        super::display::test_display(layout_at(1.0)),
         Arc::new(ShapeCell::default()),
         Box::new(move |event| sink.borrow_mut().push(event)),
         Box::new(|_| {}),
@@ -132,7 +132,7 @@ fn a_move_reports_a_new_point_inside_the_shape_once() {
     use plith_core::shapes::REST;
     let (inner, events) = recording();
     let lparam_at = |dx: f64, dy: f64| {
-        let (ox, oy) = inner.layout.island_origin(REST);
+        let (ox, oy) = inner.layout().island_origin(REST);
         // Allowed: the island point sits well inside the 1920 px wide test surface.
         #[allow(clippy::cast_possible_truncation)]
         let (x, y) = ((ox + dx).round() as i16, (oy + dy).round() as i16);
@@ -180,7 +180,7 @@ fn a_click_asks_for_leave_tracking_again() {
         pages: PageLayers::empty(),
     });
     assert!(mouse::note_move(&inner));
-    let (ox, oy) = inner.layout.island_origin(REST);
+    let (ox, oy) = inner.layout().island_origin(REST);
     // Allowed: the island point sits well inside the 1920 px wide test surface.
     #[allow(clippy::cast_possible_truncation)]
     let x = (ox + 50.0).round() as i16;
@@ -388,7 +388,7 @@ fn a_release_without_a_press_emits_nothing() {
 
 /// The `lparam` of the client pixel at island point `(dx, dy)` (scale 1.0).
 fn lparam_island(inner: &Inner, dx: f64, dy: f64) -> LPARAM {
-    let (ox, oy) = inner.layout.island_origin(plith_core::shapes::REST);
+    let (ox, oy) = inner.layout().island_origin(plith_core::shapes::REST);
     // Allowed: the test points sit well inside the signed 16-bit client range.
     #[allow(clippy::cast_possible_truncation)]
     let (x, y) = ((ox + dx).round() as i16, (oy + dy).round() as i16);

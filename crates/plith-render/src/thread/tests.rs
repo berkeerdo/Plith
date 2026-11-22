@@ -1,6 +1,7 @@
 mod harness;
 mod live;
 mod prewarm;
+mod relayout;
 
 use super::{Fatal, RenderHandle};
 use harness::*;
@@ -431,7 +432,17 @@ fn stop_and_join_is_idempotent() {
         join,
         ..
     } = run;
-    let handle = RenderHandle::new(mailbox, shared, join);
+    let config = super::RenderConfig {
+        hwnd: 0,
+        monitor: 0,
+        layout: layout(),
+        clock: plith_core::launch::ClockRequest::Auto,
+        remote: false,
+        hz: 240.0,
+        tune: R1,
+        levers: plith_core::levers::Levers::default(),
+    };
+    let handle = RenderHandle::new(&config, mailbox, shared, join);
     let other = handle.stop_handle();
     handle.stop_handle().stop_and_join();
     // The thread sends `done` before it exits, so a join that only requested the stop fails here.

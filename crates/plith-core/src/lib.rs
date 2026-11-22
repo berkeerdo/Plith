@@ -3,6 +3,7 @@
 pub mod ambient;
 pub mod clock_choice;
 pub mod demo;
+pub mod display;
 pub mod draw;
 pub mod geometry;
 pub mod gpu_health;

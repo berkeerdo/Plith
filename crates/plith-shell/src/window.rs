@@ -1,8 +1,10 @@
 //! The notch window: class registration, creation, the window procedure and the message loop.
 //!
-//! One fixed topmost window is placed once at the surface rectangle and never moves. Its window
-//! region follows the island shape, so clicks outside the shape fall through (see `hit`).
+//! One topmost window is placed at the surface rectangle and moved only by a display change
+//! (`display`). Its window region follows the island shape, so clicks outside the shape fall
+//! through (see `hit`).
 
+pub(crate) mod display;
 pub(crate) mod mouse;
 pub(crate) mod state;
 
@@ -12,7 +14,8 @@ use crate::poster::{QuitHandle, ShapePoster, UiWaker, WM_APP_BAR, WM_APP_SHAPE, 
 use crate::suppress;
 use crate::timer::{TimerHandle, is_app_timer};
 use crate::topmost;
-use plith_core::layout::{RectPx, SurfaceLayout};
+use plith_core::display::Display;
+use plith_core::layout::RectPx;
 use plith_core::panic_text::payload_text;
 use plith_core::scene::{ShapeCell, Suppression};
 use state::{Inner, current, set_current};
@@ -84,8 +87,9 @@ pub enum ShellEvent {
     },
     /// The pointer left the window region (the island shape, ADR 0004).
     Leave,
-    /// The DPI or the display configuration changed; relay the surface when the island is at rest.
-    DisplayChanged,
+    /// The DPI or the display configuration changed and the window was moved to this display;
+    /// the render thread must follow it.
+    DisplayChanged(Display),
     /// The window is about to be destroyed (`WM_CLOSE`): stop anything that presents to it.
     Closing,
     /// The suppression state changed; republish the scene with it.
@@ -191,7 +195,7 @@ fn place(hwnd: HWND, rect: RectPx) -> windows::core::Result<()> {
 fn build(inner: &Inner) -> windows::core::Result<()> {
     let instance = module()?;
     register_class(VISUAL_CLASS, instance)?;
-    let rect = inner.layout.surface;
+    let rect = inner.layout().surface;
     let style = WS_EX_TOPMOST | WS_EX_TOOLWINDOW | WS_EX_NOACTIVATE | WS_EX_NOREDIRECTIONBITMAP;
     let visual = create_window(VISUAL_CLASS, style, rect, instance)?;
     inner.visual.set(visual.0 as isize);
@@ -204,7 +208,8 @@ fn build(inner: &Inner) -> windows::core::Result<()> {
 }
 
 impl Shell {
-    /// Creates the hidden notch window for `layout`. The window is not shown; call [`Shell::show`].
+    /// Creates the hidden notch window for `display`. The window is not shown; call
+    /// [`Shell::show`]. A later display change moves it (see [`ShellEvent::DisplayChanged`]).
     /// `on_event` runs on the UI thread only. `on_panic` is called once, on the UI thread, with
     /// the message of a panic caught in a window callback; the shell then closes the window and
     /// never enters `on_event` again.
@@ -212,12 +217,12 @@ impl Shell {
     /// # Errors
     /// Returns the Win32 error of the first call that fails; nothing is left behind.
     pub fn create(
-        layout: SurfaceLayout,
+        display: Display,
         shapes: Arc<ShapeCell>,
         on_event: Box<dyn FnMut(ShellEvent)>,
         on_panic: Box<dyn Fn(String)>,
     ) -> windows::core::Result<Self> {
-        let inner = Rc::new(Inner::new(layout, shapes, on_event, on_panic));
+        let inner = Rc::new(Inner::new(display, shapes, on_event, on_panic));
         set_current(Some(Rc::clone(&inner)));
         let shell = Self { inner };
         // On failure `shell` is dropped here, which destroys whatever was created.
@@ -428,7 +433,11 @@ fn dispatch(
             return Some(LRESULT(0));
         }
         WM_DPICHANGED | WM_DISPLAYCHANGE if is_visual => {
-            inner.emit(ShellEvent::DisplayChanged);
+            display::on_message(inner, hwnd);
+            return Some(LRESULT(0));
+        }
+        display::WM_APP_RELAYOUT if is_visual => {
+            display::on_relayout(inner);
             return Some(LRESULT(0));
         }
         WM_APP_SHAPE if is_visual => {

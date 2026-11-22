@@ -2,9 +2,11 @@
 //! inside the thread; only `Arc`s, the sinks and plain integers (HWND, HMONITOR) cross.
 
 mod clocks;
+mod relayout_handle;
 mod run;
 
-pub use run::{LoopParts, LoopShared, run_guarded, run_loop};
+pub use relayout_handle::RelayoutHandle;
+pub use run::{LoopParts, LoopShared, Relayout, run_guarded, run_loop};
 
 use crate::clock::{open_clock, seconds_since};
 use crate::gpu_paint::GpuPaint;
@@ -12,6 +14,7 @@ use crate::levers::{apply_mmcss, apply_sched_class};
 use crate::paint::PaintFrame;
 use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::clock_order;
+use plith_core::display::Display;
 use plith_core::draw::PageContent;
 use plith_core::launch::ClockRequest;
 use plith_core::layout::SurfaceLayout;
@@ -51,6 +54,14 @@ pub trait Paint {
     /// last raster, outside any frame. Returns the milliseconds spent; nothing by default.
     fn prewarm(&mut self, _content: &PageContent, _pages: &[usize]) -> f64 {
         0.0
+    }
+
+    /// Rebuilds the stack for `layout` (a display change), on the hardware device.
+    ///
+    /// # Errors
+    /// Returns the failing creation call; the loop then falls back to WARP.
+    fn relayout(&mut self, _layout: SurfaceLayout) -> windows::core::Result<()> {
+        Ok(())
     }
 
     /// Rebuilds the device and target, on WARP when `warp` is set.
@@ -149,6 +160,7 @@ impl std::error::Error for RenderError {}
 /// Owns the running render thread; dropping it stops and joins the thread.
 pub struct RenderHandle {
     stop: StopHandle,
+    relayout: RelayoutHandle,
 }
 
 /// Stops (and joins) the render thread; usable from any thread. All clones share one join
@@ -184,14 +196,37 @@ impl StopHandle {
 }
 
 impl RenderHandle {
-    fn new(mailbox: Arc<SceneMailbox>, shared: Arc<LoopShared>, join: JoinHandle<()>) -> Self {
+    fn new(
+        config: &RenderConfig,
+        mailbox: Arc<SceneMailbox>,
+        shared: Arc<LoopShared>,
+        join: JoinHandle<()>,
+    ) -> Self {
+        let relayout = RelayoutHandle {
+            mailbox: Arc::clone(&mailbox),
+            shared: Arc::clone(&shared),
+            clock: config.clock,
+            last: Arc::new(Mutex::new(Display {
+                layout: config.layout,
+                monitor: config.monitor,
+                hz: config.hz,
+                remote: config.remote,
+            })),
+        };
         Self {
             stop: StopHandle {
                 mailbox,
                 shared,
                 join: Arc::new(Mutex::new(Some(join))),
             },
+            relayout,
         }
+    }
+
+    /// A handle that sends display changes to the thread.
+    #[must_use]
+    pub fn relayouter(&self) -> RelayoutHandle {
+        self.relayout.clone()
     }
 
     /// A handle that can stop and join the thread while another owner keeps the render handle.
@@ -229,6 +264,7 @@ pub fn spawn(
     mut sinks: RenderSinks,
 ) -> Result<RenderHandle, RenderError> {
     let shared = Arc::new(LoopShared::new());
+    shared.set_clock_target(config.monitor, config.hz);
     let (ready_tx, ready_rx) = mpsc::sync_channel(1);
     let join = {
         let (mailbox, shared) = (Arc::clone(&mailbox), Arc::clone(&shared));
@@ -241,7 +277,7 @@ pub fn spawn(
     // so this receive is finite. On failure the thread has already returned: join it without
     // stopping the caller's mailbox.
     match ready_rx.recv() {
-        Ok(Ok(())) => Ok(RenderHandle::new(mailbox, shared, join)),
+        Ok(Ok(())) => Ok(RenderHandle::new(&config, mailbox, shared, join)),
         Ok(Err(error)) => {
             let _ = join.join();
             Err(RenderError::Init(error))
@@ -275,7 +311,11 @@ fn render_main(
             let _ = ready.send(Ok(()));
             let parts = LoopParts {
                 paint,
-                open_clock: |kind| open_clock(kind, origin, config.monitor, config.hz),
+                // A relayout moves the target; the next clock opens for it.
+                open_clock: |kind| {
+                    let (monitor, hz) = shared.clock_target();
+                    open_clock(kind, origin, monitor, hz)
+                },
                 now: || seconds_since(origin),
                 wall: Box::new(SystemTime::now),
                 order: clock_order(config.clock, config.remote),

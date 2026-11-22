@@ -57,7 +57,7 @@ fn client_point(lparam: LPARAM) -> (f64, f64) {
 /// shape was published.
 fn message_point(inner: &Inner, lparam: LPARAM) -> Option<(f64, f64)> {
     let frame = inner.shapes.latest()?;
-    island_point(&inner.layout, frame.shape, client_point(lparam))
+    island_point(&inner.layout(), frame.shape, client_point(lparam))
 }
 
 /// `WM_LBUTTONDOWN`: records a press inside the shape. Returns `true` when the caller must take
@@ -75,7 +75,7 @@ pub(crate) fn note_down(inner: &Inner, lparam: LPARAM) -> bool {
 /// press can exist) the origin.
 fn raw_point(inner: &Inner, lparam: LPARAM) -> (f64, f64) {
     inner.shapes.latest().map_or((0.0, 0.0), |frame| {
-        island_point_unclamped(&inner.layout, frame.shape, client_point(lparam))
+        island_point_unclamped(&inner.layout(), frame.shape, client_point(lparam))
     })
 }
 
