@@ -35,8 +35,9 @@ stack in `plith-render`.
    frame. Test in Task 3 (`relayout_mid_motion_keeps_animating`).
 3. A relayout while suppressed (display off, locked): stored, no paint until unsuppressed.
    Test in Task 3 (`relayout_while_suppressed_paints_nothing`).
-4. Stack rebuild fails after a relayout: goes through `GpuHealth` like a device loss, WARP
-   fallback, not a silent black window. Test in Task 3 (`relayout_failure_reports_fatal`).
+4. Stack rebuild fails after a relayout: WARP fallback, not a silent black window (as built:
+   straight to WARP, then fatal; no `GpuHealth` counting, see the Task 3 ruling). Tests in
+   Task 3 (`relayout_failure_falls_back_to_warp`, `relayout_failure_reports_fatal`).
 5. Hit region after a scale change: the region is recomputed even though the shape is the same
    (`applied` cache must be cleared). Test in Task 2.
 
@@ -122,12 +123,12 @@ stack in `plith-render`.
   `new_layout.island_origin(shape)`), `relayout_mid_motion_keeps_animating` (motion report
   still written, no fatal), `relayout_while_suppressed_paints_nothing`,
   `relayout_with_new_hz_reopens_clock` (fake `open_clock` called again, period 1/new hz),
-  `relayout_failure_reports_fatal` (fake `relayout` errors twice: `GpuHealth` path, then
-  `on_fatal`), `nudge_wakes_waiter` in `scene` tests.
+  `relayout_failure_reports_fatal` (as built: a failed relayout and a failed WARP recover end
+  in `on_fatal`), `nudge_wakes_waiter` in `scene` tests.
 - [x] **Step 2:** `cargo test -p plith-render thread` and `-p plith-core scene` fail.
 - [x] **Step 3:** Implement `apply_relayout(&mut self) -> Result<(), String>` in
-  `relayout.rs`: take the pending value; store `layout`; `paint.relayout` (on error feed
-  `GpuHealth` as a failed paint and follow its action); clear `warm` and `presented`; when
+  `relayout.rs`: take the pending value; store `layout`; `paint.relayout` (as built: on error
+  `recover(true)`, WARP, then fatal); clear `warm` and `presented`; when
   the clock changed set `hz`, `period`, `timeline = VsyncTimeline::new(hz)`, replace
   `clocks.order` and drop the current source; log through `on_note`
   `render relayout: WxH scale=S clock=...`. Fix the stale R1 comment in `animate` about
@@ -159,9 +160,13 @@ stack in `plith-render`.
 - [ ] Console (`query session` first): change resolution, then scale 100/150 in Settings; the
   notch recentres, one `relayout:` and one `render relayout:` line per change, the next motion
   line keeps 240 fps and 0 to 1 hitches; a click on the notch still opens it (hit region).
-- [ ] RDP from the Mac: connect, the notch sits top centre, `remote=true` in the line, motion
+- [ ] RDP from the Mac: connect, the notch sits top centre, `remote=true` in the line; count the
+  `render relayout:` lines per connect (more than 2 means add a 100 to 250 ms debounce), motion
   runs on the timer clock; disconnect back to console, `remote=false`.
 - [ ] Record results in this plan's progress log and STATUS; remove the Open risk.
 
 ## Progress log
-(empty)
+- 2026-11-22: Tasks 1 to 4 committed on the branch (`f1834c9`..`25ecc6a`), five checks green,
+  1261 tests. Final review (opus): 0 critical, 1 important (a relayout whose nudge a motion or
+  ambient run took could wait while parked), fixed with `a_pending_relayout_is_applied_before_the_loop_parks`
+  (RED then GREEN). Deferred minors are listed in STATUS. Task 5 waits for Berke.

@@ -209,3 +209,25 @@ fn relayout_handle_orders_the_clock_only_on_a_change() {
     assert_eq!(taken.order, Some(vec![ClockKind::Timer]));
     assert_eq!(shared.clock_target(), (3, 240.0));
 }
+
+#[test]
+fn a_pending_relayout_is_applied_before_the_loop_parks() {
+    // The request lands after the frame, its generation already taken: nothing wakes the loop
+    // again, so it must look at the slot before it parks.
+    let run = start(Setup {
+        relayout_after: Some((
+            1,
+            Relayout {
+                layout: wide(),
+                hz: 240.0,
+                order: None,
+            },
+        )),
+        ..Setup::default()
+    });
+    run.wait_frames(2);
+    run.assert_parked();
+    assert_eq!(*lock(&run.relayouts), vec![wide()]);
+    assert_eq!(run.frames().len(), 2, "one repaint at the new layout");
+    let _ = run.stop();
+}

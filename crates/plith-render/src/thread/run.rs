@@ -198,6 +198,9 @@ where
                     }
                 }
             }
+            // A request whose nudge a motion or an ambient run already took (it landed between
+            // their apply and their mailbox read) would wait here for the next publish.
+            self.apply_relayout(true)?;
             let next = mailbox.wait_newer(self.seen);
             self.shared.wake();
             let Some(snapshot) = next else {

@@ -28,17 +28,21 @@ the new top centre of the primary monitor and draw at the new scale, without a r
    Rejected for now; a display change is rare.
 
 ## Design
-1. Shell: `WM_DISPLAYCHANGE`/`WM_DPICHANGED` set a pending flag and post one `WM_APP` message;
-   that message emits `ShellEvent::DisplayChanged` from the loop, outside a sent message.
-2. App: on `DisplayChanged` re-read `primary_monitor()`, compute `SurfaceLayout::new`. Nothing
-   changed (layout, monitor handle, hz, remote): log a `relayout: unchanged` line and stop.
-3. Shell `relayout(layout)`: store the layout, `SetWindowPos` (no activation, no z-order),
-   re-apply the latest shape so the hit region uses the new layout.
-4. Render: a `Relayout { layout, monitor, hz, remote }` request through the render handle. The
-   loop takes it between frames, stores the layout (island origin), rebuilds the paint stack
-   through `recover` with the new layout, reopens the clock when monitor, hz or remote changed,
-   and repaints the current scene.
-5. Log: `relayout: rect=x,y wxh scale=.. hz=.. remote=..` from the app, plus the render note.
+As built (2026-11-22; the first draft had the app re-read the monitor, the shell does it):
+1. Shell (`plith-shell/src/window/display.rs`): `WM_DISPLAYCHANGE`/`WM_DPICHANGED` post one
+   `WM_APP_RELAYOUT` per burst. Its handler re-reads the primary monitor and the remote state;
+   an unchanged display does nothing. Otherwise it stores the new `Display`, moves the window
+   (`SetWindowPos`, `SWP_NOACTIVATE`, `HWND_TOPMOST` as at creation), clears the cached
+   region and re-applies it, then emits `ShellEvent::DisplayChanged(Display)`.
+2. App: logs `Display::log_line` and forwards the display through `Relayouter`.
+3. Render (`RelayoutHandle`, `run/relayout.rs`): the handle stores a `Relayout { layout, hz,
+   order }` in `LoopShared` (`order` only when monitor, hz or remote changed; it also moves the
+   clock target the next clock opens for) and nudges the mailbox. The loop applies it after
+   each wake, each motion frame, each ambient tick and before it parks: stores the layout,
+   rebuilds the stack through `Paint::relayout` (the recover path), on failure WARP, then
+   fatal; reopens the clock on a new order; repaints a still, unsuppressed island.
+4. Log: `relayout: rect=x,y wxh scale=.. hz=.. remote=..` from the app, plus
+   `render relayout: wxh scale=.. hz=.. clock=kept|reopened` from the render thread.
 
 ## Left to the builder
 How the request reaches the render thread (a field on the shared state beside the mailbox

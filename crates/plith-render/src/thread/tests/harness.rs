@@ -1,7 +1,9 @@
 //! Fakes and the run harness for the render loop tests: a fake clock on shared fake time, a
 //! recording painter and a loop runner with bounded waits.
 
-use super::super::{Fatal, FrameTimes, LoopParts, LoopShared, Paint, RenderSinks, run_guarded};
+use super::super::{
+    Fatal, FrameTimes, LoopParts, LoopShared, Paint, Relayout, RenderSinks, run_guarded,
+};
 use crate::clock::{ClockError, FrameSource};
 use crate::paint::PaintFrame;
 use plith_core::ambient::{AmbientReport, LiveValues};
@@ -123,6 +125,10 @@ pub(super) struct FakePaint {
     /// Every relayout call, in order.
     pub(super) relayouts: Arc<Mutex<Vec<SurfaceLayout>>>,
     pub(super) relayout_fails: bool,
+    /// After painting this frame number, stores the relayout in `shared` with no nudge: the
+    /// state a request leaves when its generation was consumed by a take that did not apply it.
+    pub(super) relayout_after: Option<(usize, Relayout)>,
+    pub(super) shared: Arc<LoopShared>,
 }
 
 impl Paint for FakePaint {
@@ -147,6 +153,12 @@ impl Paint for FakePaint {
         }
         lock(&self.frames).push(frame.clone());
         lock(&self.calls_at).push(self.harness.total());
+        let painted = lock(&self.frames).len();
+        if let Some((at, relayout)) = &self.relayout_after
+            && *at == painted
+        {
+            self.shared.request_relayout(relayout.clone());
+        }
         Ok(FrameTimes {
             draw_ms: 1.0,
             present_ms: 0.5,
@@ -186,6 +198,7 @@ pub(super) struct Setup {
     pub(super) content: Option<Arc<PageContent>>,
     pub(super) content_script: Vec<(u64, Arc<PageContent>)>,
     pub(super) relayout_fails: bool,
+    pub(super) relayout_after: Option<(usize, Relayout)>,
 }
 
 pub(super) struct Run {
@@ -311,6 +324,8 @@ pub(super) fn start(mut setup: Setup) -> Run {
         prewarms: Arc::clone(&prewarms),
         relayouts: Arc::clone(&relayouts),
         relayout_fails: setup.relayout_fails,
+        relayout_after: setup.relayout_after.take(),
+        shared: Arc::clone(&shared),
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
