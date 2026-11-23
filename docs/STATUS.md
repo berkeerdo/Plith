@@ -51,8 +51,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   new monitor, rate or remote state. Five checks on the branch head (merge tree identical):
   fmt, clippy, 1262 tests, structure 0, release. RDP reconnect seen 2026-11-23: 0 relayout
   lines (same size), motion 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
-- **Fix `fix/session-display-state` (`ac07a42`, unmerged):** suppression follows the session
-  display, not the console one (froze the notch over RDP). Merge after the office VM suite.
+- **Session display fix: merged** (2026-11-23, `ac07a42`): suppression follows the session
+  display, not the console one (froze the notch over RDP). Five checks green, 1265 tests.
 - **Next: one console session, Berke present.** First the relayout check (plan Task 5):
   resolution and scale on the console, the RDP to console switch, and a window resize over
   RDP. Check the display-off hide still works on the console (monitor off). Then finish the settings console session (started 2026-11-21, a real click opened the
