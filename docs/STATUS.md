@@ -49,10 +49,13 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   The shell re-reads the primary monitor, moves the window and rebuilds the hit region; the
   render thread rebuilds the stack (recover path, WARP on failure) and reopens the clock on a
   new monitor, rate or remote state. Five checks on the branch head (merge tree identical):
-  fmt, clippy, 1262 tests, structure 0, release. Not yet seen on screen (plan Task 5).
+  fmt, clippy, 1262 tests, structure 0, release. RDP reconnect seen 2026-11-23: 0 relayout
+  lines (same size), motion 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
+- **Fix `fix/session-display-state` (`ac07a42`, unmerged):** suppression follows the session
+  display, not the console one (froze the notch over RDP). Merge after the office VM suite.
 - **Next: one console session, Berke present.** First the relayout check (plan Task 5):
-  resolution and scale on the console, then an RDP connect from the Mac (count the
-  `render relayout:` lines). Then finish the settings console session (started 2026-11-21, a real click opened the
+  resolution and scale on the console, the RDP to console switch, and a window resize over
+  RDP. Check the display-off hide still works on the console (monitor off). Then finish the settings console session (started 2026-11-21, a real click opened the
   window in 39 ms; progress note in the plan; plan Task 12, Task 11 Step 1):
   open from the gear with a real click, every row live, German and back, city and a real fetch,
   OSD off and on (one `osd start` per switch, no `exited` line), click-to-window delay, caret.
@@ -72,13 +75,12 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   console (plan Task 8).
 
 ## Open risks
-- Relayout unmeasured on screen (seen broken 2026-11-22 over RDP before the fix). Unknown until
-  then: a DXGI vblank wait on an output RDP removed, the hardware rebuild during the RDP adapter
-  switch, the flash of a rebuild. Deferred minors from the review: an hz change keeps the old
-  ambient divisor and stats rate until the run ends; a `DisplayChanged` before
-  `attach_relayout` is dropped (startup only); coalescing merges only queued messages (decide a
-  debounce from the RDP line count); the settings window keeps the start monitor handle (falls
-  back to primary); two relayout tests assert an origin that is equal by design.
+- Relayout unmeasured on a real display change. Unknown: a DXGI vblank wait on an output RDP
+  removed, the hardware rebuild on the RDP to console switch, the flash of a rebuild. Review
+  minors: an hz change keeps the old ambient divisor and stats rate until the run ends; an
+  early `DisplayChanged` before `attach_relayout` is dropped; coalescing merges only queued
+  messages (same-size RDP reconnect: 0 lines); the settings window keeps the start monitor
+  handle; two relayout tests assert an origin that is equal by design.
 - First OSD show of a run: draw p99 0.77 ms after the prewarm, but 1 hitch with present 11.6 ms
   (2026-11-19). Ruled an open item; root cause measured with osd Task 9.
 - Owed on screen (console, Berke present): osd Task 9 (visibility over borderless, exclusive and
