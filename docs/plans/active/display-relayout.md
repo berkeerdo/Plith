@@ -170,3 +170,14 @@ stack in `plith-render`.
   1261 tests. Final review (opus): 0 critical, 1 important (a relayout whose nudge a motion or
   ambient run took could wait while parked), fixed with `a_pending_relayout_is_applied_before_the_loop_parks`
   (RED then GREEN). Deferred minors are listed in STATUS. Task 5 waits for Berke.
+- 2026-11-23, RDP from the Mac (Task 5 row 2, part): 15 min into the session the notch froze
+  (clicks did nothing). Cause: suppression followed `GUID_CONSOLE_DISPLAY_STATE`, the console
+  monitor slept, `display_off=true` in an active RDP session, and a suppressed scene paints
+  nothing. Reproduced with the old build at start (`display_off=true` 4 ms after `start:`);
+  fixed on `fix/session-display-state` (`ac07a42`, `GUID_SESSION_DISPLAY_STATUS`), no line with
+  the new build, Berke clicked: opens. Disconnect and reconnect with the fixed build: `display_off`
+  and `locked` true, then both false, **0 `relayout:` and 0 `render relayout:` lines** (same
+  1800x1130 at 32 Hz, so no display change and no debounce needed for this case); expand, page and
+  collapse at 32 fps, 0 hitches, clock timer. Berke skipped the resolution and scale changes.
+  Still open: a window resize or scale change over RDP, the RDP to console switch
+  (`remote=false`), the whole console row.

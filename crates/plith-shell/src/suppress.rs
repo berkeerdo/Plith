@@ -13,13 +13,14 @@ use windows::Win32::System::Power::{
 use windows::Win32::System::RemoteDesktop::{
     NOTIFY_FOR_THIS_SESSION, WTSRegisterSessionNotification, WTSUnRegisterSessionNotification,
 };
-use windows::Win32::System::SystemServices::GUID_CONSOLE_DISPLAY_STATE;
+use windows::Win32::System::SystemServices::GUID_SESSION_DISPLAY_STATUS;
 use windows::Win32::UI::Shell::{
     ABM_NEW, ABM_REMOVE, ABN_FULLSCREENAPP, APPBARDATA, SHAppBarMessage,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     DEVICE_NOTIFY_WINDOW_HANDLE, PBT_POWERSETTINGCHANGE, WTS_SESSION_LOCK, WTS_SESSION_UNLOCK,
 };
+use windows::core::GUID;
 
 fn appbar_data(hwnd: HWND) -> APPBARDATA {
     APPBARDATA {
@@ -37,7 +38,7 @@ pub(crate) fn register(inner: &Inner, hwnd: HWND) -> windows::core::Result<()> {
     let power = unsafe {
         RegisterPowerSettingNotification(
             HANDLE(hwnd.0),
-            &GUID_CONSOLE_DISPLAY_STATE,
+            &GUID_SESSION_DISPLAY_STATUS,
             DEVICE_NOTIFY_WINDOW_HANDLE,
         )
     }?;
@@ -79,7 +80,7 @@ fn update(inner: &Inner, change: impl FnOnce(&mut Suppression)) {
     }
 }
 
-/// `WM_POWERBROADCAST`: tracks the console display state (0 off, 1 on, 2 dimmed).
+/// `WM_POWERBROADCAST`: tracks the display state of this session (0 off, 1 on, 2 dimmed).
 pub(crate) fn on_power(inner: &Inner, wparam: WPARAM, lparam: LPARAM) {
     if u32::try_from(wparam.0).ok() != Some(PBT_POWERSETTINGCHANGE) || lparam.0 == 0 {
         return;
@@ -87,12 +88,21 @@ pub(crate) fn on_power(inner: &Inner, wparam: WPARAM, lparam: LPARAM) {
     // SAFETY: for PBT_POWERSETTINGCHANGE, lParam points at a POWERBROADCAST_SETTING that stays
     // valid while the message is handled.
     let setting = unsafe { &*(lparam.0 as *const POWERBROADCAST_SETTING) };
-    if setting.PowerSetting != GUID_CONSOLE_DISPLAY_STATE || setting.DataLength < 4 {
-        return;
+    let state = if setting.DataLength >= 4 {
+        // SAFETY: `DataLength` is at least 4, so a DWORD follows the header; it may be unaligned.
+        unsafe { std::ptr::read_unaligned(setting.Data.as_ptr().cast::<u32>()) }
+    } else {
+        0
+    };
+    if let Some(off) = display_off(&setting.PowerSetting, setting.DataLength, state) {
+        update(inner, |s| s.display_off = off);
     }
-    // SAFETY: `DataLength` is at least 4, so a DWORD follows the header; it may be unaligned.
-    let state = unsafe { std::ptr::read_unaligned(setting.Data.as_ptr().cast::<u32>()) };
-    update(inner, |s| s.display_off = state == 0);
+}
+
+/// Whether a power setting change turns the session display off (`Some(true)`) or on. Only
+/// the session display counts: the console display sleeps while an RDP session is on screen.
+fn display_off(setting: &GUID, len: u32, state: u32) -> Option<bool> {
+    (*setting == GUID_SESSION_DISPLAY_STATUS && len >= 4).then_some(state == 0)
 }
 
 /// `WM_WTSSESSION_CHANGE`: tracks lock and unlock.
@@ -110,3 +120,6 @@ pub(crate) fn on_appbar(inner: &Inner, wparam: WPARAM, lparam: LPARAM) {
         update(inner, |s| s.fullscreen = lparam.0 != 0);
     }
 }
+
+#[cfg(test)]
+mod tests;
