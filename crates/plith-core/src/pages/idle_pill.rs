@@ -138,8 +138,9 @@ pub fn rest_shape(look: IdleLook) -> IslandShape {
     }
 }
 
-/// The Karot right-hand text, like the welcome head's `Auto` slot: the weather when it is on,
-/// else the playing title, else the default output (the only one that wears the speaker glyph,
+/// The Karot right-hand text, like the welcome head's `Auto` slot: the weather now when it is
+/// on (a turn only without it: a second clock time beside the time reads as one string), else
+/// the playing title, else the default output (the only one that wears the speaker glyph,
 /// unless it is the off word).
 fn karot_right(f: &IdleFacts) -> Option<Right<'_>> {
     let plain = |text, title| {
@@ -149,7 +150,7 @@ fn karot_right(f: &IdleFacts) -> Option<Right<'_>> {
             title,
         })
     };
-    if let Some(s) = f.turn.as_ref().or(f.now_sky.as_ref()) {
+    if let Some(s) = f.now_sky.as_ref().or(f.turn.as_ref()) {
         return plain(s, false);
     }
     if let Some((title, _)) = &f.playing {
@@ -225,6 +226,9 @@ fn karot(f: &IdleFacts, y: f64) -> Vec<Node> {
     let Some(right) = karot_right(f) else {
         return nodes;
     };
+    // The 10 DIP capitals sit CAP_RISE above their box centre: drop the box so they sit on the
+    // pill's centre line, level with the time.
+    let y = y + CAP_RISE;
     let scroll = right
         .title
         .then(|| title_scroll(right.text, y, f.scroll_start))

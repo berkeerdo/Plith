@@ -70,19 +70,32 @@ fn texts(list: &DisplayList) -> Vec<TextRow> {
         .collect()
 }
 
+/// The weather now on the right, never the next turn: a second clock time beside the time read
+/// as one string (Berke 2026-11-24, "18.02 berrak 20.00"). The turn stays on the welcome view.
 #[test]
-fn karot_time_left_turn_right() {
+fn karot_time_left_weather_now_right() {
     let t = texts(&idle_pill(IdleLook::Karot, &facts()));
     assert_eq!(t.len(), 2);
     assert_eq!(t[0].1, "14:05");
     assert_eq!(t[0].0.x, 16.0);
     assert_eq!(t[0].2, TextStyle::Clock);
     assert_eq!(t[0].3, Ink::Ink);
-    assert_eq!(t[1].1, "YAĞMUR 15:30");
+    assert_eq!(t[1].1, "9° BULUTLU");
     assert_eq!(t[1].2, TextStyle::Value);
     assert_eq!(t[1].3, Ink::Muted);
     assert_eq!(t[1].4, Align::End);
     assert_eq!(t[1].0.x + t[1].0.w, 184.0);
+}
+
+/// The capitals of the 10 DIP right-hand text sit `CAP_RISE` above its box centre (the box holds
+/// the descender), so the box drops by that much to put the words on the pill's centre line,
+/// level with the time. Measured on a render 2026-11-24: the turn sat 1.25 DIP above the time.
+#[test]
+fn karot_right_text_sits_on_the_pill_centre_line() {
+    let t = texts(&idle_pill(IdleLook::Karot, &facts()));
+    let centre = shapes::REST.height / 2.0;
+    assert_eq!(t[0].0.y + t[0].0.h / 2.0, centre, "the time box is centred");
+    assert_eq!(t[1].0.y + t[1].0.h / 2.0 - CAP_RISE, centre);
 }
 
 #[test]
@@ -97,9 +110,9 @@ fn karot_right_falls_back_weather_then_track_then_sound() {
         })
     };
     let mut f = facts();
-    f.turn = None;
-    assert_eq!(right(&f).as_deref(), Some("9° BULUTLU"));
     f.now_sky = None;
+    assert_eq!(right(&f).as_deref(), Some("YAĞMUR 15:30"));
+    f.turn = None;
     assert_eq!(
         right(&f).as_deref(),
         Some("Song"),
@@ -255,8 +268,8 @@ fn sound_words_keep_the_kind_only_when_it_fits() {
 fn karot_sound_has_speaker_glyph() {
     let list = idle_pill(IdleLook::Karot, &sound_only("%62", false));
     let right_edge = RIGHT_EDGE - 3.0 * VALUE_ADVANCE - GLYPH_GAP;
-    // Centred on the capitals of the text, which sit CAP_RISE above the text box centre.
-    let y = shapes::REST.height / 2.0 - CAP_RISE - glyphs::GLYPH / 2.0;
+    // Centred on the capitals of the text, which sit on the pill's centre line.
+    let y = shapes::REST.height / 2.0 - glyphs::GLYPH / 2.0;
     let expected = glyphs::glyph(
         DeviceKind::Speaker,
         right_edge - glyphs::GLYPH,
@@ -313,6 +326,14 @@ fn the_turn_box_fits_the_longest_turn_text_without_an_ellipsis() {
         for sky in [Sky::Clear, Sky::Cloud, Sky::Rain, Sky::Snow] {
             let text = format!("{} 15:30", sky_word(sky, lang));
             #[allow(clippy::cast_precision_loss)]
+            let needed = text.chars().count() as f64 * VALUE_ADVANCE;
+            assert!(needed <= TURN_W, "{text} needs {needed}, box is {TURN_W}");
+        }
+    }
+    // The weather now in every language, with a three-character temperature.
+    for lang in Lang::ALL {
+        for sky in [Sky::Clear, Sky::Cloud, Sky::Rain, Sky::Snow] {
+            let text = format!("-12° {}", sky_word(sky, lang));
             let needed = text.chars().count() as f64 * VALUE_ADVANCE;
             assert!(needed <= TURN_W, "{text} needs {needed}, box is {TURN_W}");
         }
@@ -374,6 +395,11 @@ fn karot_long_title_with_start_is_scroll() {
     assert_eq!(&**text, LONG_TITLE);
     assert_eq!((*style, *ink, *at), (TextStyle::Value, Ink::Muted, start));
     assert_eq!((rect.x, rect.x + rect.w), (RIGHT_EDGE - TURN_W, RIGHT_EDGE));
+    assert_eq!(
+        rect.y + rect.h / 2.0 - CAP_RISE,
+        shapes::REST.height / 2.0,
+        "the scroll sits on the same line as the plain text"
+    );
     let overflow =
         f64::from(u32::try_from(LONG_TITLE.chars().count()).unwrap()) * VALUE_ADVANCE - TURN_W;
     assert_eq!(*run_s, crate::scroll::scroll_run_s(overflow));
