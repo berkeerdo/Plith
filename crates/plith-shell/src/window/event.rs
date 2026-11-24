@@ -2,6 +2,7 @@
 
 use plith_core::display::Display;
 use plith_core::scene::Suppression;
+use plith_core::tray::menu::TrayItem;
 use std::path::PathBuf;
 
 /// Something the app has to react to.
@@ -92,6 +93,8 @@ pub enum ShellEvent {
     Suppression(Suppression),
     /// A service thread called [`UiWaker::wake`]; re-read whatever the services published.
     Wake,
+    /// The tray icon gave a command: a left click is `Settings`, the menu gives either item.
+    Tray(TrayItem),
     /// App timer `id` (set through [`TimerHandle`]) ticked.
     Timer(usize),
     /// A foreground change reached the topmost fight.

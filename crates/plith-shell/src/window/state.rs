@@ -65,6 +65,8 @@ pub(crate) struct Inner {
     /// Why the drop target could not be registered, when it could not.
     pub drop_error: RefCell<Option<String>>,
     pub registrations: RefCell<Registrations>,
+    /// The tray icon, once the app asked for it.
+    pub tray: RefCell<crate::tray::TrayState>,
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
     on_event: RefCell<Box<dyn FnMut(ShellEvent)>>,
@@ -101,6 +103,7 @@ impl Inner {
             drop_error: RefCell::new(None),
             applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),
+            tray: RefCell::new(crate::tray::TrayState::default()),
             origin: Instant::now(),
             on_event: RefCell::new(on_event),
             on_panic,

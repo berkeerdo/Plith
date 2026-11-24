@@ -90,6 +90,10 @@ pub enum SheetText {
     RowHideWindows,
     /// Sub line of the hide Windows indicator row.
     SubHideWindows,
+    /// Label of the start with Windows row.
+    RowAutostart,
+    /// Sub line of the start with Windows row.
+    SubAutostart,
     /// Label of the version row.
     RowVersion,
     /// Label of the settings file row.
@@ -142,7 +146,7 @@ pub enum SheetText {
 
 impl SheetText {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [SheetText; 59] = [
+    pub const ALL: [SheetText; 61] = [
         SheetText::WindowTitle,
         SheetText::Caption,
         SheetText::SectionGeneral,
@@ -178,6 +182,8 @@ impl SheetText {
         SheetText::SubOsd,
         SheetText::RowHideWindows,
         SheetText::SubHideWindows,
+        SheetText::RowAutostart,
+        SheetText::SubAutostart,
         SheetText::RowVersion,
         SheetText::RowFile,
         SheetText::RowData,

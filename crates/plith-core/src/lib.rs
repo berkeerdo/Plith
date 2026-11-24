@@ -31,6 +31,7 @@ pub mod theme;
 pub mod timeline;
 pub mod topmost;
 pub mod trace;
+pub mod tray;
 pub mod tuning;
 pub mod visible;
 pub mod weather;

@@ -40,6 +40,8 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubOsd => "On volume and brightness change, over games",
         SheetText::RowHideWindows => "Hide the Windows indicator",
         SheetText::SubHideWindows => "Hides Windows' own indicator while Plith's is running",
+        SheetText::RowAutostart => "Start with Windows",
+        SheetText::SubAutostart => "Plith opens by itself when you sign in to Windows",
         SheetText::RowVersion => "Version",
         SheetText::RowFile => "Settings file",
         SheetText::RowData => "Data",

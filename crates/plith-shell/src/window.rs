@@ -56,7 +56,7 @@ pub fn guard(label: &str, f: impl FnOnce()) -> Result<(), String> {
 
 /// Handle to the notch window. It lives on the UI thread and is not `Send`.
 pub struct Shell {
-    inner: Rc<Inner>,
+    pub(crate) inner: Rc<Inner>,
 }
 
 fn module() -> windows::core::Result<HINSTANCE> {
@@ -299,6 +299,7 @@ pub fn run_message_loop() -> i32 {
 }
 
 fn on_destroy(inner: &Inner, hwnd: HWND) {
+    crate::tray::remove(inner, hwnd);
     crate::drag_in::revoke(hwnd);
     topmost::kill_timer(inner);
     if let Some(hook) = inner.registrations.borrow_mut().win_event_hook.take() {
@@ -352,7 +353,15 @@ fn dispatch(
     lparam: LPARAM,
 ) -> Option<LRESULT> {
     let is_visual = hwnd.0 as isize == inner.visual.get();
+    if is_visual && crate::tray::is_taskbar_created(inner, msg) {
+        crate::tray::on_taskbar_created(inner, hwnd);
+        return Some(LRESULT(0));
+    }
     match msg {
+        crate::tray::WM_APP_TRAY if is_visual => {
+            crate::tray::on_callback(inner, hwnd, wparam, lparam);
+            return Some(LRESULT(0));
+        }
         WM_MOUSEACTIVATE => return Some(LRESULT(isize::try_from(MA_NOACTIVATE).unwrap_or(0))),
         // The press only records and captures: `WM_MOUSEACTIVATE` above already answered
         // `MA_NOACTIVATE`, and neither the press nor the capture activates the island.

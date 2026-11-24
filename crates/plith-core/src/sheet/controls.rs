@@ -178,6 +178,11 @@ impl Page {
 
     /// A toggle: the word, then a track with two stations; filled on the right is on, both hollow is off.
     pub fn toggle(&mut self, row: u8, t: f64, on: bool, to: SettingChange, live: bool) {
+        self.toggle_to(row, t, on, SheetAction::Change(to), live);
+    }
+
+    /// A toggle whose click is any action, for a switch that is not a setting of the file.
+    pub fn toggle_to(&mut self, row: u8, t: f64, on: bool, to: SheetAction, live: bool) {
         let y = t + 16.0;
         let (ink, hollow) = if live {
             (Ink::Ink, Ink::Faint)
@@ -202,7 +207,7 @@ impl Page {
         );
         if live {
             let r = rect(R - 134.0, t + 4.0, 134.0, 24.0);
-            self.target(r, FocusId::Row(row, 0), SheetAction::Change(to));
+            self.target(r, FocusId::Row(row, 0), to);
         }
     }
 

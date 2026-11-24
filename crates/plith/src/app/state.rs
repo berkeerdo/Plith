@@ -100,6 +100,8 @@ pub struct App {
     saver: Option<Saver>,
     /// The settings window.
     sheet: SheetHost,
+    /// The tray icon's menu captions and its way to quit.
+    tray: TrayHost,
 }
 
 impl App {
@@ -134,6 +136,7 @@ impl App {
             file_theme: None,
             saver: None,
             sheet: SheetHost::default(),
+            tray: TrayHost::default(),
         }
     }
 
@@ -236,6 +239,7 @@ impl App {
             ShellEvent::DragRefused { formats } => self.on_drag_refused(formats),
             ShellEvent::Drop { paths } => self.on_drop(&paths),
             ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
+            ShellEvent::Tray(item) => self.on_tray(item),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,
@@ -277,9 +281,11 @@ impl App {
 
 mod live;
 mod sheet;
+mod tray;
 
 pub use live::OsdControl;
 use sheet::{CARET_TIMER, SheetHost};
+use tray::TrayHost;
 
 #[cfg(test)]
 mod tests;
