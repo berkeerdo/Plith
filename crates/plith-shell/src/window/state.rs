@@ -58,6 +58,12 @@ pub(crate) struct Inner {
     pub last_point: Cell<Option<(f64, f64)>>,
     /// The left-button press waiting for its release (`WM_LBUTTONDOWN` inside the shape).
     pub press: crate::window::mouse::PressRecord,
+    /// The island's own drag out is running: its drop target takes nothing meanwhile.
+    pub dragging_out: Cell<bool>,
+    /// A `WM_CLOSE` arrived during the drag out and waits for it to end.
+    pub close_pending: Cell<bool>,
+    /// Why the drop target could not be registered, when it could not.
+    pub drop_error: RefCell<Option<String>>,
     pub registrations: RefCell<Registrations>,
     /// Origin of the monotonic clock the topmost debounce reads.
     pub origin: Instant,
@@ -90,6 +96,9 @@ impl Inner {
             tracking: Cell::new(false),
             last_point: Cell::new(None),
             press: crate::window::mouse::PressRecord::default(),
+            dragging_out: Cell::new(false),
+            close_pending: Cell::new(false),
+            drop_error: RefCell::new(None),
             applied: Cell::new(None),
             registrations: RefCell::new(Registrations::default()),
             origin: Instant::now(),

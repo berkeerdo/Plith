@@ -17,7 +17,7 @@ mod pt;
 pub mod sheet;
 mod tr;
 
-pub use count::{percent, songs};
+pub use count::{files, percent, songs};
 
 #[cfg(test)]
 mod tests;
@@ -157,11 +157,21 @@ pub enum Text {
     MediaHint,
     /// Fallback name of an unlabelled Voicemeeter strip, followed by its number. Sentence case, not upper case.
     Source,
+    /// The label of the drop slot on the shelf.
+    ShelfSlot,
+    /// The word that takes the last removal back.
+    ShelfUndo,
+    /// The hint after the file count in the shelf footer.
+    ShelfFooter,
+    /// The type tag of a folder on a shelf wagon.
+    ShelfFolder,
+    /// The type tag of a file with no extension on a shelf wagon.
+    ShelfFile,
 }
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 41] = [
+    pub const ALL: [Text; 46] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -203,6 +213,11 @@ impl Text {
         Text::NothingPlaying,
         Text::MediaHint,
         Text::Source,
+        Text::ShelfSlot,
+        Text::ShelfUndo,
+        Text::ShelfFooter,
+        Text::ShelfFolder,
+        Text::ShelfFile,
     ];
 }
 

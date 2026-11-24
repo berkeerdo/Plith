@@ -54,5 +54,10 @@ pub fn text(t: Text) -> &'static str {
         Text::NothingPlaying => "Niente in riproduzione",
         Text::MediaHint => "Compare qui quando Spotify, un browser o un gioco emette audio.",
         Text::Source => "Sorgente",
+        Text::ShelfSlot => "RILASCIA",
+        Text::ShelfUndo => "ANNULLA",
+        Text::ShelfFooter => "TRASCINA, RILASCIA",
+        Text::ShelfFolder => "CARTELLA",
+        Text::ShelfFile => "FILE",
     }
 }

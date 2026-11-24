@@ -56,5 +56,10 @@ pub fn text(t: Text) -> &'static str {
             "Erscheint hier, sobald Spotify, ein Browser oder ein Spiel Ton ausgibt."
         }
         Text::Source => "Quelle",
+        Text::ShelfSlot => "ABLEGEN",
+        Text::ShelfUndo => "RÜCKGÄNGIG",
+        Text::ShelfFooter => "ZIEHEN, ABLEGEN",
+        Text::ShelfFolder => "ORDNER",
+        Text::ShelfFile => "DATEI",
     }
 }

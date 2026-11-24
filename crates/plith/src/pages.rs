@@ -10,7 +10,7 @@ use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::pages::media::media_page;
 use plith_core::pages::pill::pill;
 use plith_core::pages::quick::{QuickFacts, quick_page};
-use plith_core::pages::shelf::shelf_page;
+use plith_core::pages::shelf::{ShelfView, shelf_page_with};
 use plith_core::pages::system::system_page;
 use plith_core::pages::tabbar::tabbar;
 use plith_core::pages::welcome::{WelcomeFacts, welcome_page};
@@ -31,6 +31,8 @@ pub struct Inputs<'a> {
     pub welcome: Option<&'a WelcomeFacts>,
     /// The hour cell under the pointer on the welcome view.
     pub probe: Option<i32>,
+    /// What the shelf page shows.
+    pub shelf: ShelfView<'a>,
     /// The resting look and its facts; `None` draws the seal (before the app wiring sets them).
     pub idle: Option<(IdleLook, &'a IdleFacts)>,
     /// The interface language, resolved once at start.
@@ -117,7 +119,7 @@ pub fn build_page(page: PageId, inputs: &Inputs) -> PageBuild {
             audio_page(&view, inputs.clock, inputs.lang)
         }
         PageId::Media => media_page(&facts.media, inputs.clock, inputs.lang),
-        PageId::Shelf => shelf_page(inputs.clock, inputs.lang),
+        PageId::Shelf => shelf_page_with(&inputs.shelf, inputs.clock, inputs.lang),
         PageId::System => system_page(&facts.system, inputs.clock, inputs.lang),
         PageId::Welcome => inputs.welcome.map_or_else(
             || welcome_placeholder(inputs.lang),

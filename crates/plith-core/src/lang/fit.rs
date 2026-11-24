@@ -5,7 +5,7 @@
 //! of being cut with an ellipsis on screen. A budget is the box width the layout states, else
 //! the room the layout leaves, else the width of the Turkish string the R4 renders proved.
 
-use super::{Lang, Text, date_short, device_kind, percent, sheet, sky_word, songs, text};
+use super::{Lang, Text, date_short, device_kind, files, percent, sheet, sky_word, songs, text};
 use crate::draw::TextStyle;
 use crate::pages::audio::{
     CUT_LABEL_W, DeviceKind, OUTPUT_NAME_W, SOURCE_NAME_W, VALUE_CHAR_W, VALUE_SLACK,
@@ -15,6 +15,7 @@ use crate::pages::system::{CUT_FROM, CUT_TO, LABEL_W, RIGHT, VALUE_W as VALUE_BO
 use crate::pages::tabbar::LABEL_W as TAB_W;
 use crate::pages::welcome::{LINE_W, RUN_LABEL_W};
 use crate::pages::{MARGIN_LEFT, PAGE_W, pill};
+use crate::shelf::layout::{FOOTER_X, SLOT_MIN_W, UNDO_W, UNDO_X, WAGON_W};
 use crate::weather::Sky;
 
 /// The OSD value slot (`plith-osd`, `VALUE_LEFT` 236 to the 284 edge). A test in `plith-osd`
@@ -107,8 +108,42 @@ pub fn places(lang: Lang) -> Vec<Place> {
     out.extend(page_places(lang));
     out.extend(pill_places(lang));
     out.extend(welcome_places(lang));
+    out.extend(shelf_places(lang));
     out.extend(sheet::fit::places(lang));
     out
+}
+
+/// The shelf's own copy: the slot word, the undo word and the footer line.
+fn shelf_places(lang: Lang) -> Vec<Place> {
+    let label = TextStyle::Label;
+    let t = |id| text(id, lang);
+    vec![
+        place(
+            "shelf slot",
+            t(Text::ShelfSlot),
+            label,
+            Budget::Dip(SLOT_MIN_W),
+        ),
+        place("shelf undo", t(Text::ShelfUndo), label, Budget::Dip(UNDO_W)),
+        place(
+            "shelf folder tag",
+            t(Text::ShelfFolder),
+            label,
+            Budget::Dip(WAGON_W - 20.0),
+        ),
+        place(
+            "shelf file tag",
+            t(Text::ShelfFile),
+            label,
+            Budget::Dip(WAGON_W - 20.0),
+        ),
+        place(
+            "shelf footer",
+            format!("{} \u{b7} {}", files(8, lang), t(Text::ShelfFooter)),
+            label,
+            Budget::Dip(UNDO_X - FOOTER_X),
+        ),
+    ]
 }
 
 /// The media page copy, the system row labels and the audio source names.

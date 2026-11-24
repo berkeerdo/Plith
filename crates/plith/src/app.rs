@@ -9,6 +9,7 @@ mod input;
 mod osd_slot;
 mod saver;
 mod sheet_side;
+mod shelf;
 mod state;
 mod weather_link;
 mod wire;
@@ -23,6 +24,7 @@ use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
 use crate::settings_file;
+use crate::shelf_file;
 use crate::{demo, idle};
 use feed::Feed;
 use osd_slot::{OsdSlot, RealOsd};
@@ -136,6 +138,7 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         }
     };
     shell.show();
+    log_drop_target(&shell, log);
     let quit = shell.quit_handle();
     let Attached {
         levels,
@@ -241,6 +244,13 @@ fn fixture(
     }
 }
 
+/// Logs why the window takes no file drops, when the drop target could not be registered.
+fn log_drop_target(shell: &Shell, log: &LogFile) {
+    if let Some(error) = shell.drop_target_error() {
+        log.line(&format!("shelf: no drop target: {error}"));
+    }
+}
+
 /// Starts the services (or the fixture), attaches the feed that turns them into pages and
 /// returns the level reader for the render thread. Never blocks on a service start.
 fn attach_feed(
@@ -283,6 +293,13 @@ fn attach_feed(
         &app.mailbox,
         &settings,
     );
+    if idle_wiring::is_normal(launch) {
+        feed.begin_shelf_load(shelf_file::saver(Arc::clone(log)));
+        let waker = shell.ui_waker();
+        app.attach_shelf_load(shelf_file::load_async(log, move || {
+            waker.wake();
+        }));
+    }
     app.attach_feed(feed);
     app.attach_weather(weather, idle_wiring::is_normal(launch));
     app.set_settings(settings.clone());
