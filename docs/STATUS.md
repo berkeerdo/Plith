@@ -34,11 +34,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   Probe over RDP: activation and Get OK, Set to `Remote Audio` gave `E_INVALIDARG`. Rerun with real
   outputs (console, or RDP with sound "On the remote PC") before any UI work; UI code there is
   written but never compiled.
-- **R7 settings window: merged as `c7e693a`** (2026-11-20; spec, plan `plans/active/r7-settings.md`,
-  ADR 0017, review in `quality/`). Idle check on the console: Karot 60 s, 0 render wakes.
-- **Display relayout: merged as `42f29ac`** (2026-11-22; spec, plan
-  `plans/active/display-relayout.md`, review in `quality/`). RDP reconnect 2026-11-23: 0 relayout
-  lines (same size), 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
+- Settings window `c7e693a` (plan `plans/active/r7-settings.md`) and display relayout `42f29ac`
+  (plan `plans/active/display-relayout.md`, Task 5 open): records in `journal/2026-11.md`.
 - Session display fix merged 2026-11-23 (`ac07a42`): suppression follows the session display.
 - **Owed on the console, Berke present** (any day): the relayout check (plan Task 5):
   resolution and scale on the console, the RDP to console switch, and a window resize over
@@ -61,8 +58,13 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   saw the themes and dragged in and out ("çalışıyor"), the shelf file was emptied by his remove;
   `tray: icon added` logged. Tray menu, `Çıkış`, Explorer restart not yet seen.
 - **Next: redesign of the logo/icon and the whole settings window** (Berke 2026-11-24: "logo
-  iconunu ve komple ayarları güncelleriz"). Design work order: `praxvon-direction` concepts,
-  Berke picks, build, `impeccable` pass. The current Genel subtitle no longer covers its rows.
+  iconunu ve komple ayarları güncelleriz"), plus the installer screens as one identity package
+  (Berke: "setup tasarımı da değişmeli"). Design work order: `praxvon-direction` concepts, Berke
+  picks, build, `impeccable` pass. The current Genel subtitle no longer covers its rows.
+- Updates (Berke asked if WPF users get them): WPF 0.3.x has an on-demand GitHub check that runs
+  `Plith-Setup-*.exe`; publishing the Rust installer under that name at 0.4.0 lets them move over
+  with one click. The Rust app needs its own check (button, maybe a quiet daily check): add it to
+  parity part 2. SmartScreen may warn while the cert is self-signed.
 - Then R7 parity part 2: installer and uninstall (helper in Program Files, trust store step,
   sudo with Berke's yes), WPF `config.ini` import. Research `research/2026-11-24-r7-parity.md`.
   Open: brightness hotkeys and endpoint pinning (WPF had both); asked Berke whether he uses them,
