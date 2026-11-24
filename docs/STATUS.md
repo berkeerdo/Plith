@@ -31,9 +31,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   `plans/active/r5-shelf.md`, opus review: 5 important, all fixed).
 - **R4b output picker: parked** on worktree branch `worktree-agent-afd1c836624792461` (spec
   `specs/2026-11-24-r4b-media-output-picker-design.md`, research `research/2026-11-24-r4b-app-route.md`).
-  Probe over RDP: activation and Get OK, Set to `Remote Audio` gave `E_INVALIDARG`. Rerun with real
-  outputs (console, or RDP with sound "On the remote PC") before any UI work; UI code there is
-  written but never compiled.
+  Probe over RDP: Get OK, Set to `Remote Audio` gave `E_INVALIDARG`; rerun with real outputs
+  before any UI work (UI code there never compiled).
 - Settings window `c7e693a` (plan `plans/active/r7-settings.md`) and display relayout `42f29ac`
   (plan `plans/active/display-relayout.md`, Task 5 open): records in `journal/2026-11.md`.
 - Session display fix merged 2026-11-23 (`ac07a42`): suppression follows the session display.
@@ -69,7 +68,6 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   sudo with Berke's yes), WPF `config.ini` import. Research `research/2026-11-24-r7-parity.md`.
   Open: brightness hotkeys and endpoint pinning (WPF had both); asked Berke whether he uses them,
   his "evet öyle" was ambiguous: ask again before parity part 2.
-- R4b waits for its probe with real outputs (console, or RDP sound "On the remote PC").
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).
