@@ -49,21 +49,20 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
   Step 5); audio-clarity Task 8 box (he used the ruler, "cetvel çalışıyor"). Later: the guarded
   route write session.
-- 2026-11-24 later, all merged and pushed: shelf clean fix `6979c7a` (cross per wagon, `TEMİZLE`,
-  `GERİ AL` only when an undo exists, sky word `BERRAK`); clock on the marks band `ea65414`; R7
-  parity part 1 `ae94753` (spec `specs/2026-11-24-r7-parity-tray-design.md`, plan
-  `plans/active/r7-parity-tray.md`): tray icon, exe icon and version 0.4.0, Genel row `Windows
-  ile başlat` (HKCU Run `Plith`). Five checks: 1410 tests, structure 843/0, release. RDP: Berke
-  saw the themes and dragged in and out ("çalışıyor"), the shelf file was emptied by his remove;
-  `tray: icon added` logged. Tray menu, `Çıkış`, Explorer restart not yet seen.
-- **Next: redesign of the logo/icon and the whole settings window** (Berke 2026-11-24: "logo
-  iconunu ve komple ayarları güncelleriz"), plus the installer screens as one identity package
-  (Berke: "setup tasarımı da değişmeli"). Round 1 (`design/identity/`: directions, lever-frame
-  comps) REJECTED 2026-11-24: "bence tasarım baya kötü logo özellikle" (taste log). Round 2, my
-  call on his "önerin ne ise": logo first as its own job: line up the category's best real icons
-  (Oyenza, FluentFlyout, EarTrumpet, Win11 Fluent, macOS-grade), explore with an image model,
-  redraw the pick as a clean vector, image comps before code; then settings derived from it, a
-  metaphor only as a quiet detail. Ask him for references he likes if he has any.
+- R7 parity part 1 `ae94753` (tray, exe icon, 0.4.0, `Windows ile başlat`): tray menu, `Çıkış`
+  and an Explorer restart not yet seen (record in `journal/2026-11.md`).
+- **App icon done (ADR 0019):** lime speaker-fabric tile, black source at the top edge, three
+  tone-on-tone ripples; master `design/identity/icon/plith-master-1024.png`, `.ico` from
+  `scripts/build-icon.ps1`. Release rebuilt, icon read back from the exe, `tray: icon added`
+  (RDP, 19:09); Berke has not yet said how the tray looks. He: "kumaş kısmı anlaşılmıyor".
+- **Karot pill weather fix:** right text dropped by `CAP_RISE` (was 1.25 DIP above the time,
+  measured on a render), and it shows the weather now (`9° BULUTLU`), the turn only on the welcome
+  view (Berke picked it). Render re-measured; running on his session since 19:09.
+- **Next: settings window and installer screens derived from the icon** (identity package,
+  round 1 rejected). Rule from round 2: show every visual on a page he can open, never a local
+  path; image comps first, real materials from the image model, code draws flat shapes only.
+- **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a
+  small strip with info; every idle look gets a choice of what its details show. Brainstorm first.
 - Then R7 parity part 2 (`research/2026-11-24-r7-parity.md`): installer and uninstall (helper in
   Program Files, trust store, sudo with his yes), `config.ini` import, an update check. WPF 0.3.x
   users move over through its GitHub check if the asset stays `Plith-Setup-0.4.0.exe`. Ask again
@@ -113,8 +112,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   (atomic), no hatch geometry tests.
 
 ## Recent decisions
+- ADR 0019 The app icon is a lime speaker-fabric tile with a black source
+- ADR 0018 A file drag over the island opens the shelf
+- ADR 0017 Settings live in two layers: a quick page in the island and a full window
 - ADR 0016 The welcome view is reachable from the tab row
 - ADR 0015 Eight languages from one exhaustive table, the OSD word over the pipe
-- ADR 0014 Karot idle look: click opens welcome, settings and play files, weather sources
-- ADR 0013 Windows outputs get their own view, not a one-route diagram
-- ADR 0012 Upper case: Turkish rules for our copy, invariant for foreign names
