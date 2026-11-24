@@ -96,7 +96,7 @@ fn clock_pads_zero() {
 }
 
 #[test]
-fn clock_is_right_aligned_at_the_margin() {
+fn clock_sits_on_the_marks_band_left_of_the_gear() {
     let (nodes, _) = tabbar(Some(PageId::Audio), "21:47", Lang::Tr);
     let clock = nodes
         .iter()
@@ -111,8 +111,10 @@ fn clock_is_right_aligned_at_the_margin() {
             _ => None,
         })
         .expect("clock node");
-    assert!((clock.0.x + clock.0.w - 572.0).abs() < 1e-9);
-    assert!((clock.0.y + clock.0.h / 2.0 - 34.0).abs() < 1e-9);
+    // Right edge 564: a 12 DIP gap to the gear's hit area (578), not touching its glyph.
+    assert!((clock.0.x + clock.0.w - 564.0).abs() < 1e-9);
+    // Centred on the band of the home and gear marks (y 23), not on the track (y 34).
+    assert!((clock.0.y + clock.0.h / 2.0 - 23.0).abs() < 1e-9);
     assert_eq!(clock.1, Align::End);
     assert_eq!(clock.2, Ink::Muted);
 }
@@ -312,7 +314,10 @@ fn clock_moves_for_gear() {
             _ => None,
         })
         .expect("clock node");
-    assert!((clock.x + clock.w - 572.0).abs() < 1e-9);
+    assert!(
+        clock.x + clock.w < 578.0,
+        "the clock ends before the gear hit area"
+    );
 }
 
 #[test]

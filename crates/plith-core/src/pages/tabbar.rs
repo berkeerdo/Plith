@@ -26,9 +26,11 @@ const LABEL_Y: f64 = 12.0;
 const LABEL_H: f64 = 12.0;
 pub(crate) const LABEL_W: f64 = STEP - 16.0;
 const CLOCK_W: f64 = 80.0;
-/// How far the clock sits left of the right margin, to leave room for the gear.
-const CLOCK_SHIFT: f64 = 24.0;
-/// Clock box height: its top lands on the mock baseline 38 minus the mono 12 size.
+/// How far the clock sits left of the right margin: room for the gear and a clear gap, so the
+/// gear does not read as the clock's own control (Berke 2026-11-24).
+const CLOCK_SHIFT: f64 = 32.0;
+/// Clock box height. The box is centred on the home and gear marks' band (`HOME_Y`), so the
+/// clock and the gear sit on one row.
 const CLOCK_H: f64 = 16.0;
 /// How far the hit area reaches below the line.
 const HIT_BELOW: f64 = 6.0;
@@ -115,7 +117,7 @@ pub fn tabbar(active: Option<PageId>, clock: &str, lang: Lang) -> (Vec<Node>, Ve
         nodes.push(text(
             rect(
                 right_edge - CLOCK_W,
-                LINE_Y - CLOCK_H / 2.0,
+                HOME_Y - CLOCK_H / 2.0,
                 CLOCK_W,
                 CLOCK_H,
             ),
