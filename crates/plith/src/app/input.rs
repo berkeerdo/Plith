@@ -230,6 +230,9 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         Action::ShelfRemove(index) => {
             feed.shelf_remove(index, mailbox);
         }
+        Action::ShelfClear => {
+            feed.shelf_clear(mailbox);
+        }
         Action::ShelfUndo => {
             feed.shelf_undo(mailbox);
         }

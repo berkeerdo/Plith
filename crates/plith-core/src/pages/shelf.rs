@@ -13,7 +13,7 @@ use crate::draw::{Align, DisplayList, Ink, Node, StationMark, TextStyle};
 use crate::lang::{Lang, Text, text as word};
 use crate::shapes;
 use crate::shelf::ShelfItem;
-use crate::shelf::layout::{UNDO_W, UNDO_X, layout};
+use crate::shelf::layout::{RIGHT, UNDO_W, layout};
 
 /// The dashed drop box of the empty page (mock `rect x 30, y 58, W - 60, 70`).
 const BOX_X: f64 = 30.0;
@@ -21,7 +21,9 @@ const BOX_Y: f64 = 58.0;
 const BOX_H: f64 = 70.0;
 /// The siding line y of the empty page (mock 146).
 const SIDING_Y: f64 = 146.0;
-/// Where the undo word sits on the empty page, which has no footer.
+/// Where the undo word sits on the empty page, which has no footer and no clear word.
+const EMPTY_UNDO_X: f64 = RIGHT - UNDO_W;
+/// The y of that word.
 const EMPTY_UNDO_Y: f64 = 164.0;
 /// Extra page height of the empty shelf while an undo is offered.
 const EMPTY_UNDO_ROOM: f64 = 28.0;
@@ -55,7 +57,7 @@ pub fn shelf_page_with(view: &ShelfView, clock: &str, lang: Lang) -> PageBuild {
         if view.can_undo {
             // The undo word gets its own band below the siding line.
             height += EMPTY_UNDO_ROOM;
-            targets.push(undo_target(EMPTY_UNDO_Y));
+            targets.push(undo_target(EMPTY_UNDO_X, EMPTY_UNDO_Y));
         }
     } else {
         wagons::push(&mut nodes, &mut targets, view, &plan, lang);
@@ -74,10 +76,10 @@ pub fn shelf_page_with(view: &ShelfView, clock: &str, lang: Lang) -> PageBuild {
     }
 }
 
-/// The click target of the undo word, whose text box top is `y`.
-fn undo_target(y: f64) -> HitTarget {
+/// The click target of the undo word, whose text box left is `x` and top is `y`.
+fn undo_target(x: f64, y: f64) -> HitTarget {
     HitTarget {
-        rect: rect(UNDO_X, y, UNDO_W, 14.0),
+        rect: rect(x, y, UNDO_W, 14.0),
         action: Action::ShelfUndo,
     }
 }
@@ -125,7 +127,7 @@ fn empty_nodes(nodes: &mut Vec<Node>, view: &ShelfView, lang: Lang) {
     nodes.push(station(right, SIDING_Y, StationMark::Hollow, Ink::Faint));
     if view.can_undo {
         nodes.push(text(
-            rect(UNDO_X, EMPTY_UNDO_Y, UNDO_W, 12.0),
+            rect(EMPTY_UNDO_X, EMPTY_UNDO_Y, UNDO_W, 12.0),
             word(Text::ShelfUndo, lang),
             TextStyle::Label,
             Ink::Muted,

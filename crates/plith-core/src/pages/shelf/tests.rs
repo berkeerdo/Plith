@@ -142,7 +142,7 @@ fn a_wagon_shows_its_tag_name_and_the_footer() {
     assert!(all.contains(&"gorseli 0.png".to_string()));
     assert!(all.contains(&"BIRAK".to_string()));
     assert!(all.contains(&"2 DOSYA · SÜRÜKLE, BIRAK".to_string()));
-    assert!(all.contains(&"GERİ AL".to_string()));
+    assert!(all.contains(&"TEMİZLE".to_string()));
 }
 
 #[test]
@@ -182,14 +182,84 @@ fn the_slot_is_dashed_faint_and_hot_while_a_drag_hovers() {
 }
 
 #[test]
-fn a_press_on_a_station_removes_and_on_the_body_picks_the_wagon() {
+fn a_press_on_the_cross_removes_and_on_the_body_picks_the_wagon() {
     let p = page(2, false, false);
     let wagon = crate::shelf::layout::layout(2).wagons[1];
-    let on_station = crate::pages::hit(&p.targets, wagon.stations[0], wagon.track_y);
-    assert_eq!(on_station, Some(Action::ShelfRemove(1)));
+    let on_cross = crate::pages::hit(&p.targets, wagon.cross.0, wagon.cross.1);
+    assert_eq!(on_cross, Some(Action::ShelfRemove(1)));
+    // The cross target wins over the wagon body at its edge too.
+    let corner = crate::pages::hit(&p.targets, wagon.cross.0 + 11.0, wagon.cross.1 - 11.0);
+    assert_eq!(corner, Some(Action::ShelfRemove(1)));
     let on_body = crate::pages::hit(&p.targets, wagon.rect.x + 50.0, wagon.rect.y + 40.0);
     assert_eq!(on_body, Some(Action::ShelfWagon(1)));
+    // The track under the wagon is no longer a remove target.
+    let on_track = crate::pages::hit(&p.targets, wagon.stations[0], wagon.track_y);
+    assert_eq!(on_track, None);
     assert_eq!(crate::pages::hit(&p.targets, 400.0, 100.0), None);
+}
+
+#[test]
+fn every_wagon_draws_a_faint_cross_in_its_top_right_corner() {
+    let p = page(3, false, false);
+    let plan = crate::shelf::layout::layout(3);
+    for wagon in &plan.wagons {
+        let (cx, cy) = wagon.cross;
+        let strokes = p
+            .list
+            .nodes
+            .iter()
+            .filter(|n| match n {
+                Node::Stroke {
+                    points,
+                    width,
+                    ink: Ink::Faint,
+                    dashed: false,
+                } => {
+                    *width == 1.0
+                        && points.len() == 2
+                        && points.iter().all(|&(x, y)| {
+                            (x - cx).abs() <= 5.0 + 1e-9 && (y - cy).abs() <= 5.0 + 1e-9
+                        })
+                }
+                _ => false,
+            })
+            .count();
+        assert_eq!(strokes, 2, "two diagonals at {cx},{cy}");
+    }
+}
+
+#[test]
+fn the_clear_word_shows_only_when_the_shelf_has_items() {
+    let has_clear = |p: &PageBuild| p.targets.iter().any(|t| t.action == Action::ShelfClear);
+    assert!(texts(&page(2, false, false)).contains(&"TEMİZLE".to_string()));
+    assert!(has_clear(&page(2, false, false)));
+    assert!(!texts(&page(0, false, true)).contains(&"TEMİZLE".to_string()));
+    assert!(!has_clear(&page(0, false, true)));
+}
+
+#[test]
+fn the_clear_target_sits_on_the_clear_word_and_clear_wins_over_nothing_else() {
+    let p = page(3, false, true);
+    let plan = crate::shelf::layout::layout(3);
+    let x = plan.clear.x + plan.clear.w - 10.0;
+    let y = plan.footer_y - 4.0;
+    assert_eq!(
+        crate::pages::hit(&p.targets, x, y),
+        Some(Action::ShelfClear)
+    );
+    let ux = plan.undo.x + plan.undo.w - 10.0;
+    assert_eq!(
+        crate::pages::hit(&p.targets, ux, y),
+        Some(Action::ShelfUndo)
+    );
+}
+
+#[test]
+fn the_undo_word_is_drawn_only_when_an_undo_is_possible() {
+    assert!(!texts(&page(2, false, false)).contains(&"GERİ AL".to_string()));
+    assert!(texts(&page(2, false, true)).contains(&"GERİ AL".to_string()));
+    assert!(!texts(&page(0, false, false)).contains(&"GERİ AL".to_string()));
+    assert!(texts(&page(0, false, true)).contains(&"GERİ AL".to_string()));
 }
 
 #[test]

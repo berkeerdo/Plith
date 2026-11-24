@@ -7,7 +7,9 @@ use crate::lang::{Lang, Text, files, text as word};
 use crate::pages::kit::{line, rect, station, text, text_trim};
 use crate::pages::{Action, HitTarget};
 use crate::shelf::kind::{display_name, type_tag};
-use crate::shelf::layout::{FOOTER_X, LEFT, Layout, RIGHT, UNDO_W, UNDO_X};
+use crate::shelf::layout::{
+    CLEAR_W, CLEAR_X, CROSS_SIZE, FOOTER_X, LEFT, Layout, RIGHT, TAG_W, UNDO_W, UNDO_X,
+};
 use crate::shelf::name::name_lines;
 
 /// Text left inset inside a wagon and its width (a 104 wide wagon, 10 in from each side).
@@ -50,7 +52,7 @@ pub(super) fn push(
         let r = wagon.rect;
         nodes.push(outline(r, Ink::Track, false));
         nodes.push(text(
-            rect(r.x + INSET, r.y + TAG_DY, r.w - 2.0 * INSET, 12.0),
+            rect(r.x + INSET, r.y + TAG_DY, TAG_W, 12.0),
             &type_tag(item, lang),
             TextStyle::Label,
             Ink::Faint,
@@ -79,6 +81,7 @@ pub(super) fn push(
         for x in wagon.stations {
             nodes.push(station(x, wagon.track_y, StationMark::Filled, Ink::Ink));
         }
+        push_cross(nodes, wagon.cross);
         targets.push(HitTarget {
             rect: wagon.remove,
             action: Action::ShelfRemove(index),
@@ -94,6 +97,21 @@ pub(super) fn push(
         push_slot(nodes, view.hot, slot, plan, lang);
     }
     push_footer(nodes, targets, view, plan, lang);
+}
+
+/// The remove mark: two thin diagonals centred on `(cx, cy)`.
+fn push_cross(nodes: &mut Vec<Node>, (cx, cy): (f64, f64)) {
+    let h = CROSS_SIZE / 2.0;
+    nodes.push(line(
+        vec![(cx - h, cy - h), (cx + h, cy + h)],
+        1.0,
+        Ink::Faint,
+    ));
+    nodes.push(line(
+        vec![(cx - h, cy + h), (cx + h, cy - h)],
+        1.0,
+        Ink::Faint,
+    ));
 }
 
 /// The dashed slot with its word, and the hollow station that ends the track of its row.
@@ -136,19 +154,26 @@ fn push_footer(
         Ink::Faint,
         Align::Start,
     ));
-    let ink = if view.can_undo {
-        Ink::Muted
-    } else {
-        Ink::Faint
-    };
     nodes.push(text(
-        rect(UNDO_X, top, UNDO_W, 12.0),
-        word(Text::ShelfUndo, lang),
+        rect(CLEAR_X, top, CLEAR_W, 12.0),
+        word(Text::ShelfClear, lang),
         TextStyle::Label,
-        ink,
+        Ink::Muted,
         Align::End,
     ));
+    targets.push(HitTarget {
+        rect: rect(CLEAR_X, top - 2.0, CLEAR_W, 14.0),
+        action: Action::ShelfClear,
+    });
+    // The undo word exists only while there is something to take back.
     if view.can_undo {
-        targets.push(undo_target(top - 2.0));
+        nodes.push(text(
+            rect(UNDO_X, top, UNDO_W, 12.0),
+            word(Text::ShelfUndo, lang),
+            TextStyle::Label,
+            Ink::Muted,
+            Align::End,
+        ));
+        targets.push(undo_target(UNDO_X, top - 2.0));
     }
 }

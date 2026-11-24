@@ -58,6 +58,7 @@ pub fn text(t: Text) -> &'static str {
         Text::Source => "Quelle",
         Text::ShelfSlot => "ABLEGEN",
         Text::ShelfUndo => "RÜCKGÄNGIG",
+        Text::ShelfClear => "LEEREN",
         Text::ShelfFooter => "ZIEHEN, ABLEGEN",
         Text::ShelfFolder => "ORDNER",
         Text::ShelfFile => "DATEI",

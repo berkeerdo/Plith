@@ -15,7 +15,7 @@ use crate::pages::system::{CUT_FROM, CUT_TO, LABEL_W, RIGHT, VALUE_W as VALUE_BO
 use crate::pages::tabbar::LABEL_W as TAB_W;
 use crate::pages::welcome::{LINE_W, RUN_LABEL_W};
 use crate::pages::{MARGIN_LEFT, PAGE_W, pill};
-use crate::shelf::layout::{FOOTER_X, SLOT_MIN_W, UNDO_W, UNDO_X, WAGON_W};
+use crate::shelf::layout::{CLEAR_W, FOOTER_X, SLOT_MIN_W, TAG_W, UNDO_W, UNDO_X};
 use crate::weather::Sky;
 
 /// The OSD value slot (`plith-osd`, `VALUE_LEFT` 236 to the 284 edge). A test in `plith-osd`
@@ -126,22 +126,28 @@ fn shelf_places(lang: Lang) -> Vec<Place> {
         ),
         place("shelf undo", t(Text::ShelfUndo), label, Budget::Dip(UNDO_W)),
         place(
+            "shelf clear",
+            t(Text::ShelfClear),
+            label,
+            Budget::Dip(CLEAR_W),
+        ),
+        place(
             "shelf folder tag",
             t(Text::ShelfFolder),
             label,
-            Budget::Dip(WAGON_W - 20.0),
+            Budget::Dip(TAG_W),
         ),
         place(
             "shelf file tag",
             t(Text::ShelfFile),
             label,
-            Budget::Dip(WAGON_W - 20.0),
+            Budget::Dip(TAG_W),
         ),
         place(
             "shelf footer",
             format!("{} \u{b7} {}", files(8, lang), t(Text::ShelfFooter)),
             label,
-            Budget::Dip(UNDO_X - FOOTER_X),
+            Budget::Dip(UNDO_X - FOOTER_X - 8.0),
         ),
     ]
 }

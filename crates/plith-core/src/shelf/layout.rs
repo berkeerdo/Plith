@@ -31,14 +31,24 @@ pub const ONE_ROW_HEIGHT: f64 = 214.0;
 pub const EMPTY_HEIGHT: f64 = 170.0;
 /// Distance of a station from the wagon edge.
 pub const STATION_INSET: f64 = 20.0;
-/// Half the height of the remove target around a track.
-const REMOVE_HALF_H: f64 = 9.0;
-/// How far the remove target stays in from the wagon edge.
-const REMOVE_INSET: f64 = 8.0;
+/// Width and height of the remove cross, drawn.
+pub const CROSS_SIZE: f64 = 10.0;
+/// Distance of the cross centre from the wagon's top and right edges.
+const CROSS_INSET: f64 = 14.0;
+/// Width and height of the remove target around the cross.
+const CROSS_TARGET: f64 = 24.0;
+/// Width the type tag may use: it stops where the remove target starts.
+pub const TAG_W: f64 = WAGON_W - CROSS_INSET - CROSS_TARGET / 2.0 - 10.0;
 /// Width and height of the undo word's target.
 pub const UNDO_W: f64 = 84.0;
-/// Left edge of the undo word.
-pub const UNDO_X: f64 = RIGHT - UNDO_W;
+/// Width of the clear word's target, at the right end of the footer.
+pub const CLEAR_W: f64 = 76.0;
+/// Left edge of the clear word.
+pub const CLEAR_X: f64 = RIGHT - CLEAR_W;
+/// Gap between the undo word and the clear word.
+const FOOTER_GAP: f64 = 8.0;
+/// Left edge of the undo word, before the clear word.
+pub const UNDO_X: f64 = CLEAR_X - FOOTER_GAP - UNDO_W;
 /// Left edge of the footer line.
 pub const FOOTER_X: f64 = LEFT;
 /// The narrowest the drop slot gets: the one at the fifth cell of a row.
@@ -54,7 +64,9 @@ pub struct Wagon {
     pub track_y: f64,
     /// The x of its two stations.
     pub stations: [f64; 2],
-    /// The click target that removes it: the stretch of track under the wagon.
+    /// The centre of the remove cross, in the top right corner of the wagon.
+    pub cross: (f64, f64),
+    /// The click target that removes it: a square around the cross.
     pub remove: Rect,
 }
 
@@ -73,6 +85,8 @@ pub struct Layout {
     pub footer_y: f64,
     /// The undo word's click target, at the right end of the footer.
     pub undo: Rect,
+    /// The clear word's click target, at the right end of the footer.
+    pub clear: Rect,
 }
 
 fn row_top(row: usize) -> f64 {
@@ -100,12 +114,8 @@ pub fn layout(count: usize) -> Layout {
             slot: None,
             tracks: Vec::new(),
             footer_y: 0.0,
-            undo: Rect {
-                x: 0.0,
-                y: 0.0,
-                w: 0.0,
-                h: 0.0,
-            },
+            undo: Rect::default(),
+            clear: Rect::default(),
         };
     }
     // The slot is the cell after the last wagon: a full row of four keeps it on that row, at
@@ -142,12 +152,19 @@ pub fn layout(count: usize) -> Layout {
             w: UNDO_W,
             h: UNDO_H,
         },
+        clear: Rect {
+            x: CLEAR_X,
+            y: footer_y - 12.0,
+            w: CLEAR_W,
+            h: UNDO_H,
+        },
     }
 }
 
 fn wagon(row: usize, col: usize) -> Wagon {
     let (x, y) = (col_x(col), row_top(row));
     let track_y = y + (TRACK_Y - TOP);
+    let (cx, cy) = (x + WAGON_W - CROSS_INSET, y + CROSS_INSET);
     Wagon {
         rect: Rect {
             x,
@@ -157,11 +174,12 @@ fn wagon(row: usize, col: usize) -> Wagon {
         },
         track_y,
         stations: [x + STATION_INSET, x + WAGON_W - STATION_INSET],
+        cross: (cx, cy),
         remove: Rect {
-            x: x + REMOVE_INSET,
-            y: track_y - REMOVE_HALF_H,
-            w: WAGON_W - 2.0 * REMOVE_INSET,
-            h: 2.0 * REMOVE_HALF_H,
+            x: cx - CROSS_TARGET / 2.0,
+            y: cy - CROSS_TARGET / 2.0,
+            w: CROSS_TARGET,
+            h: CROSS_TARGET,
         },
     }
 }

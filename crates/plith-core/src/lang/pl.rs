@@ -56,6 +56,7 @@ pub fn text(t: Text) -> &'static str {
         Text::Source => "Źródło",
         Text::ShelfSlot => "UPUŚĆ",
         Text::ShelfUndo => "COFNIJ",
+        Text::ShelfClear => "WYCZYŚĆ",
         Text::ShelfFooter => "PRZECIĄGNIJ, UPUŚĆ",
         Text::ShelfFolder => "FOLDER",
         Text::ShelfFile => "PLIK",
