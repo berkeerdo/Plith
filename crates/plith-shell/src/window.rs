@@ -5,8 +5,11 @@
 //! through (see `hit`).
 
 pub(crate) mod display;
+mod event;
 pub(crate) mod mouse;
 pub(crate) mod state;
+
+pub use event::ShellEvent;
 
 use crate::handles::hwnd_of;
 use crate::hit::apply::apply_latest;
@@ -39,76 +42,6 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::{PCWSTR, w};
 
 const VISUAL_CLASS: PCWSTR = w!("Plith.Notch");
-
-/// Something the app has to react to.
-#[derive(Debug, Clone, PartialEq)]
-pub enum ShellEvent {
-    /// The left button went down on the island and was released inside the drawn island shape,
-    /// at `(x, y)` DIP relative to the island's top-left (the release point).
-    Click {
-        /// Horizontal island DIP.
-        x: f64,
-        /// Vertical island DIP.
-        y: f64,
-    },
-    /// The left button went down on the island shape, at `(x, y)` island DIP.
-    Press {
-        /// Horizontal island DIP.
-        x: f64,
-        /// Vertical island DIP.
-        y: f64,
-    },
-    /// The pressed pointer moved to a new point past the drag slop, at `(x, y)` island DIP. The
-    /// point is not clamped to the shape and may lie outside the window.
-    Drag {
-        /// Horizontal island DIP.
-        x: f64,
-        /// Vertical island DIP.
-        y: f64,
-    },
-    /// A drag ended (button up or lost capture) at `(x, y)` island DIP, not clamped to the
-    /// shape. A press that never passed the slop ends as a `Click` instead.
-    Release {
-        /// Horizontal island DIP.
-        x: f64,
-        /// Vertical island DIP.
-        y: f64,
-    },
-    /// The pointer moved over the window for the first time since it last left.
-    Enter,
-    /// The pointer moved to a new point inside the drawn island shape, at `(x, y)` DIP relative
-    /// to the island's top-left. The shell does not know whether the island is open; the app
-    /// decides what a move means.
-    Move {
-        /// Horizontal island DIP.
-        x: f64,
-        /// Vertical island DIP.
-        y: f64,
-    },
-    /// The pointer left the window region (the island shape, ADR 0004).
-    Leave,
-    /// The DPI or the display configuration changed and the window was moved to this display;
-    /// the render thread must follow it.
-    DisplayChanged(Display),
-    /// The window is about to be destroyed (`WM_CLOSE`): stop anything that presents to it.
-    Closing,
-    /// The suppression state changed; republish the scene with it.
-    Suppression(Suppression),
-    /// A service thread called [`UiWaker::wake`]; re-read whatever the services published.
-    Wake,
-    /// App timer `id` (set through [`TimerHandle`]) ticked.
-    Timer(usize),
-    /// A foreground change reached the topmost fight.
-    Raised {
-        /// Class name of the new foreground window, or `?` when it is already gone.
-        foreground: String,
-        /// Class name of the nearest visible window that sat above ours before the raise.
-        /// `None` when nothing visible was above, or when the change was debounced.
-        above: Option<String>,
-        /// `true` when the windows were raised now, `false` when only the retry timer re-armed.
-        immediate: bool,
-    },
-}
 
 /// Runs `f` and turns a panic into `Err("<label> panicked: <payload>")`. The window procedure
 /// and the foreground hook run every callback through it: a panic must not unwind out of an
@@ -201,6 +134,9 @@ fn build(inner: &Inner) -> windows::core::Result<()> {
     inner.visual.set(visual.0 as isize);
     place(visual, rect)?;
     suppress::register(inner, visual)?;
+    if let Err(error) = crate::drag_in::register(visual) {
+        *inner.drop_error.borrow_mut() = Some(error.to_string());
+    }
     let hook = topmost::install_hook()?;
     inner.registrations.borrow_mut().win_event_hook = Some(hook);
     apply_latest(inner);
@@ -313,6 +249,12 @@ impl Shell {
         self.inner.culprit.borrow().clone()
     }
 
+    /// Why the window takes no file drops, when the drop target could not be registered.
+    #[must_use]
+    pub fn drop_target_error(&self) -> Option<String> {
+        self.inner.drop_error.borrow().clone()
+    }
+
     /// The current suppression state.
     #[must_use]
     pub fn suppression(&self) -> Suppression {
@@ -323,6 +265,7 @@ impl Shell {
 impl Drop for Shell {
     fn drop(&mut self) {
         let visual = hwnd_of(self.inner.visual.get());
+        crate::drag_in::revoke(visual);
         // SAFETY: IsWindow accepts any handle; DestroyWindow runs on the owning thread because
         // `Shell` is not `Send`. WM_DESTROY still finds the state, which is cleared afterwards.
         unsafe {
@@ -356,6 +299,7 @@ pub fn run_message_loop() -> i32 {
 }
 
 fn on_destroy(inner: &Inner, hwnd: HWND) {
+    crate::drag_in::revoke(hwnd);
     topmost::kill_timer(inner);
     if let Some(hook) = inner.registrations.borrow_mut().win_event_hook.take() {
         topmost::remove_hook(hook);
@@ -461,6 +405,12 @@ fn dispatch(
         WM_POWERBROADCAST if is_visual => suppress::on_power(inner, wparam, lparam),
         WM_WTSSESSION_CHANGE if is_visual => suppress::on_session(inner, wparam),
         WM_APP_BAR if is_visual => suppress::on_appbar(inner, wparam, lparam),
+        // Inside the drag out's modal loop the app handler is mid-call and the window must
+        // outlive `DoDragDrop`: the close waits until the drag ends.
+        WM_CLOSE if is_visual && inner.dragging_out.get() => {
+            inner.close_pending.set(true);
+            return Some(LRESULT(0));
+        }
         WM_CLOSE if is_visual => inner.emit(ShellEvent::Closing),
         WM_DESTROY if is_visual => {
             on_destroy(inner, hwnd);

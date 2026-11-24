@@ -6,6 +6,7 @@ pub mod drag;
 mod idle;
 mod osd;
 mod settings;
+mod shelf;
 
 use super::idle_facts::Idle;
 use super::weather_link::WeatherLink;
@@ -16,6 +17,7 @@ use plith_core::input::{MixerShape, pick_within, route_allowed};
 use plith_core::lang::Lang;
 use plith_core::pages::audio::PickMode;
 use plith_core::pages::idle_pill::IdleFacts;
+use plith_core::pages::shelf::ShelfView;
 use plith_core::pages::tabbar::clock_text;
 use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PageId};
@@ -138,6 +140,8 @@ pub struct Feed {
     drag: Option<drag::Override>,
     /// The settings window is open: its pill previews need the minute clock.
     sheet_open: bool,
+    /// The shelf items, the hot slot and the saver.
+    shelf: shelf::ShelfState,
 }
 
 impl Feed {
@@ -160,6 +164,7 @@ impl Feed {
             clock: &clock_text,
             welcome: None,
             probe: None,
+            shelf: ShelfView::default(),
             idle: None,
             lang,
         });
@@ -184,6 +189,7 @@ impl Feed {
             lang,
             drag: None,
             sheet_open: false,
+            shelf: shelf::ShelfState::default(),
         };
         feed.publish(mailbox);
         feed
@@ -207,6 +213,7 @@ impl Feed {
             clock: &self.clock_text,
             welcome: self.welcome.as_ref(),
             probe: self.probe,
+            shelf: self.shelf.view(),
             idle: self
                 .idle
                 .as_ref()

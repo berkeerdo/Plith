@@ -54,5 +54,10 @@ pub fn text(t: Text) -> &'static str {
         Text::NothingPlaying => "Nothing playing",
         Text::MediaHint => "Appears here when Spotify, a browser or a game makes sound.",
         Text::Source => "Source",
+        Text::ShelfSlot => "DROP",
+        Text::ShelfUndo => "UNDO",
+        Text::ShelfFooter => "DRAG, DROP",
+        Text::ShelfFolder => "FOLDER",
+        Text::ShelfFile => "FILE",
     }
 }

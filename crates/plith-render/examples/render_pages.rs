@@ -6,6 +6,7 @@
 //! Run: `cargo run --release -p plith-render --example render_pages`. With a folder argument
 //! (`-- <new folder>`) it renders only the idle look states of the R7 mock (the welcome view and
 //! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
+//! `--shelf <new folder>` renders the shelf page with 0 to 8 wagons and the hot slot.
 //! `--quick <new folder>` renders the quick page and every tab row at 1x and 2x in Turkish and
 //! German. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
 //! error) and `--out <new folder>` names the folder of the page states.
@@ -32,6 +33,8 @@ use std::time::{SystemTime, UNIX_EPOCH};
 mod idle_states;
 #[path = "render_pages/quick_states.rs"]
 mod quick_states;
+#[path = "render_pages/shelf_states.rs"]
+mod shelf_states;
 
 use windows::Win32::Foundation::GENERIC_WRITE;
 use windows::Win32::Graphics::Imaging::{
@@ -304,6 +307,7 @@ struct Args {
     out: Option<PathBuf>,
     idle: Option<PathBuf>,
     quick: Option<PathBuf>,
+    shelf: Option<PathBuf>,
 }
 
 fn parse_args() -> std::result::Result<Args, String> {
@@ -312,6 +316,7 @@ fn parse_args() -> std::result::Result<Args, String> {
         out: None,
         idle: None,
         quick: None,
+        shelf: None,
     };
     let mut it = std::env::args_os().skip(1);
     while let Some(arg) = it.next() {
@@ -325,6 +330,7 @@ fn parse_args() -> std::result::Result<Args, String> {
                     .ok_or_else(|| format!("unknown language code `{code}`"))?;
             }
             Some("--quick") => args.quick = Some(it.next().ok_or("--quick needs a folder")?.into()),
+            Some("--shelf") => args.shelf = Some(it.next().ok_or("--shelf needs a folder")?.into()),
             Some("--out") => args.out = Some(it.next().ok_or("--out needs a folder")?.into()),
             Some(flag) if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ if args.idle.is_none() => args.idle = Some(arg.into()),
@@ -364,11 +370,27 @@ fn render_quick(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error
     Ok(())
 }
 
+/// Renders the shelf page states in `lang` into the new folder `dir`.
+fn render_shelf(dir: &Path, lang: Lang) -> std::result::Result<(), Box<dyn std::error::Error>> {
+    let dir = out_dir(Some(dir))?;
+    for (name, contents) in shelf_states::states(lang) {
+        write_png(
+            &dir.join(format!("{name}.png")),
+            &cell(&contents, Theme::Gece)?,
+        )?;
+    }
+    println!("{}", dir.display());
+    Ok(())
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     let args = parse_args()?;
     let lang = args.lang;
+    if let Some(dir) = &args.shelf {
+        return render_shelf(dir, lang);
+    }
     if let Some(dir) = &args.quick {
         return render_quick(dir);
     }

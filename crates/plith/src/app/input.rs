@@ -20,6 +20,7 @@ impl App {
     /// A click at `(x, y)` island DIP: expands a collapsed island, runs the action of the page
     /// target under it, or does nothing on empty page space.
     pub(super) fn on_click(&mut self, x: f64, y: f64) {
+        self.forget_wagon_press();
         let expanded = self.mailbox.latest().scene.expanded;
         let layers = self
             .shapes
@@ -54,7 +55,7 @@ impl App {
 
     /// Opens the island (on `page`, when given) with the pages brought up to date first, in
     /// one scene publish after the content publish. Opening on another page ends a pick.
-    fn expand_on(&mut self, page: Option<PageId>) {
+    pub(super) fn expand_on(&mut self, page: Option<PageId>) {
         self.cancel_collapse();
         if let Some(feed) = &mut self.feed {
             if page.is_some_and(|p| p != PageId::Audio) {
@@ -98,7 +99,7 @@ impl App {
     }
 
     /// Turns to `page`; leaving the audio page ends a pick.
-    fn turn_to(&mut self, page: PageId) {
+    pub(super) fn turn_to(&mut self, page: PageId) {
         if let (true, Some(feed)) = (page != PageId::Audio, self.feed.as_mut()) {
             feed.set_pick(PickMode::None, &self.mailbox);
         }
@@ -150,7 +151,7 @@ impl App {
         self.cancel_collapse();
     }
 
-    fn cancel_collapse(&mut self) {
+    pub(super) fn cancel_collapse(&mut self) {
         if self.collapse.leave_at.is_none() {
             return;
         }
@@ -226,6 +227,12 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
             feed.set_pick(PickMode::None, mailbox);
         }
         Action::CancelPick => feed.set_pick(PickMode::None, mailbox),
+        Action::ShelfRemove(index) => {
+            feed.shelf_remove(index, mailbox);
+        }
+        Action::ShelfUndo => {
+            feed.shelf_undo(mailbox);
+        }
         Action::SetDefaultEndpoint(id) => feed.services().set_default_endpoint(&id),
         Action::ToggleMic => feed.services().toggle_mic(),
         Action::SetVolume(percent) => feed.services().set_volume(percent),
@@ -247,6 +254,7 @@ fn dispatch(feed: &mut Feed, mailbox: &SceneMailbox, action: Action) {
         Action::Tab(_)
         | Action::Look(_)
         | Action::OpenSettings
+        | Action::ShelfWagon(_)
         | Action::SeekRuler(_)
         | Action::BrightnessRuler(_)
         | Action::VolumeRuler(_) => {}

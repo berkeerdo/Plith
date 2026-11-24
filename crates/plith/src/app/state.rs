@@ -4,6 +4,7 @@ use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::input::drag::ActiveDrag;
 use super::saver::Saver;
+use super::shelf::{SHELF_TIMER, ShelfHost};
 use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
 use crate::log::LogFile;
@@ -86,6 +87,8 @@ pub struct App {
     normal_run: bool,
     /// The ruler drag under way, from the press to the release.
     pub(super) drag: Option<ActiveDrag>,
+    /// The shelf: the file drag hover, the wagon pressed and the drag out.
+    pub(super) shelf: ShelfHost,
     /// The settings of the run; the app is their one owner and applies every change.
     settings: Settings,
     /// The look the settings file holds while `--idle-look` overrides it for this run: saves
@@ -122,6 +125,7 @@ impl App {
             collapse: CollapseTimer::default(),
             demo: None,
             drag: None,
+            shelf: ShelfHost::default(),
             weather: None,
             osd: None,
             normal_run: false,
@@ -220,6 +224,17 @@ impl App {
             ShellEvent::Move { x, y } => self.on_move(x, y),
             ShellEvent::Leave => self.on_leave(),
             ShellEvent::Timer(COLLAPSE_TIMER) => self.on_collapse_tick(),
+            ShellEvent::Timer(SHELF_TIMER) => self.on_shelf_tick(),
+            ShellEvent::DragEnter {
+                x,
+                y,
+                formats,
+                effect,
+            } => self.on_drag_enter(formats, effect, (x, y)),
+            ShellEvent::DragOver { .. } => self.on_drag_over(),
+            ShellEvent::DragLeave => self.on_drag_leave(),
+            ShellEvent::DragRefused { formats } => self.on_drag_refused(formats),
+            ShellEvent::Drop { paths } => self.on_drop(&paths),
             ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
@@ -239,6 +254,7 @@ impl App {
                     feed.on_wake(&self.mailbox);
                 }
                 self.drain_sheet();
+                self.drain_shelf_load();
             }
             ShellEvent::Timer(id) => {
                 if let Some(feed) = &mut self.feed {

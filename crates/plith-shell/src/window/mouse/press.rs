@@ -103,7 +103,6 @@ impl PressRecord {
     }
 
     /// Forgets the press.
-    #[cfg(test)]
     pub(crate) fn cancel(&self) {
         self.0.set(None);
     }

@@ -15,6 +15,7 @@ mod pages;
 mod plays_file;
 mod services;
 mod settings_file;
+mod shelf_file;
 
 use plith_core::launch::Launch;
 

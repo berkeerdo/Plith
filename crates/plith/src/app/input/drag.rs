@@ -31,6 +31,7 @@ impl App {
     /// a press elsewhere does nothing (its click, if any, comes on the release).
     pub(in crate::app) fn on_press(&mut self, x: f64, y: f64) {
         self.drag = None;
+        self.note_wagon_press(x, y);
         if !self.mailbox.latest().scene.expanded {
             return;
         }
@@ -54,6 +55,9 @@ impl App {
     /// The pointer moved to `(x, y)` with a press held: shows the value and writes it when the
     /// throttle allows.
     pub(in crate::app) fn on_drag(&mut self, x: f64, _y: f64) {
+        if self.take_wagon_drag() {
+            return;
+        }
         let now = (self.now)();
         let (Some(drag), Some(feed)) = (self.drag.as_mut(), self.feed.as_mut()) else {
             return;
@@ -71,6 +75,7 @@ impl App {
     /// The press ended after a drag at `(x, y)`: writes the final value (the only seek write)
     /// and ends the drag. The shown value stays until the reading catches up.
     pub(in crate::app) fn on_release(&mut self, x: f64, _y: f64) {
+        self.forget_wagon_press();
         let now = (self.now)();
         let (Some(drag), Some(feed)) = (self.drag.take(), self.feed.as_mut()) else {
             return;

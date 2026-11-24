@@ -151,6 +151,23 @@ pub(crate) fn note_move(inner: &Inner) -> bool {
     true
 }
 
+/// Asks for the next `WM_MOUSELEAVE` right now and counts the tracking as armed. After a drag
+/// (in or out) OLE owned the mouse, so the usual first-move arming may never happen.
+pub(crate) fn rearm_leave(inner: &Inner) {
+    inner.last_point.set(None);
+    let mut track = TRACKMOUSEEVENT {
+        cbSize: u32::try_from(size_of::<TRACKMOUSEEVENT>()).unwrap_or(0),
+        dwFlags: TME_LEAVE,
+        hwndTrack: hwnd_of(inner.visual.get()),
+        dwHoverTime: 0,
+    };
+    // SAFETY: `track` is a fully initialised TRACKMOUSEEVENT that lives for the whole call and
+    // names the notch window of this thread. A failure clears the flag, so the next move asks
+    // again.
+    let armed = unsafe { TrackMouseEvent(&raw mut track) }.is_ok();
+    inner.tracking.set(armed);
+}
+
 /// Notes the pointer at `lparam`: a point inside the drawn shape that differs from the last one
 /// emitted becomes a `Move`. No timer and no repeat for a pointer at rest.
 pub(crate) fn note_point(inner: &Inner, lparam: LPARAM) {

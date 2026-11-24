@@ -36,6 +36,20 @@ fn french_zero_and_one_are_singular() {
 }
 
 #[test]
+fn file_counts_follow_each_language() {
+    assert_eq!(files(4, Lang::Tr), "4 DOSYA");
+    assert_eq!(files(1, Lang::En), "1 FILE");
+    assert_eq!(files(8, Lang::En), "8 FILES");
+    assert_eq!(files(1, Lang::De), "1 DATEI");
+    assert_eq!(files(2, Lang::De), "2 DATEIEN");
+    assert_eq!(files(3, Lang::It), "3 FILE");
+    assert_eq!(files(1, Lang::Pl), "1 PLIK");
+    assert_eq!(files(3, Lang::Pl), "3 PLIKI");
+    assert_eq!(files(5, Lang::Pl), "5 PLIKÓW");
+    assert_eq!(files(8, Lang::Pl), "8 PLIKÓW");
+}
+
+#[test]
 fn dates_both_languages() {
     assert_eq!(date_short(1, 17, 11, Lang::Tr), "SAL 17 KAS");
     assert_eq!(date_short(1, 17, 11, Lang::En), "TUE 17 NOV");
@@ -151,6 +165,11 @@ fn turkish_copy_is_unchanged() {
             "Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.",
         ),
         (Text::Source, "Kaynak"),
+        (Text::ShelfFolder, "KLASÖR"),
+        (Text::ShelfFile, "DOSYA"),
+        (Text::ShelfSlot, "BIRAK"),
+        (Text::ShelfUndo, "GERİ AL"),
+        (Text::ShelfFooter, "SÜRÜKLE, BIRAK"),
     ];
     for (t, s) in expected {
         assert_eq!(text(t, Lang::Tr), s, "{t:?}");

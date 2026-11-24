@@ -53,5 +53,10 @@ pub fn text(t: Text) -> &'static str {
         Text::NothingPlaying => "Çalan bir şey yok",
         Text::MediaHint => "Spotify, tarayıcı ya da bir oyun ses verdiğinde burada görünür.",
         Text::Source => "Kaynak",
+        Text::ShelfSlot => "BIRAK",
+        Text::ShelfUndo => "GERİ AL",
+        Text::ShelfFooter => "SÜRÜKLE, BIRAK",
+        Text::ShelfFolder => "KLASÖR",
+        Text::ShelfFile => "DOSYA",
     }
 }

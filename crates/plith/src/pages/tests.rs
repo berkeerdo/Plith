@@ -16,6 +16,7 @@ fn inputs(facts: &Facts) -> Inputs<'_> {
         clock: "21:47",
         welcome: None,
         probe: None,
+        shelf: ShelfView::default(),
         idle: None,
         lang: Lang::Tr,
     }

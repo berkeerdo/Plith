@@ -131,6 +131,12 @@ pub enum Action {
     Look(IdleLook),
     /// Open the settings window (on the quick page).
     OpenSettings,
+    /// A press on the shelf wagon at this index: a click does nothing, a drag takes it out.
+    ShelfWagon(usize),
+    /// Take the shelf wagon at this index off the shelf (the file stays where it is).
+    ShelfRemove(usize),
+    /// Bring the last removed wagon back.
+    ShelfUndo,
 }
 
 /// A built page: what to draw, where to click and how big the island is.
