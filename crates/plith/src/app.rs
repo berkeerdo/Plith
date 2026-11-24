@@ -34,6 +34,7 @@ use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::Settings;
+use plith_core::theme::Palette;
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
     MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,
@@ -114,6 +115,27 @@ fn run_logged(launch: &Launch, log: &Arc<LogFile>) -> i32 {
     code
 }
 
+/// The render thread's start settings for the island window.
+fn render_config(
+    launch: &Launch,
+    shell: &Shell,
+    monitor: &MonitorInfo,
+    display: Display,
+    palette: Palette,
+) -> RenderConfig {
+    RenderConfig {
+        hwnd: shell.hwnd(),
+        monitor: monitor.handle,
+        layout: display.layout,
+        clock: launch.clock,
+        remote: display.remote,
+        hz: monitor.hz,
+        levers: launch.levers,
+        tune: launch.tune,
+        palette,
+    }
+}
+
 fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display: Display) -> i32 {
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), Arc::default()));
     let closing = Arc::new(AtomicBool::new(false));
@@ -147,17 +169,7 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         settings,
     } = attach_feed(launch, &shell, log, &app);
     start_sides(launch, log, &shell, &app, &settings, monitor);
-    let config = RenderConfig {
-        hwnd: shell.hwnd(),
-        monitor: monitor.handle,
-        layout: display.layout,
-        clock: launch.clock,
-        remote: display.remote,
-        hz: monitor.hz,
-        levers: launch.levers,
-        tune: launch.tune,
-        palette: settings.theme.palette(),
-    };
+    let config = render_config(launch, &shell, monitor, display, settings.theme.palette());
     let sample = live::sampler(levels);
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing, sample);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
