@@ -15,9 +15,6 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   `plith-system` hook containment, flyout journal, key repeat collapse. Plan and Record:
   `plans/active/osd-r6.md`; reviews `quality/2026-11-16-osd-r6-merge-review.md` and
   `quality/2026-11-16-osd-r6-recheck.md`.
-- Wiring merged as `3669f39` (plan and Record `plans/done/wiring.md`): `plith.exe` is
-  single-instance, starts and supervises the installed helper, sends `Level` on volume, mute and
-  brightness changes, `--flyout off|dry|hide` (default off), release build has no console window.
 - **Running:** no lane (`LANES.md` retired to `journal/2026-11.md` on 2026-11-19).
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli
   (`specs/2026-11-14-r3-visual-direction.md`, mock `design/r3/ray-paneli.html`, ADR 0007).
@@ -27,30 +24,26 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   Six resting pill looks (Karot default), the welcome view as a fifth page, `settings.ini` and
   `plays.txt` in `%LOCALAPPDATA%\Plith\`, `plith-weather` (off by default). Task 12 boxes 1 and
   2 proven on the console; box 3 (weather to `OKUMA`) open. Worktree removed 2026-11-20.
-- **R7 languages:** merged as `3a281c2` (ADR 0015, plan `plans/active/r7-languages.md`). Eight
-  languages, OSD protocol 2 sends the muted word; proven on the console 2026-11-18.
-- **Console fix round: merged as `397e7d9`** (2026-11-20, plan and log
-  `plans/done/console-fix-round.md`): home mark (ADR 0016), speaker glyph level with the caps
-  (fixed in the console check, `ec86288`), one-shot title scroll, ruler drag, OSD prewarm. Five
-  checks on the merge, 1113 tests. Console 2026-11-19: Berke "çalışıyor hepsi"; Karot idle 60 s
-  1 wake (allowed 2). Worktree removed. Earlier console sessions: `journal/2026-11.md`.
-- **R7 settings window: merged as `c7e693a`** (2026-11-20). Spec
-  `specs/2026-11-20-r7-settings-window-design.md`, plan and progress log
-  `plans/active/r7-settings.md` (Tasks 1 to 10 ticked), ADR 0017, review
-  `quality/2026-11-20-settings-window-final-review.md`. Window with Genel, Boşta, OSD, Hakkında
-  on its own render thread; quick page behind a gear; live apply, atomic save, new keys `osd`
-  and `flyout`. Five checks on the merge: fmt, clippy, 1237 tests, structure 0, release.
-  Idle check 2026-11-20 console: Karot 60 s, 0 render wakes (allowed 2), 93.8 ms CPU.
-  Worktree and branch removed.
-- **Display relayout: merged as `42f29ac`** (2026-11-22). Spec
-  `specs/2026-11-22-display-relayout-design.md`, plan and progress log
-  `plans/active/display-relayout.md` (Tasks 1 to 4 ticked), review
-  `quality/2026-11-22-display-relayout-final-review.md` (1 important, fixed in `51b0b30`).
-  The shell re-reads the primary monitor, moves the window and rebuilds the hit region; the
-  render thread rebuilds the stack (recover path, WARP on failure) and reopens the clock on a
-  new monitor, rate or remote state. Five checks on the branch head (merge tree identical):
-  fmt, clippy, 1262 tests, structure 0, release. RDP reconnect seen 2026-11-23: 0 relayout
-  lines (same size), motion 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
+- R7 languages and the console fix round are done; their records moved to `journal/2026-11.md`.
+- **Theme switch: merged as `104e904`** (2026-11-24, spec `specs/2026-11-24-theme-switch-design.md`,
+  plan `plans/active/theme-switch.md`). Görünüm section, Tema row (Gece, Kağıt, York, Sodyum), key
+  `theme`, `--theme`; live palette to the island and the window, caption follows dark or light.
+  OSD helper keeps its fixed colours (needs a protocol bump). Not yet seen on screen.
+- **R5 shelf: merged as `e3aa5da`** (2026-11-24, spec `specs/2026-11-24-r5-shelf-design.md`, ADR
+  0018 drag hover opens the shelf, plan `plans/active/r5-shelf.md`, opus review 0 critical, 5
+  important, all fixed). Five checks on main after both merges and the fix `fdb5c5f`: fmt,
+  clippy, 1366 tests, structure 825/0, release. `RegisterDragDrop` succeeds on the live window
+  (no `shelf: no drop target` line, RDP 2026-11-24); no real drag yet.
+- **R4b output picker: parked** on worktree branch `worktree-agent-afd1c836624792461` (spec
+  `specs/2026-11-24-r4b-media-output-picker-design.md`, research `research/2026-11-24-r4b-app-route.md`).
+  Probe over RDP: activation and Get OK, Set to `Remote Audio` gave `E_INVALIDARG`. Rerun with real
+  outputs (console, or RDP with sound "On the remote PC") before any UI work; UI code there is
+  written but never compiled.
+- **R7 settings window: merged as `c7e693a`** (2026-11-20; spec, plan `plans/active/r7-settings.md`,
+  ADR 0017, review in `quality/`). Idle check on the console: Karot 60 s, 0 render wakes.
+- **Display relayout: merged as `42f29ac`** (2026-11-22; spec, plan
+  `plans/active/display-relayout.md`, review in `quality/`). RDP reconnect 2026-11-23: 0 relayout
+  lines (same size), 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
 - **Session display fix: merged** (2026-11-23, `ac07a42`): suppression follows the session
   display, not the console one (froze the notch over RDP). Five checks green, 1265 tests.
 - **Next: one console session, Berke present.** First the relayout check (plan Task 5):
@@ -66,8 +59,9 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
   Step 5); audio-clarity Task 8 box (he used the ruler, "cetvel çalışıyor"). Later: the guarded
   route write session.
-- Then R5 shelf, R4b media output picker; themes switch in settings (nothing calls
-  `set_palette`).
+- On screen next (RDP is fine except motion): pick each theme, drag files in from Explorer and out
+  again, remove and undo, restart keeps the shelf; then the R4b probe. Then R7 parity (tray,
+  installer). Open question to Berke: align the clock with the home and gear marks (y 23).
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).

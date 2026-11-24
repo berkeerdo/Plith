@@ -11,8 +11,9 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R1b Engine under load | Missed vblanks while a game runs behind, collapse and page durations, topmost IME skip | lane `engine` | 1 to 2 sessions | ✅ done, 1 lane session + console run (merged e20201c; ADR 0008) |
 | R3 Visual direction | Resting pill, tab bar, four pages, type, icons (praxvon-direction, impeccable) | master + Berke | 2 sessions | ✅ done, 1 session (Ray Paneli, ADR 0007, mock in `design/r3/`) |
 | R4 Pages | Tab bar, audio, media, system on the engine | lane `pages` | 4 sessions | 🔄 code merged (b6bd801, 1 lane session + 1 merge fix round; ADR 0010 to 0012); console run left |
-| R4b Media output picker | Per-app output routing (undocumented IAudioPolicyConfig); R4 shows the route read-only | ⬜ | 1 session | ⬜ waiting on R4 |
-| R5 Shelf | In-process OLE drag in and out | ⬜ | 2 sessions | ⬜ waiting on R4 |
+| R4b Media output picker | Per-app output routing (undocumented IAudioPolicyConfig); R4 shows the route read-only | master + subagents | 1 session | 🔄 parked: probe Set failed on RDP Remote Audio, rerun with real outputs |
+| R5 Shelf | In-process OLE drag in and out | master + subagents | 2 sessions | 🔄 code merged (e3aa5da, part of 1 session; ADR 0018); on screen left |
+| Theme switch | Görünüm section, four palettes live | master + subagents | not estimated | 🔄 code merged (104e904, part of 1 session); on screen left |
 | R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 code merged (4aca03e, 1 lane session + 2 review rounds; ADR 0009); console run over a game left |
 | R7a Karot idle look | Pill looks, welcome view, settings and play files, tr/en table, weather service | master + subagents | not estimated | 🔄 code merged (3ee8b05, 2 sessions incl. direction pass; ADR 0014); console run left |
 | R7 languages | Eight languages from one table, OSD muted word over the pipe | master + subagents | not estimated | ✅ done (merged 3a281c2; ADR 0015; console 2026-11-18) |
