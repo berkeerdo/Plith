@@ -3,6 +3,7 @@
 use super::{
     FlyoutPref, HeadSlot, IdleLook, LangChoice, LocationMode, OpenOn, RunSpan, Settings, TempUnit,
 };
+use crate::theme::Theme;
 
 /// One setting the window can change.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -31,6 +32,8 @@ pub enum SettingChange {
     Osd(bool),
     /// What to do with the Windows flyout.
     Flyout(FlyoutPref),
+    /// The colour theme.
+    Theme(Theme),
 }
 
 /// What a change makes the running app redo.
@@ -47,6 +50,8 @@ pub struct Effects {
     pub lang: bool,
     /// Restart the OSD side.
     pub osd: bool,
+    /// Switch the palette; the page bitmaps are redrawn in it.
+    pub theme: bool,
 }
 
 /// Stores `new` in `slot` and returns whether it differed.
@@ -80,6 +85,7 @@ pub fn apply_change(settings: &mut Settings, change: SettingChange) -> Effects {
         SettingChange::Lang(v) => effects.lang = set(&mut settings.lang, v),
         SettingChange::Osd(v) => effects.osd = set(&mut settings.osd, v),
         SettingChange::Flyout(v) => effects.osd = set(&mut settings.flyout, v),
+        SettingChange::Theme(v) => effects.theme = set(&mut settings.theme, v),
     }
     effects
 }

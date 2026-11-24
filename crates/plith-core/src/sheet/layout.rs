@@ -21,6 +21,7 @@ pub(super) const FIRST_ROW: f64 = 92.0;
 fn section_text(s: Section) -> S {
     match s {
         Section::General => S::SectionGeneral,
+        Section::Look => S::SectionLook,
         Section::Idle => S::SectionIdle,
         Section::Osd => S::SectionOsd,
         Section::About => S::SectionAbout,
@@ -30,6 +31,7 @@ fn section_text(s: Section) -> S {
 fn line_text(s: Section) -> S {
     match s {
         Section::General => S::LineGeneral,
+        Section::Look => S::LineLook,
         Section::Idle => S::LineIdle,
         Section::Osd => S::LineOsd,
         Section::About => S::LineAbout,
@@ -47,7 +49,7 @@ pub(super) fn chrome(p: &mut Page, facts: &SheetFacts, view: &SheetView) {
         Align::Start,
     );
     for (i, s) in Section::ALL.into_iter().enumerate() {
-        #[allow(clippy::cast_precision_loss)] // four sections
+        #[allow(clippy::cast_precision_loss)] // five sections
         let y = 58.0 + i as f64 * 32.0;
         let active = s == view.section;
         if active {

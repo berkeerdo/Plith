@@ -5,9 +5,11 @@
 use super::super::Paint;
 use super::LoopShared;
 use super::engine::Engine;
+use super::prewarm::Reason;
 use crate::clock::{ClockError, FrameSource};
 use plith_core::clock_choice::ClockKind;
 use plith_core::layout::SurfaceLayout;
+use plith_core::theme::Palette;
 use plith_core::timeline::VsyncTimeline;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -47,6 +49,16 @@ impl LoopShared {
         lock(&self.relayout).take()
     }
 
+    /// Stores `palette` for the loop; a palette still pending is replaced.
+    pub fn request_palette(&self, palette: Palette) {
+        *lock(&self.palette) = Some(palette);
+    }
+
+    /// Takes the pending palette, if any.
+    pub fn take_palette(&self) -> Option<Palette> {
+        lock(&self.palette).take()
+    }
+
     /// Sets the monitor and rate the next clock opens for.
     pub fn set_clock_target(&self, monitor: isize, hz: f64) {
         *lock(&self.clock_target) = (monitor, hz);
@@ -66,11 +78,29 @@ where
     O: FnMut(ClockKind) -> Result<C, ClockError>,
     N: Fn() -> f64,
 {
-    /// Applies a pending relayout; `repaint` paints the settled, unsuppressed island once at
-    /// the new layout (the parked loop has no frame of its own to show it). A failed rebuild
-    /// falls back to WARP; a failed fallback ends the thread.
+    /// Hands a pending palette to the painter and forgets which page bitmaps were rastered, so
+    /// the next raster pass redraws them all. True when a palette was pending.
+    fn apply_palette(&mut self) -> bool {
+        let Some(palette) = self.shared.take_palette() else {
+            return false;
+        };
+        self.paint.set_palette(palette);
+        self.warm = Default::default();
+        self.presented = None;
+        true
+    }
+
+    /// Applies a pending palette and relayout; `repaint` paints the settled, unsuppressed
+    /// island once at the new layout (the parked loop has no frame of its own to show it). A
+    /// failed rebuild falls back to WARP; a failed fallback ends the thread.
     pub(super) fn apply_relayout(&mut self, repaint: bool) -> Result<(), String> {
+        let recolored = self.apply_palette();
         let Some(next) = self.shared.take_relayout() else {
+            if recolored && repaint && !self.scene.suppression.any() && self.is_settled() {
+                // The bitmaps are stale: raster the open pages again, then present once.
+                self.prewarm_open(Reason::Rest);
+                self.paint_frame()?;
+            }
             return Ok(());
         };
         self.layout = next.layout;

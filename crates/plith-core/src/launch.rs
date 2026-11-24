@@ -3,6 +3,7 @@
 use crate::demo::{DemoError, DemoScript};
 use crate::levers::{Levers, MmcssPriority, SchedClass};
 use crate::settings::{FlyoutPref, IdleLook};
+use crate::theme::Theme;
 use crate::tuning::TuningSet;
 use std::fmt;
 
@@ -73,6 +74,8 @@ pub struct Launch {
     pub flyout: Option<FlyoutMode>,
     /// The resting look for this run, replacing the settings file's (`--idle-look <key>`).
     pub idle_look: Option<IdleLook>,
+    /// The colour theme for this run, replacing the settings file's (`--theme <key>`).
+    pub theme: Option<Theme>,
 }
 
 /// Why the arguments were rejected; each variant carries the offending text.
@@ -243,6 +246,10 @@ impl Launch {
                 "--idle-look" => {
                     let text = value()?;
                     launch.idle_look = Some(IdleLook::from_key(&text).ok_or_else(|| bad(text))?);
+                }
+                "--theme" => {
+                    let text = value()?;
+                    launch.theme = Some(Theme::from_key(&text).ok_or_else(|| bad(text))?);
                 }
                 "--exit-after-demo" => launch.exit_after_demo = true,
                 _ => return Err(LaunchError::UnknownFlag(flag)),

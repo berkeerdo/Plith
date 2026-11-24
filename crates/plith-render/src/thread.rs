@@ -21,6 +21,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, MmcssPriority, outcome_line};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{SceneMailbox, ShapeFrame};
+use plith_core::theme::Palette;
 use plith_core::tuning::TuningSet;
 use std::fmt;
 use std::sync::mpsc::{self, SyncSender};
@@ -55,6 +56,9 @@ pub trait Paint {
     fn prewarm(&mut self, _content: &PageContent, _pages: &[usize]) -> f64 {
         0.0
     }
+
+    /// Switches the colours; the page bitmaps are redrawn in them on their next raster.
+    fn set_palette(&mut self, _palette: Palette) {}
 
     /// Rebuilds the stack for `layout` (a display change), on the hardware device.
     ///
@@ -132,6 +136,8 @@ pub struct RenderConfig {
     pub tune: TuningSet,
     /// The load levers (the default is the R1b pick).
     pub levers: Levers,
+    /// The colours the first frame is drawn in.
+    pub palette: Palette,
 }
 
 /// Why the render thread did not start.
@@ -270,7 +276,7 @@ pub fn spawn(
         let (mailbox, shared) = (Arc::clone(&mailbox), Arc::clone(&shared));
         thread::Builder::new()
             .name(String::from("plith-render"))
-            .spawn(move || render_main(config, &mailbox, &shared, &mut sinks, &ready_tx))
+            .spawn(move || render_main(&config, &mailbox, &shared, &mut sinks, &ready_tx))
             .map_err(RenderError::Spawn)?
     };
     // The thread sends exactly once before its loop, or drops the sender when it ends early,
@@ -291,7 +297,7 @@ pub fn spawn(
 
 /// The thread body: MMCSS, renderer, loop, MMCSS revert.
 fn render_main(
-    config: RenderConfig,
+    config: &RenderConfig,
     mailbox: &SceneMailbox,
     shared: &LoopShared,
     sinks: &mut RenderSinks,
@@ -303,7 +309,7 @@ fn render_main(
     }
     let origin = Instant::now();
     let hwnd = HWND(config.hwnd as *mut core::ffi::c_void);
-    match GpuPaint::new(hwnd, config.layout, false, config.levers) {
+    match GpuPaint::new(hwnd, config.layout, false, config.levers, config.palette) {
         Ok(mut paint) => {
             for line in paint.take_notes() {
                 (sinks.on_note)(line);

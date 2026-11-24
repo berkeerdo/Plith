@@ -18,6 +18,7 @@ use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::settings::change::SettingChange;
 use plith_core::settings::{IdleLook, Settings};
 use plith_core::sheet::{Section, SheetFacts, SheetView, commit_field};
+use plith_core::theme::Theme;
 use plith_shell::FIRST_APP_TIMER;
 use plith_shell::sheet_window::{SheetEvent, set_clipboard};
 use std::cell::RefCell;
@@ -110,7 +111,7 @@ impl App {
             section: self.sheet.section,
             ..SheetView::default()
         };
-        match SheetSide::open(self.opening(facts.lang), view) {
+        match SheetSide::open(self.opening(facts.lang, facts.settings.theme), view) {
             Ok(mut side) => {
                 side.publish(&facts);
                 self.sheet.side = Some(side);
@@ -122,7 +123,7 @@ impl App {
         }
     }
 
-    fn opening(&self, lang: Lang) -> Opening {
+    fn opening(&self, lang: Lang, theme: Theme) -> Opening {
         let queue = Rc::clone(&self.sheet.queue);
         let wake = Arc::clone(&self.sheet.wake);
         let on_event = Box::new(move |event| {
@@ -142,6 +143,7 @@ impl App {
         Opening {
             monitor: self.sheet.monitor,
             title: sheet_text(SheetText::WindowTitle, lang).to_owned(),
+            theme,
             on_event,
             on_panic,
             on_fatal,
@@ -204,6 +206,7 @@ impl App {
                 side.touch();
             }
             side.set_title(sheet_text(SheetText::WindowTitle, facts.lang));
+            side.set_theme(facts.settings.theme);
             side.publish(&facts);
         }
         self.sheet.shown = Some(now);

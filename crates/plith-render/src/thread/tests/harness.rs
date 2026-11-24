@@ -12,6 +12,7 @@ use plith_core::draw::PageContent;
 use plith_core::layout::{RectPx, SurfaceLayout};
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
+use plith_core::theme::Palette;
 use plith_core::tuning::R1;
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
@@ -129,9 +130,15 @@ pub(super) struct FakePaint {
     /// state a request leaves when its generation was consumed by a take that did not apply it.
     pub(super) relayout_after: Option<(usize, Relayout)>,
     pub(super) shared: Arc<LoopShared>,
+    /// Every palette the loop switched to, in order.
+    pub(super) palettes: Arc<Mutex<Vec<Palette>>>,
 }
 
 impl Paint for FakePaint {
+    fn set_palette(&mut self, palette: Palette) {
+        lock(&self.palettes).push(palette);
+    }
+
     fn relayout(&mut self, layout: SurfaceLayout) -> windows::core::Result<()> {
         lock(&self.relayouts).push(layout);
         if self.relayout_fails {
@@ -206,6 +213,8 @@ pub(super) struct Run {
     pub(super) relayouts: Arc<Mutex<Vec<SurfaceLayout>>>,
     /// How many clocks were opened.
     pub(super) opens: Arc<AtomicU64>,
+    /// Every palette the painter was switched to.
+    pub(super) palettes: Arc<Mutex<Vec<Palette>>>,
     pub(super) mailbox: Arc<SceneMailbox>,
     pub(super) shared: Arc<LoopShared>,
     pub(super) harness: Arc<Harness>,
@@ -299,33 +308,41 @@ fn harness(setup: &mut Setup, mailbox: &Arc<SceneMailbox>) -> Arc<Harness> {
     })
 }
 
+/// What the fake painter records, shared with the run.
+#[derive(Default)]
+struct Probes {
+    frames: Arc<Mutex<Vec<PaintFrame>>>,
+    calls_at: Arc<Mutex<Vec<u64>>>,
+    recovers: Arc<Mutex<Vec<bool>>>,
+    prewarms: Prewarms,
+    relayouts: Arc<Mutex<Vec<SurfaceLayout>>>,
+    palettes: Arc<Mutex<Vec<Palette>>>,
+}
+
 pub(super) fn start(mut setup: Setup) -> Run {
     let content = setup.content.clone().unwrap_or_default();
     let mailbox = Arc::new(SceneMailbox::new(Scene::default(), content));
     let shared = Arc::new(LoopShared::new());
     let harness = harness(&mut setup, &mailbox);
-    let frames = Arc::new(Mutex::new(Vec::new()));
+    let probes = Probes::default();
     let shapes = Arc::new(Mutex::new(Vec::new()));
-    let recovers = Arc::new(Mutex::new(Vec::new()));
-    let calls_at = Arc::new(Mutex::new(Vec::new()));
     let samples = Arc::new(AtomicU64::new(0));
-    let prewarms = Arc::new(Mutex::new(Vec::new()));
-    let relayouts = Arc::new(Mutex::new(Vec::new()));
     let opens = Arc::new(AtomicU64::new(0));
     let (mut sinks, ends) = sinks(Arc::clone(&shapes), Arc::clone(&samples));
     let paint = FakePaint {
-        frames: Arc::clone(&frames),
-        calls_at: Arc::clone(&calls_at),
+        frames: Arc::clone(&probes.frames),
+        calls_at: Arc::clone(&probes.calls_at),
         harness: Arc::clone(&harness),
         fail: Arc::new(AtomicU32::new(setup.fail)),
-        recovers: Arc::clone(&recovers),
+        recovers: Arc::clone(&probes.recovers),
         recover_fails: setup.recover_fails,
         panic_at: setup.panic_at,
-        prewarms: Arc::clone(&prewarms),
-        relayouts: Arc::clone(&relayouts),
+        prewarms: Arc::clone(&probes.prewarms),
+        relayouts: Arc::clone(&probes.relayouts),
         relayout_fails: setup.relayout_fails,
         relayout_after: setup.relayout_after.take(),
         shared: Arc::clone(&shared),
+        palettes: Arc::clone(&probes.palettes),
     };
     let (done_tx, done) = mpsc::channel();
     let join = {
@@ -362,21 +379,22 @@ pub(super) fn start(mut setup: Setup) -> Run {
         })
     };
     Run {
-        relayouts,
+        relayouts: probes.relayouts,
         opens,
+        palettes: probes.palettes,
         mailbox,
         shared,
         harness,
-        frames,
-        calls_at,
+        frames: probes.frames,
+        calls_at: probes.calls_at,
         shapes,
-        recovers,
+        recovers: probes.recovers,
         reports: ends.reports,
         ambient: ends.ambient,
         samples,
         fatal: ends.fatal,
         notes: ends.notes,
-        prewarms,
+        prewarms: probes.prewarms,
         done,
         join,
     }

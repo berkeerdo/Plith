@@ -1,16 +1,21 @@
 use super::*;
 use crate::app::feed::{Feed, Timers};
 use crate::app::saver::Saver;
+use crate::app::state::Relayouter;
 use crate::app::weather_link::WeatherLink;
 use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
+use plith_core::display::Display;
 use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::pages::idle_pill::rest_shape;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::change::SettingChange;
 use plith_core::settings::{IdleLook, LangChoice, LocationMode, parse};
+use plith_core::theme::{Palette, Theme};
+use std::cell::RefCell;
 use std::path::PathBuf;
+use std::rc::Rc;
 use std::sync::atomic::AtomicBool;
 
 struct NoTimers;
@@ -237,4 +242,90 @@ fn a_city_change_while_running_does_apply() {
     app.change(SettingChange::City(String::from("Bursa")));
     assert!(app.feed.as_mut().unwrap().take_weather().is_none());
     clean(app, "run-city");
+}
+
+/// Records the palettes the render thread would be sent.
+struct FakePainter(Rc<RefCell<Vec<Palette>>>);
+
+impl Relayouter for FakePainter {
+    fn relayout(&self, _display: Display) {}
+
+    fn set_palette(&self, palette: Palette) {
+        self.0.borrow_mut().push(palette);
+    }
+}
+
+fn with_painter(name: &str) -> (App, Rc<RefCell<Vec<Palette>>>) {
+    let mut app = fed(name);
+    let sent = Rc::new(RefCell::new(Vec::new()));
+    app.attach_relayout(FakePainter(Rc::clone(&sent)));
+    (app, sent)
+}
+
+#[test]
+fn a_theme_change_sends_the_palette_once_and_the_same_theme_sends_nothing() {
+    let (mut app, sent) = with_painter("theme-send");
+    app.change(SettingChange::Theme(Theme::Kagit));
+    assert_eq!(app.settings.theme, Theme::Kagit);
+    assert_eq!(*sent.borrow(), vec![Theme::Kagit.palette()]);
+    app.change(SettingChange::Theme(Theme::Kagit));
+    app.change(SettingChange::Look(IdleLook::Plain));
+    assert_eq!(sent.borrow().len(), 1, "only a theme change repaints");
+    clean(app, "theme-send");
+}
+
+#[test]
+fn a_theme_change_is_saved_and_refreshes_the_window() {
+    let mut app = fed("theme-save");
+    let path = folder("theme-save").join("settings.ini");
+    app.attach_saver(Saver::start(
+        path.clone(),
+        Box::new(|| {}),
+        Box::new(|_| {}),
+    ));
+    let before = app.sheet.refreshes;
+    app.change(SettingChange::Theme(Theme::York));
+    assert_eq!(app.sheet.refreshes, before + 1);
+    app.flush_saver();
+    let saved = parse(&std::fs::read_to_string(&path).unwrap()).0;
+    assert_eq!(saved.theme, Theme::York);
+    clean(app, "theme-save");
+}
+
+/// Saves go to the returned path; the app shows `Sodyum` while the file holds `Gece`.
+fn theme_pinned(name: &str) -> (App, PathBuf) {
+    let mut app = fed(name);
+    let path = folder(name).join("settings.ini");
+    app.attach_saver(Saver::start(
+        path.clone(),
+        Box::new(|| {}),
+        Box::new(|_| {}),
+    ));
+    app.settings.theme = Theme::Sodyum;
+    app.keep_file_theme(Some(Theme::Gece));
+    (app, path)
+}
+
+fn saved_theme(path: &std::path::Path) -> Theme {
+    parse(&std::fs::read_to_string(path).unwrap()).0.theme
+}
+
+#[test]
+fn the_command_line_theme_is_not_saved_with_another_change() {
+    let (mut app, path) = theme_pinned("cli-theme");
+    app.change(SettingChange::Plays(false));
+    app.flush_saver();
+    assert_eq!(saved_theme(&path), Theme::Gece, "the file's own theme");
+    assert_eq!(app.settings.theme, Theme::Sodyum, "this run still shows it");
+    clean(app, "cli-theme");
+}
+
+#[test]
+fn picking_a_theme_saves_it_even_when_it_is_the_one_shown() {
+    let (mut app, path) = theme_pinned("cli-theme-pick");
+    app.change(SettingChange::Theme(Theme::Sodyum));
+    app.change(SettingChange::Plays(false));
+    app.flush_saver();
+    assert_eq!(saved_theme(&path), Theme::Sodyum);
+    clean(app, "cli-theme-pick");
 }

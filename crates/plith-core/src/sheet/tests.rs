@@ -77,7 +77,7 @@ fn click(targets: &[SheetTarget], at: (f64, f64)) -> Option<SheetAction> {
 }
 
 #[test]
-fn four_sections_in_sidebar() {
+fn five_sections_in_sidebar() {
     let (list, targets) = sheet_build(&facts(), &view(Section::Idle));
     for s in Section::ALL {
         assert!(

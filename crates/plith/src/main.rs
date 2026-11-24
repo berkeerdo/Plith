@@ -24,7 +24,8 @@ const USAGE: &str = "usage: plith [--demo <name|script>] [--exit-after-demo] [--
                      [--mmcss normal|high|critical] [--tune r1|brisk] \
                      [--fixture banana|potato|bare|none] \
                      [--flyout off|dry|hide] \
-                     [--idle-look karot|clock|playing|seal|plain|hidden]";
+                     [--idle-look karot|clock|playing|seal|plain|hidden] \
+                     [--theme gece|kagit|york|sodyum]";
 
 fn main() {
     match Launch::parse(std::env::args().skip(1)) {

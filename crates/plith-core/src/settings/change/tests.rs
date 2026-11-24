@@ -47,6 +47,7 @@ fn apply_change_effects() {
             only(|e| e.lang = true),
         ),
         (SettingChange::Osd(false), only(|e| e.osd = true)),
+        (SettingChange::Theme(Theme::York), only(|e| e.theme = true)),
         (
             SettingChange::Flyout(FlyoutPref::Hide),
             only(|e| e.osd = true),
@@ -75,6 +76,7 @@ fn applying_the_current_value_changes_nothing() {
         SettingChange::Lang(current.lang.clone()),
         SettingChange::Osd(current.osd),
         SettingChange::Flyout(current.flyout),
+        SettingChange::Theme(current.theme),
     ];
     for change in same {
         let mut s = Settings::default();

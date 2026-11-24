@@ -11,6 +11,7 @@ use crate::plays_file;
 use plith_core::launch::{FlyoutMode, flyout_mode};
 use plith_core::settings::change::{Effects, SettingChange, apply_change};
 use plith_core::settings::{IdleLook, Settings};
+use plith_core::theme::Theme;
 use std::sync::Arc;
 
 /// The OSD slot of a normal run and the `--flyout` that wins over the settings file.
@@ -82,6 +83,12 @@ impl App {
         self.file_look = look;
     }
 
+    /// Remembers the theme the settings file holds while `--theme` shows another one for this
+    /// run, so saves keep the file's value until the user picks a theme.
+    pub fn keep_file_theme(&mut self, theme: Option<Theme>) {
+        self.file_theme = theme;
+    }
+
     /// The one path of a setting change, from the settings window or the quick page: update
     /// the settings, apply what changed while running, then save. A value already set does
     /// nothing.
@@ -98,7 +105,10 @@ impl App {
     /// The change path; `apply` false only records and saves the change.
     fn change_with(&mut self, change: SettingChange, apply: bool) {
         // Picking a look ends the command line's override, even to the look already shown.
-        let unpinned = matches!(change, SettingChange::Look(_)) && self.file_look.take().is_some();
+        let mut unpinned =
+            matches!(change, SettingChange::Look(_)) && self.file_look.take().is_some();
+        // The same for the theme and `--theme`.
+        unpinned |= matches!(change, SettingChange::Theme(_)) && self.file_theme.take().is_some();
         let effects = apply_change(&mut self.settings, change);
         // Every field that changed reports at least one effect.
         if effects == Effects::default() && !unpinned {
@@ -112,6 +122,9 @@ impl App {
             let mut saved = settings;
             if let Some(look) = self.file_look {
                 saved.look = look;
+            }
+            if let Some(theme) = self.file_theme {
+                saved.theme = theme;
             }
             saver.save(saved);
         }
@@ -142,6 +155,13 @@ impl App {
         }
         if effects.osd {
             self.apply_osd(settings);
+        }
+        // The pages' lists name colour roles, not colours: the render thread draws them again
+        // in the new palette. The settings window takes the theme from its facts on refresh.
+        if effects.theme
+            && let Some(relayout) = &self.relayout
+        {
+            relayout.set_palette(settings.theme.palette());
         }
     }
 

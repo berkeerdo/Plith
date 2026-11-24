@@ -3,7 +3,8 @@
 //! Idle section (`docs/design/r7/renders-3/sheet.png`). No window opens.
 //!
 //! Run: `cargo run --release -p plith-render --example render_sheet -- <new folder>`. The folder
-//! must not exist yet; its parents are made.
+//! must not exist yet; its parents are made. `--theme <key>` after the folder paints every
+//! section in that theme (default `gece`), with the same theme marked in the Look section.
 
 #[path = "render_sheet/facts.rs"]
 mod facts;
@@ -51,6 +52,7 @@ fn write_png(path: &Path, rows: &[u8], w: u32, h: u32) -> Result<()> {
 fn section_name(section: Section) -> &'static str {
     match section {
         Section::General => "1-general",
+        Section::Look => "1b-look",
         Section::Idle => "2-idle",
         Section::Osd => "3-osd",
         Section::About => "4-about",
@@ -58,19 +60,30 @@ fn section_name(section: Section) -> &'static str {
 }
 
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
-    let dir: PathBuf = std::env::args_os()
-        .nth(1)
-        .ok_or("usage: render_sheet <new folder>")?
+    let mut args = std::env::args_os().skip(1);
+    let dir: PathBuf = args
+        .next()
+        .ok_or("usage: render_sheet <new folder> [--theme gece|kagit|york|sodyum]")?
         .into();
+    let theme = match args.next() {
+        None => Theme::Gece,
+        Some(flag) if flag == "--theme" => {
+            let key = args.next().ok_or("--theme needs a key")?;
+            let key = key.to_string_lossy();
+            Theme::from_key(&key).ok_or_else(|| format!("unknown theme `{key}`"))?
+        }
+        Some(other) => return Err(format!("unknown option {}", other.to_string_lossy()).into()),
+    };
     if let Some(parent) = dir.parent() {
         std::fs::create_dir_all(parent)?;
     }
     std::fs::create_dir(&dir)?;
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
-    let palette = Theme::Gece.palette();
+    let palette = theme.palette();
     for lang in [Lang::Tr, Lang::De] {
-        let facts = facts::sheet_facts(lang);
+        let mut facts = facts::sheet_facts(lang);
+        facts.settings.theme = theme;
         for section in Section::ALL {
             let view = SheetView {
                 section,
