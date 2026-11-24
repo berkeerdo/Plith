@@ -55,6 +55,32 @@ pub fn hex(r: u8, g: u8, b: u8) -> [f32; 4] {
 }
 
 impl Theme {
+    /// Every theme, in the order the settings window lists them.
+    pub const ALL: [Theme; 4] = [Self::Gece, Self::Kagit, Self::York, Self::Sodyum];
+
+    /// The key shared by the settings file and `--theme`.
+    #[must_use]
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Gece => "gece",
+            Self::Kagit => "kagit",
+            Self::York => "york",
+            Self::Sodyum => "sodyum",
+        }
+    }
+
+    /// The theme for a key, or `None` when the key is unknown.
+    #[must_use]
+    pub fn from_key(key: &str) -> Option<Self> {
+        Self::ALL.into_iter().find(|theme| theme.key() == key)
+    }
+
+    /// Whether the theme has a dark floor (window chrome such as the caption follows it).
+    #[must_use]
+    pub fn is_dark(self) -> bool {
+        !matches!(self, Self::Kagit)
+    }
+
     /// The palette of the theme. Gece is the spec's Loft palette; Kağıt, York and Sodyum come
     /// from the R3 mock, with the raised `faint` values of the spec.
     #[must_use]

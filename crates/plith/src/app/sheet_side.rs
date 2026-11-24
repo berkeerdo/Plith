@@ -8,7 +8,7 @@ use plith_core::sheet::{
     KeyOutcome, SheetAction, SheetFacts, SheetTarget, SheetView, commit_field, focus_field, on_key,
     sheet_build, sheet_hit,
 };
-use plith_core::theme::Palette;
+use plith_core::theme::Theme;
 use plith_render::TextMeasure;
 use plith_render::sheet::{SheetConfig, SheetRender};
 use plith_shell::sheet_window::{SheetEvent, SheetWindow};
@@ -165,6 +165,8 @@ pub struct SheetSide {
     measured: Option<(String, usize)>,
     /// The title's text.
     title: String,
+    /// The theme the render thread paints in.
+    theme: Theme,
     /// Set by the window's panic report.
     panicked: Rc<Cell<bool>>,
     /// Set by the render thread when it ends on an error.
@@ -177,6 +179,8 @@ pub struct Opening {
     pub monitor: isize,
     /// The window title.
     pub title: String,
+    /// The theme the window opens in.
+    pub theme: Theme,
     /// The window's events, called on the UI thread.
     pub on_event: Box<dyn FnMut(SheetEvent)>,
     /// Called with the message when the window's callback panics.
@@ -200,8 +204,14 @@ impl SheetSide {
                 report(message);
             })
         };
-        let window = SheetWindow::open(opening.monitor, &opening.title, opening.on_event, on_panic)
-            .map_err(|error| format!("settings window: cannot open: {error}"))?;
+        let window = SheetWindow::open(
+            opening.monitor,
+            &opening.title,
+            opening.theme.is_dark(),
+            opening.on_event,
+            on_panic,
+        )
+        .map_err(|error| format!("settings window: cannot open: {error}"))?;
         let dead = Arc::new(AtomicBool::new(false));
         let on_fatal = {
             let dead = Arc::clone(&dead);
@@ -217,7 +227,7 @@ impl SheetSide {
             width_px,
             height_px,
             scale,
-            palette: Palette::default(),
+            palette: opening.theme.palette(),
         };
         let render = SheetRender::spawn(config, on_fatal)
             .map_err(|error| format!("settings window: render failed to start: {error}"))?;
@@ -231,6 +241,7 @@ impl SheetSide {
             pending: None,
             measured: None,
             title: opening.title,
+            theme: opening.theme,
             panicked,
             dead,
         })
@@ -252,6 +263,19 @@ impl SheetSide {
         if self.title != title {
             title.clone_into(&mut self.title);
             self.window.set_title(title);
+        }
+    }
+
+    /// Switches the window's colours when the theme differs; the render thread paints the
+    /// last list again in them.
+    pub fn set_theme(&mut self, theme: Theme) {
+        if self.theme == theme {
+            return;
+        }
+        self.theme = theme;
+        self.window.set_dark_caption(theme.is_dark());
+        if let Some(render) = &self.render {
+            render.set_palette(theme.palette());
         }
     }
 

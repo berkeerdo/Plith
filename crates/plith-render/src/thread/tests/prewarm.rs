@@ -33,7 +33,7 @@ fn text_list(text: &str) -> Arc<DisplayList> {
 }
 
 /// Five text pages (the welcome view last) and a text pill.
-fn pages() -> Arc<PageContent> {
+pub(super) fn pages() -> Arc<PageContent> {
     let mut content = PageContent::empty();
     for (page, text) in ["Audio", "Media", "Shelf", "System", "Welcome"]
         .iter()
@@ -71,7 +71,7 @@ fn wait_prewarms(run: &Run, n: usize) {
 }
 
 /// An expanded, settled loop on page 0 with every page warmed; the notes so far are drained.
-fn open_at_rest() -> Run {
+pub(super) fn open_at_rest() -> Run {
     let run = start(Setup {
         content: Some(pages()),
         ..Setup::default()

@@ -11,6 +11,7 @@ use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
 use plith_core::settings::{IdleLook, Settings};
+use plith_core::theme::Theme;
 use plith_core::weather::Stamp;
 use plith_shell::UiWaker;
 use std::sync::Arc;
@@ -23,30 +24,44 @@ pub fn is_normal(launch: &Launch) -> bool {
 }
 
 /// The settings of this run: the file in a normal run, else the defaults, with `--idle-look`
-/// on top. The banana fixture shows the mock's forecast, so its weather is on (no network).
+/// and `--theme` on top. The banana fixture shows the mock's forecast, so its weather is on
+/// (no network).
 #[must_use]
 pub fn settings_for(launch: &Launch, log: &LogFile) -> Settings {
-    settings_and_file_look(launch, log).0
+    settings_and_file_values(launch, log).0
 }
 
-/// `settings_for`, and the look the file holds when `--idle-look` overrides it for this run
-/// (the app keeps writing that one, not the override).
+/// What the settings file holds for the keys a command-line flag overrides in this run (the
+/// app keeps writing these, not the overrides).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct FileValues {
+    /// The file's look when `--idle-look` is given.
+    pub look: Option<IdleLook>,
+    /// The file's theme when `--theme` is given.
+    pub theme: Option<Theme>,
+}
+
+/// `settings_for`, and the file's values for the overridden keys.
 #[must_use]
-pub fn settings_and_file_look(launch: &Launch, log: &LogFile) -> (Settings, Option<IdleLook>) {
+pub fn settings_and_file_values(launch: &Launch, log: &LogFile) -> (Settings, FileValues) {
     let mut settings = if is_normal(launch) {
         settings_file::load(log)
     } else {
         Settings::default()
     };
-    let mut file_look = None;
+    let mut file = FileValues::default();
     if let Some(look) = launch.idle_look {
-        file_look = Some(settings.look);
+        file.look = Some(settings.look);
         settings.look = look;
+    }
+    if let Some(theme) = launch.theme {
+        file.theme = Some(settings.theme);
+        settings.theme = theme;
     }
     if launch.fixture == Some(Fixture::Banana) {
         settings.weather = true;
     }
-    (settings, file_look)
+    (settings, file)
 }
 
 /// The interface language of a run: the setting, or Windows' own for `Auto`. Resolved once at

@@ -153,6 +153,7 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         hz: monitor.hz,
         levers: launch.levers,
         tune: launch.tune,
+        palette: settings.theme.palette(),
     };
     let sample = live::sampler(levels);
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing, sample);
@@ -266,7 +267,7 @@ fn attach_feed(
     let levels = services.level_source();
     let mut app = app.borrow_mut();
     // The language is resolved once, here, for every run mode (normal, demo, fixture, idle check).
-    let (settings, file_look) = idle_wiring::settings_and_file_look(launch, log);
+    let (settings, file) = idle_wiring::settings_and_file_values(launch, log);
     let lang = idle_wiring::language_of(&settings);
     let mut feed = Feed::new(
         services,
@@ -286,7 +287,8 @@ fn attach_feed(
     app.attach_feed(feed);
     app.attach_weather(weather, idle_wiring::is_normal(launch));
     app.set_settings(settings.clone());
-    app.keep_file_look(file_look);
+    app.keep_file_look(file.look);
+    app.keep_file_theme(file.theme);
     Attached {
         levels,
         content,

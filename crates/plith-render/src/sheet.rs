@@ -45,7 +45,15 @@ type Size = (u32, u32, f64);
 struct Inbox {
     list: Option<Arc<DisplayList>>,
     size: Option<Size>,
+    palette: Option<Palette>,
     stop: bool,
+}
+
+/// What `Shared::wait` took out of the inbox.
+struct Arrived {
+    list: Option<Arc<DisplayList>>,
+    size: Option<Size>,
+    palette: Option<Palette>,
 }
 
 /// The inbox, its condvar and the counters tests read.
@@ -69,9 +77,10 @@ impl Shared {
     }
 
     /// Blocks until something arrives; `None` on stop.
-    fn wait(&self) -> Option<(Option<Arc<DisplayList>>, Option<Size>)> {
+    fn wait(&self) -> Option<Arrived> {
         let mut inbox = self.lock();
-        while !inbox.stop && inbox.list.is_none() && inbox.size.is_none() {
+        while !inbox.stop && inbox.list.is_none() && inbox.size.is_none() && inbox.palette.is_none()
+        {
             inbox = self
                 .bell
                 .wait(inbox)
@@ -81,7 +90,11 @@ impl Shared {
         if inbox.stop {
             return None;
         }
-        Some((inbox.list.take(), inbox.size.take()))
+        Some(Arrived {
+            list: inbox.list.take(),
+            size: inbox.size.take(),
+            palette: inbox.palette.take(),
+        })
     }
 }
 
@@ -130,6 +143,12 @@ impl SheetRender {
     /// Hands over a new list; a list not yet painted is replaced (latest wins).
     pub fn publish(&self, list: Arc<DisplayList>) {
         self.shared.post(|inbox| inbox.list = Some(list));
+    }
+
+    /// Switches the colours; the last list is painted again in them (nothing when none has
+    /// arrived yet, or when the palette is the one in use).
+    pub fn set_palette(&self, palette: Palette) {
+        self.shared.post(|inbox| inbox.palette = Some(palette));
     }
 
     /// The client area is now `width_px` by `height_px` at `scale`; a zero size or a
@@ -269,18 +288,24 @@ fn is_new_size(next: Size, current: Size) -> bool {
 /// the thread's life and is retried; a second failure ends the thread with its message.
 fn run(mut stack: Stack, config: &SheetConfig, shared: &Shared) -> Result<(), String> {
     let mut size = (config.width_px, config.height_px, config.scale);
+    let mut palette = config.palette;
     let mut list: Option<Arc<DisplayList>> = None;
     let mut rebuilt = false;
-    while let Some((new_list, new_size)) = shared.wait() {
-        let resized = new_size.is_some_and(|next| is_new_size(next, size));
-        if let Some(next) = new_size.filter(|_| resized) {
+    while let Some(arrived) = shared.wait() {
+        let resized = arrived.size.is_some_and(|next| is_new_size(next, size));
+        if let Some(next) = arrived.size.filter(|_| resized) {
             size = next;
         }
-        let fresh = new_list.is_some();
-        if fresh {
-            list = new_list;
+        let recolored = arrived.palette.is_some_and(|next| next != palette);
+        if let Some(next) = arrived.palette.filter(|_| recolored) {
+            palette = next;
+            stack.painter.set_palette(next);
         }
-        if !resized && !fresh {
+        let fresh = arrived.list.is_some();
+        if fresh {
+            list = arrived.list;
+        }
+        if !resized && !fresh && !recolored {
             continue;
         }
         let painted = match stack.frame(size, resized, list.as_deref()) {
@@ -289,7 +314,7 @@ fn run(mut stack: Stack, config: &SheetConfig, shared: &Shared) -> Result<(), St
                 rebuilt = true;
                 // The old target must go first: a window takes one composition target.
                 drop(stack);
-                stack = Stack::new(config.hwnd, size, config.palette)
+                stack = Stack::new(config.hwnd, size, palette)
                     .map_err(|e| format!("sheet renderer rebuild failed after {error}: {e}"))?;
                 stack
                     .frame(size, false, list.as_deref())

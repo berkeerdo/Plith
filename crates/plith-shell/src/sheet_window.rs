@@ -141,8 +141,8 @@ fn placement(monitor: isize) -> (RECT, f64) {
     (placed, scale)
 }
 
-fn set_dark_caption(hwnd: HWND) {
-    let on: i32 = 1;
+fn set_dark_caption(hwnd: HWND, dark: bool) {
+    let on = i32::from(dark);
     // SAFETY: the attribute takes a 4-byte BOOL; `on` lives for the call. A failure (older
     // Windows) just leaves the light caption.
     let _ = unsafe {
@@ -224,26 +224,29 @@ impl SheetWindow {
     pub fn open(
         monitor: isize,
         title: &str,
+        dark: bool,
         on_event: Box<dyn FnMut(SheetEvent)>,
         on_panic: Box<dyn Fn(String)>,
     ) -> Result<Self, ShellError> {
-        Self::open_with(monitor, title, on_event, on_panic, true)
+        Self::open_with(monitor, title, on_event, on_panic, (true, dark))
     }
 
+    /// `look` is (show the window, dark caption).
     fn open_with(
         monitor: isize,
         title: &str,
         on_event: Box<dyn FnMut(SheetEvent)>,
         on_panic: Box<dyn Fn(String)>,
-        show: bool,
+        look: (bool, bool),
     ) -> Result<Self, ShellError> {
+        let (show, dark) = look;
         let state = Rc::new(State::new(on_event, on_panic));
         let hwnd = create(&state, title, monitor)?;
         let window = Self {
             hwnd: hwnd.0 as isize,
             state,
         };
-        set_dark_caption(hwnd);
+        set_dark_caption(hwnd, dark);
         clipboard::set_owner(window.hwnd);
         if show {
             // SAFETY: `hwnd` was just created on this thread and is alive.
@@ -273,6 +276,11 @@ impl SheetWindow {
     /// when Windows refuses the focus.
     pub fn raise(&self) {
         bring_to_front(hwnd_of(self.hwnd));
+    }
+
+    /// Switches the caption between its dark and light look (the theme's floor).
+    pub fn set_dark_caption(&self, dark: bool) {
+        set_dark_caption(hwnd_of(self.hwnd), dark);
     }
 
     /// Sets the caption text.

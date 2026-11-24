@@ -5,6 +5,7 @@ use plith_core::clock_choice::clock_order;
 use plith_core::display::Display;
 use plith_core::launch::ClockRequest;
 use plith_core::scene::SceneMailbox;
+use plith_core::theme::Palette;
 use std::sync::{Arc, Mutex, PoisonError};
 
 /// Sends display changes to the render thread; usable from any thread.
@@ -19,6 +20,13 @@ pub struct RelayoutHandle {
 }
 
 impl RelayoutHandle {
+    /// Asks the loop to draw in `palette` (a theme change): the page bitmaps are rastered again
+    /// and a settled island repaints once.
+    pub fn set_palette(&self, palette: Palette) {
+        self.shared.request_palette(palette);
+        let _ = self.mailbox.nudge();
+    }
+
     /// Asks the loop to follow `next`; the clock is reopened only when the monitor, the rate
     /// or the remote state changed since the last display.
     pub fn relayout(&self, next: Display) {

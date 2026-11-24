@@ -43,6 +43,33 @@ fn captions_are_upper() {
 }
 
 #[test]
+fn theme_names_are_the_same_upper_case_product_names_everywhere() {
+    use crate::theme::Theme;
+    let names = Theme::ALL.map(theme_name);
+    assert_eq!(names, ["GECE", "KA\u{11e}IT", "YORK", "SODYUM"]);
+    for name in names {
+        assert_eq!(name, upper(name, Lang::Tr), "{name}");
+    }
+    assert_eq!(
+        upper("ka\u{11f}\u{131}t", Lang::Tr),
+        theme_name(Theme::Kagit)
+    );
+}
+
+#[test]
+fn the_look_section_copy_is_per_language() {
+    assert_eq!(
+        sheet_text(SheetText::SectionLook, Lang::Tr),
+        "G\u{f6}r\u{fc}n\u{fc}m"
+    );
+    assert_eq!(sheet_text(SheetText::RowTheme, Lang::Tr), "Tema");
+    let en = sheet_text(SheetText::SectionLook, Lang::En);
+    for lang in Lang::ALL.into_iter().filter(|l| *l != Lang::En) {
+        assert_ne!(sheet_text(SheetText::SectionLook, lang), en, "{lang:?}");
+    }
+}
+
+#[test]
 fn language_names_are_in_themselves() {
     assert_eq!(lang_name(Lang::Tr), "T\u{fc}rk\u{e7}e");
     assert_eq!(lang_name(Lang::De), "Deutsch");

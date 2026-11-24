@@ -72,8 +72,13 @@ impl GpuPaint {
     ///
     /// # Errors
     /// Returns the first failing creation call.
-    pub fn new(hwnd: HWND, layout: SurfaceLayout, warp: bool, levers: Levers) -> Result<Self> {
-        let palette = Palette::default();
+    pub fn new(
+        hwnd: HWND,
+        layout: SurfaceLayout,
+        warp: bool,
+        levers: Levers,
+        palette: Palette,
+    ) -> Result<Self> {
         let (stack, notes) = Stack::new(hwnd, &layout, warp, levers, palette)?;
         Ok(Self {
             hwnd,
@@ -86,17 +91,15 @@ impl GpuPaint {
     }
 }
 
-impl GpuPaint {
+impl Paint for GpuPaint {
     /// Switches the palette now and for every painter rebuilt by a recovery.
-    pub fn set_palette(&mut self, palette: Palette) {
+    fn set_palette(&mut self, palette: Palette) {
         self.palette = palette;
         if let Some(stack) = self.stack.as_mut() {
             stack.painter.set_palette(palette);
         }
     }
-}
 
-impl Paint for GpuPaint {
     fn paint(&mut self, frame: &PaintFrame) -> Result<FrameTimes> {
         let stack = self
             .stack

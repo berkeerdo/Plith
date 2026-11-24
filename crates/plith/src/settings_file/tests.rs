@@ -47,7 +47,7 @@ fn saving_strips_line_breaks_from_the_city() {
     save_at(&path, &settings).unwrap();
     let text = std::fs::read_to_string(&path).unwrap();
     assert!(text.contains("city=Istanbul\n"), "{text}");
-    assert_eq!(text.lines().count(), 13);
+    assert_eq!(text.lines().count(), 14);
 }
 
 #[test]

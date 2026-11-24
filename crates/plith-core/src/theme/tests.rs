@@ -82,3 +82,34 @@ fn resolve_maps_every_role() {
 fn hex_channels_are_straight_rgba() {
     assert_eq!(bits(hex(0xFF, 0x00, 0x33)), bits([1.0, 0.0, 0.2, 1.0]));
 }
+
+#[test]
+fn only_kagit_is_a_light_theme() {
+    assert!(Theme::Gece.is_dark());
+    assert!(Theme::York.is_dark());
+    assert!(Theme::Sodyum.is_dark());
+    assert!(!Theme::Kagit.is_dark());
+    // The flag agrees with the floor: a dark theme has a floor darker than its ink.
+    for theme in THEMES {
+        let p = theme.palette();
+        assert_eq!(
+            theme.is_dark(),
+            contrast(p.floor, [0.0, 0.0, 0.0, 1.0]) < 3.0,
+            "{theme:?}"
+        );
+    }
+}
+
+#[test]
+fn theme_keys_round_trip() {
+    assert_eq!(Theme::ALL, THEMES);
+    for theme in THEMES {
+        assert_eq!(Theme::from_key(theme.key()), Some(theme));
+    }
+    assert_eq!(Theme::Gece.key(), "gece");
+    assert_eq!(Theme::Kagit.key(), "kagit");
+    assert_eq!(Theme::York.key(), "york");
+    assert_eq!(Theme::Sodyum.key(), "sodyum");
+    assert_eq!(Theme::from_key("neon"), None);
+    assert_eq!(Theme::from_key("Gece"), None);
+}

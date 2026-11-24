@@ -44,6 +44,7 @@ fn round_trip() {
         head: HeadSlot::Playing,
         osd: false,
         flyout: FlyoutPref::Hide,
+        theme: crate::theme::Theme::Sodyum,
     };
     let (back, problems) = parse(&serialize(&s));
     assert_eq!(back, s);
@@ -58,7 +59,7 @@ fn serialize_writes_every_key_in_order() {
         keys,
         [
             "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on",
-            "lang", "head", "osd", "flyout"
+            "lang", "head", "osd", "flyout", "theme"
         ]
     );
     assert!(text.ends_with('\n'));
@@ -138,4 +139,30 @@ fn idle_look_keys_round_trip() {
         assert_eq!(IdleLook::from_key(look.key()), Some(look));
     }
     assert_eq!(IdleLook::from_key("eyes"), None);
+}
+
+#[test]
+fn theme_defaults_to_gece_and_round_trips() {
+    use crate::theme::Theme;
+    assert_eq!(Settings::default().theme, Theme::Gece);
+    assert!(serialize(&Settings::default()).contains("theme=gece\n"));
+    for theme in Theme::ALL {
+        let s = Settings {
+            theme,
+            ..Settings::default()
+        };
+        let (back, problems) = parse(&serialize(&s));
+        assert_eq!(back.theme, theme);
+        assert!(problems.is_empty());
+    }
+}
+
+#[test]
+fn unknown_theme_falls_back_to_gece_and_is_reported() {
+    use crate::theme::Theme;
+    let (s, problems) = parse("theme=neon\n");
+    assert_eq!(s.theme, Theme::Gece);
+    assert_eq!(problems.len(), 1);
+    assert!(problems[0].contains("`theme`"));
+    assert!(!problems[0].contains("neon"));
 }

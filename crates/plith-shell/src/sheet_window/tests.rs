@@ -36,7 +36,7 @@ fn hidden_open_queues_events_and_closes_once() {
         "Plith test",
         Box::new(move |event| sink.borrow_mut().push(event)),
         Box::new(|_| {}),
-        false,
+        (false, true),
     )
     .expect("hidden window opens");
 
@@ -127,7 +127,7 @@ fn a_click_is_a_release_inside_after_a_press_here() {
         "Plith test",
         Box::new(move |event| sink.borrow_mut().push(event)),
         Box::new(|_| {}),
-        false,
+        (false, true),
     )
     .expect("hidden window opens");
     pump();

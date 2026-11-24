@@ -1,6 +1,8 @@
 //! The idle look settings and their text file format: one `key=value` per line, `#` comments,
 //! blank lines skipped. Parsing never fails; a bad line is reported and the default stays.
 
+use crate::theme::Theme;
+
 /// What the collapsed island shows while nothing happens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum IdleLook {
@@ -170,6 +172,8 @@ pub struct Settings {
     pub osd: bool,
     /// What to do with the Windows flyout.
     pub flyout: FlyoutPref,
+    /// The colour theme of the island and the settings window.
+    pub theme: Theme,
 }
 
 impl Default for Settings {
@@ -188,6 +192,7 @@ impl Default for Settings {
             head: HeadSlot::default(),
             osd: true,
             flyout: FlyoutPref::default(),
+            theme: Theme::default(),
         }
     }
 }
@@ -284,13 +289,14 @@ fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
         "head" => parse_head(value).map(|v| s.head = v).is_some(),
         "osd" => parse_bool(value).map(|v| s.osd = v).is_some(),
         "flyout" => parse_flyout(value).map(|v| s.flyout = v).is_some(),
+        "theme" => Theme::from_key(value).map(|v| s.theme = v).is_some(),
         _ => false,
     }
 }
 
-const KEYS: [&str; 13] = [
+const KEYS: [&str; 14] = [
     "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on", "lang",
-    "head", "osd", "flyout",
+    "head", "osd", "flyout", "theme",
 ];
 
 /// Parses the settings text. Bad lines keep the default and add one entry to the problem list.
@@ -363,13 +369,14 @@ pub fn serialize(s: &Settings) -> String {
     };
     format!(
         "look={}\nspan={span}\nplays={}\nweather={}\nlocation={location}\ncity={}\nunit={unit}\n\
-         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\n",
+         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\ntheme={}\n",
         s.look.key(),
         on_off(s.plays),
         on_off(s.weather),
         s.city,
         on_off(s.clock24),
         on_off(s.osd),
+        s.theme.key(),
     )
 }
 

@@ -1,6 +1,7 @@
 //! Settings window copy in the eight languages. See ADR 0015.
 
 use super::Lang;
+use crate::theme::Theme;
 
 mod de;
 mod en;
@@ -25,6 +26,8 @@ pub enum SheetText {
     Caption,
     /// Sidebar name of the General section.
     SectionGeneral,
+    /// Sidebar name of the Look section.
+    SectionLook,
     /// Sidebar name of the Idle section.
     SectionIdle,
     /// Sidebar name of the OSD section.
@@ -33,6 +36,8 @@ pub enum SheetText {
     SectionAbout,
     /// Line under the General section title.
     LineGeneral,
+    /// Line under the Look section title.
+    LineLook,
     /// Line under the Idle section title.
     LineIdle,
     /// Line under the OSD section title.
@@ -47,6 +52,10 @@ pub enum SheetText {
     RowOpens,
     /// Sub line of the open row.
     SubOpens,
+    /// Label of the colour theme row.
+    RowTheme,
+    /// Sub line of the colour theme row.
+    SubTheme,
     /// Caption above the closed island preview.
     CaptionClosed,
     /// Note under the closed island preview.
@@ -133,14 +142,16 @@ pub enum SheetText {
 
 impl SheetText {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [SheetText; 55] = [
+    pub const ALL: [SheetText; 59] = [
         SheetText::WindowTitle,
         SheetText::Caption,
         SheetText::SectionGeneral,
+        SheetText::SectionLook,
         SheetText::SectionIdle,
         SheetText::SectionOsd,
         SheetText::SectionAbout,
         SheetText::LineGeneral,
+        SheetText::LineLook,
         SheetText::LineIdle,
         SheetText::LineOsd,
         SheetText::LineAbout,
@@ -148,6 +159,8 @@ impl SheetText {
         SheetText::SubLanguage,
         SheetText::RowOpens,
         SheetText::SubOpens,
+        SheetText::RowTheme,
+        SheetText::SubTheme,
         SheetText::CaptionClosed,
         SheetText::PreviewNote,
         SheetText::RowStrip,
@@ -234,6 +247,18 @@ pub fn sheet_text(t: SheetText, lang: Lang) -> &'static str {
         Lang::Pt => pt::text(t),
         Lang::It => it::text(t),
         Lang::Pl => pl::text(t),
+    }
+}
+
+/// A theme named by its product name, upper case under Turkish rules. The names are proper
+/// names and read the same in every language (ADR 0007, theme switch spec section 3).
+#[must_use]
+pub fn theme_name(theme: Theme) -> &'static str {
+    match theme {
+        Theme::Gece => "GECE",
+        Theme::Kagit => "KA\u{11e}IT",
+        Theme::York => "YORK",
+        Theme::Sodyum => "SODYUM",
     }
 }
 

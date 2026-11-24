@@ -16,6 +16,7 @@ mod general;
 mod idle;
 mod keys;
 mod layout;
+mod look;
 mod osd;
 pub(crate) mod preview;
 
@@ -35,6 +36,8 @@ pub const SHEET_H: f64 = 640.0;
 pub enum Section {
     /// Language and the opening page.
     General,
+    /// The colour theme.
+    Look,
     /// The resting island and the welcome view.
     #[default]
     Idle,
@@ -46,8 +49,9 @@ pub enum Section {
 
 impl Section {
     /// Every section in sidebar order.
-    pub const ALL: [Section; 4] = [
+    pub const ALL: [Section; 5] = [
         Section::General,
+        Section::Look,
         Section::Idle,
         Section::Osd,
         Section::About,
@@ -154,6 +158,7 @@ pub fn sheet_build(facts: &SheetFacts, view: &SheetView) -> (DisplayList, Vec<Sh
     layout::chrome(&mut p, facts, view);
     match view.section {
         Section::General => general::build(&mut p, facts),
+        Section::Look => look::build(&mut p, facts),
         Section::Idle => idle::build(&mut p, facts, view),
         Section::Osd => osd::build(&mut p, facts),
         Section::About => about::build(&mut p, facts),

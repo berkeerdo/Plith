@@ -1,5 +1,6 @@
 mod harness;
 mod live;
+mod palette;
 mod prewarm;
 mod relayout;
 
@@ -441,6 +442,7 @@ fn stop_and_join_is_idempotent() {
         hz: 240.0,
         tune: R1,
         levers: plith_core::levers::Levers::default(),
+        palette: plith_core::theme::Palette::default(),
     };
     let handle = RenderHandle::new(&config, mailbox, shared, join);
     let other = handle.stop_handle();

@@ -13,6 +13,7 @@ use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::{IdleLook, Settings};
+use plith_core::theme::{Palette, Theme};
 use plith_render::{RelayoutHandle, StopHandle};
 use plith_shell::ShellEvent;
 use std::sync::Arc;
@@ -37,11 +38,18 @@ impl Stopper for StopHandle {
 pub trait Relayouter {
     /// Asks the render thread to paint for `display`.
     fn relayout(&self, display: Display);
+
+    /// Asks the render thread to draw in `palette`.
+    fn set_palette(&self, _palette: Palette) {}
 }
 
 impl Relayouter for RelayoutHandle {
     fn relayout(&self, display: Display) {
         RelayoutHandle::relayout(self, display);
+    }
+
+    fn set_palette(&self, palette: Palette) {
+        RelayoutHandle::set_palette(self, palette);
     }
 }
 
@@ -83,6 +91,8 @@ pub struct App {
     /// The look the settings file holds while `--idle-look` overrides it for this run: saves
     /// write it until the user picks a look.
     file_look: Option<IdleLook>,
+    /// The theme the settings file holds while `--theme` overrides it for this run; same rule.
+    file_theme: Option<Theme>,
     /// Writes the settings file; a normal run only.
     saver: Option<Saver>,
     /// The settings window.
@@ -117,6 +127,7 @@ impl App {
             normal_run: false,
             settings: Settings::default(),
             file_look: None,
+            file_theme: None,
             saver: None,
             sheet: SheetHost::default(),
         }

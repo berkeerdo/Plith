@@ -35,6 +35,11 @@ impl SheetPainter {
         })
     }
 
+    /// Switches the colours used by the next `draw`.
+    pub(crate) fn set_palette(&mut self, palette: Palette) {
+        self.palette = palette;
+    }
+
     /// Clears the context's target to the opaque floor and draws `list` at `scale` (the
     /// context's DIP scale) in one `BeginDraw`/`EndDraw`. Text is grayscale, as on the island.
     ///

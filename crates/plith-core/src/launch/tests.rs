@@ -258,6 +258,24 @@ fn bad_or_missing_flyout_is_rejected() {
 }
 
 #[test]
+fn theme_takes_a_theme_key() {
+    use crate::theme::Theme;
+    assert_eq!(parse(&[]).unwrap().theme, None);
+    for theme in Theme::ALL {
+        let launch = parse(&["--theme", theme.key()]).unwrap();
+        assert_eq!(launch.theme, Some(theme));
+    }
+    assert!(matches!(
+        parse(&["--theme", "neon"]),
+        Err(LaunchError::BadValue { .. })
+    ));
+    assert!(matches!(
+        parse(&["--theme"]),
+        Err(LaunchError::MissingValue(_))
+    ));
+}
+
+#[test]
 fn idle_look_takes_a_look_key() {
     assert_eq!(parse(&[]).unwrap().idle_look, None);
     for look in [

@@ -3,10 +3,11 @@
 //! Row labels are set in `Name`, sub lines and notes in `Body` (mixed case, never upper-cased),
 //! captions and choice words in `Label`.
 
-use super::{SheetText, sheet_text};
+use super::{SheetText, sheet_text, theme_name};
 use crate::draw::TextStyle;
 use crate::lang::fit::{Budget, Place};
 use crate::lang::{Lang, Text, text};
+use crate::theme::Theme;
 
 /// Room of a look name in a preview cell: 96 wide, minus the station and its gap, minus a margin.
 const LOOK_W: f64 = 70.0;
@@ -31,6 +32,35 @@ fn place(id: SheetText, lang: Lang, style: TextStyle, dip: f64) -> Place {
     }
 }
 
+/// The six look names under the preview cells.
+fn look_places(lang: Lang) -> impl Iterator<Item = Place> {
+    [
+        ("sheet look karot", Text::LookKarot),
+        ("sheet look clock", Text::LookClock),
+        ("sheet look playing", Text::LookPlaying),
+        ("sheet look seal", Text::LookSeal),
+        ("sheet look plain", Text::LookPlain),
+        ("sheet look hidden", Text::LookHidden),
+    ]
+    .into_iter()
+    .map(move |(name, id)| Place {
+        name: name.to_owned(),
+        text: text(id, lang).to_owned(),
+        style: TextStyle::Label,
+        budget: Budget::Dip(LOOK_W),
+    })
+}
+
+/// The four theme names as choice words; they read the same in every language.
+fn theme_places() -> impl Iterator<Item = Place> {
+    Theme::ALL.into_iter().map(|theme| Place {
+        name: format!("sheet theme {}", theme.key()),
+        text: theme_name(theme).to_owned(),
+        style: TextStyle::Label,
+        budget: Budget::Dip(WORD_W),
+    })
+}
+
 /// Every settings window string with its style and room. The window title is not budgeted.
 #[must_use]
 pub fn places(lang: Lang) -> Vec<Place> {
@@ -38,6 +68,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
     let mut out = Vec::new();
     for id in [
         S::SectionGeneral,
+        S::SectionLook,
         S::SectionIdle,
         S::SectionOsd,
         S::SectionAbout,
@@ -50,6 +81,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
     for id in [
         S::RowLanguage,
         S::RowOpens,
+        S::RowTheme,
         S::RowStrip,
         S::RowTopRight,
         S::RowPlayed,
@@ -66,11 +98,13 @@ pub fn places(lang: Lang) -> Vec<Place> {
     }
     for id in [
         S::LineGeneral,
+        S::LineLook,
         S::LineIdle,
         S::LineOsd,
         S::LineAbout,
         S::SubLanguage,
         S::SubOpens,
+        S::SubTheme,
         S::PreviewNote,
         S::SubStrip,
         S::SubTopRight,
@@ -84,21 +118,8 @@ pub fn places(lang: Lang) -> Vec<Place> {
     ] {
         out.push(place(id, lang, TextStyle::Body, LINE_W));
     }
-    for (name, id) in [
-        ("sheet look karot", Text::LookKarot),
-        ("sheet look clock", Text::LookClock),
-        ("sheet look playing", Text::LookPlaying),
-        ("sheet look seal", Text::LookSeal),
-        ("sheet look plain", Text::LookPlain),
-        ("sheet look hidden", Text::LookHidden),
-    ] {
-        out.push(Place {
-            name: name.to_owned(),
-            text: text(id, lang).to_owned(),
-            style: TextStyle::Label,
-            budget: Budget::Dip(LOOK_W),
-        });
-    }
+    out.extend(look_places(lang));
+    out.extend(theme_places());
     for id in S::ALL {
         if !id.is_caption() {
             continue;

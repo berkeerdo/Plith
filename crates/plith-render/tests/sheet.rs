@@ -141,6 +141,36 @@ fn wait_paints(render: &SheetRender, n: u64) {
 }
 
 #[test]
+fn a_new_palette_repaints_the_last_list_once_and_the_thread_parks_again() {
+    let hwnd = hidden_window();
+    let config = SheetConfig {
+        hwnd: hwnd.0 as isize,
+        width_px: 840,
+        height_px: 640,
+        scale: 1.0,
+        palette: palette(),
+    };
+    let render = SheetRender::spawn(config, Box::new(|_| {})).unwrap();
+    // No list yet: a palette alone paints nothing.
+    render.set_palette(Theme::Kagit.palette());
+    std::thread::sleep(Duration::from_millis(50));
+    assert_eq!(render.paints(), 0);
+    render.publish(Arc::new(idle_list(Lang::Tr)));
+    wait_paints(&render, 1);
+    render.set_palette(Theme::York.palette());
+    wait_paints(&render, 2);
+    // The same palette again paints nothing.
+    render.set_palette(Theme::York.palette());
+    std::thread::sleep(Duration::from_millis(100));
+    let wakes = render.wakes();
+    std::thread::sleep(Duration::from_millis(100));
+    assert_eq!((render.paints(), render.wakes()), (2, wakes));
+    render.stop_and_join();
+    // SAFETY: the window was created on this thread and is destroyed once.
+    unsafe { DestroyWindow(hwnd).unwrap() };
+}
+
+#[test]
 fn sheet_thread_paints_on_demand() {
     let hwnd = hidden_window();
     let config = SheetConfig {
