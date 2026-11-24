@@ -40,6 +40,8 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubOsd => "Bei Lautstärke- und Helligkeitsänderung, über Spielen",
         SheetText::RowHideWindows => "Windows-Anzeige ausblenden",
         SheetText::SubHideWindows => "Blendet die Windows-Anzeige aus, solange die von Plith läuft",
+        SheetText::RowAutostart => "Mit Windows starten",
+        SheetText::SubAutostart => "Plith startet von selbst, wenn du dich anmeldest",
         SheetText::RowVersion => "Version",
         SheetText::RowFile => "Einstellungsdatei",
         SheetText::RowData => "Daten",

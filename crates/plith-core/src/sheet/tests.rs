@@ -1,5 +1,6 @@
 use super::*;
 use crate::draw::{Ink, Node, Rect, StationMark, TextStyle};
+use crate::lang::sheet::{SheetText, sheet_text};
 use crate::pages::idle_pill::{IdleFacts, idle_pill};
 use crate::pages::pill::{PillFacts, PillState};
 use crate::settings::{FlyoutPref, HeadSlot, IdleLook, LangChoice, LocationMode, RunSpan};
@@ -32,11 +33,12 @@ fn facts_in(lang: Lang) -> SheetFacts {
         settings: Settings::default(),
         lang,
         previews: LOOKS.map(|l| Arc::new(idle_pill(l, &idle))),
-        version: "0.1.0",
+        version: "0.4.0",
         build_date: "2026-11-20",
         flyout_locked: false,
         settings_path: "C:\\Users\\someone\\AppData\\Local\\Plith\\settings.txt".into(),
         save_failed: false,
+        autostart: false,
     }
 }
 
@@ -185,6 +187,31 @@ fn toggle_flips() {
 }
 
 #[test]
+fn general_has_a_start_with_windows_row_that_flips() {
+    let (list, targets) = sheet_build(&facts(), &view(Section::General));
+    let t = target_for(&targets, &SheetAction::Autostart(true));
+    assert_eq!(
+        click(&targets, center(t)),
+        Some(SheetAction::Autostart(true))
+    );
+    assert!(texts(&list).contains(&"Windows ile ba\u{15f}lat".to_owned()));
+    let mut on = facts();
+    on.autostart = true;
+    let (_, targets) = sheet_build(&on, &view(Section::General));
+    target_for(&targets, &SheetAction::Autostart(false));
+}
+
+#[test]
+fn the_autostart_row_is_in_every_language() {
+    for lang in Lang::ALL {
+        let (list, targets) = sheet_build(&facts_in(lang), &view(Section::General));
+        let row = sheet_text(SheetText::RowAutostart, lang).to_owned();
+        assert!(texts(&list).contains(&row), "{lang:?}");
+        target_for(&targets, &SheetAction::Autostart(true));
+    }
+}
+
+#[test]
 fn flyout_row_dead_while_osd_off() {
     let mut f = facts();
     let (_, live) = sheet_build(&f, &view(Section::Osd));
@@ -227,7 +254,7 @@ fn flyout_row_dead_while_the_command_line_sets_it() {
 #[test]
 fn about_shows_the_build_date_next_to_the_version() {
     let (list, _) = sheet_build(&facts(), &view(Section::About));
-    assert!(texts(&list).iter().any(|t| t == "0.1.0  2026-11-20"));
+    assert!(texts(&list).iter().any(|t| t == "0.4.0  2026-11-20"));
 }
 
 #[test]
@@ -274,7 +301,7 @@ fn language_choice_wraps_and_picks() {
 fn about_open_gives_open_folder() {
     let (list, targets) = sheet_build(&facts(), &view(Section::About));
     target_for(&targets, &SheetAction::OpenFolder);
-    assert!(texts(&list).contains(&"0.1.0  2026-11-20".to_owned()));
+    assert!(texts(&list).contains(&"0.4.0  2026-11-20".to_owned()));
 }
 
 #[test]

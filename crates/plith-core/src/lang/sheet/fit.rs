@@ -90,6 +90,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::RowUnit,
         S::RowOsd,
         S::RowHideWindows,
+        S::RowAutostart,
         S::RowVersion,
         S::RowFile,
         S::RowData,
@@ -113,6 +114,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::SubLocation,
         S::SubOsd,
         S::SubHideWindows,
+        S::SubAutostart,
         S::SubData,
         S::SaveError,
     ] {

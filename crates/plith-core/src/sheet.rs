@@ -77,6 +77,9 @@ pub struct SheetFacts {
     pub flyout_locked: bool,
     /// Whether the last save failed.
     pub save_failed: bool,
+    /// Whether the HKCU Run value starts Plith at sign in: read when the window opened and
+    /// after each switch. It is not a setting of the file.
+    pub autostart: bool,
 }
 
 /// Where keyboard focus or the pointer is.
@@ -120,6 +123,8 @@ pub enum SheetAction {
     FocusField,
     /// Open the settings folder.
     OpenFolder,
+    /// Turn start with Windows on or off (the Run value, not a setting of the file).
+    Autostart(bool),
 }
 
 /// A clickable rectangle.

@@ -84,6 +84,8 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     for lang in [Lang::Tr, Lang::De] {
         let mut facts = facts::sheet_facts(lang);
         facts.settings.theme = theme;
+        // Turkish shows the Windows start switch off, German on, so one run covers both.
+        facts.autostart = lang == Lang::De;
         for section in Section::ALL {
             let view = SheetView {
                 section,

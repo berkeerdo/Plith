@@ -42,6 +42,8 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubHideWindows => {
             "Plith'in göstergesi çalışırken Windows'un kendi göstergesini gizler"
         }
+        SheetText::RowAutostart => "Windows ile başlat",
+        SheetText::SubAutostart => "Windows'ta oturum açınca Plith kendiliğinden açılır",
         SheetText::RowVersion => "Sürüm",
         SheetText::RowFile => "Ayar dosyası",
         SheetText::RowData => "Veri",

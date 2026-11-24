@@ -15,6 +15,7 @@ fn facts(settings: Settings) -> SheetFacts {
         flyout_locked: false,
         settings_path: String::from("C:\\x\\settings.ini"),
         save_failed: false,
+        autostart: false,
     }
 }
 

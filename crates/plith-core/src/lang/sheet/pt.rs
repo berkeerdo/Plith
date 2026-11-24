@@ -42,6 +42,8 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubHideWindows => {
             "Oculta o indicador do próprio Windows enquanto o do Plith roda"
         }
+        SheetText::RowAutostart => "Iniciar com o Windows",
+        SheetText::SubAutostart => "O Plith abre sozinho quando você entra no Windows",
         SheetText::RowVersion => "Versão",
         SheetText::RowFile => "Arquivo de configurações",
         SheetText::RowData => "Dados",

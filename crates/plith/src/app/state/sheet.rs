@@ -9,6 +9,7 @@ use super::{App, OsdControl};
 use crate::app::feed::Feed;
 use crate::app::idle_wiring::language_of;
 use crate::app::sheet_side::{Opening, SheetSide, Step, blank};
+use crate::autostart::Autostart;
 use crate::log::LogFile;
 use crate::settings_file;
 use plith_core::draw::DisplayList;
@@ -40,8 +41,9 @@ type Wake = Arc<dyn Fn() + Send + Sync>;
 /// What the six previews were built from, and the previews.
 type Previews = (IdleFacts, [Arc<DisplayList>; 6]);
 
-/// The facts a list was last built with, besides the previews.
-type Shown = (Settings, Lang, bool);
+/// The facts a list was last built with, besides the previews: the settings, the language, a
+/// failed save and the start with Windows switch.
+type Shown = (Settings, Lang, bool, bool);
 
 /// The settings window's place in the app, open or not.
 pub struct SheetHost {
@@ -61,6 +63,12 @@ pub struct SheetHost {
     previews: Option<Previews>,
     shown: Option<Shown>,
     caret_armed: bool,
+    /// Whether the app attached the window; a tray command before that opens nothing.
+    attached: bool,
+    /// The start with Windows switch; `None` in tests and runs that never touch the registry.
+    autostart: Option<Box<dyn Autostart>>,
+    /// The switch as last read or written, shown by the Genel row.
+    autostart_on: bool,
     /// How often `refresh_sheet` ran, for the tests.
     #[cfg(test)]
     pub(in crate::app) refreshes: u32,
@@ -79,6 +87,9 @@ impl Default for SheetHost {
             previews: None,
             shown: None,
             caret_armed: false,
+            attached: false,
+            autostart: None,
+            autostart_on: false,
             #[cfg(test)]
             refreshes: 0,
         }
@@ -97,12 +108,46 @@ impl App {
         self.sheet.folder = path.and_then(|p| p.parent().map(PathBuf::from));
         self.sheet.monitor = monitor;
         self.sheet.wake = wake;
+        self.sheet.attached = true;
+    }
+
+    /// Gives the Genel row its start with Windows switch (a normal run only).
+    pub fn attach_autostart(&mut self, autostart: Box<dyn Autostart>) {
+        self.sheet.autostart = Some(autostart);
+    }
+
+    /// Reads the switch again, so the row shows what the registry holds now.
+    fn read_autostart(&mut self) {
+        if let Some(autostart) = &self.sheet.autostart {
+            self.sheet.autostart_on = autostart.is_on();
+        }
+    }
+
+    /// Turns start with Windows on or off. A failed write is logged and the row shows what the
+    /// registry holds afterwards, so it springs back instead of lying.
+    pub(in crate::app) fn set_autostart(&mut self, on: bool) {
+        let Some(autostart) = self.sheet.autostart.as_mut() else {
+            return;
+        };
+        match autostart.set(on) {
+            Ok(()) => self
+                .log
+                .line(&format!("autostart: {}", if on { "on" } else { "off" })),
+            Err(error) => self.log.line(&format!("autostart: cannot switch: {error}")),
+        }
+        self.read_autostart();
     }
 
     /// Opens the settings window on the section shown last, or raises the open one.
     pub(in crate::app) fn open_sheet(&mut self) {
+        self.read_autostart();
+        if !self.sheet.attached {
+            self.log.line("settings window: not attached");
+            return;
+        }
         if let Some(side) = &self.sheet.side {
             side.raise();
+            self.refresh_sheet();
             return;
         }
         self.update_previews();
@@ -179,6 +224,7 @@ impl App {
             Step::Close => self.close_sheet(),
             Step::Copy(text) => set_clipboard(&text),
             Step::OpenFolder => self.open_folder(),
+            Step::Autostart(on) => self.set_autostart(on),
             Step::Resize(width_px, height_px, scale) => {
                 if let Some(side) = &self.sheet.side {
                     side.resize(width_px, height_px, scale);
@@ -313,6 +359,7 @@ impl App {
             flyout_locked: self.osd.as_ref().is_some_and(OsdControl::flyout_locked),
             settings_path: self.sheet.settings_path.clone(),
             save_failed: self.save_failed(),
+            autostart: self.sheet.autostart_on,
         }
     }
 
@@ -347,7 +394,12 @@ fn static_previews(facts: &IdleFacts) -> [Arc<DisplayList>; 6] {
 }
 
 fn shown(facts: &SheetFacts) -> Shown {
-    (facts.settings.clone(), facts.lang, facts.save_failed)
+    (
+        facts.settings.clone(),
+        facts.lang,
+        facts.save_failed,
+        facts.autostart,
+    )
 }
 
 #[cfg(test)]

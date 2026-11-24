@@ -153,6 +153,9 @@ impl App {
                 feed.set_weather(wiring.apply(link, settings));
             }
         }
+        if effects.lang {
+            self.sync_tray(language_of(settings));
+        }
         if effects.osd {
             self.apply_osd(settings);
         }

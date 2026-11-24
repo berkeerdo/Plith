@@ -40,6 +40,8 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::SubOsd => "Przy zmianie głośności i jasności, nad grami",
         SheetText::RowHideWindows => "Ukryj wskaźnik Windows",
         SheetText::SubHideWindows => "Ukrywa wskaźnik Windows, gdy działa wskaźnik Plith",
+        SheetText::RowAutostart => "Uruchom z Windows",
+        SheetText::SubAutostart => "Plith uruchamia się sam po zalogowaniu do Windows",
         SheetText::RowVersion => "Wersja",
         SheetText::RowFile => "Plik ustawień",
         SheetText::RowData => "Dane",

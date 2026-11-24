@@ -30,6 +30,8 @@ pub enum Step {
     Copy(String),
     /// Open the settings folder.
     OpenFolder,
+    /// Turn start with Windows on or off.
+    Autostart(bool),
     /// The client area is now this many pixels at this scale.
     Resize(u32, u32, f64),
 }
@@ -137,6 +139,7 @@ fn act(facts: &SheetFacts, view: &mut SheetView, action: SheetAction, steps: &mu
             steps.push(Step::Redraw);
         }
         SheetAction::OpenFolder => steps.push(Step::OpenFolder),
+        SheetAction::Autostart(on) => steps.push(Step::Autostart(on)),
     }
 }
 

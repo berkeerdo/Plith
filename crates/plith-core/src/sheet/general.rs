@@ -1,8 +1,8 @@
 //! The General section: language and the page the island opens on.
 
-use super::SheetFacts;
 use super::controls::{Page, word};
 use super::layout::FIRST_ROW;
+use super::{SheetAction, SheetFacts};
 use crate::lang::Lang;
 use crate::lang::sheet::{SheetText as S, lang_name};
 use crate::settings::change::SettingChange;
@@ -49,5 +49,16 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     ];
     let h = p.head(t, p.word(S::RowOpens), Some(p.word(S::SubOpens)), true);
     t += h + p.choice(1, t, words, true);
+    p.rule(t);
+
+    let h = p.head(
+        t,
+        p.word(S::RowAutostart),
+        Some(p.word(S::SubAutostart)),
+        true,
+    );
+    let to = SheetAction::Autostart(!facts.autostart);
+    p.toggle_to(2, t, facts.autostart, to, true);
+    t += h;
     p.rule(t);
 }
