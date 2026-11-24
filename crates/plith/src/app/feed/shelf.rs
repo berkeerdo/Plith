@@ -87,6 +87,15 @@ impl Feed {
         done
     }
 
+    /// Takes every wagon off the shelf; the files are untouched and one undo brings them back.
+    pub fn shelf_clear(&mut self, mailbox: &SceneMailbox) -> bool {
+        let done = self.shelf.shelf.clear() > 0;
+        if done {
+            self.shelf_changed(mailbox);
+        }
+        done
+    }
+
     /// Brings the last removal back.
     pub fn shelf_undo(&mut self, mailbox: &SceneMailbox) -> bool {
         let done = self.shelf.shelf.undo();

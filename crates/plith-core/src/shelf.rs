@@ -39,7 +39,9 @@ pub struct Added {
 #[derive(Debug, Clone, PartialEq, Eq, Default)]
 pub struct Shelf {
     items: Vec<ShelfItem>,
-    removed: Option<(usize, ShelfItem)>,
+    /// The last removal (one item, or the whole shelf after a clear) with the old places, in
+    /// ascending order.
+    removed: Vec<(usize, ShelfItem)>,
 }
 
 /// The comparison key of a path: Windows paths ignore case and a trailing separator.
@@ -77,7 +79,7 @@ impl Shelf {
     /// True when a removal can be taken back.
     #[must_use]
     pub fn can_undo(&self) -> bool {
-        self.removed.is_some()
+        !self.removed.is_empty()
     }
 
     fn position(&self, path: &Path) -> Option<usize> {
@@ -118,22 +120,33 @@ impl Shelf {
             return false;
         }
         let item = self.items.remove(index);
-        self.removed = Some((index, item));
+        self.removed = vec![(index, item)];
         true
     }
 
-    /// Brings the last removal back at its old place. `false` when nothing was removed, or the
-    /// path came back some other way meanwhile.
-    pub fn undo(&mut self) -> bool {
-        let Some((index, item)) = self.removed.take() else {
-            return false;
-        };
-        if self.position(&item.path).is_some() {
-            return false;
+    /// Removes every item and remembers them all for one [`undo`](Self::undo). Returns how
+    /// many were removed; an empty shelf keeps the earlier removal.
+    pub fn clear(&mut self) -> usize {
+        let count = self.items.len();
+        if count > 0 {
+            self.removed = self.items.drain(..).enumerate().collect();
         }
-        self.items.insert(index.min(self.items.len()), item);
+        count
+    }
+
+    /// Brings the last removal back at its old places. `false` when nothing was removed, or
+    /// every path came back some other way meanwhile.
+    pub fn undo(&mut self) -> bool {
+        let mut restored = false;
+        for (index, item) in std::mem::take(&mut self.removed) {
+            if self.position(&item.path).is_some() {
+                continue;
+            }
+            self.items.insert(index.min(self.items.len()), item);
+            restored = true;
+        }
         self.items.truncate(CAPACITY);
-        true
+        restored
     }
 
     /// The text form: one path per line, newest first.

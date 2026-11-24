@@ -137,6 +137,8 @@ pub enum Action {
     ShelfRemove(usize),
     /// Bring the last removed wagon back.
     ShelfUndo,
+    /// Take every wagon off the shelf at once (one undo brings them all back).
+    ShelfClear,
 }
 
 /// A built page: what to draw, where to click and how big the island is.

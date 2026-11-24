@@ -357,3 +357,21 @@ fn a_drag_out_that_ends_over_the_island_leaves_it_open() {
     assert!(rig.app.take_wagon_drag());
     assert_eq!(rig.timer_ms(COLLAPSE_TIMER), None);
 }
+
+#[test]
+fn clear_empties_the_shelf_and_one_undo_brings_all_back() {
+    let mut rig = rig("clear");
+    let paths: Vec<PathBuf> = (0..3)
+        .map(|i| PathBuf::from(format!("C:\\nowhere\\c{i}.txt")))
+        .collect();
+    enter(&mut rig);
+    rig.app.on_drop(&paths);
+    let mailbox = std::sync::Arc::clone(&rig.app.mailbox);
+    let feed = rig.app.feed.as_mut().unwrap();
+    assert!(feed.shelf_clear(&mailbox));
+    assert!(feed.shelf_items().is_empty());
+    assert!(!feed.shelf_clear(&mailbox), "nothing left to clear");
+    assert!(feed.shelf_undo(&mailbox));
+    let back: Vec<PathBuf> = feed.shelf_items().iter().map(|i| i.path.clone()).collect();
+    assert_eq!(back, paths);
+}

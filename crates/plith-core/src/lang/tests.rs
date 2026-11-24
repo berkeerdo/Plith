@@ -169,6 +169,8 @@ fn turkish_copy_is_unchanged() {
         (Text::ShelfFile, "DOSYA"),
         (Text::ShelfSlot, "BIRAK"),
         (Text::ShelfUndo, "GERİ AL"),
+        (Text::ShelfClear, "TEMİZLE"),
+        (Text::SkyClear, "BERRAK"),
         (Text::ShelfFooter, "SÜRÜKLE, BIRAK"),
     ];
     for (t, s) in expected {

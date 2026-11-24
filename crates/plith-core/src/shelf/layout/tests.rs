@@ -87,9 +87,26 @@ fn every_page_fits_the_surface_and_its_content_stays_inside() {
 }
 
 #[test]
-fn a_remove_target_is_the_track_under_its_wagon() {
-    let w = layout(1).wagons[0];
-    assert!(w.remove.x > w.rect.x && w.remove.x + w.remove.w < w.rect.x + w.rect.w);
-    assert!(w.remove.y < w.track_y && w.track_y < w.remove.y + w.remove.h);
-    assert!(w.remove.y > w.rect.y + w.rect.h - 10.0);
+fn the_remove_cross_sits_in_the_top_right_corner_of_its_wagon() {
+    for count in [1, 5, 8] {
+        for w in layout(count).wagons {
+            let (cx, cy) = w.cross;
+            assert!(cx > w.rect.x + w.rect.w - 20.0 && cx < w.rect.x + w.rect.w);
+            assert!(cy > w.rect.y && cy < w.rect.y + 20.0);
+            assert_eq!((w.remove.w, w.remove.h), (24.0, 24.0));
+            // The target is centred on the cross and stays inside the wagon.
+            assert_eq!(w.remove.x + 12.0, cx);
+            assert_eq!(w.remove.y + 12.0, cy);
+            assert!(w.remove.x + w.remove.w <= w.rect.x + w.rect.w);
+            assert!(w.remove.y >= w.rect.y);
+        }
+    }
+}
+
+#[test]
+fn the_clear_word_sits_at_the_right_end_with_the_undo_word_before_it() {
+    let l = layout(3);
+    assert_eq!(l.clear.x + l.clear.w, RIGHT);
+    assert!(l.undo.x + l.undo.w < l.clear.x);
+    assert_eq!(l.undo.x, UNDO_X);
 }

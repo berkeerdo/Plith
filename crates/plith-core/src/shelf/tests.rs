@@ -134,6 +134,36 @@ fn undo_on_a_full_shelf_stays_within_the_capacity() {
 }
 
 #[test]
+fn clear_empties_the_shelf_and_one_undo_brings_everything_back_in_order() {
+    let mut shelf = Shelf::default();
+    shelf.add(&[file("a"), file("b"), file("c")]);
+    assert_eq!(shelf.clear(), 3);
+    assert!(shelf.is_empty());
+    assert!(shelf.can_undo());
+    assert!(shelf.undo());
+    assert_eq!(names(&shelf), ["a", "b", "c"]);
+    assert!(!shelf.can_undo());
+}
+
+#[test]
+fn clearing_an_empty_shelf_offers_no_undo() {
+    let mut shelf = Shelf::default();
+    assert_eq!(shelf.clear(), 0);
+    assert!(!shelf.can_undo());
+}
+
+#[test]
+fn clear_replaces_an_earlier_removal_and_undo_skips_paths_that_came_back() {
+    let mut shelf = Shelf::default();
+    shelf.add(&[file("a"), file("b"), file("c")]);
+    shelf.remove(0);
+    shelf.clear();
+    shelf.add(&[file("b")]);
+    assert!(shelf.undo());
+    assert_eq!(names(&shelf), ["b", "c"]);
+}
+
+#[test]
 fn the_text_form_is_one_path_per_line_newest_first() {
     let mut shelf = Shelf::default();
     shelf.add(&[file("a"), file("b")]);

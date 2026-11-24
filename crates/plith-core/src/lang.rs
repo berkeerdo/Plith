@@ -161,6 +161,8 @@ pub enum Text {
     ShelfSlot,
     /// The word that takes the last removal back.
     ShelfUndo,
+    /// The word that takes every wagon off the shelf at once.
+    ShelfClear,
     /// The hint after the file count in the shelf footer.
     ShelfFooter,
     /// The type tag of a folder on a shelf wagon.
@@ -171,7 +173,7 @@ pub enum Text {
 
 impl Text {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [Text; 46] = [
+    pub const ALL: [Text; 47] = [
         Text::LookKarot,
         Text::LookClock,
         Text::LookPlaying,
@@ -215,6 +217,7 @@ impl Text {
         Text::Source,
         Text::ShelfSlot,
         Text::ShelfUndo,
+        Text::ShelfClear,
         Text::ShelfFooter,
         Text::ShelfFolder,
         Text::ShelfFile,

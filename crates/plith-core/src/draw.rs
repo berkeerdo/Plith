@@ -29,7 +29,7 @@ pub enum Ink {
 }
 
 /// A rectangle in page DIP, relative to the page origin.
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Default)]
 pub struct Rect {
     /// Left edge.
     pub x: f64,
