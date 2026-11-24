@@ -1,0 +1,171 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Plith icon sheet</title>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=block" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #101113; color: #ECE9E2; font-family: "Public Sans", sans-serif; width: 1440px; padding: 36px; }
+  h1 { font: 500 13px "Martian Mono", monospace; letter-spacing: .08em; color: #A39E94; margin-bottom: 6px; }
+  p.lede { font-size: 13px; color: #8A847A; margin-bottom: 26px; max-width: 980px; line-height: 1.5; }
+  .variant { margin-bottom: 34px; padding-top: 18px; border-top: 1px solid #2B2824; }
+  .vhead { display: flex; gap: 18px; align-items: baseline; margin-bottom: 14px; }
+  .vname { font: 500 13px "Martian Mono", monospace; letter-spacing: .08em; }
+  .vnote { font-size: 13px; color: #A39E94; }
+  .verdict { font: 400 10px "Martian Mono", monospace; letter-spacing: .06em; color: #8A847A; margin-left: auto; }
+  .rowx { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+  .explorer { padding: 18px 20px; display: flex; gap: 26px; align-items: flex-end; height: 380px; position: relative; padding-top: 70px; }
+  .explorer.light { background: #FFFFFF; color: #1A1A1A; }
+  .explorer.dark { background: #191919; color: #FFFFFF; }
+  .cellx { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+  .cellx span { font: 400 10px "Martian Mono", monospace; letter-spacing: .06em; opacity: .6; }
+  .cellx img, .cellx svg { display: block; }
+  .details { position: absolute; left: 20px; top: 16px; font: 12px "Segoe UI Variable Text", "Segoe UI", sans-serif; display: flex; flex-direction: column; gap: 2px; }
+  .details div { display: flex; gap: 8px; align-items: center; height: 24px; padding: 0 6px; width: 250px; }
+  .details .sel { background: rgba(0, 120, 212, .16); }
+  .bars { display: grid; grid-template-columns: 1fr; gap: 14px; margin-bottom: 14px; }
+  .taskbar { height: 48px; display: flex; align-items: center; padding: 0 10px; position: relative; font-family: "Segoe UI Variable Text", "Segoe UI", sans-serif; }
+  .taskbar.light { background: #EEEEEE; border-top: 1px solid #DADADA; color: #1A1A1A; }
+  .taskbar.dark { background: #1C1C1C; border-top: 1px solid #2E2E2E; color: #FFFFFF; }
+  .tb-center { display: flex; gap: 4px; margin: 0 auto; }
+  .tb-btn { width: 40px; height: 40px; display: grid; place-items: center; position: relative; border-radius: 4px; }
+  .tb-btn.open::after { content: ""; position: absolute; bottom: 2px; width: 6px; height: 3px; border-radius: 2px; background: currentColor; opacity: .5; }
+  .tb-btn.active { background: rgba(127, 127, 127, .16); }
+  .tb-btn.active::after { content: ""; position: absolute; bottom: 2px; width: 16px; height: 3px; border-radius: 2px; background: #3F8CD6; }
+  .tray { display: flex; gap: 6px; align-items: center; position: absolute; right: 10px; top: 0; height: 48px; }
+  .tray .ico { width: 24px; height: 32px; display: grid; place-items: center; }
+  .clock { font-size: 12px; text-align: right; line-height: 16px; padding: 0 4px; }
+  .zoom { display: flex; gap: 22px; align-items: flex-end; }
+  .zoom figure { display: flex; flex-direction: column; gap: 6px; }
+  .zoom canvas { image-rendering: pixelated; display: block; }
+  .zoom figcaption { font: 400 10px "Martian Mono", monospace; letter-spacing: .06em; color: #8A847A; }
+  .pane { padding: 14px; }
+  .pane.light { background: #EEEEEE; }
+  .pane.dark { background: #1C1C1C; }
+  .caption-test { display: flex; gap: 14px; }
+</style>
+</head>
+<body>
+<h1>PLITH · UYGULAMA SİMGESİ · ÜÇ YAPI, TEK FİKİR · 1:1 DIP</h1>
+<p class="lede">Fikir sabit: ekran çerçevesinin üst kenarında ada, altında çekili tek kol. Değişen yalnız yapı. Her boyut kendi piksel ızgarasında ayrı çizildi (16, 24 ve 32 ızgarası; 256 ayrıntı ekler). En alttaki büyütmeler gerçek 16 ve 24 piksel rasterdir, kenar yumuşatma kapalı.</p>
+<div id="sheet"></div>
+<script src="icons.js"></script>
+<script>
+// Neighbour icons: simple shapes that stand for real apps, so the 16 and 24 px icon is judged in company.
+function nb(kind, dark) {
+  const s = {
+    start: '<rect x="3" y="3" width="8.5" height="8.5" fill="#2B88D8"/><rect x="12.5" y="3" width="8.5" height="8.5" fill="#2B88D8"/><rect x="3" y="12.5" width="8.5" height="8.5" fill="#2B88D8"/><rect x="12.5" y="12.5" width="8.5" height="8.5" fill="#2B88D8"/>',
+    search: `<circle cx="10.5" cy="10.5" r="6" fill="none" stroke="${dark ? '#fff' : '#1a1a1a'}" stroke-width="1.6"/><line x1="15" y1="15" x2="20" y2="20" stroke="${dark ? '#fff' : '#1a1a1a'}" stroke-width="1.8"/>`,
+    folder: '<path d="M2 6h7l2 2h11v12H2z" fill="#E8B43A"/><path d="M2 10h20v10H2z" fill="#F7CD55"/>',
+    browser: '<circle cx="12" cy="12" r="10" fill="#1E7F5C"/><circle cx="12" cy="12" r="6" fill="#3DBA8C"/><circle cx="12" cy="12" r="3" fill="#E8F5EE"/>',
+    chat: '<rect x="2" y="4" width="20" height="16" rx="5" fill="#5865F2"/><circle cx="9" cy="12" r="1.8" fill="#fff"/><circle cx="15" cy="12" r="1.8" fill="#fff"/>',
+    game: '<circle cx="12" cy="12" r="10" fill="#1B2838"/><circle cx="15" cy="9" r="3" fill="none" stroke="#C7D5E0" stroke-width="1.5"/><circle cx="8" cy="15" r="2" fill="#C7D5E0"/>',
+    mixer: '<rect x="2" y="3" width="20" height="18" fill="#2F3D4C"/><rect x="5" y="6" width="2" height="12" fill="#8FB3D9"/><rect x="11" y="6" width="2" height="12" fill="#8FB3D9"/><rect x="17" y="6" width="2" height="12" fill="#8FB3D9"/><rect x="4" y="12" width="4" height="2" fill="#fff"/><rect x="10" y="8" width="4" height="2" fill="#fff"/><rect x="16" y="14" width="4" height="2" fill="#fff"/>',
+  }[kind];
+  return `<svg width="24" height="24" viewBox="0 0 24 24">${s}</svg>`;
+}
+function tray(kind, dark) {
+  const c = dark ? '#FFFFFF' : '#1A1A1A';
+  const s = {
+    chevron: `<path d="M4 10l4-4 4 4" fill="none" stroke="${c}" stroke-width="1.2"/>`,
+    cloud: '<path d="M4 12a3 3 0 0 1 .5-6 4 4 0 0 1 7.5 1.5A2.5 2.5 0 0 1 12 12z" fill="#2B88D8"/>',
+    shield: '<path d="M8 1.5l5.5 2v4.5c0 3.5-2.5 5.5-5.5 6.5-3-1-5.5-3-5.5-6.5V3.5z" fill="#3A7D44"/>',
+    wifi: `<path d="M1.5 6.5a9.5 9.5 0 0 1 13 0M4 9a6 6 0 0 1 8 0M6.5 11.5a2.5 2.5 0 0 1 3 0" fill="none" stroke="${c}" stroke-width="1.2"/><circle cx="8" cy="13.5" r="1" fill="${c}"/>`,
+    speaker: `<path d="M2 6h3l4-3v10l-4-3H2z" fill="none" stroke="${c}" stroke-width="1.1"/><path d="M11 5.5a3.5 3.5 0 0 1 0 5M12.8 3.8a6 6 0 0 1 0 8.4" fill="none" stroke="${c}" stroke-width="1.1"/>`,
+  }[kind];
+  return `<svg width="16" height="16" viewBox="0 0 16 16">${s}</svg>`;
+}
+function img(variant, size) {
+  const i = new Image(size, size);
+  i.src = 'data:image/svg+xml;utf8,' + encodeURIComponent(iconSvg(variant, size));
+  return i;
+}
+const loads = [];
+// A true raster: the SVG drawn into a canvas of its own pixel size, then enlarged without smoothing.
+function zoomCanvas(variant, size, scale, bg) {
+  const c = document.createElement('canvas');
+  c.width = size * scale; c.height = size * scale;
+  c.style.width = size * scale + 'px'; c.style.height = size * scale + 'px';
+  const i = img(variant, size);
+  loads.push(new Promise(res => { i.onload = () => {
+    const small = document.createElement('canvas'); small.width = size; small.height = size;
+    const sx = small.getContext('2d'); sx.fillStyle = bg; sx.fillRect(0, 0, size, size); sx.drawImage(i, 0, 0, size, size);
+    const x = c.getContext('2d'); x.imageSmoothingEnabled = false; x.drawImage(small, 0, 0, size * scale, size * scale); res();
+  }; }));
+  return c;
+}
+const VERDICT = {
+  ekran: '16 PX: OKUNUR, KOYU BARDA ÇERÇEVE KAYBOLUR',
+  plaka: '16 PX: EN İYİSİ, ADA VE TOPUZ İKİ BARDA DA AYRI',
+  kesit: '16 PX: TARAMA GİDER, ÜST ÇİZGİ ADAYA YAPIŞIR',
+};
+const sheet = document.getElementById('sheet');
+for (const key of Object.keys(ICON_VARIANTS)) {
+  const v = ICON_VARIANTS[key];
+  const sec = document.createElement('section'); sec.className = 'variant'; sec.dataset.shot = 'icon-' + key;
+  sec.innerHTML = `<div class="vhead"><span class="vname">${v.name}</span><span class="vnote">${v.note}</span><span class="verdict">${VERDICT[key]}</span></div>`;
+  // Explorer-like light and dark: sizes, plus a details list row at 16.
+  const rowx = document.createElement('div'); rowx.className = 'rowx';
+  for (const mode of ['light', 'dark']) {
+    const ex = document.createElement('div'); ex.className = 'explorer ' + mode;
+    const det = document.createElement('div'); det.className = 'details';
+    ['Plith.exe', 'Plith-Setup-0.4.0.exe'].forEach((n, i) => {
+      const d = document.createElement('div'); if (i === 0) d.className = 'sel';
+      d.appendChild(img(key, 16)); d.appendChild(document.createTextNode(n)); det.appendChild(d);
+    });
+    ex.appendChild(det);
+    for (const s of [256, 48, 32, 24, 16]) {
+      const cell = document.createElement('div'); cell.className = 'cellx';
+      cell.appendChild(img(key, s));
+      const sp = document.createElement('span'); sp.textContent = s; cell.appendChild(sp);
+      ex.appendChild(cell);
+    }
+    rowx.appendChild(ex);
+  }
+  sec.appendChild(rowx);
+  // Taskbars: Plith open and active among neighbours, tray with Plith at 16.
+  const bars = document.createElement('div'); bars.className = 'bars';
+  for (const mode of ['light', 'dark']) {
+    const dark = mode === 'dark';
+    const tb = document.createElement('div'); tb.className = 'taskbar ' + mode;
+    const center = document.createElement('div'); center.className = 'tb-center';
+    const apps = [['start'], ['search'], ['folder', 'open'], ['browser', 'open'], ['plith', 'active'], ['chat', 'open'], ['game'], ['mixer', 'open']];
+    apps.forEach(([k, st]) => {
+      const b = document.createElement('div'); b.className = 'tb-btn' + (st ? ' ' + st : '');
+      if (k === 'plith') b.appendChild(img(key, 24)); else b.innerHTML = nb(k, dark);
+      center.appendChild(b);
+    });
+    tb.appendChild(center);
+    const tr = document.createElement('div'); tr.className = 'tray';
+    ['chevron', 'plith', 'cloud', 'shield'].forEach(k => {
+      const t = document.createElement('div'); t.className = 'ico';
+      if (k === 'plith') t.appendChild(img(key, 16)); else t.innerHTML = tray(k, dark);
+      tr.appendChild(t);
+    });
+    const sys = document.createElement('div'); sys.className = 'ico'; sys.style.width = '44px'; sys.style.gap = '4px'; sys.style.display = 'flex'; sys.style.alignItems = 'center';
+    sys.innerHTML = tray('wifi', dark) + tray('speaker', dark);
+    tr.appendChild(sys);
+    const clock = document.createElement('div'); clock.className = 'clock'; clock.innerHTML = '21:47<br>24.11.2026';
+    tr.appendChild(clock);
+    tb.appendChild(tr);
+    bars.appendChild(tb);
+  }
+  sec.appendChild(bars);
+  // True raster zoom: 16 at 8x and 24 at 6x on both bar colours.
+  const zoom = document.createElement('div'); zoom.className = 'zoom';
+  [[16, 8, '#EEEEEE', 'AÇIK BAR'], [16, 8, '#1C1C1C', 'KOYU BAR'], [24, 6, '#EEEEEE', 'AÇIK BAR'], [24, 6, '#1C1C1C', 'KOYU BAR']].forEach(([s, sc, bg, lab]) => {
+    const f = document.createElement('figure');
+    f.appendChild(zoomCanvas(key, s, sc, bg));
+    const cap = document.createElement('figcaption'); cap.textContent = `${s} PX RASTER · ${sc}X · ${lab}`; f.appendChild(cap);
+    zoom.appendChild(f);
+  });
+  sec.appendChild(zoom);
+  sheet.appendChild(sec);
+}
+const imgs = [...document.images];
+Promise.all([document.fonts.ready, ...loads, ...imgs.map(i => i.decode().catch(() => {}))])
+  .then(() => { document.body.dataset.ready = '1'; });
+</script>
+</body>
+</html>

@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<title>Plith settings Kagit</title>
+<link href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=block" rel="stylesheet">
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: #C9CDD3; padding: 32px; width: 904px; }
+  .win svg { display: block; }
+  .win { box-shadow: 0 0 0 1px #A9ADB3; }
+</style>
+</head>
+<body>
+<script src="icons.js"></script>
+<script src="kit.js"></script>
+<script src="settings.js"></script>
+<script>
+// Kağıt: the OSD section with the interlock visible (13 normal, 14 locked).
+whenFonts(() => { settingsWindow('kagit', 'osd'); });
+</script>
+</body>
+</html>

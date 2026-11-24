@@ -58,16 +58,16 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   `tray: icon added` logged. Tray menu, `Çıkış`, Explorer restart not yet seen.
 - **Next: redesign of the logo/icon and the whole settings window** (Berke 2026-11-24: "logo
   iconunu ve komple ayarları güncelleriz"), plus the installer screens as one identity package
-  (Berke: "setup tasarımı da değişmeli"). Design work order: `praxvon-direction` concepts, Berke
-  picks, build, `impeccable` pass. The current Genel subtitle no longer covers its rows.
-- Updates (Berke asked if WPF users get them): WPF 0.3.x has an on-demand GitHub check that runs
-  `Plith-Setup-*.exe`; publishing the Rust installer under that name at 0.4.0 lets them move over
-  with one click. The Rust app needs its own check (button, maybe a quiet daily check): add it to
-  parity part 2. SmartScreen may warn while the cert is self-signed.
-- Then R7 parity part 2: installer and uninstall (helper in Program Files, trust store step,
-  sudo with Berke's yes), WPF `config.ini` import. Research `research/2026-11-24-r7-parity.md`.
-  Open: brightness hotkeys and endpoint pinning (WPF had both); asked Berke whether he uses them,
-  his "evet öyle" was ambiguous: ask again before parity part 2.
+  (Berke: "setup tasarımı da değişmeli"). Round 1 (`design/identity/`: directions, lever-frame
+  comps) REJECTED 2026-11-24: "bence tasarım baya kötü logo özellikle" (taste log). Round 2, my
+  call on his "önerin ne ise": logo first as its own job: line up the category's best real icons
+  (Oyenza, FluentFlyout, EarTrumpet, Win11 Fluent, macOS-grade), explore with an image model,
+  redraw the pick as a clean vector, image comps before code; then settings derived from it, a
+  metaphor only as a quiet detail. Ask him for references he likes if he has any.
+- Then R7 parity part 2 (`research/2026-11-24-r7-parity.md`): installer and uninstall (helper in
+  Program Files, trust store, sudo with his yes), `config.ini` import, an update check. WPF 0.3.x
+  users move over through its GitHub check if the asset stays `Plith-Setup-0.4.0.exe`. Ask again
+  whether he uses brightness hotkeys and endpoint pinning ("evet öyle" was ambiguous).
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).
