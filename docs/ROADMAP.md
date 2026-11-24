@@ -13,13 +13,13 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R4 Pages | Tab bar, audio, media, system on the engine | lane `pages` | 4 sessions | 🔄 code merged (b6bd801, 1 lane session + 1 merge fix round; ADR 0010 to 0012); console run left |
 | R4b Media output picker | Per-app output routing (undocumented IAudioPolicyConfig); R4 shows the route read-only | master + subagents | 1 session | 🔄 parked: probe Set failed on RDP Remote Audio, rerun with real outputs |
 | R5 Shelf | In-process OLE drag in and out | master + subagents | 2 sessions | 🔄 code merged (e3aa5da, part of 1 session; ADR 0018); on screen left |
-| Theme switch | Görünüm section, four palettes live | master + subagents | not estimated | 🔄 code merged (104e904, part of 1 session); on screen left |
+| Theme switch | Görünüm section, four palettes live | master + subagents | not estimated | ✅ merged 104e904, seen on screen by Berke 2026-11-24 |
 | R6 OSD helper | UIAccess band window, pipe, signing, flyout hardening | lane `osd` | 2 to 3 sessions | 🔄 code merged (4aca03e, 1 lane session + 2 review rounds; ADR 0009); console run over a game left |
 | R7a Karot idle look | Pill looks, welcome view, settings and play files, tr/en table, weather service | master + subagents | not estimated | 🔄 code merged (3ee8b05, 2 sessions incl. direction pass; ADR 0014); console run left |
 | R7 languages | Eight languages from one table, OSD muted word over the pipe | master + subagents | not estimated | ✅ done (merged 3a281c2; ADR 0015; console 2026-11-18) |
 | Console fix round | Home mark, speaker glyph, title scroll, ruler drag, OSD prewarm (from the 2026-11-18 console) | master + subagents | not estimated | ✅ done, 2 sessions incl. console check (merged 397e7d9; ADR 0016) |
 | R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code merged (c7e693a, 1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); console run left |
-| R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master | 3 sessions | ⬜ waiting on R4 to R6 |
+| R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master + subagents | 3 sessions | 🔄 part 1 merged (ae94753: tray, version, autostart); next the settings and icon redesign, then installer |
 
 ## Settled scope (2026-11-14)
 - Inside exclusive fullscreen games only the OSD shows (ADR 0002).

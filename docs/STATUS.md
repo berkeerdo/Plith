@@ -24,16 +24,11 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   Six resting pill looks (Karot default), the welcome view as a fifth page, `settings.ini` and
   `plays.txt` in `%LOCALAPPDATA%\Plith\`, `plith-weather` (off by default). Task 12 boxes 1 and
   2 proven on the console; box 3 (weather to `OKUMA`) open. Worktree removed 2026-11-20.
-- R7 languages and the console fix round are done; their records moved to `journal/2026-11.md`.
 - **Theme switch: merged as `104e904`** (2026-11-24, spec `specs/2026-11-24-theme-switch-design.md`,
   plan `plans/active/theme-switch.md`). Görünüm section, Tema row (Gece, Kağıt, York, Sodyum), key
-  `theme`, `--theme`; live palette to the island and the window, caption follows dark or light.
-  OSD helper keeps its fixed colours (needs a protocol bump). Not yet seen on screen.
-- **R5 shelf: merged as `e3aa5da`** (2026-11-24, spec `specs/2026-11-24-r5-shelf-design.md`, ADR
-  0018 drag hover opens the shelf, plan `plans/active/r5-shelf.md`, opus review 0 critical, 5
-  important, all fixed). Five checks on main after both merges and the fix `fdb5c5f`: fmt,
-  clippy, 1366 tests, structure 825/0, release. `RegisterDragDrop` succeeds on the live window
-  (no `shelf: no drop target` line, RDP 2026-11-24); no real drag yet.
+  `theme`, `--theme`; caption follows dark or light. OSD helper keeps fixed colours.
+- **R5 shelf: merged as `e3aa5da`** (spec `specs/2026-11-24-r5-shelf-design.md`, ADR 0018, plan
+  `plans/active/r5-shelf.md`, opus review: 5 important, all fixed).
 - **R4b output picker: parked** on worktree branch `worktree-agent-afd1c836624792461` (spec
   `specs/2026-11-24-r4b-media-output-picker-design.md`, research `research/2026-11-24-r4b-app-route.md`).
   Probe over RDP: activation and Get OK, Set to `Remote Audio` gave `E_INVALIDARG`. Rerun with real
@@ -44,9 +39,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
 - **Display relayout: merged as `42f29ac`** (2026-11-22; spec, plan
   `plans/active/display-relayout.md`, review in `quality/`). RDP reconnect 2026-11-23: 0 relayout
   lines (same size), 32 fps 0 hitches; the rest of Task 5 open (plan progress log).
-- **Session display fix: merged** (2026-11-23, `ac07a42`): suppression follows the session
-  display, not the console one (froze the notch over RDP). Five checks green, 1265 tests.
-- **Next: one console session, Berke present.** First the relayout check (plan Task 5):
+- Session display fix merged 2026-11-23 (`ac07a42`): suppression follows the session display.
+- **Owed on the console, Berke present** (any day): the relayout check (plan Task 5):
   resolution and scale on the console, the RDP to console switch, and a window resize over
   RDP. Check the display-off hide still works on the console (monitor off). Then finish the settings console session (started 2026-11-21, a real click opened the
   window in 39 ms; progress note in the plan; plan Task 12, Task 11 Step 1):
@@ -59,9 +53,21 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
   Step 5); audio-clarity Task 8 box (he used the ruler, "cetvel çalışıyor"). Later: the guarded
   route write session.
-- On screen next (RDP is fine except motion): pick each theme, drag files in from Explorer and out
-  again, remove and undo, restart keeps the shelf; then the R4b probe. Then R7 parity (tray,
-  installer). Open question to Berke: align the clock with the home and gear marks (y 23).
+- 2026-11-24 later, all merged and pushed: shelf clean fix `6979c7a` (cross per wagon, `TEMİZLE`,
+  `GERİ AL` only when an undo exists, sky word `BERRAK`); clock on the marks band `ea65414`; R7
+  parity part 1 `ae94753` (spec `specs/2026-11-24-r7-parity-tray-design.md`, plan
+  `plans/active/r7-parity-tray.md`): tray icon, exe icon and version 0.4.0, Genel row `Windows
+  ile başlat` (HKCU Run `Plith`). Five checks: 1410 tests, structure 843/0, release. RDP: Berke
+  saw the themes and dragged in and out ("çalışıyor"), the shelf file was emptied by his remove;
+  `tray: icon added` logged. Tray menu, `Çıkış`, Explorer restart not yet seen.
+- **Next: redesign of the logo/icon and the whole settings window** (Berke 2026-11-24: "logo
+  iconunu ve komple ayarları güncelleriz"). Design work order: `praxvon-direction` concepts,
+  Berke picks, build, `impeccable` pass. The current Genel subtitle no longer covers its rows.
+- Then R7 parity part 2: installer and uninstall (helper in Program Files, trust store step,
+  sudo with Berke's yes), WPF `config.ini` import. Research `research/2026-11-24-r7-parity.md`.
+  Open: brightness hotkeys and endpoint pinning (WPF had both); asked Berke whether he uses them,
+  his "evet öyle" was ambiguous: ask again before parity part 2.
+- R4b waits for its probe with real outputs (console, or RDP sound "On the remote PC").
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).
