@@ -16,6 +16,7 @@ $pinnedThumbprint = '144A7919A1FC941FDC3A9443C1DBAA7AE002AC0F'
 $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $targetDir = Join-Path $repoRoot 'target\setup-release'
 . (Join-Path $PSScriptRoot 'lib\signing.ps1')
+. (Join-Path $PSScriptRoot 'lib\payload-check.ps1')
 
 # Runs one cargo release build of a package through the machine-wide lock.
 function Invoke-ReleaseBuild {
@@ -80,9 +81,8 @@ try {
     $setup = Join-Path $targetRelease 'plith-setup.exe'
     if (-not (Test-Path -LiteralPath $setup)) { throw "Built exe not found at $setup" }
     $unsignedSize = (Get-Item -LiteralPath $setup).Length
-    if ($unsignedSize -lt $payloadBytes) {
-        throw "plith-setup.exe is $unsignedSize bytes, smaller than the payload ($payloadBytes): the payload was not embedded."
-    }
+    Assert-PlithPayloadEmbedded -SetupExe $setup -PayloadDir $payload `
+        -Originals @{ 'plith.exe' = $app; 'plith-osd.exe' = $osd } -PinnedThumbprint $pinnedThumbprint
     Invoke-PlithSign -Signtool $signtool -Thumbprint $cert.Thumbprint -Path $setup
 
     # 5. Verify all three: Valid and signed by the pinned certificate.
