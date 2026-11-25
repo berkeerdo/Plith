@@ -53,7 +53,7 @@ pub(super) fn chrome(p: &mut Page, facts: &SheetFacts, view: &SheetView) {
         let y = 58.0 + i as f64 * 32.0;
         let active = s == view.section;
         if active {
-            p.station(32.0, y + 14.0, StationMark::Filled, Ink::Ink);
+            p.station(32.0, y + 14.0, StationMark::Filled, Ink::Flow);
         }
         p.text(
             rect(44.0, y + 5.0, 108.0, 18.0),

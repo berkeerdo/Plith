@@ -3,7 +3,7 @@
 //! The layout follows the drawn Idle section in `docs/design/r7/karot.html`. Everything is pure:
 //! the window feeds facts and view state in and gets nodes and targets back.
 
-use crate::draw::{DisplayList, Ink, Node, Rect};
+use crate::draw::{ArtId, DisplayList, Ink, Node, Rect};
 use crate::lang::Lang;
 use crate::settings::Settings;
 use crate::settings::change::SettingChange;
@@ -30,6 +30,11 @@ mod tests;
 pub const SHEET_W: f64 = 840.0;
 /// Height of the sheet in DIP.
 pub const SHEET_H: f64 = 640.0;
+
+/// The artwork id of the app icon tile drawn at the top of the About section.
+pub const ICON_ART: ArtId = ArtId(0x504C_4954);
+/// Side of the About icon in DIP.
+pub const ICON_DIP: f64 = 96.0;
 
 /// A section of the sidebar.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
