@@ -75,6 +75,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "plith-setup"
+version = "0.4.0"
+dependencies = [
+ "plith-core",
+ "plith-host",
+ "windows",
+ "winresource",
+]
+
+[[package]]
 name = "plith-shell"
 version = "0.4.0"
 dependencies = [
