@@ -103,7 +103,7 @@ fn pump(job: Job, hwnd: isize, inbox: &Inbox) {
             });
         }
     };
-    let worker = match start_worker(job, &name) {
+    let worker = match start_worker(job, &name, hwnd) {
         Ok(worker) => worker,
         Err(error) => {
             return say(Msg::ElevateFailed {

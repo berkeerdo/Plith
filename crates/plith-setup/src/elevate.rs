@@ -4,10 +4,11 @@
 mod tests;
 
 use plith_core::setup::{Job, quote_arg};
+use std::ffi::c_void;
 use std::fmt;
 use std::mem::size_of;
 use std::os::windows::ffi::OsStrExt;
-use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE, WAIT_TIMEOUT};
+use windows::Win32::Foundation::{CloseHandle, ERROR_CANCELLED, HANDLE, HWND, WAIT_TIMEOUT};
 use windows::Win32::System::Threading::{GetExitCodeProcess, WaitForSingleObject};
 use windows::Win32::UI::Shell::{
     SEE_MASK_FLAG_NO_UI, SEE_MASK_NOASYNC, SEE_MASK_NOCLOSEPROCESS, SHELLEXECUTEINFOW,
@@ -93,12 +94,13 @@ pub(crate) fn worker_parameters(job: Job, pipe: &str) -> String {
 }
 
 /// Starts this exe elevated as the worker for `job` and returns once the shell has started it
-/// (or the user has refused).
+/// (or the user has refused). `owner` is the setup window (as the integer value of its `HWND`):
+/// the UAC prompt belongs to it and comes to the front instead of flashing on the taskbar.
 ///
 /// # Errors
 /// [`ElevateError::Cancelled`] when the user declines the prompt, [`ElevateError::Os`] for
 /// anything else, including a shell that reports success without a process handle.
-pub fn start_worker(job: Job, pipe: &str) -> Result<WorkerProcess, ElevateError> {
+pub fn start_worker(job: Job, pipe: &str, owner: isize) -> Result<WorkerProcess, ElevateError> {
     let exe = std::env::current_exe()
         .map_err(|error| ElevateError::Os(format!("cannot find this exe: {error}")))?;
     let file: Vec<u16> = exe
@@ -113,6 +115,7 @@ pub fn start_worker(job: Job, pipe: &str) -> Result<WorkerProcess, ElevateError>
     let mut info = SHELLEXECUTEINFOW {
         cbSize: u32::try_from(size_of::<SHELLEXECUTEINFOW>()).unwrap_or(0),
         fMask: SEE_MASK_NOCLOSEPROCESS | SEE_MASK_NOASYNC | SEE_MASK_FLAG_NO_UI,
+        hwnd: HWND(owner as *mut c_void),
         lpVerb: w!("runas"),
         lpFile: PCWSTR(file.as_ptr()),
         lpParameters: PCWSTR(parameters.as_ptr()),
