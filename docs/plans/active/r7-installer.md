@@ -1,5 +1,12 @@
 # R7 parity part 2: installer, import, update check Implementation Plan
 
+> **Finished 2026-11-26, merge waiting on Berke.** A ticked box means the step was taken, not
+> that nothing deviated. Deviations, rulings and decisions are in the progress log below, in
+> `docs/STATUS.md`, `journal/2026-11.md` and `quality/2026-11-25-setup-first-run.md`. Boxes of
+> Tasks 1 to 11 and 13 to 16 were ticked at the close from the task reviews, not as each task
+> finished. Task 5 Step 3: Berke delegated the look ("Bakmadım, sen karar ver", ruling R14).
+> Task 17 Step 2: the scheduled check measured the request, `DENETLE` was not clicked.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** `Plith-Setup-0.4.0.exe` installs, upgrades (also over WPF 0.3.x), repairs and uninstalls
@@ -78,11 +85,11 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `plith_host::http::get(url: &str) -> Result<String, String>` (now `pub`),
   `plith_core::json::{parse, Json}`.
 
-- [ ] Step 1: move files with `git mv`, fix `use` paths; `RunKey::delete` etc. unchanged.
-- [ ] Step 2: run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`; expected: the same
+- [x] Step 1: move files with `git mv`, fix `use` paths; `RunKey::delete` etc. unchanged.
+- [x] Step 2: run `node ~/.claude/bin/heavy-run.mjs -- cargo test --workspace`; expected: the same
       test count as on `main` before the move, all pass (write the count in the progress log).
-- [ ] Step 3: clippy and `node scripts/structure-check.mjs` pass.
-- [ ] Step 4: commit `refactor(host): shared windows helpers crate`.
+- [x] Step 3: clippy and `node scripts/structure-check.mjs` pass.
+- [x] Step 4: commit `refactor(host): shared windows helpers crate`.
 
 ### Task 2: setup logic in `plith-core`
 
@@ -111,17 +118,17 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
     (unknown args give `Install`; `--work` without a valid job or pipe name gives `Install`);
     `pub fn quote_arg(&str) -> String` (Windows command-line rules).
 
-- [ ] Step 1: tests in `setup/tests.rs`: `version_orders_and_parses` (`0.3.3+5e2feb9` <
+- [x] Step 1: tests in `setup/tests.rs`: `version_orders_and_parses` (`0.3.3+5e2feb9` <
   `0.4.0` < `0.10.0`; `0.4` is None), `situation_over_wpf_on_this_pc` (`situation(0.4.0,
   Some("0.3.3+5e2feb9"), true)` is `OverWpf{from:0.3.3}`), `situation_newer_installed`,
   `situation_repair_on_equal`, `situation_fresh_without_entry`, `is_ours_keeps_only_three_files`
   (`Plith.dll`, `runtimes\win\x.dll`, `Setup\Plith-Uninstaller.exe` false), `wire_round_trips`
   and `wire_rejects_garbage_and_step_out_of_range`, `args_work_needs_job_and_pipe`,
   `quote_arg_handles_spaces_parens_and_quotes` (`a b (1)` and `a"b`).
-- [ ] Step 2: run `cargo test -p plith-core setup`; expected FAIL (module missing).
-- [ ] Step 3: implement the signatures above.
-- [ ] Step 4: run again; expected PASS.
-- [ ] Step 5: commit `feat(core): setup versions, situations, wire`.
+- [x] Step 2: run `cargo test -p plith-core setup`; expected FAIL (module missing).
+- [x] Step 3: implement the signatures above.
+- [x] Step 4: run again; expected PASS.
+- [x] Step 5: commit `feat(core): setup versions, situations, wire`.
 
 ### Task 3: setup strings and palette
 
@@ -144,11 +151,11 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 - `Palette::setup()`: `floor` lime as sampled from `bg-0-1x.png` (fallback), `ink` near black,
   `muted` dark olive, `flow` lime (button label on the black pill), `faint` for the step labels.
 
-- [ ] Step 1: tests: `every_setup_string_in_eight_languages` (non-empty, captions upper-case under
+- [x] Step 1: tests: `every_setup_string_in_eight_languages` (non-empty, captions upper-case under
   `lang::upper`), `step_labels_fit` (each `Step*` measured by the existing fit helper fits 140 DIP
   at the `Label` style: reuse `lang/sheet/fit.rs` approach).
-- [ ] Step 2: run, expect FAIL; Step 3: implement; Step 4: run, expect PASS.
-- [ ] Step 5: commit `feat(lang): setup strings in eight languages`.
+- [x] Step 2: run, expect FAIL; Step 3: implement; Step 4: run, expect PASS.
+- [x] Step 5: commit `feat(lang): setup strings in eight languages`.
 
 ### Task 4: setup screens as display lists
 
@@ -177,11 +184,11 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   uninstall uses the same four in reverse (`3 - done`). The rest of the window above y 215 is
   drag area (`SetupAction::Drag`).
 
-- [ ] Step 1: tests: `start_has_button_at_readme_rect`, `running_draws_background_for_done_steps`
+- [x] Step 1: tests: `start_has_button_at_readme_rect`, `running_draws_background_for_done_steps`
   (done 2 gives `BG_ART[2]`), `done_targets_open_autostart_close`, `error_names_step_and_retry`,
   `uninstall_backgrounds_run_in_reverse`, `drag_area_above_ripples`, `every_screen_in_eight_languages_builds`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(core): setup screens`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(core): setup screens`.
 
 ### Task 5: screen renders for Berke (gate for the screens without a comp)
 
@@ -189,13 +196,13 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 - Create: `crates/plith-render/examples/render_setup.rs` (copy `render_sheet.rs`'s
   `write_png` and a PNG decode into `ArtPixels` with ids from Task 4)
 
-- [ ] Step 1: run `cargo run --release -p plith-render --example render_setup --
+- [x] Step 1: run `cargo run --release -p plith-render --example render_setup --
   docs/design/identity/r3/setup-renders` (new folder): every `Screen` in `Tr` and `En` at 1x and
   2x, names `<screen>-<lang>-<scale>x.png`.
-- [ ] Step 2: compare start, running, done against comps A1 to A3 side by side; fix offsets.
-- [ ] Step 3: show Berke all screens (private page or the folder); his words go into the progress
+- [x] Step 2: compare start, running, done against comps A1 to A3 side by side; fix offsets.
+- [x] Step 3: show Berke all screens (private page or the folder); his words go into the progress
   log. Error, newer, update and uninstall screens count as done only after his yes.
-- [ ] Step 4: commit `docs: setup screen renders`.
+- [x] Step 4: commit `docs: setup screen renders`.
 
 ### Task 6: signature and certificate stores in `plith-host`
 
@@ -216,13 +223,13 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
     CurrentUserTest(&'static str) }`; `pub fn has_cert(scope, store, thumbprint) -> Result<bool,
     String>`, `pub fn add_cert(scope, store, der: &[u8]) -> Result<(), String>` (idempotent),
     `pub fn remove_cert(scope, store, thumbprint) -> Result<(), String>` (missing is Ok).
-- [ ] Step 1: tests: `unsigned_file_is_not_signed` (a temp copy of a fresh file),
+- [x] Step 1: tests: `unsigned_file_is_not_signed` (a temp copy of a fresh file),
   `installed_helper_is_plith_signed` (runs only if `C:\Program Files\Plith\osd\plith-osd.exe`
   exists, else returns early with a printed note), `store_add_has_remove_round_trip` on
   `Scope::CurrentUserTest("PlithTest")` with the public cert DER from Task 7's assets, store
   deleted at the end.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(host): plith signature and cert stores`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(host): plith signature and cert stores`.
 
 ### Task 7: `plith-setup` crate, payload and the file step
 
@@ -250,13 +257,13 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   not-ours (`plith_core::setup::is_ours`), ACL check (port `Get-AclProblems`: owner and every
   allow ACE with write bits must be SYSTEM, Administrators, TrustedInstaller or CREATOR OWNER;
   skipped when `root` is not under `Program Files`, so temp-dir tests run).
-- [ ] Step 1: tests on a temp root with a fake `Processes`: `fresh_root_gets_three_files`,
+- [x] Step 1: tests on a temp root with a fake `Processes`: `fresh_root_gets_three_files`,
   `wpf_files_removed_after_rename` (seed `Plith.exe`, `Plith.dll`, `runtimes\x\y.dll`,
   `Setup\Plith-Uninstaller.exe`), `close_happens_after_new_files_are_written` (fake records
   order), `locked_target_fails_naming_file_and_leaves_no_new` (hold the target open with
   `share_mode(0)`), `rerun_after_failure_succeeds`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(setup): payload and file step`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(setup): payload and file step`.
 
 ### Task 8: trust, register and uninstall steps
 
@@ -277,12 +284,12 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `pub fn uninstall(root, places, scope, procs, log) -> Result<(), StepError>`: close, delete
   files, `MoveFileExW(MOVEFILE_DELAY_UNTIL_REBOOT)` for the running `setup\plith-setup.exe` and
   the empty folders, remove link, key, certificate from both stores.
-- [ ] Step 1: tests with an HKCU test key, a temp start-menu folder and `CurrentUserTest`
+- [x] Step 1: tests with an HKCU test key, a temp start-menu folder and `CurrentUserTest`
   scope: `register_writes_every_value`, `register_replaces_wpf_values`,
   `read_installed_reads_display_version`, `uninstall_removes_link_key_and_cert`,
   `uninstall_on_nothing_installed_is_ok`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(setup): trust, register, uninstall steps`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(setup): trust, register, uninstall steps`.
 
 ### Task 9: elevation, worker and pipe
 
@@ -303,11 +310,11 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `!own_integrity_above_medium()` or `verify_plith(current_exe)` fails or `!payload.is_release()`;
   else steps 1 to 3 (install) or uninstall, `Report::Step(n)` after each, `Failed` and exit 1 on
   error, `Finished` and exit 0.
-- [ ] Step 1: tests: `pipe_carries_reports_in_order` (server and client in one process),
+- [x] Step 1: tests: `pipe_carries_reports_in_order` (server and client in one process),
   `worker_refuses_at_medium` (calls `run` in the test process: medium, so exit 2, temp marker
   untouched), `cancelled_maps_from_1223`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(setup): elevated worker and report pipe`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(setup): elevated worker and report pipe`.
 
 ### Task 10: setup window and app flow
 
@@ -328,15 +335,15 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `plith_host::log::LogFile` at `data_dir()\setup.log`. `StartPlith` = `ShellExecuteExW` open on
   `<root>\plith.exe` from this medium process. Done screen's autostart starts ticked when the Run
   value exists or is absent (spec), its toggle writes through `RegistryAutostart`.
-- [ ] Step 1: flow tests: `start_install_elevates`, `reports_press_ripples_then_done`,
+- [x] Step 1: flow tests: `start_install_elevates`, `reports_press_ripples_then_done`,
   `cancelled_uac_returns_to_start_with_line`, `failure_shows_error_and_retry_elevates_again`,
   `newer_installed_offers_only_close`, `update_mode_shows_versions`,
   `uninstall_removes_run_value_and_deletes_data_when_ticked`, `done_open_starts_plith_and_quits`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: `cargo run -p plith-setup` (dev build, empty payload): window opens, start screen
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: `cargo run -p plith-setup` (dev build, empty payload): window opens, start screen
   matches the Task 5 render (screenshot through `PrintWindow`), `KUR` reaches the UAC request;
   cancel it and see the cancelled line. Write what was seen in the progress log.
-- [ ] Step 6: commit `feat(setup): window and flow`.
+- [x] Step 6: commit `feat(setup): window and flow`.
 
 ### Task 11: release script
 
@@ -344,13 +351,13 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 - Create: `scripts/build-setup.ps1` (pattern of `scripts/build-osd.ps1`: cert lookup never
   creates one, signtool lookup)
 
-- [ ] Step 1: script: release build of `plith` and `plith-osd` (`PLITH_OSD_UIACCESS=1`) through
+- [x] Step 1: script: release build of `plith` and `plith-osd` (`PLITH_OSD_UIACCESS=1`) through
   `heavy-run.mjs`, sign both, copy to a fresh `target\setup-payload-<stamp>\`, set
   `PLITH_SETUP_PAYLOAD`, release build `plith-setup`, sign, copy to
   `release\Plith-Setup-<version>.exe` (version from `cargo metadata`), verify all three with
   `Get-AuthenticodeSignature` (Valid, pinned thumbprint), print the three SHA-256.
-- [ ] Step 2: run it; expected: three `Valid` lines and the file in `release\`.
-- [ ] Step 3: commit `build: signed setup release script`.
+- [x] Step 2: run it; expected: three `Valid` lines and the file in `release\`.
+- [x] Step 3: commit `build: signed setup release script`.
 
 ### Task 12: real run on this PC (Berke's yes, his UAC click)
 
@@ -379,13 +386,13 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `[General] Theme` Dark `gece`, Light `kagit`, Auto default; `[Osd] ShowWeather` True/False to
   `weather`; `[Osd] WeatherLocation` non-empty to `city` and `location = City`; count of keys taken.
   Section-aware INI read, BOM and CRLF tolerated, unknown keys ignored.
-- [ ] Step 1: tests: `berkes_config_maps_to_gece_weather_on_no_city` (the file read in
+- [x] Step 1: tests: `berkes_config_maps_to_gece_weather_on_no_city` (the file read in
   brainstorming: Theme Dark, ShowWeather True, WeatherLocation empty; expect theme Gece, weather
   on, location default, 2 keys), `light_theme_maps_to_kagit`, `city_sets_city_mode`,
   `bom_and_crlf_tolerated`, `empty_text_gives_defaults`; `settings_file` test:
   `import_runs_only_without_settings_ini` (temp dir with both files: settings.ini wins).
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(settings): import wpf config.ini once`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(settings): import wpf config.ini once`.
 
 ### Task 14: update rules and settings keys
 
@@ -404,11 +411,11 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   seconds: 120 after start, 86_400 after the last success, 21_600 after a failure.
 - `pub fn should_notice(release: &Version, own: Version, seen: &str) -> bool`.
 - `pub enum UpdateRow { Current, Checking, Ready(Version), Downloading(u8), BadSignature, Failed }`.
-- [ ] Step 1: tests: `parses_github_latest_with_setup_asset`, `release_without_asset_is_none`,
+- [x] Step 1: tests: `parses_github_latest_with_setup_asset`, `release_without_asset_is_none`,
   `first_check_two_minutes_after_start`, `daily_after_success_six_hours_after_failure`,
   `notice_once_per_version`, `settings_round_trip_update_keys`, `old_settings_file_gets_update_defaults`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(core): update rules and keys`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(core): update rules and keys`.
 
 ### Task 15: update service, download and launch
 
@@ -429,10 +436,10 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 - Install: download to `data_dir()\updates\Plith-Setup-<v>.exe`, `verify_plith`, on failure delete
   and `Row(BadSignature)`; on success `ShellExecuteExW` open with `--update --from <own>`.
 - Notice only when `plith_shell::user_busy()` is `None`; else wait for the next check.
-- [ ] Step 1: tests with a fake fetcher trait: `check_reports_ready_and_notice_once`,
+- [x] Step 1: tests with a fake fetcher trait: `check_reports_ready_and_notice_once`,
   `busy_user_defers_notice`, `bad_signature_deletes_file`, `disabled_check_never_fetches_but_check_now_does`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: commit `feat(app): daily update check`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: commit `feat(app): daily update check`.
 
 ### Task 16: tray notice and settings rows
 
@@ -450,19 +457,19 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 - Create: `crates/plith-core/src/sheet/update_tests.rs` if `sheet/tests.rs` (588) would pass 800
 - Strings: notice title `Plith <version> hazır`, body `Kurmak için tıkla` (and seven languages).
 
-- [ ] Step 1: tests: `about_shows_update_row_per_state` (each `UpdateRow` gives its text and
+- [x] Step 1: tests: `about_shows_update_row_per_state` (each `UpdateRow` gives its text and
   `DENETLE` or `KUR` target), `general_update_toggle_flips_setting`, `notice_click_decodes`
   (`decode::click_of(0x405)`), lang tests extended by `ALL`.
-- [ ] Step 2: FAIL; Step 3: implement; Step 4: PASS.
-- [ ] Step 5: render Hakkında and Genel with `render_sheet` into a fresh folder, look at 1x and 2x.
-- [ ] Step 6: commit `feat(app): update notice and settings rows`.
+- [x] Step 2: FAIL; Step 3: implement; Step 4: PASS.
+- [x] Step 5: render Hakkında and Genel with `render_sheet` into a fresh folder, look at 1x and 2x.
+- [x] Step 6: commit `feat(app): update notice and settings rows`.
 
 ### Task 17: close the part
 
-- [ ] Step 1: five checks green; test count written from the run's own output.
-- [ ] Step 2: end-to-end update path once with Berke: a local test release is not available, so
+- [x] Step 1: five checks green; test count written from the run's own output.
+- [x] Step 2: end-to-end update path once with Berke: a local test release is not available, so
   `DENETLE` against the real GitHub latest (0.3.3 is older: row `GÜNCEL`); record.
-- [ ] Step 3: STATUS rewritten (next job, risks: standard-user helper, root certificate, update
+- [x] Step 3: STATUS rewritten (next job, risks: standard-user helper, root certificate, update
   never seen end to end until 0.4.1), ROADMAP row, journal entry, this plan's boxes and banner.
 - [ ] Step 4: ask Berke to merge; commit `docs: r7 part 2 record`.
 
@@ -474,3 +481,19 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   refused while exiting). Record: `docs/quality/2026-11-25-setup-first-run.md`. Uninstall was run
   with the Apps entry's own command, not clicked from Settings. Tasks 1 to 11 and 13 to 16 and the
   final fix wave were finished earlier; their record is the branch log and the SDD ledger.
+- 2026-11-26 Task 17: the update check never worked (NUL in the Accept header, `0e12f40`); after
+  the fix and run 8 the scheduled check reached GitHub and the row reads `GÜNCEL`. Checks on
+  `0e12f40`: 1604 passed, 1 ignored. STATUS, ROADMAP, journal, spec note (R11) and boxes done;
+  merge asked.
+- Rulings made while running the plan, in order (cost if wrong): R1 no `SetupText::Version`
+  (one string); R2 `UacCancelled` is the start layout plus a line (none); R3 public cert as
+  `PLITH_CERT` in `plith-host` (a file move); R4 the app writes `update_checked`/`update_seen`
+  (small); R5 integrity read from the token, not the log (none; in practice the OSD link proved
+  it); R6 situation edge cases (one branch); R7 README title size over the comps (a restyle); R8
+  raw OS text to `setup.log`, the screen shows step and number (one string); R9 update verified
+  through a held handle (small); R10 installer art single-copy from `docs/` (the crate reads a
+  docs path); R11 autostart tick kept off across updates (one branch); R12 release build in
+  `target\setup-release` (a second cache); R13 Task 13 run while 12 waited (none); R14 screens
+  approved by delegation (a later restyle); R15 C1 sweep and C2 medium relaunch (see N1, N2).
+  Task 7: a global mutex squat ruled not applicable; Task 8: a malformed pending list is logged
+  and left. Parked: N1, N2, N3 (STATUS risks); deferred minors per task in the review files.

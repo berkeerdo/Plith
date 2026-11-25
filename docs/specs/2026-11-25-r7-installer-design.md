@@ -117,7 +117,10 @@ Anti-goals
    DisplayIcon `plith.exe`, InstallLocation, UninstallString `"...\setup\plith-setup.exe"
    --uninstall`, EstimatedSize, NoModify, NoRepair).
 - Done screen: `WINDOWS İLE BAŞLAT` ticked if a `Plith` Run value already exists (WPF's
-  `AutoStart = True` left one), else ticked by default; `PLITH’İ AÇ`, `KAPAT`.
+  `AutoStart = True` left one), else ticked by default; `PLITH’İ AÇ`, `KAPAT`. Note (build,
+  ruling R11): "ticked by default" holds for a first install (fresh or over WPF) only. A repair,
+  upgrade or update ticks it only when the Run value exists, so a user who turned autostart off
+  keeps it off across updates.
 - Error screen: the failed step's name and one line of reason, `TEKRAR DENE`, `KAPAT`; the log
   goes to `%LOCALAPPDATA%\Plith\setup.log`. Rerunning the setup repairs a partial install.
 
