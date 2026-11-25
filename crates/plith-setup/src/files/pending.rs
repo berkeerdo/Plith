@@ -70,12 +70,29 @@ pub(super) fn drop_pending_under(entries: &[Entry], root: &Path) -> Option<Vec<E
 }
 
 fn components(text: &str) -> Vec<String> {
+    let text = strip_marker(text);
     let text = text.strip_prefix(NT_PREFIX).unwrap_or(text);
     let text = text.strip_prefix(r"\\?\").unwrap_or(text);
     text.split('\\')
         .filter(|part| !part.is_empty())
         .map(str::to_lowercase)
         .collect()
+}
+
+/// Strips the `*<digits>` marker that Windows 11 writes before the NT prefix of a pending source
+/// (measured: `*1\??\C:\...`). Only a marker of one or more ASCII digits that is followed by the
+/// NT prefix is taken; anything else is returned whole, so it cannot match the root.
+fn strip_marker(text: &str) -> &str {
+    let Some(rest) = text.strip_prefix('*') else {
+        return text;
+    };
+    let digits = rest.bytes().take_while(u8::is_ascii_digit).count();
+    let after = &rest[digits..];
+    if digits > 0 && after.starts_with(NT_PREFIX) {
+        after
+    } else {
+        text
+    }
 }
 
 /// Removes the pending deletes under `root`. A list that is absent, malformed, odd or without a

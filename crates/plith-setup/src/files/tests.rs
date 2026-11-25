@@ -168,6 +168,41 @@ fn pending_deletes_under_root_are_dropped() {
     );
 }
 
+/// The shape measured on Windows 11 (build 26300): `MoveFileExW` with a delay-until-reboot writes
+/// the source with a `*<digits>` marker before the NT prefix.
+#[test]
+fn pending_deletes_with_a_star_marker_are_dropped() {
+    let root = Path::new(r"C:\Program Files\Plith");
+    let entries = strings(&[
+        r"*1\??\C:\Windows\System32\spool\V4Dirs\x.BUD",
+        "",
+        r"*1\??\C:\Program Files\Plith\Setup\plith-setup.exe",
+        "",
+        r"*1\??\C:\Program Files\Plith\Setup",
+        "",
+        r"*12\??\C:\Program Files\Plith",
+        "",
+        r"*2\??\C:\Program Files\Plith2\x",
+        "",
+        r"*x\??\C:\Program Files\Plith\y",
+        "",
+    ]);
+    assert_eq!(
+        drop_pending_under(&entries, root).as_deref(),
+        Some(
+            strings(&[
+                r"*1\??\C:\Windows\System32\spool\V4Dirs\x.BUD",
+                "",
+                r"*2\??\C:\Program Files\Plith2\x",
+                "",
+                r"*x\??\C:\Program Files\Plith\y",
+                "",
+            ])
+            .as_slice()
+        )
+    );
+}
+
 #[test]
 fn the_root_itself_is_dropped_and_the_multi_sz_roundtrips() {
     let root = Path::new(r"C:\Program Files\Plith");
