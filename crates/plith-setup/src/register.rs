@@ -19,6 +19,7 @@ pub enum Hive {
     /// `HKEY_LOCAL_MACHINE`, the real Apps list.
     LocalMachine,
     /// `HKEY_CURRENT_USER`, for tests.
+    #[allow(dead_code, reason = "only tests build the per-user hive")]
     CurrentUser,
 }
 

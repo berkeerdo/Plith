@@ -12,6 +12,9 @@ publish = false
 plith-core.workspace = true
 plith-host.workspace = true
 plith-ipc.workspace = true
+plith-media.workspace = true
+plith-render.workspace = true
+plith-shell.workspace = true
 windows = { workspace = true, features = [
     "Win32_Foundation",
     "Win32_Security",

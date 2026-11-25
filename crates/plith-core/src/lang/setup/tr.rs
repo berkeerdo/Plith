@@ -27,5 +27,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::DeleteData => "KULLANICI VERİLERİNİ DE SİL",
         SetupText::UninstallDone => "Plith kaldırıldı.",
         SetupText::UacCancelled => "Windows izni verilmedi. Kurulum başlamadı.",
+        SetupText::ErrorCode => "Hata kodu",
+        SetupText::Busy => "Başka bir kurulum sürüyor.",
     }
 }

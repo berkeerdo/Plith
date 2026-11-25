@@ -109,17 +109,37 @@ fn done_targets_open_autostart_close() {
 fn error_names_step_and_retry() {
     let screen = Screen::Error {
         step: 2,
-        reason: "disk full".to_owned(),
+        code: 112,
+        busy: false,
     };
     let (list, targets) = build(&screen);
     assert_eq!(background(&list), BG_ART[1]);
     let t = texts(&list);
     assert!(t.contains(&format!("2 {}", tr(SetupText::Step2))));
     assert!(!t.contains(&format!("1 {}", tr(SetupText::Step1))));
-    assert!(t.contains(&"disk full".to_owned()));
+    assert!(t.contains(&format!("{} 112", tr(SetupText::ErrorCode))));
     assert!(t.contains(&tr(SetupText::ErrorTitle).to_owned()));
     assert!(action_rect(&targets, SetupAction::Retry).is_some());
     assert!(action_rect(&targets, SetupAction::Close).is_some());
+}
+
+#[test]
+fn error_line_is_the_code_the_busy_text_or_nothing() {
+    let line = |code, busy| {
+        let screen = Screen::Error {
+            step: 1,
+            code,
+            busy,
+        };
+        let t = texts(&build(&screen).0);
+        // Version label, step label, title, button label, close link and the line, if any.
+        t.into_iter()
+            .filter(|s| s.contains(tr(SetupText::ErrorCode)) || s == tr(SetupText::Busy))
+            .collect::<Vec<_>>()
+    };
+    assert!(line(0, false).is_empty(), "code 0 is omitted");
+    assert_eq!(line(5, false), [format!("{} 5", tr(SetupText::ErrorCode))]);
+    assert_eq!(line(0, true), [tr(SetupText::Busy).to_owned()]);
 }
 
 #[test]
@@ -185,7 +205,13 @@ fn every_screen_in_eight_languages_builds() {
         Screen::Done { autostart: true },
         Screen::Error {
             step: 3,
-            reason: "x".to_owned(),
+            code: u32::MAX,
+            busy: false,
+        },
+        Screen::Error {
+            step: 1,
+            code: 0,
+            busy: true,
         },
         Screen::Newer {
             installed: Version::new(1, 0, 0),

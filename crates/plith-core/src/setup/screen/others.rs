@@ -11,13 +11,22 @@ const TITLE: (TextStyle, Ink) = (TextStyle::Display, Ink::Ink);
 /// The line under the lead (a reason, a version).
 const SUB_Y: f64 = LEAD_Y + 28.0;
 
-/// A failed step: its ripple state, the step label, the reason, retry and close.
-pub(super) fn error(p: &mut Page, own: Version, step: u8, reason: &str) {
+/// A failed step: its ripple state, the step label, one line (the busy text, else the error
+/// code unless it is 0), retry and close. `failure` is `(step, code, busy)`.
+pub(super) fn error(p: &mut Page, own: Version, failure: (u8, u32, bool)) {
+    let (step, code, busy) = failure;
     p.background(step.clamp(1, 3) - 1);
     p.chrome(own, true);
     p.steps(Some(step));
     p.centered(LEAD_Y, p.word(S::ErrorTitle), LEAD);
-    p.centered(SUB_Y, reason, (TextStyle::Body, Ink::Muted));
+    let line = if busy {
+        Some(p.word(S::Busy).to_owned())
+    } else {
+        (code != 0).then(|| format!("{} {code}", p.word(S::ErrorCode)))
+    };
+    if let Some(line) = line {
+        p.centered(SUB_Y, &line, (TextStyle::Body, Ink::Muted));
+    }
     p.button(START_BUTTON_Y, S::Retry, SetupAction::Retry);
     p.link(UNDER_Y, S::Close, SetupAction::Close);
 }

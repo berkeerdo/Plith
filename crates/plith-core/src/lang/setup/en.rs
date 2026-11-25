@@ -27,5 +27,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::DeleteData => "ALSO DELETE MY DATA",
         SetupText::UninstallDone => "Plith is removed.",
         SetupText::UacCancelled => "Windows permission was declined. Setup has not started.",
+        SetupText::ErrorCode => "Error code",
+        SetupText::Busy => "Another setup is already running.",
     }
 }

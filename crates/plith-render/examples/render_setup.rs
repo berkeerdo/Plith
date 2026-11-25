@@ -57,7 +57,8 @@ fn screens() -> Vec<(&'static str, Screen)> {
             "error",
             Screen::Error {
                 step: 2,
-                reason: "The helper could not be started (error 1223).".into(),
+                code: 1223,
+                busy: false,
             },
         ),
         (

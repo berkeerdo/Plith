@@ -56,7 +56,17 @@ pub fn places(lang: Lang) -> Vec<Place> {
             | S::UpdateLead
             | S::UninstallLead => (TextStyle::Heading, LINE_W),
             S::SubUac | S::DoneSub => (TextStyle::Strong, LINE_W),
-            S::UacCancelled => (TextStyle::Body, LINE_W),
+            S::UacCancelled | S::Busy => (TextStyle::Body, LINE_W),
+            S::ErrorCode => {
+                // Drawn with the code behind it: the longest one is ten digits.
+                out.push(place(
+                    format!("setup {id:?} with code"),
+                    format!("{text} 4294967295"),
+                    TextStyle::Body,
+                    LINE_W,
+                ));
+                continue;
+            }
         };
         if id == S::Close {
             // The same word also labels the pill of the newer and uninstalled screens.

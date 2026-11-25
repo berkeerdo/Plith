@@ -27,5 +27,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::DeleteData => "APAGAR TAMBÉM MEUS DADOS",
         SetupText::UninstallDone => "O Plith foi removido.",
         SetupText::UacCancelled => "A permissão do Windows foi negada. A instalação não começou.",
+        SetupText::ErrorCode => "Código de erro",
+        SetupText::Busy => "Outra instalação já está em andamento.",
     }
 }

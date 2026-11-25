@@ -64,11 +64,15 @@ pub enum SetupText {
     UninstallDone,
     /// One line on the start screen after the user declined the Windows prompt.
     UacCancelled,
+    /// Label in front of the Windows error code on the failure screen.
+    ErrorCode,
+    /// Line on the failure screen when another setup holds the machine-wide lock.
+    Busy,
 }
 
 impl SetupText {
     /// Every installer string.
-    pub const ALL: [SetupText; 22] = [
+    pub const ALL: [SetupText; 24] = [
         SetupText::Step1,
         SetupText::Step2,
         SetupText::Step3,
@@ -91,6 +95,8 @@ impl SetupText {
         SetupText::DeleteData,
         SetupText::UninstallDone,
         SetupText::UacCancelled,
+        SetupText::ErrorCode,
+        SetupText::Busy,
     ];
 
     /// Whether the string is a caption: written upper case in its language and set in `Label`.

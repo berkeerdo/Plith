@@ -27,5 +27,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::DeleteData => "USUŃ TAKŻE MOJE DANE",
         SetupText::UninstallDone => "Plith został usunięty.",
         SetupText::UacCancelled => "Zgoda Windows została odrzucona. Instalacja nie ruszyła.",
+        SetupText::ErrorCode => "Kod błędu",
+        SetupText::Busy => "Inna instalacja jest już w toku.",
     }
 }

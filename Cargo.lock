@@ -81,6 +81,9 @@ dependencies = [
  "plith-core",
  "plith-host",
  "plith-ipc",
+ "plith-media",
+ "plith-render",
+ "plith-shell",
  "windows",
  "winresource",
 ]

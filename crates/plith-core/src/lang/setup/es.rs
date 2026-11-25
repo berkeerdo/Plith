@@ -27,5 +27,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::DeleteData => "BORRAR TAMBIÉN MIS DATOS",
         SetupText::UninstallDone => "Plith se desinstaló.",
         SetupText::UacCancelled => "Se rechazó el permiso de Windows. La instalación no empezó.",
+        SetupText::ErrorCode => "Código de error",
+        SetupText::Busy => "Ya hay otra instalación en curso.",
     }
 }

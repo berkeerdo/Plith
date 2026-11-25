@@ -82,8 +82,10 @@ pub enum Screen {
     Error {
         /// The failed step, 1 to 3.
         step: u8,
-        /// What the worker reported, drawn as given.
-        reason: String,
+        /// The Windows error code the worker reported; 0 means none and draws no line.
+        code: u32,
+        /// Another setup holds the machine-wide lock: draws that line instead of the code.
+        busy: bool,
     },
     /// A newer Plith is already installed.
     Newer {
@@ -155,7 +157,7 @@ pub fn setup_build(screen: &Screen, own: Version, lang: Lang) -> (DisplayList, V
         Screen::Running { done } => running::running(&mut p, own, *done),
         Screen::Uninstalling { done } => running::uninstalling(&mut p, own, *done),
         Screen::Done { autostart } => done::done(&mut p, own, *autostart),
-        Screen::Error { step, reason } => others::error(&mut p, own, *step, reason),
+        Screen::Error { step, code, busy } => others::error(&mut p, own, (*step, *code, *busy)),
         Screen::Newer { installed } => others::newer(&mut p, own, *installed),
         Screen::UninstallConfirm { delete_data } => {
             others::uninstall_confirm(&mut p, own, *delete_data);

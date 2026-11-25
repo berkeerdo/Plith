@@ -8,6 +8,10 @@ pub struct Payload {
     /// The signed `plith-osd.exe`.
     pub helper: &'static [u8],
     /// The public part of the signing certificate (DER).
+    #[allow(
+        dead_code,
+        reason = "the trust step reads the host crate copy; tests build payloads with it"
+    )]
     pub cert: &'static [u8],
 }
 

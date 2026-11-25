@@ -29,5 +29,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::UacCancelled => {
             "L’autorisation Windows a été refusée. L’installation n’a pas commencé."
         }
+        SetupText::ErrorCode => "Code d’erreur",
+        SetupText::Busy => "Une autre installation est déjà en cours.",
     }
 }

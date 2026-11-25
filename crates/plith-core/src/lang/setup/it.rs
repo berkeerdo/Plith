@@ -29,5 +29,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::UacCancelled => {
             "Il permesso di Windows è stato negato. L’installazione non è iniziata."
         }
+        SetupText::ErrorCode => "Codice errore",
+        SetupText::Busy => "Un’altra installazione è già in corso.",
     }
 }
