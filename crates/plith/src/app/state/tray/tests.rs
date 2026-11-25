@@ -1,6 +1,6 @@
 use super::*;
-use crate::autostart::Autostart;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_host::autostart::Autostart;
 use plith_shell::ShellEvent;
 use std::cell::Cell;
 use std::rc::Rc;
@@ -21,7 +21,7 @@ fn dir(name: &str) -> std::path::PathBuf {
 }
 
 fn app(name: &str) -> App {
-    let log = crate::log::LogFile::open_at(&dir(name).join("plith.log")).unwrap();
+    let log = plith_host::log::LogFile::open_at(&dir(name).join("plith.log")).unwrap();
     App::new(
         Arc::new(SceneMailbox::new(Scene::default(), Arc::default())),
         Arc::new(ShapeCell::default()),

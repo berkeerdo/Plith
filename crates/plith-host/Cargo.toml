@@ -1,0 +1,24 @@
+[package]
+name = "plith-host"
+description = "Windows helpers shared by the Plith binaries: the log file, the display language, the Run key and a WinHTTP GET."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+
+[dependencies]
+plith-core.workspace = true
+windows = { workspace = true, features = [
+    "Win32_Foundation",
+    "Win32_Globalization",
+    "Win32_Networking_WinHttp",
+    "Win32_System_Com",
+    "Win32_System_Registry",
+    "Win32_System_SystemInformation",
+    "Win32_UI_Shell",
+] }
+
+[lints]
+workspace = true

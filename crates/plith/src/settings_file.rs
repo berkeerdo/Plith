@@ -1,8 +1,8 @@
 //! The settings file `%LOCALAPPDATA%\Plith\settings.ini`: read at start, written when missing.
 //! The format lives in `plith-core`; this only does the file and the log lines.
 
-use crate::log::{self, LogFile};
 use plith_core::settings::{Settings, parse, serialize};
+use plith_host::log::{self, LogFile};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

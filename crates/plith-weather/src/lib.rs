@@ -2,7 +2,6 @@
 //! background worker. Parsing lives in `plith-core`; this crate does HTTP, location and timing.
 
 mod fetch;
-mod http;
 mod location;
 mod service;
 mod urls;

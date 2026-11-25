@@ -4,7 +4,6 @@
 use super::feed::{CLOCK_TIMER, Feed, Timers, wanted};
 use super::idle_facts::Idle;
 use super::state::App;
-use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
 use plith_core::draw::Node;
 use plith_core::lang::Lang;
@@ -12,6 +11,7 @@ use plith_core::launch::Fixture;
 use plith_core::pages::PageId;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell, Suppression};
 use plith_core::settings::{IdleLook, OpenOn, Settings};
+use plith_host::log::{LogFile, Stamp};
 use plith_shell::ShellEvent;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;

@@ -2,9 +2,9 @@
 //! waits up to [`STOP_WAIT`] for its supervisor, so it happens on a short thread that wakes the
 //! UI when done; a start asked for meanwhile waits for that stop (same pipe, same helper).
 
-use crate::log::LogFile;
 use crate::osd::{OsdSide, OsdSink, STOP_WAIT, join_within};
 use plith_core::launch::FlyoutMode;
+use plith_host::log::LogFile;
 use plith_ipc::{current_pipe_name, pipe_exists};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};

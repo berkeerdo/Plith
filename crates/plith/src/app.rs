@@ -20,7 +20,6 @@ mod tests;
 
 use crate::instance;
 use crate::live;
-use crate::log::{self, LogFile};
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
@@ -36,6 +35,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::Settings;
 use plith_core::theme::Palette;
+use plith_host::log::{self, LogFile};
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
     MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,

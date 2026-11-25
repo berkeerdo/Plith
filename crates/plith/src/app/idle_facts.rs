@@ -2,7 +2,6 @@
 //! resting pill and the welcome view are built from. Pure over its inputs; the feed decides
 //! when to ask.
 
-use crate::log::Stamp;
 use crate::services::Facts;
 use plith_core::lang::{Lang, Text, date_short, device_kind, text, weekday};
 use plith_core::pages::idle_pill::{
@@ -14,6 +13,7 @@ use plith_core::pages::welcome::{SoundHead, WelcomeFacts};
 use plith_core::plays::{Day, PlayLog};
 use plith_core::settings::{IdleLook, OpenOn, Settings};
 use plith_core::weather::{Forecast, Stamp as WeatherStamp};
+use plith_host::log::Stamp;
 use std::time::SystemTime;
 
 /// Writes the play log to disk.

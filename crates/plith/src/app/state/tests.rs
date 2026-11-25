@@ -1,6 +1,5 @@
 use super::*;
 use crate::app::feed::{CLOCK_TIMER, COLLAPSE_TIMER, Feed, Timers, clock_ms};
-use crate::log::Stamp;
 use crate::services::fixture::FixtureServices;
 use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
@@ -9,6 +8,7 @@ use plith_core::pages::audio::PickMode;
 use plith_core::pages::{Action, PageId};
 use plith_core::scene::{ShapeCell, ShapeFrame, Suppression};
 use plith_core::shapes::PAGES;
+use plith_host::log::Stamp;
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeSet;
 use std::rc::Rc;

@@ -1,9 +1,9 @@
 //! The idle check: at rest the render thread must stay parked, with no wake-ups and no CPU.
 
 use crate::demo::sleep_stoppable;
-use crate::log::LogFile;
 use crate::services::start::{ServiceId, StartBoard};
 use plith_core::settings::IdleLook;
+use plith_host::log::LogFile;
 use plith_render::RenderHandle;
 use std::sync::atomic::AtomicBool;
 use std::time::{Duration, Instant};

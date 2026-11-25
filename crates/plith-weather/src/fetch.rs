@@ -1,7 +1,8 @@
 //! The seam between the worker and the network: tests swap in a fake.
 
-use crate::{WeatherConfig, http, location, urls};
+use crate::{WeatherConfig, location, urls};
 use plith_core::weather::{Forecast, Stamp, parse_forecast};
+use plith_host::http;
 use windows::Win32::System::SystemInformation::GetLocalTime;
 
 /// The two steps of a forecast: where, then what. They are separate so the worker can keep the

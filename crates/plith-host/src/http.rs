@@ -60,7 +60,7 @@ fn wide(text: &str) -> Vec<u16> {
 ///
 /// Returns a short message for a non-HTTPS URL, a failed call, a status other than 200 or a body
 /// over 2 MB.
-pub(crate) fn get(url: &str) -> Result<String, String> {
+pub fn get(url: &str) -> Result<String, String> {
     let (host, port, path) = split(url)?;
     // SAFETY: plain WinHTTP calls; every handle is owned by a `Handle` and closed on drop, and
     // the wide strings outlive the calls that read them.

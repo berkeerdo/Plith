@@ -2,11 +2,11 @@
 
 use super::idle_wiring::{self, language_of};
 use super::state::App;
-use crate::autostart::RegistryAutostart;
-use crate::log::LogFile;
 use plith_core::launch::Launch;
 use plith_core::settings::Settings;
 use plith_core::tray::menu::menu;
+use plith_host::autostart::RegistryAutostart;
+use plith_host::log::LogFile;
 use plith_shell::Shell;
 use std::cell::RefCell;
 use std::rc::Rc;

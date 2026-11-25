@@ -1,10 +1,10 @@
 //! Saves the settings file off the UI thread: one worker blocked on a channel (no periodic
 //! wake), the newest queued value wins, and the value still pending is written at shutdown.
 
-use crate::log::LogFile;
 use crate::settings_file::save_at;
 use plith_core::panic_text::payload_text;
 use plith_core::settings::Settings;
+use plith_host::log::LogFile;
 use plith_shell::UiWaker;
 use std::io;
 use std::panic::{AssertUnwindSafe, catch_unwind};

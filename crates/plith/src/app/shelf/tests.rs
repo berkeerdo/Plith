@@ -1,11 +1,11 @@
 use super::*;
 use crate::app::feed::{COLLAPSE_TIMER, Timers};
-use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
 use plith_core::draw::Node;
 use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_host::log::{LogFile, Stamp};
 use std::cell::{Cell, RefCell};
 use std::collections::BTreeMap;
 use std::rc::Rc;

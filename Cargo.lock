@@ -8,6 +8,7 @@ version = "0.4.0"
 dependencies = [
  "plith-audio",
  "plith-core",
+ "plith-host",
  "plith-ipc",
  "plith-media",
  "plith-render",
@@ -29,6 +30,14 @@ dependencies = [
 [[package]]
 name = "plith-core"
 version = "0.4.0"
+
+[[package]]
+name = "plith-host"
+version = "0.4.0"
+dependencies = [
+ "plith-core",
+ "windows",
+]
 
 [[package]]
 name = "plith-ipc"
@@ -86,6 +95,7 @@ name = "plith-weather"
 version = "0.4.0"
 dependencies = [
  "plith-core",
+ "plith-host",
  "windows",
 ]
 
