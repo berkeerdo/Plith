@@ -27,6 +27,24 @@ impl UpdateLink {
         }
     }
 
+    /// Starts the service over any backend, for tests.
+    #[cfg(test)]
+    #[must_use]
+    pub fn start_over(
+        own: Version,
+        settings: UpdateSettings,
+        hooks: Hooks,
+        backend: Box<dyn super::Backend>,
+    ) -> Self {
+        let (service, feed) = UpdateService::start_over(own, settings, hooks, backend);
+        Self {
+            service,
+            feed,
+            row: UpdateRow::Current,
+            notice: None,
+        }
+    }
+
     /// Takes every queued event, in order, remembering the row and a notice on the way.
     pub fn poll(&mut self) -> Vec<UpdateEvent> {
         let events: Vec<UpdateEvent> = self.feed.try_iter().collect();

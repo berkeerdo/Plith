@@ -69,6 +69,7 @@ pub(super) fn run(job: &Job, settings: UpdateSettings, inbox: &Receiver<Command>
         };
         match command {
             None | Some(Command::CheckNow) => check(job, &mut state),
+            #[cfg(test)]
             Some(Command::Install(release)) => install(job, &release),
             Some(Command::InstallReady) => {
                 if let Some(release) = state.ready.clone() {

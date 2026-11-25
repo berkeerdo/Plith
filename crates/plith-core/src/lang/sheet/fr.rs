@@ -47,7 +47,9 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::RowVersion => "Version",
         SheetText::RowFile => "Fichier de réglages",
         SheetText::RowData => "Données",
-        SheetText::SubData => "Météo d'Open-Meteo, position IP d'ipapi.co (seulement si choisie)",
+        SheetText::SubData => {
+            "Météo d'Open-Meteo, position IP d'ipapi.co (seulement si choisie), mises à jour de GitHub"
+        }
         SheetText::WordAuto => "AUTOMATIQUE",
         SheetText::WordWelcome => "ACCUEIL",
         SheetText::WordLastPage => "DERNIÈRE",
@@ -67,6 +69,17 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::WordOff => "DÉSACTIVÉ",
         SheetText::WordOpen => "OUVRIR",
         SheetText::WordAllSettings => "TOUS LES RÉGLAGES",
+        SheetText::RowUpdate => "Mise à jour",
+        SheetText::StateUpdateCurrent => "À JOUR",
+        SheetText::StateUpdateReady => "{version} PRÊTE",
+        SheetText::StateUpdateChecking => "VÉRIFICATION",
+        SheetText::StateUpdateDownloading => "TÉLÉCHARGEMENT {percent}%",
+        SheetText::StateUpdateBadSignature => "SIGNATURE INVALIDE",
+        SheetText::StateUpdateFailed => "VÉRIFICATION ÉCHOUÉE",
+        SheetText::WordCheck => "VÉRIFIER",
+        SheetText::WordInstall => "INSTALLER",
+        SheetText::RowUpdateCheck => "Rechercher les mises à jour",
+        SheetText::SubUpdateCheck => "La requête ne transporte que ton adresse IP",
         SheetText::SaveError => "Réglages non enregistrés, valables pour cette session seulement.",
     }
 }

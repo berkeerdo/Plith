@@ -16,6 +16,7 @@ fn facts(settings: Settings) -> SheetFacts {
         settings_path: String::from("C:\\x\\settings.ini"),
         save_failed: false,
         autostart: false,
+        update: plith_core::update::UpdateRow::Current,
     }
 }
 
@@ -229,4 +230,34 @@ fn the_caret_wants_a_timer_only_while_the_field_has_focus() {
     assert!(field_focused(&view, &targets));
     view.focus = Some(FocusId::Section(Section::Idle));
     assert!(!field_focused(&view, &targets));
+}
+
+#[test]
+fn the_about_update_buttons_route_to_the_update_steps() {
+    use plith_core::setup::Version;
+    use plith_core::update::UpdateRow;
+    let cases = [
+        (
+            UpdateRow::Current,
+            SheetAction::UpdateCheck,
+            Step::UpdateCheck,
+        ),
+        (
+            UpdateRow::Ready(Version::new(0, 5, 0)),
+            SheetAction::UpdateInstall,
+            Step::UpdateInstall,
+        ),
+    ];
+    for (row, action, step) in cases {
+        let mut facts = facts(Settings::default());
+        facts.update = row;
+        let mut view = SheetView {
+            section: Section::About,
+            ..SheetView::default()
+        };
+        let targets = sheet_build(&facts, &view).1;
+        let button = targets.iter().find(|t| t.action == action).unwrap();
+        let steps = route(click(button), &facts, &mut view, &targets);
+        assert_eq!(steps, vec![step]);
+    }
 }

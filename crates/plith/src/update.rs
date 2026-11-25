@@ -1,7 +1,7 @@
 //! The update service: a daily check of the latest GitHub release, the download of a newer
 //! setup, the signature check and the start of the installer. It runs on its own thread, sleeps
 //! between checks and wakes the UI thread only to deliver an event. Nothing installs without a
-//! click: [`UpdateService::install`] is the only way to download.
+//! click: [`UpdateService::install_ready`] is the only way to download.
 //!
 //! The network, the clock, the busy check and the launch sit behind [`Backend`], so tests run
 //! without any of them.
@@ -100,6 +100,7 @@ pub trait Backend: Send + Sync {
 
 enum Command {
     CheckNow,
+    #[cfg(test)]
     Install(Release),
     InstallReady,
     Enable(bool),
@@ -109,6 +110,10 @@ enum Command {
 /// The running service.
 pub struct UpdateService {
     commands: Sender<Command>,
+    #[cfg_attr(
+        not(test),
+        allow(dead_code, reason = "only the test-only stop joins it")
+    )]
     worker: Option<JoinHandle<()>>,
 }
 
@@ -156,6 +161,7 @@ impl UpdateService {
         let _ = self.commands.send(Command::CheckNow);
     }
 
+    #[cfg(test)]
     /// Downloads, verifies and starts the installer of `release`.
     pub fn install(&self, release: Release) {
         let _ = self.commands.send(Command::Install(release));
@@ -172,6 +178,7 @@ impl UpdateService {
         let _ = self.commands.send(Command::Enable(on));
     }
 
+    #[cfg(test)]
     /// Stops the thread and waits for it; a request in flight finishes first.
     pub fn stop(mut self) {
         let _ = self.commands.send(Command::Stop);

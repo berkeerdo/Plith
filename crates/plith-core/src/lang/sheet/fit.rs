@@ -3,7 +3,7 @@
 //! Row labels are set in `Name`, sub lines and notes in `Body` (mixed case, never upper-cased),
 //! captions and choice words in `Label`.
 
-use super::{SheetText, sheet_text, theme_name};
+use super::{SheetText, fill, sheet_text, theme_name};
 use crate::draw::TextStyle;
 use crate::lang::fit::{Budget, Place};
 use crate::lang::{Lang, Text, text};
@@ -20,8 +20,12 @@ const LINE_W: f64 = 400.0;
 const WORD_W: f64 = 90.0;
 /// Room of a sidebar section name.
 const SECTION_W: f64 = 120.0;
-/// Room of the `all settings` button word.
+/// Room of the `all settings` button word and the update buttons.
 const BUTTON_W: f64 = 150.0;
+/// Room of the update state caption, as laid out in the About section.
+const STATE_W: f64 = 260.0;
+/// Room of a sub line in a row with no control on its right (the data row).
+const WIDE_W: f64 = 560.0;
 
 fn place(id: SheetText, lang: Lang, style: TextStyle, dip: f64) -> Place {
     Place {
@@ -61,6 +65,35 @@ fn theme_places() -> impl Iterator<Item = Place> {
     })
 }
 
+/// The update state captions, which hold a placeholder the code fills.
+fn is_state(id: SheetText) -> bool {
+    matches!(
+        id,
+        SheetText::StateUpdateCurrent
+            | SheetText::StateUpdateReady
+            | SheetText::StateUpdateChecking
+            | SheetText::StateUpdateDownloading
+            | SheetText::StateUpdateBadSignature
+            | SheetText::StateUpdateFailed
+    )
+}
+
+/// The update state captions with the widest value the code puts in.
+fn state_places(lang: Lang) -> impl Iterator<Item = Place> {
+    SheetText::ALL
+        .into_iter()
+        .filter(|id| is_state(*id))
+        .map(move |id| {
+            let mut shown = place(id, lang, TextStyle::Label, STATE_W);
+            shown.text = fill(
+                &fill(&shown.text, "version", "100.100.100"),
+                "percent",
+                "100",
+            );
+            shown
+        })
+}
+
 /// Every settings window string with its style and room. The window title is not budgeted.
 #[must_use]
 pub fn places(lang: Lang) -> Vec<Place> {
@@ -94,6 +127,8 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::RowVersion,
         S::RowFile,
         S::RowData,
+        S::RowUpdate,
+        S::RowUpdateCheck,
     ] {
         out.push(place(id, lang, TextStyle::Name, LABEL_W));
     }
@@ -115,20 +150,22 @@ pub fn places(lang: Lang) -> Vec<Place> {
         S::SubOsd,
         S::SubHideWindows,
         S::SubAutostart,
-        S::SubData,
+        S::SubUpdateCheck,
         S::SaveError,
     ] {
         out.push(place(id, lang, TextStyle::Body, LINE_W));
     }
     out.extend(look_places(lang));
     out.extend(theme_places());
+    out.extend(state_places(lang));
+    out.push(place(S::SubData, lang, TextStyle::Body, WIDE_W));
     for id in S::ALL {
-        if !id.is_caption() {
+        if !id.is_caption() || is_state(id) {
             continue;
         }
         let dip = match id {
             S::Caption | S::CaptionClosed => LINE_W,
-            S::WordAllSettings => BUTTON_W,
+            S::WordAllSettings | S::WordCheck | S::WordInstall => BUTTON_W,
             _ => WORD_W,
         };
         out.push(place(id, lang, TextStyle::Label, dip));

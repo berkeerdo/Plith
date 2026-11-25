@@ -32,6 +32,10 @@ pub enum Step {
     OpenFolder,
     /// Turn start with Windows on or off.
     Autostart(bool),
+    /// Check for an update now.
+    UpdateCheck,
+    /// Download and start the installer of the ready update.
+    UpdateInstall,
     /// The client area is now this many pixels at this scale.
     Resize(u32, u32, f64),
 }
@@ -140,6 +144,8 @@ fn act(facts: &SheetFacts, view: &mut SheetView, action: SheetAction, steps: &mu
         }
         SheetAction::OpenFolder => steps.push(Step::OpenFolder),
         SheetAction::Autostart(on) => steps.push(Step::Autostart(on)),
+        SheetAction::UpdateCheck => steps.push(Step::UpdateCheck),
+        SheetAction::UpdateInstall => steps.push(Step::UpdateInstall),
     }
 }
 

@@ -35,8 +35,13 @@ fn captions_are_upper() {
     for lang in Lang::ALL {
         for t in SheetText::ALL {
             if t.is_caption() {
-                let s = sheet_text(t, lang);
-                assert_eq!(s, upper(s, lang), "{lang:?} {t:?} is not upper case");
+                // The copy holds placeholders the code fills with a number.
+                let s = fill(
+                    &fill(sheet_text(t, lang), "version", "1.0.0"),
+                    "percent",
+                    "1",
+                );
+                assert_eq!(s, upper(&s, lang), "{lang:?} {t:?} is not upper case");
             }
         }
     }

@@ -76,6 +76,18 @@ impl TrayHandle {
             inner.tray.borrow_mut().lines = lines.to_vec();
         }
     }
+
+    /// Shows a balloon with `title` and `body` over the icon. A click on it arrives as
+    /// `ShellEvent::TrayNotice`. Windows may hold the balloon back (focus assist); that is its
+    /// call, and a failure leaves nothing to do.
+    pub fn notice(&self, title: &str, body: &str) {
+        if let Some(inner) = current() {
+            let hwnd = hwnd_of(inner.visual.get());
+            if inner.tray.borrow().added {
+                notify::balloon(hwnd, title, body);
+            }
+        }
+    }
 }
 
 /// Adds the icon and records it.
@@ -108,6 +120,7 @@ pub(crate) fn on_taskbar_created(inner: &Inner, hwnd: HWND) {
 pub(crate) fn on_callback(inner: &Inner, hwnd: HWND, wparam: WPARAM, lparam: LPARAM) {
     match decode::click_of(decode::event_of(lparam.0)) {
         decode::Click::Open => inner.emit(ShellEvent::Tray(TrayItem::Settings)),
+        decode::Click::Notice => inner.emit(ShellEvent::TrayNotice),
         decode::Click::Menu => {
             let lines = inner.tray.borrow().lines.clone();
             let at = decode::anchor_of(wparam.0);

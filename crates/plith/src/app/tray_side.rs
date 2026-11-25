@@ -26,6 +26,8 @@ pub fn start(
     }
     app.borrow_mut()
         .attach_tray(Some(shell.tray_handle()), shell.quit_handle());
+    app.borrow_mut()
+        .attach_notice(shell.tray_handle(), plith_shell::user_busy);
     match shell.add_tray(&menu(language_of(settings))) {
         Ok(()) => log.line("tray: icon added"),
         // At sign in Explorer may not have its taskbar yet; `TaskbarCreated` adds the icon then.

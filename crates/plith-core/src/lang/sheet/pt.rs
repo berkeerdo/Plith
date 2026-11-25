@@ -48,7 +48,7 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::RowFile => "Arquivo de configurações",
         SheetText::RowData => "Dados",
         SheetText::SubData => {
-            "Clima do Open-Meteo, localização por IP do ipapi.co (só se escolhida)"
+            "Clima do Open-Meteo, localização por IP do ipapi.co (só se escolhida), atualizações do GitHub"
         }
         SheetText::WordAuto => "AUTOMÁTICO",
         SheetText::WordWelcome => "INÍCIO",
@@ -69,6 +69,17 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::WordOff => "DESLIGADO",
         SheetText::WordOpen => "ABRIR",
         SheetText::WordAllSettings => "TODAS AS OPÇÕES",
+        SheetText::RowUpdate => "Atualização",
+        SheetText::StateUpdateCurrent => "ATUALIZADO",
+        SheetText::StateUpdateReady => "{version} PRONTA",
+        SheetText::StateUpdateChecking => "VERIFICANDO",
+        SheetText::StateUpdateDownloading => "BAIXANDO {percent}%",
+        SheetText::StateUpdateBadSignature => "ASSINATURA INVÁLIDA",
+        SheetText::StateUpdateFailed => "FALHA NA VERIFICAÇÃO",
+        SheetText::WordCheck => "VERIFICAR",
+        SheetText::WordInstall => "INSTALAR",
+        SheetText::RowUpdateCheck => "Verificar atualizações",
+        SheetText::SubUpdateCheck => "O pedido leva apenas o seu endereço IP",
         SheetText::SaveError => "Não foi possível salvar as configurações, valem só nesta sessão.",
     }
 }

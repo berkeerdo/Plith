@@ -244,6 +244,7 @@ impl App {
             ShellEvent::Drop { paths } => self.on_drop(&paths),
             ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
             ShellEvent::Tray(item) => self.on_tray(item),
+            ShellEvent::TrayNotice => self.on_tray_notice(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,

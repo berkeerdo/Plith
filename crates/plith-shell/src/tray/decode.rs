@@ -5,6 +5,8 @@
 const NIN_SELECT: u32 = 0x400;
 /// `NIN_KEYSELECT`: the icon was chosen with the keyboard.
 const NIN_KEYSELECT: u32 = 0x401;
+/// `NIN_BALLOONUSERCLICK`: the user clicked the balloon (version 4).
+const NIN_BALLOONUSERCLICK: u32 = 0x405;
 /// `WM_CONTEXTMENU`: the right button, or the menu key, on the icon.
 const WM_CONTEXTMENU: u32 = 0x7B;
 
@@ -18,6 +20,8 @@ pub(super) enum Click {
     Open,
     /// Show the menu.
     Menu,
+    /// The update balloon was clicked.
+    Notice,
     /// Nothing: moves, presses and the other notifications.
     Ignore,
 }
@@ -39,6 +43,7 @@ pub(super) fn click_of(event: u32) -> Click {
     match event {
         NIN_SELECT | NIN_KEYSELECT => Click::Open,
         WM_CONTEXTMENU => Click::Menu,
+        NIN_BALLOONUSERCLICK => Click::Notice,
         _ => Click::Ignore,
     }
 }
