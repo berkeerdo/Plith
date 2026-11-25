@@ -12,6 +12,12 @@ mod files;
 mod payload;
 #[allow(dead_code, reason = "used by the worker added in Task 9")]
 mod processes;
+#[allow(dead_code, reason = "used by the worker added in Task 9")]
+mod register;
+#[cfg(test)]
+mod testing;
+#[allow(dead_code, reason = "used by the worker added in Task 9")]
+mod uninstall;
 
 use plith_core::setup::{Mode, parse_args};
 

@@ -22,15 +22,32 @@ const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 const DIRECTORY: u32 = 0x10;
 
 /// Deletes every file and folder under `root` that `is_ours` does not allow, then the folders
-/// left empty, bottom-up. A missing root is fine.
+/// left empty, bottom-up.
 ///
 /// # Errors
 /// An entry could not be listed or deleted; the reason names it.
 pub(super) fn remove_not_ours(root: &Path, log: &mut dyn FnMut(String)) -> Result<(), StepError> {
-    walk(root, root, log)
+    remove_except(root, &|path| is_ours(&relative(root, path)), log)
 }
 
-fn walk(root: &Path, dir: &Path, log: &mut dyn FnMut(String)) -> Result<(), StepError> {
+/// Deletes every file and folder under `root` except the files `keep` names, then the folders
+/// left empty, bottom-up; a folder that still holds a kept file stays. `root` itself stays.
+///
+/// # Errors
+/// An entry could not be listed or deleted; the reason names it.
+pub(super) fn remove_except(
+    root: &Path,
+    keep: &dyn Fn(&Path) -> bool,
+    log: &mut dyn FnMut(String),
+) -> Result<(), StepError> {
+    walk(keep, root, log)
+}
+
+fn walk(
+    keep: &dyn Fn(&Path) -> bool,
+    dir: &Path,
+    log: &mut dyn FnMut(String),
+) -> Result<(), StepError> {
     let entries = fs::read_dir(dir)
         .map_err(|error| StepError::new(format!("cannot list {}: {error}", dir.display())))?;
     for entry in entries {
@@ -69,13 +86,13 @@ fn walk(root: &Path, dir: &Path, log: &mut dyn FnMut(String)) -> Result<(), Step
                     path.display()
                 )));
             }
-            walk(root, &path, log)?;
+            walk(keep, &path, log)?;
             drop(guard);
             if is_empty(&path) {
                 log(format!("removing folder {}", path.display()));
                 fs::remove_dir(&path).map_err(|error| fail_remove(&path, &error))?;
             }
-        } else if !is_ours(&relative(root, &path)) {
+        } else if !keep(&path) {
             log(format!("removing {}", path.display()));
             remove_file(&path).map_err(|error| fail_remove(&path, &error))?;
         }

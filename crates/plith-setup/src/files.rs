@@ -35,6 +35,10 @@ impl StepError {
     }
 }
 
+/// The three installed files, relative to the root: the app, the helper, the setup copy.
+pub(crate) const INSTALLED_FILES: [&str; 3] =
+    ["plith.exe", "osd\\plith-osd.exe", "setup\\plith-setup.exe"];
+
 /// One installed file: its path relative to the root and its bytes.
 struct Item<'a> {
     relative: &'static str,
@@ -81,15 +85,15 @@ fn install_checked(
     audit::audit(root, check_acl)?;
     let items = [
         Item {
-            relative: "plith.exe",
+            relative: INSTALLED_FILES[0],
             bytes: payload.plith,
         },
         Item {
-            relative: "osd\\plith-osd.exe",
+            relative: INSTALLED_FILES[1],
             bytes: payload.helper,
         },
         Item {
-            relative: "setup\\plith-setup.exe",
+            relative: INSTALLED_FILES[2],
             bytes: setup_exe,
         },
     ];
@@ -102,6 +106,27 @@ fn install_checked(
     log("removing files that are not part of the app".to_string());
     walk::remove_not_ours(root, log)?;
     check_acls(check_acl, root, &items, log)
+}
+
+/// The look before any write, for a step that works on an existing root: refuses links and,
+/// under the real `Program Files`, non-administrator write access.
+///
+/// # Errors
+/// `root` or something under it is a link or writable by a non-administrator, or cannot be read.
+pub(crate) fn audit_root(root: &Path) -> Result<(), StepError> {
+    audit::audit(root, acl::under_program_files(root))
+}
+
+/// Deletes everything under `root` (never following links) except the files `keep` names.
+///
+/// # Errors
+/// An entry could not be listed or deleted.
+pub(crate) fn remove_all_except(
+    root: &Path,
+    keep: &dyn Fn(&Path) -> bool,
+    log: &mut dyn FnMut(String),
+) -> Result<(), StepError> {
+    walk::remove_except(root, keep, log)
 }
 
 /// The `.new` path of an item.
@@ -144,7 +169,7 @@ fn remove_staged(staged: &[PathBuf]) {
 }
 
 /// Closes the running app, then ends anything still running from the two exes' own paths.
-fn close_running(
+pub(crate) fn close_running(
     root: &Path,
     procs: &mut dyn Processes,
     log: &mut dyn FnMut(String),
@@ -154,7 +179,7 @@ fn close_running(
     if let Err(reason) = procs.close_plith() {
         log(format!("Plith did not close politely: {reason}"));
     }
-    for relative in ["plith.exe", "osd\\plith-osd.exe"] {
+    for relative in &INSTALLED_FILES[..2] {
         let exe = root.join(relative);
         log(format!("stopping {}", exe.display()));
         procs.stop_by_path(&exe)?;
