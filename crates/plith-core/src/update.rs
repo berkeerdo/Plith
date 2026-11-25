@@ -4,10 +4,8 @@
 use crate::json;
 use crate::setup::Version;
 
-/// Where a release asset must be downloaded from; the download runs a program.
-const DOWNLOAD_PREFIX: &str = "https://github.com/berkeerdo/Plith/releases/download/";
-/// Where the release page must live.
-const PAGE_PREFIX: &str = "https://github.com/berkeerdo/Plith/releases/";
+/// The Plith releases address; every accepted link is built from it, never matched by prefix.
+const RELEASES: &str = "https://github.com/berkeerdo/Plith/releases";
 
 /// Seconds to wait after start before the first check.
 const FIRST_CHECK: u64 = 120;
@@ -45,44 +43,53 @@ pub enum UpdateRow {
 }
 
 /// Reads the GitHub "latest release" JSON. `None` when it is malformed, has no
-/// `Plith-Setup-<version>.exe` asset, or a link does not point at the Plith releases.
+/// `Plith-Setup-<version>.exe` asset, or a link is not exactly the address built from the tag:
+/// `.../releases/download/<tag>/Plith-Setup-<version>.exe` and `.../releases/tag/<tag>`. The tag
+/// may hold only letters, digits, `.` and `-`, with no `..`.
 #[must_use]
 pub fn parse_release(text: &str) -> Option<Release> {
     let root = json::parse(text).ok()?;
-    let version = Version::parse(root.get("tag_name")?.as_str()?)?;
-    let page_url = root.get("html_url")?.as_str()?;
-    if !page_url.starts_with(PAGE_PREFIX) {
+    let tag = root.get("tag_name")?.as_str()?;
+    let safe = !tag.is_empty()
+        && !tag.contains("..")
+        && tag
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'-');
+    if !safe {
         return None;
     }
-    let wanted = format!("Plith-Setup-{version}.exe");
-    let setup_url = root
+    let version = Version::parse(tag)?;
+    let name = format!("Plith-Setup-{version}.exe");
+    let page_url = format!("{RELEASES}/tag/{tag}");
+    let setup_url = format!("{RELEASES}/download/{tag}/{name}");
+    if root.get("html_url")?.as_str()? != page_url {
+        return None;
+    }
+    let asset = root
         .get("assets")?
         .as_arr()?
         .iter()
-        .find(|asset| asset.get("name").and_then(json::Json::as_str) == Some(wanted.as_str()))?
-        .get("browser_download_url")?
-        .as_str()?;
-    if !setup_url.starts_with(DOWNLOAD_PREFIX) {
+        .find(|asset| asset.get("name").and_then(json::Json::as_str) == Some(name.as_str()))?;
+    if asset.get("browser_download_url")?.as_str()? != setup_url {
         return None;
     }
     Some(Release {
         version,
-        setup_url: setup_url.to_string(),
-        page_url: page_url.to_string(),
+        setup_url,
+        page_url,
     })
 }
 
 /// Seconds to wait from `now` for the next check: two minutes after start, a day after the last
-/// success, six hours after a failure that came after it. Never negative; a clock that went
-/// backwards (a recorded time in the future) means check now.
+/// success, six hours after a failure that came after it. Never negative. A record later than
+/// `now` (the clock went backwards) counts as absent, so the two-minute start floor still applies.
 #[must_use]
 pub fn next_check_in(now: u64, started: u64, last_ok: u64, last_failed: Option<u64>) -> u64 {
-    if last_ok > now || last_failed.is_some_and(|failed| failed > now) {
-        return 0;
-    }
+    let last_ok = if last_ok > now { 0 } else { last_ok };
+    let last_failed = last_failed.filter(|&failed| failed <= now);
     let due = match last_failed {
-        Some(failed) if failed >= last_ok => failed + AFTER_FAILURE,
-        _ if last_ok > 0 => last_ok + AFTER_SUCCESS,
+        Some(failed) if failed >= last_ok => failed.saturating_add(AFTER_FAILURE),
+        _ if last_ok > 0 => last_ok.saturating_add(AFTER_SUCCESS),
         _ => 0,
     };
     due.max(started.saturating_add(FIRST_CHECK))

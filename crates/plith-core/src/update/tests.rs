@@ -25,8 +25,53 @@ fn parses_github_latest_with_setup_asset() {
         release.page_url,
         "https://github.com/berkeerdo/Plith/releases/tag/v0.5.0"
     );
-    let bare = LATEST.replace("\"v0.5.0\"", "\"0.5.0\"");
-    assert_eq!(parse_release(&bare).unwrap().version, release.version);
+    let bare = LATEST.replace("v0.5.0", "0.5.0");
+    let bare = parse_release(&bare).unwrap();
+    assert_eq!(bare.version, release.version);
+    assert_eq!(
+        bare.page_url,
+        "https://github.com/berkeerdo/Plith/releases/tag/0.5.0"
+    );
+}
+
+#[test]
+fn hostile_release_urls_are_rejected() {
+    let good = format!("{BASE}Plith-Setup-0.5.0.exe");
+    let page = "https://github.com/berkeerdo/Plith/releases/tag/v0.5.0";
+    let download_cases = [
+        format!("{BASE}../../evil/Plith-Setup-0.5.0.exe"),
+        format!("{BASE}%2e%2e/Plith-Setup-0.5.0.exe"),
+        format!("{BASE}..\\Plith-Setup-0.5.0.exe"),
+        format!("{good}?x=1"),
+        format!("{good}#x"),
+        format!("{good}/"),
+        good.replace("berkeerdo/Plith", "berkeerdo/Other"),
+        good.replace("berkeerdo", "Berkeerdo"),
+        good.replace("Plith-Setup-0.5.0.exe", "Plith-Setup-0.4.0.exe"),
+        good.replace("https://github.com", "https://github.com@evil.com"),
+    ];
+    for url in download_cases {
+        let json = LATEST.replace(&good, &url);
+        assert!(parse_release(&json).is_none(), "{url}");
+    }
+    let page_cases = [
+        format!("{page}?x"),
+        format!("{page}#x"),
+        format!("{page}/../x"),
+        page.replace("Plith", "Other"),
+        "https://github.com/berkeerdo/Plith/releases/".to_string(),
+    ];
+    for url in page_cases {
+        let json = LATEST.replace(page, &url);
+        assert!(parse_release(&json).is_none(), "{url}");
+    }
+    for tag in ["v0.5.0/x", "v0.5.0%2e", "..", "v0.5.0\\\\x", "v0.5.0 "] {
+        let json = LATEST.replace(
+            "\"tag_name\": \"v0.5.0\"",
+            &format!("\"tag_name\": \"{tag}\""),
+        );
+        assert!(parse_release(&json).is_none(), "{tag}");
+    }
 }
 
 #[test]
@@ -78,9 +123,18 @@ fn daily_after_success_six_hours_after_failure() {
         next_check_in(now, started, now - 600, Some(now - 7_200)),
         85_800
     );
-    // The clock went backwards: check now.
+    // The clock went backwards: the record is ignored.
     assert_eq!(next_check_in(now, started, now + 5_000, None), 0);
     assert_eq!(next_check_in(now, started, 0, Some(now + 5_000)), 0);
+}
+
+#[test]
+fn future_record_still_waits_two_minutes_after_start() {
+    assert_eq!(next_check_in(1_000, 1_000, 5_000, None), 120);
+    assert_eq!(next_check_in(1_000, 1_000, 0, Some(5_000)), 120);
+    assert_eq!(next_check_in(1_000, 1_000, 5_000, Some(6_000)), 120);
+    // A valid failure survives a future success record.
+    assert_eq!(next_check_in(1_100, 1_000, 5_000, Some(1_050)), 21_550);
 }
 
 #[test]
