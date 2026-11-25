@@ -1,7 +1,6 @@
 use super::*;
 use crate::app::feed::drag::DRAG_TIMER;
 use crate::app::feed::{COLLAPSE_TIMER, Timers};
-use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
 use crate::services::{Changes, Facts, LevelSource, Services};
 use plith_core::input::drag::RulerKind;
@@ -10,6 +9,7 @@ use plith_core::launch::Fixture;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::scene::{ShapeCell, ShapeFrame};
 use plith_core::shapes::PAGES;
+use plith_host::log::{LogFile, Stamp};
 use plith_shell::ShellEvent;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;

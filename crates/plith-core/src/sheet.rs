@@ -7,6 +7,7 @@ use crate::draw::{ArtId, DisplayList, Ink, Node, Rect};
 use crate::lang::Lang;
 use crate::settings::Settings;
 use crate::settings::change::SettingChange;
+use crate::update::UpdateRow;
 use std::sync::Arc;
 
 mod about;
@@ -25,6 +26,8 @@ pub use keys::{KeyOutcome, SheetKey, commit_field, focus_field, on_key};
 
 #[cfg(test)]
 mod tests;
+#[cfg(test)]
+mod update_tests;
 
 /// Width of the sheet in DIP.
 pub const SHEET_W: f64 = 840.0;
@@ -85,6 +88,8 @@ pub struct SheetFacts {
     /// Whether the HKCU Run value starts Plith at sign in: read when the window opened and
     /// after each switch. It is not a setting of the file.
     pub autostart: bool,
+    /// What the About update row shows.
+    pub update: UpdateRow,
 }
 
 /// Where keyboard focus or the pointer is.
@@ -130,6 +135,10 @@ pub enum SheetAction {
     OpenFolder,
     /// Turn start with Windows on or off (the Run value, not a setting of the file).
     Autostart(bool),
+    /// Check for an update now.
+    UpdateCheck,
+    /// Download and start the installer of the ready update.
+    UpdateInstall,
 }
 
 /// A clickable rectangle.

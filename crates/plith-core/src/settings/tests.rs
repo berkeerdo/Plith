@@ -45,6 +45,9 @@ fn round_trip() {
         osd: false,
         flyout: FlyoutPref::Hide,
         theme: crate::theme::Theme::Sodyum,
+        update_check: false,
+        update_checked: 1_764_000_000,
+        update_seen: "0.5.0".to_string(),
     };
     let (back, problems) = parse(&serialize(&s));
     assert_eq!(back, s);
@@ -58,8 +61,23 @@ fn serialize_writes_every_key_in_order() {
     assert_eq!(
         keys,
         [
-            "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on",
-            "lang", "head", "osd", "flyout", "theme"
+            "look",
+            "span",
+            "plays",
+            "weather",
+            "location",
+            "city",
+            "unit",
+            "clock24",
+            "open_on",
+            "lang",
+            "head",
+            "osd",
+            "flyout",
+            "theme",
+            "update_check",
+            "update_checked",
+            "update_seen"
         ]
     );
     assert!(text.ends_with('\n'));
@@ -165,4 +183,39 @@ fn unknown_theme_falls_back_to_gece_and_is_reported() {
     assert_eq!(problems.len(), 1);
     assert!(problems[0].contains("`theme`"));
     assert!(!problems[0].contains("neon"));
+}
+
+#[test]
+fn settings_round_trip_update_keys() {
+    let s = Settings {
+        update_check: false,
+        update_checked: 1_764_000_000,
+        update_seen: "0.5.0".to_string(),
+        ..Settings::default()
+    };
+    let text = serialize(&s);
+    assert!(text.contains("update_checked=1764000000\n"));
+    let (back, problems) = parse(&text);
+    assert!(problems.is_empty());
+    assert_eq!(back, s);
+}
+
+#[test]
+fn old_settings_file_gets_update_defaults() {
+    let (s, problems) = parse("look=clock\ntheme=gece\n");
+    assert!(problems.is_empty());
+    assert!(s.update_check);
+    assert_eq!(s.update_checked, 0);
+    assert_eq!(s.update_seen, "");
+}
+
+#[test]
+fn bad_update_values_are_reported_without_the_value() {
+    let (s, problems) = parse("update_seen=banana\nupdate_checked=-4\nupdate_check=maybe\n");
+    assert_eq!(s.update_seen, "");
+    assert_eq!(s.update_checked, 0);
+    assert!(s.update_check);
+    assert_eq!(problems.len(), 3);
+    assert!(problems.iter().all(|p| !p.contains("banana")));
+    assert!(problems[0].contains("`update_seen`"));
 }

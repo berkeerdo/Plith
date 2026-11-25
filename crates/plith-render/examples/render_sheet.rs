@@ -5,91 +5,39 @@
 //! Run: `cargo run --release -p plith-render --example render_sheet -- <new folder>`. The folder
 //! must not exist yet; its parents are made. `--theme <key>` after the folder paints every
 //! section in that theme (default `gece`), with the same theme marked in the Look section.
+//! `--update current|checking|ready|downloading|signature|failed` shows that state in the About
+//! update row, `--sections general,about` renders only those sections and `--lang tr` only that
+//! language; each flag may follow the folder in any order.
 
 #[path = "render_sheet/facts.rs"]
 mod facts;
+#[path = "common/png.rs"]
+mod png;
 
 use plith_core::draw::ArtPixels;
 use plith_core::lang::Lang;
+use plith_core::setup::Version;
 use plith_core::sheet::{ICON_ART, ICON_DIP, Section, SheetView, sheet_build};
 use plith_core::theme::Theme;
+use plith_core::update::UpdateRow;
 use plith_render::render_sheet_offscreen;
+use png::{decode_png, write_png};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
-use windows::Win32::Foundation::{GENERIC_READ, GENERIC_WRITE};
-use windows::Win32::Graphics::Imaging::{
-    CLSID_WICImagingFactory, GUID_ContainerFormatPng, GUID_WICPixelFormat32bppBGRA,
-    GUID_WICPixelFormat32bppPBGRA, IWICBitmapFrameEncode, IWICImagingFactory, IWICPalette,
-    WICBitmapDitherTypeNone, WICBitmapEncoderNoCache, WICBitmapInterpolationModeFant,
-    WICBitmapPaletteTypeCustom, WICDecodeMetadataCacheOnDemand,
-};
-use windows::Win32::System::Com::{
-    CLSCTX_INPROC_SERVER, COINIT_MULTITHREADED, CoCreateInstance, CoInitializeEx,
-};
-use windows::core::{HSTRING, Result};
+use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
+use windows::core::Result;
 
-/// Writes `w` by `h` BGRA rows as a PNG with WIC.
-fn write_png(path: &Path, rows: &[u8], w: u32, h: u32) -> Result<()> {
-    // SAFETY: COM is initialized on this thread before the factory is created; every pointer
-    // passed points to a live local, and `rows` holds `h` rows of `w * 4` bytes.
-    unsafe {
-        let factory: IWICImagingFactory =
-            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
-        let stream = factory.CreateStream()?;
-        stream.InitializeFromFilename(&HSTRING::from(path.as_os_str()), GENERIC_WRITE.0)?;
-        let encoder = factory.CreateEncoder(&GUID_ContainerFormatPng, std::ptr::null())?;
-        encoder.Initialize(&stream, WICBitmapEncoderNoCache)?;
-        let mut frame: Option<IWICBitmapFrameEncode> = None;
-        encoder.CreateNewFrame(&raw mut frame, std::ptr::null_mut())?;
-        let frame = frame.ok_or_else(windows::core::Error::empty)?;
-        frame.Initialize(None)?;
-        frame.SetSize(w, h)?;
-        let mut format = GUID_WICPixelFormat32bppBGRA;
-        frame.SetPixelFormat(&raw mut format)?;
-        frame.WritePixels(h, w * 4, rows)?;
-        frame.Commit()?;
-        encoder.Commit()?;
-    }
-    Ok(())
-}
-
-/// Decodes the About icon tile (`crates/plith/assets/plith-tile-256.png`) to premultiplied BGRA.
+/// Decodes the About icon tile (`crates/plith/assets/plith-tile-256.png`) to premultiplied BGRA,
+/// scaled to the drawn size with Fant, as the app does, so the render matches it.
 fn load_icon(side: u32) -> Result<Arc<ArtPixels>> {
     let path = Path::new(env!("CARGO_MANIFEST_DIR")).join("../plith/assets/plith-tile-256.png");
-    // SAFETY: COM is initialized on this thread; every out pointer is a live local.
-    unsafe {
-        let factory: IWICImagingFactory =
-            CoCreateInstance(&CLSID_WICImagingFactory, None, CLSCTX_INPROC_SERVER)?;
-        let decoder = factory.CreateDecoderFromFilename(
-            &HSTRING::from(path.as_os_str()),
-            None,
-            GENERIC_READ,
-            WICDecodeMetadataCacheOnDemand,
-        )?;
-        let frame = decoder.GetFrame(0)?;
-        // Scaled to the drawn size with Fant, as the app does, so the render matches it.
-        let scaler = factory.CreateBitmapScaler()?;
-        scaler.Initialize(&frame, side, side, WICBitmapInterpolationModeFant)?;
-        let converter = factory.CreateFormatConverter()?;
-        converter.Initialize(
-            &scaler,
-            &GUID_WICPixelFormat32bppPBGRA,
-            WICBitmapDitherTypeNone,
-            None::<&IWICPalette>,
-            0.0,
-            WICBitmapPaletteTypeCustom,
-        )?;
-        let (mut w, mut h) = (0u32, 0u32);
-        converter.GetSize(&raw mut w, &raw mut h)?;
-        let mut pixels = vec![0u8; (w * h * 4) as usize];
-        converter.CopyPixels(std::ptr::null(), w * 4, &mut pixels)?;
-        Ok(Arc::new(ArtPixels {
-            id: ICON_ART,
-            width: w,
-            height: h,
-            bgra: Arc::from(pixels),
-        }))
-    }
+    let (width, height, pixels) = decode_png(&path, Some(side))?;
+    Ok(Arc::new(ArtPixels {
+        id: ICON_ART,
+        width,
+        height,
+        bgra: Arc::from(pixels),
+    }))
 }
 
 fn section_name(section: Section) -> &'static str {
@@ -102,21 +50,85 @@ fn section_name(section: Section) -> &'static str {
     }
 }
 
+/// What the optional flags after the folder chose.
+struct Options {
+    theme: Theme,
+    update: UpdateRow,
+    sections: Vec<Section>,
+    langs: Vec<Lang>,
+}
+
+fn section_of(key: &str) -> Option<Section> {
+    Section::ALL.into_iter().find(|s| {
+        section_name(*s)
+            .split_once('-')
+            .is_some_and(|(_, name)| name == key)
+    })
+}
+
+fn update_of(key: &str) -> Option<UpdateRow> {
+    Some(match key {
+        "current" => UpdateRow::Current,
+        "checking" => UpdateRow::Checking,
+        "ready" => UpdateRow::Ready(Version::new(0, 5, 0)),
+        "downloading" => UpdateRow::Downloading(42),
+        "signature" => UpdateRow::BadSignature,
+        "failed" => UpdateRow::Failed,
+        _ => return None,
+    })
+}
+
+fn options(
+    mut args: impl Iterator<Item = std::ffi::OsString>,
+) -> std::result::Result<Options, String> {
+    let mut out = Options {
+        theme: Theme::Gece,
+        update: UpdateRow::Current,
+        sections: Section::ALL.to_vec(),
+        langs: vec![Lang::Tr, Lang::De],
+    };
+    while let Some(flag) = args.next() {
+        let flag = flag.to_string_lossy().into_owned();
+        let value = args
+            .next()
+            .ok_or_else(|| format!("{flag} needs a value"))?
+            .to_string_lossy()
+            .into_owned();
+        match flag.as_str() {
+            "--theme" => {
+                out.theme = Theme::from_key(&value).ok_or(format!("unknown theme {value}"))?;
+            }
+            "--update" => {
+                out.update = update_of(&value).ok_or(format!("unknown update state {value}"))?;
+            }
+            "--sections" => {
+                out.sections = value
+                    .split(',')
+                    .map(|key| section_of(key).ok_or(format!("unknown section {key}")))
+                    .collect::<std::result::Result<_, _>>()?;
+            }
+            "--lang" => {
+                let lang = Lang::ALL.into_iter().find(|l| l.code() == value);
+                out.langs = vec![lang.ok_or(format!("unknown language {value}"))?];
+            }
+            _ => return Err(format!("unknown option {flag}")),
+        }
+    }
+    Ok(out)
+}
+
 fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     let mut args = std::env::args_os().skip(1);
     let dir: PathBuf = args
         .next()
-        .ok_or("usage: render_sheet <new folder> [--theme gece|kagit|york|sodyum]")?
+        .ok_or("usage: render_sheet <new folder> [--theme key] [--update state] [--sections list] [--lang code]")?
         .into();
-    let theme = match args.next() {
-        None => Theme::Gece,
-        Some(flag) if flag == "--theme" => {
-            let key = args.next().ok_or("--theme needs a key")?;
-            let key = key.to_string_lossy();
-            Theme::from_key(&key).ok_or_else(|| format!("unknown theme `{key}`"))?
-        }
-        Some(other) => return Err(format!("unknown option {}", other.to_string_lossy()).into()),
-    };
+    let Options {
+        theme,
+        update,
+        sections,
+        langs,
+    } = options(args)?;
     if let Some(parent) = dir.parent() {
         std::fs::create_dir_all(parent)?;
     }
@@ -125,12 +137,13 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     let palette = theme.palette();
 
-    for lang in [Lang::Tr, Lang::De] {
+    for lang in langs {
         let mut facts = facts::sheet_facts(lang);
+        facts.update = update;
         facts.settings.theme = theme;
         // Turkish shows the Windows start switch off, German on, so one run covers both.
         facts.autostart = lang == Lang::De;
-        for section in Section::ALL {
+        for &section in &sections {
             let view = SheetView {
                 section,
                 ..SheetView::default()

@@ -7,14 +7,15 @@ use super::saver::Saver;
 use super::shelf::{SHELF_TIMER, ShelfHost};
 use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
-use crate::log::LogFile;
 use crate::osd::OsdSink;
+use crate::update::UpdateLink;
 use plith_core::demo::DemoStep;
 use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::{IdleLook, Settings};
 use plith_core::theme::{Palette, Theme};
+use plith_host::log::LogFile;
 use plith_render::{RelayoutHandle, StopHandle};
 use plith_shell::ShellEvent;
 use std::sync::Arc;
@@ -102,6 +103,8 @@ pub struct App {
     sheet: SheetHost,
     /// The tray icon's menu captions and its way to quit.
     tray: TrayHost,
+    /// The update service of a normal run.
+    update: Option<UpdateLink>,
 }
 
 impl App {
@@ -137,6 +140,7 @@ impl App {
             saver: None,
             sheet: SheetHost::default(),
             tray: TrayHost::default(),
+            update: None,
         }
     }
 
@@ -240,6 +244,7 @@ impl App {
             ShellEvent::Drop { paths } => self.on_drop(&paths),
             ShellEvent::Timer(CARET_TIMER) => self.on_caret_tick(),
             ShellEvent::Tray(item) => self.on_tray(item),
+            ShellEvent::TrayNotice => self.on_tray_notice(),
             ShellEvent::Suppression(suppression) => {
                 let _ = self.mailbox.update(|scene| Scene {
                     suppression,
@@ -259,6 +264,7 @@ impl App {
                 }
                 self.drain_sheet();
                 self.drain_shelf_load();
+                self.drain_update();
             }
             ShellEvent::Timer(id) => {
                 if let Some(feed) = &mut self.feed {
@@ -282,6 +288,7 @@ impl App {
 mod live;
 mod sheet;
 mod tray;
+mod update;
 
 pub use live::OsdControl;
 use sheet::{CARET_TIMER, SheetHost};

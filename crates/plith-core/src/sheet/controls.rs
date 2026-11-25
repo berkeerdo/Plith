@@ -211,21 +211,24 @@ impl Page {
         }
     }
 
-    /// A button word at the right edge.
-    pub fn button(&mut self, row: u8, ctl: u8, t: f64, word: &str, action: SheetAction) {
+    /// A button word at the right edge, at least 60 wide and wider for a long word. Returns the
+    /// width of its target, so a caption can sit to its left.
+    pub fn button(&mut self, row: u8, ctl: u8, t: f64, word: &str, action: SheetAction) -> f64 {
+        let w = (cell_w(word) - WORD_PAD).max(60.0);
         self.text(
-            rect(R - 64.0, t + 9.0, 60.0, 14.0),
+            rect(R - w - 4.0, t + 9.0, w, 14.0),
             word,
             TextStyle::Label,
             Ink::Ink,
             Align::End,
         );
-        self.stroke(vec![(R - 60.0, t + 26.0), (R - 4.0, t + 26.0)], Ink::Muted);
+        self.stroke(vec![(R - w, t + 26.0), (R - 4.0, t + 26.0)], Ink::Muted);
         self.target(
-            rect(R - 68.0, t + 4.0, 68.0, 24.0),
+            rect(R - w - 8.0, t + 4.0, w + 8.0, 24.0),
             FocusId::Row(row, ctl),
             action,
         );
+        w + 8.0
     }
 
     /// A one line text field box at `(x, y)`, 240 wide, showing `shown`, with the selection

@@ -2,9 +2,9 @@
 //! read without blocking, reconfigured or stopped off the UI thread while running, dropped
 //! (never joined) at exit.
 
-use crate::log::LogFile;
 use plith_core::settings::{LocationMode, Settings};
 use plith_core::weather::Forecast;
+use plith_host::log::LogFile;
 use plith_weather::{Hooks, WeatherConfig, WeatherService};
 use std::sync::Arc;
 use std::sync::mpsc::Receiver;

@@ -1,10 +1,10 @@
 use super::*;
 use crate::app::feed::{CLOCK_TIMER, Timers};
 use crate::app::idle_facts::Idle;
-use crate::log::Stamp;
 use crate::services::fixture::FixtureServices;
 use plith_core::launch::Fixture;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
+use plith_host::log::Stamp;
 use plith_shell::ShellEvent;
 use std::cell::Cell;
 use std::collections::BTreeSet;

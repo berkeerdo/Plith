@@ -47,7 +47,9 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::RowVersion => "Sürüm",
         SheetText::RowFile => "Ayar dosyası",
         SheetText::RowData => "Veri",
-        SheetText::SubData => "Hava Open-Meteo'dan, IP konumu ipapi.co'dan (yalnızca seçilirse)",
+        SheetText::SubData => {
+            "Hava Open-Meteo'dan, IP konumu ipapi.co'dan (yalnızca seçilirse), güncelleme GitHub'dan"
+        }
         SheetText::WordAuto => "OTOMATİK",
         SheetText::WordWelcome => "KARŞILAMA",
         SheetText::WordLastPage => "SON SAYFA",
@@ -67,6 +69,17 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::WordOff => "KAPALI",
         SheetText::WordOpen => "AÇ",
         SheetText::WordAllSettings => "TÜM AYARLAR",
+        SheetText::RowUpdate => "Güncelleme",
+        SheetText::StateUpdateCurrent => "GÜNCEL",
+        SheetText::StateUpdateReady => "{version} HAZIR",
+        SheetText::StateUpdateChecking => "DENETLENİYOR",
+        SheetText::StateUpdateDownloading => "İNDİRİLİYOR {percent}%",
+        SheetText::StateUpdateBadSignature => "İMZA GEÇERSİZ",
+        SheetText::StateUpdateFailed => "DENETLENEMEDİ",
+        SheetText::WordCheck => "DENETLE",
+        SheetText::WordInstall => "KUR",
+        SheetText::RowUpdateCheck => "Güncellemeleri denetle",
+        SheetText::SubUpdateCheck => "İstek IP adresin dışında hiçbir veri taşımaz",
         SheetText::SaveError => "Ayarlar kaydedilemedi, bu oturumda geçerli.",
     }
 }

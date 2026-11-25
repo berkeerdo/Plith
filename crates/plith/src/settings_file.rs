@@ -1,8 +1,8 @@
 //! The settings file `%LOCALAPPDATA%\Plith\settings.ini`: read at start, written when missing.
 //! The format lives in `plith-core`; this only does the file and the log lines.
 
-use crate::log::{self, LogFile};
-use plith_core::settings::{Settings, parse, serialize};
+use plith_core::settings::{Settings, parse, serialize, wpf};
+use plith_host::log::{self, LogFile};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -40,7 +40,7 @@ pub fn load_at(path: &Path, log: &LogFile) -> Settings {
             settings
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound => {
-            let settings = Settings::default();
+            let settings = import_wpf(path, log).unwrap_or_default();
             match save_at(path, &settings) {
                 Ok(()) => log.line("settings: no file, wrote the defaults"),
                 Err(error) => log.line(&format!("settings: cannot write the defaults: {error}")),
@@ -52,6 +52,15 @@ pub fn load_at(path: &Path, log: &LogFile) -> Settings {
             Settings::default()
         }
     }
+}
+
+/// The one-time import: the WPF app's `config.ini` beside `path`, when there is one. The old file
+/// is only read, never changed.
+fn import_wpf(path: &Path, log: &LogFile) -> Option<Settings> {
+    let text = fs::read_to_string(path.with_file_name("config.ini")).ok()?;
+    let (settings, taken) = wpf::import(&text);
+    log.line(&format!("import: wpf config.ini, {taken} keys"));
+    Some(settings)
 }
 
 /// Writes `settings` to `path` through `settings.ini.tmp` and a rename, so a crash never leaves

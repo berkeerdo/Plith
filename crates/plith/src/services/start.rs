@@ -2,10 +2,10 @@
 //! starts on its own short-lived `plith-svc-<name>` thread. The UI thread subscribed and set the
 //! waker before; the starter reports the status through a channel and posts one wake.
 
-use crate::log::LogFile;
 use plith_audio::endpoints::EndpointService;
 use plith_audio::microphone::MicrophoneService;
 use plith_audio::voicemeeter::VoicemeeterService;
+use plith_host::log::LogFile;
 use plith_media::MediaService;
 use plith_shell::UiWaker;
 use plith_system::BrightnessService;

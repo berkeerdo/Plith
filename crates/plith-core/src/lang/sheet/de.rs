@@ -45,7 +45,9 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::RowVersion => "Version",
         SheetText::RowFile => "Einstellungsdatei",
         SheetText::RowData => "Daten",
-        SheetText::SubData => "Wetter von Open-Meteo, IP-Standort von ipapi.co (nur bei Auswahl)",
+        SheetText::SubData => {
+            "Wetter von Open-Meteo, IP-Standort von ipapi.co (nur bei Auswahl), Updates von GitHub"
+        }
         SheetText::WordAuto => "AUTOMATISCH",
         SheetText::WordWelcome => "START",
         SheetText::WordLastPage => "ZULETZT",
@@ -65,6 +67,17 @@ pub fn text(t: SheetText) -> &'static str {
         SheetText::WordOff => "AUS",
         SheetText::WordOpen => "ÖFFNEN",
         SheetText::WordAllSettings => "ALLE EINSTELLUNGEN",
+        SheetText::RowUpdate => "Update",
+        SheetText::StateUpdateCurrent => "AKTUELL",
+        SheetText::StateUpdateReady => "{version} BEREIT",
+        SheetText::StateUpdateChecking => "PRÜFE",
+        SheetText::StateUpdateDownloading => "LADE {percent}%",
+        SheetText::StateUpdateBadSignature => "UNGÜLTIGE SIGNATUR",
+        SheetText::StateUpdateFailed => "PRÜFUNG FEHLGESCHLAGEN",
+        SheetText::WordCheck => "PRÜFEN",
+        SheetText::WordInstall => "INSTALLIEREN",
+        SheetText::RowUpdateCheck => "Nach Updates suchen",
+        SheetText::SubUpdateCheck => "Die Anfrage enthält nur deine IP-Adresse",
         SheetText::SaveError => "Einstellungen nicht gespeichert, nur für diese Sitzung gültig.",
     }
 }

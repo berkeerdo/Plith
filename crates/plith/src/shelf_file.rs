@@ -1,8 +1,8 @@
 //! The shelf file `%LOCALAPPDATA%\Plith\shelf.txt`: one rooted path per line, newest first, the
 //! WPF format. The text form lives in `plith-core`; this file reads and writes it.
 
-use crate::log::{self, LogFile};
 use plith_core::shelf::{Probe, Shelf};
+use plith_host::log::{self, LogFile};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

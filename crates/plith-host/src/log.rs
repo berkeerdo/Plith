@@ -39,6 +39,7 @@ pub fn format_stamp(s: Stamp) -> String {
 }
 
 /// The local time now.
+#[must_use]
 pub fn now() -> Stamp {
     // SAFETY: the call has no arguments and returns the time by value.
     let t = unsafe { GetLocalTime() };

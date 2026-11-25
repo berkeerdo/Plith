@@ -9,8 +9,6 @@ use super::{App, OsdControl};
 use crate::app::feed::Feed;
 use crate::app::idle_wiring::language_of;
 use crate::app::sheet_side::{Opening, SheetSide, Step, blank};
-use crate::autostart::Autostart;
-use crate::log::LogFile;
 use crate::settings_file;
 use plith_core::draw::DisplayList;
 use plith_core::lang::Lang;
@@ -20,6 +18,9 @@ use plith_core::settings::change::SettingChange;
 use plith_core::settings::{IdleLook, Settings};
 use plith_core::sheet::{Section, SheetFacts, SheetView, commit_field};
 use plith_core::theme::Theme;
+use plith_core::update::UpdateRow;
+use plith_host::autostart::Autostart;
+use plith_host::log::LogFile;
 use plith_shell::FIRST_APP_TIMER;
 use plith_shell::sheet_window::{SheetEvent, set_clipboard};
 use std::cell::RefCell;
@@ -43,7 +44,7 @@ type Previews = (IdleFacts, [Arc<DisplayList>; 6]);
 
 /// The facts a list was last built with, besides the previews: the settings, the language, a
 /// failed save and the start with Windows switch.
-type Shown = (Settings, Lang, bool, bool);
+type Shown = (Settings, Lang, bool, bool, UpdateRow);
 
 /// The settings window's place in the app, open or not.
 pub struct SheetHost {
@@ -228,6 +229,8 @@ impl App {
             Step::Copy(text) => set_clipboard(&text),
             Step::OpenFolder => self.open_folder(),
             Step::Autostart(on) => self.set_autostart(on),
+            Step::UpdateCheck => self.check_update_now(),
+            Step::UpdateInstall => self.install_update(),
             Step::Resize(width_px, height_px, scale) => {
                 if let Some(side) = &self.sheet.side {
                     side.resize(width_px, height_px, scale);
@@ -363,6 +366,7 @@ impl App {
             settings_path: self.sheet.settings_path.clone(),
             save_failed: self.save_failed(),
             autostart: self.sheet.autostart_on,
+            update: self.update_row(),
         }
     }
 
@@ -402,6 +406,7 @@ fn shown(facts: &SheetFacts) -> Shown {
         facts.lang,
         facts.save_failed,
         facts.autostart,
+        facts.update,
     )
 }
 

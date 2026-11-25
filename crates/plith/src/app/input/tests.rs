@@ -1,11 +1,11 @@
 use super::*;
 use crate::app::feed::{Feed, Timers};
-use crate::log::{LogFile, Stamp};
 use crate::services::fixture::FixtureServices;
 use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
 use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
 use plith_core::scene::ShapeCell;
+use plith_host::log::{LogFile, Stamp};
 use plith_shell::ShellEvent;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;

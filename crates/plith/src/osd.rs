@@ -10,9 +10,9 @@ mod supervisor;
 
 pub use flyout::restore_now;
 
-use crate::log::LogFile;
 use plith_core::launch::FlyoutMode;
 use plith_core::osd::{OsdLevel, OsdMeter};
+use plith_host::log::LogFile;
 use plith_ipc::security::own_integrity_above_medium;
 use plith_ipc::{Message, Meter, OsdLink, current_pipe_name};
 use std::sync::mpsc::{self, Sender};

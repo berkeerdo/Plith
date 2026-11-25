@@ -1,9 +1,10 @@
 //! Where the forecast is for: the Windows location service, an IP lookup or a named city.
 
 use crate::WeatherConfig;
-use crate::{http, urls};
+use crate::urls;
 use plith_core::settings::LocationMode;
 use plith_core::weather::{parse_geocode, parse_ip_location};
+use plith_host::http;
 use windows::Devices::Geolocation::{GeolocationAccessStatus, Geolocator};
 use windows::Foundation::TimeSpan;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx, CoUninitialize};

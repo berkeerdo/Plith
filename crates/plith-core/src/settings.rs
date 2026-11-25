@@ -1,6 +1,7 @@
 //! The idle look settings and their text file format: one `key=value` per line, `#` comments,
 //! blank lines skipped. Parsing never fails; a bad line is reported and the default stays.
 
+use crate::setup::Version;
 use crate::theme::Theme;
 
 /// What the collapsed island shows while nothing happens.
@@ -174,6 +175,12 @@ pub struct Settings {
     pub flyout: FlyoutPref,
     /// The colour theme of the island and the settings window.
     pub theme: Theme,
+    /// Whether the daily update check runs.
+    pub update_check: bool,
+    /// Unix seconds of the last successful update check; `0` means never.
+    pub update_checked: u64,
+    /// The version the user was last told about; empty when none.
+    pub update_seen: String,
 }
 
 impl Default for Settings {
@@ -193,6 +200,9 @@ impl Default for Settings {
             osd: true,
             flyout: FlyoutPref::default(),
             theme: Theme::default(),
+            update_check: true,
+            update_checked: 0,
+            update_seen: String::new(),
         }
     }
 }
@@ -270,6 +280,14 @@ fn parse_flyout(value: &str) -> Option<FlyoutPref> {
     }
 }
 
+/// A noticed version: empty (none) or a valid version, stored in its canonical text.
+fn parse_seen(value: &str) -> Option<String> {
+    if value.is_empty() {
+        return Some(String::new());
+    }
+    Version::parse(value).map(|v| v.to_string())
+}
+
 /// Applies one value to the field named by `key`. Returns `false` when the value is bad.
 fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
     match key {
@@ -290,13 +308,31 @@ fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
         "osd" => parse_bool(value).map(|v| s.osd = v).is_some(),
         "flyout" => parse_flyout(value).map(|v| s.flyout = v).is_some(),
         "theme" => Theme::from_key(value).map(|v| s.theme = v).is_some(),
+        "update_check" => parse_bool(value).map(|v| s.update_check = v).is_some(),
+        "update_checked" => value.parse().map(|v| s.update_checked = v).is_ok(),
+        "update_seen" => parse_seen(value).map(|v| s.update_seen = v).is_some(),
         _ => false,
     }
 }
 
-const KEYS: [&str; 14] = [
-    "look", "span", "plays", "weather", "location", "city", "unit", "clock24", "open_on", "lang",
-    "head", "osd", "flyout", "theme",
+const KEYS: [&str; 17] = [
+    "look",
+    "span",
+    "plays",
+    "weather",
+    "location",
+    "city",
+    "unit",
+    "clock24",
+    "open_on",
+    "lang",
+    "head",
+    "osd",
+    "flyout",
+    "theme",
+    "update_check",
+    "update_checked",
+    "update_seen",
 ];
 
 /// Parses the settings text. Bad lines keep the default and add one entry to the problem list.
@@ -369,7 +405,8 @@ pub fn serialize(s: &Settings) -> String {
     };
     format!(
         "look={}\nspan={span}\nplays={}\nweather={}\nlocation={location}\ncity={}\nunit={unit}\n\
-         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\ntheme={}\n",
+         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\ntheme={}\n\
+         update_check={}\nupdate_checked={}\nupdate_seen={}\n",
         s.look.key(),
         on_off(s.plays),
         on_off(s.weather),
@@ -377,10 +414,14 @@ pub fn serialize(s: &Settings) -> String {
         on_off(s.clock24),
         on_off(s.osd),
         s.theme.key(),
+        on_off(s.update_check),
+        s.update_checked,
+        s.update_seen,
     )
 }
 
 pub mod change;
+pub mod wpf;
 
 #[cfg(test)]
 mod tests;

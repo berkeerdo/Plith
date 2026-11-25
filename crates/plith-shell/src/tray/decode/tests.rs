@@ -44,3 +44,13 @@ fn the_tooltip_is_terminated_and_cut_to_fit() {
     assert_eq!(tip[TIP_LEN - 1], 0);
     assert_eq!(tip[TIP_LEN - 2], u16::from(b'x'));
 }
+
+#[test]
+fn notice_click_decodes() {
+    assert_eq!(click_of(NIN_BALLOONUSERCLICK), Click::Notice);
+    assert_eq!(click_of(0x405), Click::Notice);
+    // The other balloon notifications (shown, hide, timeout) do nothing.
+    assert_eq!(click_of(0x402), Click::Ignore, "NIN_BALLOONSHOW");
+    assert_eq!(click_of(0x403), Click::Ignore, "NIN_BALLOONHIDE");
+    assert_eq!(click_of(0x404), Click::Ignore, "NIN_BALLOONTIMEOUT");
+}

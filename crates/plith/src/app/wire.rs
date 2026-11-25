@@ -4,10 +4,10 @@
 use super::state::App;
 use crate::demo::sleep_stoppable;
 use crate::idle;
-use crate::log::LogFile;
 use plith_core::ambient::LiveValues;
 use plith_core::launch::Launch;
 use plith_core::layout::SurfaceLayout;
+use plith_host::log::LogFile;
 use plith_render::{Fatal, RenderSinks};
 use plith_shell::{MonitorInfo, QuitHandle, ShapePoster, Shell, is_remote_session};
 use std::cell::RefCell;

@@ -22,6 +22,7 @@ pub enum Json {
 
 impl Json {
     /// The value under `key` when this is an object that has it.
+    #[must_use]
     pub fn get(&self, key: &str) -> Option<&Json> {
         match self {
             Json::Obj(pairs) => pairs.iter().find(|(k, _)| k == key).map(|(_, v)| v),
@@ -30,6 +31,7 @@ impl Json {
     }
 
     /// The number, when this is one.
+    #[must_use]
     pub fn as_f64(&self) -> Option<f64> {
         match self {
             Json::Num(n) => Some(*n),
@@ -38,6 +40,7 @@ impl Json {
     }
 
     /// The string, when this is one.
+    #[must_use]
     pub fn as_str(&self) -> Option<&str> {
         match self {
             Json::Str(s) => Some(s),
@@ -46,6 +49,7 @@ impl Json {
     }
 
     /// The elements, when this is an array.
+    #[must_use]
     pub fn as_arr(&self) -> Option<&[Json]> {
         match self {
             Json::Arr(items) => Some(items),
@@ -55,6 +59,10 @@ impl Json {
 }
 
 /// Parses one complete JSON document; trailing garbage is an error.
+///
+/// # Errors
+///
+/// Returns a short message for malformed text, nesting past the depth limit or trailing input.
 pub fn parse(text: &str) -> Result<Json, String> {
     let mut reader = Reader { text, pos: 0 };
     let value = reader.value(0)?;

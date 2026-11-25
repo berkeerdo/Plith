@@ -3,9 +3,9 @@
 
 use super::flyout::{Suppression, mode_name};
 use super::health::{Failure, Health, HelperState, Notes, failure_line, give_up_line};
-use crate::log::LogFile;
 use plith_core::launch::FlyoutMode;
 use plith_core::osd::policy::wants_suppression;
+use plith_host::log::LogFile;
 use plith_ipc::{HelperProcess, INSTALLED_HELPER, Message, OsdLink, launch_helper};
 use std::io;
 use std::path::Path;

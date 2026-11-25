@@ -61,4 +61,20 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     p.toggle_to(2, t, facts.autostart, to, true);
     t += h;
     p.rule(t);
+
+    let h = p.head(
+        t,
+        p.word(S::RowUpdateCheck),
+        Some(p.word(S::SubUpdateCheck)),
+        true,
+    );
+    p.toggle(
+        3,
+        t,
+        s.update_check,
+        SettingChange::UpdateCheck(!s.update_check),
+        true,
+    );
+    t += h;
+    p.rule(t);
 }

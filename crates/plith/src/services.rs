@@ -6,7 +6,6 @@ pub mod fixture;
 pub mod start;
 pub mod writes;
 
-use crate::log::LogFile;
 use crate::model;
 use plith_audio::endpoints::{EndpointService, EndpointState};
 use plith_audio::microphone::{MicSnapshot, MicrophoneService};
@@ -16,6 +15,7 @@ use plith_core::pages::audio::AudioFacts;
 use plith_core::pages::media::MediaFacts;
 use plith_core::pages::pill::PillFacts;
 use plith_core::pages::system::SystemFacts;
+use plith_host::log::LogFile;
 use plith_media::{MediaService, MediaSnapshot};
 use plith_shell::UiWaker;
 use plith_system::{BrightnessService, DeviceLevel};

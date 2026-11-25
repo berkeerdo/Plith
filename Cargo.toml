@@ -22,6 +22,7 @@ plith-media = { path = "crates/plith-media" }
 plith-system = { path = "crates/plith-system" }
 plith-ipc = { path = "crates/plith-ipc" }
 plith-weather = { path = "crates/plith-weather" }
+plith-host = { path = "crates/plith-host" }
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"

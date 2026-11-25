@@ -1,8 +1,8 @@
 //! The demo driver: plays a `DemoScript` by handing its scene steps to the UI thread, which
 //! applies them through the same path as a click. It never synthesises input.
 
-use crate::log::LogFile;
 use plith_core::demo::{DemoScript, DemoStep};
+use plith_host::log::LogFile;
 use plith_shell::{QuitHandle, UiWaker};
 use std::cell::Cell;
 use std::sync::Arc;

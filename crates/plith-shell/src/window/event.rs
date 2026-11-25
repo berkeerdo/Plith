@@ -95,6 +95,8 @@ pub enum ShellEvent {
     Wake,
     /// The tray icon gave a command: a left click is `Settings`, the menu gives either item.
     Tray(TrayItem),
+    /// The user clicked the update balloon of the tray icon.
+    TrayNotice,
     /// App timer `id` (set through [`TimerHandle`]) ticked.
     Timer(usize),
     /// A foreground change reached the topmost fight.

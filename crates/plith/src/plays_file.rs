@@ -1,7 +1,7 @@
 //! The play log file `%LOCALAPPDATA%\Plith\plays.txt`. The text form lives in `plith-core`.
 
-use crate::log::{self, LogFile};
 use plith_core::plays::PlayLog;
+use plith_host::log::{self, LogFile};
 use std::fs;
 use std::io;
 use std::path::{Path, PathBuf};

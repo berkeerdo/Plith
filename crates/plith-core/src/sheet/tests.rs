@@ -14,7 +14,7 @@ const LOOKS: [IdleLook; 6] = [
     IdleLook::Hidden,
 ];
 
-fn facts_in(lang: Lang) -> SheetFacts {
+pub(super) fn facts_in(lang: Lang) -> SheetFacts {
     let idle = IdleFacts {
         time: "14:05".into(),
         turn: Some("YAGMUR 15:30".into()),
@@ -39,6 +39,7 @@ fn facts_in(lang: Lang) -> SheetFacts {
         settings_path: "C:\\Users\\someone\\AppData\\Local\\Plith\\settings.txt".into(),
         save_failed: false,
         autostart: false,
+        update: UpdateRow::Current,
     }
 }
 
@@ -53,7 +54,7 @@ pub(super) fn view(section: Section) -> SheetView {
     }
 }
 
-fn texts(list: &DisplayList) -> Vec<String> {
+pub(super) fn texts(list: &DisplayList) -> Vec<String> {
     list.nodes
         .iter()
         .filter_map(|n| match n {
@@ -63,7 +64,7 @@ fn texts(list: &DisplayList) -> Vec<String> {
         .collect()
 }
 
-fn target_for<'a>(targets: &'a [SheetTarget], action: &SheetAction) -> &'a SheetTarget {
+pub(super) fn target_for<'a>(targets: &'a [SheetTarget], action: &SheetAction) -> &'a SheetTarget {
     targets
         .iter()
         .find(|t| &t.action == action)

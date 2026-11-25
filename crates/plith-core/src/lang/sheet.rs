@@ -140,13 +140,35 @@ pub enum SheetText {
     WordOpen,
     /// Button: all settings.
     WordAllSettings,
+    /// Label of the update row in the About section.
+    RowUpdate,
+    /// Update state: up to date.
+    StateUpdateCurrent,
+    /// Update state: a version is ready, `{version}` is filled by code.
+    StateUpdateReady,
+    /// Update state: a check is running.
+    StateUpdateChecking,
+    /// Update state: downloading, `{percent}` is filled by code.
+    StateUpdateDownloading,
+    /// Update state: the downloaded file failed the signature check.
+    StateUpdateBadSignature,
+    /// Update state: the check or the download failed.
+    StateUpdateFailed,
+    /// Button: check for an update.
+    WordCheck,
+    /// Button: install the ready update.
+    WordInstall,
+    /// Label of the update check switch.
+    RowUpdateCheck,
+    /// Sub line of the update check switch.
+    SubUpdateCheck,
     /// Shown when the settings file cannot be written.
     SaveError,
 }
 
 impl SheetText {
     /// Every variant, for exhaustive checks.
-    pub const ALL: [SheetText; 61] = [
+    pub const ALL: [SheetText; 72] = [
         SheetText::WindowTitle,
         SheetText::Caption,
         SheetText::SectionGeneral,
@@ -207,6 +229,17 @@ impl SheetText {
         SheetText::WordOff,
         SheetText::WordOpen,
         SheetText::WordAllSettings,
+        SheetText::RowUpdate,
+        SheetText::StateUpdateCurrent,
+        SheetText::StateUpdateReady,
+        SheetText::StateUpdateChecking,
+        SheetText::StateUpdateDownloading,
+        SheetText::StateUpdateBadSignature,
+        SheetText::StateUpdateFailed,
+        SheetText::WordCheck,
+        SheetText::WordInstall,
+        SheetText::RowUpdateCheck,
+        SheetText::SubUpdateCheck,
         SheetText::SaveError,
     ];
 
@@ -237,6 +270,14 @@ impl SheetText {
                 | SheetText::WordOff
                 | SheetText::WordOpen
                 | SheetText::WordAllSettings
+                | SheetText::StateUpdateCurrent
+                | SheetText::StateUpdateReady
+                | SheetText::StateUpdateChecking
+                | SheetText::StateUpdateDownloading
+                | SheetText::StateUpdateBadSignature
+                | SheetText::StateUpdateFailed
+                | SheetText::WordCheck
+                | SheetText::WordInstall
         )
     }
 }
@@ -254,6 +295,12 @@ pub fn sheet_text(t: SheetText, lang: Lang) -> &'static str {
         Lang::It => it::text(t),
         Lang::Pl => pl::text(t),
     }
+}
+
+/// `text` with `{key}` replaced by `value`: the copy holds the placeholder, the code fills it.
+#[must_use]
+pub fn fill(text: &str, key: &str, value: &str) -> String {
+    text.replace(&format!("{{{key}}}"), value)
 }
 
 /// A theme named by its product name, upper case under Turkish rules. The names are proper

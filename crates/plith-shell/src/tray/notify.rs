@@ -5,8 +5,9 @@ use windows::Win32::Foundation::HWND;
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{GetDpiForWindow, GetSystemMetricsForDpi};
 use windows::Win32::UI::Shell::{
-    NIF_ICON, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIM_ADD, NIM_DELETE, NIM_SETVERSION,
-    NOTIFYICON_VERSION_4, NOTIFYICONDATAW, Shell_NotifyIconW,
+    NIF_ICON, NIF_INFO, NIF_MESSAGE, NIF_SHOWTIP, NIF_TIP, NIIF_LARGE_ICON, NIIF_USER, NIM_ADD,
+    NIM_DELETE, NIM_MODIFY, NIM_SETVERSION, NOTIFYICON_VERSION_4, NOTIFYICONDATAW,
+    Shell_NotifyIconW,
 };
 use windows::Win32::UI::WindowsAndMessaging::{
     HICON, IDI_APPLICATION, IMAGE_ICON, LR_SHARED, LoadIconW, LoadImageW, SM_CXSMICON,
@@ -65,6 +66,27 @@ pub(super) fn add(hwnd: HWND, callback: u32, tip: &str) -> Result<()> {
         Shell_NotifyIconW(NIM_ADD, &raw const nid).ok()?;
         nid.Anonymous.uVersion = NOTIFYICON_VERSION_4;
         Shell_NotifyIconW(NIM_SETVERSION, &raw const nid).ok()
+    }
+}
+
+/// Shows a balloon over the icon with the app icon: `title` and `body` are cut to the 63 and
+/// 255 units the structure holds. A failure (Explorer gone, balloons off) leaves nothing to do.
+pub(super) fn balloon(hwnd: HWND, title: &str, body: &str) {
+    let mut nid = data(hwnd);
+    nid.uFlags = NIF_INFO;
+    nid.dwInfoFlags = NIIF_USER | NIIF_LARGE_ICON;
+    nid.hBalloonIcon = icon(hwnd);
+    copy_units(&mut nid.szInfoTitle, title);
+    copy_units(&mut nid.szInfo, body);
+    // SAFETY: `nid` is initialised with its size set.
+    let _ = unsafe { Shell_NotifyIconW(NIM_MODIFY, &raw const nid) };
+}
+
+/// `text` into `buffer` as UTF-16, cut to leave the terminating NUL.
+fn copy_units(buffer: &mut [u16], text: &str) {
+    let room = buffer.len().saturating_sub(1);
+    for (slot, unit) in buffer.iter_mut().take(room).zip(text.encode_utf16()) {
+        *slot = unit;
     }
 }
 

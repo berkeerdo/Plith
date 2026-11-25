@@ -1,9 +1,9 @@
 //! The forecast model, Open-Meteo parsing and the small rules the welcome view and pill share.
 
-mod json;
+pub use crate::json;
 
+use crate::json::Json;
 use crate::settings::TempUnit;
-use json::Json;
 
 /// A calendar day as (year, month, day).
 pub type Day = (u16, u16, u16);

@@ -17,11 +17,33 @@ impl Quit for QuitHandle {
     }
 }
 
-/// What the app keeps of the tray: the menu captions' handle and the way out.
+/// Shows the update balloon. A trait so tests need no window.
+pub trait Balloon {
+    /// Shows `title` and `body` over the tray icon; false when it was not sent (no icon).
+    fn show(&self, title: &str, body: &str) -> bool;
+}
+
+impl Balloon for TrayHandle {
+    fn show(&self, title: &str, body: &str) -> bool {
+        self.notice(title, body)
+    }
+}
+
+/// What the app keeps of the tray: the menu captions' handle, the balloon and the way out.
 #[derive(Default)]
 pub struct TrayHost {
     handle: Option<TrayHandle>,
     quit: Option<Box<dyn Quit>>,
+    balloon: Option<Box<dyn Balloon>>,
+}
+
+impl TrayHost {
+    /// Shows the balloon; false when none is wired or it was not sent.
+    pub(super) fn show_notice(&self, title: &str, body: &str) -> bool {
+        self.balloon
+            .as_ref()
+            .is_some_and(|balloon| balloon.show(title, body))
+    }
 }
 
 impl App {
@@ -31,7 +53,14 @@ impl App {
         self.tray = TrayHost {
             handle,
             quit: Some(Box::new(quit)),
+            ..std::mem::take(&mut self.tray)
         };
+    }
+
+    /// Wires the update balloon. The service decides when to announce (it holds a notice back
+    /// while the user is busy); the app shows whatever notice it gets.
+    pub fn attach_notice(&mut self, balloon: impl Balloon + 'static) {
+        self.tray.balloon = Some(Box::new(balloon));
     }
 
     /// A tray command: a left click and the first menu item open the settings window (the path

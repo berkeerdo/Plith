@@ -3,7 +3,7 @@
 
 use super::state::Stopper;
 use super::wire::EXIT_RENDER_FATAL;
-use crate::log::LogFile;
+use plith_host::log::LogFile;
 use std::sync::mpsc::{self, RecvTimeoutError};
 use std::thread;
 use std::time::Duration;

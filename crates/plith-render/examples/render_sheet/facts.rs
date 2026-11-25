@@ -92,5 +92,6 @@ pub fn sheet_facts(lang: Lang) -> SheetFacts {
         settings_path: "C:\\Users\\someone\\AppData\\Local\\Plith\\settings.ini".into(),
         save_failed: false,
         autostart: false,
+        update: plith_core::update::UpdateRow::Current,
     }
 }

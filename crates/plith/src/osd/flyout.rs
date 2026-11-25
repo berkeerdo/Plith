@@ -1,8 +1,8 @@
 //! Native flyout suppression for the supervisor: the `FlyoutSuppressor` and the volume key hook
 //! that opens its window, started and stopped as the wanted mode changes.
 
-use crate::log::LogFile;
 use plith_core::osd::policy::SuppressMode;
+use plith_host::log::LogFile;
 use plith_system::flyout::{Match, Mode, RestoreHandle};
 use plith_system::{FlyoutSuppressor, VolumeKey, VolumeKeyHook};
 use std::sync::mpsc::Receiver;

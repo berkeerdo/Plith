@@ -4,15 +4,16 @@
 use super::feed::Feed;
 use super::idle_facts::Idle;
 use super::weather_link::WeatherWiring;
-use crate::log::{self, LogFile};
 use crate::services::fixture::idle as mock;
-use crate::{locale, plays_file, settings_file};
+use crate::{plays_file, settings_file};
 use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
 use plith_core::settings::{IdleLook, Settings};
 use plith_core::theme::Theme;
 use plith_core::weather::Stamp;
+use plith_host::locale;
+use plith_host::log::{self, LogFile};
 use plith_shell::UiWaker;
 use std::sync::Arc;
 

@@ -12,6 +12,7 @@ mod sheet_side;
 mod shelf;
 mod state;
 mod tray_side;
+mod update_side;
 mod weather_link;
 mod wire;
 
@@ -20,7 +21,6 @@ mod tests;
 
 use crate::instance;
 use crate::live;
-use crate::log::{self, LogFile};
 use crate::services::fixture::{FixtureServices, TICK, Ticker};
 use crate::services::start::StartBoard;
 use crate::services::{LevelSource, RealServices, Services};
@@ -36,6 +36,7 @@ use plith_core::layout::SurfaceLayout;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::Settings;
 use plith_core::theme::Palette;
+use plith_host::log::{self, LogFile};
 use plith_render::{RenderConfig, RenderHandle, spawn};
 use plith_shell::{
     MonitorInfo, QuitHandle, Shell, UiWaker, init_process, init_ui_thread, is_remote_session,
@@ -373,6 +374,7 @@ fn start_sides(
 ) {
     start_osd(launch, log, shell, app, settings);
     tray_side::start(launch, log, shell, app, settings);
+    update_side::start(launch, log, shell, app, settings);
     attach_settings_side(launch, log, shell, app, monitor);
 }
 

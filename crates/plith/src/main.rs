@@ -3,13 +3,10 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 mod app;
-mod autostart;
 mod demo;
 mod idle;
 mod instance;
 mod live;
-mod locale;
-mod log;
 mod model;
 mod osd;
 mod pages;
@@ -17,6 +14,7 @@ mod plays_file;
 mod services;
 mod settings_file;
 mod shelf_file;
+mod update;
 
 use plith_core::launch::Launch;
 
@@ -34,7 +32,7 @@ fn main() {
         Ok(launch) => std::process::exit(app::run(&launch)),
         Err(error) => {
             // The release build has no console, so the log file is where a bad flag shows.
-            if let Ok(log) = log::LogFile::open() {
+            if let Ok(log) = plith_host::log::LogFile::open() {
                 log.line(&format!("launch error: {error}"));
             }
             eprintln!("plith: {error}\n{USAGE}");

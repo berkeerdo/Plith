@@ -10,7 +10,6 @@ mod shelf;
 
 use super::idle_facts::Idle;
 use super::weather_link::WeatherLink;
-use crate::log::Stamp;
 use crate::pages::{Dirty, Inputs, Pages};
 use crate::services::{Facts, Services};
 use plith_core::input::{MixerShape, pick_within, route_allowed};
@@ -23,6 +22,7 @@ use plith_core::pages::welcome::{WelcomeFacts, probe_hour};
 use plith_core::pages::{HitTarget, PAGE_COUNT, PageId};
 use plith_core::scene::{Scene, SceneMailbox, Suppression};
 use plith_core::settings::IdleLook;
+use plith_host::log::Stamp;
 use plith_shell::{FIRST_APP_TIMER, TimerHandle};
 
 /// Sets and kills UI timers. A trait so tests can record instead of calling Windows.
