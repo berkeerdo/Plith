@@ -6,6 +6,7 @@
 //! a rerun starts clean because no `.new` is left behind.
 
 mod acl;
+mod audit;
 #[cfg(test)]
 mod tests;
 mod walk;
@@ -54,6 +55,30 @@ pub fn install_files(
     procs: &mut dyn Processes,
     log: &mut dyn FnMut(String),
 ) -> Result<(), StepError> {
+    let check_acl = acl::under_program_files(root);
+    install_checked(root, payload, setup_exe, procs, log, check_acl)
+}
+
+/// `install_files` with the ACL check forced on or off: the seam tests use, because the real
+/// answer depends on where `root` is.
+fn install_checked(
+    root: &Path,
+    payload: &Payload,
+    setup_exe: &[u8],
+    procs: &mut dyn Processes,
+    log: &mut dyn FnMut(String),
+    check_acl: bool,
+) -> Result<(), StepError> {
+    // Look before any write: a missing root is created (inside Program Files it inherits the
+    // admin-only ACL) and then audited like an existing one; links and, when checked, non-admin
+    // write access fail closed with nothing written.
+    log("checking the install folder".to_string());
+    if !root.exists() {
+        std::fs::create_dir_all(root).map_err(|error| {
+            StepError::new(format!("cannot create {}: {error}", root.display()))
+        })?;
+    }
+    audit::audit(root, check_acl)?;
     let items = [
         Item {
             relative: "plith.exe",
@@ -76,7 +101,7 @@ pub fn install_files(
     swap_in(root, &items, &staged, log)?;
     log("removing files that are not part of the app".to_string());
     walk::remove_not_ours(root, log)?;
-    check_acls(root, &items, log)
+    check_acls(check_acl, root, &items, log)
 }
 
 /// The `.new` path of an item.
@@ -125,7 +150,10 @@ fn close_running(
     log: &mut dyn FnMut(String),
 ) -> Result<(), String> {
     log("closing Plith".to_string());
-    procs.close_plith()?;
+    // A Plith that ignores the close request is ended by its exact path below.
+    if let Err(reason) = procs.close_plith() {
+        log(format!("Plith did not close politely: {reason}"));
+    }
     for relative in ["plith.exe", "osd\\plith-osd.exe"] {
         let exe = root.join(relative);
         log(format!("stopping {}", exe.display()));
@@ -159,11 +187,12 @@ fn swap_in(
 /// Fails when anything installed can be changed by someone who is not an administrator. Only
 /// applies under the real `Program Files`; a test folder elsewhere is not checked.
 fn check_acls(
+    check_acl: bool,
     root: &Path,
     items: &[Item<'_>],
     log: &mut dyn FnMut(String),
 ) -> Result<(), StepError> {
-    if !acl::under_program_files(root) {
+    if !check_acl {
         return Ok(());
     }
     log("checking permissions".to_string());

@@ -2,7 +2,9 @@
 
 use std::path::Path;
 use std::time::{Duration, Instant};
-use windows::Win32::Foundation::{CloseHandle, HANDLE, LPARAM, LUID, WAIT_TIMEOUT, WPARAM};
+use windows::Win32::Foundation::{
+    CloseHandle, HANDLE, LPARAM, LUID, WAIT_OBJECT_0, WAIT_TIMEOUT, WPARAM,
+};
 use windows::Win32::Security::{
     AdjustTokenPrivileges, LUID_AND_ATTRIBUTES, LookupPrivilegeValueW, SE_DEBUG_NAME,
     SE_PRIVILEGE_ENABLED, TOKEN_ADJUST_PRIVILEGES, TOKEN_PRIVILEGES, TOKEN_QUERY,
@@ -67,9 +69,7 @@ impl Processes for SystemProcesses {
         let wanted = exe.to_string_lossy().into_owned();
         let mut failures = Vec::new();
         for pid in all_pids() {
-            if image_of(pid).is_some_and(|image| image.eq_ignore_ascii_case(&wanted))
-                && let Err(error) = terminate(pid)
-            {
+            if let Err(error) = stop_pid(pid, &wanted) {
                 failures.push(error);
             }
         }
@@ -146,34 +146,47 @@ fn all_pids() -> Vec<u32> {
     pids
 }
 
-/// The full image path of a process, when it can be read.
-fn image_of(pid: u32) -> Option<String> {
+/// Ends the process `pid` when its image is exactly `wanted`, on ONE handle: the path check, the
+/// kill and the wait all use it, so a reused id cannot point them at another process. A process
+/// that is not ours to open, has another path or is already exiting is left alone.
+fn stop_pid(pid: u32, wanted: &str) -> Result<(), String> {
     // SAFETY: the handle is closed by `Handle`; the buffer and its length match.
     unsafe {
-        let process = Handle(OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid).ok()?);
+        let Ok(opened) = OpenProcess(
+            PROCESS_QUERY_LIMITED_INFORMATION | PROCESS_TERMINATE | PROCESS_SYNCHRONIZE,
+            false,
+            pid,
+        ) else {
+            return Ok(());
+        };
+        let process = Handle(opened);
         let mut buffer = vec![0u16; 32_768];
-        let mut len = u32::try_from(buffer.len()).ok()?;
-        QueryFullProcessImageNameW(
+        let mut len = u32::try_from(buffer.len()).unwrap_or(0);
+        if QueryFullProcessImageNameW(
             process.0,
             PROCESS_NAME_WIN32,
             PWSTR(buffer.as_mut_ptr()),
             &raw mut len,
         )
-        .ok()?;
-        Some(String::from_utf16_lossy(&buffer[..len as usize]))
-    }
-}
-
-/// Ends one process and waits for it to exit.
-fn terminate(pid: u32) -> Result<(), String> {
-    // SAFETY: the handle is closed by `Handle`.
-    unsafe {
-        let process = Handle(
-            OpenProcess(PROCESS_TERMINATE | PROCESS_SYNCHRONIZE, false, pid)
-                .map_err(|error| format!("cannot open process {pid}: {error}"))?,
-        );
-        TerminateProcess(process.0, 1)
-            .map_err(|error| format!("cannot end process {pid}: {error}"))?;
+        .is_err()
+        {
+            return Ok(());
+        }
+        if !String::from_utf16_lossy(&buffer[..len as usize]).eq_ignore_ascii_case(wanted) {
+            return Ok(());
+        }
+        // Already signaled: it is exiting (a Plith that just got WM_CLOSE); nothing to kill.
+        let exited = || WaitForSingleObject(process.0, 0) == WAIT_OBJECT_0;
+        if exited() {
+            return Ok(());
+        }
+        if let Err(error) = TerminateProcess(process.0, 1) {
+            // It may have exited between the check and the kill.
+            if exited() {
+                return Ok(());
+            }
+            return Err(format!("cannot end process {pid}: {error}"));
+        }
         if WaitForSingleObject(process.0, 5_000) == WAIT_TIMEOUT {
             return Err(format!("process {pid} did not exit in 5 seconds"));
         }

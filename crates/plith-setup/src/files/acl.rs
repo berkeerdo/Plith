@@ -9,9 +9,8 @@ use windows::Win32::Security::Authorization::{
     ConvertSidToStringSidW, GetNamedSecurityInfoW, SE_FILE_OBJECT,
 };
 use windows::Win32::Security::{
-    ACCESS_ALLOWED_ACE, ACE_HEADER, ACL, ACL_SIZE_INFORMATION, AclSizeInformation,
-    DACL_SECURITY_INFORMATION, GetAce, GetAclInformation, OWNER_SECURITY_INFORMATION,
-    PSECURITY_DESCRIPTOR, PSID,
+    ACE_HEADER, ACL, ACL_SIZE_INFORMATION, AclSizeInformation, DACL_SECURITY_INFORMATION, GetAce,
+    GetAclInformation, OWNER_SECURITY_INFORMATION, PSECURITY_DESCRIPTOR, PSID,
 };
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::UI::Shell::{FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
@@ -23,8 +22,6 @@ const ADMIN_SIDS: [&str; 3] = [
     "S-1-5-32-544",
     "S-1-5-80-956008885-3418522649-1831038044-1853292631-2271478464",
 ];
-/// `ACCESS_ALLOWED_ACE_TYPE`: the only entry type the check reads.
-const ACCESS_ALLOWED_ACE_TYPE: u8 = 0;
 /// CREATOR OWNER: it maps to the owner of a new child, and owners are checked separately.
 const CREATOR_OWNER: &str = "S-1-3-0";
 
@@ -34,13 +31,29 @@ const CREATOR_OWNER: &str = "S-1-3-0";
 pub const WRITE_MASK: u32 =
     0x2 | 0x4 | 0x10 | 0x40 | 0x100 | 0x1_0000 | 0x4_0000 | 0x8_0000 | 0x1000_0000 | 0x4000_0000;
 
-/// Judges an owner and a list of (SID, rights) allow entries; one text per problem.
-pub fn judge(path: &Path, owner: &str, allowed: &[(String, u32)]) -> Vec<String> {
+/// One entry of a DACL as the check sees it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum Ace {
+    /// A grant: the SID's text and the rights mask.
+    Allowed(String, u32),
+    /// An entry type the check does not read; it counts as a problem (fail closed).
+    Unknown(u8),
+}
+
+/// Judges an owner and the entries of a DACL; one text per problem.
+pub fn judge(path: &Path, owner: &str, aces: &[Ace]) -> Vec<String> {
     let mut problems = Vec::new();
     if !ADMIN_SIDS.contains(&owner) {
         problems.push(format!("{} is owned by {owner}", path.display()));
     }
-    for (sid, rights) in allowed {
+    for ace in aces {
+        let (sid, rights) = match ace {
+            Ace::Allowed(sid, rights) => (sid, rights),
+            Ace::Unknown(kind) => {
+                problems.push(format!("{}: unknown ACE type {kind}", path.display()));
+                continue;
+            }
+        };
         if ADMIN_SIDS.contains(&sid.as_str()) || sid == CREATOR_OWNER {
             continue;
         }
@@ -150,16 +163,43 @@ unsafe fn read(path: &Path, owner: PSID, dacl: *mut ACL) -> Result<Vec<String>, 
         unsafe {
             GetAce(dacl, index, &raw mut ace)
                 .map_err(|error| format!("cannot read an ACE of {}: {error}", path.display()))?;
-            let header = ace.cast::<ACE_HEADER>();
-            if (*header).AceType != ACCESS_ALLOWED_ACE_TYPE {
-                continue;
+            if let Some(entry) = read_ace(ace)? {
+                allowed.push(entry);
             }
-            let entry = ace.cast::<ACCESS_ALLOWED_ACE>();
-            let sid = PSID((&raw mut (*entry).SidStart).cast());
-            allowed.push((sid_text(sid)?, (*entry).Mask));
         }
     }
     Ok(judge(path, &owner, &allowed))
+}
+
+/// Reads one entry; `None` for a deny entry, which grants nothing.
+///
+/// Allow entries (plain, callback, object, callback object) give their SID and mask. Every other
+/// type is `Unknown`, so an entry this check cannot read never passes as harmless.
+///
+/// # Safety
+/// `ace` must point at a live ACE of a DACL.
+unsafe fn read_ace(ace: *mut c_void) -> Result<Option<Ace>, String> {
+    // SAFETY: `ace` is live by the caller's contract; object entries are read by their
+    // documented layout (header, mask, flags, optional two GUIDs, SID), unaligned.
+    unsafe {
+        let kind = (*ace.cast::<ACE_HEADER>()).AceType;
+        let bytes = ace.cast::<u8>();
+        let sid_at = match kind {
+            // Plain and callback allow: header, mask, SID.
+            0 | 9 => 8,
+            // Object and callback object allow: header, mask, flags, the GUIDs the flags name.
+            5 | 11 => {
+                let flags = bytes.add(8).cast::<u32>().read_unaligned();
+                12 + 16 * (flags & 1) as usize + 16 * ((flags >> 1) & 1) as usize
+            }
+            // Deny entries (plain, object, callback, callback object).
+            1 | 6 | 10 | 12 => return Ok(None),
+            other => return Ok(Some(Ace::Unknown(other))),
+        };
+        let mask = bytes.add(4).cast::<u32>().read_unaligned();
+        let sid = PSID(bytes.add(sid_at).cast());
+        Ok(Some(Ace::Allowed(sid_text(sid)?, mask)))
+    }
 }
 
 /// A SID as `S-1-...` text.

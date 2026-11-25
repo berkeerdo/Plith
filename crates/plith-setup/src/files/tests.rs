@@ -1,8 +1,8 @@
 //! The file step runs against temp folders and a fake `Processes`; nothing here touches
 //! `Program Files`, a real process or the registry.
 
-use super::acl::{self, WRITE_MASK};
-use super::{StepError, install_files};
+use super::acl::{self, Ace, WRITE_MASK};
+use super::{StepError, install_checked, install_files};
 use crate::payload::Payload;
 use crate::processes::Processes;
 use std::fs::{self, OpenOptions};
@@ -47,6 +47,7 @@ impl Drop for TempDir {
 struct FakeProcesses {
     root: PathBuf,
     events: Vec<String>,
+    hang: bool,
 }
 
 impl FakeProcesses {
@@ -54,6 +55,7 @@ impl FakeProcesses {
         Self {
             root: root.to_path_buf(),
             events: Vec::new(),
+            hang: false,
         }
     }
 }
@@ -68,6 +70,9 @@ impl Processes for FakeProcesses {
         .iter()
         .all(|name| self.root.join(name).exists());
         self.events.push(format!("close staged={staged}"));
+        if self.hang {
+            return Err("Plith did not close in 5 seconds".to_string());
+        }
         Ok(())
     }
 
@@ -189,7 +194,7 @@ fn rerun_after_failure_succeeds() {
 }
 
 #[test]
-fn junction_is_removed_but_its_target_survives() {
+fn junction_inside_root_is_refused_and_target_survives() {
     let temp = TempDir::new("junction");
     let root = temp.root();
     let outside = temp.0.join("outside");
@@ -204,27 +209,104 @@ fn junction_is_removed_but_its_target_survives() {
         .expect("mklink");
     assert!(status.status.success(), "mklink failed");
 
-    run(&root).expect("install");
+    let error = run(&root).expect_err("a link inside the root is refused");
 
-    assert!(
-        !root.join("link").exists(),
-        "the junction itself is removed"
-    );
+    assert!(error.reason.contains("link"), "{}", error.reason);
     assert_eq!(fs::read(outside.join("keep.txt")).unwrap(), b"keep");
+    assert!(!root.join("plith.exe").exists(), "nothing was written");
+    assert!(leftover_new_files(&root).is_empty());
+}
+
+#[test]
+fn reparse_root_is_refused() {
+    let temp = TempDir::new("rootlink");
+    let outside = temp.0.join("outside");
+    fs::create_dir_all(&outside).unwrap();
+    let root = temp.root();
+    let status = Command::new("cmd")
+        .args(["/C", "mklink", "/J"])
+        .arg(&root)
+        .arg(&outside)
+        .output()
+        .expect("mklink");
+    assert!(status.status.success(), "mklink failed");
+
+    let error = run(&root).expect_err("a root that is a link is refused");
+
+    assert!(error.reason.contains("link"), "{}", error.reason);
+    assert_eq!(
+        fs::read_dir(&outside).unwrap().count(),
+        0,
+        "nothing written through it"
+    );
+}
+
+#[test]
+fn acl_problem_blocks_staging() {
+    let temp = TempDir::new("blocked");
+    let root = temp.root();
+    fs::create_dir_all(&root).unwrap();
+    let status = Command::new("icacls")
+        .arg(&root)
+        .args(["/grant", "*S-1-5-32-545:(OI)(CI)W"])
+        .output()
+        .expect("icacls");
+    assert!(status.status.success(), "icacls failed");
+    let mut procs = FakeProcesses::new(&root);
+
+    let error = install_checked(&root, &PAYLOAD, SETUP_EXE, &mut procs, &mut |_| {}, true)
+        .expect_err("a Users-writable root must stop the install");
+
+    assert!(error.reason.contains("S-1-5-32-545"), "{}", error.reason);
+    assert!(leftover_new_files(&root).is_empty());
+    assert!(!root.join("plith.exe").exists());
+    assert!(procs.events.is_empty(), "nothing was closed either");
+}
+
+#[test]
+fn hung_plith_falls_back_to_kill() {
+    let temp = TempDir::new("hung");
+    let root = temp.root();
+    let mut procs = FakeProcesses::new(&root);
+    procs.hang = true;
+
+    install_files(&root, &PAYLOAD, SETUP_EXE, &mut procs, &mut |_| {}).expect("install");
+
+    let wanted = format!("stop {}", root.join("plith.exe").display());
+    assert!(procs.events.contains(&wanted), "{:?}", procs.events);
+    assert_three_files(&root);
 }
 
 #[test]
 fn acl_judgement_flags_users_write_and_passes_admins() {
-    let admin = "S-1-5-32-544".to_string();
-    let users = "S-1-5-32-545".to_string();
-    let fine = acl::judge(Path::new("p"), "S-1-5-18", &[(admin.clone(), 0x1F_01FF)]);
+    let ace = |sid: &str, rights: u32| Ace::Allowed(sid.to_string(), rights);
+    let fine = acl::judge(
+        Path::new("p"),
+        "S-1-5-18",
+        &[ace("S-1-5-32-544", 0x1F_01FF)],
+    );
     assert!(fine.is_empty(), "{fine:?}");
-    let read_only = acl::judge(Path::new("p"), "S-1-5-18", &[(users.clone(), 0x12_00A9)]);
+    let read_only = acl::judge(
+        Path::new("p"),
+        "S-1-5-18",
+        &[ace("S-1-5-32-545", 0x12_00A9)],
+    );
     assert!(read_only.is_empty(), "{read_only:?}");
-    let bad = acl::judge(Path::new("p"), "S-1-5-18", &[(users, WRITE_MASK & 0x2)]);
+    let bad = acl::judge(
+        Path::new("p"),
+        "S-1-5-18",
+        &[ace("S-1-5-32-545", WRITE_MASK & 0x2)],
+    );
     assert_eq!(bad.len(), 1, "{bad:?}");
     let owned = acl::judge(Path::new("p"), "S-1-5-21-1-2-3-1001", &[]);
     assert_eq!(owned.len(), 1, "{owned:?}");
+}
+
+#[test]
+fn an_ace_type_the_check_cannot_read_is_a_problem() {
+    let problems = acl::judge(Path::new("p"), "S-1-5-18", &[Ace::Unknown(4)]);
+    assert_eq!(problems.len(), 1, "{problems:?}");
+    assert!(problems[0].contains("unknown ACE type 4"));
 }
 
 #[test]

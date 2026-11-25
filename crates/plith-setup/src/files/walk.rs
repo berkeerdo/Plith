@@ -2,16 +2,22 @@
 //!
 //! The walk never follows a reparse point (junction or symlink): the link itself is deleted and
 //! its target is never opened, so a link planted in the install folder cannot steer the delete
-//! elsewhere.
+//! elsewhere. A folder is held open (without delete sharing) while it is walked.
 
 use super::StepError;
 use plith_core::setup::is_ours;
 use std::fs;
-use std::os::windows::fs::MetadataExt;
+use std::os::windows::fs::{MetadataExt, OpenOptionsExt};
 use std::path::Path;
 
 /// `FILE_ATTRIBUTE_REPARSE_POINT`.
 const REPARSE_POINT: u32 = 0x400;
+/// `FILE_SHARE_READ | FILE_SHARE_WRITE`: no `FILE_SHARE_DELETE`.
+const FILE_SHARE_READ_WRITE: u32 = 0x3;
+/// Needed to open a directory.
+const FILE_FLAG_BACKUP_SEMANTICS: u32 = 0x0200_0000;
+/// Open a link itself instead of following it.
+const FILE_FLAG_OPEN_REPARSE_POINT: u32 = 0x0020_0000;
 /// `FILE_ATTRIBUTE_DIRECTORY`.
 const DIRECTORY: u32 = 0x10;
 
@@ -46,7 +52,25 @@ fn walk(root: &Path, dir: &Path, log: &mut dyn FnMut(String)) -> Result<(), Step
             };
             removed.map_err(|error| fail_remove(&path, &error))?;
         } else if is_dir {
+            // Held open without delete sharing while it is walked, so it cannot be renamed or
+            // replaced by a link in between; the attributes are read from the handle itself.
+            let guard = open_dir(&path)?;
+            let swapped = guard
+                .metadata()
+                .map_err(|error| {
+                    StepError::new(format!("cannot read {}: {error}", path.display()))
+                })?
+                .file_attributes()
+                & REPARSE_POINT
+                != 0;
+            if swapped {
+                return Err(StepError::new(format!(
+                    "{} turned into a link while the install ran",
+                    path.display()
+                )));
+            }
             walk(root, &path, log)?;
+            drop(guard);
             if is_empty(&path) {
                 log(format!("removing folder {}", path.display()));
                 fs::remove_dir(&path).map_err(|error| fail_remove(&path, &error))?;
@@ -57,6 +81,17 @@ fn walk(root: &Path, dir: &Path, log: &mut dyn FnMut(String)) -> Result<(), Step
         }
     }
     Ok(())
+}
+
+/// Opens a directory itself, never what a link there points at, and shares it for reading and
+/// writing but not for delete or rename.
+fn open_dir(path: &Path) -> Result<fs::File, StepError> {
+    fs::OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ_WRITE)
+        .custom_flags(FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT)
+        .open(path)
+        .map_err(|error| StepError::new(format!("cannot open {}: {error}", path.display())))
 }
 
 /// The path under `root`, with backslashes, as `is_ours` expects.
