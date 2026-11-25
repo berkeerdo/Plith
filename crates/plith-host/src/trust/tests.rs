@@ -182,6 +182,52 @@ fn codes_map_to_verdicts() {
 }
 
 #[test]
+fn only_s_ok_counts_as_success() {
+    // S_FALSE and other non-negative codes are not a verified signature.
+    assert_eq!(classify(HRESULT(1)), Verdict::Fail(SignError::BadSignature));
+    assert_eq!(
+        classify(HRESULT(0x7FFF)),
+        Verdict::Fail(SignError::BadSignature)
+    );
+}
+
+#[test]
+fn the_signer_must_match_thumbprint_and_bytes() {
+    let thumb = PLITH_THUMBPRINT.to_string();
+    assert_eq!(judge_signer(thumb.clone(), PLITH_CERT), Ok(()));
+    let mut other = PLITH_CERT.to_vec();
+    let last = other.len() - 1;
+    other[last] ^= 0xFF;
+    assert_eq!(
+        judge_signer(thumb.clone(), &other),
+        Err(SignError::WrongSigner(thumb))
+    );
+    let foreign = "00".repeat(20);
+    assert_eq!(
+        judge_signer(foreign.clone(), PLITH_CERT),
+        Err(SignError::WrongSigner(foreign))
+    );
+}
+
+#[test]
+fn the_pinned_certificate_has_the_pinned_thumbprint() {
+    use windows::Win32::Security::Cryptography::{
+        CertCreateCertificateContext, CertFreeCertificateContext, PKCS_7_ASN_ENCODING,
+        X509_ASN_ENCODING,
+    };
+    // SAFETY: the bytes outlive the context, which is freed once below.
+    let context = unsafe {
+        CertCreateCertificateContext(X509_ASN_ENCODING | PKCS_7_ASN_ENCODING, PLITH_CERT)
+    };
+    assert!(!context.is_null(), "PLITH_CERT does not parse");
+    // SAFETY: a live context from the call above.
+    let thumb = unsafe { thumbprint(context) };
+    // SAFETY: freed once.
+    let _ = unsafe { CertFreeCertificateContext(Some(context)) };
+    assert_eq!(thumb.as_deref(), Ok(PLITH_THUMBPRINT));
+}
+
+#[test]
 fn store_add_has_remove_round_trip() {
     let _cleanup = TestStore;
     let scope = Scope::CurrentUserTest(TEST_STORE);

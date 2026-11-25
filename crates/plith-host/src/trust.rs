@@ -2,7 +2,7 @@
 //! download run before they use a file, and the certificate stores the setup writes.
 //!
 //! "Signed by Plith" means a valid Authenticode signature whose signer leaf has the pinned
-//! thumbprint. The certificate is self-signed, so an untrusted root or a broken chain is accepted,
+//! thumbprint and is byte for byte the pinned certificate. The certificate is self-signed, so an untrusted root or a broken chain is accepted,
 //! but only for that leaf: adding it to the machine's Root store is what the setup does next on a
 //! clean machine. Every other failure (a tampered file, a bad signature, a distrusted signer)
 //! refuses the file. Revocation is not checked: the certificate has no revocation list.
@@ -15,7 +15,7 @@ use std::fmt::{self, Write as _};
 use std::path::Path;
 use windows::Win32::Foundation::{
     CERT_E_CHAINING, CERT_E_UNTRUSTEDROOT, CRYPT_E_FILE_ERROR, HANDLE, HWND, INVALID_HANDLE_VALUE,
-    TRUST_E_NOSIGNATURE, TRUST_E_SUBJECT_FORM_UNKNOWN,
+    S_OK, TRUST_E_NOSIGNATURE, TRUST_E_SUBJECT_FORM_UNKNOWN,
 };
 use windows::Win32::Security::Cryptography::{
     CERT_CONTEXT, CERT_SHA1_HASH_PROP_ID, CertGetCertificateContextProperty,
@@ -74,10 +74,11 @@ enum Verdict {
     Fail(SignError),
 }
 
-/// Sorts a `WinVerifyTrust` code. Only success and a root or chain error reach the signer
-/// check; everything else, a digest mismatch first of all, is a refusal.
+/// Sorts a `WinVerifyTrust` code. Only success (exactly `S_OK`, no other non-negative code) and
+/// a root or chain error reach the signer check; everything else, a digest mismatch first of
+/// all, is a refusal.
 fn classify(code: HRESULT) -> Verdict {
-    if code.is_ok() || code == CERT_E_UNTRUSTEDROOT || code == CERT_E_CHAINING {
+    if code == S_OK || code == CERT_E_UNTRUSTEDROOT || code == CERT_E_CHAINING {
         Verdict::CheckSigner
     } else if code == TRUST_E_NOSIGNATURE || code == TRUST_E_SUBJECT_FORM_UNKNOWN {
         Verdict::Fail(SignError::NotSigned)
@@ -216,7 +217,21 @@ unsafe fn check_signer(state: HANDLE) -> Result<(), SignError> {
     }
     // SAFETY: `leaf` is the signer certificate context, alive while the state is open.
     let thumb = unsafe { thumbprint(leaf) }.map_err(SignError::Os)?;
-    if thumb == PLITH_THUMBPRINT {
+    // SAFETY: as above; its encoded bytes are `cbCertEncoded` long and live as long as it does.
+    let encoded = unsafe {
+        let leaf = &*leaf;
+        if leaf.pbCertEncoded.is_null() {
+            return Err(missing());
+        }
+        std::slice::from_raw_parts(leaf.pbCertEncoded, leaf.cbCertEncoded as usize)
+    };
+    judge_signer(thumb, encoded)
+}
+
+/// Pure. The signer leaf is Plith's only when both its thumbprint and its encoded bytes are the
+/// pinned ones (one judgement for the path and the handle checks).
+fn judge_signer(thumb: String, encoded: &[u8]) -> Result<(), SignError> {
+    if thumb == PLITH_THUMBPRINT && encoded == PLITH_CERT {
         Ok(())
     } else {
         Err(SignError::WrongSigner(thumb))
