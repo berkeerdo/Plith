@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-25. Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0, R1, R1b, R2 and R3 are done. R6 code is merged as `4aca03e`; its console run over a game
@@ -54,13 +54,14 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
 - **App icon done (ADR 0019):** lime speaker-fabric tile, black source at the top edge, three
   tone-on-tone ripples; master `design/identity/icon/plith-master-1024.png`, `.ico` from
   `scripts/build-icon.ps1`. Release rebuilt, icon read back from the exe, `tray: icon added`
-  (RDP, 19:09); Berke has not yet said how the tray looks. He: "kumaş kısmı anlaşılmıyor".
-- **Karot pill weather fix:** right text dropped by `CAP_RISE` (was 1.25 DIP above the time,
-  measured on a render), and it shows the weather now (`9° BULUTLU`), the turn only on the welcome
-  view (Berke picked it). Render re-measured; running on his session since 19:09.
-- **Next: settings window and installer screens derived from the icon** (identity package,
-  round 1 rejected). Rule from round 2: show every visual on a page he can open, never a local
-  path; image comps first, real materials from the image model, code draws flat shapes only.
+  (RDP, 19:09); tray look not yet confirmed ("kumaş kısmı anlaşılmıyor").
+- **Karot pill weather fix:** right text no longer dropped by `CAP_RISE` (measured on a render);
+  shows the weather now (`9° BULUTLU`), the turn only on the welcome view (Berke picked it).
+- **Identity round 3 on branch `feature/identity-r3`, uncommitted** (spec
+  `specs/2026-11-24-identity-r3-design.md`, plan `plans/active/identity-r3.md`, ADR 0020): About
+  opens with the icon, selected section station in the flow colour, class icon; installer A Halka
+  material in `design/identity/r3/installer/`. Owed: Berke's yes on the installer page, a real
+  click to see the title bar and taskbar icon, then commits and the merge (ask first).
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a
   small strip with info; every idle look gets a choice of what its details show. Brainstorm first.
 - Then R7 parity part 2 (`research/2026-11-24-r7-parity.md`): installer and uninstall (helper in
@@ -112,8 +113,8 @@ Updated 2026-11-22. Rewritten, not appended; old content goes to `journal/`.
   (atomic), no hatch geometry tests.
 
 ## Recent decisions
+- ADR 0020 The settings window marks the selected section in the theme's flow colour
 - ADR 0019 The app icon is a lime speaker-fabric tile with a black source
 - ADR 0018 A file drag over the island opens the shelf
 - ADR 0017 Settings live in two layers: a quick page in the island and a full window
 - ADR 0016 The welcome view is reachable from the tab row
-- ADR 0015 Eight languages from one exhaustive table, the OSD word over the pipe
