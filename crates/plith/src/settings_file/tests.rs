@@ -80,3 +80,37 @@ fn a_failed_rename_leaves_no_temp_file() {
     assert!(save_at(&path, &Settings::default()).is_err());
     assert!(!dir.join("settings.ini.tmp").exists());
 }
+
+#[test]
+fn import_runs_only_without_settings_ini() {
+    let dir = folder("import-skip");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("settings.ini");
+    std::fs::write(dir.join("config.ini"), "[General]\nTheme = Light\n").unwrap();
+    std::fs::write(&path, "theme=sodyum\n").unwrap();
+    let settings = load_at(&path, &log_in(&dir));
+    assert_eq!(settings.theme, plith_core::theme::Theme::Sodyum);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "theme=sodyum\n");
+}
+
+#[test]
+fn import_runs_when_only_config_ini_exists() {
+    let dir = folder("import-run");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("settings.ini");
+    let config = "[General]\nTheme = Light\n[Osd]\nShowWeather = False\n";
+    std::fs::write(dir.join("config.ini"), config).unwrap();
+    let log = log_in(&dir);
+    let settings = load_at(&path, &log);
+    assert_eq!(settings.theme, plith_core::theme::Theme::Kagit);
+    assert!(!settings.weather);
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(written.contains("theme=kagit\n"), "{written}");
+    assert_eq!(
+        std::fs::read_to_string(dir.join("config.ini")).unwrap(),
+        config
+    );
+    log.flush();
+    let text = std::fs::read_to_string(dir.join("plith.log")).unwrap();
+    assert!(text.contains("import: wpf config.ini, 2 keys"), "{text}");
+}

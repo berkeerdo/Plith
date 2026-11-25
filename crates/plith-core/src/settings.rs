@@ -381,6 +381,7 @@ pub fn serialize(s: &Settings) -> String {
 }
 
 pub mod change;
+pub mod wpf;
 
 #[cfg(test)]
 mod tests;
