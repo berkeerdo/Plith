@@ -2,29 +2,33 @@
 
 #![windows_subsystem = "windows"]
 
-// Later tasks call these (the worker in Task 9, the window in Task 10); until then only the
-// file step's tests do.
+// The window (Task 10) uses what the worker does not; until then those parts are dead code.
 #[allow(dead_code, reason = "used by the window added in Task 10")]
 mod art;
-#[allow(dead_code, reason = "used by the worker added in Task 9")]
+#[allow(dead_code, reason = "used by the window added in Task 10")]
+mod elevate;
+#[allow(dead_code, reason = "parts are used by the window added in Task 10")]
 mod files;
-#[allow(dead_code, reason = "used by the worker added in Task 9")]
+#[allow(dead_code, reason = "parts are used by the window added in Task 10")]
 mod payload;
-#[allow(dead_code, reason = "used by the worker added in Task 9")]
+#[allow(dead_code, reason = "used by the window added in Task 10")]
+mod pipe;
 mod processes;
-#[allow(dead_code, reason = "used by the worker added in Task 9")]
+#[allow(dead_code, reason = "parts are used by the window added in Task 10")]
 mod register;
 #[cfg(test)]
 mod testing;
-#[allow(dead_code, reason = "used by the worker added in Task 9")]
+#[allow(dead_code, reason = "parts are used by the window added in Task 10")]
 mod uninstall;
+mod worker;
 
 use plith_core::setup::{Mode, parse_args};
 
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
-    // Every mode ends here until the elevated worker and the window exist.
     match parse_args(&args) {
-        Mode::Install | Mode::Update { .. } | Mode::Uninstall | Mode::Work { .. } => {}
+        Mode::Work { job, pipe } => std::process::exit(worker::run(job, &pipe)),
+        // The window arrives in Task 10.
+        Mode::Install | Mode::Update { .. } | Mode::Uninstall => {}
     }
 }
