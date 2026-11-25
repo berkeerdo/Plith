@@ -55,11 +55,11 @@ Updated 2026-11-25. Rewritten, not appended; old content goes to `journal/`.
   (RDP, 19:09); tray look not yet confirmed ("kumaş kısmı anlaşılmıyor").
 - **Karot pill weather fix:** right text no longer dropped by `CAP_RISE` (measured on a render);
   shows the weather now (`9° BULUTLU`), the turn only on the welcome view (Berke picked it).
-- **Identity round 3 done on `feature/identity-r3`** (`7d763fc`, not merged; spec
+- **Identity round 3: merged as `f95a805`** and pushed (spec
   `specs/2026-11-24-identity-r3-design.md`, plan `plans/active/identity-r3.md`, ADR 0020): About
   icon header, flow station, class icon; installer A Halka material approved ("evet şimdi oldu")
-  in `design/identity/r3/installer/`. Owed: merge to main (ask), a real click on the gear to see
-  the title bar and taskbar icon (release running since 08:08 on 2026-11-25).
+  in `design/identity/r3/installer/`. Owed: a real click on the gear to see the title bar and
+  taskbar icon (plan Task 5 Step 2).
 - **Next: R7 parity part 2** (`research/2026-11-24-r7-parity.md`): the Rust installer drawn as A
   Halka (`design/identity/r3/installer/README.md` has the layout), uninstall (helper in Program
   Files, trust store, sudo with his yes), `config.ini` import, and the update check (spec
