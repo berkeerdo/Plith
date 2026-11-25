@@ -7,7 +7,9 @@
 param(
     [string]$Master = (Join-Path $PSScriptRoot '..\docs\design\identity\icon\plith-master-1024.png'),
     [string]$Out = (Join-Path $PSScriptRoot '..\crates\plith\assets\plith.ico'),
-    [int[]]$Sizes = @(16, 20, 24, 32, 40, 48, 64, 256)
+    [int[]]$Sizes = @(16, 20, 24, 32, 40, 48, 64, 256),
+    # The 256 px entry also lands here for the settings window's About icon.
+    [string]$Tile = (Join-Path $PSScriptRoot '..\crates\plith\assets\plith-tile-256.png')
 )
 
 $ErrorActionPreference = 'Stop'
@@ -84,3 +86,8 @@ $w.Flush()
 [System.IO.File]::WriteAllBytes((Join-Path (Resolve-Path (Split-Path $Out)).Path (Split-Path $Out -Leaf)), $ico.ToArray())
 $w.Dispose()
 Write-Host "wrote $Out ($($entries.Count) sizes: $($Sizes -join ', '))"
+
+$big = $entries | Where-Object { $_.Size -eq 256 } | Select-Object -First 1
+if ($null -eq $big) { throw 'No 256 px entry for the tile PNG.' }
+[System.IO.File]::WriteAllBytes((Join-Path (Resolve-Path (Split-Path $Tile)).Path (Split-Path $Tile -Leaf)), $big.Png)
+Write-Host "wrote $Tile (256 px)"
