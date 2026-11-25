@@ -2,7 +2,7 @@
 //! `Program Files`, a real process or the registry.
 
 use super::acl::{self, Ace, WRITE_MASK};
-use super::pending::{PendingDeletes, drop_pending_under};
+use super::pending::{Entry, Pending, PendingDeletes, decode, drop_pending_under, encode};
 use super::{Seams, StepError, install_checked};
 use crate::payload::Payload;
 use crate::processes::Processes;
@@ -86,19 +86,24 @@ impl Processes for FakeProcesses {
 /// An in-memory restart delete list.
 #[derive(Default)]
 struct FakePending {
-    list: Option<Vec<String>>,
+    list: Option<Vec<Entry>>,
+    malformed: bool,
     reads: u32,
-    writes: Vec<Option<Vec<String>>>,
+    writes: Vec<Option<Vec<Entry>>>,
 }
 
 impl PendingDeletes for FakePending {
-    fn read(&mut self) -> Result<Option<Vec<String>>, String> {
+    fn read(&mut self) -> Result<Pending, String> {
         self.reads += 1;
-        Ok(self.list.clone())
+        Ok(if self.malformed {
+            Pending::Malformed
+        } else {
+            self.list.clone().map_or(Pending::Absent, Pending::List)
+        })
     }
 
-    fn write(&mut self, entries: Option<&[String]>) -> Result<(), String> {
-        self.list = entries.map(<[String]>::to_vec);
+    fn write(&mut self, entries: Option<&[Entry]>) -> Result<(), String> {
+        self.list = entries.map(<[Entry]>::to_vec);
         self.writes.push(self.list.clone());
         Ok(())
     }
@@ -124,8 +129,11 @@ fn run(root: &Path) -> Result<Vec<String>, StepError> {
     Ok(procs.events)
 }
 
-fn strings(items: &[&str]) -> Vec<String> {
-    items.iter().map(|item| (*item).to_string()).collect()
+fn strings(items: &[&str]) -> Vec<Entry> {
+    items
+        .iter()
+        .map(|item| item.encode_utf16().collect())
+        .collect()
 }
 
 #[test]
@@ -142,21 +150,23 @@ fn pending_deletes_under_root_are_dropped() {
         "",
     ]);
     assert_eq!(
-        drop_pending_under(&entries, root),
-        strings(&[
-            r"\??\C:\Program Files\Plith\old.dll",
-            r"\??\C:\Program Files\Plith\new.dll",
-            r"\??\C:\Program Files\Other\x.tmp",
-            "",
-            r"\??\C:\Program Files\Plith2\x",
-            "",
-        ])
+        drop_pending_under(&entries, root).as_deref(),
+        Some(
+            strings(&[
+                r"\??\C:\Program Files\Plith\old.dll",
+                r"\??\C:\Program Files\Plith\new.dll",
+                r"\??\C:\Program Files\Other\x.tmp",
+                "",
+                r"\??\C:\Program Files\Plith2\x",
+                "",
+            ])
+            .as_slice()
+        )
     );
 }
 
 #[test]
 fn the_root_itself_is_dropped_and_the_multi_sz_roundtrips() {
-    use super::pending::{decode, encode};
     let root = Path::new(r"C:\Program Files\Plith");
     let entries = strings(&[
         r"\??\C:\Program Files\Plith",
@@ -164,12 +174,84 @@ fn the_root_itself_is_dropped_and_the_multi_sz_roundtrips() {
         r"\??\D:\a",
         "!\\??\\D:\\b",
     ]);
-    assert_eq!(decode(&encode(&entries)), entries);
+    assert_eq!(decode(&encode(&entries)), Some(entries.clone()));
     assert_eq!(
-        drop_pending_under(&entries, root),
-        strings(&[r"\??\D:\a", "!\\??\\D:\\b"])
+        drop_pending_under(&entries, root).as_deref(),
+        Some(strings(&[r"\??\D:\a", "!\\??\\D:\\b"]).as_slice())
     );
-    assert!(decode(&encode(&[])).is_empty());
+    assert_eq!(decode(&encode(&[])), Some(Vec::new()));
+    // A trailing empty destination survives: "src NUL NUL NUL".
+    let trailing = strings(&[r"\??\D:\a", ""]);
+    assert_eq!(decode(&encode(&trailing)), Some(trailing));
+    // Missing terminators are malformed.
+    let mut bytes = encode(&strings(&["abc"]));
+    bytes.truncate(bytes.len() - 2);
+    assert_eq!(decode(&bytes), None);
+    assert_eq!(decode(&[0x61]), None);
+}
+
+#[test]
+fn undecodable_entry_survives_byte_identical() {
+    let temp = TempDir::new("pending-surrogate");
+    let root = temp.root();
+    let lone: Entry = vec![0x5C, 0xD800, 0x41];
+    let mut list = strings(&[&format!(r"\??\{}\old.dll", root.display()), ""]);
+    list.extend([lone.clone(), Vec::new()]);
+    list.extend(strings(&[r"\??\C:\elsewhere\x", "!\\??\\C:\\y"]));
+    let mut pending = FakePending {
+        list: Some(list),
+        ..FakePending::default()
+    };
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut pending,
+        &mut |_| {},
+    )
+    .expect("install");
+    let mut expected = vec![lone, Vec::new()];
+    expected.extend(strings(&[r"\??\C:\elsewhere\x", "!\\??\\C:\\y"]));
+    assert_eq!(pending.list, Some(expected));
+    // The raw bytes of the whole list round-trip as well.
+    let raw = encode(pending.list.as_ref().unwrap());
+    assert_eq!(decode(&raw), pending.list);
+}
+
+#[test]
+fn odd_entry_count_leaves_value_untouched() {
+    let temp = TempDir::new("pending-odd");
+    let root = temp.root();
+    let list = strings(&[&format!(r"\??\{}\old.dll", root.display()), "", "dangling"]);
+    let mut pending = FakePending {
+        list: Some(list.clone()),
+        ..FakePending::default()
+    };
+    let mut log = Vec::new();
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut pending,
+        &mut |line| {
+            log.push(line);
+        },
+    )
+    .expect("install goes on");
+    assert!(pending.writes.is_empty());
+    assert_eq!(pending.list, Some(list));
+    assert!(log.iter().any(|line| line.contains("odd entry count")));
+
+    let mut malformed = FakePending {
+        malformed: true,
+        ..FakePending::default()
+    };
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut malformed,
+        &mut |_| {},
+    )
+    .expect("install goes on");
+    assert!(malformed.writes.is_empty());
 }
 
 #[test]

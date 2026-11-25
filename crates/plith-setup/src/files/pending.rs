@@ -17,41 +17,56 @@ use windows::core::{PCWSTR, w};
 /// The prefix Windows puts on the paths of pending operations.
 const NT_PREFIX: &str = r"\??\";
 
+/// One list entry as the raw UTF-16 Windows stores: never converted, so an entry that is not ours
+/// (an unpaired surrogate is legal in an NTFS name) is written back exactly as it was read.
+pub(super) type Entry = Vec<u16>;
+
+/// What the list held.
+#[derive(Debug, PartialEq, Eq)]
+pub(super) enum Pending {
+    /// There is no list.
+    Absent,
+    /// The entries, pairs of source and destination.
+    List(Vec<Entry>),
+    /// The value is not a well-formed `REG_MULTI_SZ`; it must not be rewritten.
+    Malformed,
+}
+
 /// Where the restart deletes are kept. A fake stands in for it in tests, so they never touch
 /// `HKLM`.
 pub(super) trait PendingDeletes {
-    /// The entries of the list; `None` when there is none.
+    /// The list as it is now.
     ///
     /// # Errors
     /// The text of the error when the list exists but cannot be read.
-    fn read(&mut self) -> Result<Option<Vec<String>>, String>;
+    fn read(&mut self) -> Result<Pending, String>;
 
     /// Replaces the list, or removes it when `entries` is `None`.
     ///
     /// # Errors
     /// The text of the error when the list cannot be written.
-    fn write(&mut self, entries: Option<&[String]>) -> Result<(), String>;
+    fn write(&mut self, entries: Option<&[Entry]>) -> Result<(), String>;
 }
 
 /// Drops the delete pairs (empty destination) whose source is `root` or lies under it, comparing
-/// path components without case. Everything else is kept in order.
-pub(super) fn drop_pending_under(entries: &[String], root: &Path) -> Vec<String> {
+/// path components without case. Everything else is kept in order and untouched. `None` when the
+/// entry count is odd: the list is not made of pairs, so it is not ours to edit.
+pub(super) fn drop_pending_under(entries: &[Entry], root: &Path) -> Option<Vec<Entry>> {
+    if !entries.len().is_multiple_of(2) {
+        return None;
+    }
     let root = components(&root.to_string_lossy());
     let mut kept = Vec::with_capacity(entries.len());
-    for pair in entries.chunks(2) {
-        let is_ours = match pair {
-            [source, destination] => destination.is_empty() && under(&components(source), &root),
-            _ => false,
-        };
-        if !is_ours {
+    for pair in entries.as_chunks::<2>().0 {
+        // Strict decoding: an entry that is not valid UTF-16 cannot be under the root.
+        let ours = pair[1].is_empty()
+            && String::from_utf16(&pair[0])
+                .is_ok_and(|source| components(&source).starts_with(&root));
+        if !ours {
             kept.extend_from_slice(pair);
         }
     }
-    kept
-}
-
-fn under(path: &[String], root: &[String]) -> bool {
-    path.starts_with(root)
+    Some(kept)
 }
 
 fn components(text: &str) -> Vec<String> {
@@ -63,17 +78,26 @@ fn components(text: &str) -> Vec<String> {
         .collect()
 }
 
-/// Removes the pending deletes under `root`; leaves the list alone when none matches.
+/// Removes the pending deletes under `root`. A list that is absent, malformed, odd or without a
+/// match is left alone (the malformed and odd ones with a log line).
 pub(super) fn cancel_under(
     root: &Path,
     pending: &mut dyn PendingDeletes,
     log: &mut dyn FnMut(String),
 ) -> Result<(), StepError> {
     let fail = |reason: String| StepError::new(format!("pending restart deletes: {reason}"));
-    let Some(entries) = pending.read().map_err(fail)? else {
+    let entries = match pending.read().map_err(fail)? {
+        Pending::Absent => return Ok(()),
+        Pending::Malformed => {
+            log("the pending restart delete list is malformed; left untouched".to_string());
+            return Ok(());
+        }
+        Pending::List(entries) => entries,
+    };
+    let Some(kept) = drop_pending_under(&entries, root) else {
+        log("the pending restart delete list has an odd entry count; left untouched".to_string());
         return Ok(());
     };
-    let kept = drop_pending_under(&entries, root);
     if kept.len() == entries.len() {
         return Ok(());
     }
@@ -120,7 +144,7 @@ impl Drop for Open {
 }
 
 impl PendingDeletes for SystemPending {
-    fn read(&mut self) -> Result<Option<Vec<String>>, String> {
+    fn read(&mut self) -> Result<Pending, String> {
         let key = Open::new()?;
         let mut kind = REG_VALUE_TYPE(0);
         let mut size = 0u32;
@@ -136,7 +160,7 @@ impl PendingDeletes for SystemPending {
             )
         };
         if sized == ERROR_FILE_NOT_FOUND {
-            return Ok(None);
+            return Ok(Pending::Absent);
         }
         if sized != ERROR_SUCCESS || kind != REG_MULTI_SZ {
             return Err(format!("cannot read the list: error {}", sized.0));
@@ -157,10 +181,10 @@ impl PendingDeletes for SystemPending {
             return Err(format!("cannot read the list: error {}", read.0));
         }
         data.truncate(size as usize);
-        Ok(Some(decode(&data)))
+        Ok(decode(&data).map_or(Pending::Malformed, Pending::List))
     }
 
-    fn write(&mut self, entries: Option<&[String]>) -> Result<(), String> {
+    fn write(&mut self, entries: Option<&[Entry]>) -> Result<(), String> {
         let key = Open::new()?;
         // SAFETY: constant NUL-terminated names and a byte slice alive for the call.
         let code = unsafe {
@@ -180,33 +204,31 @@ impl PendingDeletes for SystemPending {
     }
 }
 
-/// `REG_MULTI_SZ` bytes into entries: each string ends in a NUL, and an extra NUL ends the list.
-pub(super) fn decode(data: &[u8]) -> Vec<String> {
-    let mut wide: Vec<u16> = data
-        .as_chunks::<2>()
-        .0
-        .iter()
-        .map(|pair| u16::from_le_bytes(*pair))
-        .collect();
-    // The list terminator, then the terminator of the last string.
-    for _ in 0..2 {
-        if wide.last() == Some(&0) {
-            wide.pop();
-        }
+/// `REG_MULTI_SZ` bytes into raw entries, by their terminators: every string ends in a NUL and
+/// one more NUL ends the list, so an empty string before that (an empty destination) is an entry.
+/// `None` when the bytes are not whole UTF-16 units or the terminators are missing.
+pub(super) fn decode(data: &[u8]) -> Option<Vec<Entry>> {
+    let (units, rest) = data.as_chunks::<2>();
+    if !rest.is_empty() {
+        return None;
     }
-    if wide.is_empty() {
-        return Vec::new();
+    let mut wide: Vec<u16> = units.iter().map(|pair| u16::from_le_bytes(*pair)).collect();
+    if wide.len() <= 2 && wide.iter().all(|&unit| unit == 0) {
+        return Some(Vec::new());
     }
-    wide.split(|&unit| unit == 0)
-        .map(String::from_utf16_lossy)
-        .collect()
+    // The list terminator, then every entry must end in its own NUL.
+    if wide.pop() != Some(0) || wide.last() != Some(&0) {
+        return None;
+    }
+    wide.pop();
+    Some(wide.split(|&unit| unit == 0).map(<[u16]>::to_vec).collect())
 }
 
 /// Entries into `REG_MULTI_SZ` bytes.
-pub(super) fn encode(entries: &[String]) -> Vec<u8> {
+pub(super) fn encode(entries: &[Entry]) -> Vec<u8> {
     let mut wide: Vec<u16> = Vec::new();
     for entry in entries {
-        wide.extend(entry.encode_utf16());
+        wide.extend_from_slice(entry);
         wide.push(0);
     }
     wide.push(0);
