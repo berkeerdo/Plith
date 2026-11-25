@@ -17,6 +17,7 @@ $repoRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 $targetDir = Join-Path $repoRoot 'target\setup-release'
 . (Join-Path $PSScriptRoot 'lib\signing.ps1')
 . (Join-Path $PSScriptRoot 'lib\payload-check.ps1')
+. (Join-Path $PSScriptRoot 'lib\manifest-check.ps1')
 
 # Runs one cargo release build of a package through the machine-wide lock.
 function Invoke-ReleaseBuild {
@@ -58,6 +59,10 @@ try {
     $osd = Join-Path $targetRelease 'plith-osd.exe'
     foreach ($exe in @($app, $osd)) {
         if (-not (Test-Path -LiteralPath $exe)) { throw "Built exe not found at $exe" }
+    }
+    # A helper built without the env var would ship and silently lose UIAccess.
+    Assert-PlithUiAccess -Path $osd
+    foreach ($exe in @($app, $osd)) {
         Invoke-PlithSign -Signtool $signtool -Thumbprint $cert.Thumbprint -Path $exe
     }
 
