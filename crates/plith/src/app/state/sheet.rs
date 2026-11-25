@@ -158,6 +158,9 @@ impl App {
         };
         match SheetSide::open(self.opening(facts.lang, facts.settings.theme), view) {
             Ok(mut side) => {
+                if !side.has_icon() {
+                    self.log.line("settings window: icon decode failed");
+                }
                 side.publish(&facts);
                 self.sheet.side = Some(side);
                 self.sheet.shown = Some(shown(&facts));

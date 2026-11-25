@@ -24,10 +24,11 @@ use windows::Win32::Graphics::Gdi::{
 use windows::Win32::System::LibraryLoader::GetModuleHandleW;
 use windows::Win32::UI::HiDpi::{AdjustWindowRectExForDpi, GetDpiForMonitor, MDT_EFFECTIVE_DPI};
 use windows::Win32::UI::WindowsAndMessaging::{
-    CreateWindowExW, FLASHW_ALL, FLASHW_TIMERNOFG, FLASHWINFO, FlashWindowEx, IDC_ARROW, IsIconic,
-    LoadCursorW, PostMessageW, RegisterClassExW, SW_RESTORE, SW_SHOW, SetForegroundWindow,
-    SetWindowTextW, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW, WS_CAPTION,
-    WS_EX_NOREDIRECTIONBITMAP, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
+    CreateWindowExW, FLASHW_ALL, FLASHW_TIMERNOFG, FLASHWINFO, FlashWindowEx, GetSystemMetrics,
+    HICON, IDC_ARROW, IMAGE_ICON, IsIconic, LR_SHARED, LoadCursorW, LoadImageW, PostMessageW,
+    RegisterClassExW, SM_CXICON, SM_CXSMICON, SW_RESTORE, SW_SHOW, SYSTEM_METRICS_INDEX,
+    SetForegroundWindow, SetWindowTextW, ShowWindow, WINDOW_EX_STYLE, WINDOW_STYLE, WNDCLASSEXW,
+    WS_CAPTION, WS_EX_NOREDIRECTIONBITMAP, WS_MINIMIZEBOX, WS_OVERLAPPED, WS_SYSMENU,
 };
 use windows::core::{PCWSTR, w};
 
@@ -37,6 +38,8 @@ pub use clipboard::set_clipboard;
 pub type ShellError = windows::core::Error;
 
 const CLASS: PCWSTR = w!("Plith.Settings");
+/// The resource id the build script gives the exe's icon (the tray reads the same id).
+const ICON_RESOURCE: usize = 1;
 /// Client size in DIP, as drawn.
 const CLIENT_DIP: (u32, u32) = (840, 640);
 const STYLE: WINDOW_STYLE =
@@ -76,6 +79,26 @@ pub struct SheetWindow {
     state: Rc<State>,
 }
 
+/// The exe's icon (resource 1, set by `plith/build.rs`) at the system size `metric`; a null
+/// icon, which Windows fills with its default, when the exe carries none.
+fn class_icon(instance: HINSTANCE, metric: SYSTEM_METRICS_INDEX) -> HICON {
+    // SAFETY: the metric call has no pointer input; the resource id is the integer form of a
+    // name in this module; LR_SHARED images are owned by the system and never destroyed.
+    unsafe {
+        let size = GetSystemMetrics(metric);
+        LoadImageW(
+            Some(instance),
+            PCWSTR(ICON_RESOURCE as *const u16),
+            IMAGE_ICON,
+            size,
+            size,
+            LR_SHARED,
+        )
+        .map(|handle| HICON(handle.0))
+        .unwrap_or_default()
+    }
+}
+
 fn register_class(instance: HINSTANCE) -> windows::core::Result<()> {
     // SAFETY: the stock arrow cursor is a system resource, so a null instance and a predefined id are valid.
     let cursor = unsafe { LoadCursorW(None, IDC_ARROW) }?;
@@ -84,6 +107,8 @@ fn register_class(instance: HINSTANCE) -> windows::core::Result<()> {
         lpfnWndProc: Some(window_proc),
         hInstance: instance,
         hCursor: cursor,
+        hIcon: class_icon(instance, SM_CXICON),
+        hIconSm: class_icon(instance, SM_CXSMICON),
         lpszClassName: CLASS,
         ..WNDCLASSEXW::default()
     };

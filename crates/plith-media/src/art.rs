@@ -106,6 +106,15 @@ impl ArtCache {
     }
 }
 
+/// Decodes encoded PNG or JPEG bytes into premultiplied BGRA, scaled down with the Fant filter
+/// so the longest side is at most `max_side` (smaller images keep their size). Needs COM
+/// initialized on the calling thread. `None` when the bytes are not an image.
+#[cfg(windows)]
+#[must_use]
+pub fn decode_image(encoded: &[u8], max_side: u32) -> Option<Artwork> {
+    wic::decode_fit(encoded, max_side)
+}
+
 #[cfg(windows)]
 mod wic {
     use std::sync::Arc;
@@ -122,7 +131,12 @@ mod wic {
     /// Decodes encoded image bytes into premultiplied BGRA, longest side at most [`MAX_SIDE`].
     /// Needs COM initialized on the calling thread. `None` when the bytes are not an image.
     pub(crate) fn decode(encoded: &[u8]) -> Option<Artwork> {
-        let (width, height, pixels) = decode_pixels(encoded).ok()?;
+        decode_fit(encoded, MAX_SIDE)
+    }
+
+    /// As [`decode`], with the longest side at most `max_side`.
+    pub(crate) fn decode_fit(encoded: &[u8], max_side: u32) -> Option<Artwork> {
+        let (width, height, pixels) = decode_pixels(encoded, max_side).ok()?;
         Some(Artwork {
             width,
             height,
@@ -131,7 +145,7 @@ mod wic {
         })
     }
 
-    fn decode_pixels(encoded: &[u8]) -> windows::core::Result<(u32, u32, Vec<u8>)> {
+    fn decode_pixels(encoded: &[u8], max_side: u32) -> windows::core::Result<(u32, u32, Vec<u8>)> {
         // SAFETY: COM is initialized on this thread by the caller, and every out pointer handed
         // to WIC is a local that outlives its call. `InitializeFromMemory` references `encoded`
         // without copying it; the stream, the decoder, the frame and everything built on them
@@ -150,7 +164,7 @@ mod wic {
             let frame = decoder.GetFrame(0)?;
             let (mut w, mut h) = (0u32, 0u32);
             frame.GetSize(&raw mut w, &raw mut h)?;
-            let (out_w, out_h) = fit_longest(w, h, MAX_SIDE);
+            let (out_w, out_h) = fit_longest(w, h, max_side);
             if out_w == 0 || out_h == 0 {
                 // E_INVALIDARG: an image with an empty side has nothing to decode.
                 return Err(windows::core::Error::new(

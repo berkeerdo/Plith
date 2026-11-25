@@ -305,6 +305,94 @@ fn about_open_gives_open_folder() {
 }
 
 #[test]
+fn about_opens_with_the_icon() {
+    let (list, _) = sheet_build(&facts(), &view(Section::About));
+    let icons: Vec<Rect> = list
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Image { rect, art } if *art == ICON_ART => Some(*rect),
+            _ => None,
+        })
+        .collect();
+    let expected = Rect {
+        x: layout::X,
+        y: layout::FIRST_ROW,
+        w: ICON_DIP,
+        h: ICON_DIP,
+    };
+    assert_eq!(icons, vec![expected]);
+}
+
+#[test]
+fn about_names_the_app_and_version() {
+    let (list, _) = sheet_build(&facts(), &view(Section::About));
+    let text_at = |want: &str| {
+        list.nodes.iter().find_map(|n| match n {
+            Node::Text {
+                rect,
+                text,
+                style,
+                ink,
+                ..
+            } if &**text == want => Some((*rect, *style, *ink)),
+            _ => None,
+        })
+    };
+    let (name, style, _) = text_at("Plith").expect("the app name");
+    assert_eq!(style, TextStyle::Hero);
+    assert!((name.x - (layout::X + ICON_DIP + 20.0)).abs() < 1e-9);
+    let (version, style, ink) = text_at("0.4.0  2026-11-20").expect("version and date");
+    assert_eq!((style, ink), (TextStyle::Value, Ink::Muted));
+    assert!(version.y > name.y, "the version sits under the name");
+}
+
+#[test]
+fn about_rows_follow_the_header() {
+    let (list, targets) = sheet_build(&facts(), &view(Section::About));
+    let top = layout::FIRST_ROW + ICON_DIP + 24.0;
+    let first_rule = list
+        .nodes
+        .iter()
+        .filter_map(|n| match n {
+            Node::Stroke { points, .. } if points.len() == 2 && points[0].0 >= layout::X => {
+                Some(points[0].1)
+            }
+            _ => None,
+        })
+        .fold(f64::INFINITY, f64::min);
+    assert!(
+        (first_rule - top).abs() < 1e-9,
+        "first rule at {first_rule}"
+    );
+    let open = target_for(&targets, &SheetAction::OpenFolder).rect;
+    assert!(open.y >= top && open.y + open.h <= top + layout::ROW_SUB);
+}
+
+#[test]
+fn selected_section_station_is_flow() {
+    for (i, s) in Section::ALL.into_iter().enumerate() {
+        let (list, _) = sheet_build(&facts(), &view(s));
+        let filled: Vec<(f64, Ink)> = list
+            .nodes
+            .iter()
+            .filter_map(|n| match n {
+                Node::Station {
+                    x,
+                    y,
+                    mark: StationMark::Filled,
+                    ink,
+                } if (*x - 32.0).abs() < 1e-9 => Some((*y, *ink)),
+                _ => None,
+            })
+            .collect();
+        #[allow(clippy::cast_precision_loss)] // five sections
+        let y = 58.0 + i as f64 * 32.0 + 14.0;
+        assert_eq!(filled, vec![(y, Ink::Flow)], "{s:?}");
+    }
+}
+
+#[test]
 fn save_error_replaces_the_line() {
     let mut f = facts();
     let line = crate::lang::sheet::sheet_text(crate::lang::sheet::SheetText::LineIdle, Lang::Tr);
@@ -331,13 +419,19 @@ fn focus_and_hover_outline_a_target() {
 }
 
 #[test]
-fn no_lime_in_sheet() {
+fn flow_only_on_the_selected_station() {
+    // ADR 0020: the selected section's sidebar station is the one flow-coloured mark.
     let mut f = facts();
     f.settings.head = HeadSlot::Playing;
     f.settings.location = LocationMode::City;
     for s in Section::ALL {
         let (list, _) = sheet_build(&f, &view(s));
         for n in &list.nodes {
+            if let Node::Station { x, .. } = n
+                && (*x - 32.0).abs() < 1e-9
+            {
+                continue;
+            }
             let ink = match n {
                 Node::Fill { ink, .. }
                 | Node::Stroke { ink, .. }

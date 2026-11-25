@@ -172,6 +172,8 @@ pub struct SheetSide {
     theme: Theme,
     /// Set by the window's panic report.
     panicked: Rc<Cell<bool>>,
+    /// Whether the About icon decoded; without it the header draws without the icon.
+    has_icon: bool,
     /// Set by the render thread when it ends on an error.
     dead: Arc<AtomicBool>,
 }
@@ -225,12 +227,15 @@ impl SheetSide {
             })
         };
         let (width_px, height_px, scale) = window.client_px();
+        let icon = icon::icon_art(icon::TILE_PNG, scale);
+        let has_icon = icon.is_some();
         let config = SheetConfig {
             hwnd: window.hwnd(),
             width_px,
             height_px,
             scale,
             palette: opening.theme.palette(),
+            art: icon.into_iter().collect(),
         };
         let render = SheetRender::spawn(config, on_fatal)
             .map_err(|error| format!("settings window: render failed to start: {error}"))?;
@@ -247,7 +252,14 @@ impl SheetSide {
             theme: opening.theme,
             panicked,
             dead,
+            has_icon,
         })
+    }
+
+    /// Whether the About icon decoded when the window opened.
+    #[must_use]
+    pub fn has_icon(&self) -> bool {
+        self.has_icon
     }
 
     /// Restores and focuses the open window.
@@ -363,6 +375,8 @@ impl SheetSide {
         view
     }
 }
+
+mod icon;
 
 #[cfg(test)]
 mod tests;
