@@ -5,8 +5,9 @@ use crate::list::{ListEnv, ListKit, draw_list};
 use crate::offscreen::{make_bitmap, read_back};
 use crate::paint::color;
 use crate::text::TextSystem;
-use plith_core::draw::DisplayList;
+use plith_core::draw::{ArtPixels, DisplayList};
 use plith_core::theme::Palette;
+use std::sync::Arc;
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct2D::{
     D2D1_BITMAP_OPTIONS_CANNOT_DRAW, D2D1_BITMAP_OPTIONS_CPU_READ, D2D1_BITMAP_OPTIONS_TARGET,
@@ -20,18 +21,22 @@ pub(crate) struct SheetPainter {
     kit: ListKit,
     text: TextSystem,
     palette: Palette,
+    /// Artwork `Node::Image` may name; fixed for the window's life.
+    art: Vec<Arc<ArtPixels>>,
 }
 
 impl SheetPainter {
-    /// Creates the brushes on `gpu`'s context and a text system of its own.
+    /// Creates the brushes on `gpu`'s context and a text system of its own; `art` is the
+    /// artwork the lists may name.
     ///
     /// # Errors
     /// Returns the failing brush or DirectWrite call.
-    pub(crate) fn new(gpu: &Gpu, palette: Palette) -> Result<Self> {
+    pub(crate) fn new(gpu: &Gpu, palette: Palette, art: Vec<Arc<ArtPixels>>) -> Result<Self> {
         Ok(Self {
             kit: ListKit::new(gpu.context(), gpu.d2d_factory())?,
             text: TextSystem::new()?,
             palette,
+            art,
         })
     }
 
@@ -65,7 +70,7 @@ impl SheetPainter {
         let mut env = ListEnv {
             palette: &self.palette,
             text: &mut self.text,
-            art: &[],
+            art: &self.art,
             scale,
         };
         let drawn = draw_list(ctx, &mut self.kit, &mut env, list);
@@ -89,7 +94,12 @@ pub(crate) fn pixel_size(list: &DisplayList, scale: f64) -> (u32, u32) {
 ///
 /// # Errors
 /// Returns the first failing Windows call, or `E_INVALIDARG` for an empty list size.
-pub(crate) fn offscreen(list: &DisplayList, scale: f64, palette: Palette) -> Result<Vec<u8>> {
+pub(crate) fn offscreen(
+    list: &DisplayList,
+    scale: f64,
+    palette: Palette,
+    art: &[Arc<ArtPixels>],
+) -> Result<Vec<u8>> {
     let (w, h) = pixel_size(list, scale);
     if w == 0 || h == 0 {
         return Err(Error::from(E_INVALIDARG));
@@ -111,7 +121,8 @@ pub(crate) fn offscreen(list: &DisplayList, scale: f64, palette: Palette) -> Res
         ctx.SetTarget(&target);
         ctx.SetDpi(dpi, dpi);
     }
-    let drawn = SheetPainter::new(&gpu, palette).and_then(|mut p| p.draw(ctx, list, scale));
+    let drawn =
+        SheetPainter::new(&gpu, palette, art.to_vec()).and_then(|mut p| p.draw(ctx, list, scale));
     let rows = drawn.and_then(|()| read_back(&staging, &target, w, h));
     // SAFETY: detaches the target before the bitmap and the context are released.
     unsafe { ctx.SetTarget(None::<&ID2D1Image>) };

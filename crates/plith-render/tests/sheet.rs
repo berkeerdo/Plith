@@ -4,7 +4,7 @@
 #[path = "../examples/render_sheet/facts.rs"]
 mod facts;
 
-use plith_core::draw::{DisplayList, Node, TextStyle, Trim};
+use plith_core::draw::{ArtId, ArtPixels, DisplayList, Node, Rect, TextStyle, Trim};
 use plith_core::lang::Lang;
 use plith_core::sheet::{Section, SheetView, sheet_build};
 use plith_core::theme::{Palette, Theme};
@@ -43,18 +43,45 @@ fn pixel(rows: &[u8], w: usize, x: usize, y: usize) -> [u8; 4] {
 
 #[test]
 fn sheet_offscreen_size() {
-    let rows = render_sheet_offscreen(&idle_list(Lang::Tr), 2.0, palette()).unwrap();
+    let rows = render_sheet_offscreen(&idle_list(Lang::Tr), 2.0, palette(), &[]).unwrap();
     assert_eq!(rows.len(), 1680 * 1280 * 4);
 }
 
 #[test]
 fn sheet_floor_is_opaque() {
-    let rows = render_sheet_offscreen(&idle_list(Lang::Tr), 1.0, palette()).unwrap();
+    let rows = render_sheet_offscreen(&idle_list(Lang::Tr), 1.0, palette(), &[]).unwrap();
     let floor = palette().floor;
     let want = [byte(floor[2]), byte(floor[1]), byte(floor[0]), 255];
     for (x, y) in [(0, 0), (839, 0), (0, 639), (839, 639)] {
         assert_eq!(pixel(&rows, 840, x, y), want, "corner ({x}, {y})");
     }
+}
+
+#[test]
+fn offscreen_draws_sheet_art() {
+    let list = DisplayList {
+        nodes: vec![Node::Image {
+            rect: Rect {
+                x: 10.0,
+                y: 10.0,
+                w: 20.0,
+                h: 20.0,
+            },
+            art: ArtId(7),
+        }],
+        size: (840.0, 640.0),
+    };
+    let red = Arc::new(ArtPixels {
+        id: ArtId(7),
+        width: 2,
+        height: 2,
+        bgra: Arc::from([0u8, 0, 255, 255].repeat(4)),
+    });
+    let rows = render_sheet_offscreen(&list, 1.0, palette(), &[red]).unwrap();
+    assert_eq!(pixel(&rows, 840, 20, 20), [0, 0, 255, 255]);
+    let floor = palette().floor;
+    let want = [byte(floor[2]), byte(floor[1]), byte(floor[0]), 255];
+    assert_eq!(pixel(&rows, 840, 5, 5), want);
 }
 
 #[test]
@@ -75,7 +102,7 @@ fn inset_preview_visible() {
             _ => None,
         })
         .expect("an inset");
-    let rows = render_sheet_offscreen(&list, 2.0, palette()).unwrap();
+    let rows = render_sheet_offscreen(&list, 2.0, palette(), &[]).unwrap();
     let floor = palette().floor_high;
     let base = [byte(floor[2]), byte(floor[1]), byte(floor[0])];
     // Inset coordinates are a few hundred positive DIP.
@@ -149,6 +176,7 @@ fn a_new_palette_repaints_the_last_list_once_and_the_thread_parks_again() {
         height_px: 640,
         scale: 1.0,
         palette: palette(),
+        art: Vec::new(),
     };
     let render = SheetRender::spawn(config, Box::new(|_| {})).unwrap();
     // No list yet: a palette alone paints nothing.
@@ -179,6 +207,7 @@ fn sheet_thread_paints_on_demand() {
         height_px: 640,
         scale: 1.0,
         palette: palette(),
+        art: Vec::new(),
     };
     let fatal: Arc<Mutex<Option<String>>> = Arc::default();
     let sink = Arc::clone(&fatal);

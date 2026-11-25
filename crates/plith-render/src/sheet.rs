@@ -11,7 +11,7 @@ mod tests;
 use crate::device::Gpu;
 use crate::thread::RenderError;
 use paint::SheetPainter;
-use plith_core::draw::DisplayList;
+use plith_core::draw::{ArtPixels, DisplayList};
 use plith_core::panic_text::payload_text;
 use plith_core::theme::Palette;
 use std::panic::{AssertUnwindSafe, catch_unwind};
@@ -23,7 +23,7 @@ use target::SheetSurface;
 use windows::Win32::Foundation::HWND;
 
 /// What the sheet thread needs to start.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone)]
 pub struct SheetConfig {
     /// The settings window's `HWND` as an integer.
     pub hwnd: isize,
@@ -35,6 +35,8 @@ pub struct SheetConfig {
     pub scale: f64,
     /// The colours.
     pub palette: Palette,
+    /// Artwork the lists may name (the About icon); fixed for the window's life.
+    pub art: Vec<Arc<ArtPixels>>,
 }
 
 /// A size in pixels and its DIP scale.
@@ -121,7 +123,7 @@ impl SheetRender {
             let shared = Arc::clone(&shared);
             thread::Builder::new()
                 .name(String::from("plith-sheet"))
-                .spawn(move || sheet_main(config, &shared, &*on_fatal, &ready_tx))
+                .spawn(move || sheet_main(&config, &shared, &*on_fatal, &ready_tx))
                 .map_err(RenderError::Spawn)?
         };
         // The thread sends once before its loop, or drops the sender when it ends early.
@@ -189,7 +191,8 @@ impl Drop for SheetRender {
 
 /// Draws `list` on WARP into a bitmap of the list's size at `scale` (the sheet is 840 x 640 DIP,
 /// so scale 2 gives 1680 x 1280) on the opaque floor of `palette`, and returns tightly packed
-/// premultiplied BGRA rows. For renders and tests; no window is involved.
+/// premultiplied BGRA rows. `art` is the artwork `Node::Image` may name. For renders and tests;
+/// no window is involved.
 ///
 /// # Errors
 /// Returns [`RenderError::Init`] with the first failing Windows call.
@@ -197,8 +200,9 @@ pub fn render_sheet_offscreen(
     list: &DisplayList,
     scale: f64,
     palette: Palette,
+    art: &[Arc<ArtPixels>],
 ) -> Result<Vec<u8>, RenderError> {
-    paint::offscreen(list, scale, palette).map_err(RenderError::Init)
+    paint::offscreen(list, scale, palette, art).map_err(RenderError::Init)
 }
 
 /// Device, swap chain and painter. Drops in field order after detaching the target.
@@ -209,11 +213,16 @@ struct Stack {
 }
 
 impl Stack {
-    fn new(hwnd: isize, size: Size, palette: Palette) -> windows::core::Result<Self> {
+    fn new(
+        hwnd: isize,
+        size: Size,
+        palette: Palette,
+        art: &[Arc<ArtPixels>],
+    ) -> windows::core::Result<Self> {
         let gpu = Gpu::new(false)?;
         let hwnd = HWND(hwnd as *mut core::ffi::c_void);
         let surface = SheetSurface::new(&gpu, hwnd, (size.0, size.1), size.2)?;
-        let painter = SheetPainter::new(&gpu, palette)?;
+        let painter = SheetPainter::new(&gpu, palette, art.to_vec())?;
         Ok(Self {
             painter,
             surface,
@@ -249,13 +258,13 @@ impl Drop for Stack {
 
 /// The thread body: build the stack, report the start, run the loop under a panic guard.
 fn sheet_main(
-    config: SheetConfig,
+    config: &SheetConfig,
     shared: &Shared,
     on_fatal: &(dyn Fn(String) + Send),
     ready: &SyncSender<windows::core::Result<()>>,
 ) {
     let size = (config.width_px, config.height_px, config.scale);
-    let stack = match Stack::new(config.hwnd, size, config.palette) {
+    let stack = match Stack::new(config.hwnd, size, config.palette, &config.art) {
         Ok(stack) => stack,
         Err(error) => {
             let _ = ready.send(Err(error));
@@ -263,7 +272,7 @@ fn sheet_main(
         }
     };
     let _ = ready.send(Ok(()));
-    let run = catch_unwind(AssertUnwindSafe(|| run(stack, &config, shared)));
+    let run = catch_unwind(AssertUnwindSafe(|| run(stack, config, shared)));
     match run {
         Ok(Ok(())) => {}
         Ok(Err(message)) => on_fatal(message),
@@ -314,7 +323,7 @@ fn run(mut stack: Stack, config: &SheetConfig, shared: &Shared) -> Result<(), St
                 rebuilt = true;
                 // The old target must go first: a window takes one composition target.
                 drop(stack);
-                stack = Stack::new(config.hwnd, size, palette)
+                stack = Stack::new(config.hwnd, size, palette, &config.art)
                     .map_err(|e| format!("sheet renderer rebuild failed after {error}: {e}"))?;
                 stack
                     .frame(size, false, list.as_deref())
