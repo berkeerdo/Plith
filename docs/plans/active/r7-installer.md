@@ -1,6 +1,6 @@
 # R7 parity part 2: installer, import, update check Implementation Plan
 
-> **Finished 2026-11-26, merge waiting on Berke.** A ticked box means the step was taken, not
+> **Finished 2026-11-26, merged as `3a9cb89` and pushed.** A ticked box means the step was taken, not
 > that nothing deviated. Deviations, rulings and decisions are in the progress log below, in
 > `docs/STATUS.md`, `journal/2026-11.md` and `quality/2026-11-25-setup-first-run.md`. Boxes of
 > Tasks 1 to 11 and 13 to 16 were ticked at the close from the task reviews, not as each task
@@ -471,7 +471,7 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `DENETLE` against the real GitHub latest (0.3.3 is older: row `GÜNCEL`); record.
 - [x] Step 3: STATUS rewritten (next job, risks: standard-user helper, root certificate, update
   never seen end to end until 0.4.1), ROADMAP row, journal entry, this plan's boxes and banner.
-- [ ] Step 4: ask Berke to merge; commit `docs: r7 part 2 record`.
+- [x] Step 4: ask Berke to merge; commit `docs: r7 part 2 record`.
 
 ## Progress log
 (written while the plan runs, never back-filled)
@@ -480,7 +480,8 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   repairs), two bugs found and fixed (`f66c80a` star marker in the pending list, `5625860` kill
   refused while exiting). Record: `docs/quality/2026-11-25-setup-first-run.md`. Uninstall was run
   with the Apps entry's own command, not clicked from Settings. Tasks 1 to 11 and 13 to 16 and the
-  final fix wave were finished earlier; their record is the branch log and the SDD ledger.
+  final fix wave were finished earlier; their record is the git log (the scratch ledger was deleted after the merge;
+  its rulings and minors are copied below and in `quality/`).
 - 2026-11-26 Task 17: the update check never worked (NUL in the Accept header, `0e12f40`); after
   the fix and run 8 the scheduled check reached GitHub and the row reads `GÜNCEL`. Checks on
   `0e12f40`: 1604 passed, 1 ignored. STATUS, ROADMAP, journal, spec note (R11) and boxes done;
@@ -496,4 +497,5 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
   `target\setup-release` (a second cache); R13 Task 13 run while 12 waited (none); R14 screens
   approved by delegation (a later restyle); R15 C1 sweep and C2 medium relaunch (see N1, N2).
   Task 7: a global mutex squat ruled not applicable; Task 8: a malformed pending list is logged
-  and left. Parked: N1, N2, N3 (STATUS risks); deferred minors per task in the review files.
+  and left. Parked: N1, N2, N3 (STATUS risks); deferred minors:
+  `docs/quality/2026-11-26-r7-installer-deferred-minors.md`.

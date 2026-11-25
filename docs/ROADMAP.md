@@ -19,7 +19,7 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R7 languages | Eight languages from one table, OSD muted word over the pipe | master + subagents | not estimated | ✅ done (merged 3a281c2; ADR 0015; console 2026-11-18) |
 | Console fix round | Home mark, speaker glyph, title scroll, ruler drag, OSD prewarm (from the 2026-11-18 console) | master + subagents | not estimated | ✅ done, 2 sessions incl. console check (merged 397e7d9; ADR 0016) |
 | R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code merged (c7e693a, 1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); console run left |
-| R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master + subagents | 3 sessions | 🔄 part 1 merged (ae94753: tray, version, autostart); part 2 done on `feature/r7-installer` (setup, uninstall, config.ini import, update check; 2 sessions incl. 8 real runs, 3 bugs found there; ADR 0021), merge waiting on Berke; left: parity check, WPF removed |
+| R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master + subagents | 3 sessions | 🔄 part 1 merged (ae94753: tray, version, autostart); part 2 merged (3a9cb89: setup, uninstall, config.ini import, update check; 2 sessions incl. 8 real runs, 3 bugs found there; ADR 0021); left: parity check, WPF removed |
 | Island in A Halka | The installer's material, themes and motion in the island (Berke 2026-11-25) | master + subagents | not estimated | ⬜ next, brainstorm first |
 
 ## Settled scope (2026-11-14)

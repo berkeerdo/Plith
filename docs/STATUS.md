@@ -5,7 +5,7 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
 ## Now
 - R0 to R3, R5, R7 languages, theme switch, settings window, identity r3 and the app icon are
   merged; history in `journal/2026-11.md`. R4, R6 and R7a are merged with console runs left.
-- **R7 part 2 done on branch `feature/r7-installer`, not merged yet** (Berke asked). Spec
+- **R7 part 2 merged as `3a9cb89` and pushed** (2026-11-26; checks green on main). Spec
   `specs/2026-11-25-r7-installer-design.md`, plan `plans/active/r7-installer.md`, ADR 0021.
   `plith-setup.exe`: A Halka window at medium, elevated worker over a pipe, signed payload
   (`plith.exe`, `osd\plith-osd.exe`, `setup\plith-setup.exe`), Apps entry, Start Menu link,
@@ -58,8 +58,8 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   wide release.
 - Setup, parked before public release: N1 a "Run as administrator" compatibility flag on the
   setup makes the medium relaunch loop (fix: a marker argument); N2 SmartScreen blocking the
-  relaunch fails silently (log only); N3 harmless. Deferred minors per task in the SDD ledger
-  summary of the plan's progress log and the task review files.
+  relaunch fails silently (log only); N3 harmless. Deferred review minors:
+  `quality/2026-11-26-r7-installer-deferred-minors.md`.
 - Relayout unmeasured on a real display change (vblank wait on an output RDP removed, rebuild on
   the RDP to console switch, the flash of a rebuild). Review minors in
   `quality/2026-11-22-display-relayout-final-review.md`.
