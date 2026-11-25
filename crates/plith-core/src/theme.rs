@@ -141,6 +141,27 @@ impl Default for Palette {
 }
 
 impl Palette {
+    /// The installer palette: the icon's lime speaker fabric, the same in every theme. It is a
+    /// standalone constructor, not a `Theme`, so the settings theme row never offers it.
+    ///
+    /// `floor` is the average of an 80 x 80 patch of plain fabric (x 40 to 120, y 300 to 380,
+    /// clear of the ripples and the text) in `docs/design/identity/r3/installer/bg-0-1x.png`:
+    /// (204, 251, 12). The fabric is flat in colour, so `floor_high` is the same value.
+    #[must_use]
+    pub fn setup() -> Self {
+        Self {
+            floor: hex(204, 251, 12),
+            floor_high: hex(204, 251, 12),
+            border: hex(0x8F, 0xB8, 0x0A),
+            ink: hex(0x0A, 0x0D, 0x02),
+            muted: hex(0x2E, 0x3A, 0x04),
+            faint: hex(0x3B, 0x48, 0x06),
+            track: hex(0x8F, 0xB8, 0x0A),
+            faint_track: hex(0xB4, 0xE0, 0x0C),
+            flow: hex(0xCA, 0xFF, 0x33),
+        }
+    }
+
     /// The colour of a role. `Floor` is the floor's top stop and `FloorHigh` its bottom stop.
     #[must_use]
     pub fn resolve(&self, ink: Ink) -> [f32; 4] {

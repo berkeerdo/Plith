@@ -101,6 +101,21 @@ fn only_kagit_is_a_light_theme() {
 }
 
 #[test]
+fn setup_palette_is_lime_with_readable_text_and_not_a_theme() {
+    assert_eq!(Theme::ALL.len(), 4);
+    let p = Palette::setup();
+    assert_eq!(bits(p.floor), bits(hex(204, 251, 12)));
+    for (name, ink) in [("ink", p.ink), ("muted", p.muted), ("faint", p.faint)] {
+        assert!(contrast(ink, p.floor) >= 4.5, "{name} on the lime floor");
+    }
+    // The button label is lime on the black pill.
+    assert!(contrast(p.flow, [0.0, 0.0, 0.0, 1.0]) >= 7.0);
+    for theme in THEMES {
+        assert_ne!(theme.palette(), p, "{theme:?}");
+    }
+}
+
+#[test]
 fn theme_keys_round_trip() {
     assert_eq!(Theme::ALL, THEMES);
     for theme in THEMES {

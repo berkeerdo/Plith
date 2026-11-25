@@ -14,6 +14,7 @@ mod fr;
 mod it;
 mod pl;
 mod pt;
+pub mod setup;
 pub mod sheet;
 mod tr;
 
