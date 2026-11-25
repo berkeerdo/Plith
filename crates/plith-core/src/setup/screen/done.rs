@@ -10,6 +10,6 @@ pub(super) fn done(p: &mut Page, own: Version, autostart: bool) {
     p.centered(236.0, p.word(S::DoneTitle), (TextStyle::Heading, Ink::Ink));
     p.centered(274.0, p.word(S::DoneSub), (TextStyle::Strong, Ink::Ink));
     p.button(304.0, S::Open, SetupAction::Open);
-    p.check(370.0, autostart, S::Autostart, SetupAction::ToggleAutostart);
-    p.link(394.0, S::Close, SetupAction::Close);
+    p.link(373.0, S::Close, SetupAction::Close);
+    p.check(399.0, autostart, S::Autostart, SetupAction::ToggleAutostart);
 }

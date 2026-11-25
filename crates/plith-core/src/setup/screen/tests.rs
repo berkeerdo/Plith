@@ -52,7 +52,7 @@ fn start_has_button_at_readme_rect() {
         matches!(n, Node::Text { text, ink: Ink::Flow, .. } if &**text == tr(SetupText::Install))
     });
     assert!(lime_label, "the button label is the lime flow ink");
-    assert!(texts(&list).contains(&"0.4.0".to_owned()));
+    assert!(texts(&list).contains(&"PLITH 0.4.0".to_owned()));
     assert!(texts(&list).contains(&tr(SetupText::LeadStart).to_owned()));
     assert_eq!(
         setup_hit(&targets, 320.0, 320.0),
@@ -85,15 +85,15 @@ fn done_targets_open_autostart_close() {
     let open = action_rect(&targets, SetupAction::Open).unwrap();
     assert_eq!((open.x, open.y), (220.0, 304.0));
     let auto = action_rect(&targets, SetupAction::ToggleAutostart).unwrap();
-    assert!(auto.y < 370.0 && auto.y + auto.h > 370.0);
+    assert!(auto.y < 399.0 && auto.y + auto.h > 399.0);
     let close = targets
         .iter()
         .filter(|t| t.action == SetupAction::Close)
         .map(|t| t.rect)
         .collect::<Vec<_>>();
     assert_eq!(close.len(), 2, "the caption and the close mark");
-    assert!(close.iter().any(|r| r.y < 394.0 && r.y + r.h > 394.0));
-    assert_eq!(setup_hit(&targets, 320.0, 394.0), Some(SetupAction::Close));
+    assert!(close.iter().any(|r| r.y < 373.0 && r.y + r.h > 373.0));
+    assert_eq!(setup_hit(&targets, 320.0, 373.0), Some(SetupAction::Close));
     assert_eq!(setup_hit(&targets, 624.0, 20.0), Some(SetupAction::Close));
     let boxes = |on: bool| {
         let (l, _) = build(&Screen::Done { autostart: on });

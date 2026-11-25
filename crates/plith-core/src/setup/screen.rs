@@ -47,7 +47,9 @@ const BUTTON_X: f64 = 220.0;
 /// Side margin of a centred line.
 const MARGIN: f64 = 40.0;
 /// Advance of one mono caption character with its tracking, for centring and underlines.
-const ADVANCE: f64 = 7.4;
+const ADVANCE: f64 = 7.7;
+/// Spare width on a caption's text box so its estimated width never truncates it.
+const TEXT_SLACK: f64 = 8.0;
 /// Checkbox edge.
 const CHECK: f64 = 16.0;
 /// Gap between a checkbox and its label.
@@ -259,7 +261,7 @@ impl Page {
     pub(super) fn chrome(&mut self, own: Version, closable: bool) {
         self.text(
             (18.0, 21.0, 160.0),
-            &own.to_string(),
+            &format!("PLITH {own}"),
             (TextStyle::Label, Ink::Ink),
             Align::Start,
         );
@@ -318,7 +320,7 @@ impl Page {
         let w = caption_w(label);
         let x = (SETUP_W - w) / 2.0;
         self.text(
-            (x, cy, w),
+            (x, cy, w + TEXT_SLACK),
             label,
             (TextStyle::Label, Ink::Ink),
             Align::Start,
@@ -360,7 +362,7 @@ impl Page {
             });
         }
         self.text(
-            (x + CHECK + CHECK_GAP, cy, w),
+            (x + CHECK + CHECK_GAP, cy, w + TEXT_SLACK),
             label,
             (TextStyle::Label, Ink::Ink),
             Align::Start,
