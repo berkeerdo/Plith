@@ -8,7 +8,7 @@
 #[cfg(test)]
 mod tests;
 
-use plith_core::setup::{Report, decode, encode};
+use plith_core::setup::{Report, decode, encode, parse_pipe_name, setup_pipe_name};
 use plith_ipc::security::{current_user_sid, setup_pipe_sddl};
 use std::mem::size_of;
 use std::sync::Arc;
@@ -25,8 +25,8 @@ use windows::Win32::Security::Authorization::{
 use windows::Win32::Security::{PSECURITY_DESCRIPTOR, SECURITY_ATTRIBUTES};
 use windows::Win32::Storage::FileSystem::{
     CreateFileW, FILE_ATTRIBUTE_NORMAL, FILE_FLAG_FIRST_PIPE_INSTANCE, FILE_FLAGS_AND_ATTRIBUTES,
-    FILE_SHARE_NONE, OPEN_EXISTING, PIPE_ACCESS_INBOUND, ReadFile, SECURITY_ANONYMOUS,
-    SECURITY_SQOS_PRESENT, WriteFile,
+    FILE_SHARE_NONE, FILE_TYPE_PIPE, GetFileType, OPEN_EXISTING, PIPE_ACCESS_INBOUND, ReadFile,
+    SECURITY_ANONYMOUS, SECURITY_SQOS_PRESENT, WriteFile,
 };
 use windows::Win32::System::Pipes::{
     ConnectNamedPipe, CreateNamedPipeW, PIPE_READMODE_MESSAGE, PIPE_REJECT_REMOTE_CLIENTS,
@@ -68,7 +68,7 @@ pub fn report_pipe_name() -> String {
     if unsafe { ProcessIdToSessionId(pid, &raw mut session) }.is_err() {
         session = 0;
     }
-    format!("\\\\.\\pipe\\plith-setup-{session}-{pid}")
+    setup_pipe_name(session, pid)
 }
 
 /// The receiving end: one inbound, message-mode instance that refuses remote clients.
@@ -212,9 +212,13 @@ pub struct ReportClient(Handle);
 /// # Errors
 /// The text says why the pipe could not be opened.
 pub fn report_client(name: &str) -> Result<ReportClient, String> {
-    open_for_writing(name).map(ReportClient)
+    // The worker never opens a name it was handed as is: it rebuilds the name from the two
+    // numbers, so no path piece can lead the open to another object.
+    let (session, pid) = parse_pipe_name(name).ok_or("not a setup pipe name")?;
+    open_for_writing(&setup_pipe_name(session, pid)).map(ReportClient)
 }
 
+/// Opens `name` for writing and keeps the handle only when it is a pipe.
 fn open_for_writing(name: &str) -> Result<Handle, String> {
     let wide_name = wide(name);
     // SAFETY: the name outlives the call; no security attributes or template are passed.
@@ -231,9 +235,14 @@ fn open_for_writing(name: &str) -> Result<Handle, String> {
             None,
         )
     };
-    handle
+    let handle = handle
         .map(Handle)
-        .map_err(|error| format!("cannot open the report pipe: {error}"))
+        .map_err(|error| format!("cannot open the report pipe: {error}"))?;
+    // SAFETY: the handle is live and owned by `handle`.
+    if unsafe { GetFileType(handle.0) } != FILE_TYPE_PIPE {
+        return Err("the report pipe is not a pipe".to_string());
+    }
+    Ok(handle)
 }
 
 impl ReportClient {

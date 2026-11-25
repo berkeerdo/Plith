@@ -24,10 +24,14 @@ use crate::pipe::report_client;
 use crate::processes::SystemProcesses;
 use crate::register::{Places, register, trust_helper};
 use plith_core::setup::{Job, Report, Version};
-use plith_host::trust::{Scope, verify_plith};
+use plith_host::trust::{Scope, verify_plith, verify_plith_handle};
 use plith_ipc::security::own_integrity_above_medium;
+use std::fs::{File, OpenOptions};
+use std::io::{Read, Seek, SeekFrom};
+use std::os::windows::fs::OpenOptionsExt;
 use std::path::PathBuf;
 use windows::Win32::Foundation::{CloseHandle, ERROR_ALREADY_EXISTS, GetLastError, HANDLE};
+use windows::Win32::Storage::FileSystem::FILE_SHARE_READ;
 use windows::Win32::System::Com::CoTaskMemFree;
 use windows::Win32::System::Threading::CreateMutexW;
 use windows::Win32::UI::Shell::{FOLDERID_ProgramFiles, KF_FLAG_DEFAULT, SHGetKnownFolderPath};
@@ -88,7 +92,7 @@ impl Drop for WorkerLock {
 /// Runs the job and returns the exit code. Everything the worker may do starts here.
 #[must_use]
 pub fn run(job: Job, pipe: &str) -> i32 {
-    let Some(exe) = may_run() else {
+    let Some(image) = may_run() else {
         return REFUSED;
     };
     let Some(_lock) = WorkerLock::take() else {
@@ -102,8 +106,12 @@ pub fn run(job: Job, pipe: &str) -> i32 {
         }
     };
     let outcome = match job {
-        Job::Install => install(&exe, &send),
-        Job::Uninstall => remove(&send),
+        Job::Install => install(image, &send),
+        Job::Uninstall => {
+            // The uninstall may need to replace or schedule this very image: let go of it.
+            drop(image);
+            remove(&send)
+        }
     };
     match outcome {
         Ok(()) => {
@@ -121,15 +129,24 @@ pub fn run(job: Job, pipe: &str) -> i32 {
     }
 }
 
-/// The path of this exe when the worker is allowed to run: elevated, signed by Plith and a
-/// release build with a real payload. Reads only; nothing is written.
-fn may_run() -> Option<PathBuf> {
+/// This exe's open image when the worker is allowed to run: elevated, signed by
+/// Plith and a release build with a real payload. Reads only; nothing is written.
+///
+/// The image is opened once, shared for reading only (no write, no rename, no delete while it
+/// is held), judged through that handle, and later read from the same handle, so the bytes
+/// that get installed are the bytes that were verified, whatever happens to the path.
+fn may_run() -> Option<File> {
     if !matches!(own_integrity_above_medium(), Ok(true)) {
         return None;
     }
     let exe = std::env::current_exe().ok()?;
-    verify_plith(&exe).ok()?;
-    embedded().is_release().then_some(exe)
+    let image = OpenOptions::new()
+        .read(true)
+        .share_mode(FILE_SHARE_READ.0)
+        .open(&exe)
+        .ok()?;
+    verify_plith_handle(&image, &exe).ok()?;
+    embedded().is_release().then_some(image)
 }
 
 fn own_version() -> Result<Version, StepError> {
@@ -138,11 +155,14 @@ fn own_version() -> Result<Version, StepError> {
 }
 
 /// Steps 1 to 3 of an install; the error carries the step that failed.
-fn install(exe: &std::path::Path, send: &dyn Fn(Report)) -> Result<(), (u8, StepError)> {
+fn install(mut image: File, send: &dyn Fn(Report)) -> Result<(), (u8, StepError)> {
     let root = install_root().map_err(|reason| (1, StepError::new(reason)))?;
     let mut log = |text: String| send(Report::Log(text));
-    let setup_exe = std::fs::read(exe)
-        .map_err(|error| (1, StepError::new(format!("cannot read this exe: {error}"))))?;
+    let read_error =
+        |error: std::io::Error| (1, StepError::new(format!("cannot read this exe: {error}")));
+    let mut setup_exe = Vec::new();
+    image.seek(SeekFrom::Start(0)).map_err(read_error)?;
+    image.read_to_end(&mut setup_exe).map_err(read_error)?;
     install_files(
         &root,
         &embedded(),
@@ -151,6 +171,16 @@ fn install(exe: &std::path::Path, send: &dyn Fn(Report)) -> Result<(), (u8, Step
         &mut log,
     )
     .map_err(|error| (1, error))?;
+    // The copy now sits in the administrator-only folder: judge it there before anything
+    // can start it from the Apps entry, and refuse the install if it is not Plith's.
+    let installed = root.join("setup").join("plith-setup.exe");
+    verify_plith(&installed).map_err(|error| {
+        (
+            1,
+            StepError::new(format!("{} is not trusted: {error}", installed.display())),
+        )
+    })?;
+    drop(image);
     send(Report::Step(1));
     trust_helper(Scope::LocalMachine, &root.join("osd").join("plith-osd.exe"))
         .map_err(|error| (2, error))?;

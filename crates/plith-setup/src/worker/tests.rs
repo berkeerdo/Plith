@@ -1,7 +1,7 @@
 //! Tests of the worker's refusal and its error-code extraction. Nothing here installs.
 
 use super::{os_code, run};
-use crate::pipe::{ReportServer, report_pipe_name};
+use crate::pipe::ReportServer;
 use crate::testing::TempDir;
 use plith_core::setup::Job;
 use plith_ipc::security::own_integrity_above_medium;
@@ -17,7 +17,7 @@ fn worker_refuses_at_medium() {
     let marker = temp.root().join("marker.txt");
     std::fs::create_dir_all(temp.root()).unwrap();
     std::fs::write(&marker, b"untouched").unwrap();
-    let pipe = format!("{}-refuse-test", report_pipe_name());
+    let pipe = plith_core::setup::setup_pipe_name(2_000_000, std::process::id());
     let server = ReportServer::bind(&pipe).expect("bind");
 
     assert_eq!(run(Job::Install, &pipe), 2);

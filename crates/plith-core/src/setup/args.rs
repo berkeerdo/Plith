@@ -5,6 +5,27 @@ use super::Version;
 /// The pipe name prefix a worker accepts.
 const PIPE_PREFIX: &str = "\\\\.\\pipe\\plith-setup-";
 
+/// The pipe name of a setup window: the prefix, the session id and the window's process id.
+#[must_use]
+pub fn setup_pipe_name(session: u32, pid: u32) -> String {
+    format!("{PIPE_PREFIX}{session}-{pid}")
+}
+
+/// Reads `(session, pid)` from a setup pipe name. Only `<digits>-<digits>` after the prefix is
+/// accepted, so nothing else (a path piece, a second dash, a sign) can ride along.
+#[must_use]
+pub fn parse_pipe_name(name: &str) -> Option<(u32, u32)> {
+    let rest = name.strip_prefix(PIPE_PREFIX)?;
+    let (session, pid) = rest.split_once('-')?;
+    let number = |text: &str| {
+        if text.is_empty() || !text.bytes().all(|b| b.is_ascii_digit()) {
+            return None;
+        }
+        text.parse::<u32>().ok()
+    };
+    Some((number(session)?, number(pid)?))
+}
+
 /// What the elevated worker should do.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Job {
@@ -50,12 +71,13 @@ pub fn parse_args(args: &[String]) -> Mode {
                 Some("uninstall") => Job::Uninstall,
                 _ => return Mode::Install,
             };
-            match arg(2) {
-                Some(pipe) if pipe.starts_with(PIPE_PREFIX) => Mode::Work {
+            // The name is rebuilt from the two numbers, never taken as given.
+            match arg(2).and_then(parse_pipe_name) {
+                Some((session, pid)) => Mode::Work {
                     job,
-                    pipe: pipe.to_string(),
+                    pipe: setup_pipe_name(session, pid),
                 },
-                _ => Mode::Install,
+                None => Mode::Install,
             }
         }
         _ => Mode::Install,

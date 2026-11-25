@@ -8,7 +8,33 @@ fn strings(args: &[&str]) -> Vec<String> {
     args.iter().map(|s| (*s).to_string()).collect()
 }
 
-const PIPE: &str = "\\\\.\\pipe\\plith-setup-abc";
+const PIPE: &str = "\\\\.\\pipe\\plith-setup-1-2";
+
+#[test]
+fn args_reject_pipe_with_traversal() {
+    for bad in [
+        "\\\\.\\pipe\\plith-setup-1-2\\..\\..\\x",
+        "\\\\.\\pipe\\plith-setup-1-2/x",
+        "\\\\.\\pipe\\plith-setup-a-b",
+        "\\\\.\\pipe\\plith-setup-1-2-3",
+        "\\\\.\\pipe\\plith-setup--",
+        "\\\\.\\pipe\\plith-setup-1-",
+        "\\\\.\\pipe\\plith-setup--2",
+        "\\\\.\\pipe\\plith-setup-+1-2",
+        "\\\\.\\pipe\\plith-setup-1-99999999999",
+        "\\\\.\\pipe\\plith-setup-",
+        "\\\\.\\pipe\\plith-setup-1",
+    ] {
+        assert_eq!(
+            parse_args(&strings(&["--work", "install", bad])),
+            Mode::Install,
+            "{bad}"
+        );
+        assert_eq!(parse_pipe_name(bad), None, "{bad}");
+    }
+    assert_eq!(parse_pipe_name(PIPE), Some((1, 2)));
+    assert_eq!(setup_pipe_name(1, 2), PIPE);
+}
 
 #[test]
 fn version_orders_and_parses() {

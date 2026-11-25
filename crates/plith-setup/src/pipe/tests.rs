@@ -10,7 +10,7 @@ const WAIT: Duration = Duration::from_secs(5);
 fn unique_name() -> String {
     static COUNTER: AtomicU32 = AtomicU32::new(0);
     let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-    format!("\\\\.\\pipe\\plith-setup-test-{}-{n}", std::process::id())
+    plith_core::setup::setup_pipe_name(1_000_000 + n, std::process::id())
 }
 
 #[test]
@@ -80,4 +80,21 @@ fn the_window_names_its_pipe_by_session_and_pid() {
     let name = report_pipe_name();
     assert!(name.starts_with("\\\\.\\pipe\\plith-setup-"));
     assert!(name.ends_with(&format!("-{}", std::process::id())));
+}
+
+#[test]
+fn worker_refuses_non_pipe_handle() {
+    let path = std::env::temp_dir().join(format!("plith-setup-nonpipe-{}", std::process::id()));
+    std::fs::write(&path, b"keep").unwrap();
+    let result = super::open_for_writing(&path.display().to_string());
+    assert!(result.is_err());
+    drop(result);
+    assert_eq!(std::fs::read(&path).unwrap(), b"keep");
+    std::fs::remove_file(&path).unwrap();
+}
+
+#[test]
+fn the_client_refuses_names_that_are_not_setup_pipes() {
+    assert!(report_client(r"\\.\pipe\plith-setup-1-2\..\..\x").is_err());
+    assert!(report_client(r"C:\Windows\win.ini").is_err());
 }

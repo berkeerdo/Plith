@@ -95,6 +95,32 @@ fn installed_helper_is_plith_signed() {
 }
 
 #[test]
+fn verify_handle_matches_verify_path() {
+    let helper = Path::new(HELPER);
+    if !helper.exists() {
+        println!("skipped: {HELPER} is not installed");
+        return;
+    }
+    let file = std::fs::File::open(helper).expect("open helper");
+    assert_eq!(verify_plith_handle(&file, helper), verify_plith(helper));
+    assert_eq!(verify_plith_handle(&file, helper), Ok(()));
+}
+
+#[test]
+fn an_unsigned_file_through_a_handle_is_not_signed() {
+    let dir = TempDir::new("unsigned-handle");
+    let copy = dir.0.join("unsigned.exe");
+    std::fs::copy(std::env::current_exe().expect("test exe"), &copy).expect("copy");
+    let file = std::fs::File::open(&copy).expect("open copy");
+    assert_eq!(verify_plith_handle(&file, &copy), Err(SignError::NotSigned));
+    // The handle decides, not the name: an unsigned file under a signed file's name is refused.
+    assert_eq!(
+        verify_plith_handle(&file, Path::new(HELPER)),
+        Err(SignError::NotSigned)
+    );
+}
+
+#[test]
 fn tampered_signed_file_is_bad_signature() {
     let helper = Path::new(HELPER);
     if !helper.exists() {

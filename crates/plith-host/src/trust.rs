@@ -102,9 +102,29 @@ fn is_win32(code: HRESULT) -> bool {
 /// [`SignError`] saying why the file is not trusted.
 pub fn verify_plith(path: &Path) -> Result<(), SignError> {
     let wide = HSTRING::from(path.as_os_str());
+    verify_file(&wide, HANDLE::default())
+}
+
+/// Like [`verify_plith`], but judges the file behind an open handle, so the file that was
+/// judged is the file the caller then reads from the same handle, whatever happens to the path
+/// in between. `path` is only the name Windows records; the bytes come from `file`.
+///
+/// The file position is not defined afterwards: seek before reading.
+///
+/// # Errors
+/// [`SignError`] saying why the file is not trusted.
+pub fn verify_plith_handle(file: &std::fs::File, path: &Path) -> Result<(), SignError> {
+    use std::os::windows::io::AsRawHandle;
+    let wide = HSTRING::from(path.as_os_str());
+    verify_file(&wide, HANDLE(file.as_raw_handle()))
+}
+
+/// The one judgement behind both entry points: a null `handle` lets Windows open the path.
+fn verify_file(wide: &HSTRING, handle: HANDLE) -> Result<(), SignError> {
     let mut file = WINTRUST_FILE_INFO {
         cbStruct: size_u32::<WINTRUST_FILE_INFO>(),
         pcwszFilePath: PCWSTR(wide.as_ptr()),
+        hFile: handle,
         ..Default::default()
     };
     let mut data = WINTRUST_DATA {

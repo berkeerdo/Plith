@@ -66,6 +66,9 @@ fn embed_manifest() {
     }
     let dir = std::env::var_os("CARGO_MANIFEST_DIR").expect("cargo sets CARGO_MANIFEST_DIR");
     let manifest = Path::new(&dir).join("plith-setup.manifest");
+    // Every DLL this exe loads comes from System32 only: it may start elevated from Downloads,
+    // where a planted wintrust.dll or crypt32.dll next to it would otherwise load first.
+    println!("cargo:rustc-link-arg-bins=/DEPENDENTLOADFLAG:0x800");
     println!("cargo:rustc-link-arg-bins=/MANIFEST:EMBED");
     println!(
         "cargo:rustc-link-arg-bins=/MANIFESTINPUT:{}",

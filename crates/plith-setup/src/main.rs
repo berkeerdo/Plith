@@ -23,8 +23,15 @@ mod uninstall;
 mod worker;
 
 use plith_core::setup::{Mode, parse_args};
+use windows::Win32::System::LibraryLoader::{
+    LOAD_LIBRARY_SEARCH_SYSTEM32, SetDefaultDllDirectories,
+};
 
 fn main() {
+    // First, before anything can load a DLL: System32 only (the linker flag covers the DLLs
+    // loaded at start-up). Nothing to do if it fails.
+    // SAFETY: a plain call with a flag constant.
+    let _ = unsafe { SetDefaultDllDirectories(LOAD_LIBRARY_SEARCH_SYSTEM32) };
     let args: Vec<String> = std::env::args().skip(1).collect();
     match parse_args(&args) {
         Mode::Work { job, pipe } => std::process::exit(worker::run(job, &pipe)),
