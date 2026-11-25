@@ -35,7 +35,6 @@ Updated 2026-11-25. Rewritten, not appended; old content goes to `journal/`.
   before any UI work (UI code there never compiled).
 - Settings window `c7e693a` (plan `plans/active/r7-settings.md`) and display relayout `42f29ac`
   (plan `plans/active/display-relayout.md`, Task 5 open): records in `journal/2026-11.md`.
-- Session display fix merged 2026-11-23 (`ac07a42`): suppression follows the session display.
 - **Owed on the console, Berke present** (any day): the relayout check (plan Task 5):
   resolution and scale on the console, the RDP to console switch, and a window resize over
   RDP. Check the display-off hide still works on the console (monitor off). Then finish the settings console session (started 2026-11-21, a real click opened the
@@ -49,25 +48,26 @@ Updated 2026-11-25. Rewritten, not appended; old content goes to `journal/`.
   media page while playing (pages Task 18 Step 3) and his words on the square-top look (Task 7a
   Step 5); audio-clarity Task 8 box (he used the ruler, "cetvel çalışıyor"). Later: the guarded
   route write session.
-- R7 parity part 1 `ae94753` (tray, exe icon, 0.4.0, `Windows ile başlat`): tray menu, `Çıkış`
-  and an Explorer restart not yet seen (record in `journal/2026-11.md`).
+- R7 parity part 1 `ae94753`: tray menu, `Çıkış`, an Explorer restart not yet seen (journal).
 - **App icon done (ADR 0019):** lime speaker-fabric tile, black source at the top edge, three
   tone-on-tone ripples; master `design/identity/icon/plith-master-1024.png`, `.ico` from
   `scripts/build-icon.ps1`. Release rebuilt, icon read back from the exe, `tray: icon added`
   (RDP, 19:09); tray look not yet confirmed ("kumaş kısmı anlaşılmıyor").
 - **Karot pill weather fix:** right text no longer dropped by `CAP_RISE` (measured on a render);
   shows the weather now (`9° BULUTLU`), the turn only on the welcome view (Berke picked it).
-- **Identity round 3 on branch `feature/identity-r3`, uncommitted** (spec
+- **Identity round 3 done on `feature/identity-r3`** (`7d763fc`, not merged; spec
   `specs/2026-11-24-identity-r3-design.md`, plan `plans/active/identity-r3.md`, ADR 0020): About
-  opens with the icon, selected section station in the flow colour, class icon; installer A Halka
-  material in `design/identity/r3/installer/`. Owed: Berke's yes on the installer page, a real
-  click to see the title bar and taskbar icon, then commits and the merge (ask first).
+  icon header, flow station, class icon; installer A Halka material approved ("evet şimdi oldu")
+  in `design/identity/r3/installer/`. Owed: merge to main (ask), a real click on the gear to see
+  the title bar and taskbar icon (release running since 08:08 on 2026-11-25).
+- **Next: R7 parity part 2** (`research/2026-11-24-r7-parity.md`): the Rust installer drawn as A
+  Halka (`design/identity/r3/installer/README.md` has the layout), uninstall (helper in Program
+  Files, trust store, sudo with his yes), `config.ini` import, and the update check (spec
+  `specs/2026-11-25-update-check-design.md`: daily check, one tray notice per version, `KUR`
+  verifies the Plith signature, then the installer's update screen). Asset name stays
+  `Plith-Setup-<version>.exe`. Ask whether he uses brightness hotkeys and endpoint pinning.
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a
   small strip with info; every idle look gets a choice of what its details show. Brainstorm first.
-- Then R7 parity part 2 (`research/2026-11-24-r7-parity.md`): installer and uninstall (helper in
-  Program Files, trust store, sudo with his yes), `config.ini` import, an update check. WPF 0.3.x
-  users move over through its GitHub check if the asset stays `Plith-Setup-0.4.0.exe`. Ask again
-  whether he uses brightness hotkeys and endpoint pinning ("evet öyle" was ambiguous).
 - Console how-to: `query session` first; release `plith.exe` is a GUI exe, so start it with
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 - **Audio page clarity:** merged as `68bcdb0` (ADR 0013, plan `plans/active/audio-clarity.md`).
