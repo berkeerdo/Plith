@@ -183,7 +183,10 @@ fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
 /// The height of the text box of a style.
 fn line_h(style: TextStyle) -> f64 {
     match style {
+        TextStyle::Display => 34.0,
         TextStyle::Heading => 26.0,
+        TextStyle::Button => 22.0,
+        TextStyle::Step => 16.0,
         TextStyle::Strong => 18.0,
         _ => 14.0,
     }
@@ -262,7 +265,7 @@ impl Page {
         self.text(
             (18.0, 21.0, 160.0),
             &format!("PLITH {own}"),
-            (TextStyle::Label, Ink::Ink),
+            (TextStyle::Step, Ink::Ink),
             Align::Start,
         );
         if !closable {
@@ -291,7 +294,7 @@ impl Page {
             self.text(
                 (x, cy, SETUP_W - x),
                 &s,
-                (TextStyle::Label, Ink::Ink),
+                (TextStyle::Step, Ink::Ink),
                 Align::Start,
             );
         }
@@ -308,7 +311,7 @@ impl Page {
         self.text(
             (r.x, y + BUTTON_H / 2.0, r.w),
             label,
-            (TextStyle::Label, Ink::Flow),
+            (TextStyle::Button, Ink::Flow),
             Align::Center,
         );
         self.target(r, action);
@@ -342,23 +345,25 @@ impl Page {
         let total = CHECK + CHECK_GAP + w;
         let x = (SETUP_W - total) / 2.0;
         let top = cy - CHECK / 2.0;
-        self.nodes.push(Node::Stroke {
-            points: vec![
-                (x, top),
-                (x + CHECK, top),
-                (x + CHECK, top + CHECK),
-                (x, top + CHECK),
-                (x, top),
-            ],
-            width: 1.5,
-            ink: Ink::Ink,
-            dashed: false,
-        });
         if on {
+            // On is a filled ink square, off an outline.
             self.nodes.push(Node::Fill {
-                rect: rect(x + 3.0, top + 3.0, CHECK - 6.0, CHECK - 6.0),
+                rect: rect(x, top, CHECK, CHECK),
                 radius: 0.0,
                 ink: Ink::Ink,
+            });
+        } else {
+            self.nodes.push(Node::Stroke {
+                points: vec![
+                    (x, top),
+                    (x + CHECK, top),
+                    (x + CHECK, top + CHECK),
+                    (x, top + CHECK),
+                    (x, top),
+                ],
+                width: 1.5,
+                ink: Ink::Ink,
+                dashed: false,
             });
         }
         self.text(

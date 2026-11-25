@@ -19,7 +19,7 @@ pub fn text(t: SetupText) -> &'static str {
         SetupText::Close => "SCHLIESSEN",
         SetupText::Update => "AKTUALISIEREN",
         SetupText::UpdateLead => "Eine neue Version von Plith wird installiert.",
-        SetupText::Retry => "ERNEUT VERSUCHEN",
+        SetupText::Retry => "NOCHMAL",
         SetupText::ErrorTitle => "Die Installation konnte nicht abgeschlossen werden.",
         SetupText::NewerTitle => "Auf diesem Computer ist schon ein neueres Plith.",
         SetupText::UninstallLead => "Plith wird von diesem Computer entfernt.",

@@ -64,6 +64,12 @@ pub enum TextStyle {
     Hero,
     /// A section heading: semibold sans 20.
     Heading,
+    /// A pill button label: semibold sans 17.
+    Button,
+    /// A screen title: semibold sans 26.
+    Display,
+    /// A step or version caption: medium mono 12.
+    Step,
 }
 
 /// Where an overlong line loses its characters.
@@ -400,6 +406,9 @@ pub fn style_spec(style: TextStyle) -> StyleSpec {
         TextStyle::Strong => (Family::Sans, 14.0, 600, false, 0.0),
         TextStyle::Hero => (Family::Mono, 30.0, 400, false, MONO_TRACKING),
         TextStyle::Heading => (Family::Sans, 20.0, 600, false, 0.0),
+        TextStyle::Button => (Family::Sans, 17.0, 600, false, 0.0),
+        TextStyle::Display => (Family::Sans, 26.0, 600, false, 0.0),
+        TextStyle::Step => (Family::Mono, 12.0, 500, true, MONO_TRACKING),
     };
     StyleSpec {
         family,

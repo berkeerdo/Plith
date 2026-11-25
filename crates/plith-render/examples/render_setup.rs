@@ -20,8 +20,8 @@ use std::sync::Arc;
 use windows::Win32::System::Com::{COINIT_MULTITHREADED, CoInitializeEx};
 use windows::core::Result;
 
-/// This setup's version, drawn top left.
-const OWN: Version = Version::new(0, 5, 0);
+/// This setup's version, drawn top left in every render.
+const OWN: Version = Version::new(0, 4, 0);
 
 /// Loads one installer material file at its own pixel size (no rescale).
 fn load_art(id: plith_core::draw::ArtId, file: &str) -> Result<Arc<ArtPixels>> {

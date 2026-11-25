@@ -6,6 +6,8 @@ use crate::draw::{Ink, TextStyle};
 use crate::lang::setup::SetupText as S;
 
 const LEAD: (TextStyle, Ink) = (TextStyle::Heading, Ink::Ink);
+/// The title of an end state: the same role as the done title.
+const TITLE: (TextStyle, Ink) = (TextStyle::Display, Ink::Ink);
 /// The line under the lead (a reason, a version).
 const SUB_Y: f64 = LEAD_Y + 28.0;
 
@@ -51,6 +53,6 @@ pub(super) fn uninstall_confirm(p: &mut Page, own: Version, delete_data: bool) {
 pub(super) fn uninstalled(p: &mut Page, own: Version) {
     p.background(0);
     p.chrome(own, true);
-    p.centered(LEAD_Y, p.word(S::UninstallDone), LEAD);
+    p.centered(LEAD_Y, p.word(S::UninstallDone), TITLE);
     p.button(START_BUTTON_Y, S::Close, SetupAction::Close);
 }

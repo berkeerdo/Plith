@@ -36,7 +36,7 @@ pub fn places(lang: Lang) -> Vec<Place> {
         out.push(place(
             format!("setup {id:?}"),
             text,
-            TextStyle::Label,
+            TextStyle::Step,
             STEP_W,
         ));
     }
@@ -45,20 +45,28 @@ pub fn places(lang: Lang) -> Vec<Place> {
         let (style, dip) = match id {
             S::Step1 | S::Step2 | S::Step3 => continue,
             S::Install | S::Open | S::Update | S::Retry | S::Uninstall => {
-                (TextStyle::Label, BUTTON_W)
+                (TextStyle::Button, BUTTON_W)
             }
             S::Autostart | S::Close | S::DeleteData => (TextStyle::Label, CHECK_W),
+            S::DoneTitle | S::UninstallDone => (TextStyle::Display, LINE_W),
             S::LeadStart
             | S::LeadRunning
-            | S::DoneTitle
             | S::ErrorTitle
             | S::NewerTitle
             | S::UpdateLead
-            | S::UninstallLead
-            | S::UninstallDone => (TextStyle::Heading, LINE_W),
+            | S::UninstallLead => (TextStyle::Heading, LINE_W),
             S::SubUac | S::DoneSub => (TextStyle::Strong, LINE_W),
             S::UacCancelled => (TextStyle::Body, LINE_W),
         };
+        if id == S::Close {
+            // The same word also labels the pill of the newer and uninstalled screens.
+            out.push(place(
+                "setup Close pill".to_owned(),
+                text.clone(),
+                TextStyle::Button,
+                BUTTON_W,
+            ));
+        }
         out.push(place(format!("setup {id:?}"), text, style, dip));
     }
     out
