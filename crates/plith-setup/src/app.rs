@@ -18,6 +18,8 @@ use plith_core::setup::{
     situation,
 };
 use plith_core::theme::Palette;
+use plith_core::tray::run_value::is_ours;
+use plith_host::autostart::RunKey;
 use plith_host::locale::windows_language;
 use plith_host::log::{LogFile, data_dir};
 use plith_render::{SheetConfig, SheetRender};
@@ -117,7 +119,13 @@ fn show(mode: &Mode) -> i32 {
         .and_then(|dir| LogFile::open_at(&dir.join("setup.log")).ok());
     let root = install_root().ok();
     let own = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 0));
-    let flow = Flow::new(mode, find_situation(own, root.as_deref()), own);
+    // The Run value as found: an update or repair keeps what the user chose.
+    let run_value = RunKey::user_run()
+        .read()
+        .ok()
+        .flatten()
+        .map(|text| is_ours(&text));
+    let flow = Flow::new(mode, find_situation(own, root.as_deref()), own, run_value);
     let inbox = Inbox::default();
     let app = Rc::new(RefCell::new(App {
         flow,

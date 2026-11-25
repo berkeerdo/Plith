@@ -32,6 +32,8 @@ pub struct Flow {
     screen: Screen,
     job: Job,
     delete_data: bool,
+    /// The start with Windows tick the done screen starts with.
+    autostart: bool,
 }
 
 /// The step an error is attributed to when the worker said nothing: the first of an install,
@@ -50,9 +52,21 @@ fn code_of(reason: &str) -> u32 {
 
 impl Flow {
     /// The first screen for how this setup was started and what is on the machine. `own` is the
-    /// version this setup carries.
+    /// version this setup carries. `run_value_ours` is the Run value `Plith` found at start:
+    /// `None` no value, `Some(true)` a Plith one, `Some(false)` another program's. A fresh or
+    /// WPF install ticks start with Windows; an update or repair keeps the user's choice, so it
+    /// is ticked only when a Plith value is there.
     #[must_use]
-    pub fn new(mode: &Mode, situation: Situation, own: Version) -> Self {
+    pub fn new(
+        mode: &Mode,
+        situation: Situation,
+        own: Version,
+        run_value_ours: Option<bool>,
+    ) -> Self {
+        let autostart = match (mode, situation) {
+            (Mode::Install, Situation::Fresh | Situation::OverWpf { .. }) => true,
+            _ => run_value_ours == Some(true),
+        };
         let update = |from| Screen::Update { from, to: own };
         let (screen, job) = match (mode, situation) {
             (_, Situation::NewerInstalled { installed }) => {
@@ -71,6 +85,7 @@ impl Flow {
             screen,
             job,
             delete_data: false,
+            autostart,
         }
     }
 
@@ -173,8 +188,9 @@ impl Flow {
             }
             Report::Finished => match self.job {
                 Job::Install => {
-                    self.screen = Screen::Done { autostart: true };
-                    vec![Effect::SetAutostart(true)]
+                    let on = self.autostart;
+                    self.screen = Screen::Done { autostart: on };
+                    vec![Effect::SetAutostart(on)]
                 }
                 Job::Uninstall => {
                     self.screen = Screen::Uninstalled;

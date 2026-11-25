@@ -3,7 +3,7 @@ use super::*;
 const OWN: Version = Version::new(0, 4, 0);
 
 fn flow(mode: &Mode, situation: Situation) -> Flow {
-    Flow::new(mode, situation, OWN)
+    Flow::new(mode, situation, OWN, None)
 }
 
 fn fresh() -> Flow {
@@ -322,4 +322,59 @@ fn primary_action_of_every_screen() {
     assert_eq!(f.primary_action(), Some(SetupAction::Retry));
     let f = flow(&Mode::Uninstall, Situation::Repair);
     assert_eq!(f.primary_action(), Some(SetupAction::Uninstall));
+}
+
+/// A flow over `situation` with the Run value found at start, taken through to the done screen.
+fn finished(mode: &Mode, situation: Situation, run: Option<bool>) -> (Screen, Vec<Effect>) {
+    let mut f = Flow::new(mode, situation, OWN, run);
+    f.on_action(SetupAction::Install);
+    let effects = f.on_report(Report::Finished);
+    (f.screen(), effects)
+}
+
+#[allow(
+    clippy::needless_pass_by_value,
+    reason = "the tuple is a throwaway result"
+)]
+fn assert_tick(got: (Screen, Vec<Effect>), on: bool) {
+    assert_eq!(got.0, Screen::Done { autostart: on });
+    assert_eq!(got.1, [Effect::SetAutostart(on)]);
+}
+
+#[test]
+fn update_keeps_autostart_off_when_no_run_value() {
+    let from = Version::new(0, 3, 9);
+    let situation = Situation::Upgrade { from };
+    assert_tick(finished(&Mode::Update { from }, situation, None), false);
+    assert_tick(finished(&Mode::Install, situation, Some(false)), false);
+    assert_tick(
+        finished(&Mode::Update { from }, situation, Some(true)),
+        true,
+    );
+}
+
+#[test]
+fn repair_keeps_autostart_on_when_ours() {
+    assert_tick(
+        finished(&Mode::Install, Situation::Repair, Some(true)),
+        true,
+    );
+    assert_tick(finished(&Mode::Install, Situation::Repair, None), false);
+}
+
+#[test]
+fn fresh_install_ticks_autostart() {
+    for run in [None, Some(true), Some(false)] {
+        assert_tick(finished(&Mode::Install, Situation::Fresh, run), true);
+    }
+}
+
+#[test]
+fn over_wpf_ticks_autostart() {
+    let situation = Situation::OverWpf {
+        from: Version::new(0, 3, 1),
+    };
+    for run in [None, Some(true)] {
+        assert_tick(finished(&Mode::Install, situation, run), true);
+    }
 }
