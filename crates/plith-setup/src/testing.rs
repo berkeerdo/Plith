@@ -84,8 +84,8 @@ impl Processes for FakeProcesses {
         Ok(())
     }
 
-    fn stop_by_path(&mut self, exe: &Path) -> Result<(), String> {
-        self.events.push(format!("stop {}", exe.display()));
+    fn stop_under(&mut self, root: &Path) -> Result<(), String> {
+        self.events.push(format!("stop under {}", root.display()));
         Ok(())
     }
 }

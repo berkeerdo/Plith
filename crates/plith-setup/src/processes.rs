@@ -13,7 +13,7 @@ use windows::Win32::System::Diagnostics::ToolHelp::{
     CreateToolhelp32Snapshot, PROCESSENTRY32W, Process32FirstW, Process32NextW, TH32CS_SNAPPROCESS,
 };
 use windows::Win32::System::Threading::{
-    GetCurrentProcess, OpenProcess, OpenProcessToken, PROCESS_NAME_WIN32,
+    GetCurrentProcess, GetCurrentProcessId, OpenProcess, OpenProcessToken, PROCESS_NAME_WIN32,
     PROCESS_QUERY_LIMITED_INFORMATION, PROCESS_SYNCHRONIZE, PROCESS_TERMINATE,
     QueryFullProcessImageNameW, TerminateProcess, WaitForSingleObject,
 };
@@ -33,11 +33,13 @@ pub trait Processes {
     /// The window is still there after the wait.
     fn close_plith(&mut self) -> Result<(), String>;
 
-    /// Ends every process whose image is exactly `exe` and waits for it to exit.
+    /// Ends every process whose image lies under `root` (this process's own image excepted) and
+    /// waits for each to exit. Catches what the old app left running from the folder, such as the
+    /// WPF drop catcher, which outlives the app it belongs to.
     ///
     /// # Errors
     /// A process could not be ended or did not exit in time.
-    fn stop_by_path(&mut self, exe: &Path) -> Result<(), String>;
+    fn stop_under(&mut self, root: &Path) -> Result<(), String>;
 }
 
 /// The real thing.
@@ -64,12 +66,20 @@ impl Processes for SystemProcesses {
         Ok(())
     }
 
-    fn stop_by_path(&mut self, exe: &Path) -> Result<(), String> {
+    fn stop_under(&mut self, root: &Path) -> Result<(), String> {
         enable_debug_privilege();
-        let wanted = exe.to_string_lossy().into_owned();
+        let root = root.to_string_lossy().into_owned();
+        // The setup's own image is spared: an uninstall runs from `setup\plith-setup.exe` under
+        // the root, as the window and as this worker.
+        let own = std::env::current_exe()
+            .map(|exe| exe.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        // SAFETY: a plain call with no arguments.
+        let own_pid = unsafe { GetCurrentProcessId() };
+        let doomed = |image: &str| should_stop(image, &root, &own);
         let mut failures = Vec::new();
-        for pid in all_pids() {
-            if let Err(error) = stop_pid(pid, &wanted) {
+        for pid in all_pids().into_iter().filter(|&pid| pid != own_pid) {
+            if let Err(error) = stop_pid(pid, &doomed) {
                 failures.push(error);
             }
         }
@@ -146,10 +156,31 @@ fn all_pids() -> Vec<u32> {
     pids
 }
 
-/// Ends the process `pid` when its image is exactly `wanted`, on ONE handle: the path check, the
-/// kill and the wait all use it, so a reused id cannot point them at another process. A process
-/// that is not ours to open, has another path or is already exiting is left alone.
-fn stop_pid(pid: u32, wanted: &str) -> Result<(), String> {
+/// Path components, lower-cased, for a case-insensitive comparison by whole names.
+fn components(path: &str) -> Vec<String> {
+    path.split(['\\', '/'])
+        .filter(|part| !part.is_empty())
+        .map(str::to_lowercase)
+        .collect()
+}
+
+/// Pure. Whether `image` lies under `root`, comparing whole path components without regard to
+/// case: `C:\Program Files\Plith\x.exe` is under `C:\Program Files\Plith`, `...\Plith2\x.exe`
+/// is not, and neither is the root itself.
+pub(crate) fn is_under(image: &str, root: &str) -> bool {
+    let (image, root) = (components(image), components(root));
+    !root.is_empty() && image.len() > root.len() && image[..root.len()] == root[..]
+}
+
+/// Pure. Whether the sweep ends a process with this image: under `root` and not `own`.
+pub(crate) fn should_stop(image: &str, root: &str, own: &str) -> bool {
+    is_under(image, root) && components(image) != components(own)
+}
+
+/// Ends the process `pid` when `doomed` accepts its image path, on ONE handle: the path check,
+/// the kill and the wait all use it, so a reused id cannot point them at another process. A
+/// process that is not ours to open, is spared or is already exiting is left alone.
+fn stop_pid(pid: u32, doomed: &dyn Fn(&str) -> bool) -> Result<(), String> {
     // SAFETY: the handle is closed by `Handle`; the buffer and its length match.
     unsafe {
         let Ok(opened) = OpenProcess(
@@ -172,7 +203,7 @@ fn stop_pid(pid: u32, wanted: &str) -> Result<(), String> {
         {
             return Ok(());
         }
-        if !String::from_utf16_lossy(&buffer[..len as usize]).eq_ignore_ascii_case(wanted) {
+        if !doomed(&String::from_utf16_lossy(&buffer[..len as usize])) {
             return Ok(());
         }
         // Already signaled: it is exiting (a Plith that just got WM_CLOSE); nothing to kill.

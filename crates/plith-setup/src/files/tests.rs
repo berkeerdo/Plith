@@ -77,8 +77,11 @@ impl Processes for FakeProcesses {
         Ok(())
     }
 
-    fn stop_by_path(&mut self, exe: &Path) -> Result<(), String> {
-        self.events.push(format!("stop {}", exe.display()));
+    fn stop_under(&mut self, root: &Path) -> Result<(), String> {
+        // Still staged means the renames have not happened yet.
+        let staged = self.root.join("plith.exe.new").exists();
+        self.events
+            .push(format!("stop under {} staged={staged}", root.display()));
         Ok(())
     }
 }
@@ -393,8 +396,30 @@ fn close_happens_after_new_files_are_written() {
     let root = temp.root();
     let events = run(&root).expect("install");
     assert_eq!(events[0], "close staged=true");
-    assert!(events.iter().any(|e| e.ends_with("plith.exe")));
-    assert!(events.iter().any(|e| e.ends_with("plith-osd.exe")));
+    // Everything under the root is swept after the polite close and before any rename.
+    let sweep = format!("stop under {} staged=true", root.display());
+    assert_eq!(events[1..], [sweep]);
+}
+
+#[test]
+fn the_sweep_judges_whole_path_components() {
+    use crate::processes::{is_under, should_stop};
+    let root = r"C:\Program Files\Plith";
+    assert!(is_under(r"C:\Program Files\Plith\x.exe", root));
+    assert!(is_under(
+        r"c:\program files\PLITH\Plith.DropCatcher.exe",
+        root
+    ));
+    assert!(is_under(r"C:\Program Files\Plith\osd\plith-osd.exe", root));
+    assert!(!is_under(r"C:\Program Files\Plith2\x.exe", root));
+    assert!(
+        !is_under(r"C:\Program Files\Plith", root),
+        "the root itself"
+    );
+    assert!(!is_under(r"C:\Windows\explorer.exe", root));
+    let own = r"C:\Program Files\Plith\setup\plith-setup.exe";
+    assert!(!should_stop(own, root, own), "the setup never stops itself");
+    assert!(should_stop(r"C:\Program Files\Plith\plith.exe", root, own));
 }
 
 #[test]
@@ -526,7 +551,7 @@ fn hung_plith_falls_back_to_kill() {
 
     install_with(&root, &mut procs, &mut FakePending::default(), &mut |_| {}).expect("install");
 
-    let wanted = format!("stop {}", root.join("plith.exe").display());
+    let wanted = format!("stop under {} staged=true", root.display());
     assert!(procs.events.contains(&wanted), "{:?}", procs.events);
     assert_three_files(&root);
 }

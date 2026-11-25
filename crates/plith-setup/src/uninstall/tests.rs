@@ -54,11 +54,10 @@ fn uninstall_removes_link_key_and_cert() {
     assert_eq!(read_installed(&places.places), None);
     assert_eq!(has_cert(scope, Store::Root, PLITH_THUMBPRINT), Ok(false));
     assert!(procs.events[0] == "close", "Plith is closed first");
-    assert!(
-        procs
-            .events
-            .iter()
-            .any(|event| event.ends_with("plith-osd.exe"))
+    let sweep = format!("stop under {}", temp.root().display());
+    assert_eq!(
+        procs.events[1], sweep,
+        "everything under the root is stopped"
     );
 }
 

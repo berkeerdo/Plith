@@ -181,23 +181,24 @@ fn remove_staged(staged: &[PathBuf]) {
     }
 }
 
-/// Closes the running app, then ends anything still running from the two exes' own paths.
+/// Closes the running app, then ends everything still running from under `root`: a Plith that
+/// ignored the close, the helper, and what an old WPF app left behind (its drop catcher keeps
+/// running after the app is gone and would hold its files).
 pub(crate) fn close_running(
     root: &Path,
     procs: &mut dyn Processes,
     log: &mut dyn FnMut(String),
 ) -> Result<(), String> {
     log("closing Plith".to_string());
-    // A Plith that ignores the close request is ended by its exact path below.
+    // A Plith that ignores the close request is ended by the sweep below.
     if let Err(reason) = procs.close_plith() {
         log(format!("Plith did not close politely: {reason}"));
     }
-    for relative in &INSTALLED_FILES[..2] {
-        let exe = root.join(relative);
-        log(format!("stopping {}", exe.display()));
-        procs.stop_by_path(&exe)?;
-    }
-    Ok(())
+    log(format!(
+        "stopping everything running from {}",
+        root.display()
+    ));
+    procs.stop_under(root)
 }
 
 /// Renames each `.new` over its target. If one fails, the file is named, the `.new` files not
