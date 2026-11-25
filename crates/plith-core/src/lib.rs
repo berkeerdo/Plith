@@ -24,6 +24,7 @@ pub mod plays;
 pub mod scene;
 pub mod scroll;
 pub mod settings;
+pub mod setup;
 pub mod shapes;
 pub mod sheet;
 pub mod shelf;
