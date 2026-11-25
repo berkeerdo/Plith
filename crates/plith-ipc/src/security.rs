@@ -48,6 +48,17 @@ pub fn own_integrity_above_medium() -> Result<bool, String> {
         .map_err(|e| format!("{e:?}"))
 }
 
+/// Whether process `pid` runs above medium integrity.
+///
+/// # Errors
+/// The text says why the process or its token could not be read.
+#[cfg(windows)]
+pub fn process_integrity_above_medium(pid: u32) -> Result<bool, String> {
+    token::process_token_facts(pid)
+        .map(|facts| is_above_medium(facts.integrity_rid))
+        .map_err(|e| format!("{e:?}"))
+}
+
 /// The string form of the current user's SID, such as `S-1-5-21-...`.
 ///
 /// # Errors

@@ -50,8 +50,13 @@ impl App {
         }
     }
 
-    /// Starts the installed app from this medium process, never elevated.
+    /// Starts the installed app from this medium process. An elevated window refuses: Plith is
+    /// never started elevated.
     fn start_plith(&self) {
+        if self.elevated {
+            self.log("not starting Plith: this setup runs elevated");
+            return;
+        }
         let Some(root) = &self.root else {
             self.log("cannot start Plith: no install folder");
             return;
@@ -61,7 +66,9 @@ impl App {
         }
     }
 
-    /// Turns the Run value on (pointing at the installed app) or off.
+    /// Turns the Run value on (pointing at the installed app) or off. It goes to this process's
+    /// `HKCU`, which is the signed-in user's also in a window that stayed elevated (an elevated
+    /// token of the same user keeps the same profile hive).
     fn set_autostart(&self, on: bool) {
         let result = match &self.root {
             Some(root) => {

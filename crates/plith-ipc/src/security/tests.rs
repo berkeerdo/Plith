@@ -30,3 +30,13 @@ fn only_levels_above_medium_count_as_above_medium() {
 fn own_integrity_can_be_read() {
     assert!(super::own_integrity_above_medium().is_ok());
 }
+
+#[cfg(windows)]
+#[test]
+fn a_process_reads_like_its_own_integrity() {
+    let pid = std::process::id();
+    assert_eq!(
+        super::process_integrity_above_medium(pid),
+        super::own_integrity_above_medium()
+    );
+}

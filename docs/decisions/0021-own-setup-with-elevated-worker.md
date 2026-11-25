@@ -26,3 +26,7 @@ and uninstall (`--uninstall`) are modes of the same file. The Windows helpers it
   and on the update download.
 - The setup drawing code is ours to maintain; there is no installer framework to lean on.
 - Elevation as another admin account is not covered in this part; it is measured before release.
+- Addendum (final review): a setup window that was itself started elevated (WPF's update button
+  uses `runas`, or "Run as administrator") starts itself again through the desktop shell
+  (`IShellWindows` desktop view, `IShellDispatch2::ShellExecute`), which runs at medium, and
+  exits. If that fails, or the shell is elevated too, the window stays but never starts Plith.

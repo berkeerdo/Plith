@@ -1,16 +1,18 @@
-//! The installer window at medium integrity: it shows the screens, starts the elevated worker
-//! through the pump, and does the effects that belong to the user (the Run value, starting
-//! Plith, the user's data).
+//! The installer window, at medium integrity (an elevated start hands over to a medium copy,
+//! see [`medium`]): it shows the screens, starts the elevated worker through the pump, and does
+//! the effects that belong to the user (the Run value, starting Plith, the user's data).
 //!
 //! `Flow` (in `plith-core`) owns the screen state; this module only feeds it clicks, keys and
 //! worker reports and carries out what it asks for.
 
 mod art;
 mod effects;
+mod medium;
 mod pump;
 
 use crate::register::{Places, read_installed};
 use crate::worker::install_root;
+use medium::Start;
 use plith_core::lang::{Lang, resolve};
 use plith_core::settings::LangChoice;
 use plith_core::setup::{
@@ -56,6 +58,8 @@ struct App {
     shown: Option<Screen>,
     /// The install folder, when Windows names it.
     root: Option<PathBuf>,
+    /// The window runs elevated (the medium hand-over failed): Plith is never started from it.
+    elevated: bool,
     /// The process exit code: 1 once something broke.
     exit: i32,
 }
@@ -100,23 +104,49 @@ fn find_situation(own: Version, root: Option<&Path>) -> Situation {
     situation(own, entry.as_deref(), has_wpf)
 }
 
-/// Runs the installer window for `mode` until it is closed and returns the exit code.
+/// Runs the installer window for `mode` until it is closed and returns the exit code. An
+/// elevated start hands over to a medium copy first (see [`medium`]); the single-instance mutex
+/// is taken only after that, so it never blocks the copy.
 pub fn run(mode: &Mode) -> i32 {
-    let Some(_single) = SingleInstance::take() else {
-        return 0;
-    };
     let ole = init_ui_thread().is_ok();
-    let code = show(mode);
+    let code = match medium::ensure() {
+        Start::Relaunched => {
+            if let Some(log) = open_log() {
+                log.line("setup started elevated; started again at medium through the shell");
+            }
+            0
+        }
+        start => match SingleInstance::take() {
+            Some(_single) => show(mode, start),
+            None => 0,
+        },
+    };
     if ole {
         uninit_ui_thread();
     }
     code
 }
 
-fn show(mode: &Mode) -> i32 {
-    let log = data_dir()
+/// `setup.log` in the user's data folder.
+fn open_log() -> Option<LogFile> {
+    data_dir()
         .ok()
-        .and_then(|dir| LogFile::open_at(&dir.join("setup.log")).ok());
+        .and_then(|dir| LogFile::open_at(&dir.join("setup.log")).ok())
+}
+
+fn show(mode: &Mode, start: Start) -> i32 {
+    let log = open_log();
+    let elevated = match start {
+        Start::Elevated(reason) => {
+            if let Some(log) = &log {
+                log.line(&format!(
+                    "setup runs elevated ({reason}); it will not start Plith"
+                ));
+            }
+            true
+        }
+        Start::Medium | Start::Relaunched => false,
+    };
     let root = install_root().ok();
     let own = Version::parse(env!("CARGO_PKG_VERSION")).unwrap_or(Version::new(0, 0, 0));
     // The Run value as found: an update or repair keeps what the user chose.
@@ -139,6 +169,7 @@ fn show(mode: &Mode) -> i32 {
         targets: Vec::new(),
         shown: None,
         root,
+        elevated,
         exit: 0,
     }));
     if let Err(text) = open(&app, &inbox) {
