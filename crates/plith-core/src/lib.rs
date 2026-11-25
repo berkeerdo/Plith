@@ -35,5 +35,6 @@ pub mod topmost;
 pub mod trace;
 pub mod tray;
 pub mod tuning;
+pub mod update;
 pub mod visible;
 pub mod weather;

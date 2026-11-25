@@ -77,6 +77,7 @@ fn applying_the_current_value_changes_nothing() {
         SettingChange::Osd(current.osd),
         SettingChange::Flyout(current.flyout),
         SettingChange::Theme(current.theme),
+        SettingChange::UpdateCheck(current.update_check),
     ];
     for change in same {
         let mut s = Settings::default();
@@ -92,4 +93,12 @@ fn a_change_is_stored() {
     apply_change(&mut s, SettingChange::City("Izmir".to_string()));
     assert!(!s.osd);
     assert_eq!(s.city, "Izmir");
+}
+
+#[test]
+fn update_check_change_flips_the_service() {
+    let mut s = Settings::default();
+    let effects = apply_change(&mut s, SettingChange::UpdateCheck(false));
+    assert_eq!(effects, only(|e| e.update = true));
+    assert!(!s.update_check);
 }

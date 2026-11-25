@@ -34,6 +34,8 @@ pub enum SettingChange {
     Flyout(FlyoutPref),
     /// The colour theme.
     Theme(Theme),
+    /// The daily update check on or off.
+    UpdateCheck(bool),
 }
 
 /// What a change makes the running app redo.
@@ -52,6 +54,8 @@ pub struct Effects {
     pub osd: bool,
     /// Switch the palette; the page bitmaps are redrawn in it.
     pub theme: bool,
+    /// Start or stop the update check service.
+    pub update: bool,
 }
 
 /// Stores `new` in `slot` and returns whether it differed.
@@ -86,6 +90,7 @@ pub fn apply_change(settings: &mut Settings, change: SettingChange) -> Effects {
         SettingChange::Osd(v) => effects.osd = set(&mut settings.osd, v),
         SettingChange::Flyout(v) => effects.osd = set(&mut settings.flyout, v),
         SettingChange::Theme(v) => effects.theme = set(&mut settings.theme, v),
+        SettingChange::UpdateCheck(v) => effects.update = set(&mut settings.update_check, v),
     }
     effects
 }
