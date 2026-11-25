@@ -318,3 +318,38 @@ fn install_removes_only_older_setups_by_their_own_names() {
     assert!(fake.dir.join("other.txt").exists());
     let _ = std::fs::remove_dir_all(&fake.dir);
 }
+
+#[test]
+fn updates_folder_junction_is_refused() {
+    let fake = Fake::new("junction");
+    let data = fake.dir.join("data");
+    let elsewhere = fake.dir.join("elsewhere");
+    std::fs::create_dir_all(&data).unwrap();
+    std::fs::create_dir_all(&elsewhere).unwrap();
+    let link = data.join("updates");
+    let made = std::process::Command::new("cmd")
+        .arg("/C")
+        .arg("mklink")
+        .arg("/J")
+        .arg(&link)
+        .arg(&elsewhere)
+        .output()
+        .is_ok_and(|out| out.status.success());
+    if !made {
+        eprintln!("no junction without privileges here, skipped");
+        let _ = std::fs::remove_dir_all(&fake.dir);
+        return;
+    }
+    let mut backend = Arc::try_unwrap(fake).ok().unwrap();
+    let root = backend.dir.clone();
+    backend.dir = link;
+    let fake = Arc::new(backend);
+    let (service, feed, _) = start(&fake, settings(false));
+    service.install(release());
+    let events = finish(service, &feed);
+    assert_eq!(events.last(), Some(&UpdateEvent::Row(UpdateRow::Failed)));
+    assert_eq!(fake.launched.load(Ordering::SeqCst), 0);
+    assert!(!elsewhere.join("Plith-Setup-0.5.0.exe").exists());
+    let _ = std::fs::remove_dir(&fake.dir);
+    let _ = std::fs::remove_dir_all(&root);
+}

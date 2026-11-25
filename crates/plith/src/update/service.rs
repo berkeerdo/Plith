@@ -159,9 +159,31 @@ fn install(job: &Job, release: &Release) {
 /// The updates folder, cleared of older setups, and the path the new one goes to.
 fn prepare(job: &Job, version: Version) -> Result<std::path::PathBuf, String> {
     let dir = job.backend.updates_dir()?;
+    let parent = dir.parent().map(Path::to_path_buf);
+    let check = || {
+        parent
+            .iter()
+            .chain(std::iter::once(&dir))
+            .try_for_each(|path| refuse_reparse(path))
+    };
+    check()?;
     std::fs::create_dir_all(&dir).map_err(|e| format!("folder: {e}"))?;
+    check()?;
     remove_older(&dir, version);
     Ok(dir.join(setup_name(version)))
+}
+
+/// Refuses a folder that is a reparse point (a junction or symlink could send the download and
+/// the launch somewhere else). A missing folder is fine: it is created next.
+fn refuse_reparse(path: &Path) -> Result<(), String> {
+    use std::os::windows::fs::MetadataExt;
+    const REPARSE_POINT: u32 = 0x400;
+    match std::fs::symlink_metadata(path) {
+        Ok(meta) if meta.file_attributes() & REPARSE_POINT != 0 => {
+            Err("the updates folder is a link, refused".to_string())
+        }
+        _ => Ok(()),
+    }
 }
 
 fn setup_name(version: Version) -> String {
