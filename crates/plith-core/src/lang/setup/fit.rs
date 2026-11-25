@@ -48,10 +48,16 @@ pub fn places(lang: Lang) -> Vec<Place> {
                 (TextStyle::Label, BUTTON_W)
             }
             S::Autostart | S::Close | S::DeleteData => (TextStyle::Label, CHECK_W),
-            S::DoneTitle | S::ErrorTitle | S::NewerTitle | S::UninstallDone => {
-                (TextStyle::Strong, LINE_W)
-            }
-            _ => (TextStyle::Body, LINE_W),
+            S::LeadStart
+            | S::LeadRunning
+            | S::DoneTitle
+            | S::ErrorTitle
+            | S::NewerTitle
+            | S::UpdateLead
+            | S::UninstallLead
+            | S::UninstallDone => (TextStyle::Heading, LINE_W),
+            S::SubUac | S::DoneSub => (TextStyle::Strong, LINE_W),
+            S::UacCancelled => (TextStyle::Body, LINE_W),
         };
         out.push(place(format!("setup {id:?}"), text, style, dip));
     }
