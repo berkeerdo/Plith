@@ -354,16 +354,16 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 
 ### Task 12: real run on this PC (Berke's yes, his UAC click)
 
-- [ ] Step 1: ask Berke; record the state first: `Program Files\Plith` listing, Apps entry, Run
+- [x] Step 1: ask Berke; record the state first: `Program Files\Plith` listing, Apps entry, Run
   value, cert stores.
-- [ ] Step 2: run `release\Plith-Setup-0.4.0.exe`: over WPF 0.3.3. Check: WPF files gone, three
+- [x] Step 2: run `release\Plith-Setup-0.4.0.exe`: over WPF 0.3.3. Check: WPF files gone, three
   files present, Apps entry `0.4.0`, link present, Run value to the new path, `plith.log` shows
   the helper connected and `remote false`/integrity medium for `plith.exe`.
-- [ ] Step 3: run it again: repair path, same end state.
-- [ ] Step 4: uninstall from Settings > Apps: no files (except `setup\` until reboot), no entry,
+- [x] Step 3: run it again: repair path, same end state.
+- [x] Step 4: uninstall from Settings > Apps: no files (except `setup\` until reboot), no entry,
   no link, no certificate in Root and TrustedPublisher, user data kept.
-- [ ] Step 5: reinstall; then rerun `scripts/install-osd.ps1` only if a dev helper is needed.
-- [ ] Step 6: record in this plan's log and in `quality/2026-11-xx-setup-first-run.md`; commit
+- [x] Step 5: reinstall; then rerun `scripts/install-osd.ps1` only if a dev helper is needed (not needed).
+- [x] Step 6: record in this plan's log and in `quality/2026-11-xx-setup-first-run.md`; commit
   `docs: setup first run record`.
 
 ### Task 13: WPF settings import
@@ -468,3 +468,9 @@ Move `crates/plith/src/log.rs` (156 lines), `locale.rs` (82), `autostart.rs` (21
 
 ## Progress log
 (written while the plan runs, never back-filled)
+
+- 2026-11-26 Task 12 done: seven real runs (over WPF, repair, uninstall, reinstall, three
+  repairs), two bugs found and fixed (`f66c80a` star marker in the pending list, `5625860` kill
+  refused while exiting). Record: `docs/quality/2026-11-25-setup-first-run.md`. Uninstall was run
+  with the Apps entry's own command, not clicked from Settings. Tasks 1 to 11 and 13 to 16 and the
+  final fix wave were finished earlier; their record is the branch log and the SDD ledger.
