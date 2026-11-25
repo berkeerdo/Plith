@@ -12,6 +12,7 @@ mod sheet_side;
 mod shelf;
 mod state;
 mod tray_side;
+mod update_side;
 mod weather_link;
 mod wire;
 
@@ -373,6 +374,7 @@ fn start_sides(
 ) {
     start_osd(launch, log, shell, app, settings);
     tray_side::start(launch, log, shell, app, settings);
+    update_side::start(launch, log, shell, app, settings);
     attach_settings_side(launch, log, shell, app, monitor);
 }
 

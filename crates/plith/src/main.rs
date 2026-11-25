@@ -14,6 +14,11 @@ mod plays_file;
 mod services;
 mod settings_file;
 mod shelf_file;
+#[allow(
+    dead_code,
+    reason = "the settings rows and the tray notice of the next task call the rest of the service"
+)]
+mod update;
 
 use plith_core::launch::Launch;
 

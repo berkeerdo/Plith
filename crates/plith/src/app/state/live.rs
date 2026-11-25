@@ -118,6 +118,13 @@ impl App {
         if apply {
             self.apply_settings(&settings, effects);
         }
+        self.queue_save(settings);
+        self.refresh_sheet();
+    }
+
+    /// Queues `settings` for the saver, keeping the file's look and theme where a command-line
+    /// flag overrides them for this run.
+    pub(super) fn queue_save(&self, settings: Settings) {
         if let Some(saver) = &self.saver {
             let mut saved = settings;
             if let Some(look) = self.file_look {
@@ -128,7 +135,6 @@ impl App {
             }
             saver.save(saved);
         }
-        self.refresh_sheet();
     }
 
     /// Applies `settings` after a change with `effects` (see `apply_change`): the feed, then
@@ -158,6 +164,11 @@ impl App {
         }
         if effects.osd {
             self.apply_osd(settings);
+        }
+        if effects.update
+            && let Some(update) = &self.update
+        {
+            update.enable(settings.update_check);
         }
         // The pages' lists name colour roles, not colours: the render thread draws them again
         // in the new palette. The settings window takes the theme from its facts on refresh.

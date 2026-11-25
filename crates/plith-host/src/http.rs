@@ -1,18 +1,26 @@
-//! A blocking HTTPS GET over `WinHTTP`. This is the only file that touches `WinHTTP`.
+//! A blocking HTTPS GET over `WinHTTP`. This file and its `download` child are the only code
+//! that touches `WinHTTP`.
+
+mod download;
 
 use std::ffi::c_void;
 use windows::Win32::Networking::WinHttp::{
-    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_FLAG_NUMBER,
-    WINHTTP_QUERY_STATUS_CODE, WinHttpCloseHandle, WinHttpConnect, WinHttpOpen, WinHttpOpenRequest,
-    WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse, WinHttpSendRequest,
-    WinHttpSetTimeouts,
+    WINHTTP_ACCESS_TYPE_AUTOMATIC_PROXY, WINHTTP_FLAG_SECURE, WINHTTP_QUERY_CONTENT_LENGTH,
+    WINHTTP_QUERY_FLAG_NUMBER, WINHTTP_QUERY_STATUS_CODE, WinHttpCloseHandle, WinHttpConnect,
+    WinHttpOpen, WinHttpOpenRequest, WinHttpQueryHeaders, WinHttpReadData, WinHttpReceiveResponse,
+    WinHttpSendRequest, WinHttpSetTimeouts,
 };
 use windows::core::{PCWSTR, w};
+
+pub use download::download;
 
 /// Every phase (resolve, connect, send, receive) may take this long.
 const TIMEOUT_MS: i32 = 10_000;
 /// A body larger than this is refused.
 const MAX_BODY: usize = 2 * 1024 * 1024;
+
+/// The error text of a 404 reply, which a caller may treat as "nothing there yet".
+pub const NOT_FOUND: &str = "http status 404";
 
 /// A `WinHTTP` handle, closed on drop.
 struct Handle(*mut c_void);
@@ -54,14 +62,18 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-/// Fetches `url` and returns the body as text.
-///
-/// # Errors
-///
-/// Returns a short message for a non-HTTPS URL, a failed call, a status other than 200 or a body
-/// over 2 MB.
-pub fn get(url: &str) -> Result<String, String> {
+/// The handles of one request; the fields drop in order: request, connection, session.
+struct Exchange {
+    request: Handle,
+    _connection: Handle,
+    _session: Handle,
+}
+
+/// Sends a GET for `url` (with an `Accept` header when given), receives the response and checks
+/// for status 200. `WinHTTP` follows redirects, but never one from HTTPS to plain HTTP.
+fn open(url: &str, accept: Option<&str>) -> Result<Exchange, String> {
     let (host, port, path) = split(url)?;
+    let headers = accept.map(|accept| wide(&format!("Accept: {accept}\r\n")));
     // SAFETY: plain WinHTTP calls; every handle is owned by a `Handle` and closed on drop, and
     // the wide strings outlive the calls that read them.
     unsafe {
@@ -95,60 +107,87 @@ pub fn get(url: &str) -> Result<String, String> {
             ),
             "request",
         )?;
-        WinHttpSendRequest(request.0, None, None, 0, 0, 0).map_err(|e| format!("send: {e}"))?;
+        WinHttpSendRequest(request.0, headers.as_deref(), None, 0, 0, 0)
+            .map_err(|e| format!("send: {e}"))?;
         WinHttpReceiveResponse(request.0, std::ptr::null_mut())
             .map_err(|e| format!("receive: {e}"))?;
-        let status = status_code(&request)?;
+        let status = number_header(&request, WINHTTP_QUERY_STATUS_CODE).unwrap_or(0);
         if status != 200 {
             return Err(format!("http status {status}"));
         }
-        read_body(&request)
+        Ok(Exchange {
+            request,
+            _connection: connection,
+            _session: session,
+        })
     }
 }
 
-/// # Safety
+/// Fetches `url` and returns the body as text.
 ///
-/// `request` must hold a request whose response has been received.
-unsafe fn status_code(request: &Handle) -> Result<u32, String> {
-    let mut status = 0u32;
+/// # Errors
+///
+/// Returns a short message for a non-HTTPS URL, a failed call, a status other than 200 or a body
+/// over 2 MB.
+pub fn get(url: &str) -> Result<String, String> {
+    get_with_accept(url, None)
+}
+
+/// Like [`get`], with an `Accept` header (the GitHub API wants one).
+///
+/// # Errors
+///
+/// As [`get`]; a 404 reads exactly [`NOT_FOUND`].
+pub fn get_with_accept(url: &str, accept: Option<&str>) -> Result<String, String> {
+    let exchange = open(url, accept)?;
+    read_body(&exchange.request)
+}
+
+/// A numeric response header, if the response carries it.
+fn number_header(request: &Handle, header: u32) -> Option<u32> {
+    let mut value = 0u32;
     let mut size = 4u32;
-    // SAFETY: `status` is a 4-byte buffer and `size` says so.
+    // SAFETY: `value` is a 4-byte buffer and `size` says so; the response has been received.
     unsafe {
         WinHttpQueryHeaders(
             request.0,
-            WINHTTP_QUERY_STATUS_CODE | WINHTTP_QUERY_FLAG_NUMBER,
+            header | WINHTTP_QUERY_FLAG_NUMBER,
             PCWSTR::null(),
-            Some((&raw mut status).cast()),
+            Some((&raw mut value).cast()),
             &raw mut size,
             std::ptr::null_mut(),
         )
     }
-    .map_err(|e| format!("status: {e}"))?;
-    Ok(status)
+    .ok()?;
+    Some(value)
 }
 
-/// # Safety
-///
-/// `request` must hold a request whose response has been received.
-unsafe fn read_body(request: &Handle) -> Result<String, String> {
+/// Reads one chunk into `chunk`; 0 means the body ended.
+fn read_chunk(request: &Handle, chunk: &mut [u8]) -> Result<usize, String> {
+    let mut read = 0u32;
+    // SAFETY: the buffer is `chunk.len()` bytes and `read` receives the count written.
+    unsafe {
+        WinHttpReadData(
+            request.0,
+            chunk.as_mut_ptr().cast(),
+            u32::try_from(chunk.len()).unwrap_or(u32::MAX),
+            &raw mut read,
+        )
+    }
+    .map_err(|e| format!("read: {e}"))?;
+    Ok(read as usize)
+}
+
+/// Reads the whole body of a request whose response has been received.
+fn read_body(request: &Handle) -> Result<String, String> {
     let mut body = Vec::new();
     let mut chunk = [0u8; 8192];
     loop {
-        let mut read = 0u32;
-        // SAFETY: the buffer is `chunk.len()` bytes and `read` receives the count written.
-        unsafe {
-            WinHttpReadData(
-                request.0,
-                chunk.as_mut_ptr().cast(),
-                u32::try_from(chunk.len()).unwrap_or(8192),
-                &raw mut read,
-            )
-        }
-        .map_err(|e| format!("read: {e}"))?;
+        let read = read_chunk(request, &mut chunk)?;
         if read == 0 {
             break;
         }
-        body.extend_from_slice(&chunk[..read as usize]);
+        body.extend_from_slice(&chunk[..read]);
         if body.len() > MAX_BODY {
             return Err("body too large".to_string());
         }

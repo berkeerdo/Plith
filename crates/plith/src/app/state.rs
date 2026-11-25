@@ -8,6 +8,7 @@ use super::shelf::{SHELF_TIMER, ShelfHost};
 use super::weather_link::WeatherWiring;
 use super::wire::raised_line;
 use crate::osd::OsdSink;
+use crate::update::UpdateLink;
 use plith_core::demo::DemoStep;
 use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
@@ -102,6 +103,8 @@ pub struct App {
     sheet: SheetHost,
     /// The tray icon's menu captions and its way to quit.
     tray: TrayHost,
+    /// The update service of a normal run.
+    update: Option<UpdateLink>,
 }
 
 impl App {
@@ -137,6 +140,7 @@ impl App {
             saver: None,
             sheet: SheetHost::default(),
             tray: TrayHost::default(),
+            update: None,
         }
     }
 
@@ -259,6 +263,7 @@ impl App {
                 }
                 self.drain_sheet();
                 self.drain_shelf_load();
+                self.drain_update();
             }
             ShellEvent::Timer(id) => {
                 if let Some(feed) = &mut self.feed {
@@ -282,6 +287,7 @@ impl App {
 mod live;
 mod sheet;
 mod tray;
+mod update;
 
 pub use live::OsdControl;
 use sheet::{CARET_TIMER, SheetHost};
