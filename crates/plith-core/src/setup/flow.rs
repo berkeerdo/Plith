@@ -34,6 +34,8 @@ pub struct Flow {
     delete_data: bool,
     /// The start with Windows tick the done screen starts with.
     autostart: bool,
+    /// Started by the update check: a finished install starts the new Plith by itself.
+    update: bool,
 }
 
 /// The step an error is attributed to when the worker said nothing: the first of an install,
@@ -86,6 +88,7 @@ impl Flow {
             job,
             delete_data: false,
             autostart,
+            update: matches!(mode, Mode::Update { .. }),
         }
     }
 
@@ -190,7 +193,12 @@ impl Flow {
                 Job::Install => {
                     let on = self.autostart;
                     self.screen = Screen::Done { autostart: on };
-                    vec![Effect::SetAutostart(on)]
+                    let mut effects = vec![Effect::SetAutostart(on)];
+                    // An update was asked for from Plith: it comes back without a click.
+                    if self.update {
+                        effects.push(Effect::StartPlith);
+                    }
+                    effects
                 }
                 Job::Uninstall => {
                     self.screen = Screen::Uninstalled;

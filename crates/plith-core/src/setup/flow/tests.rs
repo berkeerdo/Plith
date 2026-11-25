@@ -345,12 +345,29 @@ fn assert_tick(got: (Screen, Vec<Effect>), on: bool) {
 fn update_keeps_autostart_off_when_no_run_value() {
     let from = Version::new(0, 3, 9);
     let situation = Situation::Upgrade { from };
-    assert_tick(finished(&Mode::Update { from }, situation, None), false);
+    for (run, on) in [(None, false), (Some(true), true)] {
+        let (screen, effects) = finished(&Mode::Update { from }, situation, run);
+        assert_eq!(screen, Screen::Done { autostart: on });
+        assert_eq!(effects[0], Effect::SetAutostart(on));
+    }
     assert_tick(finished(&Mode::Install, situation, Some(false)), false);
-    assert_tick(
-        finished(&Mode::Update { from }, situation, Some(true)),
-        true,
+}
+
+#[test]
+fn update_mode_starts_plith_when_finished() {
+    // The update spec: the installer closes Plith, installs, and starts the new one.
+    let from = Version::new(0, 3, 9);
+    let situation = Situation::Upgrade { from };
+    let (screen, effects) = finished(&Mode::Update { from }, situation, Some(true));
+    assert_eq!(effects, [Effect::SetAutostart(true), Effect::StartPlith]);
+    assert_eq!(
+        screen,
+        Screen::Done { autostart: true },
+        "then the done screen"
     );
+    // An install run by hand over an older version waits for the button.
+    let (_, effects) = finished(&Mode::Install, situation, Some(true));
+    assert_eq!(effects, [Effect::SetAutostart(true)]);
 }
 
 #[test]
