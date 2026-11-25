@@ -2,7 +2,8 @@
 //! `Program Files`, a real process or the registry.
 
 use super::acl::{self, Ace, WRITE_MASK};
-use super::{StepError, install_checked, install_files};
+use super::pending::{PendingDeletes, drop_pending_under};
+use super::{Seams, StepError, install_checked};
 use crate::payload::Payload;
 use crate::processes::Processes;
 use std::fs::{self, OpenOptions};
@@ -82,10 +83,169 @@ impl Processes for FakeProcesses {
     }
 }
 
+/// An in-memory restart delete list.
+#[derive(Default)]
+struct FakePending {
+    list: Option<Vec<String>>,
+    reads: u32,
+    writes: Vec<Option<Vec<String>>>,
+}
+
+impl PendingDeletes for FakePending {
+    fn read(&mut self) -> Result<Option<Vec<String>>, String> {
+        self.reads += 1;
+        Ok(self.list.clone())
+    }
+
+    fn write(&mut self, entries: Option<&[String]>) -> Result<(), String> {
+        self.list = entries.map(<[String]>::to_vec);
+        self.writes.push(self.list.clone());
+        Ok(())
+    }
+}
+
+/// The install with the ACL check off (a temp root) and a fake restart delete list.
+fn install_with(
+    root: &Path,
+    procs: &mut FakeProcesses,
+    pending: &mut FakePending,
+    log: &mut dyn FnMut(String),
+) -> Result<(), StepError> {
+    let mut seams = Seams {
+        check_acl: false,
+        pending,
+    };
+    install_checked(root, &PAYLOAD, SETUP_EXE, procs, log, &mut seams)
+}
+
 fn run(root: &Path) -> Result<Vec<String>, StepError> {
     let mut procs = FakeProcesses::new(root);
-    install_files(root, &PAYLOAD, SETUP_EXE, &mut procs, &mut |_| {})?;
+    install_with(root, &mut procs, &mut FakePending::default(), &mut |_| {})?;
     Ok(procs.events)
+}
+
+fn strings(items: &[&str]) -> Vec<String> {
+    items.iter().map(|item| (*item).to_string()).collect()
+}
+
+#[test]
+fn pending_deletes_under_root_are_dropped() {
+    let root = Path::new(r"C:\Program Files\Plith");
+    let entries = strings(&[
+        r"\??\C:\program files\PLITH\setup\plith-setup.exe",
+        "",
+        r"\??\C:\Program Files\Plith\old.dll",
+        r"\??\C:\Program Files\Plith\new.dll",
+        r"\??\C:\Program Files\Other\x.tmp",
+        "",
+        r"\??\C:\Program Files\Plith2\x",
+        "",
+    ]);
+    assert_eq!(
+        drop_pending_under(&entries, root),
+        strings(&[
+            r"\??\C:\Program Files\Plith\old.dll",
+            r"\??\C:\Program Files\Plith\new.dll",
+            r"\??\C:\Program Files\Other\x.tmp",
+            "",
+            r"\??\C:\Program Files\Plith2\x",
+            "",
+        ])
+    );
+}
+
+#[test]
+fn the_root_itself_is_dropped_and_the_multi_sz_roundtrips() {
+    use super::pending::{decode, encode};
+    let root = Path::new(r"C:\Program Files\Plith");
+    let entries = strings(&[
+        r"\??\C:\Program Files\Plith",
+        "",
+        r"\??\D:\a",
+        "!\\??\\D:\\b",
+    ]);
+    assert_eq!(decode(&encode(&entries)), entries);
+    assert_eq!(
+        drop_pending_under(&entries, root),
+        strings(&[r"\??\D:\a", "!\\??\\D:\\b"])
+    );
+    assert!(decode(&encode(&[])).is_empty());
+}
+
+#[test]
+fn pending_list_empty_after_drop_removes_value() {
+    let temp = TempDir::new("pending-empty");
+    let root = temp.root();
+    let mut pending = FakePending {
+        list: Some(strings(&[
+            &format!(r"\??\{}\setup\plith-setup.exe", root.display()),
+            "",
+            &format!(r"\??\{}", root.display()),
+            "",
+        ])),
+        ..FakePending::default()
+    };
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut pending,
+        &mut |_| {},
+    )
+    .expect("install");
+    assert_eq!(pending.writes, [None], "the value is removed");
+}
+
+#[test]
+fn other_pending_deletes_stay_and_an_untouched_list_is_not_written() {
+    let temp = TempDir::new("pending-other");
+    let root = temp.root();
+    let other = strings(&[r"\??\C:\elsewhere\x.tmp", ""]);
+    let mut pending = FakePending {
+        list: Some(other.clone()),
+        ..FakePending::default()
+    };
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut pending,
+        &mut |_| {},
+    )
+    .expect("install");
+    assert!(pending.writes.is_empty());
+    assert_eq!(pending.list, Some(other));
+}
+
+#[test]
+fn install_cancels_pending_deletes_before_staging() {
+    let temp = TempDir::new("pending-order");
+    let root = temp.root();
+    let mut pending = FakePending {
+        list: Some(strings(&[
+            &format!(r"\??\{}\setup\plith-setup.exe", root.display()),
+            "",
+        ])),
+        ..FakePending::default()
+    };
+    let mut log = Vec::new();
+    install_with(
+        &root,
+        &mut FakeProcesses::new(&root),
+        &mut pending,
+        &mut |line| {
+            log.push(line);
+        },
+    )
+    .expect("install");
+    assert_eq!(pending.reads, 1);
+    let cancel = log
+        .iter()
+        .position(|line| line.contains("cancelling"))
+        .unwrap();
+    let first_write = log
+        .iter()
+        .position(|line| line.starts_with("writing"))
+        .unwrap();
+    assert!(cancel < first_write, "{log:?}");
 }
 
 fn assert_three_files(root: &Path) {
@@ -254,8 +414,20 @@ fn acl_problem_blocks_staging() {
     assert!(status.status.success(), "icacls failed");
     let mut procs = FakeProcesses::new(&root);
 
-    let error = install_checked(&root, &PAYLOAD, SETUP_EXE, &mut procs, &mut |_| {}, true)
-        .expect_err("a Users-writable root must stop the install");
+    let mut pending = FakePending::default();
+    let mut seams = Seams {
+        check_acl: true,
+        pending: &mut pending,
+    };
+    let error = install_checked(
+        &root,
+        &PAYLOAD,
+        SETUP_EXE,
+        &mut procs,
+        &mut |_| {},
+        &mut seams,
+    )
+    .expect_err("a Users-writable root must stop the install");
 
     assert!(error.reason.contains("S-1-5-32-545"), "{}", error.reason);
     assert!(leftover_new_files(&root).is_empty());
@@ -270,7 +442,7 @@ fn hung_plith_falls_back_to_kill() {
     let mut procs = FakeProcesses::new(&root);
     procs.hang = true;
 
-    install_files(&root, &PAYLOAD, SETUP_EXE, &mut procs, &mut |_| {}).expect("install");
+    install_with(&root, &mut procs, &mut FakePending::default(), &mut |_| {}).expect("install");
 
     let wanted = format!("stop {}", root.join("plith.exe").display());
     assert!(procs.events.contains(&wanted), "{:?}", procs.events);

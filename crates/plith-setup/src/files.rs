@@ -7,6 +7,7 @@
 
 mod acl;
 mod audit;
+mod pending;
 #[cfg(test)]
 mod tests;
 mod walk;
@@ -59,20 +60,30 @@ pub fn install_files(
     procs: &mut dyn Processes,
     log: &mut dyn FnMut(String),
 ) -> Result<(), StepError> {
-    let check_acl = acl::under_program_files(root);
-    install_checked(root, payload, setup_exe, procs, log, check_acl)
+    let mut seams = Seams {
+        check_acl: acl::under_program_files(root),
+        pending: &mut pending::SystemPending,
+    };
+    install_checked(root, payload, setup_exe, procs, log, &mut seams)
 }
 
-/// `install_files` with the ACL check forced on or off: the seam tests use, because the real
-/// answer depends on where `root` is.
+/// What tests replace in `install_files`: the ACL check (the real answer depends on where `root`
+/// is) and the restart delete list (the real one is in `HKLM`).
+struct Seams<'a> {
+    check_acl: bool,
+    pending: &'a mut dyn pending::PendingDeletes,
+}
+
+/// `install_files` with its seams given.
 fn install_checked(
     root: &Path,
     payload: &Payload,
     setup_exe: &[u8],
     procs: &mut dyn Processes,
     log: &mut dyn FnMut(String),
-    check_acl: bool,
+    seams: &mut Seams<'_>,
 ) -> Result<(), StepError> {
+    let check_acl = seams.check_acl;
     // Look before any write: a missing root is created (inside Program Files it inherits the
     // admin-only ACL) and then audited like an existing one; links and, when checked, non-admin
     // write access fail closed with nothing written.
@@ -83,6 +94,8 @@ fn install_checked(
         })?;
     }
     audit::audit(root, check_acl)?;
+    // A restart delete left by an uninstall would remove this install at the next boot.
+    pending::cancel_under(root, seams.pending, log)?;
     let items = [
         Item {
             relative: INSTALLED_FILES[0],
