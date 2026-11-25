@@ -19,18 +19,15 @@ impl Quit for QuitHandle {
 
 /// Shows the update balloon. A trait so tests need no window.
 pub trait Balloon {
-    /// Shows `title` and `body` over the tray icon.
-    fn show(&self, title: &str, body: &str);
+    /// Shows `title` and `body` over the tray icon; false when it was not sent (no icon).
+    fn show(&self, title: &str, body: &str) -> bool;
 }
 
 impl Balloon for TrayHandle {
-    fn show(&self, title: &str, body: &str) {
-        self.notice(title, body);
+    fn show(&self, title: &str, body: &str) -> bool {
+        self.notice(title, body)
     }
 }
-
-/// Names the reason the user must not be disturbed now, or `None`.
-type Busy = Box<dyn Fn() -> Option<&'static str>>;
 
 /// What the app keeps of the tray: the menu captions' handle, the balloon and the way out.
 #[derive(Default)]
@@ -38,21 +35,14 @@ pub struct TrayHost {
     handle: Option<TrayHandle>,
     quit: Option<Box<dyn Quit>>,
     balloon: Option<Box<dyn Balloon>>,
-    busy: Option<Busy>,
 }
 
 impl TrayHost {
-    /// Why the user is busy, or `None` (also when no check is wired).
-    pub(super) fn busy(&self) -> Option<&'static str> {
-        self.busy.as_ref().and_then(|busy| busy())
-    }
-
-    /// Shows the balloon; false when none is wired.
+    /// Shows the balloon; false when none is wired or it was not sent.
     pub(super) fn show_notice(&self, title: &str, body: &str) -> bool {
-        self.balloon.as_ref().is_some_and(|balloon| {
-            balloon.show(title, body);
-            true
-        })
+        self.balloon
+            .as_ref()
+            .is_some_and(|balloon| balloon.show(title, body))
     }
 }
 
@@ -67,15 +57,10 @@ impl App {
         };
     }
 
-    /// Wires the update balloon: `balloon` shows it, `busy` says whether the user must not be
-    /// disturbed right now (a game, a presentation).
-    pub fn attach_notice(
-        &mut self,
-        balloon: impl Balloon + 'static,
-        busy: impl Fn() -> Option<&'static str> + 'static,
-    ) {
+    /// Wires the update balloon. The service decides when to announce (it holds a notice back
+    /// while the user is busy); the app shows whatever notice it gets.
+    pub fn attach_notice(&mut self, balloon: impl Balloon + 'static) {
         self.tray.balloon = Some(Box::new(balloon));
-        self.tray.busy = Some(Box::new(busy));
     }
 
     /// A tray command: a left click and the first menu item open the settings window (the path

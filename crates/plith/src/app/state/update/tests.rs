@@ -62,15 +62,19 @@ impl Backend for Net {
     }
 }
 
-/// A balloon that records what it was asked to show.
-#[derive(Clone, Default)]
-struct Shown(Rc<RefCell<Vec<(String, String)>>>);
+/// A balloon that records what it was asked to show; `sent` is what it reports (false: no icon).
+#[derive(Clone)]
+struct Shown {
+    shown: Rc<RefCell<Vec<(String, String)>>>,
+    sent: bool,
+}
 
 impl Balloon for Shown {
-    fn show(&self, title: &str, body: &str) {
-        self.0
+    fn show(&self, title: &str, body: &str) -> bool {
+        self.shown
             .borrow_mut()
             .push((title.to_owned(), body.to_owned()));
+        self.sent
     }
 }
 
@@ -91,8 +95,8 @@ fn app(name: &str) -> App {
 }
 
 /// An app with a service over [`Net`] (the background check off: only commands run) and a
-/// balloon whose busy answer the test sets.
-fn wired(name: &str, busy: Option<&'static str>) -> (App, Shown, Arc<Counts>) {
+/// balloon that reports `sent`.
+fn wired(name: &str, sent: bool) -> (App, Shown, Arc<Counts>) {
     let mut app = app(name);
     let counts = Arc::new(Counts::default());
     let net = Net {
@@ -109,8 +113,11 @@ fn wired(name: &str, busy: Option<&'static str>) -> (App, Shown, Arc<Counts>) {
         seen: String::new(),
     };
     app.attach_update(UpdateLink::start_over(OWN, from, hooks, Box::new(net)));
-    let balloon = Shown::default();
-    app.attach_notice(balloon.clone(), move || busy);
+    let balloon = Shown {
+        shown: Rc::default(),
+        sent,
+    };
+    app.attach_notice(balloon.clone());
     (app, balloon, counts)
 }
 
@@ -146,7 +153,7 @@ fn without_a_service_the_row_is_current() {
 
 #[test]
 fn the_row_follows_the_service_into_the_sheet_facts() {
-    let (mut app, _, counts) = wired("row", None);
+    let (mut app, _, counts) = wired("row", true);
     app.check_update_now();
     settle(&mut app, ready);
     assert_eq!(app.sheet_facts().update, UpdateRow::Ready(NEWER));
@@ -155,11 +162,11 @@ fn the_row_follows_the_service_into_the_sheet_facts() {
 
 #[test]
 fn a_new_version_shows_one_balloon_in_the_users_language() {
-    let (mut app, balloon, counts) = wired("balloon", None);
+    let (mut app, balloon, counts) = wired("balloon", true);
     app.check_update_now();
     settle(&mut app, ready);
     assert_eq!(
-        *balloon.0.borrow(),
+        *balloon.shown.borrow(),
         vec![(
             "Plith 0.5.0 haz\u{131}r".to_owned(),
             "Kurmak i\u{e7}in t\u{131}kla".to_owned()
@@ -169,24 +176,24 @@ fn a_new_version_shows_one_balloon_in_the_users_language() {
     app.check_update_now();
     settle(&mut app, |_| counts.fetches.load(Ordering::SeqCst) == 2);
     app.drain_update();
-    assert_eq!(balloon.0.borrow().len(), 1);
+    assert_eq!(balloon.shown.borrow().len(), 1);
     assert!(log_of(&app, "balloon").contains("update: notice shown for 0.5.0"));
 }
 
 #[test]
-fn a_busy_user_gets_the_row_but_no_balloon() {
-    let (mut app, balloon, _) = wired("busy", Some("QUNS_RUNNING_D3D_FULL_SCREEN"));
+fn a_balloon_that_was_not_sent_is_logged_as_skipped() {
+    let (mut app, balloon, _) = wired("skipped", false);
     app.check_update_now();
     settle(&mut app, ready);
-    assert!(balloon.0.borrow().is_empty());
-    let log = log_of(&app, "busy");
-    assert!(log.contains("notice held back"), "{log}");
-    assert!(log.contains("QUNS_RUNNING_D3D_FULL_SCREEN"), "{log}");
+    assert_eq!(balloon.shown.borrow().len(), 1, "the app tried once");
+    let log = log_of(&app, "skipped");
+    assert!(log.contains("notice skipped: no tray icon"), "{log}");
+    assert!(!log.contains("notice shown"), "{log}");
 }
 
 #[test]
 fn clicking_the_balloon_installs_the_ready_version_once() {
-    let (mut app, _, counts) = wired("click", None);
+    let (mut app, _, counts) = wired("click", true);
     app.check_update_now();
     settle(&mut app, ready);
     app.on_event(ShellEvent::TrayNotice);
@@ -196,7 +203,7 @@ fn clicking_the_balloon_installs_the_ready_version_once() {
 
 #[test]
 fn the_about_install_button_starts_the_same_install() {
-    let (mut app, _, counts) = wired("install", None);
+    let (mut app, _, counts) = wired("install", true);
     app.check_update_now();
     settle(&mut app, ready);
     app.install_update();
@@ -205,7 +212,7 @@ fn the_about_install_button_starts_the_same_install() {
 
 #[test]
 fn a_balloon_click_with_nothing_found_installs_nothing() {
-    let (mut app, _, counts) = wired("nothing", None);
+    let (mut app, _, counts) = wired("nothing", true);
     app.on_event(ShellEvent::TrayNotice);
     // A later command proves the service saw the click first and did nothing.
     app.check_update_now();
@@ -215,7 +222,7 @@ fn a_balloon_click_with_nothing_found_installs_nothing() {
 
 #[test]
 fn a_row_change_redraws_the_open_sheet() {
-    let (mut app, _, _) = wired("redraw", None);
+    let (mut app, _, _) = wired("redraw", true);
     let before = app.sheet.refreshes;
     app.check_update_now();
     settle(&mut app, ready);

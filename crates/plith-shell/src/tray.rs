@@ -79,14 +79,18 @@ impl TrayHandle {
 
     /// Shows a balloon with `title` and `body` over the icon. A click on it arrives as
     /// `ShellEvent::TrayNotice`. Windows may hold the balloon back (focus assist); that is its
-    /// call, and a failure leaves nothing to do.
-    pub fn notice(&self, title: &str, body: &str) {
-        if let Some(inner) = current() {
-            let hwnd = hwnd_of(inner.visual.get());
-            if inner.tray.borrow().added {
-                notify::balloon(hwnd, title, body);
-            }
+    /// call, and a failure leaves nothing to do. Returns whether the balloon was sent, which
+    /// needs the icon in the taskbar.
+    #[must_use]
+    pub fn notice(&self, title: &str, body: &str) -> bool {
+        let Some(inner) = current() else {
+            return false;
+        };
+        if !inner.tray.borrow().added {
+            return false;
         }
+        notify::balloon(hwnd_of(inner.visual.get()), title, body);
+        true
     }
 }
 

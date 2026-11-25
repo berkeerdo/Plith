@@ -77,15 +77,9 @@ impl App {
         }
     }
 
-    /// The tray balloon for `version`, unless the user is busy right now (the service checked
-    /// when it found the release; this is the second look, at the moment of showing). The About
-    /// row shows the version either way.
+    /// The tray balloon for `version`. The service already held the notice back while the user
+    /// was busy and records `Seen` only when it sends one, so the app shows what it gets.
     fn announce_update(&self, version: Version) {
-        if let Some(reason) = self.tray.busy() {
-            self.log
-                .line(&format!("update: notice held back, user busy ({reason})"));
-            return;
-        }
         let lang = self.sheet_facts().lang;
         if self.tray.show_notice(
             &plith_core::tray::notice::title(version, lang),
@@ -93,6 +87,8 @@ impl App {
         ) {
             self.log
                 .line(&format!("update: notice shown for {version}"));
+        } else {
+            self.log.line("update: notice skipped: no tray icon");
         }
     }
 
