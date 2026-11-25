@@ -212,8 +212,10 @@ fn stop_pid(pid: u32, doomed: &dyn Fn(&str) -> bool) -> Result<(), String> {
             return Ok(());
         }
         if let Err(error) = TerminateProcess(process.0, 1) {
-            // It may have exited between the check and the kill.
-            if exited() {
+            // A process already inside ExitProcess refuses the kill with access denied before its
+            // handle is signaled (measured: the OSD, 10 ms after Plith's bye). Give it the same
+            // grace as a kill instead of failing the install.
+            if WaitForSingleObject(process.0, 5_000) == WAIT_OBJECT_0 {
                 return Ok(());
             }
             return Err(format!("cannot end process {pid}: {error}"));
