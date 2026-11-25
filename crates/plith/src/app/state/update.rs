@@ -14,12 +14,12 @@ impl App {
         self.update = Some(link);
     }
 
-    /// What the About update row shows: the service's last row, or the up to date state when
-    /// there is no service (a probing run).
+    /// What the About update row shows: the service's last row, or no claim when there is no
+    /// service (a probing run).
     pub(super) fn update_row(&self) -> UpdateRow {
         self.update
             .as_ref()
-            .map_or(UpdateRow::Current, UpdateLink::row)
+            .map_or(UpdateRow::Unknown, UpdateLink::row)
     }
 
     /// The About `DENETLE` button.

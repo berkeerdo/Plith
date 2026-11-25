@@ -62,6 +62,9 @@ pub enum LaunchError {
     BadSignature,
     /// The installer did not start (for example the user declined the UAC prompt).
     Failed(String),
+    /// The saved file is not where it was saved (a link on the way, a network path); starting
+    /// it is refused, and downloading again would end the same way.
+    Refused(String),
 }
 
 /// What the service takes from the outside world.
@@ -168,7 +171,8 @@ impl UpdateService {
     }
 
     /// Like [`Self::install`], for the newest release the service found itself (the About button
-    /// has only the version it shows).
+    /// has only the version it shows). With nothing found yet (after a restart) it checks first
+    /// and installs a newer release if there is one.
     pub fn install_ready(&self) {
         let _ = self.commands.send(Command::InstallReady);
     }

@@ -22,7 +22,7 @@ impl UpdateLink {
         Self {
             service,
             feed,
-            row: UpdateRow::Current,
+            row: UpdateRow::Unknown,
             notice: None,
         }
     }
@@ -40,7 +40,7 @@ impl UpdateLink {
         Self {
             service,
             feed,
-            row: UpdateRow::Current,
+            row: UpdateRow::Unknown,
             notice: None,
         }
     }

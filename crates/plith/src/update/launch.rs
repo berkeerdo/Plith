@@ -25,9 +25,10 @@ const SHOW_NORMAL: i32 = 1;
 
 /// Opens `setup` once with share mode read only, checks its signature through that handle,
 /// asks the handle where the file really is, refuses a place other than `setup`, and starts
-/// that final path (verb `open`, so the installer's manifest asks UAC) with `--update --from
-/// <own>` while the handle is still open: the file that was judged is the file that runs, even
-/// if a folder on the way was turned into a junction.
+/// that final path (verb `open`: the installer is `asInvoker`, so it starts at medium and asks
+/// UAC later, only for its worker) with `--update --from <own>` while the handle is still open:
+/// the file that was judged is the file that runs, even if a folder on the way was turned into a
+/// junction.
 pub(super) fn verify_and_start(setup: &Path, own: Version) -> Result<(), LaunchError> {
     let file = OpenOptions::new()
         .read(true)
@@ -40,7 +41,7 @@ pub(super) fn verify_and_start(setup: &Path, own: Version) -> Result<(), LaunchE
         Err(_) => return Err(LaunchError::BadSignature),
     }
     let actual = final_path(&file).map_err(LaunchError::Failed)?;
-    let run = judge_final_path(&actual, setup).map_err(LaunchError::Failed)?;
+    let run = judge_final_path(&actual, setup).map_err(LaunchError::Refused)?;
     let result = start(&run, own);
     drop(file);
     result.map_err(LaunchError::Failed)

@@ -143,10 +143,10 @@ fn log_of(app: &App, name: &str) -> String {
 }
 
 #[test]
-fn without_a_service_the_row_is_current() {
+fn without_a_service_the_row_claims_nothing() {
     let app = app("none");
-    assert_eq!(app.update_row(), UpdateRow::Current);
-    assert_eq!(app.sheet_facts().update, UpdateRow::Current);
+    assert_eq!(app.update_row(), UpdateRow::Unknown);
+    assert_eq!(app.sheet_facts().update, UpdateRow::Unknown);
     app.check_update_now();
     app.install_update();
 }
@@ -211,13 +211,20 @@ fn the_about_install_button_starts_the_same_install() {
 }
 
 #[test]
-fn a_balloon_click_with_nothing_found_installs_nothing() {
-    let (mut app, _, counts) = wired("nothing", true);
+fn a_balloon_click_after_a_restart_checks_then_installs() {
+    // After a restart nothing is ready yet; the notice still in the notification centre is the
+    // user's intent, so the click checks and, finding the newer release, installs it.
+    let (mut app, _, counts) = wired("restart", true);
     app.on_event(ShellEvent::TrayNotice);
-    // A later command proves the service saw the click first and did nothing.
-    app.check_update_now();
-    settle(&mut app, ready);
-    assert_eq!(counts.launches.load(Ordering::SeqCst), 0);
+    settle(&mut app, |_| counts.launches.load(Ordering::SeqCst) == 1);
+    assert_eq!(counts.fetches.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn a_fresh_service_claims_nothing_until_it_checked() {
+    let (mut app, _, _) = wired("fresh", true);
+    app.drain_update();
+    assert_eq!(app.update_row(), UpdateRow::Unknown);
 }
 
 #[test]

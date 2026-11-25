@@ -69,6 +69,21 @@ fn about_shows_update_row_per_state() {
 }
 
 #[test]
+fn an_unchecked_row_offers_a_check_and_claims_nothing() {
+    let (shown, targets) = about_with(UpdateRow::Unknown);
+    assert!(shown.contains(&"DENETLE".to_owned()));
+    assert!(targets.iter().any(|t| t.action == SheetAction::UpdateCheck));
+    assert!(
+        !targets
+            .iter()
+            .any(|t| t.action == SheetAction::UpdateInstall)
+    );
+    for claim in ["G\u{dc}NCEL", "DENETLENEMED\u{130}"] {
+        assert!(!shown.contains(&claim.to_owned()), "claims {claim}");
+    }
+}
+
+#[test]
 fn update_button_sits_inside_the_content_column() {
     let (_, targets) = about_with(UpdateRow::Ready(Version::new(1, 0, 0)));
     let install = target_for(&targets, &SheetAction::UpdateInstall).rect;

@@ -298,6 +298,45 @@ fn declined_installer_returns_the_row_to_ready() {
 }
 
 #[test]
+fn install_ready_with_nothing_found_checks_then_installs() {
+    let fake = Fake::new("ready-unchecked");
+    fake.answer(Ok(Some(release_json("v0.5.0"))));
+    let (service, feed, _) = start(&fake, settings(false));
+    service.install_ready();
+    let events = finish(service, &feed);
+    assert_eq!(fake.fetches.load(Ordering::SeqCst), 1);
+    assert_eq!(fake.launched.load(Ordering::SeqCst), 1);
+    assert!(events.contains(&UpdateEvent::Row(UpdateRow::Ready(NEWER))));
+    assert!(
+        !events.iter().any(|e| matches!(e, UpdateEvent::Notice(_))),
+        "the click is the intent; no notice on top: {events:?}"
+    );
+    let _ = std::fs::remove_dir_all(&fake.dir);
+}
+
+#[test]
+fn install_ready_with_nothing_newer_installs_nothing() {
+    let fake = Fake::new("ready-current");
+    fake.answer(Ok(Some(release_json("v0.4.0"))));
+    let (service, feed, _) = start(&fake, settings(false));
+    service.install_ready();
+    let events = finish(service, &feed);
+    assert_eq!(fake.launched.load(Ordering::SeqCst), 0);
+    assert_eq!(events.last(), Some(&UpdateEvent::Row(UpdateRow::Current)));
+}
+
+#[test]
+fn a_refused_final_path_fails_instead_of_offering_the_same_download() {
+    let fake = Fake::new("refused");
+    lock(&fake.launches).push_back(Err(LaunchError::Refused("moved".to_string())));
+    let (service, feed, _) = start(&fake, settings(false));
+    service.install(release());
+    let events = finish(service, &feed);
+    assert_eq!(events.last(), Some(&UpdateEvent::Row(UpdateRow::Failed)));
+    let _ = std::fs::remove_dir_all(&fake.dir);
+}
+
+#[test]
 fn install_removes_only_older_setups_by_their_own_names() {
     let fake = Fake::new("older-files");
     std::fs::create_dir_all(&fake.dir).unwrap();

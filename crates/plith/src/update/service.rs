@@ -68,11 +68,19 @@ pub(super) fn run(job: &Job, settings: UpdateSettings, inbox: &Receiver<Command>
             }
         };
         match command {
-            None | Some(Command::CheckNow) => check(job, &mut state),
+            None | Some(Command::CheckNow) => {
+                check(job, &mut state, true);
+            }
             #[cfg(test)]
             Some(Command::Install(release)) => install(job, &release),
             Some(Command::InstallReady) => {
-                if let Some(release) = state.ready.clone() {
+                // After a restart nothing is ready yet, but the click (the About button or a
+                // notice left in the notification centre) is the intent: check, then install.
+                let release = match state.ready.clone() {
+                    Some(release) => Some(release),
+                    None => check(job, &mut state, false),
+                };
+                if let Some(release) = release {
                     install(job, &release);
                 }
             }
@@ -82,8 +90,9 @@ pub(super) fn run(job: &Job, settings: UpdateSettings, inbox: &Receiver<Command>
     }
 }
 
-/// One check: the row, the outcome, and a notice when it is due.
-fn check(job: &Job, state: &mut State) {
+/// One check: the row, the outcome, and (when `notice` allows) a notice when it is due. Returns
+/// the newer release found, if any.
+fn check(job: &Job, state: &mut State, notice: bool) -> Option<Release> {
     job.emit(UpdateEvent::Row(UpdateRow::Checking));
     let now = job.backend.now();
     let text = match job.backend.latest() {
@@ -92,26 +101,33 @@ fn check(job: &Job, state: &mut State) {
             state.last_failed = Some(now);
             job.fail("check", &reason);
             job.emit(UpdateEvent::Row(UpdateRow::Failed));
-            return;
+            return None;
         }
     };
     state.last_ok = now;
     state.last_failed = None;
     job.emit(UpdateEvent::Checked(now));
     match text.as_deref().and_then(parse_release) {
-        Some(release) if release.version > job.own => announce(job, state, release),
-        _ => job.emit(UpdateEvent::Row(UpdateRow::Current)),
+        Some(release) if release.version > job.own => {
+            announce(job, state, &release, notice);
+            Some(release)
+        }
+        _ => {
+            job.emit(UpdateEvent::Row(UpdateRow::Current));
+            None
+        }
     }
 }
 
-/// A newer release: the row always, the notice once per version and never over a game.
-fn announce(job: &Job, state: &mut State, release: Release) {
+/// A newer release: the row always, the notice once per version, never over a game and never
+/// when the user already asked to install.
+fn announce(job: &Job, state: &mut State, release: &Release, notice: bool) {
     let version = release.version;
     state.ready = Some(release.clone());
     job.emit(UpdateEvent::Row(UpdateRow::Ready(version)));
-    if should_notice(&version, job.own, &state.seen) && !job.backend.busy() {
+    if notice && should_notice(&version, job.own, &state.seen) && !job.backend.busy() {
         state.seen = version.to_string();
-        job.emit(UpdateEvent::Notice(release));
+        job.emit(UpdateEvent::Notice(release.clone()));
         job.emit(UpdateEvent::Seen(version));
     }
 }
@@ -153,6 +169,11 @@ fn install(job: &Job, release: &Release) {
         Err(LaunchError::Failed(reason)) => {
             job.fail("installer start", &reason);
             job.emit(UpdateEvent::Row(UpdateRow::Ready(version)));
+        }
+        // Another click would download the same file into the same refusal.
+        Err(LaunchError::Refused(reason)) => {
+            job.fail("installer start", &reason);
+            job.emit(UpdateEvent::Row(UpdateRow::Failed));
         }
     }
 }

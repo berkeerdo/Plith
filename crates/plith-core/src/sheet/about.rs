@@ -37,9 +37,12 @@ pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
 }
 
 /// The state of the update row and its button: `DENETLE` when a check can run, `KUR` when a
-/// version is ready, no button while a check or a download runs.
+/// version is ready, no button while a check or a download runs. Before the first check there is
+/// no state text at all.
 fn update_state(p: &mut Page, t: f64, row: UpdateRow) {
     let (state, ink, button) = match row {
+        // Nothing is known yet: no state is claimed, only a check is offered.
+        UpdateRow::Unknown => (String::new(), Ink::Muted, Some(false)),
         UpdateRow::Current => (
             p.word(S::StateUpdateCurrent).to_owned(),
             Ink::Muted,
@@ -82,6 +85,9 @@ fn update_state(p: &mut Page, t: f64, row: UpdateRow) {
         }
         None => R - 4.0,
     };
+    if state.is_empty() {
+        return;
+    }
     p.text(
         rect(edge - STATE_W, t + 9.0, STATE_W, 14.0),
         &state,

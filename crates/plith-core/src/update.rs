@@ -28,6 +28,8 @@ pub struct Release {
 /// What the About row shows.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum UpdateRow {
+    /// Not checked since Plith started: no claim, only the check button.
+    Unknown,
     /// Up to date.
     Current,
     /// A check is running.
