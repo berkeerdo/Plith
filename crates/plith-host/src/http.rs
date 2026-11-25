@@ -62,6 +62,12 @@ fn wide(text: &str) -> Vec<u16> {
     text.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
+/// The `Accept` request header, without a terminating NUL: `WinHttpSendRequest` takes its length
+/// from the slice, and a NUL inside that length makes the call fail with invalid parameter.
+fn accept_header(accept: &str) -> Vec<u16> {
+    format!("Accept: {accept}\r\n").encode_utf16().collect()
+}
+
 /// The handles of one request; the fields drop in order: request, connection, session.
 struct Exchange {
     request: Handle,
@@ -73,7 +79,7 @@ struct Exchange {
 /// for status 200. `WinHTTP` follows redirects, but never one from HTTPS to plain HTTP.
 fn open(url: &str, accept: Option<&str>) -> Result<Exchange, String> {
     let (host, port, path) = split(url)?;
-    let headers = accept.map(|accept| wide(&format!("Accept: {accept}\r\n")));
+    let headers = accept.map(accept_header);
     // SAFETY: plain WinHTTP calls; every handle is owned by a `Handle` and closed on drop, and
     // the wide strings outlive the calls that read them.
     unsafe {
@@ -197,7 +203,31 @@ fn read_body(request: &Handle) -> Result<String, String> {
 
 #[cfg(test)]
 mod tests {
-    use super::split;
+    use super::{accept_header, split};
+
+    /// `WinHttpSendRequest` takes the header length from the slice, so a trailing NUL would be
+    /// sent as part of the header and the call fails with `ERROR_INVALID_PARAMETER` (measured:
+    /// every update check on this PC, 2026-11-25).
+    #[test]
+    fn the_accept_header_carries_no_nul() {
+        let header = accept_header("application/vnd.github+json");
+        assert!(!header.contains(&0));
+        assert_eq!(
+            String::from_utf16(&header).ok().as_deref(),
+            Some("Accept: application/vnd.github+json\r\n")
+        );
+    }
+
+    /// Live: the request the update check sends. Run by hand with `--ignored`.
+    #[test]
+    #[ignore = "network"]
+    fn github_latest_answers_with_the_accept_header() {
+        let body = super::get_with_accept(
+            "https://api.github.com/repos/berkeerdo/Plith/releases/latest",
+            Some("application/vnd.github+json"),
+        );
+        assert!(body.is_ok_and(|text| text.contains("\"tag_name\"")));
+    }
 
     #[test]
     fn only_https_is_accepted() {
