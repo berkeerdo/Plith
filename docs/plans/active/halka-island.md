@@ -40,10 +40,10 @@
 **Interfaces:**
 - Produces: the files above; `README.md` records each file's pixel size, its DIP rectangle relative to the source centre, the fabric's mean colour and darkest weave colour, the **text zone** (the open page content rectangle of the tallest page, from `plith-core` layout, in DIP relative to the open island's top left) and the minimum and maximum WCAG relative luminance of the fabric inside it at 1x and 2x (all measured by the script), and the total size in bytes. If the darkest weave in the text zone fails ink 7:1 against `#141A05`, tone the fabric inside the zone in the script (spec 11: the art gives way, never the ink) and record how.
 
-- [ ] **Step 1:** Write `make-halka.ps1 -In docs/design/identity/r3/installer -Out <new folder>`, reusing the mask code of `make-states.ps1` (bounds 160 / 310 / 450, grow 30, feather 14). Outputs: fabric = whole `flat` scaled by 1/3 (1x) and 2/3 (2x); ring k = `p2` pixels with alpha = ring k mask, cropped to the ring's bounding box; disc = the source cut from `p2` with alpha (threshold on the black body plus its rim shadow), cropped; pill = `inst/button.png` scaled to 32 DIP high keeping its lower half, at 1x and 2x.
-- [ ] **Step 2:** Run it into a fresh folder, then copy into `crates/plith-core/themes/halka/`. Expected: every file exists; total under 3 MB (convert to smaller PNG settings if not, and note it).
-- [ ] **Step 3:** Composite check: fabric + ring 1..3 + disc at 1x equals `bg-3-1x.png` within 4 levels mean per channel over the ripple area (script prints the number). Record it in `README.md`.
-- [ ] **Step 4:** Commit `feat(design): cut the halka art`.
+- [x] **Step 1:** Write `make-halka.ps1 -In docs/design/identity/r3/installer -Out <new folder>`, reusing the mask code of `make-states.ps1` (bounds 160 / 310 / 450, grow 30, feather 14). Outputs: fabric = whole `flat` scaled by 1/3 (1x) and 2/3 (2x); ring k = `p2` pixels with alpha = ring k mask, cropped to the ring's bounding box; disc = the source cut from `p2` with alpha (threshold on the black body plus its rim shadow), cropped; pill = `inst/button.png` scaled to 32 DIP high keeping its lower half, at 1x and 2x.
+- [x] **Step 2:** Run it into a fresh folder, then copy into `crates/plith-core/themes/halka/`. Expected: every file exists; total under 3 MB (convert to smaller PNG settings if not, and note it).
+- [x] **Step 3:** Composite check: fabric + ring 1..3 + disc at 1x equals `bg-3-1x.png` within 4 levels mean per channel over the ripple area (script prints the number). Record it in `README.md`.
+- [x] **Step 4:** Commit `feat(design): cut the halka art`.
 
 ### Task 2: Halka as a pack
 
