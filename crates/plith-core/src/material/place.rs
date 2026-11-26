@@ -122,7 +122,7 @@ mod tests {
 
     #[test]
     fn the_largest_island_stays_near_the_fabric() {
-        // The fabric is cut for 620 x 420; the overshoot passes it by less than its mirror
+        // The fabric is cut for 640 x 420; the overshoot passes it by less than its mirror
         // reach (a mirrored band is never wider than the raster itself).
         let (w, h) = (PAGE_MAX_WIDTH * OVERSHOOT, PAGE_MAX_HEIGHT * OVERSHOOT);
         assert!(w - FABRIC_W < FABRIC_W && h - 420.0 < 420.0);

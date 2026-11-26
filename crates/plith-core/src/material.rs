@@ -29,8 +29,7 @@ pub const FADE_MS: f64 = 180.0;
 pub const RISE_STEP_MS: f64 = 60.0;
 /// The reveal circle reaches the far corner at this morph progress.
 pub const REVEAL_FULL_AT: f64 = 0.55;
-/// The disc lifts out of the shape between these two progress values.
-/// Progress where the lift starts.
+/// Progress where the disc starts to lift out of the shape.
 pub const LIFT_FROM: f64 = 0.30;
 /// Progress where the lift ends.
 pub const LIFT_TO: f64 = 0.60;
