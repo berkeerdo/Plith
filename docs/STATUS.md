@@ -31,7 +31,11 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   theme designer and marketplace fit on top. Settings r2 brings back Görünüm as a visual
   theme picker (cards with a mini island; overrides the old no-cards anti-goal). Comps r2 and
   palettes: artifact `PPgArGSRbE82QB6q3ZdytY`; page, rasters and contrast
-  script in `docs/design/themes/r2/`. Write the spec (ADR superseding 0007), then plans.
+  script in `docs/design/themes/r2/` (the script checks the floor mean only; the per-pixel
+  check is still owed). Settings r2 mock: artifact `UQpu8w5MWVvn9diUWpZUjs`, not in the repo.
+  **Spec approved** (Berke 2026-11-26): `specs/2026-11-26-theme-worlds-design.md`, ADR 0022
+  (supersedes 0007). Next: plan 1 of its section 10 (pack format, loader, colour solve,
+  settings keys, migration).
 - Then the island in A Halka: spec and plan committed in `be73ada`
   (`specs/2026-11-26-halka-island-design.md`, `plans/active/halka-island.md`); its Task 2
   (theme row) is revised by the theme worlds spec. Motion is measured on the console with
@@ -94,8 +98,8 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   dev build, not an install, and the setup leaves it alone.
 
 ## Recent decisions
+- ADR 0022 Themes are material worlds in data packs (supersedes 0007)
 - ADR 0021 Plith installs with its own setup and an elevated worker
 - ADR 0020 The settings window marks the selected section in the theme's flow colour
 - ADR 0019 The app icon is a lime speaker-fabric tile with a black source
 - ADR 0018 A file drag over the island opens the shelf
-- ADR 0017 Settings live in two layers: a quick page in the island and a full window

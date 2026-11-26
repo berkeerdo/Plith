@@ -1,5 +1,7 @@
 # 0007 Themes are palettes over one visual language
 
+Superseded by 0022 (2026-11-26).
+
 Date: 2026-11-14. Status: accepted (Berke, R3 review of the first Ray Paneli render).
 
 **Context:** the rewrite design dropped the accent picker and VISION said "not a theme engine,
