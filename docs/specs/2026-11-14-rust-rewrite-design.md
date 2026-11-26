@@ -129,10 +129,19 @@ crates/plith-system/        brightness, native flyout suppression
 crates/plith-ipc/           notch to OSD pipe protocol
 crates/plith/               the app binary: composes everything, thin main.rs
 crates/plith-osd/           the UIAccess helper binary
+crates/plith-host/          Windows helpers shared by the binaries: log, language, Run key,
+                            WinHTTP GET, signature check (added 2026-11-26 from the R7 crates)
+crates/plith-setup/         the installer binary (added 2026-11-26 from the R7 crates)
 ```
 Dependency direction: `plith` depends on everything; `plith-render` and `plith-shell` depend on
 `plith-core`; the three service crates depend on nothing of ours. Windows bindings: the
 `windows` crate, one pinned version in `[workspace.dependencies]`.
+Added 2026-11-26 from the R7 crates: `plith-host` depends on `plith-core`; `plith-weather` may
+also use `plith-host`; `plith-setup` may use `plith-core`, `plith-host`, `plith-ipc`,
+`plith-media`, `plith-render` and `plith-shell`; all three may use `windows`. Crates other than
+`plith` may not depend on each other beyond these rules (`scripts/check-deps.mjs` enforces them).
+Exception: `plith-render` may use `plith-media` as a dev-dependency only (tests and examples
+decode real art); a normal dependency stays forbidden.
 
 ## 8. Visual design
 
