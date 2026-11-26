@@ -1,3 +1,6 @@
+// Exact comparisons are intended: clamped endpoints and untouched copies are bit-identical.
+#![allow(clippy::float_cmp)]
+
 use super::*;
 
 const EPS: f32 = 1e-4;
@@ -19,8 +22,8 @@ fn layers_at_rest_collapsed_and_open() {
 #[test]
 fn ripples_press_in_order_at_listed_times() {
     let m = expanded(1000.0);
-    for k in 0..3 {
-        let l = m.layers(1000.0 + RIPPLE_START_MS[k] + PRESS_MS, 1.0);
+    for (k, start) in RIPPLE_START_MS.iter().enumerate() {
+        let l = m.layers(1000.0 + start + PRESS_MS, 1.0);
         assert!((l.ripples[k] - 1.0).abs() < EPS, "ripple {k} not pressed");
         if k < 2 {
             // The listed starts are 88.8 ms apart and a press lasts 90 ms,
@@ -176,8 +179,8 @@ fn replay_never_dips_below_current() {
     m.expand(at, 0.02);
     for dt in 0..40 {
         let l = m.layers(at + f64::from(dt) * 5.0, 0.02);
-        for k in 0..3 {
-            assert!(l.ripples[k] >= start[k] - 1e-6, "ripple {k} dipped");
+        for (k, (r, s)) in l.ripples.iter().zip(start).enumerate() {
+            assert!(*r >= s - 1e-6, "ripple {k} dipped");
         }
     }
 }
