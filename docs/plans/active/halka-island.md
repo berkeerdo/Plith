@@ -120,11 +120,11 @@
 **Interfaces:**
 - Consumes: Tasks 3 to 5.
 
-- [ ] **Step 1: failing tests:** `motion_line_names_the_theme` (line ends with ` theme halka`); engine harness `halka_expand_is_not_settled_until_ripples_end` and `gece_settles_as_before` (same frame count as before for a fixed demo expand).
-- [ ] **Step 2:** FAIL, then implement, then PASS (`heavy-run` for the render crate). Check any script under `scripts/` that parses `motion` lines still reads them.
-- [ ] **Step 3:** `--halka <new folder>` writes, at 1x and 2x: collapsed with Karot, Clock and Playing; Hidden; audio, media and welcome open; the expand strip at progress 0 / 0.25 / 0.40 / 0.55 / 0.70 / 1.0 on the welcome page; the settings window in Halka. Run it into a fresh folder and inspect every PNG yourself before showing anyone.
-- [ ] **Step 4:** Publish the set on Berke's private review page (same style as "Plith Kurulum Ekranları"). **Stop here until Berke has looked**; apply palette or layout changes he asks for, rerun Step 3.
-- [ ] **Step 5:** Five checks green (`cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, full suite on the office VM per `server-ofis`, `node scripts/structure-check.mjs`, release build via `heavy-run`). Commit `feat(render): run the halka motion`.
+- [x] **Step 1: failing tests:** `motion_line_names_the_theme` (line ends with ` theme halka`); engine harness `halka_expand_is_not_settled_until_ripples_end` and `gece_settles_as_before` (same frame count as before for a fixed demo expand).
+- [x] **Step 2:** FAIL, then implement, then PASS (`heavy-run` for the render crate). Check any script under `scripts/` that parses `motion` lines still reads them.
+- [x] **Step 3:** `--halka <new folder>` writes, at 1x and 2x: collapsed with Karot, Clock and Playing; Hidden; audio, media and welcome open; the expand strip at progress 0 / 0.25 / 0.40 / 0.55 / 0.70 / 1.0 on the welcome page; the settings window in Halka. Run it into a fresh folder and inspect every PNG yourself before showing anyone.
+- [x] **Step 4:** Publish the set on Berke's private review page (same style as "Plith Kurulum Ekranları"). **Stop here until Berke has looked**; apply palette or layout changes he asks for, rerun Step 3.
+- [x] **Step 5:** Five checks green (`cargo fmt --check`, `cargo clippy --workspace -- -D warnings`, full suite on the office VM per `server-ofis`, `node scripts/structure-check.mjs`, release build via `heavy-run`). Commit `feat(render): run the halka motion`.
 
 ### Task 7: Console measurement with Berke
 
