@@ -1,5 +1,8 @@
 # Theme packs (theme worlds plan 1) Implementation Plan
 
+> **Done 2026-11-26, merged in `3b868f6`.** A ticked box means the step was taken, not that
+> nothing deviated. Deviations, deliberate omissions and decisions are in STATUS / journal.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Replace the fixed `Theme` enum with theme packs (a parsed `theme.ini` manifest), a colour solve for user accent and floor picks, the new settings keys and the migration of the retired themes, with Gece as the only built-in pack.

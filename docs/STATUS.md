@@ -1,11 +1,13 @@
 # Status
 
-Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-26 (evening). Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0 to R3, R5, R7 languages, theme switch, settings window, identity r3 and the app icon are
   merged; history in `journal/2026-11.md`. R4, R6 and R7a are merged with console runs left.
-- **R7 part 2 merged as `3a9cb89` and pushed** (2026-11-26; checks green on main). Spec
+- **R7 part 2 merged as `3a9cb89` and pushed** (2026-11-26). Correction: its CI run on main was
+  red (setup register tests on the runner's 8.3 temp path; the dependency rules step never ran);
+  both fixed in the theme packs merge `3b868f6`, PR #1 green on run 45826321975. Spec
   `specs/2026-11-25-r7-installer-design.md`, plan `plans/active/r7-installer.md`, ADR 0021.
   `plith-setup.exe`: A Halka window at medium, elevated worker over a pipe, signed payload
   (`plith.exe`, `osd\plith-osd.exe`, `setup\plith-setup.exe`), Apps entry, Start Menu link,
@@ -34,21 +36,24 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   script in `docs/design/themes/r2/` (the script checks the floor mean only; the per-pixel
   check is still owed). Settings r2 mock: artifact `UQpu8w5MWVvn9diUWpZUjs`, not in the repo.
   **Spec approved** (Berke 2026-11-26): `specs/2026-11-26-theme-worlds-design.md`, ADR 0022
-  (supersedes 0007). **Plan 1 done on `feature/theme-packs`** (`6d75352`, not merged, not
-  pushed): packs, colour solve, accent and floor keys, retired themes migrate to Gece colours;
-  1665 tests passed, 86 of 93 renders byte-identical to main (7 expected). It merges together
-  with plan 2 (Halka on packs, next): `plans/active/halka-island.md` rewritten on the branch
-  (`587ca1f`, read it in `.claude/worktrees/theme-packs`), run subagent-driven there. Plan 2 rules the pill
-  accent with a `collapsed.flow.color` key (lime on the black pill). No
-  release before plan 3 (no Sıfırla for migrated colours yet).
-- Then the island in A Halka: spec and plan committed in `be73ada`
-  (`specs/2026-11-26-halka-island-design.md`, `plans/active/halka-island.md`); its Task 2
-  (theme row) is revised by the theme worlds spec. Motion is measured on the console with
-  Berke present.
-- Release: Berke asked about publishing now (2026-11-26); held until parity and the theme
-  worlds (missing WPF features, the self-signed root certificate, a non-admin user unmeasured).
-- After that: R7 parity close (parity check against WPF 0.3.1, WPF removed from `src/`), then
-  the first public 0.4.0 release (which makes the update path testable with 0.4.1).
+  (supersedes 0007). **Plans 1 and 2 merged as `3b868f6`** (2026-11-26; PR #1 green). Plan 1
+  (`plans/done/theme-packs.md`): packs, colour solve, accent and floor keys, retired themes
+  migrate to Gece colours. Plan 2 (`plans/active/halka-island.md`, Tasks 1 to 6 done): Halka
+  is a built-in pack (lime fabric open, glossy black pill collapsed, `collapsed.flow.color`
+  lime), `ThemePaint` (open, collapsed, art) to the render thread, painter draws the material
+  over an opaque black base, the engine drives `MaterialMotion`, `motion` lines end with
+  `; theme <id>`. Per-pixel contrast in the text zone (worst at 2x): ink 10.64, muted 6.15,
+  faint 4.37, flow 12.55. 1747 workspace tests. Render set seen by Berke (artifact
+  `A7kvbsAcEUZAMvUWPNbozY`); his pick 2026-11-26: ripples follow the morph progress (start at
+  0.15 / 0.30 / 0.45, each over 0.15), not time (option A). Rulings of the run: ledger summary
+  in `journal/2026-11.md`.
+- **Next: plan 2 Task 7, console measurement with Berke** (release build, `--theme halka` and
+  `gece`, expand and collapse audio, media, welcome ten times each, live switch while open;
+  check the UI-thread art decode on a switch to Halka and the ring-clip frames' draw ms). Then
+  theme worlds plan 3 (Firn, Kablo, Şerit, settings r2, Sıfırla for migrated colours). No
+  release before plan 3.
+- Release held until parity and the theme worlds (Berke asked 2026-11-26). After plan 3: R7
+  parity close (vs WPF 0.3.1, WPF out of `src/`), then public 0.4.0 (0.4.1 tests the update).
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a
   small strip with info; every idle look gets a choice of what its details show. Brainstorm first.
 - **R4b output picker: parked** on branch `worktree-agent-afd1c836624792461`: probe Set to
@@ -68,6 +73,13 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   `Start-Process -Wait`; close it with `WM_CLOSE` to class `Plith.Notch` (clean `exit 0`).
 
 ## Open risks
+- Update from WPF 0.3.1: its updater downloads `Plith-Setup-*` and starts it elevated
+  (`runas`), so every old user enters the setup's unmeasured elevated-start relaunch (C2, N1).
+  Test it once (install 0.3.1, press update) before the first release.
+- Setup links: tests expand 8.3 temp paths; production `register` / `uninstall` link-target
+  compares are unchecked for a user with a short profile path.
+- Halka: art decodes on the UI thread at start, on a theme switch and on a scale-class change
+  (unmeasured); `gece-base.png` render fixture passes on CI's WARP today but is exact to 2 levels.
 - Setup, unmeasured: a standard (non-admin) user (the UIAccess helper's level; the client trusts
   only a server strictly above it, so it may fail closed); the elevated-start relaunch (C2) and
   the UAC owner window; the update path past the check (download, signature, update screen,
@@ -99,8 +111,6 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
 - R7a unverified: the Windows location path (IP via `ipapi.co` may be the real path), `lang=auto`
   when UI language and region differ, a real weather fetch through the app.
 - Branches `feature/shelf-one-surface` and `feature/notch-in-loft` hold WPF work; not merged.
-- `Plith.DropCatcher.exe` (pid 30448 here) runs from the WPF Debug folder in `src\`; it is the
-  dev build, not an install, and the setup leaves it alone.
 
 ## Recent decisions
 - ADR 0022 Themes are material worlds in data packs (supersedes 0007)
