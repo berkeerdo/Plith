@@ -34,4 +34,8 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
   on top without engine changes.
 - Windows notifications shown in the island. Reading them needs `UserNotificationListener`,
   which needs package identity (a sparse package for the unpackaged exe) and the user's consent;
-  Windows still shows its own toast beside it. Research before any brainstorm.
+  Windows still shows its own toast beside it. Hiding it has no official API; proposed route
+  (Berke agreed 2026-11-26): per-app "show banners" off while the notification centre keeps
+  them, set by Plith per app the user picks (undocumented registry value, measure on this PC
+  first). Do Not Disturb is the global fallback the user turns on. Research before any
+  brainstorm.
