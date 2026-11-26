@@ -302,3 +302,51 @@ fn page_has_hero_clock_date_home_active_and_no_station_active() {
         }
     )));
 }
+
+/// The rect and alignment of the text node that reads `s`.
+fn text_at(nodes: &[Node], s: &str) -> (crate::draw::Rect, Align) {
+    nodes
+        .iter()
+        .find_map(|n| match n {
+            Node::Text {
+                text, rect, align, ..
+            } if &**text == s => Some((*rect, *align)),
+            _ => None,
+        })
+        .unwrap_or_else(|| panic!("no text {s}"))
+}
+
+/// Where the date text ends, at the 7.6 DIP mono advance the label rule uses.
+fn date_end(f: &WelcomeFacts) -> f64 {
+    #[allow(clippy::cast_precision_loss)]
+    let chars = f.date.chars().count() as f64;
+    32.0 + chars * 7.6
+}
+
+#[test]
+fn a_song_that_started_under_the_date_puts_its_label_right_of_the_date() {
+    let mut f = facts();
+    f.date = "PER 26 KAS".into();
+    f.playing = false;
+    f.paused_last = true;
+    // The run starts at 08:32; a play from 09:00 starts at x 52, under the date.
+    f.plays = vec![play(540, 600, "BORDERLINE", "Naarly")];
+    let list = nodes(&f, None);
+    for s in ["BORDERLINE", "Naarly · DURDU"] {
+        let (r, align) = text_at(&list, s);
+        assert_eq!(align, Align::Start, "{s} flips to the right of its start");
+        assert!(r.x >= date_end(&f), "{s} at x {} under the date", r.x);
+        assert!(r.x + r.w <= 590.0, "{s} past the run");
+    }
+}
+
+#[test]
+fn a_song_that_started_clear_of_the_date_keeps_its_label_left_of_its_start() {
+    let f = facts();
+    let list = nodes(&f, None);
+    for s in ["Avril 14th", "Aphex Twin"] {
+        let (r, align) = text_at(&list, s);
+        assert_eq!(align, Align::End, "{s} stays right-aligned to its start");
+        assert!(r.x >= date_end(&f), "{s} rect reaches under the date");
+    }
+}

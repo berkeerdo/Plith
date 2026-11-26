@@ -21,6 +21,12 @@ const BIT_UP: f64 = 18.0;
 const BIT_DOWN: f64 = 22.0;
 /// The widest song label, so it stays clear of the head.
 pub(crate) const LABEL_W: f64 = 220.0;
+/// Left edge of the head's date line (`head.rs`), which the song label must stay right of.
+const DATE_X: f64 = 32.0;
+/// Estimated advance of the 10 DIP mono styles (date, artist) and the 12 DIP sans title, in
+/// DIP a character; both err wide.
+const MONO_ADVANCE: f64 = 7.6;
+const BODY_ADVANCE: f64 = 7.5;
 /// Closest two temperature labels may sit.
 const TEMP_GAP: f64 = 30.0;
 
@@ -106,30 +112,48 @@ fn song_band(out: &mut Vec<Node>, f: &WelcomeFacts, ax: &Axis, hide_label: bool)
     }
 }
 
-/// The title and artist of the last play, right-aligned at the start of its interval.
+/// Estimated width of `s` at `advance` DIP a character (a few dozen characters at most).
+#[allow(clippy::cast_precision_loss)]
+fn est_width(s: &str, advance: f64) -> f64 {
+    s.chars().count() as f64 * advance
+}
+
+/// The title and artist of the last play, right-aligned at the start of its interval. A play
+/// that started so far left that the label would reach under the date flips: the label starts
+/// right of the play's start, never left of the date's end.
 fn song_label(out: &mut Vec<Node>, f: &WelcomeFacts, ax: &Axis) {
     let Some(p) = f.plays.last() else { return };
-    let right = (ax.x(f64::from(p.start_min)) - 2.0).clamp(X0 + 60.0, X1);
-    let left = (right - LABEL_W).max(X0);
     // Paused only when the session says so; a track that ended hours ago is just a past play.
     let artist = if f.paused_last && !f.playing {
         format!("{} · {}", p.artist, word(Text::Paused, f.lang))
     } else {
         p.artist.clone()
     };
+    let date_end = DATE_X + est_width(&f.date, MONO_ADVANCE);
+    let need = est_width(&p.title, BODY_ADVANCE)
+        .max(est_width(&artist, MONO_ADVANCE))
+        .min(LABEL_W);
+    let start = ax.x(f64::from(p.start_min));
+    let right = (start - 2.0).clamp(X0 + 60.0, X1);
+    let (left, right, align) = if right - need >= date_end {
+        ((right - LABEL_W).max(date_end), right, Align::End)
+    } else {
+        let left = (start + 2.0).max(date_end);
+        (left, (left + LABEL_W).min(X1), Align::Start)
+    };
     out.push(text(
         rect(left, AXIS - 34.0, right - left, 14.0),
         &p.title,
         TextStyle::Body,
         Ink::Ink,
-        Align::End,
+        align,
     ));
     out.push(text(
         rect(left, AXIS - 46.0, right - left, 12.0),
         &artist,
         TextStyle::Value,
         Ink::Faint,
-        Align::End,
+        align,
     ));
 }
 
