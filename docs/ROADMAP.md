@@ -20,9 +20,18 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | Console fix round | Home mark, speaker glyph, title scroll, ruler drag, OSD prewarm (from the 2026-11-18 console) | master + subagents | not estimated | ✅ done, 2 sessions incl. console check (merged 397e7d9; ADR 0016) |
 | R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code merged (c7e693a, 1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); console run left |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master + subagents | 3 sessions | 🔄 part 1 merged (ae94753: tray, version, autostart); part 2 merged (3a9cb89: setup, uninstall, config.ini import, update check; 2 sessions incl. 8 real runs, 3 bugs found there; ADR 0021); left: parity check, WPF removed |
-| Island in A Halka | The installer's material, themes and motion in the island (Berke 2026-11-25) | master + subagents | not estimated | ⬜ next, brainstorm first |
+| Theme worlds and settings r2 | Every theme a material world (Halka, Firn, Kablo, Şerit, plain Gece; York, Sodyum, Kağıt retired), themes as data packs, settings r2 with a visual theme section (Berke 2026-11-26) | master + subagents | not estimated | ⬜ next: comps r2 seen and liked, spec next |
+| Island in A Halka | The installer's material, themes and motion in the island (Berke 2026-11-25); the first theme world built | master + subagents | not estimated | ⬜ after the theme worlds spec (spec and plan in be73ada; plan Task 2 to revise) |
 
 ## Settled scope (2026-11-14)
 - Inside exclusive fullscreen games only the OSD shows (ADR 0002).
 - The accent picker is dropped; four fixed colour themes instead (ADR 0007). Weather came back
   with the idle look, off by default (ADR 0014, Berke 2026-11-17).
+
+## Ideas, not planned (Berke 2026-11-26)
+- A marketplace with a theme designer and plugins, later. Theme worlds are therefore built as
+  data packs (palette, material rasters, motion parameters), so a designer and a store can sit
+  on top without engine changes.
+- Windows notifications shown in the island. Reading them needs `UserNotificationListener`,
+  which needs package identity (a sparse package for the unpackaged exe) and the user's consent;
+  Windows still shows its own toast beside it. Research before any brainstorm.

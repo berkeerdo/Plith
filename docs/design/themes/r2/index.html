@@ -1,0 +1,232 @@
+<title>Plith Tema Dünyaları 2</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Martian+Mono:wght@400;500&family=Public+Sans:wght@400;600&display=swap">
+<style>
+/* Layout: one band per theme, the island at true size (1 DIP = 1 CSS px) on a desktop strip, contrast numbers beside it; settings theme section sketch at the end. Single dark look. */
+:root {
+  color-scheme: dark;
+  --page: #0D0D0C;
+  --panel: #161514;
+  --border: #2C2925;
+  --ink: #ECE9E2;
+  --muted: #A39E94;
+  --ok: #CAFF33;
+  --sans: "Public Sans", "Segoe UI", system-ui, sans-serif;
+  --mono: "Martian Mono", Consolas, monospace;
+}
+body { background: var(--page); color: var(--ink); font-family: var(--sans); }
+main { padding-block: 32px 72px; padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); max-width: 1180px; margin: 0 auto; display: grid; gap: 48px; }
+h1 { font-size: 24px; font-weight: 600; margin: 0 0 8px; text-wrap: balance; }
+h2 { font-size: 19px; font-weight: 600; margin: 0; }
+p { line-height: 1.55; max-width: 74ch; margin: 0; }
+.intro { display: grid; gap: 8px; }
+.intro p, .note { color: var(--muted); }
+section { display: grid; gap: 14px; }
+.head { display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+.src { color: var(--muted); font-size: 13.5px; }
+.stage { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+.desk { min-width: 680px; height: 330px; display: flex; flex-direction: column; align-items: center; background: linear-gradient(160deg, #3B4652, #20262D 60%, #171B20); position: relative; }
+.desk .pillrow { position: absolute; right: 18px; bottom: 16px; display: flex; gap: 14px; align-items: center; font: 11px var(--mono); color: #C9CED4; }
+.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+@media (max-width: 760px) { .row2 { grid-template-columns: 1fr; } }
+.facts { background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 14px 16px; display: grid; gap: 8px; font-size: 13.5px; line-height: 1.5; }
+.facts table { border-collapse: collapse; font: 12px var(--mono); font-variant-numeric: tabular-nums; }
+.facts td { padding: 3px 12px 3px 0; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 3px; vertical-align: -2px; margin-right: 6px; border: 1px solid #0006; }
+.pass { color: var(--ok); }
+
+/* island at true size */
+.island { width: 620px; height: 246px; margin-top: 0; border-radius: 0 0 26px 26px; background-size: cover; background-position: center; position: relative; overflow: hidden; box-shadow: 0 10px 30px #0008; font-family: var(--sans); color: var(--i-ink); }
+.island .tabs { height: 34px; display: flex; gap: 22px; align-items: center; padding: 0 22px; font: 500 10.5px var(--mono); letter-spacing: .08em; color: var(--i-faint); }
+.island .tabs b { color: var(--i-ink); font-weight: 500; }
+.island .body { display: grid; grid-template-columns: 1fr 210px; gap: 26px; padding: 14px 22px 0; }
+.island .label { font: 500 10px var(--mono); letter-spacing: .08em; color: var(--i-faint); }
+.island .title { font-size: 19px; font-weight: 600; margin-top: 8px; }
+.island .artist { font-size: 13px; color: var(--i-muted); margin-top: 3px; }
+.island .prog { margin-top: 22px; height: 4px; border-radius: 2px; background: var(--i-track); position: relative; }
+.island .prog i { position: absolute; inset: 0 62% 0 0; border-radius: 2px; background: var(--i-flow); }
+.island .time { display: flex; justify-content: space-between; margin-top: 7px; font: 10px var(--mono); color: var(--i-muted); font-variant-numeric: tabular-nums; }
+.island .lv { display: grid; gap: 13px; }
+.island .lvrow { display: grid; gap: 5px; }
+.island .lvhead { display: flex; justify-content: space-between; font: 500 10px var(--mono); letter-spacing: .06em; color: var(--i-muted); }
+.island .lvhead span:last-child { color: var(--i-ink); font-variant-numeric: tabular-nums; }
+.island .bar { height: 6px; border-radius: 3px; background: var(--i-track); position: relative; }
+.island .bar i { position: absolute; top: 0; bottom: 0; left: 0; border-radius: 3px; background: var(--i-flow); }
+.island .holes { height: 8px; display: flex; gap: 4px; }
+.island .holes i { width: 8px; height: 8px; border-radius: 50%; border: 1px solid var(--i-faint); box-sizing: border-box; }
+.island .holes i.on { background: var(--i-flow); border-color: var(--i-flow); }
+.pill { width: 200px; height: 32px; border-radius: 16px; background-size: 100% 100%; }
+.pill.x2 { width: 400px; height: 64px; border-radius: 32px; }
+
+.t-halka { --i-ink: #141A05; --i-muted: #3A4512; --i-faint: #4E5C1A; --i-flow: #000000; --i-track: #0000001F; }
+.t-firn { --i-ink: #0E1A2B; --i-muted: #34465E; --i-faint: #52647C; --i-flow: #1C5D99; --i-track: #0E1A2B1F; }
+.t-kablo { --i-ink: #F3E6DA; --i-muted: #C4AE9E; --i-faint: #9C8574; --i-flow: #E0874A; --i-track: #F3E6DA1F; }
+.t-serit { --i-ink: #1E1610; --i-muted: #574634; --i-faint: #7A6650; --i-flow: #1E1610; --i-track: #1E16101F; }
+.t-gece { --i-ink: #ECEAE4; --i-muted: #A6A39B; --i-faint: #7C7972; --i-flow: #CAFF33; --i-track: #ECEAE41F; }
+.t-halka.island { background-image: url(halka-floor.jpg); }
+.t-firn.island { background-image: url(firn-floor.jpg); background-position: bottom; }
+.t-kablo.island { background-image: url(kablo-floor.jpg); background-position: bottom; }
+.t-serit.island { background-image: url(serit-floor.jpg); background-position: bottom; }
+.t-gece.island { background: #0B0B0A; }
+.t-halka.pill { background-image: url(halka-pill.jpg); }
+.t-firn.pill { background-image: url(firn-pill.jpg); }
+.t-kablo.pill { background-image: url(kablo-pill.jpg); }
+.t-serit.pill { background-image: url(serit-pill.jpg); }
+.t-gece.pill { background: #0B0B0A; }
+
+/* settings theme section sketch */
+.sheet { overflow-x: auto; border-radius: 10px; border: 1px solid var(--border); }
+.win { min-width: 760px; display: grid; grid-template-columns: 156px 1fr; background: #121211; color: #ECEAE4; font-size: 13px; }
+.side { border-right: 1px solid #262522; padding: 18px 0; display: grid; align-content: start; gap: 2px; }
+.side div { padding: 8px 18px; color: #A6A39B; }
+.side div.on { color: #ECEAE4; background: #1E1D1B; box-shadow: inset 2px 0 0 #CAFF33; }
+.pane { padding: 22px 28px 28px; display: grid; gap: 16px; }
+.pane h3 { margin: 0; font-size: 17px; font-weight: 600; }
+.cards { display: grid; grid-template-columns: repeat(5, 1fr); gap: 12px; }
+.card { display: grid; gap: 8px; }
+.card .pv { height: 86px; border-radius: 8px; border: 1px solid #2A2926; overflow: hidden; display: flex; justify-content: center; position: relative; background: linear-gradient(160deg, #3B4652, #20262D); }
+.card .pv .mini { width: 92%; height: 64px; border-radius: 0 0 10px 10px; background-size: cover; background-position: top; padding: 8px 10px; box-sizing: border-box; display: grid; gap: 5px; align-content: start; }
+.card .pv .mini i { display: block; height: 4px; border-radius: 2px; background: var(--i-ink); width: 60%; }
+.card .pv .mini i + i { background: var(--i-muted); width: 40%; }
+.card .pv .mini i + i + i { background: var(--i-flow); width: 75%; margin-top: 6px; }
+.card.on .pv { border: 2px solid #CAFF33; }
+.card .nm { display: flex; justify-content: space-between; font-weight: 600; }
+.card .nm span { font: 10px var(--mono); color: #7C7972; font-weight: 400; letter-spacing: .06em; align-self: center; }
+.card .ds { color: #A6A39B; font-size: 12px; line-height: 1.4; }
+.big { display: grid; grid-template-columns: auto 1fr; gap: 18px; align-items: start; border-top: 1px solid #262522; padding-top: 16px; }
+.big .pill { flex: none; }
+.big p { color: #A6A39B; font-size: 12.5px; }
+</style>
+
+<main>
+<div class="intro">
+  <h1>Tema dünyaları, ikinci tur</h1>
+  <p>Seçtiğin dört malzeme, bu kez gerçek ölçüde. Her bantta ada masaüstünün tepesinde, gerçek boyutunda (620 piksel genişlik) açık duruyor. Sağ altta kapalı hali de gerçek boyutta (200 × 32) ve iki kat büyütülmüş olarak var.</p>
+  <p>Malzemeler resim modelinden geliyor, yazılar ve göstergeler kodla çiziliyor. Her temanın yazı renkleri kendi malzemesine göre seçildi ve kontrastı ölçüldü. Ölçüt: ana yazı 7:1, ikincil yazı 4.5:1, soluk etiket ve akış rengi 3:1. Dördü de geçiyor. Hareket bu sayfada yok, o konsolda ölçülecek.</p>
+</div>
+
+<section>
+  <div class="head"><h2>Halka</h2><span class="src">Kurulumun limon kumaşı. Ses akışı siyah, işaretler dolu.</span></div>
+  <div class="stage"><div class="desk">
+    <div class="island t-halka">
+      <div class="tabs"><b>SES</b><span>MEDYA</span><span>RAF</span><span>SİSTEM</span></div>
+      <div class="body">
+        <div><div class="label">ŞİMDİ ÇALIYOR</div><div class="title">Kara Toprak</div><div class="artist">Aşık Veysel</div><div class="prog"><i></i></div><div class="time"><span>1:42</span><span>4:31</span></div></div>
+        <div class="lv">
+          <div class="lvrow"><div class="lvhead"><span>HOPARLÖR</span><span>62</span></div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>KULAKLIK</span><span>40</span></div><div class="bar"><i style="width:40%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>MİKROFON</span><span>78</span></div><div class="bar"><i style="width:78%"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pillrow"><span>KAPALI</span><div class="pill t-halka"></div><div class="pill x2 t-halka"></div></div>
+  </div></div>
+  <div class="facts"><table>
+    <tr><td><span class="sw" style="background:#C7F910"></span>zemin #C7F910</td><td>ölçülen ortalama</td></tr>
+    <tr><td><span class="sw" style="background:#141A05"></span>yazı #141A05</td><td class="pass">14.4:1</td></tr>
+    <tr><td><span class="sw" style="background:#3A4512"></span>ikincil #3A4512</td><td class="pass">8.3:1</td></tr>
+    <tr><td><span class="sw" style="background:#4E5C1A"></span>soluk #4E5C1A</td><td class="pass">5.9:1</td></tr>
+    <tr><td><span class="sw" style="background:#000"></span>akış #000000</td><td class="pass">17.0:1</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="head"><h2>Firn</h2><span class="src">Sıkışmış buzul karı. Yazı alanı düz kar, katmanlar sadece alt kenarda.</span></div>
+  <div class="stage"><div class="desk">
+    <div class="island t-firn">
+      <div class="tabs"><b>SES</b><span>MEDYA</span><span>RAF</span><span>SİSTEM</span></div>
+      <div class="body">
+        <div><div class="label">ŞİMDİ ÇALIYOR</div><div class="title">Kara Toprak</div><div class="artist">Aşık Veysel</div><div class="prog"><i></i></div><div class="time"><span>1:42</span><span>4:31</span></div></div>
+        <div class="lv">
+          <div class="lvrow"><div class="lvhead"><span>HOPARLÖR</span><span>62</span></div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>KULAKLIK</span><span>40</span></div><div class="bar"><i style="width:40%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>MİKROFON</span><span>78</span></div><div class="bar"><i style="width:78%"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pillrow"><span>KAPALI</span><div class="pill t-firn"></div><div class="pill x2 t-firn"></div></div>
+  </div></div>
+  <div class="facts"><table>
+    <tr><td><span class="sw" style="background:#D1DDEC"></span>zemin #D1DDEC</td><td>ölçülen ortalama</td></tr>
+    <tr><td><span class="sw" style="background:#0E1A2B"></span>yazı #0E1A2B</td><td class="pass">12.7:1</td></tr>
+    <tr><td><span class="sw" style="background:#34465E"></span>ikincil #34465E</td><td class="pass">7.0:1</td></tr>
+    <tr><td><span class="sw" style="background:#52647C"></span>soluk #52647C</td><td class="pass">4.4:1</td></tr>
+    <tr><td><span class="sw" style="background:#1C5D99"></span>akış #1C5D99, buzul mavisi</td><td class="pass">5.0:1</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="head"><h2>Kablo</h2><span class="src">Gütaperka yüz, kenarda çelik zırh teli ve bakır öz. Halat yok, yüz düz.</span></div>
+  <div class="stage"><div class="desk">
+    <div class="island t-kablo">
+      <div class="tabs"><b>SES</b><span>MEDYA</span><span>RAF</span><span>SİSTEM</span></div>
+      <div class="body">
+        <div><div class="label">ŞİMDİ ÇALIYOR</div><div class="title">Kara Toprak</div><div class="artist">Aşık Veysel</div><div class="prog"><i></i></div><div class="time"><span>1:42</span><span>4:31</span></div></div>
+        <div class="lv">
+          <div class="lvrow"><div class="lvhead"><span>HOPARLÖR</span><span>62</span></div><div class="bar"><i style="width:62%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>KULAKLIK</span><span>40</span></div><div class="bar"><i style="width:40%"></i></div></div>
+          <div class="lvrow"><div class="lvhead"><span>MİKROFON</span><span>78</span></div><div class="bar"><i style="width:78%"></i></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pillrow"><span>KAPALI</span><div class="pill t-kablo"></div><div class="pill x2 t-kablo"></div></div>
+  </div></div>
+  <div class="facts"><table>
+    <tr><td><span class="sw" style="background:#2A1A14"></span>zemin #2A1A14</td><td>ölçülen ortalama</td></tr>
+    <tr><td><span class="sw" style="background:#F3E6DA"></span>yazı #F3E6DA</td><td class="pass">13.6:1</td></tr>
+    <tr><td><span class="sw" style="background:#C4AE9E"></span>ikincil #C4AE9E</td><td class="pass">7.9:1</td></tr>
+    <tr><td><span class="sw" style="background:#9C8574"></span>soluk #9C8574</td><td class="pass">4.8:1</td></tr>
+    <tr><td><span class="sw" style="background:#E0874A"></span>akış #E0874A, bakır</td><td class="pass">6.2:1</td></tr>
+  </table><p class="note">Açık adada zırh teli alt kenara alındı (üst kenar ekranın tepesine yapışık, orada görünmezdi).</p></div>
+</section>
+
+<section>
+  <div class="head"><h2>Şerit</h2><span class="src">Temiz krem telgraf şeridi. Ses seviyesi delik sırası olarak zımbalanıyor.</span></div>
+  <div class="stage"><div class="desk">
+    <div class="island t-serit">
+      <div class="tabs"><b>SES</b><span>MEDYA</span><span>RAF</span><span>SİSTEM</span></div>
+      <div class="body">
+        <div><div class="label">ŞİMDİ ÇALIYOR</div><div class="title">Kara Toprak</div><div class="artist">Aşık Veysel</div><div class="prog"><i></i></div><div class="time"><span>1:42</span><span>4:31</span></div></div>
+        <div class="lv">
+          <div class="lvrow"><div class="lvhead"><span>HOPARLÖR</span><span>62</span></div><div class="holes" data-v="62"></div></div>
+          <div class="lvrow"><div class="lvhead"><span>KULAKLIK</span><span>40</span></div><div class="holes" data-v="40"></div></div>
+          <div class="lvrow"><div class="lvhead"><span>MİKROFON</span><span>78</span></div><div class="holes" data-v="78"></div></div>
+        </div>
+      </div>
+    </div>
+    <div class="pillrow"><span>KAPALI</span><div class="pill t-serit"></div><div class="pill x2 t-serit"></div></div>
+  </div></div>
+  <div class="facts"><table>
+    <tr><td><span class="sw" style="background:#F8E9CC"></span>zemin #F8E9CC</td><td>ölçülen ortalama</td></tr>
+    <tr><td><span class="sw" style="background:#1E1610"></span>yazı #1E1610</td><td class="pass">14.9:1</td></tr>
+    <tr><td><span class="sw" style="background:#574634"></span>ikincil #574634</td><td class="pass">7.5:1</td></tr>
+    <tr><td><span class="sw" style="background:#7A6650"></span>soluk #7A6650</td><td class="pass">4.6:1</td></tr>
+    <tr><td><span class="sw" style="background:#1E1610"></span>akış: delik</td><td class="pass">14.9:1</td></tr>
+  </table></div>
+</section>
+
+<section>
+  <div class="head"><h2>Ayarlarda tema bölümü</h2><span class="src">Görünüm sayfası, ayarlar r2 düzeninde</span></div>
+  <div class="sheet"><div class="win">
+    <div class="side"><div>Genel</div><div class="on">Görünüm</div><div>Ses</div><div>Medya</div><div>Raf</div><div>Hava</div><div>Hakkında</div></div>
+    <div class="pane">
+      <h3>Tema</h3>
+      <div class="cards">
+        <div class="card t-halka on"><div class="pv"><div class="mini" style="background-image:url(halka-floor.jpg)"><i></i><i></i><i></i></div></div><div class="nm">Halka <span>SEÇİLİ</span></div><div class="ds">Limon kumaş, halka halka açılır</div></div>
+        <div class="card t-firn"><div class="pv"><div class="mini" style="background-image:url(firn-floor.jpg);background-position:bottom"><i></i><i></i><i></i></div></div><div class="nm">Firn</div><div class="ds">Buzul karı, katman katman oturur</div></div>
+        <div class="card t-kablo"><div class="pv"><div class="mini" style="background-image:url(kablo-floor.jpg);background-position:bottom"><i></i><i></i><i></i></div></div><div class="nm">Kablo</div><div class="ds">Bakır ve çelik, teller gerilir</div></div>
+        <div class="card t-serit"><div class="pv"><div class="mini" style="background-image:url(serit-floor.jpg);background-position:bottom"><i></i><i></i><i></i></div></div><div class="nm">Şerit</div><div class="ds">Telgraf kağıdı, soldan beslenir</div></div>
+        <div class="card t-gece"><div class="pv"><div class="mini" style="background:#0B0B0A"><i></i><i></i><i></i></div></div><div class="nm">Gece</div><div class="ds">Sade siyah, malzemesiz</div></div>
+      </div>
+      <div class="big"><div class="pill x2 t-halka"></div><p>Kartın üstüne gelince küçük önizleme oynar: o temanın açılış hareketi bir kez döner. Tıklayınca ada hemen o temaya geçer, kaydet düğmesi yok. Ayarlar penceresi kendisi her temada aynı sade koyu görünümde kalır.</p></div>
+    </div>
+  </div></div>
+</section>
+</main>
+
+<script>
+document.querySelectorAll('.holes').forEach(function (el) {
+  var on = Math.round(+el.dataset.v / 100 * 18);
+  for (var i = 0; i < 18; i++) { var d = document.createElement('i'); if (i < on) d.className = 'on'; el.appendChild(d); }
+});
+</script>

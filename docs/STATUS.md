@@ -22,11 +22,22 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
 - Label rule (Berke 2026-11-16): Turkish UI strings upper-case with Turkish rules; names from
   Windows or Voicemeeter with invariant rules ("DISPLAY", never "DİSPLAY").
 - Engine: frame latency 2 (ADR 0008), tune `brisk`. R3 direction Ray Paneli (ADR 0007).
-- **Next: the island in A Halka** (Berke 2026-11-25, after running the setup: "o temayı
-  temaları animasyonları normal notch'a island'a koyalım"): bring the installer's material,
-  themes and motion into the island. Brainstorm first (what carries over: the lime floor, the
-  art, the step motion; as a fifth theme or a new look). Motion is measured on the console with
+- **Next: theme worlds and settings r2** (Berke 2026-11-26: "temalarımız kötü", the theme part
+  must be made good; settings r2 mock "çok daha iyi"; comps r2 "güzel baya"). Every theme is a
+  material world like Halka: Halka, Firn (glacier firn), Kablo (1866 Atlantic cable), Şerit
+  (punched telegraph tape), plus plain Gece; York, Sodyum, Kağıt retire. Text must read on
+  every material: per-theme ink colours, a quiet text zone, contrast tested (ink 7, muted 4.5,
+  faint and flow 3, measured per pixel, not on the mean). Themes are data packs so a later
+  theme designer and marketplace fit on top. Settings r2 brings back Görünüm as a visual
+  theme picker (cards with a mini island; overrides the old no-cards anti-goal). Comps r2 and
+  palettes: artifact `PPgArGSRbE82QB6q3ZdytY`; page, rasters and contrast
+  script in `docs/design/themes/r2/`. Write the spec (ADR superseding 0007), then plans.
+- Then the island in A Halka: spec and plan committed in `be73ada`
+  (`specs/2026-11-26-halka-island-design.md`, `plans/active/halka-island.md`); its Task 2
+  (theme row) is revised by the theme worlds spec. Motion is measured on the console with
   Berke present.
+- Release: Berke asked about publishing now (2026-11-26); held until parity and the theme
+  worlds (missing WPF features, the self-signed root certificate, a non-admin user unmeasured).
 - After that: R7 parity close (parity check against WPF 0.3.1, WPF removed from `src/`), then
   the first public 0.4.0 release (which makes the update path testable with 0.4.1).
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a
