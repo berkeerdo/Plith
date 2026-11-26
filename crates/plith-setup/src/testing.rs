@@ -2,11 +2,27 @@
 
 use crate::processes::Processes;
 use crate::register::{Hive, Places};
+use std::ffi::OsString;
 use std::fs;
+use std::os::windows::ffi::{OsStrExt, OsStringExt};
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU32, Ordering};
+use windows::Win32::Storage::FileSystem::GetLongPathNameW;
 use windows::Win32::System::Registry::{HKEY_CURRENT_USER, RegDeleteTreeW};
 use windows::core::{HSTRING, PCWSTR};
+
+/// Expands 8.3 short names (`RUNNER~1`): CI runners hand out a short `%TEMP%`, while a shell
+/// link reports the long form, so expected paths must be long to compare equal.
+fn long_path(path: &Path) -> PathBuf {
+    let wide: Vec<u16> = path.as_os_str().encode_wide().chain(Some(0)).collect();
+    let mut buf = vec![0u16; 1024];
+    // SAFETY: `wide` is NUL terminated and `buf` is a live, writable buffer of the stated size.
+    let len = unsafe { GetLongPathNameW(PCWSTR(wide.as_ptr()), Some(&mut buf)) } as usize;
+    if len == 0 || len > buf.len() {
+        return path.to_path_buf();
+    }
+    PathBuf::from(OsString::from_wide(&buf[..len]))
+}
 
 /// A unique temp folder, removed on drop.
 pub struct TempDir(PathBuf);
@@ -15,8 +31,8 @@ impl TempDir {
     pub fn new(name: &str) -> Self {
         static COUNTER: AtomicU32 = AtomicU32::new(0);
         let n = COUNTER.fetch_add(1, Ordering::Relaxed);
-        let path =
-            std::env::temp_dir().join(format!("plith-setup-{name}-{}-{n}", std::process::id()));
+        let path = long_path(&std::env::temp_dir())
+            .join(format!("plith-setup-{name}-{}-{n}", std::process::id()));
         fs::create_dir_all(&path).expect("temp dir");
         Self(path)
     }
