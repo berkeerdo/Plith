@@ -5,7 +5,7 @@
 //! The strip frames are real frames of a BRISK expand from the Karot pill to the welcome page,
 //! stepped at 240 Hz the way the render loop steps them: each frame is the first one whose morph
 //! progress reaches 0, 0.25, 0.40, 0.55, 0.70 and 1.0, with the island shape, the content
-//! opacity and the ripple time that frame has.
+//! opacity and the ripples that frame has (they press with the progress, then hold and fade).
 
 use super::{
     BOTTOM, CELL_W, Canvas, EDGE, PILL_GAP, SCALE_CELL, idle_states, png, px, sheet_facts,
@@ -15,7 +15,7 @@ use plith_core::geometry::IslandShape;
 use plith_core::island::IslandMotion;
 use plith_core::lang::Lang;
 use plith_core::material::art::{MaterialArt, ThemePaint};
-use plith_core::material::{EXPAND_SETTLE_MS, MaterialLayers, MaterialMotion, morph_progress};
+use plith_core::material::{MaterialLayers, MaterialMotion, morph_progress};
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::fixtures;
@@ -206,10 +206,9 @@ fn states() -> Vec<(&'static str, Shot)> {
 }
 
 /// The strip: a BRISK expand from the Karot pill to the welcome page, one shot per `STRIP`
-/// progress, with the ripple time in ms. The ripples run on the frame's own time, or with
-/// `plan_clock` on `progress x EXPAND_SETTLE_MS` (the plan's reading, where progress grows
-/// linearly with time; the BRISK spring opens much faster than that).
-fn strip(plan_clock: bool) -> Vec<(f64, f64, Shot)> {
+/// progress, with the time since the expand in ms. The timeline is advanced every frame, as
+/// the render loop does, so the latched presses and the hold start are the app's.
+fn strip() -> Vec<(f64, f64, Shot)> {
     let facts = idle_states::idle_facts(LANG);
     let from = rest_shape(IdleLook::Karot);
     let welcome = welcome_page(&idle_states::rest(LANG), None);
@@ -224,6 +223,7 @@ fn strip(plan_clock: bool) -> Vec<(f64, f64, Shot)> {
     let mut t_ms = 0.0;
     while out.len() < STRIP.len() && t_ms < 2000.0 {
         let progress = morph_progress(island.shape().height, REST.height, to.height);
+        material.advance(t_ms, progress);
         let want = STRIP[out.len()];
         if progress >= want.min(1.0 - OPEN_EPS) {
             let mut shot = page_shot(PageId::Welcome, &welcome);
@@ -235,13 +235,8 @@ fn strip(plan_clock: bool) -> Vec<(f64, f64, Shot)> {
             // An opacity in 0..=1.
             let value = opacity.value().clamp(0.0, 1.0) as f32;
             shot.opacity = value;
-            let ripple_ms = if plan_clock {
-                want * EXPAND_SETTLE_MS
-            } else {
-                t_ms
-            };
-            shot.layers = material.layers(ripple_ms, progress);
-            out.push((want, ripple_ms, shot));
+            shot.layers = material.layers(t_ms, progress);
+            out.push((want, t_ms, shot));
             continue;
         }
         island.step(FRAME_S);
@@ -305,30 +300,23 @@ pub(super) fn render(dir: &Path) -> Result<(), Error> {
                 super::write_png(&file, &row(std::slice::from_ref(&shot), paint)?)?;
             }
         }
-        render_strip(&dir, factor, &halka, "strip", false)?;
-        render_strip(&dir, factor, &halka, "strip-plan", true)?;
+        render_strip(&dir, factor, &halka)?;
         render_settings(&dir, factor)?;
     }
     println!("{}", dir.display());
     Ok(())
 }
 
-/// Writes one strip (`name`, see [`strip`]) and prints each frame's numbers.
-fn render_strip(
-    dir: &Path,
-    factor: f64,
-    halka: &ThemePaint,
-    name: &str,
-    plan_clock: bool,
-) -> Result<(), Error> {
-    for (progress, ripple_ms, shot) in strip(plan_clock) {
+/// Writes the strip (see [`strip`]) and prints each frame's numbers.
+fn render_strip(dir: &Path, factor: f64, halka: &ThemePaint) -> Result<(), Error> {
+    for (progress, t_ms, shot) in strip() {
         let file = dir.join(format!(
-            "halka-{name}-{:03.0}-{factor}x.png",
+            "halka-strip-{:03.0}-{factor}x.png",
             progress * 100.0
         ));
         let l = shot.layers;
         println!(
-            "{name} {factor}x {progress:.2}: ripple clock {ripple_ms:.1} ms, {:.1}x{:.1}, \
+            "strip {factor}x {progress:.2}: t {t_ms:.1} ms, {:.1}x{:.1}, \
              content {:.2}, reveal {:.2}, ripples {:.2}/{:.2}/{:.2}, disc {:.2} lift {:.1}, \
              pill {:.2}",
             shot.shape.width,

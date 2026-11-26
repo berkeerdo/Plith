@@ -16,7 +16,7 @@ use super::{Fatal, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use ambient::AmbientEnd;
 use engine::{Engine, Taken, content_spring};
-use material::{material_at_rest, open_height_of};
+use material::{material_at_rest, morph_at_rest};
 use plith_core::clock_choice::ClockKind;
 use plith_core::gpu_health::GpuHealth;
 use plith_core::island::IslandMotion;
@@ -169,7 +169,7 @@ pub fn run_loop<C, P, O, N>(
         aim_pages: Vec::new(),
         presented: None,
         material: material_at_rest(scene),
-        open_height: open_height_of(scene),
+        morph: morph_at_rest(scene),
         theme: ThemeId::gece(),
         has_material: false,
     };

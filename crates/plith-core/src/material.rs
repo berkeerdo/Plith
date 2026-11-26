@@ -1,30 +1,29 @@
 //! The Halka theme's open and collapse motion as pure data: fabric reveal, three ripples, the
 //! source disc lift and the pill fade (spec `2026-11-26-halka-island-design.md`, section 5).
 //!
-//! Two clocks drive it. The reveal, the disc lift and the pill follow the morph's `progress`
-//! (height between its start and target), so they follow the spring and its retargets. The
-//! ripples run on time since `expand`. All opacity curves are linear ramps.
+//! The morph's `progress` (height between its start and target, so it follows the spring and
+//! its retargets) drives the reveal, the disc lift, the pill and the ripple presses. A press is
+//! latched: `advance` records it each frame and it never comes back out while expanding. Time
+//! drives only the hold and fade after all three are pressed, and the collapse. All opacity
+//! curves are linear ramps.
 
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
 pub mod art;
+mod line;
 pub mod place;
 
-/// The measured `brisk` expand full time in milliseconds: the visible/full pair "expand 417/592 ms"
-/// in `docs/plans/done/engine-r1b.md` (line 379); 592 is the full time.
-pub const EXPAND_SETTLE_MS: f64 = 592.0;
-/// When each ripple starts pressing, in ms since `expand`: 25, 40 and 55 % of the settle time.
-pub const RIPPLE_START_MS: [f64; 3] = [
-    EXPAND_SETTLE_MS * 0.25,
-    EXPAND_SETTLE_MS * 0.40,
-    EXPAND_SETTLE_MS * 0.55,
-];
-/// A ripple presses (0 to 1) over this long.
-pub const PRESS_MS: f64 = 90.0;
-/// A pressed ripple holds at 1 this long. Ripples 1 and 2 keep holding until the last ripple's
-/// hold ends, so that all three fade together.
+pub use line::MorphLine;
+
+/// The morph progress where each ripple starts pressing (Berke's pick, 2026-11-26).
+pub const RIPPLE_FROM: [f64; 3] = [0.15, 0.30, 0.45];
+/// A ripple presses (0 to 1) over this much progress.
+pub const PRESS_SPAN: f64 = 0.15;
+/// All three ripples are pressed from this progress on.
+pub const ALL_PRESSED_AT: f64 = RIPPLE_FROM[2] + PRESS_SPAN;
+/// The pressed ripples hold at 1 this long after the last one is pressed.
 pub const HOLD_MS: f64 = 120.0;
-/// The shared fade (1 to 0) that starts when the last ripple's hold ends.
+/// The shared fade (1 to 0) that starts when the hold ends.
 pub const FADE_MS: f64 = 180.0;
 /// Collapse: each ripple starts leaving this long after the previous one, in order 3, 2, 1.
 pub const RISE_STEP_MS: f64 = 60.0;
@@ -42,8 +41,6 @@ pub const PILL_GONE_AT: f64 = 0.30;
 /// A reopen during a collapse replays the ripples only if the reveal had shrunk below this.
 pub const REPLAY_BELOW: f64 = 0.10;
 
-/// Time after `expand` when the last ripple has faded out.
-const EXPAND_DONE_MS: f64 = RIPPLE_START_MS[2] + PRESS_MS + HOLD_MS + FADE_MS;
 /// Time after `collapse` when the last ripple (index 0) has faded out.
 const COLLAPSE_DONE_MS: f64 = 2.0 * RISE_STEP_MS + FADE_MS;
 /// Progress tolerance for "at the end" in `is_settled`.
@@ -95,11 +92,13 @@ pub fn morph_progress(height: f64, rest: f64, open: f64) -> f64 {
 #[derive(Clone, Copy, Debug)]
 enum Phase {
     Collapsed,
-    /// `expand` was called at `since`; the ripples run on `now - since`, each pressing from its
-    /// `base` value (0 on a fresh open, the current value on a replay) toward 1.
+    /// Opening or open. Each ripple presses from its `base` (0 on a fresh open, the current
+    /// value on a replay) toward 1 as the progress passes its span; `pressed` is the latched
+    /// value, and `full_at` the time all three reached 1 (the hold starts there).
     Expanding {
-        since: f64,
         base: [f32; 3],
+        pressed: [f32; 3],
+        full_at: Option<f64>,
     },
     /// `collapse` was called at `since`; ripples fade from the `from` values.
     Collapsing {
@@ -130,12 +129,14 @@ fn ramp(t: f64, from: f64, len: f64) -> f64 {
     ((t - from) / len).clamp(0.0, 1.0)
 }
 
-/// Ripple `k` while expanding, `t` ms since `expand`: press from `base`, hold until the last
-/// ripple's hold ends, then the shared fade.
-fn expand_ripple(k: usize, t: f64, base: f32) -> f32 {
-    let press = base + (1.0 - base) * ramp(t, RIPPLE_START_MS[k], PRESS_MS) as f32;
-    let fade_from = RIPPLE_START_MS[2] + PRESS_MS + HOLD_MS;
-    press * (1.0 - ramp(t, fade_from, FADE_MS)) as f32
+/// Ripple `k` pressed from `base` at `progress`; exactly 1 at the end of its span.
+fn press(k: usize, progress: f64, base: f32) -> f32 {
+    1.0 - (1.0 - base) * (1.0 - ramp(progress, RIPPLE_FROM[k], PRESS_SPAN) as f32)
+}
+
+/// The shared fade factor (1 while holding, 0 when faded) `now_ms` after `full_at`.
+fn hold_fade(now_ms: f64, full_at: Option<f64>) -> f32 {
+    full_at.map_or(1.0, |t| 1.0 - ramp(now_ms, t + HOLD_MS, FADE_MS) as f32)
 }
 
 /// Ripple values `t` ms into a collapse. Ripple 3 (index 2) leaves first. "Rise" is read as a
@@ -157,14 +158,15 @@ impl MaterialMotion {
         }
     }
 
-    /// A timeline at rest, open: an expand that ended long ago (an island that jumped open with
-    /// no motion, such as a suppressed scene).
+    /// A timeline at rest, open: pressed and faded long ago (an island that jumped open with no
+    /// motion, such as a suppressed scene).
     #[must_use]
     pub fn open() -> Self {
         Self {
             phase: Phase::Expanding {
-                since: f64::NEG_INFINITY,
                 base: [0.0; 3],
+                pressed: [1.0; 3],
+                full_at: Some(f64::NEG_INFINITY),
             },
         }
     }
@@ -172,9 +174,11 @@ impl MaterialMotion {
     fn ripples_at(&self, now_ms: f64) -> [f32; 3] {
         match self.phase {
             Phase::Collapsed => [0.0; 3],
-            Phase::Expanding { since, base } => {
-                let t = now_ms - since;
-                [0, 1, 2].map(|k| expand_ripple(k, t, base[k]))
+            Phase::Expanding {
+                pressed, full_at, ..
+            } => {
+                let fade = hold_fade(now_ms, full_at);
+                pressed.map(|p| p * fade)
             }
             Phase::Collapsing { since, from } | Phase::Reopened { since, from } => {
                 collapse_ripples(from, now_ms - since)
@@ -192,20 +196,42 @@ impl MaterialMotion {
             Phase::Expanding { .. } | Phase::Reopened { .. } => {}
             Phase::Collapsed => {
                 self.phase = Phase::Expanding {
-                    since: now_ms,
                     base: [0.0; 3],
+                    pressed: [0.0; 3],
+                    full_at: None,
                 }
             }
             Phase::Collapsing { since, from } => {
                 let reveal = (progress / REVEAL_FULL_AT).clamp(0.0, 1.0);
                 self.phase = if reveal < REPLAY_BELOW {
+                    let base = collapse_ripples(from, now_ms - since);
                     Phase::Expanding {
-                        since: now_ms,
-                        base: collapse_ripples(from, now_ms - since),
+                        base,
+                        pressed: base,
+                        full_at: None,
                     }
                 } else {
                     Phase::Reopened { since, from }
                 };
+            }
+        }
+    }
+
+    /// Records the frame at `now_ms` and `progress`: while expanding, each ripple's press is
+    /// latched at its highest value so far, and the hold starts the first time all three are
+    /// pressed. Call it every frame before [`Self::layers`].
+    pub fn advance(&mut self, now_ms: f64, progress: f64) {
+        if let Phase::Expanding {
+            base,
+            pressed,
+            full_at,
+        } = &mut self.phase
+        {
+            for (k, p) in pressed.iter_mut().enumerate() {
+                *p = p.max(press(k, progress, base[k]));
+            }
+            if full_at.is_none() && pressed.iter().all(|p| *p >= 1.0) {
+                *full_at = Some(now_ms);
             }
         }
     }
@@ -222,7 +248,8 @@ impl MaterialMotion {
         };
     }
 
-    /// The layers at `now_ms` for the morph's current `progress` (0..1).
+    /// The layers at `now_ms` for the morph's current `progress` (0..1). The ripples are the
+    /// latched presses as of the last [`Self::advance`].
     ///
     /// Lift is linear in progress over `LIFT_FROM..LIFT_TO`. The pill fades linearly to 0 at
     /// `PILL_GONE_AT`. The disc fades in as the pill fades out (`1 - pill`) and fades out as it
@@ -245,8 +272,9 @@ impl MaterialMotion {
     pub fn is_settled(&self, now_ms: f64, progress: f64) -> bool {
         match self.phase {
             Phase::Collapsed => progress <= PROGRESS_EPS,
-            Phase::Expanding { since, .. } => {
-                now_ms - since >= EXPAND_DONE_MS && progress >= 1.0 - PROGRESS_EPS
+            Phase::Expanding { full_at, .. } => {
+                full_at.is_some_and(|t| now_ms - t >= HOLD_MS + FADE_MS)
+                    && progress >= 1.0 - PROGRESS_EPS
             }
             Phase::Reopened { since, .. } => {
                 now_ms - since >= COLLAPSE_DONE_MS && progress >= 1.0 - PROGRESS_EPS

@@ -13,7 +13,7 @@ use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
-use plith_core::material::MaterialMotion;
+use plith_core::material::{MaterialMotion, MorphLine};
 use plith_core::motion::{MotionKind, MotionStats};
 use plith_core::page::{PageLayers, PageTurn, motion_pages};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
@@ -71,8 +71,8 @@ pub(super) struct Engine<'a, C, P, O, N> {
     /// The material's open and collapse timeline; driven for every theme, painted and waited
     /// for only when `has_material`.
     pub(super) material: MaterialMotion,
-    /// The height the material's morph progress reaches 1 at (`material.rs`).
-    pub(super) open_height: f64,
+    /// The line the material's morph progress follows (`material.rs`).
+    pub(super) morph: MorphLine,
     /// The pack drawn, named at the end of the motion line.
     pub(super) theme: ThemeId,
     /// Whether the theme drawn has a material.
@@ -280,6 +280,7 @@ where
     /// one (the title scroll). After a failed paint and a successful `recover`, the same
     /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
     pub(super) fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
+        self.advance_material();
         let shape = self.island.shape();
         let pages = self.pages.layers();
         let content_opacity = opacity_f32(self.content.value());
