@@ -77,6 +77,8 @@ pub enum Floor {
         lum_min: f64,
         /// The lightest luminance in the text zone.
         lum_max: f64,
+        /// The mean colour of the whole raster: the flat colour drawn where the raster is not.
+        mean: Rgb,
     },
 }
 
@@ -129,6 +131,9 @@ pub struct Pack {
     pub collapsed: Face,
     /// The default accent.
     pub flow: Rgb,
+    /// The accent of the collapsed pill, when the pack fixes it (the user's accent then does not
+    /// apply to the pill).
+    pub collapsed_flow: Option<Rgb>,
     /// How the accent is drawn.
     pub flow_style: FlowStyle,
     /// Whether the user may pick the accent.
@@ -155,7 +160,9 @@ impl Pack {
             Floor::Colour { top, high } => Backdrop::Flat {
                 lums: vec![top.luminance(), high.luminance()],
             },
-            Floor::Material { lum_min, lum_max } => Backdrop::Range {
+            Floor::Material {
+                lum_min, lum_max, ..
+            } => Backdrop::Range {
                 min: lum_min,
                 max: lum_max,
             },
@@ -223,6 +230,7 @@ pub fn parse_pack(text: &str) -> Result<Pack, PackError> {
         open,
         collapsed,
         flow: fields.colour_required("flow.color")?,
+        collapsed_flow: fields.colour("collapsed.flow.color")?,
         flow_style: flow_style(&fields)?,
         flow_adjustable: fields.boolean("flow.adjustable")?.unwrap_or(false),
         floor_adjustable,
@@ -337,7 +345,12 @@ fn floor(fields: &Fields, p: &str) -> Result<Floor, PackError> {
                     "lum_min above lum_max",
                 ));
             }
-            Ok(Floor::Material { lum_min, lum_max })
+            let mean = colour("mean")?;
+            Ok(Floor::Material {
+                lum_min,
+                lum_max,
+                mean,
+            })
         }
         _ => Err(PackError::new(format!("{p}kind"), "bad value")),
     }
@@ -361,6 +374,11 @@ fn check_contrast(pack: &Pack) -> Result<(), PackError> {
                 ));
             }
         }
+    }
+    if let Some(flow) = pack.collapsed_flow
+        && worst_contrast(flow, &pack.backdrop(&pack.collapsed)) < FLOW_BAR
+    {
+        return Err(PackError::new("collapsed.flow.color", "contrast too low"));
     }
     let backdrop = pack.backdrop(&pack.open);
     if pack.flow_style == FlowStyle::Fill && worst_contrast(pack.flow, &backdrop) < FLOW_BAR {

@@ -6,6 +6,7 @@ id=halka
 name=Halka
 blurb.en=Lime fabric
 floor.kind=material
+floor.mean=#CCFA0D
 floor.lum_min=0.78
 floor.lum_max=0.93
 text_zone=24,40,572,180

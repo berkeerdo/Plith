@@ -7,7 +7,7 @@ fn rgb(text: &str) -> Rgb {
 }
 
 fn gece_text() -> String {
-    BUILTIN[0].to_owned()
+    BUILTIN[0].manifest.to_owned()
 }
 
 /// The Gece manifest with one line replaced (or appended when the key is absent).
@@ -15,6 +15,7 @@ fn gece_with(key: &str, value: &str) -> String {
     let prefix = format!("{key}=");
     let mut found = false;
     let mut lines: Vec<String> = BUILTIN[0]
+        .manifest
         .lines()
         .map(|l| {
             if l.starts_with(&prefix) {
@@ -34,6 +35,7 @@ fn gece_with(key: &str, value: &str) -> String {
 fn gece_without(key: &str) -> String {
     let prefix = format!("{key}=");
     BUILTIN[0]
+        .manifest
         .lines()
         .filter(|l| !l.starts_with(&prefix))
         .collect::<Vec<_>>()
@@ -47,7 +49,7 @@ fn reason(text: &str) -> (String, &'static str) {
 
 #[test]
 fn gece_builtin_parses() {
-    let pack = parse_pack(BUILTIN[0]).unwrap();
+    let pack = parse_pack(BUILTIN[0].manifest).unwrap();
     assert_eq!(pack.id, "gece");
     assert_eq!(pack.name, "Gece");
     assert_eq!(
@@ -200,7 +202,8 @@ fn material_manifest_parses() {
         pack.open.floor,
         Floor::Material {
             lum_min: 0.78,
-            lum_max: 0.93
+            lum_max: 0.93,
+            mean: rgb("#CCFA0D")
         }
     );
     assert_eq!(pack.text_zone, Some([24.0, 40.0, 572.0, 180.0]));
@@ -271,4 +274,51 @@ fn id_and_required_keys_checked() {
 fn pack_error_displays_key_and_reason() {
     let err = PackError::new("flow.color", "bad colour");
     assert_eq!(err.to_string(), "`flow.color`: bad colour");
+}
+
+#[test]
+fn halka_builtin_parses() {
+    let pack = parse_pack(BUILTIN[1].manifest).unwrap();
+    assert_eq!(pack.id, "halka");
+    assert_eq!(pack.signature, Signature::Rings);
+    assert_eq!(pack.overlays, ["ring-1", "ring-2", "ring-3", "disc"]);
+    assert_eq!(pack.blurbs.len(), 8);
+    assert_eq!(
+        pack.open.floor,
+        Floor::Material {
+            lum_min: 0.5773,
+            lum_max: 0.9275,
+            mean: rgb("#CCFA0D")
+        }
+    );
+    assert_eq!(pack.text_zone, Some([30.0, 12.0, 566.0, 394.0]));
+    assert_eq!(pack.flow, rgb("#000000"));
+    assert_eq!(pack.collapsed_flow, Some(rgb("#CAFF33")));
+    assert_eq!(pack.swatches.len(), 5);
+    assert!(pack.flow_adjustable && !pack.floor_adjustable && !pack.dark);
+    let gece = parse_pack(BUILTIN[0].manifest).unwrap();
+    assert_eq!(pack.collapsed, gece.open);
+}
+
+#[test]
+fn material_needs_mean() {
+    let text = HALKA.replace("floor.mean=#CCFA0D\n", "");
+    assert_eq!(
+        reason(&text),
+        ("floor.mean".to_owned(), "missing required key")
+    );
+}
+
+#[test]
+fn collapsed_flow_checked_on_collapsed_face() {
+    let ok = format!("{HALKA}collapsed.flow.color=#CAFF33\n");
+    assert_eq!(
+        parse_pack(&ok).unwrap().collapsed_flow,
+        Some(rgb("#CAFF33"))
+    );
+    // Dark on the black pill: fine on the lime open face, refused on the pill.
+    let bad = format!("{HALKA}collapsed.flow.color=#141A05\n");
+    let (key, why) = reason(&bad);
+    assert_eq!(key, "collapsed.flow.color");
+    assert!(why.contains("contrast"));
 }

@@ -194,3 +194,62 @@ fn bad_floor_sets_refused() {
     assert!(r.floor_refused);
     assert_eq!(r.open, todays_gece());
 }
+
+fn real_halka() -> ThemeId {
+    ThemeId::parse("halka").unwrap()
+}
+
+#[test]
+fn halka_open_flow_black_pill_lime() {
+    let r = Registry::builtin().resolve(&real_halka(), none());
+    assert_eq!(r.open.flow, hex(0, 0, 0));
+    assert_eq!(r.collapsed.flow, hex(0xCA, 0xFF, 0x33));
+    assert_eq!(r.collapsed.floor, todays_gece().floor);
+    assert_eq!(r.sheet.floor, todays_gece().floor);
+    assert_eq!(r.sheet.flow, todays_gece().flow);
+    assert!(r.material && !r.dark);
+}
+
+#[test]
+fn halka_user_accent_open_only() {
+    let pick = AccentPick::Colour(rgb("#0B2A4A"));
+    let r = Registry::builtin().resolve(&real_halka(), picks(Some(&pick), None));
+    assert_eq!(r.open.flow, hex(0x0B, 0x2A, 0x4A));
+    assert_eq!(r.collapsed.flow, hex(0xCA, 0xFF, 0x33));
+}
+
+#[test]
+fn material_floor_uses_mean() {
+    let r = Registry::builtin().resolve(&real_halka(), none());
+    assert_eq!(r.open.floor, hex(0xCC, 0xFA, 0x0D));
+    assert_eq!(r.open.floor_high, hex(0xCC, 0xFA, 0x0D));
+}
+
+#[test]
+fn drawn_is_gece_for_unknown() {
+    let unknown = ThemeId::parse("firn").unwrap();
+    let r = Registry::builtin().resolve(&unknown, none());
+    assert_eq!(r.id, unknown);
+    assert_eq!(r.drawn, ThemeId::gece());
+    assert!(!r.material);
+    let halka = Registry::builtin().resolve(&real_halka(), none());
+    assert_eq!(halka.drawn, real_halka());
+}
+
+/// A pick whose own chroma never reaches 3:1 on this backdrop (found by a sweep: the window of
+/// passing greys is a hair wide) still gets a grey at chroma 0, not the fallback.
+#[test]
+fn chroma_zero_retry_passes() {
+    use crate::theme::colour::{Backdrop, worst_contrast};
+    use crate::theme::solve::solve_accent;
+    let backdrop = Backdrop::Flat {
+        lums: vec![0.05, 0.8505],
+    };
+    let fallback = rgb("#123456");
+    let solved = solve_accent(rgb("#00FF00"), &backdrop, fallback);
+    assert_ne!(solved.shift, Shift::Fallback);
+    assert_ne!(solved.colour, fallback);
+    let [r, g, b] = solved.colour.0;
+    assert!(r == g && g == b, "a grey, got {:?}", solved.colour);
+    assert!(worst_contrast(solved.colour, &backdrop) >= 3.0);
+}

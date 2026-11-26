@@ -18,9 +18,10 @@ const INK_KEYS: [&str; 6] = [
 ];
 
 /// The floor keys of a face, as key suffixes after `floor.`.
-pub(super) const FLOOR_KEYS: [&str; 5] = ["kind", "color", "color_high", "lum_min", "lum_max"];
+pub(super) const FLOOR_KEYS: [&str; 6] =
+    ["kind", "color", "color_high", "mean", "lum_min", "lum_max"];
 
-const SINGLE_KEYS: [&str; 13] = [
+const SINGLE_KEYS: [&str; 14] = [
     "format",
     "id",
     "name",
@@ -28,6 +29,7 @@ const SINGLE_KEYS: [&str; 13] = [
     "material.tintable",
     "text_zone",
     "flow.color",
+    "collapsed.flow.color",
     "flow.style",
     "flow.adjustable",
     "flow.swatches",

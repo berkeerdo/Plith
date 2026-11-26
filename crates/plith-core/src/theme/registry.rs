@@ -71,6 +71,10 @@ pub struct Picks<'a> {
 pub struct ResolvedTheme {
     /// The id asked for, even when it is unknown and Gece is drawn.
     pub id: ThemeId,
+    /// The pack actually drawn: `gece` for an unknown id.
+    pub drawn: ThemeId,
+    /// Whether the drawn open floor is a raster material (a plain floor pick replaces it).
+    pub material: bool,
     /// The open island.
     pub open: Palette,
     /// The collapsed pill.
@@ -95,7 +99,8 @@ pub struct Registry {
 fn gece_pack() -> &'static Pack {
     static GECE: OnceLock<Pack> = OnceLock::new();
     GECE.get_or_init(|| {
-        parse_pack(BUILTIN[0]).unwrap_or_else(|e| panic!("built-in pack gece refused: {e}"))
+        parse_pack(BUILTIN[0].manifest)
+            .unwrap_or_else(|e| panic!("built-in pack gece refused: {e}"))
     })
 }
 
@@ -109,7 +114,9 @@ impl Registry {
     pub fn builtin() -> Self {
         let packs = BUILTIN
             .iter()
-            .map(|text| parse_pack(text).unwrap_or_else(|e| panic!("built-in pack refused: {e}")))
+            .map(|b| {
+                parse_pack(b.manifest).unwrap_or_else(|e| panic!("built-in pack refused: {e}"))
+            })
             .collect();
         Self { packs }
     }
@@ -146,10 +153,14 @@ impl Registry {
         };
         let wanted = wanted_accent(pack, &picks);
         let (open_flow, shift) = solve(pack, wanted, &open);
-        let (collapsed_flow, _) = solve(pack, wanted, &collapsed);
+        let collapsed_flow = pack
+            .collapsed_flow
+            .unwrap_or_else(|| solve(pack, wanted, &collapsed).0);
         let sheet = sheet_palette(wanted);
         ResolvedTheme {
             id: id.clone(),
+            drawn: ThemeId(pack.id.clone()),
+            material: plain.is_none() && matches!(pack.open.floor, Floor::Material { .. }),
             open: palette(&open, open_flow),
             collapsed: palette(&collapsed, collapsed_flow),
             sheet,
@@ -228,7 +239,7 @@ fn sheet_palette(accent: Rgb) -> Palette {
 fn palette(face: &Face, flow: Rgb) -> Palette {
     let (floor, floor_high) = match face.floor {
         Floor::Colour { top, high } => (top.rgba(), high.rgba()),
-        Floor::Material { lum_min, lum_max } => (grey(lum_min), grey(lum_max)),
+        Floor::Material { mean, .. } => (mean.rgba(), mean.rgba()),
     };
     Palette {
         floor,
@@ -241,19 +252,6 @@ fn palette(face: &Face, flow: Rgb) -> Palette {
         faint_track: face.ink.faint_track.rgba(),
         flow: flow.rgba(),
     }
-}
-
-/// A grey of a given luminance, the stand-in colour of a raster floor.
-fn grey(luminance: f64) -> [f32; 4] {
-    let v = luminance.clamp(0.0, 1.0);
-    let encoded = if v <= 0.003_130_8 {
-        v * 12.92
-    } else {
-        1.055 * v.powf(1.0 / 2.4) - 0.055
-    };
-    #[allow(clippy::cast_possible_truncation)] // a value in 0..=1
-    let channel = encoded as f32;
-    [channel, channel, channel, 1.0]
 }
 
 #[cfg(test)]

@@ -93,6 +93,7 @@ one tokenizer serves both. Keys (v1):
 | `floor.kind` | `color` or `material` |
 | `floor.color`, `floor.color_high` | Two gradient stops (`color` packs) |
 | `floor.lum_min`, `floor.lum_max` | Relative luminance range of the text zone (material packs), measured, checked by test (5.3) |
+| `floor.mean` | Mean colour of the whole raster (material packs, required): the flat colour the palette's floor roles use where the raster is not drawn |
 | `floor.adjustable` | `true` only on `color` packs |
 | `material.tintable` | Reserved, must be `false` in v1 |
 | `text_zone` | Rect in DIP relative to the open island, where text and marks may sit |
@@ -101,6 +102,7 @@ one tokenizer serves both. Keys (v1):
 | `flow.style` | `fill` (bars, dots) or `punch` (Şerit: levels drawn as hole rows in ink) |
 | `flow.adjustable` | Whether the user may pick the accent |
 | `flow.swatches` | Up to 6 suggested accents, each already passing on this floor |
+| `collapsed.flow.color` | Optional: the exact accent of the collapsed pill; the user's accent then does not apply to the pill. Checked 3:1 on the collapsed face at load (Halka: Gece lime on the black pill) |
 | `collapsed.*` | Same `floor.*` and `ink.*` keys for the collapsed pill (Halka: glossy black pill, Gece ink) |
 | `motion.open` | One of `rings`, `layers`, `tension`, `feed`, `none` |
 | `motion.overlays` | Overlay raster names the signature uses, in order |
