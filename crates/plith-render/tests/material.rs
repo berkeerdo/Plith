@@ -79,7 +79,7 @@ fn halka() -> ThemePaint {
         },
     );
     assert!(resolved.material, "halka draws a material");
-    ThemePaint::new(resolved.open, resolved.collapsed, Some(Arc::new(art)))
+    ThemePaint::new(id, resolved.open, resolved.collapsed, Some(Arc::new(art)))
 }
 
 /// The pack's measured mean fabric colour.

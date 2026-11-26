@@ -1,5 +1,6 @@
 mod harness;
 mod live;
+mod material;
 mod palette;
 mod prewarm;
 mod relayout;

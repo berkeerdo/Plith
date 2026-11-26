@@ -139,6 +139,7 @@ impl Painter {
             open,
             collapsed,
             material,
+            ..
         } = paint;
         self.open = open;
         self.collapsed = collapsed;

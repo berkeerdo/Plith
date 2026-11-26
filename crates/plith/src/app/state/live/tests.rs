@@ -301,6 +301,7 @@ fn halka_sends_material_and_two_palettes() {
     assert_eq!(sent.borrow().len(), 1);
     let paint = sent.borrow()[0].clone();
     assert!(paint.material.is_some(), "Halka draws its material");
+    assert_eq!(paint.drawn, id("halka"), "the motion line names it");
     assert_eq!(
         bits(paint.collapsed.floor),
         bits(Palette::default().floor),
@@ -339,6 +340,7 @@ fn gece_sends_plain_paint() {
     app.change(SettingChange::Theme(ThemeId::gece()));
     let paint = sent.borrow()[1].clone();
     assert!(paint.material.is_none());
+    assert_eq!(paint.drawn, ThemeId::gece());
     assert_eq!(paint.open, paint.collapsed);
     clean(app, "gece-plain");
 }

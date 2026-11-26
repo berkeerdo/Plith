@@ -157,6 +157,18 @@ impl MaterialMotion {
         }
     }
 
+    /// A timeline at rest, open: an expand that ended long ago (an island that jumped open with
+    /// no motion, such as a suppressed scene).
+    #[must_use]
+    pub fn open() -> Self {
+        Self {
+            phase: Phase::Expanding {
+                since: f64::NEG_INFINITY,
+                base: [0.0; 3],
+            },
+        }
+    }
+
     fn ripples_at(&self, now_ms: f64) -> [f32; 3] {
         match self.phase {
             Phase::Collapsed => [0.0; 3],

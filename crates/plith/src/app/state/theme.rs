@@ -12,10 +12,14 @@ impl App {
     /// the island falls back to the plain default paint.
     pub(super) fn theme_paint(&mut self, resolved: &ResolvedTheme) -> ThemePaint {
         if !resolved.material {
-            return ThemePaint::new(resolved.open, resolved.collapsed, None);
+            let drawn = resolved.drawn.clone();
+            return ThemePaint::new(drawn, resolved.open, resolved.collapsed, None);
         }
         match self.art.get(&resolved.drawn, self.scale) {
-            Ok(art) => ThemePaint::new(resolved.open, resolved.collapsed, Some(art)),
+            Ok(art) => {
+                let drawn = resolved.drawn.clone();
+                ThemePaint::new(drawn, resolved.open, resolved.collapsed, Some(art))
+            }
             Err(error) => {
                 self.log.line(&error);
                 ThemePaint::plain(Palette::default())

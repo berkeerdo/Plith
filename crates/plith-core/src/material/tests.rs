@@ -20,6 +20,21 @@ fn layers_at_rest_collapsed_and_open() {
 }
 
 #[test]
+fn open_at_rest_is_settled_and_collapses_from_nothing() {
+    let mut m = MaterialMotion::open();
+    assert!(m.is_settled(0.0, 1.0));
+    assert_eq!(m.layers(0.0, 1.0), MaterialLayers::OPEN);
+    m.expand(10.0, 1.0);
+    assert!(
+        m.is_settled(10.0, 1.0),
+        "already open: expand replays nothing"
+    );
+    m.collapse(10.0);
+    assert_eq!(m.layers(10.0, 1.0).ripples, [0.0; 3]);
+    assert!(m.is_settled(10.0 + 1000.0, 0.0));
+}
+
+#[test]
 fn ripples_press_in_order_at_listed_times() {
     let m = expanded(1000.0);
     for (k, start) in RIPPLE_START_MS.iter().enumerate() {

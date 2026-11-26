@@ -7,6 +7,7 @@
 
 use crate::draw::ArtPixels;
 use crate::theme::Palette;
+use crate::theme::registry::ThemeId;
 use std::sync::Arc;
 
 /// The decoded rasters of a material pack (spec `2026-11-26-halka-island-design.md`, section 3).
@@ -27,6 +28,8 @@ pub struct MaterialArt {
 /// pictures.
 #[derive(Debug, Clone, PartialEq)]
 pub struct ThemePaint {
+    /// The pack drawn (the motion log line names it).
+    pub drawn: ThemeId,
     /// The open island's colours.
     pub open: Palette,
     /// The collapsed pill's colours.
@@ -36,20 +39,28 @@ pub struct ThemePaint {
 }
 
 impl ThemePaint {
-    /// A plain theme: one palette for both faces, no material.
+    /// A plain theme drawn as Gece: one palette for both faces, no material.
     #[must_use]
     pub fn plain(palette: Palette) -> Self {
         Self {
+            drawn: ThemeId::gece(),
             open: palette,
             collapsed: palette,
             material: None,
         }
     }
 
-    /// The two palettes of a resolved theme with its pictures (`None` for a plain theme).
+    /// The pack `drawn`, the two palettes of a resolved theme and its pictures (`None` for a
+    /// plain theme).
     #[must_use]
-    pub fn new(open: Palette, collapsed: Palette, material: Option<Arc<MaterialArt>>) -> Self {
+    pub fn new(
+        drawn: ThemeId,
+        open: Palette,
+        collapsed: Palette,
+        material: Option<Arc<MaterialArt>>,
+    ) -> Self {
         Self {
+            drawn,
             open,
             collapsed,
             material,
@@ -76,6 +87,7 @@ mod tests {
         let paint = ThemePaint::plain(Palette::default());
         assert_eq!(paint.open, paint.collapsed);
         assert!(paint.material.is_none());
+        assert_eq!(paint.drawn, ThemeId::gece());
     }
 
     #[test]
@@ -86,7 +98,14 @@ mod tests {
             disc: pixels(5),
             pill: pixels(6),
         });
-        let paint = ThemePaint::new(Palette::default(), Palette::setup(), Some(Arc::clone(&art)));
+        let halka = ThemeId::parse("halka").expect("id");
+        let paint = ThemePaint::new(
+            halka.clone(),
+            Palette::default(),
+            Palette::setup(),
+            Some(Arc::clone(&art)),
+        );
+        assert_eq!(paint.drawn, halka);
         assert!(Arc::ptr_eq(paint.material.as_ref().unwrap(), &art));
         assert_ne!(paint.open, paint.collapsed);
     }

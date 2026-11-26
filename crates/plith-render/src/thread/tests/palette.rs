@@ -16,7 +16,7 @@ use std::sync::{Arc, Mutex};
 use std::thread;
 use std::time::{Duration, Instant};
 
-fn handle_of(run: &Run) -> RelayoutHandle {
+pub(super) fn handle_of(run: &Run) -> RelayoutHandle {
     RelayoutHandle {
         mailbox: Arc::clone(&run.mailbox),
         shared: Arc::clone(&run.shared),
@@ -30,7 +30,7 @@ fn handle_of(run: &Run) -> RelayoutHandle {
     }
 }
 
-fn wait_palettes(run: &Run, n: usize) {
+pub(super) fn wait_palettes(run: &Run, n: usize) {
     let deadline = Instant::now() + BOUND;
     while lock(&run.palettes).len() < n {
         assert!(Instant::now() < deadline, "expected {n} palette switches");

@@ -8,7 +8,8 @@
 //! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
 //! `--shelf <new folder>` renders the shelf page with 0 to 8 wagons and the hot slot.
 //! `--quick <new folder>` renders the quick page and every tab row at 1x and 2x in Turkish and
-//! German. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
+//! German. `--halka <new folder>` renders the Halka review set (`render_pages/halka_states.rs`)
+//! with Gece beside it. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
 //! error) and `--out <new folder>` names the folder of the page states.
 
 use plith_core::draw::{DisplayList, PageContent};
@@ -32,10 +33,16 @@ use plith_render::{TextSystem, render_offscreen};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+#[path = "render_pages/halka_states.rs"]
+mod halka_states;
 #[path = "render_pages/idle_states.rs"]
 mod idle_states;
+#[path = "common/png.rs"]
+mod png;
 #[path = "render_pages/quick_states.rs"]
 mod quick_states;
+#[path = "render_sheet/facts.rs"]
+mod sheet_facts;
 #[path = "render_pages/shelf_states.rs"]
 mod shelf_states;
 
@@ -334,6 +341,7 @@ struct Args {
     idle: Option<PathBuf>,
     quick: Option<PathBuf>,
     shelf: Option<PathBuf>,
+    halka: Option<PathBuf>,
 }
 
 fn parse_args() -> std::result::Result<Args, String> {
@@ -343,6 +351,7 @@ fn parse_args() -> std::result::Result<Args, String> {
         idle: None,
         quick: None,
         shelf: None,
+        halka: None,
     };
     let mut it = std::env::args_os().skip(1);
     while let Some(arg) = it.next() {
@@ -357,6 +366,7 @@ fn parse_args() -> std::result::Result<Args, String> {
             }
             Some("--quick") => args.quick = Some(it.next().ok_or("--quick needs a folder")?.into()),
             Some("--shelf") => args.shelf = Some(it.next().ok_or("--shelf needs a folder")?.into()),
+            Some("--halka") => args.halka = Some(it.next().ok_or("--halka needs a folder")?.into()),
             Some("--out") => args.out = Some(it.next().ok_or("--out needs a folder")?.into()),
             Some(flag) if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ if args.idle.is_none() => args.idle = Some(arg.into()),
@@ -414,6 +424,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     let args = parse_args()?;
     let lang = args.lang;
+    if let Some(dir) = &args.halka {
+        return halka_states::render(dir);
+    }
     if let Some(dir) = &args.shelf {
         return render_shelf(dir, lang);
     }

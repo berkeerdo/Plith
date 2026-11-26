@@ -41,6 +41,17 @@ fn report_line_matches_the_pinned_format() {
 }
 
 #[test]
+fn motion_line_names_the_theme() {
+    let mut s = MotionStats::new(MotionKind::Expand, HZ, "dcomp");
+    s.record_frame(0.0, CALM);
+    let mut report = s.finish();
+    assert_eq!(report.theme, None, "the stats know no theme");
+    report.theme = Some(String::from("halka"));
+    let line = report.to_string();
+    assert!(line.ends_with("first wait 0.0 ms; theme halka"), "{line}");
+}
+
+#[test]
 fn first_wait_is_noted_once_with_one_decimal() {
     let mut s = MotionStats::new(MotionKind::Expand, HZ, "dcomp");
     s.note_first_wait(12.34);

@@ -128,6 +128,8 @@ pub struct MotionReport {
     pub first_wait_ms: f64,
     /// The first hitches of the motion (at most `MAX_HITCH_DETAILS`), in order.
     pub hitch_details: Vec<HitchDetail>,
+    /// The theme pack drawn, ending the line as `; theme <id>`; `None` (the OSD) leaves it out.
+    pub theme: Option<String>,
 }
 
 impl MotionReport {
@@ -172,7 +174,11 @@ impl fmt::Display for MotionReport {
             self.clock,
             self.retargets,
             self.first_wait_ms,
-        )
+        )?;
+        match &self.theme {
+            Some(theme) => write!(f, "; theme {theme}"),
+            None => Ok(()),
+        }
     }
 }
 
@@ -296,6 +302,7 @@ impl MotionStats {
             retargets: self.retargets,
             first_wait_ms: self.first_wait_ms.unwrap_or(0.0),
             hitch_details: self.hitch_details.clone(),
+            theme: None,
         }
     }
 }

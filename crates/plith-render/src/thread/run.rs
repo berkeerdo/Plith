@@ -5,6 +5,7 @@
 
 mod ambient;
 mod engine;
+mod material;
 mod prewarm;
 mod relayout;
 
@@ -15,6 +16,7 @@ use super::{Fatal, Paint, RenderSinks};
 use crate::clock::{ClockError, FrameSource};
 use ambient::AmbientEnd;
 use engine::{Engine, Taken, content_spring};
+use material::{material_at_rest, open_height_of};
 use plith_core::clock_choice::ClockKind;
 use plith_core::gpu_health::GpuHealth;
 use plith_core::island::IslandMotion;
@@ -24,6 +26,7 @@ use plith_core::motion::FramePhases;
 use plith_core::page::PageTurn;
 use plith_core::panic_text::payload_text;
 use plith_core::scene::{Scene, SceneMailbox, Snapshot};
+use plith_core::theme::registry::ThemeId;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::TuningSet;
 use prewarm::Reason;
@@ -165,6 +168,10 @@ pub fn run_loop<C, P, O, N>(
         warm: Default::default(),
         aim_pages: Vec::new(),
         presented: None,
+        material: material_at_rest(scene),
+        open_height: open_height_of(scene),
+        theme: ThemeId::gece(),
+        has_material: false,
     };
     if engine.clocks.order.is_empty() {
         (engine.sinks.on_fatal)(Fatal::Error(String::from("no frame clock kinds to try")));
@@ -299,7 +306,11 @@ where
             }
             // The wait belongs to the frame it paced: a repaint without a wait reports 0.
             self.wait_ms = 0.0;
-            if island_settled && self.pages_settled && self.content_settled {
+            if island_settled
+                && self.pages_settled
+                && self.content_settled
+                && self.material_settled()
+            {
                 self.finish_motion(drawn_by);
                 return Ok(());
             }

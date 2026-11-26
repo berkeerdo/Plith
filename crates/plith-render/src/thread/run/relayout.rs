@@ -84,6 +84,7 @@ where
         let Some(paint) = self.shared.take_theme() else {
             return false;
         };
+        self.note_theme(&paint);
         self.paint.set_theme(paint);
         self.warm = Default::default();
         self.presented = None;
