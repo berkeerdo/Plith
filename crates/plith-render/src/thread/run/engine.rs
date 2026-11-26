@@ -13,7 +13,7 @@ use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
-use plith_core::material::{MaterialMotion, MorphLine};
+use plith_core::material::{MaterialLayers, MaterialMotion, MorphLine};
 use plith_core::motion::{MotionKind, MotionStats};
 use plith_core::page::{PageLayers, PageTurn, motion_pages};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
@@ -114,6 +114,17 @@ pub(super) fn content_target(scene: Scene) -> f64 {
 #[allow(clippy::cast_possible_truncation)]
 pub(super) fn opacity_f32(value: f64) -> f32 {
     value.clamp(0.0, 1.0) as f32
+}
+
+/// The content opacity a frame paints: the spring's `value`, or 0 while a ripple shows, so no
+/// frame shows ripples and page content together (Halka, 2026-11-26). The content spring waits
+/// for the ripples (`gate_content`), so this cut only bites where the content was already gone.
+fn shown_content(material: &MaterialLayers, value: f64) -> f32 {
+    if material.ripples.iter().any(|r| *r > 0.0) {
+        0.0
+    } else {
+        opacity_f32(value)
+    }
 }
 
 impl<C, P, O, N> Engine<'_, C, P, O, N>
@@ -243,9 +254,9 @@ where
             self.stats = Some(MotionStats::new(kind, self.hz, self.clocks.kind().as_str()));
         }
         self.island.retarget(target);
-        self.content
-            .retarget(content_target(scene), self.set.opacity);
         self.aim_material(scene);
+        self.content
+            .retarget(self.content_goal(scene), self.set.opacity);
         self.scene = scene;
         self.content_settled = self.content.is_settled();
         if page_changed {
@@ -283,9 +294,11 @@ where
     /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
     pub(super) fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
         self.advance_material();
+        self.gate_content();
         let shape = self.island.shape();
         let pages = self.pages.layers();
-        let content_opacity = opacity_f32(self.content.value());
+        let material = self.material_layers();
+        let content_opacity = shown_content(&material, self.content.value());
         let mut live = if shows_live(&self.page_content, &pages, f64::from(content_opacity)) {
             (self.sinks.sample)()
         } else {
@@ -302,7 +315,7 @@ where
             content: Arc::clone(&self.page_content),
             content_gen: self.content_gen,
             live,
-            material: self.material_layers(),
+            material,
         };
         let (times, recovered) = self.paint_once(&frame)?;
         if times.is_none() && recovered {

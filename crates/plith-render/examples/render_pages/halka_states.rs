@@ -3,9 +3,10 @@
 //! welcome page; the settings window; and the same collapsed and open frames in Gece beside them.
 //!
 //! The strip frames are real frames of a BRISK expand from the Karot pill to the welcome page,
-//! stepped at 240 Hz the way the render loop steps them: each frame is the first one whose morph
-//! progress reaches 0, 0.25, 0.40, 0.55, 0.70 and 1.0, with the island shape, the content
-//! opacity and the ripples that frame has (they press with the progress, then hold and fade).
+//! stepped at 240 Hz the way the render loop steps them: each frame is the first one at or past
+//! 0, 50, 100, 160, 290 and 450 ms since the expand, with the island shape, the morph progress,
+//! the content opacity and the ripples that frame has (they press with the progress, then fade
+//! together; the page content waits until they are gone, as the loop's content gate does).
 
 use super::{
     BOTTOM, CELL_W, Canvas, EDGE, PILL_GAP, SCALE_CELL, idle_states, png, px, sheet_facts,
@@ -42,12 +43,13 @@ type Error = Box<dyn std::error::Error>;
 
 /// The language of the set.
 const LANG: Lang = Lang::Tr;
-/// The morph progress of each strip frame.
-const STRIP: [f64; 6] = [0.0, 0.25, 0.40, 0.55, 0.70, 1.0];
+/// The time of each strip frame, in ms since the expand: the pill, the first ripple pressing,
+/// all three pressed (no text yet), the fade, the page coming in (no ripples), the page in.
+const STRIP_MS: [f64; 6] = [0.0, 50.0, 100.0, 160.0, 290.0, 450.0];
 /// One frame at 240 Hz, in seconds.
 const FRAME_S: f64 = 1.0 / 240.0;
-/// Progress this close to 1 counts as the open end (the spring approaches it).
-const OPEN_EPS: f64 = 1e-3;
+/// Slack so a frame time that rounds just under a strip time still counts.
+const TIME_EPS: f64 = 1e-6;
 
 /// One island: its shape, what it shows and how far the material has moved.
 struct Shot {
@@ -205,9 +207,10 @@ fn states() -> Vec<(&'static str, Shot)> {
     ]
 }
 
-/// The strip: a BRISK expand from the Karot pill to the welcome page, one shot per `STRIP`
-/// progress, with the time since the expand in ms. The timeline is advanced every frame, as
-/// the render loop does, so the latched presses and the hold start are the app's.
+/// The strip: a BRISK expand from the Karot pill to the welcome page, one shot per `STRIP_MS`
+/// time, with its morph progress. The timeline is advanced every frame and the content spring
+/// is held at 0 until the content gate opens, as the render loop does, so the latched presses,
+/// the fade and the content handover are the app's.
 fn strip() -> Vec<(f64, f64, Shot)> {
     let facts = idle_states::idle_facts(LANG);
     let from = rest_shape(IdleLook::Karot);
@@ -216,27 +219,29 @@ fn strip() -> Vec<(f64, f64, Shot)> {
     let mut island = IslandMotion::new(from, BRISK);
     island.retarget(to);
     let mut opacity = Spring::new(0.0, BRISK.opacity).with_eps(0.002, 0.01);
-    opacity.retarget(1.0, BRISK.opacity);
     let mut material = MaterialMotion::new();
     material.expand(0.0, 0.0);
     let mut out = Vec::new();
     let mut t_ms = 0.0;
-    while out.len() < STRIP.len() && t_ms < 2000.0 {
+    while out.len() < STRIP_MS.len() && t_ms < 2000.0 {
         let progress = morph_progress(island.shape().height, REST.height, to.height);
         material.advance(t_ms, progress);
-        let want = STRIP[out.len()];
-        if progress >= want.min(1.0 - OPEN_EPS) {
+        if material.content_gate() && opacity.target() < 0.5 {
+            opacity.retarget(1.0, BRISK.opacity);
+        }
+        if t_ms + TIME_EPS >= STRIP_MS[out.len()] {
             let mut shot = page_shot(PageId::Welcome, &welcome);
             let mut content = (*shot.content).clone();
             content.pill = Arc::new(idle_pill(IdleLook::Karot, &facts));
             shot.content = Arc::new(content);
             shot.shape = island.shape();
+            shot.layers = material.layers(t_ms, progress);
+            let ripples = shot.layers.ripples.iter().any(|r| *r > 0.0);
             #[allow(clippy::cast_possible_truncation)]
             // An opacity in 0..=1.
             let value = opacity.value().clamp(0.0, 1.0) as f32;
-            shot.opacity = value;
-            shot.layers = material.layers(t_ms, progress);
-            out.push((want, t_ms, shot));
+            shot.opacity = if ripples { 0.0 } else { value };
+            out.push((progress, t_ms, shot));
             continue;
         }
         island.step(FRAME_S);
@@ -310,13 +315,10 @@ pub(super) fn render(dir: &Path) -> Result<(), Error> {
 /// Writes the strip (see [`strip`]) and prints each frame's numbers.
 fn render_strip(dir: &Path, factor: f64, halka: &ThemePaint) -> Result<(), Error> {
     for (progress, t_ms, shot) in strip() {
-        let file = dir.join(format!(
-            "halka-strip-{:03.0}-{factor}x.png",
-            progress * 100.0
-        ));
+        let file = dir.join(format!("halka-strip-{t_ms:03.0}ms-{factor}x.png"));
         let l = shot.layers;
         println!(
-            "strip {factor}x {progress:.2}: t {t_ms:.1} ms, {:.1}x{:.1}, \
+            "strip {factor}x t {t_ms:.1} ms: progress {progress:.2}, {:.1}x{:.1}, \
              content {:.2}, reveal {:.2}, ripples {:.2}/{:.2}/{:.2}, disc {:.2} lift {:.1}, \
              pill {:.2}",
             shot.shape.width,

@@ -139,7 +139,11 @@ Anti-goals
   (2026-11-26), replacing the time-based press: the ripples follow the morph's progress, ripple
   k pressing linearly over progress 0.15 / 0.30 / 0.45 plus 0.15 (all pressed at 0.60), latched
   so a dip in progress never un-presses or replays them, then held 120 ms and faded together over
-  180 ms from the moment the last one is pressed.
+  180 ms from the moment the last one is pressed. Halka exception to "page content keeps its
+  existing handover" (Berke, 2026-11-26): the ripples fade together right after the last press
+  (`HOLD_MS` 0, `FADE_MS` 120, the collapse keeps its 180 ms as `RISE_MS`), and the expand's
+  content handover (idle look out, page in) starts only once they are 0, so no frame shows
+  ripples and page text together; Gece and the plain themes keep the handover unchanged.
 - `motion` log lines name the theme, so Halka and Gece runs read side by side.
 - Assets are cut from the existing sources by a script next to `make-states.ps1`, no new
   image-model passes unless a cut fails (then about 10 credits, asked first).

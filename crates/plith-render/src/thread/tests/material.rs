@@ -18,6 +18,8 @@ use std::sync::Arc;
 use std::thread;
 use std::time::Duration;
 
+mod gate;
+
 /// Frames of the fixed demo expand (rest to page 0, BRISK, 240 Hz) and of its collapse,
 /// measured on the loop before the material timeline existed (tree at 497d9da).
 const GECE_EXPAND_FRAMES: usize = 144;

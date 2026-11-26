@@ -3,6 +3,8 @@
 
 use super::*;
 
+mod gate;
+
 const EPS: f32 = 1e-4;
 
 fn expanded(now: f64) -> MaterialMotion {
@@ -123,7 +125,7 @@ fn collapse_mid_expand_starts_from_current() {
     // Ripple 3 leaves first (it is 0 here), ripple 1 last.
     let later = at(&mut m, now + RISE_STEP_MS, 0.3);
     assert_eq!(later.ripples[0], before.ripples[0]);
-    let end = at(&mut m, now + 2.0 * RISE_STEP_MS + FADE_MS, 0.0);
+    let end = at(&mut m, now + 2.0 * RISE_STEP_MS + RISE_MS, 0.0);
     assert!(end.ripples.iter().all(|r| *r < 1e-6));
 }
 
@@ -168,12 +170,17 @@ fn settled_only_when_ripples_done_and_progress_at_end() {
     at(&mut m, 100.0, 1.0);
     let done = 100.0 + HOLD_MS + FADE_MS;
     assert!(!m.is_settled(done - 1.0, 1.0));
+    assert!(
+        !m.is_settled(done, 1.0),
+        "the frame that sees the end is not recorded yet"
+    );
+    at(&mut m, done, 1.0);
     assert!(!m.is_settled(done, 0.5));
     assert!(m.is_settled(done, 1.0));
     let mut c = pressed_at(100.0);
     c.collapse(done);
     assert!(!c.is_settled(done + 10.0, 0.0));
-    let after = done + 2.0 * RISE_STEP_MS + FADE_MS;
+    let after = done + 2.0 * RISE_STEP_MS + RISE_MS;
     assert!(!c.is_settled(after, 0.4));
     assert!(c.is_settled(after, 0.0));
     assert!(MaterialMotion::new().is_settled(0.0, 0.0));

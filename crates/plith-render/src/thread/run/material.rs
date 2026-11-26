@@ -82,6 +82,25 @@ where
         self.material.advance(now, progress);
     }
 
+    /// The content spring's target for `scene`: 0 when collapsed; 1 when expanded, except while
+    /// a material's open still has ripples to press and fade (Halka: the page waits for them,
+    /// Berke 2026-11-26). A plain theme keeps the target it always had.
+    pub(super) fn content_goal(&self, scene: Scene) -> f64 {
+        let waits = self.has_material && !self.material.content_gate();
+        if scene.expanded && !waits { 1.0 } else { 0.0 }
+    }
+
+    /// Aims the content spring at `content_goal` when the gate opened (or the theme changed)
+    /// since the last aim; after `advance_material`, so the frame that opens the gate still
+    /// paints the content at 0 and the motion cannot end before the content has moved.
+    pub(super) fn gate_content(&mut self) {
+        let goal = self.content_goal(self.scene);
+        if (self.content.target() - goal).abs() > 0.5 {
+            self.content.retarget(goal, self.set.opacity);
+            self.content_settled = false;
+        }
+    }
+
     /// The layers this frame paints: the timeline's for a material theme, `OPEN` otherwise.
     pub(super) fn material_layers(&self) -> MaterialLayers {
         if self.has_material {
