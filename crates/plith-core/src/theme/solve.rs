@@ -14,7 +14,7 @@ const DARK_LUMINANCE: f64 = 0.179;
 /// Chroma of the ink tints.
 const INK_CHROMA: f64 = 0.012;
 /// Floors with a chroma below this count as neutral and get untinted ink.
-const NEUTRAL_CHROMA: f64 = 0.02;
+const NEUTRAL_CHROMA: f64 = 0.005;
 
 /// How the solve moved an accent pick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

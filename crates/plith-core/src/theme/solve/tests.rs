@@ -125,6 +125,17 @@ fn neutral_floor_gives_neutral_ink() {
 }
 
 #[test]
+fn tinted_migrated_floors_keep_tinted_ink() {
+    for floor in ["#F3F2ED", "#1C2420"] {
+        let plain = derive_plain(rgb(floor)).unwrap();
+        let tinted = [plain.ink, plain.muted, plain.faint]
+            .iter()
+            .any(|role| role.0[0] != role.0[1] || role.0[1] != role.0[2]);
+        assert!(tinted, "ink on {floor} lost its tint");
+    }
+}
+
+#[test]
 fn mid_grey_floor() {
     if let Some(plain) = derive_plain(rgb("#777777")) {
         assert_bar(&plain);
