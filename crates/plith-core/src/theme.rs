@@ -3,6 +3,8 @@
 
 use crate::draw::Ink;
 
+pub mod colour;
+
 /// The colours of one theme as straight sRGB RGBA in 0..=1.
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Palette {
@@ -180,7 +182,7 @@ impl Palette {
 }
 
 /// WCAG relative luminance of an sRGB colour (alpha ignored).
-fn luminance(rgba: [f32; 4]) -> f64 {
+pub(crate) fn luminance(rgba: [f32; 4]) -> f64 {
     let lin = |c: f32| {
         let c = f64::from(c);
         if c <= 0.040_45 {
