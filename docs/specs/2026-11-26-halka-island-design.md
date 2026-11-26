@@ -128,7 +128,8 @@ Anti-goals
   drawn as filled marks**, ink text never filled, so flow and ink differ by shape as well as
   value. If the review shows flow and ink cannot be told apart, the flow becomes the glossy
   black raster tone with the source's highlight (a 1 px light line on top), still not lime.
-- Motion timeline (proposal, tuned on the console): expand follows the existing spring; the
+- Motion timeline (first proposal; its press times, hold and fade are superseded by the two
+  dated picks at the end of this bullet): expand follows the existing spring; the
   fabric reveal is a circle growing from the source centre, reaching the far corner at 55 % of
   the morph's progress; ripples press at 25 / 40 / 55 % of the spring's typical settle time
   (converted to ms once, from the measured `brisk` expand), each a 90 ms press (fade in to the
@@ -138,14 +139,21 @@ Anti-goals
   disc fades back into the pill below 30 % progress. Berke's pick on the render review
   (2026-11-26), replacing the time-based press: the ripples follow the morph's progress, ripple
   k pressing linearly over progress 0.15 / 0.30 / 0.45 plus 0.15 (all pressed at 0.60), latched
-  so a dip in progress never un-presses or replays them, then held 120 ms and faded together over
-  180 ms from the moment the last one is pressed.
+  so a dip in progress never un-presses or replays them, then (superseded by the next sentence)
+  held 120 ms and faded together over 180 ms from the last press. Halka exception to "page content keeps its
+  existing handover" (Berke, 2026-11-26): the ripples fade together right after the last press
+  (`HOLD_MS` 0, `FADE_MS` 60, the collapse keeps its 180 ms as `RISE_MS`), the page comes in
+  only once they are 0 (about 160 ms after Gece's in a brisk expand), the idle look leaves with
+  the black pill on its own schedule (never above the pill's opacity), so no frame shows ripples
+  with page text or the idle look over the fabric, and the review strip is sampled by time since
+  the expand (0 / 50 / 100 / 130 / 230 / 400 ms, progress printed beside each); Gece and the
+  plain themes keep the handover unchanged.
 - `motion` log lines name the theme, so Halka and Gece runs read side by side.
 - Assets are cut from the existing sources by a script next to `make-states.ps1`, no new
   image-model passes unless a cut fails (then about 10 credits, asked first).
 - A render review page (Berke's private page) shows: collapsed in three idle looks, the audio,
-  media and welcome pages open, and a frame strip of the expand at 0 / 25 / 40 / 55 / 70 / 100 %,
-  at 1x and 2x. Berke sees it before the timeline and palette are final.
+  media and welcome pages open, and a frame strip of the expand (by time since 2026-11-26, see
+  the timeline above), at 1x and 2x. Berke sees it before the timeline and palette are final.
 
 ## 6. Left to the builder
 - The exact crop rectangles and how the ring overlays are cut and feathered, checked at 1x and
