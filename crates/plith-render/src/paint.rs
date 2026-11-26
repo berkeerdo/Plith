@@ -220,6 +220,12 @@ impl Painter {
         let placed = self.place_pages(ctx, frame, scale)?;
         self.material.ready(ctx)?;
         let material = self.material.is_set();
+        // A material never shows through: an opaque base in the collapsed floor colour lies
+        // under the pill and the reveal, skipped once the opaque fabric covers the shape.
+        let base = material && frame.material.reveal < 1.0;
+        if base {
+            self.kit.set_color(self.collapsed.floor, 1.0);
+        }
         let clear = color([0.0; 4], 1.0);
         // SAFETY: draw calls between BeginDraw and EndDraw on a live context with a target.
         unsafe {
@@ -227,6 +233,8 @@ impl Painter {
             ctx.Clear(Some(&raw const clear));
             if !material {
                 ctx.FillGeometry(&parts.fill, &parts.gradient, None);
+            } else if base {
+                ctx.FillGeometry(&parts.fill, &self.kit.brush, None);
             }
         }
         let clipped = material || !placed.is_empty();

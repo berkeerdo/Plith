@@ -233,8 +233,7 @@ fn halka_collapsed_is_black() {
         ))
         .unwrap();
     let centre = pixel(&buf, w, 100, 16);
-    // The pill raster itself is 253 to 255 opaque in its body.
-    assert!(centre[3] >= 250, "opaque pill, got {centre:?}");
+    assert_eq!(centre[3], 255, "opaque pill (the base under its 253 body)");
     assert!(luminance(centre) < 0.1, "black pill, got {centre:?}");
 }
 
@@ -253,7 +252,7 @@ fn halka_hidden_sliver_is_black_not_fabric() {
         .unwrap();
     for x in [10, 100, 190] {
         let p = pixel(&buf, w, x, 1);
-        assert!(p[3] >= 250, "opaque sliver at {x}, got {p:?}");
+        assert_eq!(p[3], 255, "opaque sliver at {x}");
         assert!(luminance(p) < 0.1, "black sliver at {x}, got {p:?}");
     }
 }
@@ -530,10 +529,44 @@ fn a_partial_reveal_is_a_circle_from_the_source() {
         .render(&frame(shape, PageContent::empty(), 1.0, layers))
         .unwrap();
     // Far corner distance is hypot(310, 267) = 409; 0.3 of it is 123 DIP around (310, 33).
-    assert_eq!(pixel(&buf, w, 310, 140)[3], 255, "inside the circle");
-    assert_eq!(
-        pixel(&buf, w, 20, 280)[3],
-        0,
-        "outside the circle, no pill: nothing"
+    let inside = pixel(&buf, w, 310, 140);
+    assert!(
+        luminance(inside) > 0.5,
+        "fabric inside the circle, got {inside:?}"
     );
+    let outside = pixel(&buf, w, 20, 280);
+    assert_eq!(outside[3], 255, "the base fills outside the circle");
+    assert!(
+        luminance(outside) < 0.1,
+        "black outside the circle, got {outside:?}"
+    );
+}
+
+#[test]
+fn halka_mid_expand_is_opaque() {
+    let shape = IslandShape {
+        width: 620.0,
+        height: 400.0,
+        radius: 24.0,
+    };
+    let (w, h) = px_size(shape);
+    let mut off = offscreen(w, h);
+    off.set_theme(halka());
+    // About 0.40 of the morph: the pill gone, the reveal short of the far corner.
+    let layers = MaterialLayers {
+        reveal: 0.4 / 0.55,
+        ripples: [1.0, 0.5, 0.0],
+        disc: 1.0,
+        disc_lift: 5.0,
+        pill: 0.0,
+    };
+    let buf = off
+        .render(&frame(shape, PageContent::empty(), 0.0, layers))
+        .unwrap();
+    // Far corner hypot(310, 367) = 480; the circle reaches 349 DIP from (310, 33).
+    for at in [(20, 380), (600, 380), (310, 395)] {
+        let p = pixel(&buf, w, at.0, at.1);
+        assert_eq!(p[3], 255, "opaque outside the reveal at {at:?}");
+        assert!(luminance(p) < 0.1, "black base at {at:?}, got {p:?}");
+    }
 }
