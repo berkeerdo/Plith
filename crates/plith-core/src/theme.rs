@@ -4,6 +4,7 @@
 use crate::draw::Ink;
 
 pub mod colour;
+pub mod solve;
 
 /// The colours of one theme as straight sRGB RGBA in 0..=1.
 #[derive(Debug, Clone, Copy, PartialEq)]
