@@ -5,17 +5,8 @@ Updated 2026-11-26 (late evening). Rewritten, not appended; old content goes to 
 ## Now
 - R0 to R3, R5, R7 languages, theme switch, settings window, identity r3 and the app icon are
   merged; history in `journal/2026-11.md`. R4, R6 and R7a are merged with console runs left.
-- **R7 part 2 merged as `3a9cb89` and pushed** (2026-11-26). Correction: its CI run on main was
-  red (setup register tests on the runner's 8.3 temp path; the dependency rules step never ran);
-  both fixed in the theme packs merge `3b868f6`, PR #1 green on run 45826321975. Spec
-  `specs/2026-11-25-r7-installer-design.md`, plan `plans/active/r7-installer.md`, ADR 0021.
-  `plith-setup.exe`: A Halka window at medium, elevated worker over a pipe, signed payload
-  (`plith.exe`, `osd\plith-osd.exe`, `setup\plith-setup.exe`), Apps entry, Start Menu link,
-  certificate in LocalMachine Root and TrustedPublisher, uninstall; one-time WPF `config.ini`
-  import; daily update check against GitHub `releases/latest` with a tray notice and an About
-  row. Build: `scripts/build-setup.ps1` (never overwrites `release\Plith-Setup-<v>.exe`; older
-  builds kept as `-pre1` to `-pre4`). Checks on `0e12f40`: 1604 tests passed, 1 ignored (live
-  network), clippy, fmt, structure.
+- **R7 part 2 merged as `3a9cb89`** (2026-11-26; setup, update check, WPF import; ADR 0021,
+  plan `plans/active/r7-installer.md`). Detail moved to `journal/2026-11.md`.
 - **Installed on this PC from the setup** (2026-11-26 00:21, build `40A12AC9...`): Plith runs
   from `C:\Program Files\Plith`, the old WPF install is gone. Eight real runs and three bugs
   fixed: `quality/2026-11-25-setup-first-run.md`.
@@ -46,11 +37,18 @@ Updated 2026-11-26 (late evening). Rewritten, not appended; old content goes to 
   progress (0.15 / 0.30 / 0.45, each over 0.15, option A); page text waits until they fade
   (60 ms), idle look leaves with the pill, so the page comes 162.5 ms after Gece's (fake clock).
   Merged as `b72bdb7` (PR #2 green). Rulings: `journal/2026-11.md`.
-- **Next: plan 2 Task 7, console measurement with Berke** (release build, `--theme halka` and
-  `gece`, expand and collapse audio, media, welcome ten times each, live switch while open;
-  UI-thread art decode on a switch to Halka, ring-clip draw ms, how the 162 ms page delay
-  feels, a collapse gap with neither page nor idle look). Then theme worlds plan 3 (Firn,
-  Kablo, Şerit, settings r2, Sıfırla for migrated colours). No release before plan 3.
+- **Plan 2 Task 7 console run** (2026-11-26, `quality/2026-11-26-halka-motion.md`): Halka meets
+  the bar (240 fps; collapse-only hitches, same as Gece; no ring-clip cost). Berke: ripples too
+  fast to see, song label lay on the date, idle pill looks off-centre and its "icon design" is
+  bad. Branch `feature/halka-tune` (not committed yet): slower ripples (0.10 / 0.35 / 0.60,
+  span 0.25, hold 40, fade 120; page at 312.5 ms, budgets 320) and the welcome label flips right
+  of the play start when it would reach under the date. Checks: 1761 passed, 1 ignored, clippy,
+  fmt, structure.
+- **Next: finish Task 7 with Berke on the console:** he judges the slower ripples and the label
+  in the release build; live switch Halka to Gece and back while open; an `--idle-check` run for
+  0 render wakes; what exactly is off-centre in the idle pill (measured: 16 px left, about 14 px
+  right, vertical within 1 px). Then theme worlds plan 3 (Firn, Kablo, Şerit, settings r2,
+  Sıfırla for migrated colours). No release before plan 3.
 - Release held until parity and the theme worlds (Berke asked 2026-11-26). After plan 3: R7
   parity close (vs WPF 0.3.1, WPF out of `src/`), then public 0.4.0 (0.4.1 tests the update).
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a

@@ -20,18 +20,19 @@ pub mod place;
 
 pub use line::MorphLine;
 
-/// The morph progress where each ripple starts pressing (Berke's pick, 2026-11-26).
-pub const RIPPLE_FROM: [f64; 3] = [0.15, 0.30, 0.45];
-/// A ripple presses (0 to 1) over this much progress.
-pub const PRESS_SPAN: f64 = 0.15;
+/// The morph progress where each ripple starts pressing ([0.15, 0.30, 0.45] before the console
+/// run of 2026-11-26, where Berke found them too fast to see).
+pub const RIPPLE_FROM: [f64; 3] = [0.10, 0.35, 0.60];
+/// A ripple presses (0 to 1) over this much progress (0.15 before the console run).
+pub const PRESS_SPAN: f64 = 0.25;
 /// All three ripples are pressed from this progress on.
 pub const ALL_PRESSED_AT: f64 = RIPPLE_FROM[2] + PRESS_SPAN;
-/// The pressed ripples hold at 1 this long after the last one is pressed (0: the fade starts
-/// at once, so the page waits as little as it can; 120 before 2026-11-26).
-pub const HOLD_MS: f64 = 0.0;
-/// The shared open fade (1 to 0) that starts when the hold ends (180, then 120, before 60 on
-/// 2026-11-26, to keep the page wait near 150 ms).
-pub const FADE_MS: f64 = 60.0;
+/// The pressed ripples hold at 1 this long after the last one is pressed (120, then 0, before
+/// the console run of 2026-11-26).
+pub const HOLD_MS: f64 = 40.0;
+/// The shared open fade (1 to 0) that starts when the hold ends (180, 120, then 60 before the
+/// console run of 2026-11-26).
+pub const FADE_MS: f64 = 120.0;
 /// Collapse: each ripple fades (its value to 0) over this long.
 pub const RISE_MS: f64 = 180.0;
 /// Collapse: each ripple starts leaving this long after the previous one, in order 3, 2, 1.

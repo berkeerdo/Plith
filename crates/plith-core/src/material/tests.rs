@@ -53,8 +53,8 @@ fn open_at_rest_is_settled_and_collapses_from_nothing() {
 
 #[test]
 fn all_pressed_where_the_last_press_ends() {
-    assert!((ALL_PRESSED_AT - 0.60).abs() < 1e-12);
-    assert_eq!(RIPPLE_FROM, [0.15, 0.30, 0.45]);
+    assert!((ALL_PRESSED_AT - 0.85).abs() < 1e-12);
+    assert_eq!(RIPPLE_FROM, [0.10, 0.35, 0.60]);
 }
 
 #[test]
