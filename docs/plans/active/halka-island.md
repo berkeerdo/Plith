@@ -105,10 +105,10 @@
 - Consumes: `ThemePaint`, `MaterialLayers`, `MaterialArt`.
 - Produces: draw order with a material: clear; fill shape with the pill bitmap brush (three-slice stretched, at `layers.pill`); push clip of the shape; fill the reveal circle (centre = source point, radius = `reveal` x distance to the far corner) with the fabric bitmap brush (`D2D1_EXTEND_MODE_MIRROR`, transform anchoring the source point); ring k bitmaps at `ripples[k]`; disc at `disc` shifted up by `disc_lift`; then the page and pill bitmaps as today; border.
 
-- [ ] **Step 1: failing tests** (offscreen, read back pixels): `halka_open_floor_is_fabric` (a pixel at (20, 200) DIP of the open audio page within 12 levels of the Halka pack's `floor.mean`); `halka_collapsed_is_black` (centre pixel of the 200 x 32 island has luminance below 0.1); `fabric_brush_extends_by_mirror` (shape 651 x 441: the corner pixel is fabric, not transparent or clamped stripe: its colour within 12 levels of the mean); `theme_switch_mid_open_replaces_floor` (paint open Halka, `set_theme(plain Gece)`, paint: the (20, 200) pixel within 6 levels of Gece's floor); `plain_theme_paints_as_before` (Gece frame pixels equal a frame painted before this task, via the existing reference render used by the tests).
-- [ ] **Step 2:** Run them via `node ~/.claude/bin/heavy-run.mjs -- cargo test -p plith-render`. Expected: FAIL.
-- [ ] **Step 3:** Implement. Bitmaps are created once per `ThemePaint` change on the render thread; no allocation per frame.
-- [ ] **Step 4:** Tests PASS; `paint.rs` stays under 500 lines. Commit `feat(render): paint the halka material`.
+- [x] **Step 1: failing tests** (offscreen, read back pixels): `halka_open_floor_is_fabric` (a pixel at (20, 200) DIP of the open audio page within 12 levels of the Halka pack's `floor.mean`); `halka_collapsed_is_black` (centre pixel of the 200 x 32 island has luminance below 0.1); `fabric_brush_extends_by_mirror` (shape 651 x 441: the corner pixel is fabric, not transparent or clamped stripe: its colour within 12 levels of the mean); `theme_switch_mid_open_replaces_floor` (paint open Halka, `set_theme(plain Gece)`, paint: the (20, 200) pixel within 6 levels of Gece's floor); `plain_theme_paints_as_before` (Gece frame pixels equal a frame painted before this task, via the existing reference render used by the tests).
+- [x] **Step 2:** Run them via `node ~/.claude/bin/heavy-run.mjs -- cargo test -p plith-render`. Expected: FAIL.
+- [x] **Step 3:** Implement. Bitmaps are created once per `ThemePaint` change on the render thread; no allocation per frame.
+- [x] **Step 4:** Tests PASS; `paint.rs` stays under 500 lines. Commit `feat(render): paint the halka material`.
 
 ### Task 6: Drive the motion in the engine, log the theme, render the review set
 
