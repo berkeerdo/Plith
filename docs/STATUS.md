@@ -37,7 +37,8 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   (supersedes 0007). **Plan 1 done on `feature/theme-packs`** (`6d75352`, not merged, not
   pushed): packs, colour solve, accent and floor keys, retired themes migrate to Gece colours;
   1665 tests passed, 86 of 93 renders byte-identical to main (7 expected). It merges together
-  with plan 2 (Halka on packs, next) so main never shows a one-theme picker. Open for plan 2:
+  with plan 2 (Halka on packs, next): `plans/active/halka-island.md` rewritten on the branch
+  (`587ca1f`, read it in `.claude/worktrees/theme-packs`), run subagent-driven there. Open for plan 2:
   Halka black accent solves to grey on its pill (lime rule or `collapsed.flow.color`). No
   release before plan 3 (no Sıfırla for migrated colours yet).
 - Then the island in A Halka: spec and plan committed in `be73ada`
