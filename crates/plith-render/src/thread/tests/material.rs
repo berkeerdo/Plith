@@ -274,6 +274,26 @@ fn a_switch_to_gece_mid_motion_settles_and_parks() {
 }
 
 #[test]
+fn a_theme_switch_inside_the_ripple_window_still_repaints() {
+    // A theme that lands right after a short collapse always shows its frame, whether or not
+    // the material timeline had finished its ripple schedule (the loop is parked and has no
+    // frame of its own).
+    let run = brisk_with(Vec::new(), Some(Duration::from_millis(2)));
+    run.wait_frames(1);
+    run.mailbox.publish(expanded(0));
+    run.wait_calls(run.harness.total() + 3);
+    run.mailbox.publish(Scene::default());
+    let report = run.report();
+    assert_eq!(report.retargets, 1, "{report}");
+    run.assert_parked();
+    let painted = run.frames().len();
+    handle_of(&run).set_theme(halka());
+    run.wait_frames(painted + 1);
+    run.assert_parked();
+    let _ = run.stop();
+}
+
+#[test]
 fn halka_open_island_returning_from_suppression_settles_at_once() {
     let run = halka_at_rest();
     let locked = Scene {

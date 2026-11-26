@@ -268,11 +268,13 @@ where
         self.posted = None;
     }
 
+    /// True when the springs have stopped (the material timeline is not asked).
+    pub(super) fn springs_settled(&self) -> bool {
+        self.island.is_settled() && self.pages_settled && self.content_settled
+    }
+
     pub(super) fn is_settled(&self) -> bool {
-        self.island.is_settled()
-            && self.pages_settled
-            && self.content_settled
-            && self.material_settled()
+        self.springs_settled() && self.material_settled()
     }
 
     /// Paints the current state, with live values sampled once when a visible page layer has a

@@ -97,7 +97,9 @@ where
     pub(super) fn apply_relayout(&mut self, repaint: bool) -> Result<(), String> {
         let recolored = self.apply_palette();
         let Some(next) = self.shared.take_relayout() else {
-            if recolored && repaint && !self.scene.suppression.any() && self.is_settled() {
+            // The springs decide, not the material timeline: a theme that lands inside a
+            // ripple window must still show its frame (the loop is parked and has none).
+            if recolored && repaint && !self.scene.suppression.any() && self.springs_settled() {
                 // The bitmaps are stale: raster the open pages again, then present once.
                 self.prewarm_open(Reason::Rest);
                 self.paint_frame()?;
@@ -130,7 +132,7 @@ where
             "render relayout: {}x{} scale={:.2} hz={:.2} clock={clock}",
             s.width, s.height, next.layout.scale, self.hz
         ));
-        if repaint && !self.scene.suppression.any() && self.is_settled() {
+        if repaint && !self.scene.suppression.any() && self.springs_settled() {
             self.paint_frame()?;
         }
         Ok(())
