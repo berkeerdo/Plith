@@ -1,5 +1,6 @@
 use super::*;
 use plith_core::settings::{IdleLook, serialize};
+use plith_core::theme::registry::ThemeId;
 
 fn folder(name: &str) -> PathBuf {
     std::env::temp_dir().join(format!("plith-settings-{name}-{}", std::process::id()))
@@ -87,10 +88,48 @@ fn import_runs_only_without_settings_ini() {
     std::fs::create_dir_all(&dir).unwrap();
     let path = dir.join("settings.ini");
     std::fs::write(dir.join("config.ini"), "[General]\nTheme = Light\n").unwrap();
-    std::fs::write(&path, "theme=sodyum\n").unwrap();
+    std::fs::write(&path, "look=clock\n").unwrap();
     let settings = load_at(&path, &log_in(&dir));
-    assert_eq!(settings.theme, plith_core::theme::Theme::Sodyum);
-    assert_eq!(std::fs::read_to_string(&path).unwrap(), "theme=sodyum\n");
+    assert_eq!(settings.look, IdleLook::Clock);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "look=clock\n");
+}
+
+#[test]
+fn a_retired_theme_rewrites_the_file_once_with_the_new_keys() {
+    let dir = folder("migrate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("settings.ini");
+    std::fs::write(&path, "theme=sodyum\nlook=clock\n").unwrap();
+    let log = log_in(&dir);
+    let settings = load_at(&path, &log);
+    assert_eq!(settings.theme, ThemeId::gece());
+    let written = std::fs::read_to_string(&path).unwrap();
+    assert!(written.contains("theme=gece\n"), "{written}");
+    assert!(written.contains("accent.gece=#FFB224\n"), "{written}");
+    assert!(!written.contains("sodyum"), "{written}");
+    assert!(!dir.join("settings.ini.tmp").exists());
+    // The second start finds nothing to move and leaves the file as it is.
+    assert_eq!(load_at(&path, &log), settings);
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), written);
+    log.flush();
+    let text = std::fs::read_to_string(dir.join("plith.log")).unwrap();
+    assert!(
+        text.contains("settings: theme sodyum moved to gece"),
+        "{text}"
+    );
+}
+
+#[test]
+fn another_problem_does_not_rewrite_the_file() {
+    let dir = folder("no-migrate");
+    std::fs::create_dir_all(&dir).unwrap();
+    let path = dir.join("settings.ini");
+    std::fs::write(&path, "look=clock\nnonsense\n").unwrap();
+    let _ = load_at(&path, &log_in(&dir));
+    assert_eq!(
+        std::fs::read_to_string(&path).unwrap(),
+        "look=clock\nnonsense\n"
+    );
 }
 
 #[test]
@@ -102,10 +141,11 @@ fn import_runs_when_only_config_ini_exists() {
     std::fs::write(dir.join("config.ini"), config).unwrap();
     let log = log_in(&dir);
     let settings = load_at(&path, &log);
-    assert_eq!(settings.theme, plith_core::theme::Theme::Kagit);
+    assert_eq!(settings.theme, ThemeId::gece());
+    assert_eq!(settings.floors[&ThemeId::gece()].to_hex(), "#F3F2ED");
     assert!(!settings.weather);
     let written = std::fs::read_to_string(&path).unwrap();
-    assert!(written.contains("theme=kagit\n"), "{written}");
+    assert!(written.contains("floor.gece=#F3F2ED\n"), "{written}");
     assert_eq!(
         std::fs::read_to_string(dir.join("config.ini")).unwrap(),
         config

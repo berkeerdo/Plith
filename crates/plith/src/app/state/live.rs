@@ -11,7 +11,7 @@ use crate::plays_file;
 use plith_core::launch::{FlyoutMode, flyout_mode};
 use plith_core::settings::change::{Effects, SettingChange, apply_change};
 use plith_core::settings::{IdleLook, Settings};
-use plith_core::theme::Theme;
+use plith_core::theme::registry::ThemeId;
 use std::sync::Arc;
 
 /// The OSD slot of a normal run and the `--flyout` that wins over the settings file.
@@ -85,7 +85,7 @@ impl App {
 
     /// Remembers the theme the settings file holds while `--theme` shows another one for this
     /// run, so saves keep the file's value until the user picks a theme.
-    pub fn keep_file_theme(&mut self, theme: Option<Theme>) {
+    pub fn keep_file_theme(&mut self, theme: Option<ThemeId>) {
         self.file_theme = theme;
     }
 
@@ -130,7 +130,7 @@ impl App {
             if let Some(look) = self.file_look {
                 saved.look = look;
             }
-            if let Some(theme) = self.file_theme {
+            if let Some(theme) = self.file_theme.clone() {
                 saved.theme = theme;
             }
             saver.save(saved);
@@ -175,7 +175,7 @@ impl App {
         if effects.theme
             && let Some(relayout) = &self.relayout
         {
-            relayout.set_palette(settings.theme.palette());
+            relayout.set_palette(self.resolve(settings).open);
         }
     }
 

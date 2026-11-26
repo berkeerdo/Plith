@@ -80,3 +80,25 @@ fn every_own_string_has_glyphs() {
     }
     assert!(failures.is_empty(), "\n{}", failures.join("\n"));
 }
+
+#[test]
+fn the_five_planned_theme_names_are_measured_in_every_language() {
+    let mut text = system();
+    for lang in Lang::ALL {
+        let all = places(lang);
+        for name in ["GECE", "HALKA", "F\u{130}RN", "KABLO", "\u{15e}ER\u{130}T"] {
+            let place = all
+                .iter()
+                .find(|p| p.text == name && p.name == format!("sheet theme {name}"))
+                .unwrap_or_else(|| panic!("{lang:?} does not measure {name}"));
+            let Budget::Dip(budget) = place.budget else {
+                panic!("{name} has no fixed budget");
+            };
+            let w = width(&mut text, &place.text, place.style);
+            assert!(
+                w <= budget + EPSILON,
+                "{lang:?} {name}: {w:.1} > {budget:.1}"
+            );
+        }
+    }
+}

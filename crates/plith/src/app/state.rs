@@ -14,7 +14,8 @@ use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::{IdleLook, Settings};
-use plith_core::theme::{Palette, Theme};
+use plith_core::theme::Palette;
+use plith_core::theme::registry::{AccentPick, Picks, Registry, ResolvedTheme, ThemeId};
 use plith_host::log::LogFile;
 use plith_render::{RelayoutHandle, StopHandle};
 use plith_shell::ShellEvent;
@@ -96,7 +97,9 @@ pub struct App {
     /// write it until the user picks a look.
     file_look: Option<IdleLook>,
     /// The theme the settings file holds while `--theme` overrides it for this run; same rule.
-    file_theme: Option<Theme>,
+    file_theme: Option<ThemeId>,
+    /// The theme packs of the run, built at start.
+    registry: Registry,
     /// Writes the settings file; a normal run only.
     saver: Option<Saver>,
     /// The settings window.
@@ -137,11 +140,31 @@ impl App {
             settings: Settings::default(),
             file_look: None,
             file_theme: None,
+            registry: Registry::builtin(),
             saver: None,
             sheet: SheetHost::default(),
             tray: TrayHost::default(),
             update: None,
         }
+    }
+
+    /// The palettes of the run's theme under the user's picks. The live Windows accent is not
+    /// wired yet, so a `Windows` pick falls back to the pack's own flow.
+    #[must_use]
+    pub fn resolved(&self) -> ResolvedTheme {
+        self.resolve(&self.settings)
+    }
+
+    /// `resolved` for the given `settings`.
+    pub(super) fn resolve(&self, settings: &Settings) -> ResolvedTheme {
+        let id = &settings.theme;
+        let accent: Option<&AccentPick> = settings.accents.get(id);
+        let picks = Picks {
+            accent,
+            floor: settings.floors.get(id).copied(),
+            windows_accent: None,
+        };
+        self.registry.resolve(id, picks)
     }
 
     /// Replaces the monotonic clock (seconds) the collapse delay reads.

@@ -45,6 +45,8 @@
 
 ### Task 2: Halka in `plith-core::theme` and ADR 0022
 
+> Superseded: replaced by `theme-packs.md`; Halka becomes a pack in plan 2. Do not execute this task as written.
+
 **Files:**
 - Modify: `crates/plith-core/src/theme.rs`, `crates/plith-core/src/theme/tests.rs`, `crates/plith-core/src/lang/sheet.rs:309`, `crates/plith-core/src/sheet/look.rs` (and `look/tests.rs`), `crates/plith/src/app/sheet_side.rs:299`
 - Create: `docs/decisions/0022-a-theme-may-carry-a-material.md`

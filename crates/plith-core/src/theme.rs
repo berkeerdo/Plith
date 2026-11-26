@@ -34,23 +34,6 @@ pub struct Palette {
     pub flow: [f32; 4],
 }
 
-/// The fixed set of themes.
-///
-/// The variant names `Gece`, `Kagit`, `York` and `Sodyum` are the product names of the themes
-/// as the spec gives them (ADR 0007), kept as proper names on purpose rather than translated.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
-pub enum Theme {
-    /// Loft dark with a lime flow; the default.
-    #[default]
-    Gece,
-    /// Loft light with a dark green flow.
-    Kagit,
-    /// A 1951 NX panel green-grey with a lamp white flow.
-    York,
-    /// Black with an amber flow.
-    Sodyum,
-}
-
 /// An opaque colour from 8-bit sRGB channels.
 #[must_use]
 pub fn hex(r: u8, g: u8, b: u8) -> [f32; 4] {
@@ -62,95 +45,21 @@ pub fn hex(r: u8, g: u8, b: u8) -> [f32; 4] {
     ]
 }
 
-impl Theme {
-    /// Every theme, in the order the settings window lists them.
-    pub const ALL: [Theme; 4] = [Self::Gece, Self::Kagit, Self::York, Self::Sodyum];
-
-    /// The key shared by the settings file and `--theme`.
-    #[must_use]
-    pub fn key(self) -> &'static str {
-        match self {
-            Self::Gece => "gece",
-            Self::Kagit => "kagit",
-            Self::York => "york",
-            Self::Sodyum => "sodyum",
-        }
-    }
-
-    /// The theme for a key, or `None` when the key is unknown.
-    #[must_use]
-    pub fn from_key(key: &str) -> Option<Self> {
-        Self::ALL.into_iter().find(|theme| theme.key() == key)
-    }
-
-    /// Whether the theme has a dark floor (window chrome such as the caption follows it).
-    #[must_use]
-    pub fn is_dark(self) -> bool {
-        !matches!(self, Self::Kagit)
-    }
-
-    /// The palette of the theme. Gece is the spec's Loft palette; Kağıt, York and Sodyum come
-    /// from the R3 mock, with the raised `faint` values of the spec.
-    #[must_use]
-    pub fn palette(self) -> Palette {
-        match self {
-            Self::Gece => Palette {
-                floor: hex(0x0B, 0x0B, 0x0A),
-                floor_high: hex(0x15, 0x14, 0x12),
-                border: hex(0x2B, 0x28, 0x24),
-                ink: hex(0xEC, 0xE9, 0xE2),
-                muted: hex(0xA3, 0x9E, 0x94),
-                faint: hex(0x8A, 0x84, 0x7A),
-                track: hex(0x4A, 0x46, 0x3F),
-                faint_track: hex(0x2E, 0x2B, 0x27),
-                flow: hex(0xCA, 0xFF, 0x33),
-            },
-            Self::Kagit => Palette {
-                floor: hex(0xF3, 0xF2, 0xED),
-                floor_high: hex(0xE7, 0xE6, 0xE0),
-                border: hex(0xCF, 0xCB, 0xC2),
-                ink: hex(0x1A, 0x19, 0x16),
-                muted: hex(0x55, 0x51, 0x4A),
-                faint: hex(0x6B, 0x66, 0x5E),
-                track: hex(0xB3, 0xAE, 0xA4),
-                faint_track: hex(0xD6, 0xD2, 0xC9),
-                flow: hex(0x3F, 0x6E, 0x00),
-            },
-            Self::York => Palette {
-                floor: hex(0x1C, 0x24, 0x20),
-                floor_high: hex(0x22, 0x2B, 0x26),
-                border: hex(0x34, 0x40, 0x3A),
-                ink: hex(0xE4, 0xEA, 0xE4),
-                muted: hex(0x9E, 0xAA, 0xA2),
-                faint: hex(0x86, 0x95, 0x8E),
-                track: hex(0x46, 0x53, 0x4D),
-                faint_track: hex(0x2C, 0x36, 0x31),
-                flow: hex(0xFF, 0xE9, 0xA8),
-            },
-            Self::Sodyum => Palette {
-                floor: hex(0x09, 0x09, 0x0A),
-                floor_high: hex(0x11, 0x11, 0x13),
-                border: hex(0x26, 0x26, 0x2A),
-                ink: hex(0xED, 0xED, 0xEF),
-                muted: hex(0xA2, 0xA2, 0xA8),
-                faint: hex(0x86, 0x86, 0x8D),
-                track: hex(0x45, 0x45, 0x4B),
-                faint_track: hex(0x2A, 0x2A, 0x2E),
-                flow: hex(0xFF, 0xB2, 0x24),
-            },
-        }
-    }
-}
-
 impl Default for Palette {
     fn default() -> Self {
-        Theme::default().palette()
+        use registry::{Picks, Registry, ThemeId};
+        let picks = Picks {
+            accent: None,
+            floor: None,
+            windows_accent: None,
+        };
+        Registry::builtin().resolve(&ThemeId::gece(), picks).open
     }
 }
 
 impl Palette {
     /// The installer palette: the icon's lime speaker fabric, the same in every theme. It is a
-    /// standalone constructor, not a `Theme`, so the settings theme row never offers it.
+    /// standalone constructor, not a theme pack, so the settings theme row never offers it.
     ///
     /// `floor` is the average of an 80 x 80 patch of plain fabric (x 40 to 120, y 300 to 380,
     /// clear of the ripples and the text) in `docs/design/identity/r3/installer/bg-0-1x.png`:

@@ -11,7 +11,9 @@ use plith_core::pages::idle_pill::rest_shape;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::change::SettingChange;
 use plith_core::settings::{IdleLook, LangChoice, LocationMode, parse};
-use plith_core::theme::{Palette, Theme};
+use plith_core::theme::Palette;
+use plith_core::theme::colour::Rgb;
+use plith_core::theme::registry::{AccentPick, ThemeId};
 use plith_host::log::{LogFile, Stamp};
 use std::cell::RefCell;
 use std::path::PathBuf;
@@ -262,16 +264,60 @@ fn with_painter(name: &str) -> (App, Rc<RefCell<Vec<Palette>>>) {
     (app, sent)
 }
 
+/// A colour as exact bits, so tests compare it without a float comparison.
+fn bits(c: [f32; 4]) -> [u32; 4] {
+    c.map(f32::to_bits)
+}
+
+fn id(text: &str) -> ThemeId {
+    ThemeId::parse(text).unwrap()
+}
+
 #[test]
 fn a_theme_change_sends_the_palette_once_and_the_same_theme_sends_nothing() {
     let (mut app, sent) = with_painter("theme-send");
-    app.change(SettingChange::Theme(Theme::Kagit));
-    assert_eq!(app.settings.theme, Theme::Kagit);
-    assert_eq!(*sent.borrow(), vec![Theme::Kagit.palette()]);
-    app.change(SettingChange::Theme(Theme::Kagit));
+    // No second pack is built in yet: an unknown id is kept and draws Gece.
+    app.change(SettingChange::Theme(id("next")));
+    assert_eq!(app.settings.theme, id("next"));
+    assert_eq!(*sent.borrow(), vec![Palette::default()]);
+    app.change(SettingChange::Theme(id("next")));
     app.change(SettingChange::Look(IdleLook::Plain));
     assert_eq!(sent.borrow().len(), 1, "only a theme change repaints");
     clean(app, "theme-send");
+}
+
+#[test]
+fn accent_change_sends_solved_palette() {
+    let (mut app, sent) = with_painter("accent-send");
+    let amber = Rgb([0xFF, 0xB2, 0x24]);
+    app.change(SettingChange::Accent(
+        ThemeId::gece(),
+        Some(AccentPick::Colour(amber)),
+    ));
+    assert_eq!(sent.borrow().len(), 1);
+    assert_eq!(bits(sent.borrow()[0].flow), bits(amber.rgba()));
+    assert_eq!(bits(sent.borrow()[0].floor), bits(Palette::default().floor));
+    clean(app, "accent-send");
+}
+
+#[test]
+fn sheet_palette_stays_gece_floor() {
+    let (mut app, sent) = with_painter("sheet-floor");
+    let paper = Rgb([0xF3, 0xF2, 0xED]);
+    app.change(SettingChange::Floor(ThemeId::gece(), Some(paper)));
+    let resolved = app.resolved();
+    assert_eq!(
+        bits(resolved.open.floor),
+        bits(paper.rgba()),
+        "the island takes the floor"
+    );
+    assert_eq!(sent.borrow()[0], resolved.open);
+    assert_eq!(
+        bits(resolved.sheet.floor),
+        bits(Palette::default().floor),
+        "the window does not"
+    );
+    clean(app, "sheet-floor");
 }
 
 #[test]
@@ -284,15 +330,15 @@ fn a_theme_change_is_saved_and_refreshes_the_window() {
         Box::new(|_| {}),
     ));
     let before = app.sheet.refreshes;
-    app.change(SettingChange::Theme(Theme::York));
+    app.change(SettingChange::Theme(id("next")));
     assert_eq!(app.sheet.refreshes, before + 1);
     app.flush_saver();
     let saved = parse(&std::fs::read_to_string(&path).unwrap()).0;
-    assert_eq!(saved.theme, Theme::York);
+    assert_eq!(saved.theme, id("next"));
     clean(app, "theme-save");
 }
 
-/// Saves go to the returned path; the app shows `Sodyum` while the file holds `Gece`.
+/// Saves go to the returned path; the app shows `next` while the file holds Gece.
 fn theme_pinned(name: &str) -> (App, PathBuf) {
     let mut app = fed(name);
     let path = folder(name).join("settings.ini");
@@ -301,12 +347,12 @@ fn theme_pinned(name: &str) -> (App, PathBuf) {
         Box::new(|| {}),
         Box::new(|_| {}),
     ));
-    app.settings.theme = Theme::Sodyum;
-    app.keep_file_theme(Some(Theme::Gece));
+    app.settings.theme = id("next");
+    app.keep_file_theme(Some(ThemeId::gece()));
     (app, path)
 }
 
-fn saved_theme(path: &std::path::Path) -> Theme {
+fn saved_theme(path: &std::path::Path) -> ThemeId {
     parse(&std::fs::read_to_string(path).unwrap()).0.theme
 }
 
@@ -315,17 +361,17 @@ fn the_command_line_theme_is_not_saved_with_another_change() {
     let (mut app, path) = theme_pinned("cli-theme");
     app.change(SettingChange::Plays(false));
     app.flush_saver();
-    assert_eq!(saved_theme(&path), Theme::Gece, "the file's own theme");
-    assert_eq!(app.settings.theme, Theme::Sodyum, "this run still shows it");
+    assert_eq!(saved_theme(&path), ThemeId::gece(), "the file's own theme");
+    assert_eq!(app.settings.theme, id("next"), "this run still shows it");
     clean(app, "cli-theme");
 }
 
 #[test]
 fn picking_a_theme_saves_it_even_when_it_is_the_one_shown() {
     let (mut app, path) = theme_pinned("cli-theme-pick");
-    app.change(SettingChange::Theme(Theme::Sodyum));
+    app.change(SettingChange::Theme(id("next")));
     app.change(SettingChange::Plays(false));
     app.flush_saver();
-    assert_eq!(saved_theme(&path), Theme::Sodyum);
+    assert_eq!(saved_theme(&path), id("next"));
     clean(app, "cli-theme-pick");
 }
