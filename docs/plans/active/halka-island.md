@@ -73,10 +73,10 @@
   - `pub struct MaterialMotion` with `new() -> Self` (at `COLLAPSED`), `expand(&mut self, now_ms: f64)`, `collapse(&mut self, now_ms: f64)`, `layers(&self, now_ms: f64, progress: f64) -> MaterialLayers`, `is_settled(&self, now_ms: f64, progress: f64) -> bool`.
   - Constants from spec section 5: reveal full at progress 0.55; ripple press starts `RIPPLE_START_MS: [f64; 3]` (25 / 40 / 55 % of `EXPAND_SETTLE_MS`, a constant set from the measured `brisk` expand full time in the latest console record), `PRESS_MS = 90.0`, `HOLD_MS = 120.0`, `FADE_MS = 180.0`; disc lift between progress 0.30 and 0.60 by 40 DIP; collapse ripple steps `RISE_STEP_MS = 60.0` in order 3, 2, 1; pill below progress 0.30; `REPLAY_BELOW = 0.10`.
 
-- [ ] **Step 1: failing tests:** `layers_at_rest_collapsed_and_open`; `ripples_press_in_order_at_listed_times` (at `RIPPLE_START_MS[k] + PRESS_MS` ripple k is 1, ripple k+1 still 0); `ripples_gone_after_hold_and_fade`; `reveal_full_at_progress_055`; `disc_lift_between_030_and_060`; `collapse_mid_expand_starts_from_current` (layers right after `collapse` equal layers right before); `reopen_replays_only_below_ten_percent`; `page_switch_does_not_replay` (no `expand` call, progress jumping 1 to 0.8 to 1 leaves ripples at 0); `settled_only_when_ripples_done_and_progress_at_end`; `morph_progress_clamps`.
-- [ ] **Step 2:** `cargo test -p plith-core material`. Expected: FAIL.
-- [ ] **Step 3:** Implement. Opacity curves are linear ramps; the collapse sequence starts each ripple from its current value.
-- [ ] **Step 4:** Tests PASS; `node scripts/structure-check.mjs` passes. Commit `feat(core): add the material timeline`.
+- [x] **Step 1: failing tests:** `layers_at_rest_collapsed_and_open`; `ripples_press_in_order_at_listed_times` (at `RIPPLE_START_MS[k] + PRESS_MS` ripple k is 1, ripple k+1 still 0); `ripples_gone_after_hold_and_fade`; `reveal_full_at_progress_055`; `disc_lift_between_030_and_060`; `collapse_mid_expand_starts_from_current` (layers right after `collapse` equal layers right before); `reopen_replays_only_below_ten_percent`; `page_switch_does_not_replay` (no `expand` call, progress jumping 1 to 0.8 to 1 leaves ripples at 0); `settled_only_when_ripples_done_and_progress_at_end`; `morph_progress_clamps`.
+- [x] **Step 2:** `cargo test -p plith-core material`. Expected: FAIL.
+- [x] **Step 3:** Implement. Opacity curves are linear ramps; the collapse sequence starts each ripple from its current value.
+- [x] **Step 4:** Tests PASS; `node scripts/structure-check.mjs` passes. Commit `feat(core): add the material timeline`.
 
 ### Task 4: `ThemePaint` from the app to the render thread
 
