@@ -9,8 +9,9 @@ use crate::tuning::BRISK;
 /// One frame at 240 Hz, in ms.
 const FRAME_MS: f64 = 1000.0 / 240.0;
 /// The latest the gate may open in a BRISK expand from rest to page 0. The floor is the press
-/// (progress 0.60 at about 100 ms), the hold and the fade.
-const GATE_BY_MS: f64 = 170.0;
+/// (progress 0.85 at about 152 ms), the hold and the fade: 312.5 ms measured (170 before the
+/// slower ripples of 2026-11-27).
+const GATE_BY_MS: f64 = 320.0;
 
 /// A BRISK expand from rest to page 0 at 240 Hz: (time in ms, morph progress) per frame.
 fn brisk_curve() -> Vec<(f64, f64)> {
