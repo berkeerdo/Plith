@@ -5,7 +5,10 @@ use crate::draw::Ink;
 
 pub mod builtin;
 pub mod colour;
+#[cfg(test)]
+mod fixtures;
 pub mod pack;
+pub mod registry;
 pub mod solve;
 
 /// The colours of one theme as straight sRGB RGBA in 0..=1.
