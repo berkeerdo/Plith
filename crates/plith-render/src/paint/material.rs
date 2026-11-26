@@ -5,13 +5,14 @@
 //! The bitmaps are made once per art (`set` with a new `Arc`) on the first frame that needs
 //! them; a frame only moves the fabric brush and issues draw calls.
 
-use super::{f, snap};
+use super::{f, push_clip, snap};
 use plith_core::draw::ArtPixels;
 use plith_core::geometry::IslandShape;
 use plith_core::material::MaterialLayers;
 use plith_core::material::art::MaterialArt;
 use plith_core::material::place::{
-    DISC_AT, FABRIC_ANCHOR, FABRIC_W, PILL_H, RING_AT, reveal_radius, source_point, three_slice,
+    DISC_AT, FABRIC_ANCHOR, FABRIC_W, PILL_H, RING_AT, cap_opacity, reveal_radius, source_point,
+    three_slice,
 };
 use std::sync::Arc;
 use windows::Win32::Foundation::E_INVALIDARG;
@@ -131,11 +132,28 @@ fn blit(
     }
 }
 
-/// An overlay (a ring or the disc) at `at` from the source centre, snapped to device pixels.
+/// The fabric brush's top-left: the source centre minus the fabric's anchor, snapped to device
+/// pixels.
+fn fabric_origin((sx, sy): (f64, f64), scale: f64) -> (f64, f64) {
+    (
+        snap(sx - FABRIC_ANCHOR.0, scale),
+        snap(sy - FABRIC_ANCHOR.1, scale),
+    )
+}
+
+/// An overlay's top-left, `at` from the source centre, measured from the snapped fabric origin
+/// and not snapped again: the overlays then resample with the fabric's own phase at any scale
+/// (a separate snap moves them up to half a device pixel against the weave at 1.25 or 1.75).
+fn overlay_origin(source: (f64, f64), at: (f64, f64), scale: f64) -> (f64, f64) {
+    let (fx, fy) = fabric_origin(source, scale);
+    (fx + FABRIC_ANCHOR.0 + at.0, fy + FABRIC_ANCHOR.1 + at.1)
+}
+
+/// An overlay (a ring or the disc) at `at` from the source centre.
 fn overlay(
     ctx: &ID2D1DeviceContext,
     bitmap: &ID2D1Bitmap1,
-    (sx, sy): (f64, f64),
+    source: (f64, f64),
     at: (f64, f64),
     opacity: f32,
     scale: f64,
@@ -145,12 +163,8 @@ fn overlay(
     }
     // SAFETY: plain getter on a live bitmap.
     let size = unsafe { bitmap.GetSize() };
-    let dest = rect(
-        snap(sx + at.0, scale),
-        snap(sy + at.1, scale),
-        f64::from(size.width),
-        f64::from(size.height),
-    );
+    let (left, top) = overlay_origin(source, at, scale);
+    let dest = rect(left, top, f64::from(size.width), f64::from(size.height));
     blit(ctx, bitmap, dest, None, opacity);
 }
 
@@ -211,16 +225,30 @@ impl Material {
         if layers.reveal > 0.0 {
             draw_fabric(ctx, &b.fabric, shape, origin, layers.reveal, scale);
         }
-        for (ring, (opacity, at)) in b.rings.iter().zip(layers.ripples.iter().zip(RING_AT)) {
-            overlay(ctx, ring, source, at, *opacity, scale);
+        // The rings are pressed into the fabric: under a partial reveal they are clipped to its
+        // circle (their rasters carry fabric, which must not show on the black base). Without
+        // the clip's geometry they are left out for the frame.
+        let partial = layers.reveal < 1.0;
+        let shown = layers.ripples.iter().any(|r| *r > 0.0)
+            && (!partial || push_reveal(ctx, shape, source, layers.reveal));
+        if shown {
+            for (ring, (opacity, at)) in b.rings.iter().zip(layers.ripples.iter().zip(RING_AT)) {
+                overlay(ctx, ring, source, at, *opacity, scale);
+            }
+            if partial {
+                // SAFETY: pairs the PushLayer of `push_reveal`, inside the frame's BeginDraw.
+                unsafe { ctx.PopLayer() };
+            }
         }
         let disc_at = (DISC_AT.0, DISC_AT.1 - layers.disc_lift);
         overlay(ctx, &b.disc, source, disc_at, layers.disc, scale);
     }
 }
 
-/// The pill three-sliced over the shape's width, its top on the island's top: a shorter island
-/// crops it (the Hidden sliver shows its black top), a taller one stretches it down.
+/// The pill three-sliced over the shape's width at its own height, its top on the island's top:
+/// a shorter island crops it, a taller one shows the opaque base below it (no vertical stretch).
+/// Below the pill's height the caps fade out (`cap_opacity`) over the straight middle drawn
+/// across the whole width, so the Hidden sliver is the pill's black top end to end.
 fn draw_pill(
     ctx: &ID2D1DeviceContext,
     pill: &ID2D1Bitmap1,
@@ -232,18 +260,52 @@ fn draw_pill(
     // SAFETY: plain getter on a live bitmap.
     let size = unsafe { pill.GetSize() };
     let art_h = f64::from(size.height);
-    let (top, bottom) = (snap(oy, scale), snap(oy + shape.height.max(PILL_H), scale));
-    for slice in three_slice(f64::from(size.width), ox, shape.width) {
-        if slice.dst.1 <= 0.0 || slice.src.1 <= 0.0 {
-            continue;
+    let (top, bottom) = (snap(oy, scale), snap(oy + PILL_H, scale));
+    let span = |left: f64, width: f64, src: (f64, f64), alpha: f32| {
+        if width <= 0.0 || src.1 <= 0.0 || alpha <= 0.0 {
+            return;
         }
-        let (left, right) = (
-            snap(slice.dst.0, scale),
-            snap(slice.dst.0 + slice.dst.1, scale),
-        );
-        let dest = rect(left, top, right - left, bottom - top);
-        let src = rect(slice.src.0, 0.0, slice.src.1, art_h);
-        blit(ctx, pill, dest, Some(src), opacity);
+        let (l, r) = (snap(left, scale), snap(left + width, scale));
+        let dest = rect(l, top, r - l, bottom - top);
+        blit(ctx, pill, dest, Some(rect(src.0, 0.0, src.1, art_h)), alpha);
+    };
+    let [left_cap, middle, right_cap] = three_slice(f64::from(size.width), ox, shape.width);
+    let caps = f(cap_opacity(shape.height));
+    if caps < 1.0 {
+        span(ox, shape.width, middle.src, opacity);
+    } else {
+        span(middle.dst.0, middle.dst.1, middle.src, opacity);
+    }
+    for cap in [left_cap, right_cap] {
+        span(cap.dst.0, cap.dst.1, cap.src, opacity * caps);
+    }
+}
+
+/// Pushes a layer clipped to the reveal circle of `shape` at `reveal`; false (and nothing
+/// pushed) when the circle's geometry cannot be made.
+fn push_reveal(
+    ctx: &ID2D1DeviceContext,
+    shape: IslandShape,
+    (sx, sy): (f64, f64),
+    reveal: f64,
+) -> bool {
+    let r = f(reveal_radius(shape, reveal));
+    let circle = D2D1_ELLIPSE {
+        point: Vector2 { X: f(sx), Y: f(sy) },
+        radiusX: r,
+        radiusY: r,
+    };
+    // SAFETY: plain factory calls on the live context; `circle` is a live local.
+    let geometry = unsafe {
+        ctx.GetFactory()
+            .and_then(|factory| factory.CreateEllipseGeometry(&raw const circle))
+    };
+    match geometry {
+        Ok(geometry) => {
+            push_clip(ctx, geometry.into());
+            true
+        }
+        Err(_) => false,
     }
 }
 
@@ -258,10 +320,8 @@ fn draw_fabric(
     scale: f64,
 ) {
     let (sx, sy) = source_point(shape, origin);
-    let shift = Matrix3x2::translation(
-        f(snap(sx - FABRIC_ANCHOR.0, scale)),
-        f(snap(sy - FABRIC_ANCHOR.1, scale)),
-    );
+    let (fx, fy) = fabric_origin((sx, sy), scale);
+    let shift = Matrix3x2::translation(f(fx), f(fy));
     // SAFETY: plain state change and draw calls inside the frame's BeginDraw/EndDraw on a live
     // brush; the transform and shapes are live locals.
     unsafe {
@@ -277,6 +337,29 @@ fn draw_fabric(
                 radiusY: r,
             };
             ctx.FillEllipse(&raw const circle, fabric);
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn overlays_sit_on_the_fabric_grid_at_any_scale() {
+        for scale in [1.0, 1.25, 1.5, 1.75, 2.0] {
+            for source in [(310.0, 33.0), (310.3, 33.4), (311.7, 34.9)] {
+                let fabric = fabric_origin(source, scale);
+                for at in RING_AT.into_iter().chain([DISC_AT]) {
+                    let o = overlay_origin(source, at, scale);
+                    let want = (FABRIC_ANCHOR.0 + at.0, FABRIC_ANCHOR.1 + at.1);
+                    let got = (o.0 - fabric.0, o.1 - fabric.1);
+                    assert!(
+                        (got.0 - want.0).abs() < 1e-9 && (got.1 - want.1).abs() < 1e-9,
+                        "scale {scale}, source {source:?}, at {at:?}: {got:?} vs {want:?}"
+                    );
+                }
+            }
         }
     }
 }

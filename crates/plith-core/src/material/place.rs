@@ -3,6 +3,7 @@
 //! island. All values are DIP; the files' pixel sizes are these times their scale class.
 
 use crate::geometry::IslandShape;
+use crate::shapes::REST_HIDDEN;
 
 /// The source centre's height below the island's top edge.
 pub const SOURCE_Y: f64 = 33.0;
@@ -16,8 +17,18 @@ pub const RING_AT: [(f64, f64); 3] = [(-109.0, -8.23), (-149.0, 21.77), (-177.0,
 pub const DISC_AT: (f64, f64) = (-69.0, -33.23);
 /// The pill's straight middle starts this far from either end of its raster.
 pub const PILL_CAP: f64 = 32.0;
-/// The pill raster's own height: a shorter island crops it, a taller one stretches it.
+/// The pill raster's own height: a shorter island crops it; a taller one shows it at this
+/// height on top and the opaque base below (it is never stretched down).
 pub const PILL_H: f64 = 32.0;
+
+/// How much of the pill's two caps shows on an island `height` tall: none on the Hidden sliver
+/// (their rounded ends carry a light rim that would show as two specks in 3 DIP), all from the
+/// pill's own height on, linear between. Under a faded cap the pill's straight middle shows.
+#[must_use]
+pub fn cap_opacity(height: f64) -> f64 {
+    let low = REST_HIDDEN.height;
+    ((height - low) / (PILL_H - low)).clamp(0.0, 1.0)
+}
 
 /// The source centre of an island of `shape` whose top-left is `origin`.
 #[must_use]
@@ -69,7 +80,17 @@ pub fn three_slice(art_w: f64, left: f64, width: f64) -> [Slice; 3] {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::shapes::{OVERSHOOT, PAGE_MAX_HEIGHT, PAGE_MAX_WIDTH, REST, REST_HIDDEN};
+    use crate::shapes::{OVERSHOOT, PAGE_MAX_HEIGHT, PAGE_MAX_WIDTH, REST};
+
+    #[test]
+    fn the_caps_fade_out_toward_the_hidden_sliver() {
+        assert!(cap_opacity(REST_HIDDEN.height).abs() < 1e-12);
+        assert!(cap_opacity(0.0).abs() < 1e-12);
+        assert!((cap_opacity(REST.height) - 1.0).abs() < 1e-12);
+        assert!((cap_opacity(300.0) - 1.0).abs() < 1e-12);
+        let mid = REST_HIDDEN.height.midpoint(PILL_H);
+        assert!((cap_opacity(mid) - 0.5).abs() < 1e-12);
+    }
 
     fn shape(width: f64, height: f64) -> IslandShape {
         IslandShape {

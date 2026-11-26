@@ -61,8 +61,13 @@ fn decode(pack: &BuiltinPack, name: &str) -> Arc<ArtPixels> {
 
 /// The Halka paint at the 1x files, as the app sends it.
 fn halka() -> ThemePaint {
+    halka_files("1x")
+}
+
+/// The Halka paint at the `files` scale class (`1x` or `2x`).
+fn halka_files(files: &str) -> ThemePaint {
     let pack = halka_pack();
-    let get = |base: &str| decode(pack, &format!("{base}-1x"));
+    let get = |base: &str| decode(pack, &format!("{base}-{files}"));
     let art = MaterialArt {
         fabric: get("floor"),
         rings: [get("ring-1"), get("ring-2"), get("ring-3")],
@@ -254,6 +259,102 @@ fn halka_hidden_sliver_is_black_not_fabric() {
         let p = pixel(&buf, w, x, 1);
         assert_eq!(p[3], 255, "opaque sliver at {x}");
         assert!(luminance(p) < 0.1, "black sliver at {x}, got {p:?}");
+    }
+}
+
+/// The Hidden sliver at `scale` with the files the app uses there: no light pixel anywhere in
+/// it, the two ends included (the pill caps' rim highlight must not show in 3 DIP).
+fn assert_sliver_ends_black(scale: f64, files: &str) {
+    let w = (REST_HIDDEN.width * scale).ceil() as u32;
+    let h = (REST_HIDDEN.height * scale).ceil() as u32;
+    let text = TextSystem::new().expect("text system");
+    let mut off = Offscreen::new(w, h, scale, Palette::default(), text).expect("offscreen");
+    off.set_theme(halka_files(files));
+    let buf = off
+        .render(&frame(
+            REST_HIDDEN,
+            PageContent::empty(),
+            0.0,
+            MaterialLayers::COLLAPSED,
+        ))
+        .unwrap();
+    // The ends are the caps' 32 DIP; the border's outer device pixels are left out.
+    let edge = scale.ceil() as u32;
+    let cap = (32.0 * scale) as u32;
+    for y in 0..h - edge {
+        for x in (edge..cap).chain(w - cap..w - edge) {
+            let p = pixel(&buf, w, x, y);
+            let max = p[0].max(p[1]).max(p[2]);
+            assert!(max <= 0x18, "light pixel at ({x}, {y}) at {scale}x: {p:?}");
+        }
+    }
+}
+
+#[test]
+fn halka_hidden_sliver_ends_are_black() {
+    assert_sliver_ends_black(1.0, "1x");
+    assert_sliver_ends_black(2.0, "2x");
+}
+
+#[test]
+fn the_pill_keeps_its_height_while_it_fades() {
+    // A taller island mid-fade: the pill stays 32 DIP at the top, the base shows below it.
+    let shape = IslandShape {
+        width: 300.0,
+        height: 120.0,
+        radius: 24.0,
+    };
+    let (w, h) = px_size(shape);
+    let mut off = offscreen(w, h);
+    let paint = halka();
+    let base = bgra(paint.collapsed.floor);
+    off.set_theme(paint);
+    let layers = MaterialLayers {
+        pill: 1.0,
+        ..MaterialLayers::COLLAPSED
+    };
+    let buf = off
+        .render(&frame(shape, PageContent::empty(), 0.0, layers))
+        .unwrap();
+    for at in [(150, 60), (150, 100), (14, 90), (286, 90)] {
+        near(
+            pixel(&buf, w, at.0, at.1),
+            base,
+            2,
+            &format!("base at {at:?}"),
+        );
+    }
+}
+
+#[test]
+fn a_ring_shows_only_inside_the_reveal() {
+    // Progress about 0.27 of a strip frame: ring 1 pressed 0.8, the circle at 0.49 of the far
+    // corner (radius about 93 DIP from (181.6, 33)).
+    let shape = IslandShape {
+        width: 363.2,
+        height: 85.9,
+        radius: 24.0,
+    };
+    let (w, h) = px_size(shape);
+    let mut off = offscreen(w, h);
+    off.set_theme(halka());
+    let layers = MaterialLayers {
+        reveal: 0.49,
+        ripples: [0.8, 0.0, 0.0],
+        disc: 0.0,
+        disc_lift: 0.0,
+        pill: 0.0,
+    };
+    let buf = off
+        .render(&frame(shape, PageContent::empty(), 0.0, layers))
+        .unwrap();
+    // Inside ring 1's raster (x 72.6 to 289.6, y 24.8 to 131.8), outside the circle.
+    for at in [(78, 50), (285, 50), (80, 70)] {
+        let p = pixel(&buf, w, at.0, at.1);
+        assert!(
+            luminance(p) < 0.05,
+            "ring outside the reveal at {at:?}: {p:?}"
+        );
     }
 }
 
