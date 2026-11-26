@@ -4,7 +4,7 @@
 //!
 //! The strip frames are real frames of a BRISK expand from the Karot pill to the welcome page,
 //! stepped at 240 Hz the way the render loop steps them: each frame is the first one at or past
-//! 0, 50, 100, 160, 290 and 450 ms since the expand, with the island shape, the morph progress,
+//! 0, 50, 100, 130, 230 and 400 ms since the expand, with the island shape, the morph progress,
 //! the content opacity and the ripples that frame has (they press with the progress, then fade
 //! together; the page content waits until they are gone, as the loop's content gate does).
 
@@ -45,7 +45,7 @@ type Error = Box<dyn std::error::Error>;
 const LANG: Lang = Lang::Tr;
 /// The time of each strip frame, in ms since the expand: the pill, the first ripple pressing,
 /// all three pressed (no text yet), the fade, the page coming in (no ripples), the page in.
-const STRIP_MS: [f64; 6] = [0.0, 50.0, 100.0, 160.0, 290.0, 450.0];
+const STRIP_MS: [f64; 6] = [0.0, 50.0, 100.0, 130.0, 230.0, 400.0];
 /// One frame at 240 Hz, in seconds.
 const FRAME_S: f64 = 1.0 / 240.0;
 /// Slack so a frame time that rounds just under a strip time still counts.

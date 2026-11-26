@@ -11,7 +11,7 @@ use plith_core::tuning::BRISK;
 
 /// The most the Halka content may lag Gece's in a brisk expand, at every alpha level, in ms.
 /// The floor is the press (progress 0.60 at about 100 ms), the hold and the fade.
-const MAX_LAG_MS: f64 = 240.0;
+const MAX_LAG_MS: f64 = 170.0;
 
 fn ripples_show(frame: &PaintFrame) -> bool {
     frame.material.ripples.iter().any(|r| *r > 0.0)

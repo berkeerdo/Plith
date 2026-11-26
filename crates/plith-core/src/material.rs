@@ -29,8 +29,9 @@ pub const ALL_PRESSED_AT: f64 = RIPPLE_FROM[2] + PRESS_SPAN;
 /// The pressed ripples hold at 1 this long after the last one is pressed (0: the fade starts
 /// at once, so the page waits as little as it can; 120 before 2026-11-26).
 pub const HOLD_MS: f64 = 0.0;
-/// The shared open fade (1 to 0) that starts when the hold ends (180 before 2026-11-26).
-pub const FADE_MS: f64 = 120.0;
+/// The shared open fade (1 to 0) that starts when the hold ends (180, then 120, before 60 on
+/// 2026-11-26, to keep the page wait near 150 ms).
+pub const FADE_MS: f64 = 60.0;
 /// Collapse: each ripple fades (its value to 0) over this long.
 pub const RISE_MS: f64 = 180.0;
 /// Collapse: each ripple starts leaving this long after the previous one, in order 3, 2, 1.
@@ -87,6 +88,16 @@ impl MaterialLayers {
         disc_lift: LIFT_DIP,
         pill: 0.0,
     };
+}
+
+/// The idle look's opacity in a frame with the page content at `content`: `1 - content` for a
+/// plain theme (`pill` is `None`). With a material it is also never above the material's `pill`
+/// opacity, so it leaves with the black pill and never sits over the fabric in the collapsed
+/// ink, whatever the page wait (Berke, 2026-11-26).
+#[must_use]
+pub fn idle_look_alpha(content: f32, pill: Option<f32>) -> f32 {
+    let handover = 1.0 - content.clamp(0.0, 1.0);
+    pill.map_or(handover, |p| handover.min(p.clamp(0.0, 1.0)))
 }
 
 /// Morph progress from the current height: 0 at `rest`, 1 at `open`, clamped; 1 when `open <= rest`.

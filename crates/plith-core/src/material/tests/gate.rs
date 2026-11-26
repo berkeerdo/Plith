@@ -10,7 +10,7 @@ use crate::tuning::BRISK;
 const FRAME_MS: f64 = 1000.0 / 240.0;
 /// The latest the gate may open in a BRISK expand from rest to page 0. The floor is the press
 /// (progress 0.60 at about 100 ms), the hold and the fade.
-const GATE_BY_MS: f64 = 240.0;
+const GATE_BY_MS: f64 = 170.0;
 
 /// A BRISK expand from rest to page 0 at 240 Hz: (time in ms, morph progress) per frame.
 fn brisk_curve() -> Vec<(f64, f64)> {
@@ -125,4 +125,30 @@ fn the_collapse_keeps_its_timing() {
         (l.ripples[2] - 0.5).abs() < 0.01,
         "ripple 3 half way: {l:?}"
     );
+}
+
+#[test]
+fn the_idle_look_leaves_with_the_pill() {
+    // A plain theme: the idle look is what the content leaves, as always.
+    for content in [0.0, 0.25, 1.0] {
+        assert_eq!(idle_look_alpha(content, None), 1.0 - content);
+    }
+    // Halka: never above the pill, so it is gone once the pill is, whatever the content.
+    let mut m = expanded(0.0);
+    for (now, progress) in brisk_curve() {
+        m.advance(now, progress);
+        let pill = m.layers(now, progress).pill;
+        let idle = idle_look_alpha(0.0, Some(pill));
+        assert!(idle <= pill, "idle {idle} above pill {pill} at {now:.1} ms");
+        if pill == 0.0 {
+            assert_eq!(idle, 0.0, "idle look over the fabric at {now:.1} ms");
+        }
+    }
+    assert_eq!(
+        idle_look_alpha(0.0, Some(1.0)),
+        1.0,
+        "collapsed: the look shows"
+    );
+    let handing = idle_look_alpha(0.6, Some(1.0));
+    assert!((handing - 0.4).abs() < 1e-6, "the content still hands over");
 }

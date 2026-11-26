@@ -671,3 +671,44 @@ fn halka_mid_expand_is_opaque() {
         assert!(luminance(p) < 0.1, "black base at {at:?}, got {p:?}");
     }
 }
+
+/// An open 200 x 120 frame with the content at 0 and the idle look's pill list a filled block
+/// of ink at (40, 8) 30 x 16, painted with `layers`.
+fn idle_frame(layers: MaterialLayers) -> PaintFrame {
+    let mut content = PageContent::empty();
+    content.pill = Arc::new(DisplayList {
+        nodes: vec![fill(40.0, 8.0, 30.0, 16.0, Ink::Ink)],
+        size: (REST.width, REST.height),
+    });
+    let shape = IslandShape {
+        width: REST.width,
+        height: 120.0,
+        radius: 24.0,
+    };
+    frame(shape, content, 0.0, layers)
+}
+
+#[test]
+fn halka_idle_look_leaves_with_the_pill() {
+    // Halka, pill gone, page not in yet (the content waits for the ripples): fabric, no look.
+    let f = idle_frame(MaterialLayers::OPEN);
+    let (w, h) = px_size(f.shape);
+    let mut off = offscreen(w, h);
+    off.set_theme(halka());
+    let buf = off.render(&f).unwrap();
+    near(
+        box_mean(&buf, w, (55, 16), 3),
+        rgb_bgra(fabric_mean()),
+        12,
+        "no idle look over the fabric",
+    );
+    // Gece, same frame: the look still shows at `1 - content`, as before.
+    let mut plain = offscreen(w, h);
+    let buf = plain.render(&f).unwrap();
+    near(
+        pixel(&buf, w, 55, 16),
+        bgra(Palette::default().ink),
+        2,
+        "gece keeps its idle look",
+    );
+}

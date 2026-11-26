@@ -15,8 +15,8 @@ use material::Material;
 use plith_core::ambient::LiveValues;
 use plith_core::draw::{DisplayList, Node, PageContent};
 use plith_core::geometry::IslandShape;
-use plith_core::material::MaterialLayers;
 use plith_core::material::art::ThemePaint;
+use plith_core::material::{MaterialLayers, idle_look_alpha};
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::theme::Palette;
 use std::sync::Arc;
@@ -278,8 +278,15 @@ impl Painter {
         unsafe { ctx.EndDraw(None, None) }
     }
 
+    /// The idle look's opacity this frame: `1 - content_opacity`, and with a material never
+    /// above its pill, so the look leaves with the black pill (`idle_look_alpha`).
+    fn idle_alpha(&self, frame: &PaintFrame) -> f32 {
+        let pill = self.material.is_set().then_some(frame.material.pill);
+        idle_look_alpha(frame.content_opacity, pill)
+    }
+
     /// Refreshes the bitmaps this frame shows and places them: the visible page layers (when
-    /// the content is visible), then the pill (when the content is not fully visible).
+    /// the content is visible), then the idle look's pill list (at `idle_alpha`).
     fn place_pages(
         &mut self,
         ctx: &ID2D1DeviceContext,
@@ -289,6 +296,7 @@ impl Painter {
         let (ox, oy) = frame.origin;
         let content = &frame.content;
         let (open, collapsed) = (self.open, self.collapsed);
+        let idle = self.idle_alpha(frame);
         let mut env = ListEnv {
             palette: &open,
             text: &mut self.text,
@@ -321,14 +329,12 @@ impl Painter {
                 }
             }
         }
-        if frame.content_opacity < 1.0 {
-            add(PILL, &content.pill, ox, 1.0 - frame.content_opacity)?;
-        }
+        add(PILL, &content.pill, ox, idle)?;
         Ok(placed)
     }
 
     /// Draws the live nodes of every visible page layer (outgoing first) at its offset and
-    /// opacity, then the pill's (the title scroll) at `1 - content_opacity`.
+    /// opacity, then the pill's (the title scroll) at `idle_alpha`.
     fn draw_layers_live(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame, scale: f64) {
         let (ox, oy) = frame.origin;
         for layer in frame.pages.iter() {
@@ -344,7 +350,7 @@ impl Painter {
             }
         }
         let pill = &frame.content.pill;
-        let alpha = 1.0 - frame.content_opacity;
+        let alpha = self.idle_alpha(frame);
         self.draw_list_live(ctx, frame, (pill, alpha), (PILL, ox, oy), scale);
     }
 
