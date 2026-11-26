@@ -13,6 +13,7 @@ use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
+use plith_core::material::MaterialLayers;
 use plith_core::motion::{MotionKind, MotionStats};
 use plith_core::page::{PageLayers, PageTurn, motion_pages};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
@@ -282,6 +283,7 @@ where
             content: Arc::clone(&self.page_content),
             content_gen: self.content_gen,
             live,
+            material: MaterialLayers::OPEN,
         };
         let (times, recovered) = self.paint_once(&frame)?;
         if times.is_none() && recovered {

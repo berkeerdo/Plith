@@ -127,17 +127,21 @@ impl Offscreen {
         read_back(&self.staging, &self.target, self.width, self.height)
     }
 
-    /// Switches the theme: the painter draws the open palette for now.
-    // Taken by value like the trait method: the painter will keep the material.
-    #[allow(clippy::needless_pass_by_value)]
+    /// Switches the theme: both palettes and the material, if any.
     pub fn set_theme(&mut self, paint: ThemePaint) {
-        self.painter.set_palette(paint.open);
+        self.painter.set_theme(paint);
     }
 
     /// How many page or pill bitmaps the painter redrew so far.
     #[must_use]
     pub fn page_rebuilds(&self) -> u64 {
         self.painter.page_rebuilds()
+    }
+
+    /// How many times the painter built the material's bitmaps so far.
+    #[must_use]
+    pub fn material_builds(&self) -> u64 {
+        self.painter.material_builds()
     }
 
     /// How many times the painter built the island geometry so far.

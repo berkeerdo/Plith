@@ -7,6 +7,7 @@ use plith_core::draw::{
     SeekTimeline, StationMark, TextStyle, Trim,
 };
 use plith_core::geometry::IslandShape;
+use plith_core::material::MaterialLayers;
 use plith_core::material::art::ThemePaint;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::shapes::REST;
@@ -46,6 +47,7 @@ fn frame(shape: IslandShape, origin: (f64, f64), pages: &[PageLayer]) -> PaintFr
         content: Arc::new(PageContent::empty()),
         content_gen: 0,
         live: LiveValues::default(),
+        material: MaterialLayers::OPEN,
     }
 }
 

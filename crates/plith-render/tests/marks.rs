@@ -7,6 +7,7 @@ use plith_core::draw::{
     DisplayList, Ink, LiveNode, LiveRail, Node, PageContent, Rect, SeekTimeline,
 };
 use plith_core::geometry::IslandShape;
+use plith_core::material::MaterialLayers;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::theme::Palette;
 use plith_render::paint::PaintFrame;
@@ -40,6 +41,7 @@ fn page_frame(nodes: Vec<Node>, live: LiveValues) -> PaintFrame {
         content: Arc::new(content),
         content_gen: 0,
         live,
+        material: MaterialLayers::OPEN,
     }
 }
 

@@ -14,6 +14,7 @@
 use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::lang::Lang;
+use plith_core::material::MaterialLayers;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::fixtures;
@@ -152,6 +153,7 @@ fn island(content: &Content, palette: Palette) -> Result<(Vec<u8>, usize, usize)
         content: Arc::new(page_content),
         content_gen: 1,
         live: fixtures::live_values(),
+        material: MaterialLayers::OPEN,
     };
     let (w, h) = (px(shape.width), px(shape.height));
     let text = TextSystem::new()?;
