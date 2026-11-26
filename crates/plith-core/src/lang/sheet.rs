@@ -1,7 +1,6 @@
 //! Settings window copy in the eight languages. See ADR 0015.
 
 use super::Lang;
-use crate::theme::Theme;
 
 mod de;
 mod en;
@@ -301,18 +300,6 @@ pub fn sheet_text(t: SheetText, lang: Lang) -> &'static str {
 #[must_use]
 pub fn fill(text: &str, key: &str, value: &str) -> String {
     text.replace(&format!("{{{key}}}"), value)
-}
-
-/// A theme named by its product name, upper case under Turkish rules. The names are proper
-/// names and read the same in every language (ADR 0007, theme switch spec section 3).
-#[must_use]
-pub fn theme_name(theme: Theme) -> &'static str {
-    match theme {
-        Theme::Gece => "GECE",
-        Theme::Kagit => "KA\u{11e}IT",
-        Theme::York => "YORK",
-        Theme::Sodyum => "SODYUM",
-    }
 }
 
 /// A language named in itself, for the language picker.

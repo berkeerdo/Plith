@@ -3,11 +3,10 @@
 //! Row labels are set in `Name`, sub lines and notes in `Body` (mixed case, never upper-cased),
 //! captions and choice words in `Label`.
 
-use super::{SheetText, fill, sheet_text, theme_name};
+use super::{SheetText, fill, sheet_text};
 use crate::draw::TextStyle;
 use crate::lang::fit::{Budget, Place};
 use crate::lang::{Lang, Text, text};
-use crate::theme::Theme;
 
 /// Room of a look name in a preview cell: 96 wide, minus the station and its gap, minus a margin.
 const LOOK_W: f64 = 70.0;
@@ -55,11 +54,16 @@ fn look_places(lang: Lang) -> impl Iterator<Item = Place> {
     })
 }
 
-/// The four theme names as choice words; they read the same in every language.
+/// The five planned theme names, upper case under Turkish rules, as the Look row sets them
+/// (spec 4.4). They read the same in every language.
+pub(super) const THEME_NAMES: [&str; 5] =
+    ["GECE", "HALKA", "F\u{130}RN", "KABLO", "\u{15e}ER\u{130}T"];
+
+/// The planned theme names as choice words.
 fn theme_places() -> impl Iterator<Item = Place> {
-    Theme::ALL.into_iter().map(|theme| Place {
-        name: format!("sheet theme {}", theme.key()),
-        text: theme_name(theme).to_owned(),
+    THEME_NAMES.into_iter().map(|name| Place {
+        name: format!("sheet theme {name}"),
+        text: name.to_owned(),
         style: TextStyle::Label,
         budget: Budget::Dip(WORD_W),
     })

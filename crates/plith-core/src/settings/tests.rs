@@ -1,4 +1,6 @@
 use super::*;
+use crate::theme::colour::Rgb;
+use crate::theme::registry::{AccentPick, ThemeId};
 
 #[test]
 fn osd_and_flyout_round_trip() {
@@ -44,7 +46,9 @@ fn round_trip() {
         head: HeadSlot::Playing,
         osd: false,
         flyout: FlyoutPref::Hide,
-        theme: crate::theme::Theme::Sodyum,
+        theme: ThemeId::parse("firn").unwrap(),
+        accents: [(ThemeId::gece(), AccentPick::Windows)].into(),
+        floors: [(ThemeId::gece(), Rgb([1, 2, 3]))].into(),
         update_check: false,
         update_checked: 1_764_000_000,
         update_seen: "0.5.0".to_string(),
@@ -159,30 +163,120 @@ fn idle_look_keys_round_trip() {
     assert_eq!(IdleLook::from_key("eyes"), None);
 }
 
-#[test]
-fn theme_defaults_to_gece_and_round_trips() {
-    use crate::theme::Theme;
-    assert_eq!(Settings::default().theme, Theme::Gece);
-    assert!(serialize(&Settings::default()).contains("theme=gece\n"));
-    for theme in Theme::ALL {
-        let s = Settings {
-            theme,
-            ..Settings::default()
-        };
-        let (back, problems) = parse(&serialize(&s));
-        assert_eq!(back.theme, theme);
-        assert!(problems.is_empty());
-    }
+fn id(text: &str) -> ThemeId {
+    ThemeId::parse(text).unwrap()
+}
+
+fn hex(text: &str) -> Rgb {
+    Rgb::parse(text).unwrap()
 }
 
 #[test]
-fn unknown_theme_falls_back_to_gece_and_is_reported() {
-    use crate::theme::Theme;
-    let (s, problems) = parse("theme=neon\n");
-    assert_eq!(s.theme, Theme::Gece);
+fn theme_defaults_to_gece() {
+    assert_eq!(Settings::default().theme, ThemeId::gece());
+    assert!(serialize(&Settings::default()).contains("theme=gece\n"));
+}
+
+#[test]
+fn unknown_theme_syntax_falls_back_to_gece_and_is_reported() {
+    let (s, problems) = parse("theme=NEON!\n");
+    assert_eq!(s.theme, ThemeId::gece());
     assert_eq!(problems.len(), 1);
     assert!(problems[0].contains("`theme`"));
-    assert!(!problems[0].contains("neon"));
+    assert!(!problems[0].contains("NEON"));
+}
+
+#[test]
+fn accent_and_floor_round_trip() {
+    let text = "theme=gece\naccent.gece=#FFB224\naccent.halka=windows\nfloor.gece=#1C2420\n";
+    let (s, problems) = parse(text);
+    assert!(problems.is_empty(), "{problems:?}");
+    assert_eq!(
+        s.accents.get(&id("gece")),
+        Some(&AccentPick::Colour(hex("#FFB224")))
+    );
+    assert_eq!(s.accents.get(&id("halka")), Some(&AccentPick::Windows));
+    assert_eq!(s.floors.get(&id("gece")), Some(&hex("#1C2420")));
+    let written = serialize(&s);
+    assert!(written.contains(
+        "theme=gece\naccent.gece=#FFB224\naccent.halka=windows\nfloor.gece=#1C2420\nupdate_check="
+    ));
+    let (back, problems) = parse(&written);
+    assert!(problems.is_empty());
+    assert_eq!(back, s);
+}
+
+#[test]
+fn bad_accent_lines_logged_and_skipped() {
+    let text = "accent.gece=#12345\naccent.gece=red\naccent.=#000000\naccent.GECE=#000000\n\
+                floor.gece=windows\nweather=on\n";
+    let (s, problems) = parse(text);
+    // Five bad lines (the brief says four but lists five).
+    assert_eq!(problems.len(), 5, "{problems:?}");
+    assert!(s.accents.is_empty());
+    assert!(s.floors.is_empty());
+    assert!(s.weather);
+    for problem in &problems {
+        assert!(problem.contains("characters"), "{problem}");
+        assert!(!problem.contains("#12345"), "{problem}");
+        assert!(!problem.contains("red"), "{problem}");
+        assert!(!problem.contains("#000000"), "{problem}");
+        assert!(!problem.contains("windows"), "{problem}");
+    }
+    assert!(problems[0].contains("`accent.gece`"));
+}
+
+#[test]
+fn future_theme_kept() {
+    let text = serialize(&parse("theme=firn\naccent.firn=#1C5D99\n").0);
+    assert!(text.contains("theme=firn\naccent.firn=#1C5D99\n"));
+}
+
+#[test]
+fn sodyum_migrates() {
+    let (s, problems) = parse("theme=sodyum\n");
+    assert_eq!(s.theme, ThemeId::gece());
+    assert_eq!(
+        s.accents.get(&id("gece")),
+        Some(&AccentPick::Colour(hex("#FFB224")))
+    );
+    assert!(s.floors.is_empty());
+    assert_eq!(problems, ["theme sodyum moved to gece"]);
+}
+
+#[test]
+fn york_migrates() {
+    let (s, problems) = parse("theme=york\n");
+    assert_eq!(s.theme, ThemeId::gece());
+    assert_eq!(s.floors.get(&id("gece")), Some(&hex("#1C2420")));
+    assert_eq!(
+        s.accents.get(&id("gece")),
+        Some(&AccentPick::Colour(hex("#FFE9A8")))
+    );
+    assert_eq!(problems, ["theme york moved to gece"]);
+}
+
+#[test]
+fn kagit_migrates() {
+    let (s, problems) = parse("theme=kagit\n");
+    assert_eq!(s.theme, ThemeId::gece());
+    assert_eq!(s.floors.get(&id("gece")), Some(&hex("#F3F2ED")));
+    assert_eq!(
+        s.accents.get(&id("gece")),
+        Some(&AccentPick::Colour(hex("#3F6E00")))
+    );
+    assert_eq!(problems, ["theme kagit moved to gece"]);
+}
+
+#[test]
+fn migration_keeps_user_accent() {
+    let (s, _) = parse("theme=sodyum\naccent.gece=#7FD4FF\n");
+    assert_eq!(
+        s.accents.get(&id("gece")),
+        Some(&AccentPick::Colour(hex("#7FD4FF")))
+    );
+    let (s, _) = parse("floor.gece=#101010\ntheme=kagit\n");
+    assert_eq!(s.floors.get(&id("gece")), Some(&hex("#101010")));
 }
 
 #[test]

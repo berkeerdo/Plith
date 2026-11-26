@@ -1,8 +1,12 @@
 //! The idle look settings and their text file format: one `key=value` per line, `#` comments,
 //! blank lines skipped. Parsing never fails; a bad line is reported and the default stays.
 
+use std::collections::BTreeMap;
+use std::fmt::Write as _;
+
 use crate::setup::Version;
-use crate::theme::Theme;
+use crate::theme::colour::Rgb;
+use crate::theme::registry::{AccentPick, ThemeId};
 
 /// What the collapsed island shows while nothing happens.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
@@ -173,8 +177,12 @@ pub struct Settings {
     pub osd: bool,
     /// What to do with the Windows flyout.
     pub flyout: FlyoutPref,
-    /// The colour theme of the island and the settings window.
-    pub theme: Theme,
+    /// The id of the colour theme pack of the island and the settings window.
+    pub theme: ThemeId,
+    /// The accent picked per theme pack; a pack with no entry keeps its own accent.
+    pub accents: BTreeMap<ThemeId, AccentPick>,
+    /// The floor colour picked per theme pack; a pack with no entry keeps its own floor.
+    pub floors: BTreeMap<ThemeId, Rgb>,
     /// Whether the daily update check runs.
     pub update_check: bool,
     /// Unix seconds of the last successful update check; `0` means never.
@@ -199,7 +207,9 @@ impl Default for Settings {
             head: HeadSlot::default(),
             osd: true,
             flyout: FlyoutPref::default(),
-            theme: Theme::default(),
+            theme: ThemeId::default(),
+            accents: BTreeMap::new(),
+            floors: BTreeMap::new(),
             update_check: true,
             update_checked: 0,
             update_seen: String::new(),
@@ -307,12 +317,55 @@ fn apply(s: &mut Settings, key: &str, value: &str) -> bool {
         "head" => parse_head(value).map(|v| s.head = v).is_some(),
         "osd" => parse_bool(value).map(|v| s.osd = v).is_some(),
         "flyout" => parse_flyout(value).map(|v| s.flyout = v).is_some(),
-        "theme" => Theme::from_key(value).map(|v| s.theme = v).is_some(),
+        "theme" => ThemeId::parse(value).map(|v| s.theme = v).is_some(),
         "update_check" => parse_bool(value).map(|v| s.update_check = v).is_some(),
         "update_checked" => value.parse().map(|v| s.update_checked = v).is_ok(),
         "update_seen" => parse_seen(value).map(|v| s.update_seen = v).is_some(),
         _ => false,
     }
+}
+
+/// Applies an `accent.<id>` or `floor.<id>` line. `None` when `key` is neither family; otherwise
+/// whether the id and the value were good.
+fn apply_prefixed(s: &mut Settings, key: &str, value: &str) -> Option<bool> {
+    if let Some(id) = key.strip_prefix("accent.") {
+        let pick = if value == "windows" {
+            Some(AccentPick::Windows)
+        } else {
+            Rgb::parse(value).map(AccentPick::Colour)
+        };
+        return Some(match (ThemeId::parse(id), pick) {
+            (Some(id), Some(pick)) => {
+                s.accents.insert(id, pick);
+                true
+            }
+            _ => false,
+        });
+    }
+    let id = key.strip_prefix("floor.")?;
+    Some(match (ThemeId::parse(id), Rgb::parse(value)) {
+        (Some(id), Some(rgb)) => {
+            s.floors.insert(id, rgb);
+            true
+        }
+        _ => false,
+    })
+}
+
+/// The `accent.*` then `floor.*` lines, in id order, each ending with a newline.
+fn pick_lines(s: &Settings) -> String {
+    let mut out = String::new();
+    for (id, pick) in &s.accents {
+        let value = match pick {
+            AccentPick::Colour(rgb) => rgb.to_hex(),
+            AccentPick::Windows => "windows".to_owned(),
+        };
+        let _ = writeln!(out, "accent.{}={value}", id.as_str());
+    }
+    for (id, rgb) in &s.floors {
+        let _ = writeln!(out, "floor.{}={}", id.as_str(), rgb.to_hex());
+    }
+    out
 }
 
 const KEYS: [&str; 17] = [
@@ -344,6 +397,7 @@ pub fn parse(text: &str) -> (Settings, Vec<String>) {
     let mut settings = Settings::default();
     let mut problems = Vec::new();
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
+    let mut raw_theme = String::new();
     for (index, raw) in text.lines().enumerate() {
         let line = raw.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -355,14 +409,25 @@ pub fn parse(text: &str) -> (Settings, Vec<String>) {
             continue;
         };
         let (key, value) = (key.trim(), value.trim());
-        if !KEYS.contains(&key) {
-            problems.push(format!("line {number}: unknown key `{key}`"));
-        } else if !apply(&mut settings, key, value) {
-            let length = value.chars().count();
-            problems.push(format!(
-                "line {number}: bad value ({length} characters) for `{key}`"
-            ));
+        let applied = if KEYS.contains(&key) {
+            Some(apply(&mut settings, key, value))
+        } else {
+            apply_prefixed(&mut settings, key, value)
+        };
+        match applied {
+            None => problems.push(format!("line {number}: unknown key `{key}`")),
+            Some(false) => {
+                let length = value.chars().count();
+                problems.push(format!(
+                    "line {number}: bad value ({length} characters) for `{key}`"
+                ));
+            }
+            Some(true) if key == "theme" => value.clone_into(&mut raw_theme),
+            Some(true) => {}
         }
+    }
+    if migrate::retired(&mut settings, &raw_theme) {
+        problems.push(format!("theme {raw_theme} moved to gece"));
     }
     (settings, problems)
 }
@@ -405,7 +470,7 @@ pub fn serialize(s: &Settings) -> String {
     };
     format!(
         "look={}\nspan={span}\nplays={}\nweather={}\nlocation={location}\ncity={}\nunit={unit}\n\
-         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\ntheme={}\n\
+         clock24={}\nopen_on={open_on}\nlang={lang}\nhead={head}\nosd={}\nflyout={flyout}\ntheme={}\n{}\
          update_check={}\nupdate_checked={}\nupdate_seen={}\n",
         s.look.key(),
         on_off(s.plays),
@@ -413,7 +478,8 @@ pub fn serialize(s: &Settings) -> String {
         s.city,
         on_off(s.clock24),
         on_off(s.osd),
-        s.theme.key(),
+        s.theme.as_str(),
+        pick_lines(s),
         on_off(s.update_check),
         s.update_checked,
         s.update_seen,
@@ -421,6 +487,7 @@ pub fn serialize(s: &Settings) -> String {
 }
 
 pub mod change;
+pub mod migrate;
 pub mod wpf;
 
 #[cfg(test)]

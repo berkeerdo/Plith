@@ -258,15 +258,32 @@ fn bad_or_missing_flyout_is_rejected() {
 }
 
 #[test]
-fn theme_takes_a_theme_key() {
-    use crate::theme::Theme;
+fn theme_flag_takes_any_valid_id() {
+    use crate::theme::registry::ThemeId;
     assert_eq!(parse(&[]).unwrap().theme, None);
-    for theme in Theme::ALL {
-        let launch = parse(&["--theme", theme.key()]).unwrap();
-        assert_eq!(launch.theme, Some(theme));
+    for text in ["gece", "halka", "firn", "kablo", "serit", "x-1"] {
+        let launch = parse(&["--theme", text]).unwrap();
+        assert_eq!(launch.theme, ThemeId::parse(text));
+        assert!(launch.theme.is_some());
     }
     assert!(matches!(
-        parse(&["--theme", "neon"]),
+        parse(&["--theme"]),
+        Err(LaunchError::MissingValue(_))
+    ));
+}
+
+#[test]
+fn theme_flag_rejects_bad_syntax() {
+    for text in ["GECE!", "Gece", "", "a b"] {
+        assert!(
+            matches!(parse(&["--theme", text]), Err(LaunchError::BadValue { .. })),
+            "{text:?}"
+        );
+    }
+    let long = "a".repeat(33);
+    assert!(parse(&["--theme", &long]).is_err());
+    assert!(matches!(
+        parse(&["--theme", "neon!"]),
         Err(LaunchError::BadValue { .. })
     ));
     assert!(matches!(
