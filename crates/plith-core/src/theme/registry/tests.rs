@@ -172,6 +172,23 @@ fn material_ignores_floor_pick() {
 }
 
 #[test]
+fn explicit_white_accent_kept() {
+    let pick = AccentPick::Colour(rgb("#FFFFFF"));
+    let r = Registry::builtin().resolve(&gece(), picks(Some(&pick), None));
+    assert_eq!(r.open.flow, hex(0xFF, 0xFF, 0xFF));
+    assert_eq!(r.accent_shift, Shift::Kept);
+}
+
+#[test]
+fn explicit_grey_accent_solved_not_dropped() {
+    let pick = AccentPick::Colour(rgb("#808080"));
+    let r = Registry::builtin().resolve(&gece(), picks(Some(&pick), None));
+    assert_ne!(r.open.flow, todays_gece().flow);
+    assert!(contrast(r.open.flow, r.open.floor) >= 3.0);
+    assert!(contrast(r.open.flow, r.open.floor_high) >= 3.0);
+}
+
+#[test]
 fn bad_floor_sets_refused() {
     let r = Registry::builtin().resolve(&gece(), picks(None, Some("#777777")));
     assert!(r.floor_refused);

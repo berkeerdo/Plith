@@ -1,6 +1,8 @@
 //! The registry of theme packs and the resolve from a pack plus the user's picks to the palettes
 //! the app draws with.
 
+use std::sync::OnceLock;
+
 use super::Palette;
 use super::builtin::BUILTIN;
 use super::colour::{Oklch, Rgb};
@@ -89,8 +91,12 @@ pub struct Registry {
     packs: Vec<Pack>,
 }
 
-fn gece_pack() -> Pack {
-    parse_pack(BUILTIN[0]).unwrap_or_else(|e| panic!("built-in pack gece refused: {e}"))
+/// Gece, parsed once: the fallback pack and the base of the sheet station.
+fn gece_pack() -> &'static Pack {
+    static GECE: OnceLock<Pack> = OnceLock::new();
+    GECE.get_or_init(|| {
+        parse_pack(BUILTIN[0]).unwrap_or_else(|e| panic!("built-in pack gece refused: {e}"))
+    })
 }
 
 impl Registry {
@@ -129,13 +135,10 @@ impl Registry {
     /// The palettes of a theme under the user's picks. An unknown id draws Gece but keeps the id.
     #[must_use]
     pub fn resolve(&self, id: &ThemeId, picks: Picks) -> ResolvedTheme {
-        let fallback;
-        let pack = if let Some(found) = self.get(id).or_else(|| self.get(&ThemeId::gece())) {
-            found
-        } else {
-            fallback = gece_pack();
-            &fallback
-        };
+        let pack = self
+            .get(id)
+            .or_else(|| self.get(&ThemeId::gece()))
+            .unwrap_or(gece_pack());
         let (plain, floor_refused) = plain_floor(pack.floor_adjustable, picks.floor);
         let (open, collapsed) = match &plain {
             Some(p) => (plain_face(p), plain_face(p)),
@@ -143,7 +146,7 @@ impl Registry {
         };
         let wanted = wanted_accent(pack, &picks);
         let (open_flow, shift) = solve(pack, wanted, &open);
-        let (collapsed_flow, _) = solve(pack, open_flow, &collapsed);
+        let (collapsed_flow, _) = solve(pack, wanted, &collapsed);
         let sheet = sheet_palette(wanted);
         ResolvedTheme {
             id: id.clone(),
@@ -191,14 +194,13 @@ fn wanted_accent(pack: &Pack, picks: &Picks) -> Rgb {
     if !pack.flow_adjustable {
         return pack.flow;
     }
-    let picked = match picks.accent {
-        Some(AccentPick::Colour(c)) => Some(*c),
-        Some(AccentPick::Windows) => picks.windows_accent,
-        None => None,
-    };
-    match picked {
-        Some(c) if Oklch::from_rgb(c).c >= NEUTRAL_CHROMA => c,
-        _ => pack.flow,
+    match picks.accent {
+        Some(AccentPick::Colour(c)) => *c,
+        Some(AccentPick::Windows) => picks
+            .windows_accent
+            .filter(|c| Oklch::from_rgb(*c).c >= NEUTRAL_CHROMA)
+            .unwrap_or(pack.flow),
+        None => pack.flow,
     }
 }
 
