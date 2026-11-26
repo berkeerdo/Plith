@@ -7,8 +7,6 @@
 
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
-use std::cell::Cell;
-
 /// The measured `brisk` expand full time in milliseconds: the visible/full pair "expand 417/592 ms"
 /// in `docs/plans/done/engine-r1b.md` (line 379); 592 is the full time.
 pub const EXPAND_SETTLE_MS: f64 = 592.0;
@@ -94,24 +92,29 @@ pub fn morph_progress(height: f64, rest: f64, open: f64) -> f64 {
 #[derive(Clone, Copy, Debug)]
 enum Phase {
     Collapsed,
-    /// `expand` was called at `since`; the ripples run on `now - since`.
+    /// `expand` was called at `since`; the ripples run on `now - since`, each pressing from its
+    /// `base` value (0 on a fresh open, the current value on a replay) toward 1.
     Expanding {
         since: f64,
+        base: [f32; 3],
     },
     /// `collapse` was called at `since`; ripples fade from the `from` values.
     Collapsing {
         since: f64,
         from: [f32; 3],
     },
+    /// A reopen that does not replay: the fabric follows the spring again while the ripples keep
+    /// fading from `from`, on the collapse schedule that began at `since`.
+    Reopened {
+        since: f64,
+        from: [f32; 3],
+    },
 }
 
-/// The material timeline state. Interior state: the last progress seen by `layers` / `is_settled`
-/// lives in a `Cell`, so `expand` (which takes only a time) can tell whether a collapse had
-/// shrunk the reveal below `REPLAY_BELOW`.
+/// The material timeline state.
 #[derive(Debug)]
 pub struct MaterialMotion {
     phase: Phase,
-    last_progress: Cell<f64>,
 }
 
 impl Default for MaterialMotion {
@@ -124,12 +127,22 @@ fn ramp(t: f64, from: f64, len: f64) -> f64 {
     ((t - from) / len).clamp(0.0, 1.0)
 }
 
-/// Ripple `k` while expanding, `t` ms since `expand`: press, hold until the last ripple's hold
-/// ends, then the shared fade.
-fn expand_ripple(k: usize, t: f64) -> f32 {
-    let press = ramp(t, RIPPLE_START_MS[k], PRESS_MS);
+/// Ripple `k` while expanding, `t` ms since `expand`: press from `base`, hold until the last
+/// ripple's hold ends, then the shared fade.
+fn expand_ripple(k: usize, t: f64, base: f32) -> f32 {
+    let press = base + (1.0 - base) * ramp(t, RIPPLE_START_MS[k], PRESS_MS) as f32;
     let fade_from = RIPPLE_START_MS[2] + PRESS_MS + HOLD_MS;
-    (press * (1.0 - ramp(t, fade_from, FADE_MS))) as f32
+    press * (1.0 - ramp(t, fade_from, FADE_MS)) as f32
+}
+
+/// Ripple values `t` ms into a collapse. Ripple 3 (index 2) leaves first. "Rise" is read as a
+/// fade from the current value to 0 over `FADE_MS`, delayed by `RISE_STEP_MS` per step, so the
+/// layers right after `collapse` equal the layers right before (no jump).
+fn collapse_ripples(from: [f32; 3], t: f64) -> [f32; 3] {
+    [0, 1, 2].map(|k| {
+        let delay = (2 - k) as f64 * RISE_STEP_MS;
+        from[k] * (1.0 - ramp(t, delay, FADE_MS)) as f32
+    })
 }
 
 impl MaterialMotion {
@@ -138,46 +151,46 @@ impl MaterialMotion {
     pub fn new() -> Self {
         Self {
             phase: Phase::Collapsed,
-            last_progress: Cell::new(0.0),
         }
     }
 
     fn ripples_at(&self, now_ms: f64) -> [f32; 3] {
         match self.phase {
             Phase::Collapsed => [0.0; 3],
-            Phase::Expanding { since } => {
+            Phase::Expanding { since, base } => {
                 let t = now_ms - since;
-                [0, 1, 2].map(|k| expand_ripple(k, t))
+                [0, 1, 2].map(|k| expand_ripple(k, t, base[k]))
             }
-            // Ripple 3 (index 2) leaves first. "Rise" is read as a fade from the current value to
-            // 0 over `FADE_MS`, delayed by `RISE_STEP_MS` per step, so the layers right after
-            // `collapse` equal the layers right before (no jump).
-            Phase::Collapsing { since, from } => {
-                let t = now_ms - since;
-                [0, 1, 2].map(|k| {
-                    let delay = (2 - k) as f64 * RISE_STEP_MS;
-                    from[k] * (1.0 - ramp(t, delay, FADE_MS)) as f32
-                })
+            Phase::Collapsing { since, from } | Phase::Reopened { since, from } => {
+                collapse_ripples(from, now_ms - since)
             }
         }
     }
 
-    /// Start (or restart) the open sequence. While open or opening this is a no-op, so a page
-    /// switch replays nothing. During a collapse the ripples replay only if the reveal (from the
-    /// last progress seen) had shrunk below `REPLAY_BELOW`; otherwise the fabric follows the
-    /// spring again with the ripples already spent.
-    pub fn expand(&mut self, now_ms: f64) {
+    /// Start (or restart) the open sequence; `progress` is the morph progress right now. While
+    /// open or opening this is a no-op, so a page switch replays nothing. During a collapse the
+    /// ripples replay only if the reveal had shrunk below `REPLAY_BELOW`; either way they
+    /// continue from their current opacities (a replay presses up from them, never down; no
+    /// replay keeps fading them out), so nothing jumps.
+    pub fn expand(&mut self, now_ms: f64, progress: f64) {
         match self.phase {
-            Phase::Expanding { .. } => {}
-            Phase::Collapsed => self.phase = Phase::Expanding { since: now_ms },
-            Phase::Collapsing { .. } => {
-                let reveal = (self.last_progress.get() / REVEAL_FULL_AT).clamp(0.0, 1.0);
-                let since = if reveal < REPLAY_BELOW {
-                    now_ms
+            Phase::Expanding { .. } | Phase::Reopened { .. } => {}
+            Phase::Collapsed => {
+                self.phase = Phase::Expanding {
+                    since: now_ms,
+                    base: [0.0; 3],
+                }
+            }
+            Phase::Collapsing { since, from } => {
+                let reveal = (progress / REVEAL_FULL_AT).clamp(0.0, 1.0);
+                self.phase = if reveal < REPLAY_BELOW {
+                    Phase::Expanding {
+                        since: now_ms,
+                        base: collapse_ripples(from, now_ms - since),
+                    }
                 } else {
-                    now_ms - EXPAND_DONE_MS
+                    Phase::Reopened { since, from }
                 };
-                self.phase = Phase::Expanding { since };
             }
         }
     }
@@ -201,7 +214,6 @@ impl MaterialMotion {
     /// lifts, so it is 1 at the end of the pill fade, 0 once lifted out, and 0 at rest.
     #[must_use]
     pub fn layers(&self, now_ms: f64, progress: f64) -> MaterialLayers {
-        self.last_progress.set(progress);
         let lift = ramp(progress, LIFT_FROM, LIFT_TO - LIFT_FROM);
         let pill = 1.0 - ramp(progress, 0.0, PILL_GONE_AT);
         MaterialLayers {
@@ -214,12 +226,15 @@ impl MaterialMotion {
     }
 
     /// True when nothing is animating: ripples done and the progress at the end of the direction.
+    #[must_use]
     pub fn is_settled(&self, now_ms: f64, progress: f64) -> bool {
-        self.last_progress.set(progress);
         match self.phase {
             Phase::Collapsed => progress <= PROGRESS_EPS,
-            Phase::Expanding { since } => {
+            Phase::Expanding { since, .. } => {
                 now_ms - since >= EXPAND_DONE_MS && progress >= 1.0 - PROGRESS_EPS
+            }
+            Phase::Reopened { since, .. } => {
+                now_ms - since >= COLLAPSE_DONE_MS && progress >= 1.0 - PROGRESS_EPS
             }
             Phase::Collapsing { since, .. } => {
                 now_ms - since >= COLLAPSE_DONE_MS && progress <= PROGRESS_EPS

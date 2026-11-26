@@ -4,7 +4,7 @@ const EPS: f32 = 1e-4;
 
 fn expanded(now: f64) -> MaterialMotion {
     let mut m = MaterialMotion::new();
-    m.expand(now);
+    m.expand(now, 0.0);
     m
 }
 
@@ -94,8 +94,7 @@ fn reopen_replays_only_below_ten_percent() {
     // Reveal 0.5 (progress 0.275): no replay.
     let mut m = expanded(0.0);
     m.collapse(1000.0);
-    m.layers(1100.0, 0.275);
-    m.expand(1100.0);
+    m.expand(1100.0, 0.275);
     assert_eq!(
         m.layers(1100.0 + RIPPLE_START_MS[0] + PRESS_MS, 0.5)
             .ripples,
@@ -104,8 +103,7 @@ fn reopen_replays_only_below_ten_percent() {
     // Reveal 0.05 (progress 0.0275): replays.
     let mut m = expanded(0.0);
     m.collapse(1000.0);
-    m.layers(1300.0, 0.0275);
-    m.expand(1300.0);
+    m.expand(1300.0, 0.0275);
     let l = m.layers(1300.0 + RIPPLE_START_MS[0] + PRESS_MS, 0.3);
     assert!((l.ripples[0] - 1.0).abs() < EPS);
 }
@@ -147,4 +145,39 @@ fn morph_progress_clamps() {
     assert_eq!(morph_progress(500.0, 30.0, 130.0), 1.0);
     assert_eq!(morph_progress(10.0, 30.0, 130.0), 0.0);
     assert_eq!(morph_progress(50.0, 30.0, 30.0), 1.0);
+}
+
+#[test]
+fn reopen_mid_collapse_continues_ripples() {
+    // 0.5 progress: no replay branch; 0.02: replay branch.
+    for progress in [0.5, 0.02] {
+        let mut m = expanded(0.0);
+        let now = RIPPLE_START_MS[1] + 40.0;
+        m.collapse(now);
+        let at = now + 100.0;
+        let before = m.layers(at, progress);
+        assert!(before.ripples[0] > 0.0, "need a visible ripple");
+        m.expand(at, progress);
+        assert_eq!(
+            m.layers(at, progress),
+            before,
+            "jump at progress {progress}"
+        );
+    }
+}
+
+#[test]
+fn replay_never_dips_below_current() {
+    let mut m = expanded(0.0);
+    let now = 500.0;
+    m.collapse(now);
+    let at = now + 100.0;
+    let start = m.layers(at, 0.02).ripples;
+    m.expand(at, 0.02);
+    for dt in 0..40 {
+        let l = m.layers(at + f64::from(dt) * 5.0, 0.02);
+        for k in 0..3 {
+            assert!(l.ripples[k] >= start[k] - 1e-6, "ripple {k} dipped");
+        }
+    }
 }
