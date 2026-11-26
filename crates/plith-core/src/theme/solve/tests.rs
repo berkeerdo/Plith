@@ -109,6 +109,22 @@ fn derive_plain_dark_flag() {
 }
 
 #[test]
+fn neutral_floor_gives_neutral_ink() {
+    for floor in ["#000000", "#FFFFFF", "#202020"] {
+        let plain = derive_plain(rgb(floor)).unwrap_or_else(|| panic!("no plain for {floor}"));
+        for role in [plain.ink, plain.muted, plain.faint] {
+            let [r, g, b] = role.0.map(i16::from);
+            assert!(
+                (r - g).abs() <= 1 && (g - b).abs() <= 1 && (r - b).abs() <= 1,
+                "{} on {floor} is tinted",
+                role.to_hex()
+            );
+        }
+        assert_bar(&plain);
+    }
+}
+
+#[test]
 fn mid_grey_floor() {
     if let Some(plain) = derive_plain(rgb("#777777")) {
         assert_bar(&plain);

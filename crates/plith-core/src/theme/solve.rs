@@ -13,6 +13,8 @@ const ACCENT_BAR: f64 = 3.0;
 const DARK_LUMINANCE: f64 = 0.179;
 /// Chroma of the ink tints.
 const INK_CHROMA: f64 = 0.012;
+/// Floors with a chroma below this count as neutral and get untinted ink.
+const NEUTRAL_CHROMA: f64 = 0.02;
 
 /// How the solve moved an accent pick.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -148,14 +150,20 @@ pub fn derive_plain(floor: Rgb) -> Option<PlainInk> {
         ([0.20, 0.42, 0.52], -1.0)
     };
     let bars = [7.0, 4.5, 3.0];
+    // A floor without a real hue has no tint to follow: keep the ink neutral.
+    let ink_chroma = if base.c < NEUTRAL_CHROMA {
+        0.0
+    } else {
+        INK_CHROMA
+    };
     let mut roles = [floor; 3];
     for ((role, target), bar) in roles.iter_mut().zip(targets).zip(bars) {
         let start = Oklch {
             l: target,
-            c: INK_CHROMA,
+            c: ink_chroma,
             h: base.h,
         };
-        *role = walk(start, INK_CHROMA, first, bar, &backdrop)?.0;
+        *role = walk(start, ink_chroma, first, bar, &backdrop)?.0;
     }
     let [ink, muted, faint] = roles;
     Some(PlainInk {

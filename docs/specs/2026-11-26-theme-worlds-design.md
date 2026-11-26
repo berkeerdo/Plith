@@ -77,8 +77,8 @@ themes/<id>/
   pill-1x.png   pill-2x.png       collapsed island
   <overlay>-1x.png / -2x.png      motion overlays named by the manifest
 ```
-Built-ins live in the repo at `crates/plith-core/themes/<id>/` (moved from `crates/plith/themes/` so core tests read the real files;
-one folder per pack, one place). Raster formats: PNG or JPG through WIC, sRGB.
+Built-ins live in the repo at `crates/plith-core/themes/<id>/` (moved from `crates/plith/themes/`
+so core tests read the real files; one folder per pack, one place). Raster formats: PNG or JPG through WIC, sRGB.
 
 ### 4.2 Manifest
 Same line rules as `settings.ini` (`key=value`, `#` comments, BOM tolerated, no sections), so

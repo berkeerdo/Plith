@@ -1,5 +1,7 @@
-//! Themes (ADR 0007): fixed palettes over one visual language. A theme sets colours only; shape,
-//! type and spacing are the same in every theme.
+//! Themes (ADR 0022): a theme is a pack, a manifest plus rasters, resolved through the
+//! [`registry`] with the user's accent and floor picks. The solve keeps text and accents readable
+//! on the resulting floor. [`Palette`] is the role table the painters read; shape, type and
+//! spacing are the same in every theme.
 
 use crate::draw::Ink;
 
