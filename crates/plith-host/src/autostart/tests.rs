@@ -1,19 +1,21 @@
-//! These tests write only under `HKCU\Software\Plith-test`, never the real Run key, and delete
-//! their subkey (and the parent when it is empty) at the end, also when an assertion fails.
+//! These tests write only to their own `HKCU\Software\Plith-test-*` keys, never the real Run
+//! key, and delete their key at the end, also when an assertion fails. Each key sits directly
+//! under `Software`: a shared parent deleted by one test's cleanup made a parallel test's
+//! write fail with `ERROR_KEY_DELETED` (1018).
 
 use super::*;
 use windows::Win32::System::Registry::RegDeleteKeyW;
 
-const PARENT: &str = r"Software\Plith-test";
+const PREFIX: &str = r"Software\Plith-test";
 
-/// A unique test subkey that is removed on drop.
+/// A unique test key that is removed on drop.
 struct TestKey {
     path: String,
 }
 
 impl TestKey {
     fn new(name: &str) -> Self {
-        let path = format!(r"{PARENT}\{name}-{}", std::process::id());
+        let path = format!("{PREFIX}-{name}-{}", std::process::id());
         Self { path }
     }
 
@@ -24,11 +26,9 @@ impl TestKey {
 
 impl Drop for TestKey {
     fn drop(&mut self) {
-        // SAFETY: plain wide strings, deleting keys of this test under the current user.
+        // SAFETY: a plain wide string, deleting this test's own key under the current user.
         unsafe {
             let _ = RegDeleteKeyW(HKEY_CURRENT_USER, &HSTRING::from(self.path.as_str()));
-            // Fails while another test's subkey is still there, which is what is wanted.
-            let _ = RegDeleteKeyW(HKEY_CURRENT_USER, &HSTRING::from(PARENT));
         }
     }
 }
