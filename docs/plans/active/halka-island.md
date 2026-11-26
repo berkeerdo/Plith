@@ -132,8 +132,8 @@
 - Create: `docs/quality/2026-11-XX-halka-motion.md`
 - Modify: `docs/STATUS.md`, `docs/ROADMAP.md`, this plan (banner, move to `plans/done/`)
 
-- [ ] **Step 1:** Berke at the PC; `query session` shows console, log line `remote false`.
-- [ ] **Step 2:** Release build; `--theme halka` with the demo driver: expand and collapse audio, media, welcome ten times each; then the same with `--theme gece`. Live switch Halka to Gece and back while open.
-- [ ] **Step 3:** Record every `motion` line's fps, hitches, worst gap, draw and present ms per theme in the quality file; 0 render wakes at rest afterwards.
-- [ ] **Step 4:** If Halka misses the bar, apply the spec's cut order one step at a time (shorter ripple fade, no ripples, no reveal) and remeasure each; record each run.
+- [x] **Step 1:** Berke at the PC; `query session` shows console, log line `remote false`. (2026-11-26, via `tscon`.)
+- [ ] **Step 2:** Release build; `--theme halka` with the demo driver: expand and collapse audio, media, welcome ten times each; then the same with `--theme gece`. Live switch Halka to Gece and back while open. (2026-11-26: demo runs done, 8 passes each, the 75 s watchdog cut Halka's 10; live switch still owed.)
+- [ ] **Step 3:** Record every `motion` line's fps, hitches, worst gap, draw and present ms per theme in the quality file; 0 render wakes at rest afterwards. (Recorded in `quality/2026-11-26-halka-motion.md`; the rest-wake check is still owed.)
+- [x] **Step 4:** If Halka misses the bar, apply the spec's cut order one step at a time (shorter ripple fade, no ripples, no reveal) and remeasure each; record each run. (Halka met the bar; no cut needed.)
 - [ ] **Step 5:** Tune `RIPPLE_FROM`, `PRESS_SPAN`, `HOLD_MS` and `FADE_MS` (changed 2026-11-26, option A) only from what Berke saw; rerun Step 2 once after tuning. Update STATUS (rewrite), ROADMAP, banner; commit `docs: halka measured`.
