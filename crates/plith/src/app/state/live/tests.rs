@@ -437,3 +437,14 @@ fn picking_a_theme_saves_it_even_when_it_is_the_one_shown() {
     assert_eq!(saved_theme(&path), id("next"));
     clean(app, "cli-theme-pick");
 }
+
+#[test]
+fn halka_starts_on_its_collapsed_floor_not_the_lime_one() {
+    let mut app = fed("halka-start");
+    app.settings.theme = id("halka");
+    let resolved = app.resolved();
+    let start = app.start_palette();
+    assert_eq!(bits(start.floor), bits(resolved.collapsed.floor));
+    assert_ne!(bits(start.floor), bits(resolved.open.floor), "not lime");
+    clean(app, "halka-start");
+}

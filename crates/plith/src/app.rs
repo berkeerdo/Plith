@@ -173,7 +173,7 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         settings,
     } = attach_feed(launch, &shell, log, &app);
     start_sides(launch, log, &shell, &app, &settings, monitor);
-    let palette = app.borrow().resolved().open;
+    let palette = app.borrow().start_palette();
     let config = render_config(launch, &shell, monitor, display, palette);
     let sample = live::sampler(levels);
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing, sample);

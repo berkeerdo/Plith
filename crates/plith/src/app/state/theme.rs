@@ -40,6 +40,13 @@ impl App {
         }
     }
 
+    /// The palette the render thread starts on: the collapsed one, as the island starts
+    /// collapsed (a material theme's open palette is its lime floor, never shown at rest).
+    #[must_use]
+    pub fn start_palette(&self) -> Palette {
+        self.resolved().collapsed
+    }
+
     /// Records the scale of the display the art is decoded for.
     pub fn set_display_scale(&mut self, scale: f64) {
         self.scale = scale;
