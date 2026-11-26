@@ -8,12 +8,14 @@
 //! the six pill looks, from a fixed day and time) into that folder, which must not exist yet.
 //! `--shelf <new folder>` renders the shelf page with 0 to 8 wagons and the hot slot.
 //! `--quick <new folder>` renders the quick page and every tab row at 1x and 2x in Turkish and
-//! German. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
+//! German. `--halka <new folder>` renders the Halka review set (`render_pages/halka_states.rs`)
+//! with Gece beside it. `--lang <code>` picks the language of our own copy (default `tr`; an unknown code is an
 //! error) and `--out <new folder>` names the folder of the page states.
 
 use plith_core::draw::{DisplayList, PageContent};
 use plith_core::geometry::IslandShape;
 use plith_core::lang::Lang;
+use plith_core::material::MaterialLayers;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::pages::audio::{PickMode, audio_page, audio_view};
 use plith_core::pages::fixtures;
@@ -23,16 +25,24 @@ use plith_core::pages::shelf::shelf_page;
 use plith_core::pages::system::system_page;
 use plith_core::pages::{PageBuild, PageId};
 use plith_core::shapes::REST;
-use plith_core::theme::{Palette, Theme, hex};
+use plith_core::theme::colour::Rgb;
+use plith_core::theme::registry::{AccentPick, Picks, Registry, ThemeId};
+use plith_core::theme::{Palette, hex};
 use plith_render::paint::PaintFrame;
 use plith_render::{TextSystem, render_offscreen};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{SystemTime, UNIX_EPOCH};
+#[path = "render_pages/halka_states.rs"]
+mod halka_states;
 #[path = "render_pages/idle_states.rs"]
 mod idle_states;
+#[path = "common/png.rs"]
+mod png;
 #[path = "render_pages/quick_states.rs"]
 mod quick_states;
+#[path = "render_sheet/facts.rs"]
+mod sheet_facts;
 #[path = "render_pages/shelf_states.rs"]
 mod shelf_states;
 
@@ -150,6 +160,7 @@ fn island(content: &Content, palette: Palette) -> Result<(Vec<u8>, usize, usize)
         content: Arc::new(page_content),
         content_gen: 1,
         live: fixtures::live_values(),
+        material: MaterialLayers::OPEN,
     };
     let (w, h) = (px(shape.width), px(shape.height));
     let text = TextSystem::new()?;
@@ -159,13 +170,35 @@ fn island(content: &Content, palette: Palette) -> Result<(Vec<u8>, usize, usize)
     Ok((rows, w, h))
 }
 
-/// The desk colour of each theme's mock cell.
-fn desk(theme: Theme) -> [f32; 4] {
-    match theme {
-        Theme::Gece => hex(0x1B, 0x1D, 0x21),
-        Theme::Kagit => hex(0xC9, 0xCD, 0xD3),
-        Theme::York => hex(0x14, 0x18, 0x1A),
-        Theme::Sodyum => hex(0x1A, 0x1A, 0x1D),
+/// One look of the mock: a palette on the colour of the desk it stands on.
+#[derive(Clone, Copy)]
+struct Look {
+    palette: Palette,
+    desk: [f32; 4],
+}
+
+impl Look {
+    /// Gece, the default pack, on its desk.
+    fn gece() -> Self {
+        Self {
+            palette: Palette::default(),
+            desk: hex(0x1B, 0x1D, 0x21),
+        }
+    }
+
+    /// Gece under a floor and an accent pick, the way a retired theme migrates.
+    fn picked(floor: Option<[u8; 3]>, accent: [u8; 3], desk: [f32; 4]) -> Self {
+        let accent = AccentPick::Colour(Rgb(accent));
+        let picks = Picks {
+            accent: Some(&accent),
+            floor: floor.map(Rgb),
+            windows_accent: None,
+        };
+        let resolved = Registry::builtin().resolve(&ThemeId::gece(), picks);
+        Self {
+            palette: resolved.open,
+            desk,
+        }
     }
 }
 
@@ -177,15 +210,15 @@ fn shape_of(content: &Content) -> IslandShape {
 }
 
 /// A cell with the islands side by side, centred, flush under the edge.
-fn cell(contents: &[Content], theme: Theme) -> Result<Canvas> {
+fn cell(contents: &[Content], look: Look) -> Result<Canvas> {
     let shapes: Vec<IslandShape> = contents.iter().map(shape_of).collect();
     let row_w: f64 = shapes.iter().map(|s| s.width).sum::<f64>()
         + PILL_GAP * f64::from(u32::try_from(shapes.len()).unwrap_or(1).saturating_sub(1));
     let tallest = shapes.iter().map(|s| s.height).fold(0.0, f64::max);
-    let mut canvas = Canvas::desk(CELL_W, EDGE + tallest + BOTTOM, desk(theme));
+    let mut canvas = Canvas::desk(CELL_W, EDGE + tallest + BOTTOM, look.desk);
     let mut x = (CELL_W - row_w) / 2.0;
     for (content, shape) in contents.iter().zip(&shapes) {
-        let (rows, w, h) = island(content, theme.palette())?;
+        let (rows, w, h) = island(content, look.palette)?;
         canvas.over(&rows, w, h, px(x), px(EDGE));
         x += shape.width + PILL_GAP;
     }
@@ -308,6 +341,7 @@ struct Args {
     idle: Option<PathBuf>,
     quick: Option<PathBuf>,
     shelf: Option<PathBuf>,
+    halka: Option<PathBuf>,
 }
 
 fn parse_args() -> std::result::Result<Args, String> {
@@ -317,6 +351,7 @@ fn parse_args() -> std::result::Result<Args, String> {
         idle: None,
         quick: None,
         shelf: None,
+        halka: None,
     };
     let mut it = std::env::args_os().skip(1);
     while let Some(arg) = it.next() {
@@ -331,6 +366,7 @@ fn parse_args() -> std::result::Result<Args, String> {
             }
             Some("--quick") => args.quick = Some(it.next().ok_or("--quick needs a folder")?.into()),
             Some("--shelf") => args.shelf = Some(it.next().ok_or("--shelf needs a folder")?.into()),
+            Some("--halka") => args.halka = Some(it.next().ok_or("--halka needs a folder")?.into()),
             Some("--out") => args.out = Some(it.next().ok_or("--out needs a folder")?.into()),
             Some(flag) if flag.starts_with("--") => return Err(format!("unknown option {flag}")),
             _ if args.idle.is_none() => args.idle = Some(arg.into()),
@@ -346,7 +382,7 @@ fn render_idle(dir: &Path, lang: Lang) -> std::result::Result<(), Box<dyn std::e
     for (name, contents) in idle_states::states(lang) {
         write_png(
             &dir.join(format!("{name}.png")),
-            &cell(&contents, Theme::Gece)?,
+            &cell(&contents, Look::gece())?,
         )?;
     }
     println!("{}", dir.display());
@@ -362,7 +398,7 @@ fn render_quick(dir: &Path) -> std::result::Result<(), Box<dyn std::error::Error
             SCALE_CELL.with(|s| s.set(factor));
             for (name, contents) in quick_states::states(lang) {
                 let file = format!("{name}-{code}-{factor}x.png");
-                write_png(&dir.join(file), &cell(&contents, Theme::Gece)?)?;
+                write_png(&dir.join(file), &cell(&contents, Look::gece())?)?;
             }
         }
     }
@@ -376,7 +412,7 @@ fn render_shelf(dir: &Path, lang: Lang) -> std::result::Result<(), Box<dyn std::
     for (name, contents) in shelf_states::states(lang) {
         write_png(
             &dir.join(format!("{name}.png")),
-            &cell(&contents, Theme::Gece)?,
+            &cell(&contents, Look::gece())?,
         )?;
     }
     println!("{}", dir.display());
@@ -388,6 +424,9 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
     let args = parse_args()?;
     let lang = args.lang;
+    if let Some(dir) = &args.halka {
+        return halka_states::render(dir);
+    }
     if let Some(dir) = &args.shelf {
         return render_shelf(dir, lang);
     }
@@ -401,21 +440,39 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     for (name, contents) in gece_states(lang) {
         write_png(
             &dir.join(format!("{name}.png")),
-            &cell(&contents, Theme::Gece)?,
+            &cell(&contents, Look::gece())?,
         )?;
     }
     let view = audio_view(&fixtures::lit(&fixtures::banana()), PickMode::None, lang);
-    let themes = [
-        ("kagit", Theme::Kagit),
-        ("york", Theme::York),
-        ("sodyum", Theme::Sodyum),
+    // The three retired themes, as the settings migration turns them into Gece picks.
+    let looks = [
+        (
+            "kagit",
+            Look::picked(
+                Some([0xF3, 0xF2, 0xED]),
+                [0x3F, 0x6E, 0x00],
+                hex(0xC9, 0xCD, 0xD3),
+            ),
+        ),
+        (
+            "york",
+            Look::picked(
+                Some([0x1C, 0x24, 0x20]),
+                [0xFF, 0xE9, 0xA8],
+                hex(0x14, 0x18, 0x1A),
+            ),
+        ),
+        (
+            "sodyum",
+            Look::picked(None, [0xFF, 0xB2, 0x24], hex(0x1A, 0x1A, 0x1D)),
+        ),
     ];
-    for (name, theme) in themes {
+    for (name, look) in looks {
         let page = audio_page(&view, fixtures::CLOCK, lang);
         let contents = [Content::Page(PageId::Audio, page)];
         write_png(
             &dir.join(format!("12-theme-{name}.png")),
-            &cell(&contents, theme)?,
+            &cell(&contents, look)?,
         )?;
     }
     println!("{}", dir.display());

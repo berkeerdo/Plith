@@ -10,7 +10,7 @@ use plith_core::lang::{Lang, resolve};
 use plith_core::launch::{Fixture, Launch};
 use plith_core::scene::SceneMailbox;
 use plith_core::settings::{IdleLook, Settings};
-use plith_core::theme::Theme;
+use plith_core::theme::registry::ThemeId;
 use plith_core::weather::Stamp;
 use plith_host::locale;
 use plith_host::log::{self, LogFile};
@@ -34,12 +34,12 @@ pub fn settings_for(launch: &Launch, log: &LogFile) -> Settings {
 
 /// What the settings file holds for the keys a command-line flag overrides in this run (the
 /// app keeps writing these, not the overrides).
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub struct FileValues {
     /// The file's look when `--idle-look` is given.
     pub look: Option<IdleLook>,
     /// The file's theme when `--theme` is given.
-    pub theme: Option<Theme>,
+    pub theme: Option<ThemeId>,
 }
 
 /// `settings_for`, and the file's values for the overridden keys.
@@ -55,8 +55,8 @@ pub fn settings_and_file_values(launch: &Launch, log: &LogFile) -> (Settings, Fi
         file.look = Some(settings.look);
         settings.look = look;
     }
-    if let Some(theme) = launch.theme {
-        file.theme = Some(settings.theme);
+    if let Some(theme) = launch.theme.clone() {
+        file.theme = Some(settings.theme.clone());
         settings.theme = theme;
     }
     if launch.fixture == Some(Fixture::Banana) {

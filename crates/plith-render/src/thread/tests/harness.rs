@@ -10,10 +10,11 @@ use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::ClockKind;
 use plith_core::draw::PageContent;
 use plith_core::layout::{RectPx, SurfaceLayout};
+use plith_core::material::art::ThemePaint;
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
 use plith_core::theme::Palette;
-use plith_core::tuning::R1;
+use plith_core::tuning::{R1, TuningSet};
 use std::sync::atomic::{AtomicBool, AtomicU32, AtomicU64, Ordering};
 use std::sync::mpsc::{self, Receiver};
 use std::sync::{Arc, Mutex, PoisonError};
@@ -135,8 +136,8 @@ pub(super) struct FakePaint {
 }
 
 impl Paint for FakePaint {
-    fn set_palette(&mut self, palette: Palette) {
-        lock(&self.palettes).push(palette);
+    fn set_theme(&mut self, paint: ThemePaint) {
+        lock(&self.palettes).push(paint.open);
     }
 
     fn relayout(&mut self, layout: SurfaceLayout) -> windows::core::Result<()> {
@@ -206,6 +207,8 @@ pub(super) struct Setup {
     pub(super) content_script: Vec<(u64, Arc<PageContent>)>,
     pub(super) relayout_fails: bool,
     pub(super) relayout_after: Option<(usize, Relayout)>,
+    /// The spring tuning (R1 when `None`).
+    pub(super) tune: Option<TuningSet>,
 }
 
 pub(super) struct Run {
@@ -352,6 +355,7 @@ pub(super) fn start(mut setup: Setup) -> Run {
             Arc::clone(&harness),
         );
         let instant = setup.instant;
+        let tune = setup.tune.unwrap_or(R1);
         let opened = Arc::clone(&opens);
         thread::spawn(move || {
             let clock_harness = Arc::clone(&harness);
@@ -372,7 +376,7 @@ pub(super) fn start(mut setup: Setup) -> Run {
                 order: KINDS.to_vec(),
                 hz: 240.0,
                 layout: layout(),
-                tune: R1,
+                tune,
             };
             run_guarded(parts, &mailbox, &shared, &mut sinks, || {});
             let _ = done_tx.send(());

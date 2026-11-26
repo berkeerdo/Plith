@@ -9,6 +9,7 @@ use crate::thread::{FrameTimes, Paint};
 use plith_core::draw::PageContent;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, outcome_line};
+use plith_core::material::art::ThemePaint;
 use plith_core::theme::Palette;
 use std::time::Instant;
 use windows::Win32::Foundation::{E_UNEXPECTED, HWND};
@@ -29,7 +30,7 @@ impl Stack {
         layout: &SurfaceLayout,
         warp: bool,
         levers: Levers,
-        palette: Palette,
+        theme: &ThemePaint,
     ) -> Result<(Self, Vec<String>)> {
         let gpu = Gpu::new(warp)?;
         let mut target = CompositionTarget::new(&gpu, hwnd, layout, levers)?;
@@ -39,7 +40,9 @@ impl Stack {
             .map(|outcome| outcome_line(&outcome))
             .collect();
         let text = TextSystem::new()?;
-        let mut painter = Painter::new(gpu.context(), gpu.d2d_factory(), palette, text)?;
+        let mut painter = Painter::new(gpu.context(), gpu.d2d_factory(), theme.open, text)?;
+        // The material's bitmaps belong to this device: the painter makes them again.
+        painter.set_theme(theme.clone());
         notes.extend(painter.take_notes());
         Ok((
             Self {
@@ -57,8 +60,8 @@ pub struct GpuPaint {
     hwnd: HWND,
     layout: SurfaceLayout,
     levers: Levers,
-    /// The palette the painter uses; kept here so a recovered painter gets it back.
-    palette: Palette,
+    /// The theme the painter uses; kept here so a recovered painter gets it back.
+    theme: ThemePaint,
     stack: Option<Stack>,
     notes: Vec<String>,
 }
@@ -79,12 +82,13 @@ impl GpuPaint {
         levers: Levers,
         palette: Palette,
     ) -> Result<Self> {
-        let (stack, notes) = Stack::new(hwnd, &layout, warp, levers, palette)?;
+        let theme = ThemePaint::plain(palette);
+        let (stack, notes) = Stack::new(hwnd, &layout, warp, levers, &theme)?;
         Ok(Self {
             hwnd,
             layout,
             levers,
-            palette,
+            theme,
             stack: Some(stack),
             notes,
         })
@@ -92,12 +96,12 @@ impl GpuPaint {
 }
 
 impl Paint for GpuPaint {
-    /// Switches the palette now and for every painter rebuilt by a recovery.
-    fn set_palette(&mut self, palette: Palette) {
-        self.palette = palette;
+    /// Switches the theme now and for every painter rebuilt by a recovery.
+    fn set_theme(&mut self, paint: ThemePaint) {
         if let Some(stack) = self.stack.as_mut() {
-            stack.painter.set_palette(palette);
+            stack.painter.set_theme(paint.clone());
         }
+        self.theme = paint;
     }
 
     fn paint(&mut self, frame: &PaintFrame) -> Result<FrameTimes> {
@@ -145,7 +149,7 @@ impl Paint for GpuPaint {
             // Dropped before the rebuild: a window takes only one composition target.
             drop(stack);
         }
-        let (stack, notes) = Stack::new(self.hwnd, &self.layout, warp, self.levers, self.palette)?;
+        let (stack, notes) = Stack::new(self.hwnd, &self.layout, warp, self.levers, &self.theme)?;
         self.stack = Some(stack);
         self.notes.extend(notes);
         Ok(())

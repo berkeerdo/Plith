@@ -11,13 +11,14 @@ use crate::app::idle_wiring::language_of;
 use crate::app::sheet_side::{Opening, SheetSide, Step, blank};
 use crate::settings_file;
 use plith_core::draw::DisplayList;
-use plith_core::lang::Lang;
 use plith_core::lang::sheet::{SheetText, sheet_text};
+use plith_core::lang::{Lang, upper};
 use plith_core::pages::idle_pill::{IdleFacts, idle_pill};
 use plith_core::settings::change::SettingChange;
 use plith_core::settings::{IdleLook, Settings};
-use plith_core::sheet::{Section, SheetFacts, SheetView, commit_field};
-use plith_core::theme::Theme;
+use plith_core::sheet::{Section, SheetFacts, SheetView, ThemeCard, commit_field};
+use plith_core::theme::Palette;
+use plith_core::theme::registry::ThemeId;
 use plith_core::update::UpdateRow;
 use plith_host::autostart::Autostart;
 use plith_host::log::LogFile;
@@ -157,7 +158,7 @@ impl App {
             section: self.sheet.section,
             ..SheetView::default()
         };
-        match SheetSide::open(self.opening(facts.lang, facts.settings.theme), view) {
+        match SheetSide::open(self.opening(facts.lang, self.resolved().sheet), view) {
             Ok(mut side) => {
                 if !side.has_icon() {
                     self.log.line("settings window: icon decode failed");
@@ -172,7 +173,7 @@ impl App {
         }
     }
 
-    fn opening(&self, lang: Lang, theme: Theme) -> Opening {
+    fn opening(&self, lang: Lang, palette: Palette) -> Opening {
         let queue = Rc::clone(&self.sheet.queue);
         let wake = Arc::clone(&self.sheet.wake);
         let on_event = Box::new(move |event| {
@@ -192,7 +193,7 @@ impl App {
         Opening {
             monitor: self.sheet.monitor,
             title: sheet_text(SheetText::WindowTitle, lang).to_owned(),
-            theme,
+            palette,
             on_event,
             on_panic,
             on_fatal,
@@ -252,13 +253,14 @@ impl App {
         }
         let previews_moved = self.update_previews();
         let facts = self.sheet_facts();
+        let sheet = self.resolved().sheet;
         let now = shown(&facts);
         if let Some(side) = self.sheet.side.as_mut() {
             if previews_moved || self.sheet.shown.as_ref() != Some(&now) {
                 side.touch();
             }
             side.set_title(sheet_text(SheetText::WindowTitle, facts.lang));
-            side.set_theme(facts.settings.theme);
+            side.set_palette(sheet);
             side.publish(&facts);
         }
         self.sheet.shown = Some(now);
@@ -346,6 +348,21 @@ impl App {
         true
     }
 
+    /// The theme packs the Look row offers: names upper-cased under Turkish rules in every
+    /// language, as the row draws them.
+    fn theme_cards(&self) -> Vec<ThemeCard> {
+        self.registry
+            .packs()
+            .iter()
+            .filter_map(|pack| {
+                Some(ThemeCard {
+                    id: ThemeId::parse(&pack.id)?,
+                    name: upper(&pack.name, Lang::Tr),
+                })
+            })
+            .collect()
+    }
+
     /// What the window shows besides its view state.
     pub(super) fn sheet_facts(&self) -> SheetFacts {
         let lang = self
@@ -367,6 +384,7 @@ impl App {
             save_failed: self.save_failed(),
             autostart: self.sheet.autostart_on,
             update: self.update_row(),
+            themes: self.theme_cards(),
         }
     }
 

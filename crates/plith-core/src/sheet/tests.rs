@@ -40,7 +40,19 @@ pub(super) fn facts_in(lang: Lang) -> SheetFacts {
         save_failed: false,
         autostart: false,
         update: UpdateRow::Current,
+        themes: theme_cards(),
     }
+}
+
+/// The four packs the Look row tests list; names as the app builds them (Turkish upper case).
+pub(super) fn theme_cards() -> Vec<ThemeCard> {
+    ["gece", "halka", "firn", "kablo"]
+        .into_iter()
+        .map(|id| ThemeCard {
+            id: ThemeId::parse(id).unwrap(),
+            name: crate::lang::upper(id, Lang::Tr),
+        })
+        .collect()
 }
 
 pub(super) fn facts() -> SheetFacts {

@@ -3,7 +3,9 @@
 use super::{
     FlyoutPref, HeadSlot, IdleLook, LangChoice, LocationMode, OpenOn, RunSpan, Settings, TempUnit,
 };
-use crate::theme::Theme;
+use crate::theme::colour::Rgb;
+use crate::theme::registry::{AccentPick, ThemeId};
+use std::collections::BTreeMap;
 
 /// One setting the window can change.
 #[derive(Debug, Clone, PartialEq, Eq)]
@@ -32,8 +34,12 @@ pub enum SettingChange {
     Osd(bool),
     /// What to do with the Windows flyout.
     Flyout(FlyoutPref),
-    /// The colour theme.
-    Theme(Theme),
+    /// The colour theme pack.
+    Theme(ThemeId),
+    /// The accent of a pack; `None` resets it to the pack's own.
+    Accent(ThemeId, Option<AccentPick>),
+    /// The floor colour of a pack; `None` resets it to the pack's own.
+    Floor(ThemeId, Option<Rgb>),
     /// The daily update check on or off.
     UpdateCheck(bool),
 }
@@ -67,6 +73,18 @@ fn set<T: PartialEq>(slot: &mut T, new: T) -> bool {
     true
 }
 
+/// Sets or removes the pick for `id` and returns whether the map changed.
+fn set_pick<V: PartialEq + Copy>(
+    map: &mut BTreeMap<ThemeId, V>,
+    id: ThemeId,
+    new: Option<V>,
+) -> bool {
+    match new {
+        Some(v) => map.insert(id, v) != Some(v),
+        None => map.remove(&id).is_some(),
+    }
+}
+
 /// Applies `change` and returns the effects it needs; the default (nothing to redo) when the
 /// value was already set. A look change reports only the pill: the quick page is the
 /// controller's business.
@@ -90,6 +108,8 @@ pub fn apply_change(settings: &mut Settings, change: SettingChange) -> Effects {
         SettingChange::Osd(v) => effects.osd = set(&mut settings.osd, v),
         SettingChange::Flyout(v) => effects.osd = set(&mut settings.flyout, v),
         SettingChange::Theme(v) => effects.theme = set(&mut settings.theme, v),
+        SettingChange::Accent(id, v) => effects.theme = set_pick(&mut settings.accents, id, v),
+        SettingChange::Floor(id, v) => effects.theme = set_pick(&mut settings.floors, id, v),
         SettingChange::UpdateCheck(v) => effects.update = set(&mut settings.update_check, v),
     }
     effects

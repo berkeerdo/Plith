@@ -7,7 +7,9 @@ mod facts;
 use plith_core::draw::{ArtId, ArtPixels, DisplayList, Node, Rect, TextStyle, Trim};
 use plith_core::lang::Lang;
 use plith_core::sheet::{Section, SheetView, sheet_build};
-use plith_core::theme::{Palette, Theme};
+use plith_core::theme::Palette;
+use plith_core::theme::colour::Rgb;
+use plith_core::theme::registry::{AccentPick, Picks, Registry, ThemeId};
 use plith_render::sheet::{SheetConfig, SheetRender, render_sheet_offscreen};
 use plith_render::{TextMeasure, TextSystem};
 use std::sync::{Arc, Mutex};
@@ -19,7 +21,7 @@ use windows::Win32::UI::WindowsAndMessaging::{
 use windows::core::w;
 
 fn palette() -> Palette {
-    Theme::Gece.palette()
+    Palette::default()
 }
 
 fn idle_list(lang: Lang) -> DisplayList {
@@ -180,15 +182,15 @@ fn a_new_palette_repaints_the_last_list_once_and_the_thread_parks_again() {
     };
     let render = SheetRender::spawn(config, Box::new(|_| {})).unwrap();
     // No list yet: a palette alone paints nothing.
-    render.set_palette(Theme::Kagit.palette());
+    render.set_palette(kagit());
     std::thread::sleep(Duration::from_millis(50));
     assert_eq!(render.paints(), 0);
     render.publish(Arc::new(idle_list(Lang::Tr)));
     wait_paints(&render, 1);
-    render.set_palette(Theme::York.palette());
+    render.set_palette(york());
     wait_paints(&render, 2);
     // The same palette again paints nothing.
-    render.set_palette(Theme::York.palette());
+    render.set_palette(york());
     std::thread::sleep(Duration::from_millis(100));
     let wakes = render.wakes();
     std::thread::sleep(Duration::from_millis(100));
@@ -231,4 +233,23 @@ fn sheet_thread_paints_on_demand() {
     assert_eq!(*fatal.lock().unwrap(), None);
     // SAFETY: the window was created on this thread and is destroyed once.
     unsafe { DestroyWindow(hwnd).unwrap() };
+}
+
+/// Gece under a floor and an accent pick, as the settings migration turns a retired theme.
+fn migrated(floor: Option<[u8; 3]>, accent: [u8; 3]) -> Palette {
+    let accent = AccentPick::Colour(Rgb(accent));
+    let picks = Picks {
+        accent: Some(&accent),
+        floor: floor.map(Rgb),
+        windows_accent: None,
+    };
+    Registry::builtin().resolve(&ThemeId::gece(), picks).open
+}
+
+fn kagit() -> Palette {
+    migrated(Some([0xF3, 0xF2, 0xED]), [0x3F, 0x6E, 0x00])
+}
+
+fn york() -> Palette {
+    migrated(Some([0x1C, 0x24, 0x20]), [0xFF, 0xE9, 0xA8])
 }

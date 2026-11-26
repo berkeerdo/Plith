@@ -34,8 +34,17 @@ pub fn load_at(path: &Path, log: &LogFile) -> Settings {
     match fs::read_to_string(path) {
         Ok(text) => {
             let (settings, problems) = parse(&text);
+            let migrated = problems.iter().any(|p| is_theme_migration(p));
             for problem in problems {
                 log.line(&format!("settings: {problem}"));
+            }
+            // A retired theme moved to Gece: write the file once so it carries the new keys.
+            // The problems are only logged; they never mark the file as corrupt.
+            if migrated {
+                match save_at(path, &settings) {
+                    Ok(()) => log.line("settings: rewrote the file after the theme move"),
+                    Err(error) => log.line(&format!("settings: cannot rewrite the file: {error}")),
+                }
             }
             settings
         }
@@ -52,6 +61,11 @@ pub fn load_at(path: &Path, log: &LogFile) -> Settings {
             Settings::default()
         }
     }
+}
+
+/// Whether a parse problem is the report of a retired theme moved to Gece.
+fn is_theme_migration(problem: &str) -> bool {
+    problem.starts_with("theme ") && problem.ends_with(" moved to gece")
 }
 
 /// The one-time import: the WPF app's `config.ini` beside `path`, when there is one. The old file

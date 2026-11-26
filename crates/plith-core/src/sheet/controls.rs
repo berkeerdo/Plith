@@ -30,7 +30,7 @@ pub(super) fn rect(x: f64, y: f64, w: f64, h: f64) -> Rect {
 /// One word of a choice group.
 pub(super) struct Word {
     /// The caption.
-    pub text: &'static str,
+    pub text: String,
     /// Whether it is the picked one.
     pub on: bool,
     /// What a click does.
@@ -133,7 +133,7 @@ impl Page {
     /// not fit. Returns the extra height of the wrapped lines.
     #[allow(clippy::cast_precision_loss)] // a handful of lines
     pub fn choice(&mut self, row: u8, t: f64, words: Vec<Word>, live: bool) -> f64 {
-        let widths: Vec<f64> = words.iter().map(|w| cell_w(w.text)).collect();
+        let widths: Vec<f64> = words.iter().map(|w| cell_w(&w.text)).collect();
         let lines = wrap(&widths);
         let mut index = 0u8;
         let mut words = words.into_iter();
@@ -159,7 +159,7 @@ impl Page {
         let on = word.on && live;
         self.text(
             rect(x, t + 9.0, w - 4.0, 14.0),
-            word.text,
+            &word.text,
             TextStyle::Label,
             if on { Ink::Ink } else { Ink::Faint },
             Align::End,
@@ -296,9 +296,9 @@ fn wrap(widths: &[f64]) -> Vec<Vec<f64>> {
 }
 
 /// A choice word that changes a setting.
-pub(super) fn word(text: &'static str, on: bool, change: SettingChange) -> Word {
+pub(super) fn word(text: impl Into<String>, on: bool, change: SettingChange) -> Word {
     Word {
-        text,
+        text: text.into(),
         on,
         action: SheetAction::Change(change),
     }

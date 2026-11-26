@@ -1,17 +1,22 @@
-//! The painter: the island (a floor gradient with a border, square top, rounded bottom), the
-//! cached page bitmaps composited inside its clip, the live nodes of the incoming page and the
-//! pill.
+//! The painter: the island (a floor gradient, or a material's raster floor, with a border,
+//! square top, rounded bottom), the cached page bitmaps composited inside its clip, the live
+//! nodes of the incoming page and the pill. Pages draw in the open palette, the pill in the
+//! collapsed one.
 
 mod island;
+mod material;
 
 use crate::list::{ListEnv, ListKit};
 use crate::live::draw_live;
 use crate::pages::{PILL, PageCache};
 use crate::text::TextSystem;
 use island::Island;
+use material::Material;
 use plith_core::ambient::LiveValues;
 use plith_core::draw::{DisplayList, Node, PageContent};
 use plith_core::geometry::IslandShape;
+use plith_core::material::MaterialLayers;
+use plith_core::material::art::ThemePaint;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::theme::Palette;
 use std::sync::Arc;
@@ -41,6 +46,8 @@ pub struct PaintFrame {
     pub content_gen: u64,
     /// Values sampled for the live nodes on an ambient frame; the default on any other frame.
     pub live: LiveValues,
+    /// The material's layers this frame; `MaterialLayers::OPEN` and ignored for a plain theme.
+    pub material: MaterialLayers,
 }
 
 /// Narrows a DIP value for Direct2D.
@@ -84,7 +91,11 @@ pub struct Painter {
     kit: ListKit,
     island: Island,
     pages: PageCache,
-    palette: Palette,
+    /// The pages' colours.
+    open: Palette,
+    /// The pill's colours.
+    collapsed: Palette,
+    material: Material,
     text: TextSystem,
 }
 
@@ -98,7 +109,8 @@ fn context_scale(ctx: &ID2D1DeviceContext) -> f64 {
 
 impl Painter {
     /// Creates the painter on `ctx`; `factory` (the context's own factory) builds geometry.
-    /// `text` lays out the display lists' text; `palette` colours everything.
+    /// `text` lays out the display lists' text; `palette` colours everything (a plain theme
+    /// until [`Painter::set_theme`]).
     ///
     /// # Errors
     /// Returns the Windows error when a brush cannot be created.
@@ -113,14 +125,34 @@ impl Painter {
             kit: ListKit::new(ctx, factory)?,
             island: Island::default(),
             pages: PageCache::default(),
-            palette,
+            open: palette,
+            collapsed: palette,
+            material: Material::default(),
             text,
         })
     }
 
-    /// Switches the palette; the page bitmaps are redrawn on their next use.
-    pub fn set_palette(&mut self, palette: Palette) {
-        self.palette = palette;
+    /// Switches the theme: the page and pill bitmaps are redrawn on their next use, the
+    /// material's bitmaps are made on the next frame (and dropped for a plain theme).
+    pub fn set_theme(&mut self, paint: ThemePaint) {
+        let ThemePaint {
+            open,
+            collapsed,
+            material,
+            ..
+        } = paint;
+        self.open = open;
+        self.collapsed = collapsed;
+        self.material.set(material);
+    }
+
+    /// The palette a cache slot draws in: the pill's collapsed one, else the open one.
+    fn slot_palette(&self, slot: usize) -> &Palette {
+        if slot == PILL {
+            &self.collapsed
+        } else {
+            &self.open
+        }
     }
 
     /// How many page or pill bitmaps were redrawn so far (a test hook).
@@ -128,6 +160,13 @@ impl Painter {
     #[doc(hidden)]
     pub fn page_rebuilds(&self) -> u64 {
         self.pages.rebuilds()
+    }
+
+    /// How many times the material's bitmaps were built so far (a test hook).
+    #[must_use]
+    #[doc(hidden)]
+    pub fn material_builds(&self) -> u64 {
+        self.material.builds()
     }
 
     /// How many times the island geometry was built so far (a test hook).
@@ -148,14 +187,16 @@ impl Painter {
         content: &PageContent,
         pages: &[usize],
     ) -> Result<()> {
-        let mut env = ListEnv {
-            palette: &self.palette,
-            text: &mut self.text,
-            art: &content.art,
-            scale: context_scale(ctx),
-        };
+        let scale = context_scale(ctx);
         for &page in pages {
             if let Some(list) = content.pages.get(page) {
+                let palette = *self.slot_palette(page);
+                let mut env = ListEnv {
+                    palette: &palette,
+                    text: &mut self.text,
+                    art: &content.art,
+                    scale,
+                };
                 self.pages.draw(ctx, page, list, &mut self.kit, &mut env)?;
             }
         }
@@ -176,35 +217,62 @@ impl Painter {
         let scale = context_scale(ctx);
         let parts =
             self.island
-                .update(ctx, &self.factory, frame.shape, frame.origin, &self.palette)?;
+                .update(ctx, &self.factory, frame.shape, frame.origin, &self.open)?;
         let placed = self.place_pages(ctx, frame, scale)?;
+        self.material.ready(ctx)?;
+        let material = self.material.is_set();
+        // A material never shows through: an opaque base in the collapsed floor colour lies
+        // under the pill and the reveal, skipped once the opaque fabric covers the shape.
+        let base = material && frame.material.reveal < 1.0;
+        if base {
+            self.kit.set_color(self.collapsed.floor, 1.0);
+        }
         let clear = color([0.0; 4], 1.0);
         // SAFETY: draw calls between BeginDraw and EndDraw on a live context with a target.
         unsafe {
             ctx.BeginDraw();
             ctx.Clear(Some(&raw const clear));
-            ctx.FillGeometry(&parts.fill, &parts.gradient, None);
+            if !material {
+                ctx.FillGeometry(&parts.fill, &parts.gradient, None);
+            } else if base {
+                ctx.FillGeometry(&parts.fill, &self.kit.brush, None);
+            }
         }
-        let clipped = !placed.is_empty();
+        let clipped = material || !placed.is_empty();
         if clipped {
             push_clip(ctx, parts.fill.clone().into());
+        }
+        if material {
+            let (shape, origin) = (frame.shape, frame.origin);
+            self.material
+                .draw(ctx, shape, origin, &frame.material, scale);
         }
         for page in &placed {
             composite(ctx, page);
         }
         self.draw_layers_live(ctx, frame, scale);
-        if let Some(border) = &parts.border {
-            self.kit.set_color(self.palette.border, 1.0);
-            // SAFETY: as above; PopLayer pairs the PushLayer of `push_clip`.
-            unsafe {
-                if clipped {
-                    ctx.PopLayer();
-                }
-                ctx.DrawGeometry(border, &self.kit.brush, 1.0, None);
-            }
-        } else if clipped {
-            // SAFETY: as above.
+        if clipped {
+            // SAFETY: as above; pairs the PushLayer of `push_clip`.
             unsafe { ctx.PopLayer() };
+        }
+        if let Some(border) = &parts.border {
+            // A material's border follows its floor: the pill's while the pill shows.
+            let pill = if material {
+                frame.material.pill.clamp(0.0, 1.0)
+            } else {
+                0.0
+            };
+            let strokes = [
+                (self.collapsed.border, pill),
+                (self.open.border, 1.0 - pill),
+            ];
+            for (rgba, alpha) in strokes {
+                if alpha > 0.0 {
+                    self.kit.set_color(rgba, alpha);
+                    // SAFETY: as above.
+                    unsafe { ctx.DrawGeometry(border, &self.kit.brush, 1.0, None) };
+                }
+            }
         }
         // SAFETY: closes the BeginDraw above.
         unsafe { ctx.EndDraw(None, None) }
@@ -220,8 +288,9 @@ impl Painter {
     ) -> Result<Vec<Placed>> {
         let (ox, oy) = frame.origin;
         let content = &frame.content;
+        let (open, collapsed) = (self.open, self.collapsed);
         let mut env = ListEnv {
-            palette: &self.palette,
+            palette: &open,
             text: &mut self.text,
             art: &content.art,
             scale,
@@ -231,6 +300,7 @@ impl Painter {
             if opacity <= 0.0 {
                 return Ok(());
             }
+            env.palette = if slot == PILL { &collapsed } else { &open };
             let bitmap = self.pages.draw(ctx, slot, list, &mut self.kit, &mut env)?;
             if let Some(bitmap) = bitmap {
                 placed.push(Placed {
@@ -269,22 +339,24 @@ impl Painter {
             } = *layer;
             if let Some(list) = frame.content.pages.get(page) {
                 let alpha = f(opacity) * frame.content_opacity;
-                self.draw_list_live(ctx, frame, (list, alpha), (ox + offset, oy), scale);
+                let at = (page, ox + offset, oy);
+                self.draw_list_live(ctx, frame, (list, alpha), at, scale);
             }
         }
         let pill = &frame.content.pill;
         let alpha = 1.0 - frame.content_opacity;
-        self.draw_list_live(ctx, frame, (pill, alpha), (ox, oy), scale);
+        self.draw_list_live(ctx, frame, (pill, alpha), (PILL, ox, oy), scale);
     }
 
-    /// Draws the live nodes of `list` at `alpha`, offset to the same snapped place as its
-    /// bitmap at `(x, y)`. Nothing for a hidden list or one without live nodes.
+    /// Draws the live nodes of `list` (cache slot `slot`, which picks the palette) at `alpha`,
+    /// offset to the same snapped place as its bitmap at `(x, y)`. Nothing for a hidden list or
+    /// one without live nodes.
     fn draw_list_live(
         &mut self,
         ctx: &ID2D1DeviceContext,
         frame: &PaintFrame,
         (list, alpha): (&DisplayList, f32),
-        (x, y): (f64, f64),
+        (slot, x, y): (usize, f64, f64),
         scale: f64,
     ) {
         if alpha <= 0.0 || !list.nodes.iter().any(|node| matches!(node, Node::Live(_))) {
@@ -293,12 +365,13 @@ impl Painter {
         let shift = Matrix3x2::translation(f(snap(x, scale)), f(snap(y, scale)));
         // SAFETY: plain state changes inside the frame's BeginDraw/EndDraw; restored below.
         unsafe { ctx.SetTransform(&raw const shift) };
+        let palette = *self.slot_palette(slot);
         draw_live(
             ctx,
             (&mut self.kit, &mut self.text),
             list,
             &frame.live,
-            &self.palette,
+            &palette,
             alpha,
         );
         let identity = Matrix3x2::identity();

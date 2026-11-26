@@ -2,7 +2,6 @@
 //! weather choice. Only the keys that still mean something are taken; everything else is ignored.
 
 use super::{LocationMode, Settings};
-use crate::theme::Theme;
 
 /// The longest city taken from the old file, in characters.
 const CITY_LIMIT: usize = 200;
@@ -15,7 +14,7 @@ const CITY_LIMIT: usize = 200;
 #[must_use]
 pub fn import(config_ini: &str) -> (Settings, usize) {
     let mut settings = Settings::default();
-    let mut theme = None;
+    let mut light = None;
     let mut weather = None;
     let mut city = None;
     let mut section = String::new();
@@ -31,15 +30,17 @@ pub fn import(config_ini: &str) -> (Settings, usize) {
         };
         let (key, value) = (key.trim().to_ascii_lowercase(), value.trim());
         match (section.as_str(), key.as_str()) {
-            ("general", "theme") => theme = parse_theme(value).or(theme),
+            ("general", "theme") => light = parse_theme(value).or(light),
             ("osd", "showweather") => weather = parse_bool(value).or(weather),
             ("osd", "weatherlocation") => city = Some(clean_city(value)),
             _ => {}
         }
     }
     let mut taken = 0;
-    if let Some(theme) = theme {
-        settings.theme = theme;
+    if let Some(light) = light {
+        if light {
+            super::migrate::kagit(&mut settings);
+        }
         taken += 1;
     }
     if let Some(on) = weather {
@@ -54,11 +55,11 @@ pub fn import(config_ini: &str) -> (Settings, usize) {
     (settings, taken)
 }
 
-fn parse_theme(value: &str) -> Option<Theme> {
+/// Whether the old theme was light; `Dark` and `Auto` are Gece as it is.
+fn parse_theme(value: &str) -> Option<bool> {
     match value.to_ascii_lowercase().as_str() {
-        "dark" => Some(Theme::Gece),
-        "light" => Some(Theme::Kagit),
-        "auto" => Some(Theme::default()),
+        "dark" | "auto" => Some(false),
+        "light" => Some(true),
         _ => None,
     }
 }

@@ -3,21 +3,21 @@
 use super::SheetFacts;
 use super::controls::{Page, word};
 use super::layout::FIRST_ROW;
-use crate::lang::sheet::{SheetText as S, theme_name};
+use crate::lang::sheet::SheetText as S;
 use crate::settings::change::SettingChange;
-use crate::theme::Theme;
 
 pub(super) fn build(p: &mut Page, facts: &SheetFacts) {
     let mut t = FIRST_ROW;
     p.rule(t);
 
-    let words = Theme::ALL
-        .into_iter()
-        .map(|theme| {
+    let words = facts
+        .themes
+        .iter()
+        .map(|card| {
             word(
-                theme_name(theme),
-                facts.settings.theme == theme,
-                SettingChange::Theme(theme),
+                card.name.as_str(),
+                facts.settings.theme == card.id,
+                SettingChange::Theme(card.id.clone()),
             )
         })
         .collect();

@@ -7,9 +7,13 @@ use plith_core::draw::{
     SeekTimeline, StationMark, TextStyle, Trim,
 };
 use plith_core::geometry::IslandShape;
+use plith_core::material::MaterialLayers;
+use plith_core::material::art::ThemePaint;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::shapes::REST;
-use plith_core::theme::{Palette, Theme};
+use plith_core::theme::Palette;
+use plith_core::theme::colour::Rgb;
+use plith_core::theme::registry::{AccentPick, Picks, Registry, ThemeId};
 use plith_render::offscreen::Offscreen;
 use plith_render::paint::PaintFrame;
 use plith_render::{TextSystem, render_offscreen};
@@ -43,6 +47,7 @@ fn frame(shape: IslandShape, origin: (f64, f64), pages: &[PageLayer]) -> PaintFr
         content: Arc::new(PageContent::empty()),
         content_gen: 0,
         live: LiveValues::default(),
+        material: MaterialLayers::OPEN,
     }
 }
 
@@ -102,7 +107,7 @@ fn empty() -> Vec<u8> {
 }
 
 fn gece() -> Palette {
-    Theme::Gece.palette()
+    Palette::default()
 }
 
 #[test]
@@ -374,13 +379,13 @@ fn page_bitmap_reused_across_frames() {
     f.content = Arc::new(content);
     let _ = off.render(&f).unwrap();
     assert_eq!(off.page_rebuilds(), 2);
-    off.set_palette(Theme::York.palette());
+    off.set_theme(ThemePaint::plain(york_palette()));
     let york = off.render(&f).unwrap();
     assert_eq!(off.page_rebuilds(), 3);
     assert_eq!(off.island_builds(), 1, "a palette change keeps the paths");
     near(
         pixel(&york, W, 60, 60),
-        bgra(Theme::York.palette().ink),
+        bgra(york_palette().ink),
         2,
         "redrawn in the new ink",
     );
@@ -744,4 +749,19 @@ fn inset_draws_scaled() {
         bgra(p.ink),
         "below the inset"
     );
+}
+
+/// Gece under a floor and an accent pick, as the settings migration turns a retired theme.
+fn migrated(floor: Option<[u8; 3]>, accent: [u8; 3]) -> Palette {
+    let accent = AccentPick::Colour(Rgb(accent));
+    let picks = Picks {
+        accent: Some(&accent),
+        floor: floor.map(Rgb),
+        windows_accent: None,
+    };
+    Registry::builtin().resolve(&ThemeId::gece(), picks).open
+}
+
+fn york_palette() -> Palette {
+    migrated(Some([0x1C, 0x24, 0x20]), [0xFF, 0xE9, 0xA8])
 }

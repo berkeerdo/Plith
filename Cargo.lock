@@ -70,6 +70,7 @@ name = "plith-render"
 version = "0.4.0"
 dependencies = [
  "plith-core",
+ "plith-media",
  "windows",
  "windows-numerics",
 ]

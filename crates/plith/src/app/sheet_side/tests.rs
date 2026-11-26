@@ -17,6 +17,7 @@ fn facts(settings: Settings) -> SheetFacts {
         save_failed: false,
         autostart: false,
         update: plith_core::update::UpdateRow::Current,
+        themes: Vec::new(),
     }
 }
 

@@ -6,6 +6,7 @@ mod feed;
 mod idle_facts;
 mod idle_wiring;
 mod input;
+mod material_art;
 mod osd_slot;
 mod saver;
 mod sheet_side;
@@ -149,6 +150,7 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         Arc::clone(log),
         Arc::clone(&closing),
     )));
+    app.borrow_mut().set_display_scale(display.layout.scale);
     let handler = {
         let app = Rc::clone(&app);
         Box::new(move |event| app.borrow_mut().on_event(event))
@@ -171,7 +173,8 @@ fn run_shell(launch: &Launch, log: &Arc<LogFile>, monitor: &MonitorInfo, display
         settings,
     } = attach_feed(launch, &shell, log, &app);
     start_sides(launch, log, &shell, &app, &settings, monitor);
-    let config = render_config(launch, &shell, monitor, display, settings.theme.palette());
+    let palette = app.borrow().start_palette();
+    let config = render_config(launch, &shell, monitor, display, palette);
     let sample = live::sampler(levels);
     let sinks = wire::sinks(shell.shape_poster(), log, quit, &fatal, &closing, sample);
     let render = match spawn(config, Arc::clone(&mailbox), sinks) {
@@ -358,6 +361,8 @@ fn attach_render_and_demo(app: &Rc<RefCell<App>>, render: &RenderHandle) -> Send
     let mut app = app.borrow_mut();
     app.attach_render(render.stop_handle());
     app.attach_relayout(render.relayouter());
+    // A material theme from the settings file: the render thread starts on a plain palette.
+    app.resend_material();
     let (steps, demo_steps) = mpsc::channel();
     app.attach_demo(demo_steps);
     steps

@@ -7,6 +7,7 @@ use crate::draw::{ArtId, DisplayList, Ink, Node, Rect};
 use crate::lang::Lang;
 use crate::settings::Settings;
 use crate::settings::change::SettingChange;
+use crate::theme::registry::ThemeId;
 use crate::update::UpdateRow;
 use std::sync::Arc;
 
@@ -66,6 +67,15 @@ impl Section {
     ];
 }
 
+/// One theme pack as the Look row lists it.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ThemeCard {
+    /// The pack id.
+    pub id: ThemeId,
+    /// The pack name, already upper case under Turkish rules in every UI language.
+    pub name: String,
+}
+
 /// What the sheet needs to know, besides the view state.
 #[derive(Debug, Clone)]
 pub struct SheetFacts {
@@ -90,6 +100,8 @@ pub struct SheetFacts {
     pub autostart: bool,
     /// What the About update row shows.
     pub update: UpdateRow,
+    /// The theme packs the Look row offers, in listing order.
+    pub themes: Vec<ThemeCard>,
 }
 
 /// Where keyboard focus or the pointer is.

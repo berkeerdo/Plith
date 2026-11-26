@@ -48,17 +48,22 @@ fn captions_are_upper() {
 }
 
 #[test]
-fn theme_names_are_the_same_upper_case_product_names_everywhere() {
-    use crate::theme::Theme;
-    let names = Theme::ALL.map(theme_name);
-    assert_eq!(names, ["GECE", "KA\u{11e}IT", "YORK", "SODYUM"]);
-    for name in names {
-        assert_eq!(name, upper(name, Lang::Tr), "{name}");
+fn the_five_planned_theme_names_have_a_place_in_every_language() {
+    use super::fit::THEME_NAMES;
+    use crate::lang::fit::places;
+    let lower = ["gece", "halka", "firn", "kablo", "\u{15f}erit"];
+    for (name, low) in THEME_NAMES.into_iter().zip(lower) {
+        assert_eq!(name, upper(low, Lang::Tr), "{name}");
     }
-    assert_eq!(
-        upper("ka\u{11f}\u{131}t", Lang::Tr),
-        theme_name(Theme::Kagit)
-    );
+    for lang in Lang::ALL {
+        let all = places(lang);
+        for name in THEME_NAMES {
+            assert!(
+                all.iter().any(|p| p.text == name),
+                "{lang:?} {name} has no place in the fit list"
+            );
+        }
+    }
 }
 
 #[test]

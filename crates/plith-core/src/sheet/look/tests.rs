@@ -6,7 +6,7 @@ use crate::sheet::{
     FocusId, KeyOutcome, Section, SheetAction, SheetKey, SheetTarget, on_key, sheet_build,
     sheet_hit,
 };
-use crate::theme::Theme;
+use crate::theme::registry::ThemeId;
 
 fn texts(list: &DisplayList) -> Vec<String> {
     list.nodes
@@ -25,7 +25,16 @@ fn theme_targets(targets: &[SheetTarget]) -> Vec<&SheetTarget> {
         .collect()
 }
 
-fn pick(theme: Theme) -> SheetAction {
+fn id(text: &str) -> ThemeId {
+    ThemeId::parse(text).unwrap()
+}
+
+/// The ids of the facts' cards, in listing order.
+fn ids() -> Vec<ThemeId> {
+    facts().themes.into_iter().map(|card| card.id).collect()
+}
+
+fn pick(theme: ThemeId) -> SheetAction {
     SheetAction::Change(SettingChange::Theme(theme))
 }
 
@@ -55,7 +64,7 @@ fn the_look_section_sits_between_general_and_idle() {
 }
 
 #[test]
-fn the_theme_row_lists_the_four_product_names() {
+fn the_theme_row_lists_the_pack_names_of_the_facts() {
     let (list, targets) = sheet_build(&facts(), &view(Section::Look));
     let all = texts(&list);
     let mut at = 0;
@@ -64,12 +73,12 @@ fn the_theme_row_lists_the_four_product_names() {
         assert!(found.is_some(), "{label} missing or out of order");
         at += found.unwrap() + 1;
     }
-    for name in ["GECE", "KA\u{11e}IT", "YORK", "SODYUM"] {
+    for name in ["GECE", "HALKA", "F\u{130}RN", "KABLO"] {
         assert!(all.iter().any(|t| t == name), "{name}");
     }
     let groups = theme_targets(&targets);
     assert_eq!(groups.len(), 4);
-    for (target, theme) in groups.iter().zip(Theme::ALL) {
+    for (target, theme) in groups.iter().zip(ids()) {
         assert_eq!(target.action, pick(theme));
     }
 }
@@ -77,8 +86,11 @@ fn the_theme_row_lists_the_four_product_names() {
 #[test]
 fn clicking_a_theme_word_picks_that_theme() {
     let (_, targets) = sheet_build(&facts(), &view(Section::Look));
-    for theme in Theme::ALL {
-        let t = targets.iter().find(|t| t.action == pick(theme)).unwrap();
+    for theme in ids() {
+        let t = targets
+            .iter()
+            .find(|t| t.action == pick(theme.clone()))
+            .unwrap();
         let (x, y) = (t.rect.x + t.rect.w / 2.0, t.rect.y + t.rect.h / 2.0);
         assert_eq!(sheet_hit(&targets, x, y).unwrap().action, pick(theme));
     }
@@ -87,10 +99,13 @@ fn clicking_a_theme_word_picks_that_theme() {
 #[test]
 fn only_the_current_theme_is_underlined() {
     let mut f = facts();
-    for theme in Theme::ALL {
-        f.settings.theme = theme;
+    for theme in ids() {
+        f.settings.theme = theme.clone();
         let (list, targets) = sheet_build(&f, &view(Section::Look));
-        let at = targets.iter().find(|t| t.action == pick(theme)).unwrap();
+        let at = targets
+            .iter()
+            .find(|t| t.action == pick(theme.clone()))
+            .unwrap();
         let underlines: Vec<f64> = list
             .nodes
             .iter()
@@ -119,12 +134,12 @@ fn arrows_walk_the_choice_and_tab_visits_each_word() {
     v.focus = Some(FocusId::Row(0, 0));
     assert_eq!(
         on_key(&f, &mut v, SheetKey::Right),
-        KeyOutcome::Act(pick(Theme::Kagit))
+        KeyOutcome::Act(pick(id("halka")))
     );
     assert_eq!(v.focus, Some(FocusId::Row(0, 1)));
     assert_eq!(
         on_key(&f, &mut v, SheetKey::Left),
-        KeyOutcome::Act(pick(Theme::Gece))
+        KeyOutcome::Act(pick(id("gece")))
     );
     assert_eq!(on_key(&f, &mut v, SheetKey::Left), KeyOutcome::Nothing);
     let mut seen = Vec::new();
@@ -154,7 +169,7 @@ fn the_section_reads_in_every_language() {
         f.lang = lang;
         let (list, _) = sheet_build(&f, &view(Section::Look));
         let all = texts(&list);
-        assert!(all.iter().any(|t| t == "SODYUM"), "{lang:?}");
+        assert!(all.iter().any(|t| t == "KABLO"), "{lang:?}");
         assert!(all.len() > 8, "{lang:?}");
     }
 }

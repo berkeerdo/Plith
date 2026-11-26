@@ -135,7 +135,11 @@ Anti-goals
   `p2` depth), held 120 ms, then all fade over 180 ms; the source lifts (slides up out of the
   shape) between 30 and 60 % progress; page content keeps its existing handover. Collapse:
   ripples rise in reverse order in 60 ms steps, the reveal circle shrinks into the source, the
-  disc fades back into the pill below 30 % progress.
+  disc fades back into the pill below 30 % progress. Berke's pick on the render review
+  (2026-11-26), replacing the time-based press: the ripples follow the morph's progress, ripple
+  k pressing linearly over progress 0.15 / 0.30 / 0.45 plus 0.15 (all pressed at 0.60), latched
+  so a dip in progress never un-presses or replays them, then held 120 ms and faded together over
+  180 ms from the moment the last one is pressed.
 - `motion` log lines name the theme, so Halka and Gece runs read side by side.
 - Assets are cut from the existing sources by a script next to `make-states.ps1`, no new
   image-model passes unless a cut fails (then about 10 credits, asked first).

@@ -1,12 +1,13 @@
 //! Sheet facts for renders and tests: the pill previews built from the R7 mock's data (14:32 on
 //! a fixed day, rain at 15:30, Nightcall playing, the first pill fixture's output at 62).
 
-use plith_core::lang::{Lang, Text, device_kind, text};
+use plith_core::lang::{Lang, Text, device_kind, text, upper};
 use plith_core::pages::audio::DeviceKind;
 use plith_core::pages::fixtures;
 use plith_core::pages::idle_pill::{IdleFacts, idle_pill, sound_words, weather_words};
 use plith_core::settings::{IdleLook, Settings, TempUnit};
-use plith_core::sheet::SheetFacts;
+use plith_core::sheet::{SheetFacts, ThemeCard};
+use plith_core::theme::registry::{Registry, ThemeId};
 use plith_core::weather::{Day, Forecast, Hour, Sky, Stamp};
 use std::sync::Arc;
 
@@ -93,5 +94,20 @@ pub fn sheet_facts(lang: Lang) -> SheetFacts {
         save_failed: false,
         autostart: false,
         update: plith_core::update::UpdateRow::Current,
+        themes: theme_cards(),
     }
+}
+
+/// The theme cards of the built-in packs, named as the app names them.
+fn theme_cards() -> Vec<ThemeCard> {
+    Registry::builtin()
+        .packs()
+        .iter()
+        .filter_map(|pack| {
+            Some(ThemeCard {
+                id: ThemeId::parse(&pack.id)?,
+                name: upper(&pack.name, Lang::Tr),
+            })
+        })
+        .collect()
 }

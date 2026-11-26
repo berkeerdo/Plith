@@ -8,7 +8,7 @@ use plith_core::sheet::{
     KeyOutcome, SheetAction, SheetFacts, SheetTarget, SheetView, commit_field, focus_field, on_key,
     sheet_build, sheet_hit,
 };
-use plith_core::theme::Theme;
+use plith_core::theme::Palette;
 use plith_render::TextMeasure;
 use plith_render::sheet::{SheetConfig, SheetRender};
 use plith_shell::sheet_window::{SheetEvent, SheetWindow};
@@ -174,8 +174,8 @@ pub struct SheetSide {
     measured: Option<(String, usize)>,
     /// The title's text.
     title: String,
-    /// The theme the render thread paints in.
-    theme: Theme,
+    /// The palette the render thread paints in.
+    palette: Palette,
     /// Set by the window's panic report.
     panicked: Rc<Cell<bool>>,
     /// Whether the About icon decoded; without it the header draws without the icon.
@@ -190,8 +190,8 @@ pub struct Opening {
     pub monitor: isize,
     /// The window title.
     pub title: String,
-    /// The theme the window opens in.
-    pub theme: Theme,
+    /// The palette the window opens in.
+    pub palette: Palette,
     /// The window's events, called on the UI thread.
     pub on_event: Box<dyn FnMut(SheetEvent)>,
     /// Called with the message when the window's callback panics.
@@ -218,7 +218,7 @@ impl SheetSide {
         let window = SheetWindow::open(
             opening.monitor,
             &opening.title,
-            opening.theme.is_dark(),
+            true,
             opening.on_event,
             on_panic,
         )
@@ -240,7 +240,7 @@ impl SheetSide {
             width_px,
             height_px,
             scale,
-            palette: opening.theme.palette(),
+            palette: opening.palette,
             art: icon.into_iter().collect(),
         };
         let render = SheetRender::spawn(config, on_fatal)
@@ -255,7 +255,7 @@ impl SheetSide {
             pending: None,
             measured: None,
             title: opening.title,
-            theme: opening.theme,
+            palette: opening.palette,
             panicked,
             dead,
             has_icon,
@@ -287,16 +287,15 @@ impl SheetSide {
         }
     }
 
-    /// Switches the window's colours when the theme differs; the render thread paints the
-    /// last list again in them.
-    pub fn set_theme(&mut self, theme: Theme) {
-        if self.theme == theme {
+    /// Switches the window's colours when the palette differs; the render thread paints the
+    /// last list again in them. The caption stays dark: the window is always on Gece's floor.
+    pub fn set_palette(&mut self, palette: Palette) {
+        if self.palette == palette {
             return;
         }
-        self.theme = theme;
-        self.window.set_dark_caption(theme.is_dark());
+        self.palette = palette;
         if let Some(render) = &self.render {
-            render.set_palette(theme.palette());
+            render.set_palette(palette);
         }
     }
 

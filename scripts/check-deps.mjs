@@ -3,16 +3,24 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
-/** For each workspace crate: the plith crates it may use, and whether it may use `windows`. */
+/**
+ * For each workspace crate: the plith crates it may use, the extra ones allowed only as
+ * dev-dependencies (`dev`), and whether it may use `windows`.
+ */
 const RULES = {
   'plith-core': { plith: [], windows: false },
-  'plith-render': { plith: ['plith-core'], windows: true },
+  'plith-render': { plith: ['plith-core'], dev: ['plith-media'], windows: true },
   'plith-shell': { plith: ['plith-core'], windows: true },
   'plith-audio': { plith: [], windows: true },
   'plith-media': { plith: [], windows: true },
   'plith-system': { plith: [], windows: true },
   'plith-ipc': { plith: [], windows: true },
-  'plith-weather': { plith: ['plith-core'], windows: true },
+  'plith-weather': { plith: ['plith-core', 'plith-host'], windows: true },
+  'plith-host': { plith: ['plith-core'], windows: true },
+  'plith-setup': {
+    plith: ['plith-core', 'plith-host', 'plith-ipc', 'plith-media', 'plith-render', 'plith-shell'],
+    windows: true,
+  },
   plith: { plith: ['*'], windows: true },
   'plith-osd': { plith: ['plith-render', 'plith-ipc', 'plith-core'], windows: true },
 };
@@ -33,7 +41,10 @@ export function violations(metadata) {
     }
     for (const dep of pkg.dependencies) {
       const isOurs = dep.name === 'plith' || dep.name.startsWith('plith-');
-      const allowedOurs = rule.plith.includes('*') || rule.plith.includes(dep.name);
+      const allowedOurs =
+        rule.plith.includes('*') ||
+        rule.plith.includes(dep.name) ||
+        (dep.kind === 'dev' && (rule.dev ?? []).includes(dep.name));
       if ((isOurs && !allowedOurs) || (dep.name === 'windows' && !rule.windows)) {
         found.push(`${pkg.name} may not depend on ${dep.name}`);
       }

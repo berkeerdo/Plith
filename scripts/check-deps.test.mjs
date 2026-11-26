@@ -21,7 +21,9 @@ const real = {
   'plith-media': [],
   'plith-system': [],
   'plith-ipc': [],
-  'plith-weather': ['plith-core'],
+  'plith-weather': ['plith-core', 'plith-host'],
+  'plith-host': ['plith-core'],
+  'plith-setup': ['plith-core', 'plith-host', 'plith-ipc', 'plith-media', 'plith-render', 'plith-shell'],
   plith: ['plith-core', 'plith-render', 'plith-shell', 'plith-audio', 'plith-media', 'plith-system', 'plith-ipc'],
   'plith-osd': ['plith-render', 'plith-ipc'],
 };
@@ -58,4 +60,22 @@ test('an unknown plith crate must be added to the rules', () => {
   assert.deepEqual(violations(metadata({ ...real, 'plith-extra': [] })), [
     'plith-extra has no dependency rule; add it to check-deps.mjs',
   ]);
+});
+
+test('a dev-dependency listed in dev is allowed', () => {
+  const meta = metadata(real);
+  meta.packages.find((p) => p.name === 'plith-render').dependencies.push({ name: 'plith-media', kind: 'dev' });
+  assert.deepEqual(violations(meta), []);
+});
+
+test('the same crate as a normal dependency is a violation', () => {
+  const meta = metadata(real);
+  meta.packages.find((p) => p.name === 'plith-render').dependencies.push({ name: 'plith-media', kind: null });
+  assert.deepEqual(violations(meta), ['plith-render may not depend on plith-media']);
+});
+
+test('a dev-dependency not listed in dev is a violation', () => {
+  const meta = metadata(real);
+  meta.packages.find((p) => p.name === 'plith-render').dependencies.push({ name: 'plith-shell', kind: 'dev' });
+  assert.deepEqual(violations(meta), ['plith-render may not depend on plith-shell']);
 });

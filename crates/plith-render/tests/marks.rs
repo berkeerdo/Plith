@@ -7,8 +7,9 @@ use plith_core::draw::{
     DisplayList, Ink, LiveNode, LiveRail, Node, PageContent, Rect, SeekTimeline,
 };
 use plith_core::geometry::IslandShape;
+use plith_core::material::MaterialLayers;
 use plith_core::page::{PageLayer, PageLayers};
-use plith_core::theme::{Palette, Theme};
+use plith_core::theme::Palette;
 use plith_render::paint::PaintFrame;
 use plith_render::{TextSystem, render_offscreen};
 use std::sync::Arc;
@@ -40,6 +41,7 @@ fn page_frame(nodes: Vec<Node>, live: LiveValues) -> PaintFrame {
         content: Arc::new(content),
         content_gen: 0,
         live,
+        material: MaterialLayers::OPEN,
     }
 }
 
@@ -65,7 +67,7 @@ fn near(got: [u8; 4], want: [u8; 4], tol: u8, what: &str) {
 
 #[test]
 fn polygon_fills_its_triangle() {
-    let p = Theme::Gece.palette();
+    let p = Palette::default();
     let triangle = Node::Polygon {
         points: vec![(100.0, 40.0), (140.0, 60.0), (100.0, 80.0)],
         ink: Ink::Ink,
@@ -113,7 +115,7 @@ fn seek(playing: bool, ink: Ink) -> (Node, LiveValues) {
 #[test]
 fn seek_head_takes_the_ink_of_its_node() {
     // Core decides the ink (flow while playing); the renderer only maps it.
-    let p = Theme::Gece.palette();
+    let p = Palette::default();
     let (node, live) = seek(true, Ink::Flow);
     let buf = render(&page_frame(vec![node], live));
     near(pixel(&buf, 120, 100), bgra(p.flow), 2, "flow head");
@@ -131,7 +133,7 @@ fn seek_head_takes_the_ink_of_its_node() {
 fn trace_sits_on_a_faint_track_baseline() {
     // Mock `trace()`: a faint-track line under the samples, the samples in faint ink, a 14 DIP
     // swing above the baseline 1 DIP inside the 16 DIP slot.
-    let p = Theme::Gece.palette();
+    let p = Palette::default();
     let trace = Node::Live(LiveNode::Trace {
         rect: Rect {
             x: 100.0,

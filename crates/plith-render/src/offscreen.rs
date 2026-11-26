@@ -1,5 +1,6 @@
 //! Offscreen rendering on WARP: the test hook that reads pixels back on the CPU.
 
+use plith_core::material::art::ThemePaint;
 use plith_core::theme::Palette;
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct2D::Common::{
@@ -126,15 +127,21 @@ impl Offscreen {
         read_back(&self.staging, &self.target, self.width, self.height)
     }
 
-    /// Switches the painter's palette.
-    pub fn set_palette(&mut self, palette: Palette) {
-        self.painter.set_palette(palette);
+    /// Switches the theme: both palettes and the material, if any.
+    pub fn set_theme(&mut self, paint: ThemePaint) {
+        self.painter.set_theme(paint);
     }
 
     /// How many page or pill bitmaps the painter redrew so far.
     #[must_use]
     pub fn page_rebuilds(&self) -> u64 {
         self.painter.page_rebuilds()
+    }
+
+    /// How many times the painter built the material's bitmaps so far.
+    #[must_use]
+    pub fn material_builds(&self) -> u64 {
+        self.painter.material_builds()
     }
 
     /// How many times the painter built the island geometry so far.

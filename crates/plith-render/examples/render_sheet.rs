@@ -18,7 +18,7 @@ use plith_core::draw::ArtPixels;
 use plith_core::lang::Lang;
 use plith_core::setup::Version;
 use plith_core::sheet::{ICON_ART, ICON_DIP, Section, SheetView, sheet_build};
-use plith_core::theme::Theme;
+use plith_core::theme::registry::{Picks, Registry, ThemeId};
 use plith_core::update::UpdateRow;
 use plith_render::render_sheet_offscreen;
 use png::{decode_png, write_png};
@@ -52,7 +52,7 @@ fn section_name(section: Section) -> &'static str {
 
 /// What the optional flags after the folder chose.
 struct Options {
-    theme: Theme,
+    theme: ThemeId,
     update: UpdateRow,
     sections: Vec<Section>,
     langs: Vec<Lang>,
@@ -82,7 +82,7 @@ fn options(
     mut args: impl Iterator<Item = std::ffi::OsString>,
 ) -> std::result::Result<Options, String> {
     let mut out = Options {
-        theme: Theme::Gece,
+        theme: ThemeId::gece(),
         update: UpdateRow::Current,
         sections: Section::ALL.to_vec(),
         langs: vec![Lang::Tr, Lang::De],
@@ -96,7 +96,9 @@ fn options(
             .into_owned();
         match flag.as_str() {
             "--theme" => {
-                out.theme = Theme::from_key(&value).ok_or(format!("unknown theme {value}"))?;
+                out.theme = ThemeId::parse(&value)
+                    .filter(|id| Registry::builtin().get(id).is_some())
+                    .ok_or(format!("unknown theme {value}"))?;
             }
             "--update" => {
                 out.update = update_of(&value).ok_or(format!("unknown update state {value}"))?;
@@ -135,12 +137,17 @@ fn main() -> std::result::Result<(), Box<dyn std::error::Error>> {
     std::fs::create_dir(&dir)?;
     // SAFETY: called once on the main thread before any COM use.
     unsafe { CoInitializeEx(None, COINIT_MULTITHREADED).ok()? };
-    let palette = theme.palette();
+    let picks = Picks {
+        accent: None,
+        floor: None,
+        windows_accent: None,
+    };
+    let palette = Registry::builtin().resolve(&theme, picks).sheet;
 
     for lang in langs {
         let mut facts = facts::sheet_facts(lang);
         facts.update = update;
-        facts.settings.theme = theme;
+        facts.settings.theme = theme.clone();
         // Turkish shows the Windows start switch off, German on, so one run covers both.
         facts.autostart = lang == Lang::De;
         for &section in &sections {

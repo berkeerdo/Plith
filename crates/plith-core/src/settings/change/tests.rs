@@ -1,4 +1,5 @@
 use super::*;
+use crate::settings::serialize;
 
 fn only(f: impl FnOnce(&mut Effects)) -> Effects {
     let mut e = Effects::default();
@@ -47,7 +48,10 @@ fn apply_change_effects() {
             only(|e| e.lang = true),
         ),
         (SettingChange::Osd(false), only(|e| e.osd = true)),
-        (SettingChange::Theme(Theme::York), only(|e| e.theme = true)),
+        (
+            SettingChange::Theme(ThemeId::parse("york").unwrap()),
+            only(|e| e.theme = true),
+        ),
         (
             SettingChange::Flyout(FlyoutPref::Hide),
             only(|e| e.osd = true),
@@ -76,7 +80,7 @@ fn applying_the_current_value_changes_nothing() {
         SettingChange::Lang(current.lang.clone()),
         SettingChange::Osd(current.osd),
         SettingChange::Flyout(current.flyout),
-        SettingChange::Theme(current.theme),
+        SettingChange::Theme(current.theme.clone()),
         SettingChange::UpdateCheck(current.update_check),
     ];
     for change in same {
@@ -101,4 +105,47 @@ fn update_check_change_flips_the_service() {
     let effects = apply_change(&mut s, SettingChange::UpdateCheck(false));
     assert_eq!(effects, only(|e| e.update = true));
     assert!(!s.update_check);
+}
+
+fn gece() -> ThemeId {
+    ThemeId::gece()
+}
+
+#[test]
+fn accent_change_sets_theme_effect() {
+    let mut s = Settings::default();
+    let pick = AccentPick::Colour(Rgb([0x7F, 0xD4, 0xFF]));
+    let effects = apply_change(&mut s, SettingChange::Accent(gece(), Some(pick)));
+    assert_eq!(effects, only(|e| e.theme = true));
+    assert_eq!(s.accents.get(&gece()), Some(&pick));
+    let effects = apply_change(&mut s, SettingChange::Accent(gece(), Some(pick)));
+    assert_eq!(effects, Effects::default());
+    let effects = apply_change(&mut s, SettingChange::Floor(gece(), Some(Rgb([1, 2, 3]))));
+    assert_eq!(effects, only(|e| e.theme = true));
+    assert_eq!(s.floors.get(&gece()), Some(&Rgb([1, 2, 3])));
+}
+
+#[test]
+fn accent_reset_removes_key() {
+    let mut s = Settings::default();
+    apply_change(
+        &mut s,
+        SettingChange::Accent(gece(), Some(AccentPick::Windows)),
+    );
+    apply_change(&mut s, SettingChange::Floor(gece(), Some(Rgb([1, 2, 3]))));
+    assert_eq!(
+        apply_change(&mut s, SettingChange::Accent(gece(), None)),
+        only(|e| e.theme = true)
+    );
+    assert_eq!(
+        apply_change(&mut s, SettingChange::Floor(gece(), None)),
+        only(|e| e.theme = true)
+    );
+    assert!(s.accents.is_empty() && s.floors.is_empty());
+    assert!(!serialize(&s).contains("accent."));
+    // Resetting what is not set changes nothing.
+    assert_eq!(
+        apply_change(&mut s, SettingChange::Accent(gece(), None)),
+        Effects::default()
+    );
 }

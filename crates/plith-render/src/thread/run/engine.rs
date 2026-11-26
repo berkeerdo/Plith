@@ -13,10 +13,12 @@ use plith_core::geometry::IslandShape;
 use plith_core::gpu_health::{GpuAction, GpuHealth};
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
+use plith_core::material::{MaterialMotion, MorphLine};
 use plith_core::motion::{MotionKind, MotionStats};
 use plith_core::page::{PageLayers, PageTurn, motion_pages};
 use plith_core::scene::{Scene, ShapeFrame, Snapshot};
 use plith_core::spring::Spring;
+use plith_core::theme::registry::ThemeId;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::{Tuning, TuningSet};
 use plith_core::visible::{DrawnState, visibly_differs};
@@ -66,6 +68,15 @@ pub(super) struct Engine<'a, C, P, O, N> {
     pub(super) aim_pages: Vec<usize>,
     /// The content of the last presented frame.
     pub(super) presented: Option<Arc<PageContent>>,
+    /// The material's open and collapse timeline; driven for every theme, painted and waited
+    /// for only when `has_material`.
+    pub(super) material: MaterialMotion,
+    /// The line the material's morph progress follows (`material.rs`).
+    pub(super) morph: MorphLine,
+    /// The pack drawn, named at the end of the motion line.
+    pub(super) theme: ThemeId,
+    /// Whether the theme drawn has a material.
+    pub(super) has_material: bool,
 }
 
 /// What a new mailbox generation changed.
@@ -171,6 +182,7 @@ where
         };
         let mut report = stats.finish();
         report.clock = drawn_by.as_str();
+        report.theme = Some(self.theme.as_str().to_owned());
         (self.sinks.on_motion)(report);
     }
 
@@ -233,6 +245,7 @@ where
         self.island.retarget(target);
         self.content
             .retarget(content_target(scene), self.set.opacity);
+        self.aim_material(scene);
         self.scene = scene;
         self.content_settled = self.content.is_settled();
         if page_changed {
@@ -249,13 +262,19 @@ where
         self.pages_settled = true;
         self.content = content_spring(scene, self.set.opacity);
         self.content_settled = true;
+        self.snap_material(scene);
         self.stats = None;
         self.last_shape = None;
         self.posted = None;
     }
 
-    pub(super) fn is_settled(&self) -> bool {
+    /// True when the springs have stopped (the material timeline is not asked).
+    pub(super) fn springs_settled(&self) -> bool {
         self.island.is_settled() && self.pages_settled && self.content_settled
+    }
+
+    pub(super) fn is_settled(&self) -> bool {
+        self.springs_settled() && self.material_settled()
     }
 
     /// Paints the current state, with live values sampled once when a visible page layer has a
@@ -263,6 +282,7 @@ where
     /// one (the title scroll). After a failed paint and a successful `recover`, the same
     /// frame is painted once more (no extra clock wait), so a recovered frame is not lost.
     pub(super) fn paint_frame(&mut self) -> Result<Option<FrameTimes>, String> {
+        self.advance_material();
         let shape = self.island.shape();
         let pages = self.pages.layers();
         let content_opacity = opacity_f32(self.content.value());
@@ -282,6 +302,7 @@ where
             content: Arc::clone(&self.page_content),
             content_gen: self.content_gen,
             live,
+            material: self.material_layers(),
         };
         let (times, recovered) = self.paint_once(&frame)?;
         if times.is_none() && recovered {
