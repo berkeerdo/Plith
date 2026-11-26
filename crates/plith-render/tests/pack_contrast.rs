@@ -58,12 +58,37 @@ fn material_packs() -> Vec<(Pack, &'static BuiltinPack)> {
         .collect()
 }
 
+/// Refuses a zone that is empty or leaves the `width` x `height` floor: a check over it would
+/// pass without looking at the pixels it names.
+fn check_rect(rect: (u32, u32, u32, u32), width: u32, height: u32) {
+    let (x0, y0, x1, y1) = rect;
+    assert!(
+        x1 > x0 && y1 > y0 && x1 <= width && y1 <= height,
+        "text zone {rect:?} is empty or outside the {width}x{height} floor"
+    );
+}
+
 /// The pixel rectangle of the text zone at `scale` (1 or 2): `(x0, y0, x1, y1)`, exclusive end.
-fn zone(pack: &Pack, scale: u32) -> (u32, u32, u32, u32) {
+fn zone(pack: &Pack, scale: u32, floor: &Floored) -> (u32, u32, u32, u32) {
     let [left, top, wide, high] = pack.text_zone.expect("a material pack names its text zone");
     let s = scale as f32;
     let (x0, y0) = ((left * s) as u32, (top * s) as u32);
-    (x0, y0, x0 + (wide * s) as u32, y0 + (high * s) as u32)
+    let rect = (x0, y0, x0 + (wide * s) as u32, y0 + (high * s) as u32);
+    check_rect(rect, floor.width, floor.height);
+    rect
+}
+
+/// Every pixel of the text zone, after checking that exactly `w*scale * h*scale` were visited.
+fn zone_pixels(pack: &Pack, scale: u32, floor: &Floored) -> Vec<(u32, u32, Rgb)> {
+    let (x0, y0, x1, y1) = zone(pack, scale, floor);
+    let all: Vec<_> = (y0..y1)
+        .flat_map(|y| (x0..x1).map(move |x| (x, y)))
+        .map(|(x, y)| (x, y, pixel(floor, x, y)))
+        .collect();
+    let [_, _, wide, high] = pack.text_zone.expect("a material pack names its text zone");
+    let want = (wide * scale as f32) as usize * (high * scale as f32) as usize;
+    assert_eq!(all.len(), want, "{} pixels checked at {scale}x", pack.id);
+    all
 }
 
 /// The opaque colour of pixel `(x, y)`: un-premultiplied, over black where it is not opaque.
@@ -85,17 +110,13 @@ fn ratio(a: f64, b: f64) -> f64 {
 }
 
 /// The worst (lowest) ratio of `ink` over the zone, with where it happens and the pixel there.
-fn worst(floor: &Floored, rect: (u32, u32, u32, u32), ink: Rgb) -> (f64, u32, u32, Rgb) {
-    let (x0, y0, x1, y1) = rect;
+fn worst(pixels: &[(u32, u32, Rgb)], ink: Rgb) -> (f64, u32, u32, Rgb) {
     let li = ink.luminance();
     let mut found = (f64::MAX, 0, 0, Rgb([0, 0, 0]));
-    for y in y0..y1 {
-        for x in x0..x1 {
-            let px = pixel(floor, x, y);
-            let r = ratio(li, px.luminance());
-            if r < found.0 {
-                found = (r, x, y, px);
-            }
+    for &(x, y, px) in pixels {
+        let r = ratio(li, px.luminance());
+        if r < found.0 {
+            found = (r, x, y, px);
         }
     }
     found
@@ -128,7 +149,7 @@ fn builtin_text_zones_pass_per_pixel() {
         let punch = pack.flow_style == FlowStyle::Punch;
         for (scale, file) in [(1, "floor-1x"), (2, "floor-2x")] {
             let floor = decode(builtin, file);
-            let rect = zone(&pack, scale);
+            let pixels = zone_pixels(&pack, scale, &floor);
             let mut colours = vec![
                 ("ink", pack.open.ink.ink, MIN_INK),
                 ("muted", pack.open.ink.muted, MIN_MUTED),
@@ -138,7 +159,7 @@ fn builtin_text_zones_pass_per_pixel() {
                 colours.push(("flow", pack.flow, MIN_FLOW));
             }
             for (name, ink, min) in colours {
-                let w = worst(&floor, rect, ink);
+                let w = worst(&pixels, ink);
                 println!("{} {file}: {}", pack.id, describe(name, ink, w));
                 if w.0 < min {
                     failures.push(format!(
@@ -164,14 +185,11 @@ fn lum_bounds_are_honest() {
         };
         for (scale, file) in [(1, "floor-1x"), (2, "floor-2x")] {
             let floor = decode(builtin, file);
-            let (x0, y0, x1, y1) = zone(&pack, scale);
             let (mut lo, mut hi) = (f64::MAX, f64::MIN);
-            for y in y0..y1 {
-                for x in x0..x1 {
-                    let l = pixel(&floor, x, y).luminance();
-                    lo = lo.min(l);
-                    hi = hi.max(l);
-                }
+            for (_, _, px) in zone_pixels(&pack, scale, &floor) {
+                let l = px.luminance();
+                lo = lo.min(l);
+                hi = hi.max(l);
             }
             println!(
                 "{} {file}: lum {lo:.4}..{hi:.4}, manifest {lum_min}..{lum_max}",
@@ -191,4 +209,30 @@ fn lum_bounds_are_honest() {
             );
         }
     }
+}
+
+#[test]
+fn the_2x_zone_is_exactly_twice_the_1x_zone() {
+    for (pack, builtin) in material_packs() {
+        let one = zone(&pack, 1, &decode(builtin, "floor-1x"));
+        let two = zone(&pack, 2, &decode(builtin, "floor-2x"));
+        assert_eq!(
+            two,
+            (one.0 * 2, one.1 * 2, one.2 * 2, one.3 * 2),
+            "{}",
+            pack.id
+        );
+    }
+}
+
+#[test]
+#[should_panic(expected = "empty or outside")]
+fn an_empty_zone_is_refused() {
+    check_rect((10, 10, 10, 50), 640, 420);
+}
+
+#[test]
+#[should_panic(expected = "empty or outside")]
+fn a_zone_past_the_floor_is_refused() {
+    check_rect((30, 12, 700, 406), 640, 420);
 }
