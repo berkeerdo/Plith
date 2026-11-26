@@ -34,8 +34,12 @@ Updated 2026-11-26. Rewritten, not appended; old content goes to `journal/`.
   script in `docs/design/themes/r2/` (the script checks the floor mean only; the per-pixel
   check is still owed). Settings r2 mock: artifact `UQpu8w5MWVvn9diUWpZUjs`, not in the repo.
   **Spec approved** (Berke 2026-11-26): `specs/2026-11-26-theme-worlds-design.md`, ADR 0022
-  (supersedes 0007). Next: plan 1 of its section 10 (pack format, loader, colour solve,
-  settings keys, migration).
+  (supersedes 0007). **Plan 1 done on `feature/theme-packs`** (`6d75352`, not merged, not
+  pushed): packs, colour solve, accent and floor keys, retired themes migrate to Gece colours;
+  1665 tests passed, 86 of 93 renders byte-identical to main (7 expected). It merges together
+  with plan 2 (Halka on packs, next) so main never shows a one-theme picker. Open for plan 2:
+  Halka black accent solves to grey on its pill (lime rule or `collapsed.flow.color`). No
+  release before plan 3 (no Sıfırla for migrated colours yet).
 - Then the island in A Halka: spec and plan committed in `be73ada`
   (`specs/2026-11-26-halka-island-design.md`, `plans/active/halka-island.md`); its Task 2
   (theme row) is revised by the theme worlds spec. Motion is measured on the console with
