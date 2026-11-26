@@ -19,6 +19,7 @@ use plith_core::draw::PageContent;
 use plith_core::launch::ClockRequest;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, MmcssPriority, outcome_line};
+use plith_core::material::art::ThemePaint;
 use plith_core::motion::MotionReport;
 use plith_core::scene::{SceneMailbox, ShapeFrame};
 use plith_core::theme::Palette;
@@ -57,8 +58,9 @@ pub trait Paint {
         0.0
     }
 
-    /// Switches the colours; the page bitmaps are redrawn in them on their next raster.
-    fn set_palette(&mut self, _palette: Palette) {}
+    /// Switches the theme: the colours (the page bitmaps are redrawn in them on their next
+    /// raster) and, for a material theme, its pictures.
+    fn set_theme(&mut self, _paint: ThemePaint) {}
 
     /// Rebuilds the stack for `layout` (a display change), on the hardware device.
     ///

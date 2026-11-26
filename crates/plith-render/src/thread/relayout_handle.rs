@@ -4,8 +4,8 @@ use super::run::{LoopShared, Relayout};
 use plith_core::clock_choice::clock_order;
 use plith_core::display::Display;
 use plith_core::launch::ClockRequest;
+use plith_core::material::art::ThemePaint;
 use plith_core::scene::SceneMailbox;
-use plith_core::theme::Palette;
 use std::sync::{Arc, Mutex, PoisonError};
 
 /// Sends display changes to the render thread; usable from any thread.
@@ -20,10 +20,10 @@ pub struct RelayoutHandle {
 }
 
 impl RelayoutHandle {
-    /// Asks the loop to draw in `palette` (a theme change): the page bitmaps are rastered again
+    /// Asks the loop to draw `paint` (a theme change): the page bitmaps are rastered again
     /// and a settled island repaints once.
-    pub fn set_palette(&self, palette: Palette) {
-        self.shared.request_palette(palette);
+    pub fn set_theme(&self, paint: ThemePaint) {
+        self.shared.request_theme(paint);
         let _ = self.mailbox.nudge();
     }
 

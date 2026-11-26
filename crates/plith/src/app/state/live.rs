@@ -172,10 +172,12 @@ impl App {
         }
         // The pages' lists name colour roles, not colours: the render thread draws them again
         // in the new palette. The settings window takes the theme from its facts on refresh.
-        if effects.theme
-            && let Some(relayout) = &self.relayout
-        {
-            relayout.set_palette(self.resolve(settings).open);
+        if effects.theme && self.relayout.is_some() {
+            let resolved = self.resolve(settings);
+            let paint = self.theme_paint(&resolved);
+            if let Some(relayout) = &self.relayout {
+                relayout.set_theme(paint);
+            }
         }
     }
 

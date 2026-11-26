@@ -7,6 +7,8 @@
 
 #![allow(clippy::cast_possible_truncation, clippy::cast_precision_loss)]
 
+pub mod art;
+
 /// The measured `brisk` expand full time in milliseconds: the visible/full pair "expand 417/592 ms"
 /// in `docs/plans/done/engine-r1b.md` (line 379); 592 is the full time.
 pub const EXPAND_SETTLE_MS: f64 = 592.0;

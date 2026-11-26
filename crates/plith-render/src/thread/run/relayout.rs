@@ -9,7 +9,7 @@ use super::prewarm::Reason;
 use crate::clock::{ClockError, FrameSource};
 use plith_core::clock_choice::ClockKind;
 use plith_core::layout::SurfaceLayout;
-use plith_core::theme::Palette;
+use plith_core::material::art::ThemePaint;
 use plith_core::timeline::VsyncTimeline;
 use std::sync::{Mutex, MutexGuard, PoisonError};
 
@@ -49,14 +49,14 @@ impl LoopShared {
         lock(&self.relayout).take()
     }
 
-    /// Stores `palette` for the loop; a palette still pending is replaced.
-    pub fn request_palette(&self, palette: Palette) {
-        *lock(&self.palette) = Some(palette);
+    /// Stores `paint` for the loop; a theme paint still pending is replaced.
+    pub fn request_theme(&self, paint: ThemePaint) {
+        *lock(&self.theme) = Some(paint);
     }
 
-    /// Takes the pending palette, if any.
-    pub fn take_palette(&self) -> Option<Palette> {
-        lock(&self.palette).take()
+    /// Takes the pending theme paint, if any.
+    pub fn take_theme(&self) -> Option<ThemePaint> {
+        lock(&self.theme).take()
     }
 
     /// Sets the monitor and rate the next clock opens for.
@@ -81,10 +81,10 @@ where
     /// Hands a pending palette to the painter and forgets which page bitmaps were rastered, so
     /// the next raster pass redraws them all. True when a palette was pending.
     fn apply_palette(&mut self) -> bool {
-        let Some(palette) = self.shared.take_palette() else {
+        let Some(paint) = self.shared.take_theme() else {
             return false;
         };
-        self.paint.set_palette(palette);
+        self.paint.set_theme(paint);
         self.warm = Default::default();
         self.presented = None;
         true

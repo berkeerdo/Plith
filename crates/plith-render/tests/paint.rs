@@ -7,6 +7,7 @@ use plith_core::draw::{
     SeekTimeline, StationMark, TextStyle, Trim,
 };
 use plith_core::geometry::IslandShape;
+use plith_core::material::art::ThemePaint;
 use plith_core::page::{PageLayer, PageLayers};
 use plith_core::shapes::REST;
 use plith_core::theme::Palette;
@@ -376,7 +377,7 @@ fn page_bitmap_reused_across_frames() {
     f.content = Arc::new(content);
     let _ = off.render(&f).unwrap();
     assert_eq!(off.page_rebuilds(), 2);
-    off.set_palette(york_palette());
+    off.set_theme(ThemePaint::plain(york_palette()));
     let york = off.render(&f).unwrap();
     assert_eq!(off.page_rebuilds(), 3);
     assert_eq!(off.island_builds(), 1, "a palette change keeps the paths");

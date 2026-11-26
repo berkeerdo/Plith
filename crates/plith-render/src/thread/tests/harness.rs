@@ -10,6 +10,7 @@ use plith_core::ambient::{AmbientReport, LiveValues};
 use plith_core::clock_choice::ClockKind;
 use plith_core::draw::PageContent;
 use plith_core::layout::{RectPx, SurfaceLayout};
+use plith_core::material::art::ThemePaint;
 use plith_core::motion::MotionReport;
 use plith_core::scene::{Scene, SceneMailbox, ShapeFrame};
 use plith_core::theme::Palette;
@@ -135,8 +136,8 @@ pub(super) struct FakePaint {
 }
 
 impl Paint for FakePaint {
-    fn set_palette(&mut self, palette: Palette) {
-        lock(&self.palettes).push(palette);
+    fn set_theme(&mut self, paint: ThemePaint) {
+        lock(&self.palettes).push(paint.open);
     }
 
     fn relayout(&mut self, layout: SurfaceLayout) -> windows::core::Result<()> {

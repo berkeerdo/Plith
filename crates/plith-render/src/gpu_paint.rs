@@ -9,6 +9,7 @@ use crate::thread::{FrameTimes, Paint};
 use plith_core::draw::PageContent;
 use plith_core::layout::SurfaceLayout;
 use plith_core::levers::{Levers, outcome_line};
+use plith_core::material::art::ThemePaint;
 use plith_core::theme::Palette;
 use std::time::Instant;
 use windows::Win32::Foundation::{E_UNEXPECTED, HWND};
@@ -92,8 +93,10 @@ impl GpuPaint {
 }
 
 impl Paint for GpuPaint {
-    /// Switches the palette now and for every painter rebuilt by a recovery.
-    fn set_palette(&mut self, palette: Palette) {
+    /// Switches the theme now and for every painter rebuilt by a recovery. Only the open palette
+    /// is drawn for now.
+    fn set_theme(&mut self, paint: ThemePaint) {
+        let ThemePaint { open: palette, .. } = paint;
         self.palette = palette;
         if let Some(stack) = self.stack.as_mut() {
             stack.painter.set_palette(palette);

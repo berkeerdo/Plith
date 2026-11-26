@@ -3,6 +3,7 @@
 use super::feed::drag::DRAG_TIMER;
 use super::feed::{COLLAPSE_TIMER, Feed};
 use super::input::drag::ActiveDrag;
+use super::material_art::{ArtCache, two_x};
 use super::saver::Saver;
 use super::shelf::{SHELF_TIMER, ShelfHost};
 use super::weather_link::WeatherWiring;
@@ -12,9 +13,9 @@ use crate::update::UpdateLink;
 use plith_core::demo::DemoStep;
 use plith_core::display::Display;
 use plith_core::input::CollapseTimer;
+use plith_core::material::art::ThemePaint;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::{IdleLook, Settings};
-use plith_core::theme::Palette;
 use plith_core::theme::registry::{AccentPick, Picks, Registry, ResolvedTheme, ThemeId};
 use plith_host::log::LogFile;
 use plith_render::{RelayoutHandle, StopHandle};
@@ -42,8 +43,8 @@ pub trait Relayouter {
     /// Asks the render thread to paint for `display`.
     fn relayout(&self, display: Display);
 
-    /// Asks the render thread to draw in `palette`.
-    fn set_palette(&self, _palette: Palette) {}
+    /// Asks the render thread to draw `paint`: the palettes and the material of a theme.
+    fn set_theme(&self, _paint: ThemePaint) {}
 }
 
 impl Relayouter for RelayoutHandle {
@@ -51,8 +52,8 @@ impl Relayouter for RelayoutHandle {
         RelayoutHandle::relayout(self, display);
     }
 
-    fn set_palette(&self, palette: Palette) {
-        RelayoutHandle::set_palette(self, palette);
+    fn set_theme(&self, paint: ThemePaint) {
+        RelayoutHandle::set_theme(self, paint);
     }
 }
 
@@ -98,6 +99,9 @@ pub struct App {
     file_look: Option<IdleLook>,
     /// The theme the settings file holds while `--theme` overrides it for this run; same rule.
     file_theme: Option<ThemeId>,
+    /// The decoded art of the drawn material theme, and the display scale it was decoded for.
+    art: ArtCache,
+    scale: f64,
     /// The theme packs of the run, built at start.
     registry: Registry,
     /// Writes the settings file; a normal run only.
@@ -140,6 +144,8 @@ impl App {
             settings: Settings::default(),
             file_look: None,
             file_theme: None,
+            art: ArtCache::default(),
+            scale: 1.0,
             registry: Registry::builtin(),
             saver: None,
             sheet: SheetHost::default(),
@@ -217,10 +223,16 @@ impl App {
 
     /// The window already moved to `display` (the shell did it); log it and let the render
     /// thread follow.
-    fn on_display_changed(&self, display: Display) {
+    fn on_display_changed(&mut self, display: Display) {
         self.log.line(&display.log_line());
+        let crossed = two_x(self.scale) != two_x(display.layout.scale);
+        self.scale = display.layout.scale;
         if let Some(relayout) = &self.relayout {
             relayout.relayout(display);
+        }
+        if crossed {
+            // The art of the other file scale is decoded and sent.
+            self.resend_material();
         }
     }
 
@@ -310,6 +322,7 @@ impl App {
 
 mod live;
 mod sheet;
+mod theme;
 mod tray;
 mod update;
 

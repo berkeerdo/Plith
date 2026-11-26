@@ -1,5 +1,6 @@
 //! Offscreen rendering on WARP: the test hook that reads pixels back on the CPU.
 
+use plith_core::material::art::ThemePaint;
 use plith_core::theme::Palette;
 use windows::Win32::Foundation::E_INVALIDARG;
 use windows::Win32::Graphics::Direct2D::Common::{
@@ -126,9 +127,11 @@ impl Offscreen {
         read_back(&self.staging, &self.target, self.width, self.height)
     }
 
-    /// Switches the painter's palette.
-    pub fn set_palette(&mut self, palette: Palette) {
-        self.painter.set_palette(palette);
+    /// Switches the theme: the painter draws the open palette for now.
+    // Taken by value like the trait method: the painter will keep the material.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn set_theme(&mut self, paint: ThemePaint) {
+        self.painter.set_palette(paint.open);
     }
 
     /// How many page or pill bitmaps the painter redrew so far.

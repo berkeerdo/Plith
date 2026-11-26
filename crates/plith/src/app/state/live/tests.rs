@@ -7,6 +7,7 @@ use crate::services::fixture::FixtureServices;
 use plith_core::display::Display;
 use plith_core::lang::Lang;
 use plith_core::launch::Fixture;
+use plith_core::material::art::ThemePaint;
 use plith_core::pages::idle_pill::rest_shape;
 use plith_core::scene::{Scene, SceneMailbox, ShapeCell};
 use plith_core::settings::change::SettingChange;
@@ -246,18 +247,18 @@ fn a_city_change_while_running_does_apply() {
     clean(app, "run-city");
 }
 
-/// Records the palettes the render thread would be sent.
-struct FakePainter(Rc<RefCell<Vec<Palette>>>);
+/// Records the theme paints the render thread would be sent.
+struct FakePainter(Rc<RefCell<Vec<ThemePaint>>>);
 
 impl Relayouter for FakePainter {
     fn relayout(&self, _display: Display) {}
 
-    fn set_palette(&self, palette: Palette) {
-        self.0.borrow_mut().push(palette);
+    fn set_theme(&self, paint: ThemePaint) {
+        self.0.borrow_mut().push(paint);
     }
 }
 
-fn with_painter(name: &str) -> (App, Rc<RefCell<Vec<Palette>>>) {
+fn with_painter(name: &str) -> (App, Rc<RefCell<Vec<ThemePaint>>>) {
     let mut app = fed(name);
     let sent = Rc::new(RefCell::new(Vec::new()));
     app.attach_relayout(FakePainter(Rc::clone(&sent)));
@@ -279,11 +280,67 @@ fn a_theme_change_sends_the_palette_once_and_the_same_theme_sends_nothing() {
     // No second pack is built in yet: an unknown id is kept and draws Gece.
     app.change(SettingChange::Theme(id("next")));
     assert_eq!(app.settings.theme, id("next"));
-    assert_eq!(*sent.borrow(), vec![Palette::default()]);
+    assert_eq!(*sent.borrow(), vec![ThemePaint::plain(Palette::default())]);
     app.change(SettingChange::Theme(id("next")));
     app.change(SettingChange::Look(IdleLook::Plain));
     assert_eq!(sent.borrow().len(), 1, "only a theme change repaints");
     clean(app, "theme-send");
+}
+
+fn com() {
+    use windows::Win32::System::Com::{COINIT_APARTMENTTHREADED, CoInitializeEx};
+    // SAFETY: initializes COM for this test thread; a repeat call returns S_FALSE and is fine.
+    let _ = unsafe { CoInitializeEx(None, COINIT_APARTMENTTHREADED) };
+}
+
+#[test]
+fn halka_sends_material_and_two_palettes() {
+    com();
+    let (mut app, sent) = with_painter("halka-send");
+    app.change(SettingChange::Theme(id("halka")));
+    assert_eq!(sent.borrow().len(), 1);
+    let paint = sent.borrow()[0].clone();
+    assert!(paint.material.is_some(), "Halka draws its material");
+    assert_eq!(
+        bits(paint.collapsed.floor),
+        bits(Palette::default().floor),
+        "the pill is on Gece's floor"
+    );
+    assert_eq!(
+        bits(paint.collapsed.flow),
+        bits(Rgb([0xCA, 0xFF, 0x33]).rgba())
+    );
+    assert_ne!(bits(paint.open.floor), bits(paint.collapsed.floor));
+    clean(app, "halka-send");
+}
+
+#[test]
+fn a_palette_only_switch_keeps_the_decoded_art() {
+    com();
+    let (mut app, sent) = with_painter("halka-keep");
+    app.change(SettingChange::Theme(id("halka")));
+    app.change(SettingChange::Accent(
+        id("halka"),
+        Some(AccentPick::Colour(Rgb([0x0B, 0x2A, 0x4A]))),
+    ));
+    let sent = sent.borrow();
+    assert_eq!(sent.len(), 2);
+    let art = |p: &ThemePaint| Arc::clone(p.material.as_ref().unwrap());
+    assert!(Arc::ptr_eq(&art(&sent[0]), &art(&sent[1])), "decoded once");
+    drop(sent);
+    clean(app, "halka-keep");
+}
+
+#[test]
+fn gece_sends_plain_paint() {
+    com();
+    let (mut app, sent) = with_painter("gece-plain");
+    app.change(SettingChange::Theme(id("halka")));
+    app.change(SettingChange::Theme(ThemeId::gece()));
+    let paint = sent.borrow()[1].clone();
+    assert!(paint.material.is_none());
+    assert_eq!(paint.open, paint.collapsed);
+    clean(app, "gece-plain");
 }
 
 #[test]
@@ -295,8 +352,11 @@ fn accent_change_sends_solved_palette() {
         Some(AccentPick::Colour(amber)),
     ));
     assert_eq!(sent.borrow().len(), 1);
-    assert_eq!(bits(sent.borrow()[0].flow), bits(amber.rgba()));
-    assert_eq!(bits(sent.borrow()[0].floor), bits(Palette::default().floor));
+    assert_eq!(bits(sent.borrow()[0].open.flow), bits(amber.rgba()));
+    assert_eq!(
+        bits(sent.borrow()[0].open.floor),
+        bits(Palette::default().floor)
+    );
     clean(app, "accent-send");
 }
 
@@ -311,7 +371,7 @@ fn sheet_palette_stays_gece_floor() {
         bits(paper.rgba()),
         "the island takes the floor"
     );
-    assert_eq!(sent.borrow()[0], resolved.open);
+    assert_eq!(sent.borrow()[0].open, resolved.open);
     assert_eq!(
         bits(resolved.sheet.floor),
         bits(Palette::default().floor),

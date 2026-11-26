@@ -7,6 +7,7 @@ use super::harness::*;
 use super::prewarm::{open_at_rest, pages};
 use plith_core::display::Display;
 use plith_core::launch::ClockRequest;
+use plith_core::material::art::ThemePaint;
 use plith_core::scene::{Scene, Suppression};
 use plith_core::theme::Palette;
 use plith_core::theme::colour::Rgb;
@@ -52,7 +53,7 @@ fn an_open_island_at_rest_rasters_every_page_again_and_repaints_once() {
     let run = open_at_rest();
     let handle = handle_of(&run);
     let (frames, warmed) = (run.frames().len(), run.prewarms().len());
-    handle.set_palette(york());
+    handle.set_theme(ThemePaint::plain(york()));
     run.wait_frames(frames + 1);
     run.assert_parked();
     assert_eq!(*lock(&run.palettes), vec![york()]);
@@ -75,7 +76,7 @@ fn a_collapsed_island_repaints_the_pill_and_rasters_no_page() {
     });
     run.wait_frames(1);
     let handle = handle_of(&run);
-    handle.set_palette(sodyum());
+    handle.set_theme(ThemePaint::plain(sodyum()));
     run.wait_frames(2);
     run.assert_parked();
     assert_eq!(*lock(&run.palettes), vec![sodyum()]);
@@ -94,7 +95,7 @@ fn a_suppressed_island_takes_the_palette_and_paints_it_when_it_returns() {
     run.wait_frames(1);
     run.mailbox.publish(locked());
     let handle = handle_of(&run);
-    handle.set_palette(kagit());
+    handle.set_theme(ThemePaint::plain(kagit()));
     wait_palettes(&run, 1);
     run.assert_parked();
     assert_eq!(run.frames().len(), 1, "nothing painted while locked");
@@ -114,7 +115,7 @@ fn a_palette_during_a_motion_keeps_the_motion_going() {
     run.wait_frames(1);
     run.mailbox.publish(expanded(0));
     run.wait_calls(10);
-    handle_of(&run).set_palette(york());
+    handle_of(&run).set_theme(ThemePaint::plain(york()));
     let report = run.report();
     assert!(report.frames > 10, "{report}");
     assert!(run.fatal.try_recv().is_err());

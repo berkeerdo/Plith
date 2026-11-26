@@ -19,11 +19,11 @@ use plith_core::clock_choice::ClockKind;
 use plith_core::gpu_health::GpuHealth;
 use plith_core::island::IslandMotion;
 use plith_core::layout::SurfaceLayout;
+use plith_core::material::art::ThemePaint;
 use plith_core::motion::FramePhases;
 use plith_core::page::PageTurn;
 use plith_core::panic_text::payload_text;
 use plith_core::scene::{Scene, SceneMailbox, Snapshot};
-use plith_core::theme::Palette;
 use plith_core::timeline::{FrameStamper, VsyncTimeline};
 use plith_core::tuning::TuningSet;
 use prewarm::Reason;
@@ -40,7 +40,7 @@ pub struct LoopShared {
     stop: AtomicBool,
     relayout: Mutex<Option<Relayout>>,
     clock_target: Mutex<(isize, f64)>,
-    palette: Mutex<Option<Palette>>,
+    theme: Mutex<Option<ThemePaint>>,
 }
 
 impl LoopShared {
