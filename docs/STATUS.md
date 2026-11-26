@@ -1,6 +1,6 @@
 # Status
 
-Updated 2026-11-26 (evening). Rewritten, not appended; old content goes to `journal/`.
+Updated 2026-11-26 (late evening). Rewritten, not appended; old content goes to `journal/`.
 
 ## Now
 - R0 to R3, R5, R7 languages, theme switch, settings window, identity r3 and the app icon are
@@ -45,11 +45,14 @@ Updated 2026-11-26 (evening). Rewritten, not appended; old content goes to `jour
   `; theme <id>`. Per-pixel contrast in the text zone (worst at 2x): ink 10.64, muted 6.15,
   faint 4.37, flow 12.55. 1747 workspace tests. Render set seen by Berke (artifact
   `A7kvbsAcEUZAMvUWPNbozY`); his pick 2026-11-26: ripples follow the morph progress (start at
-  0.15 / 0.30 / 0.45, each over 0.15), not time (option A). Rulings of the run: ledger summary
-  in `journal/2026-11.md`.
+  0.15 / 0.30 / 0.45, each over 0.15), not time (option A). Then (Berke: text did not show):
+  page text waits until the ripples fade (60 ms), idle look leaves with the pill; the page comes
+  162.5 ms after Gece's (fake clock). Merged as `b72bdb7` (PR #2 green). Rulings of the run:
+  ledger summary in `journal/2026-11.md`.
 - **Next: plan 2 Task 7, console measurement with Berke** (release build, `--theme halka` and
   `gece`, expand and collapse audio, media, welcome ten times each, live switch while open;
-  check the UI-thread art decode on a switch to Halka and the ring-clip frames' draw ms). Then
+  check the UI-thread art decode on a switch to Halka, the ring-clip frames' draw ms, how the
+  162 ms page delay feels, a collapse gap with neither page nor idle look). Then
   theme worlds plan 3 (Firn, Kablo, Şerit, settings r2, Sıfırla for migrated colours). No
   release before plan 3.
 - Release held until parity and the theme worlds (Berke asked 2026-11-26). After plan 3: R7
