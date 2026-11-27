@@ -23,7 +23,7 @@ fn the_file_scale_follows_the_display_scale() {
     assert_eq!(size(&one.fabric), (640, 420));
     assert_eq!(size(&two.fabric), (1280, 840));
     assert_eq!(one.fabric.bgra.len(), 640 * 420 * 4);
-    assert_eq!(size(&two.pill).0, size(&one.pill).0 * 2);
+    assert_eq!(size(&two.disc).0, size(&one.disc).0 * 2);
 }
 
 #[test]

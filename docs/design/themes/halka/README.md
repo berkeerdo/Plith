@@ -65,3 +65,7 @@ crop is the 1x box doubled.
   there. The 1920x1264 source cannot be cropped any larger, and the design says never scale up.
 - The pill's lower half is 244 DIP wide, wider than the 200 DIP collapsed island; it is meant to
   be three-sliced, so only its end caps and a straight stretch are used.
+
+> Note (2026-11-27): the pill raster (`pill-1x/2x.png`, three-sliced) was dropped. The collapsed pill is
+> the collapsed palette's gradient and border on the island's own shape, because the raster's corner did
+> not match the shape's 16 DIP radius. `make-halka.ps1` still lists the pill; do not ship its output.

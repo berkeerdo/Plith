@@ -126,7 +126,6 @@ fn halka_paint(scale: f64) -> Result<ThemePaint, Error> {
         fabric: get("floor")?,
         rings: [get("ring-1")?, get("ring-2")?, get("ring-3")?],
         disc: get("disc")?,
-        pill: get("pill")?,
     };
     let picks = Picks {
         accent: None,

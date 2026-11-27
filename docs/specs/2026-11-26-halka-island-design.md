@@ -177,3 +177,7 @@ Anti-goals
   wakes at rest afterwards.
 - ADR 0022 written. Five checks green: `cargo fmt --check`, `cargo clippy --workspace -- -D
   warnings`, the test suite, `node scripts/structure-check.mjs`, a release build.
+
+> Note (2026-11-27): the pill raster and its three-slice were dropped. The collapsed pill is the
+> collapsed palette's gradient and border on the island's own shape, because the raster's corner did
+> not match the shape's 16 DIP radius. Sections above that describe the raster are historical.

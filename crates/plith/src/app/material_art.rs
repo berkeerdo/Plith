@@ -40,7 +40,6 @@ pub fn load(id: &str, pack: &BuiltinPack, scale: f64) -> Result<Arc<MaterialArt>
         fabric: get("floor")?,
         rings: [get("ring-1")?, get("ring-2")?, get("ring-3")?],
         disc: get("disc")?,
-        pill: get("pill")?,
     }))
 }
 

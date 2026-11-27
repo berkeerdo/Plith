@@ -1,6 +1,7 @@
-//! The material floor (spec `2026-11-26-halka-island-design.md`, sections 3 and 5): the glossy
-//! pill three-sliced over the shape, the fabric revealed in a circle from the source centre,
-//! then the ripple rings and the source disc while a motion runs. Drawn inside the shape's clip.
+//! The material floor (spec `2026-11-26-halka-island-design.md`, sections 3 and 5): the fabric
+//! revealed in a circle from the source centre, then the ripple rings and the source disc while
+//! a motion runs. Drawn inside the shape's clip, over the collapsed pill, which the painter
+//! draws as the island's own gradient.
 //!
 //! The bitmaps are made once per art (`set` with a new `Arc`) on the first frame that needs
 //! them; a frame only moves the fabric brush and issues draw calls.
@@ -11,8 +12,7 @@ use plith_core::geometry::IslandShape;
 use plith_core::material::MaterialLayers;
 use plith_core::material::art::MaterialArt;
 use plith_core::material::place::{
-    DISC_AT, FABRIC_ANCHOR, FABRIC_W, PILL_H, RING_AT, cap_opacity, reveal_radius, source_point,
-    three_slice,
+    DISC_AT, FABRIC_ANCHOR, FABRIC_W, RING_AT, reveal_radius, source_point,
 };
 use std::sync::Arc;
 use windows::Win32::Foundation::E_INVALIDARG;
@@ -33,7 +33,6 @@ struct Bitmaps {
     fabric: ID2D1BitmapBrush1,
     rings: [ID2D1Bitmap1; 3],
     disc: ID2D1Bitmap1,
-    pill: ID2D1Bitmap1,
 }
 
 /// The current material and its bitmaps, made lazily on the render thread.
@@ -96,7 +95,6 @@ fn build(ctx: &ID2D1DeviceContext, art: &MaterialArt) -> Result<Bitmaps> {
             bitmap(ctx, &art.rings[2], dpi)?,
         ],
         disc: bitmap(ctx, &art.disc, dpi)?,
-        pill: bitmap(ctx, &art.pill, dpi)?,
     })
 }
 
@@ -204,9 +202,9 @@ impl Material {
         Ok(())
     }
 
-    /// Draws the floor of `shape` at `origin` with `layers`, bottom to top: pill, fabric
-    /// reveal, rings, disc. Inside the frame's `BeginDraw` and the shape's clip; nothing before
-    /// `ready`.
+    /// Draws the floor of `shape` at `origin` with `layers`, bottom to top: fabric reveal,
+    /// rings, disc (the pill is the island's own gradient, drawn by the painter before this).
+    /// Inside the frame's `BeginDraw` and the shape's clip; nothing before `ready`.
     pub(super) fn draw(
         &self,
         ctx: &ID2D1DeviceContext,
@@ -218,9 +216,6 @@ impl Material {
         let Some(b) = &self.bitmaps else {
             return;
         };
-        if layers.pill > 0.0 {
-            draw_pill(ctx, &b.pill, shape, origin, layers.pill, scale);
-        }
         let source = source_point(shape, origin);
         if layers.reveal > 0.0 {
             draw_fabric(ctx, &b.fabric, shape, origin, layers.reveal, scale);
@@ -242,42 +237,6 @@ impl Material {
         }
         let disc_at = (DISC_AT.0, DISC_AT.1 - layers.disc_lift);
         overlay(ctx, &b.disc, source, disc_at, layers.disc, scale);
-    }
-}
-
-/// The pill three-sliced over the shape's width at its own height, its top on the island's top:
-/// a shorter island crops it, a taller one shows the opaque base below it (no vertical stretch).
-/// Below the pill's height the caps fade out (`cap_opacity`) over the straight middle drawn
-/// across the whole width, so the Hidden sliver is the pill's black top end to end.
-fn draw_pill(
-    ctx: &ID2D1DeviceContext,
-    pill: &ID2D1Bitmap1,
-    shape: IslandShape,
-    (ox, oy): (f64, f64),
-    opacity: f32,
-    scale: f64,
-) {
-    // SAFETY: plain getter on a live bitmap.
-    let size = unsafe { pill.GetSize() };
-    let art_h = f64::from(size.height);
-    let (top, bottom) = (snap(oy, scale), snap(oy + PILL_H, scale));
-    let span = |left: f64, width: f64, src: (f64, f64), alpha: f32| {
-        if width <= 0.0 || src.1 <= 0.0 || alpha <= 0.0 {
-            return;
-        }
-        let (l, r) = (snap(left, scale), snap(left + width, scale));
-        let dest = rect(l, top, r - l, bottom - top);
-        blit(ctx, pill, dest, Some(rect(src.0, 0.0, src.1, art_h)), alpha);
-    };
-    let [left_cap, middle, right_cap] = three_slice(f64::from(size.width), ox, shape.width);
-    let caps = f(cap_opacity(shape.height));
-    if caps < 1.0 {
-        span(ox, shape.width, middle.src, opacity);
-    } else {
-        span(middle.dst.0, middle.dst.1, middle.src, opacity);
-    }
-    for cap in [left_cap, right_cap] {
-        span(cap.dst.0, cap.dst.1, cap.src, opacity * caps);
     }
 }
 
