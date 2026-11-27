@@ -34,7 +34,7 @@ Updated 2026-11-26 (late evening). Rewritten, not appended; old content goes to 
   240 fps, 0 to 2 hitches per run except one 16-hitch expand that did not repeat in 39 more;
   live switch Halka to Gece and back while open is clean; idle 1 wake in 60 s (allowed 2).
   Berke: the slower ripples read now. The welcome label fix was not remarked on.
-- **Pill fix, branch `feature/halka-pill-rim` (not committed yet):** the "off-centre" idle pill
+- **Pill fix merged as `691c43e`** (PR #4 green, 2026-11-27): the "off-centre" idle pill
   was the pill raster's rim, curving in from the top while the island's corner is a 16 DIP arc.
   The raster and its three-slice code are gone; the collapsed Halka pill is the collapsed
   palette's gradient and border on the island's own outline. Checks: 1759 passed, 1 ignored,
