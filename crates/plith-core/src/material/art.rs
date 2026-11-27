@@ -20,8 +20,6 @@ pub struct MaterialArt {
     pub rings: [Arc<ArtPixels>; 3],
     /// The source disc.
     pub disc: Arc<ArtPixels>,
-    /// The collapsed pill.
-    pub pill: Arc<ArtPixels>,
 }
 
 /// What the render thread paints a theme with: the two palettes and, for a material theme, its
@@ -96,7 +94,6 @@ mod tests {
             fabric: pixels(1),
             rings: [pixels(2), pixels(3), pixels(4)],
             disc: pixels(5),
-            pill: pixels(6),
         });
         let halka = ThemeId::parse("halka").expect("id");
         let paint = ThemePaint::new(

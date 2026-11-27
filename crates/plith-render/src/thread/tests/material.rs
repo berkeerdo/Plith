@@ -55,7 +55,6 @@ fn halka() -> ThemePaint {
         fabric: pixels(1),
         rings: [pixels(2), pixels(3), pixels(4)],
         disc: pixels(5),
-        pill: pixels(6),
     };
     let id = ThemeId::parse("halka").expect("id");
     ThemePaint::new(

@@ -21,7 +21,7 @@ Status: `✅ done, actual` / `🔄 in progress` / `⬜ next` / `⬜ waiting on <
 | R7 Settings window | Genel, Boşta, OSD, Hakkında window; quick page behind a gear; live apply and atomic save | master + subagents | not estimated | 🔄 code merged (c7e693a, 1 session: brainstorm, spec, plan, 10 tasks, final review; ADR 0017); console run left |
 | R7 Parity | Settings, tray, installer, parity check against WPF 0.3.1, WPF removed | master + subagents | 3 sessions | 🔄 part 1 merged (ae94753: tray, version, autostart); part 2 merged (3a9cb89: setup, uninstall, config.ini import, update check; 2 sessions incl. 8 real runs, 3 bugs found there; ADR 0021); left: parity check, WPF removed |
 | Theme worlds and settings r2 | Every theme a material world (Halka, Firn, Kablo, Şerit, plain Gece; York, Sodyum, Kağıt retired), themes as data packs, settings r2 with a visual theme section (Berke 2026-11-26) | master + subagents | not estimated | ⬜ plans 1 and 2 merged `3b868f6` (2026-11-26, one day each); plan 3 next (Firn, Kablo, Şerit, settings r2, Sıfırla) |
-| Island in A Halka | The installer's material, themes and motion in the island (Berke 2026-11-25); the first theme world built | master + subagents | not estimated | ⬜ merged `3b868f6` (Tasks 1 to 6, render set seen by Berke); Task 7 console measurement owed |
+| Island in A Halka | The installer's material, themes and motion in the island (Berke 2026-11-25); the first theme world built | master + subagents | not estimated | ✅ merged `3b868f6`, tuned `f6cccfe`, measured on the console 2026-11-26 and 27 (three days; plus a fix round outside the plan: the pill raster replaced by a gradient on the island's outline) |
 
 ## Settled scope (2026-11-14)
 - Inside exclusive fullscreen games only the OSD shows (ADR 0002).

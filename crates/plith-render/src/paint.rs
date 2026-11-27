@@ -215,15 +215,27 @@ impl Painter {
     /// Returns the `EndDraw` error (for example device removed) or a resource failure.
     pub fn paint(&mut self, ctx: &ID2D1DeviceContext, frame: &PaintFrame) -> Result<()> {
         let scale = context_scale(ctx);
-        let parts =
-            self.island
-                .update(ctx, &self.factory, frame.shape, frame.origin, &self.open)?;
+        let material = self.material.is_set();
+        // A material's island gradient is the collapsed palette's: the pill is that gradient on
+        // the island's own shape, faded by `frame.material.pill`.
+        let floor = if material {
+            &self.collapsed
+        } else {
+            &self.open
+        };
+        let parts = self
+            .island
+            .update(ctx, &self.factory, frame.shape, frame.origin, floor)?;
         let placed = self.place_pages(ctx, frame, scale)?;
         self.material.ready(ctx)?;
-        let material = self.material.is_set();
         // A material never shows through: an opaque base in the collapsed floor colour lies
         // under the pill and the reveal, skipped once the opaque fabric covers the shape.
         let base = material && frame.material.reveal < 1.0;
+        let pill = if material {
+            frame.material.pill.clamp(0.0, 1.0)
+        } else {
+            1.0
+        };
         if base {
             self.kit.set_color(self.collapsed.floor, 1.0);
         }
@@ -232,10 +244,13 @@ impl Painter {
         unsafe {
             ctx.BeginDraw();
             ctx.Clear(Some(&raw const clear));
-            if !material {
-                ctx.FillGeometry(&parts.fill, &parts.gradient, None);
-            } else if base {
+            if base {
                 ctx.FillGeometry(&parts.fill, &self.kit.brush, None);
+            }
+            if pill > 0.0 && (!material || base) {
+                // The cached brush's opacity is set on every fill, so it never goes stale.
+                parts.gradient.SetOpacity(pill);
+                ctx.FillGeometry(&parts.fill, &parts.gradient, None);
             }
         }
         let clipped = material || !placed.is_empty();
@@ -257,14 +272,10 @@ impl Painter {
         }
         if let Some(border) = &parts.border {
             // A material's border follows its floor: the pill's while the pill shows.
-            let pill = if material {
-                frame.material.pill.clamp(0.0, 1.0)
-            } else {
-                0.0
-            };
+            let weight = if material { pill } else { 0.0 };
             let strokes = [
-                (self.collapsed.border, pill),
-                (self.open.border, 1.0 - pill),
+                (self.collapsed.border, weight),
+                (self.open.border, 1.0 - weight),
             ];
             for (rgba, alpha) in strokes {
                 if alpha > 0.0 {

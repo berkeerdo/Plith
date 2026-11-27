@@ -39,8 +39,6 @@ pub const BUILTIN: [BuiltinPack; 2] = [
             file!("halka", "ring-3-2x"),
             file!("halka", "disc-1x"),
             file!("halka", "disc-2x"),
-            file!("halka", "pill-1x"),
-            file!("halka", "pill-2x"),
         ],
     },
 ];

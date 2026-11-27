@@ -3,7 +3,7 @@
     clippy::cast_sign_loss,
     clippy::cast_precision_loss
 )]
-//! Offscreen tests of a material theme on WARP: the Halka fabric floor, the black pill, the
+//! Offscreen tests of a material theme on WARP: the Halka fabric floor, the collapsed pill, the
 //! content palettes, a switch back to a plain theme and the plain path against a frame painted
 //! before materials existed.
 
@@ -72,7 +72,6 @@ fn halka_files(files: &str) -> ThemePaint {
         fabric: get("floor"),
         rings: [get("ring-1"), get("ring-2"), get("ring-3")],
         disc: get("disc"),
-        pill: get("pill"),
     };
     let id = ThemeId::parse("halka").expect("id");
     let resolved = Registry::builtin().resolve(
@@ -228,6 +227,39 @@ fn halka_open_floor_is_fabric() {
 fn halka_collapsed_is_black() {
     let (w, h) = px_size(REST);
     let mut off = offscreen(w, h);
+    let paint = halka();
+    let (low, high) = (paint.collapsed.floor, paint.collapsed.floor_high);
+    off.set_theme(paint);
+    let buf = off
+        .render(&frame(
+            REST,
+            PageContent::empty(),
+            0.0,
+            MaterialLayers::COLLAPSED,
+        ))
+        .unwrap();
+    let centre = pixel(&buf, w, 100, 16);
+    assert_eq!(centre[3], 255, "opaque pill");
+    assert!(luminance(centre) < 0.1, "dark pill, got {centre:?}");
+    near(
+        centre,
+        bgra(lerp(low, high, 16.5 / 32.0)),
+        3,
+        "collapsed gradient",
+    );
+}
+
+/// Linear mix of two RGBA colours.
+fn lerp(a: [f32; 4], b: [f32; 4], t: f32) -> [f32; 4] {
+    std::array::from_fn(|i| a[i] + (b[i] - a[i]) * t)
+}
+
+#[test]
+fn the_pill_corner_has_no_rim_inside_the_edge() {
+    // The collapsed shape has a 16 DIP bottom corner. Inside its curve the pill is as dark as
+    // its centre: no light rim of a raster whose own corner did not match the shape's.
+    let (w, h) = px_size(REST);
+    let mut off = offscreen(w, h);
     off.set_theme(halka());
     let buf = off
         .render(&frame(
@@ -238,8 +270,19 @@ fn halka_collapsed_is_black() {
         ))
         .unwrap();
     let centre = pixel(&buf, w, 100, 16);
-    assert_eq!(centre[3], 255, "opaque pill (the base under its 253 body)");
-    assert!(luminance(centre) < 0.1, "black pill, got {centre:?}");
+    let (cx, cy) = (REST.radius, REST.height - REST.radius);
+    // Points 2.5 to 5 DIP inside the bottom-left and bottom-right corner arcs.
+    for depth in [2.5, 3.5, 5.0] {
+        for angle in [200.0_f64, 225.0, 250.0, 270.0] {
+            let (sin, cos) = angle.to_radians().sin_cos();
+            let r = REST.radius - depth;
+            let (dx, dy) = (r * cos, -r * sin);
+            for (px, py) in [(cx + dx, cy + dy), (REST.width - cx - dx, cy + dy)] {
+                let p = pixel(&buf, w, px as u32, py as u32);
+                near(p, centre, 8, &format!("corner at ({px:.1}, {py:.1})"));
+            }
+        }
+    }
 }
 
 #[test]
@@ -263,7 +306,7 @@ fn halka_hidden_sliver_is_black_not_fabric() {
 }
 
 /// The Hidden sliver at `scale` with the files the app uses there: no light pixel anywhere in
-/// it, the two ends included (the pill caps' rim highlight must not show in 3 DIP).
+/// it, the two ends included (no rim speck at the ends of the 3 DIP gradient).
 fn assert_sliver_ends_black(scale: f64, files: &str) {
     let w = (REST_HIDDEN.width * scale).ceil() as u32;
     let h = (REST_HIDDEN.height * scale).ceil() as u32;
@@ -278,7 +321,7 @@ fn assert_sliver_ends_black(scale: f64, files: &str) {
             MaterialLayers::COLLAPSED,
         ))
         .unwrap();
-    // The ends are the caps' 32 DIP; the border's outer device pixels are left out.
+    // The ends are the old caps' 32 DIP; the border's outer device pixels are left out.
     let edge = scale.ceil() as u32;
     let cap = (32.0 * scale) as u32;
     for y in 0..h - edge {
@@ -297,8 +340,9 @@ fn halka_hidden_sliver_ends_are_black() {
 }
 
 #[test]
-fn the_pill_keeps_its_height_while_it_fades() {
-    // A taller island mid-fade: the pill stays 32 DIP at the top, the base shows below it.
+fn the_pill_gradient_spans_a_taller_island_while_it_fades() {
+    // A taller island mid-fade: the collapsed gradient runs over the whole shape (not a 32 DIP
+    // strip), at the pill's opacity over the opaque base of the same floor colour.
     let shape = IslandShape {
         width: 300.0,
         height: 120.0,
@@ -307,23 +351,29 @@ fn the_pill_keeps_its_height_while_it_fades() {
     let (w, h) = px_size(shape);
     let mut off = offscreen(w, h);
     let paint = halka();
-    let base = bgra(paint.collapsed.floor);
+    let (low, high) = (paint.collapsed.floor, paint.collapsed.floor_high);
     off.set_theme(paint);
     let layers = MaterialLayers {
-        pill: 1.0,
+        pill: 0.5,
         ..MaterialLayers::COLLAPSED
     };
     let buf = off
         .render(&frame(shape, PageContent::empty(), 0.0, layers))
         .unwrap();
-    for at in [(150, 60), (150, 100), (14, 90), (286, 90)] {
+    for at in [(150, 20), (150, 60), (150, 100), (14, 90), (286, 90)] {
+        // Half the gradient over the base: the mean of the floor and the gradient colour.
+        let t = (at.1 as f32 + 0.5) / 120.0;
+        let want = lerp(low, lerp(low, high, t), 0.5);
         near(
             pixel(&buf, w, at.0, at.1),
-            base,
-            2,
-            &format!("base at {at:?}"),
+            bgra(want),
+            3,
+            &format!("gradient at {at:?}"),
         );
     }
+    let top = pixel(&buf, w, 150, 10);
+    let bottom = pixel(&buf, w, 150, 110);
+    assert!(bottom[2] >= top[2], "the gradient brightens downward");
 }
 
 #[test]

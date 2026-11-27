@@ -27,28 +27,22 @@ Updated 2026-11-26 (late evening). Rewritten, not appended; old content goes to 
   script in `docs/design/themes/r2/` (the script checks the floor mean only; the per-pixel
   check is still owed). Settings r2 mock: artifact `UQpu8w5MWVvn9diUWpZUjs`, not in the repo.
   **Spec approved** (Berke 2026-11-26): `specs/2026-11-26-theme-worlds-design.md`, ADR 0022
-  (supersedes 0007). **Plans 1 and 2 merged as `3b868f6`** (2026-11-26; PR #1 green). Plan 1
-  (`plans/done/theme-packs.md`): packs, colour solve, accent and floor keys, retired themes
-  migrate to Gece colours. Plan 2 (`plans/active/halka-island.md`, Tasks 1 to 6 done): Halka
-  pack (lime fabric open, glossy black pill collapsed), `ThemePaint` to the render thread,
-  material over an opaque black base, engine drives `MaterialMotion`, `motion` lines end with
-  `; theme <id>`. Text-zone contrast per pixel (worst, 2x): ink 10.64, muted 6.15, faint 4.37,
-  flow 12.55. Berke's picks (render set `A7kvbsAcEUZAMvUWPNbozY`): ripples follow the morph
-  progress (0.15 / 0.30 / 0.45, each over 0.15, option A); page text waits until they fade
-  (60 ms), idle look leaves with the pill, so the page comes 162.5 ms after Gece's (fake clock).
-  Merged as `b72bdb7` (PR #2 green). Rulings: `journal/2026-11.md`.
-- **Plan 2 Task 7 console run** (2026-11-26, `quality/2026-11-26-halka-motion.md`): Halka meets
-  the bar (240 fps; collapse-only hitches, same as Gece; no ring-clip cost). Berke: ripples too
-  fast to see, song label lay on the date, idle pill looks off-centre and its "icon design" is
-  bad. Branch `feature/halka-tune` (not committed yet): slower ripples (0.10 / 0.35 / 0.60,
-  span 0.25, hold 40, fade 120; page at 312.5 ms, budgets 320) and the welcome label flips right
-  of the play start when it would reach under the date. Checks: 1761 passed, 1 ignored, clippy,
-  fmt, structure.
-- **Next: finish Task 7 with Berke on the console:** he judges the slower ripples and the label
-  in the release build; live switch Halka to Gece and back while open; an `--idle-check` run for
-  0 render wakes; what exactly is off-centre in the idle pill (measured: 16 px left, about 14 px
-  right, vertical within 1 px). Then theme worlds plan 3 (Firn, Kablo, Şerit, settings r2,
-  Sıfırla for migrated colours). No release before plan 3.
+  (supersedes 0007). **Plans 1 and 2 done** (`plans/done/theme-packs.md`,
+  `plans/done/halka-island.md`; merges `3b868f6`, `b72bdb7`, tuning `f6cccfe`; history and
+  rulings in `journal/2026-11.md`).
+- **Halka measured on the console** (2026-11-26 and 27, `quality/2026-11-26-halka-motion.md`):
+  240 fps, 0 to 2 hitches per run except one 16-hitch expand that did not repeat in 39 more;
+  live switch Halka to Gece and back while open is clean; idle 1 wake in 60 s (allowed 2).
+  Berke: the slower ripples read now. The welcome label fix was not remarked on.
+- **Pill fix, branch `feature/halka-pill-rim` (not committed yet):** the "off-centre" idle pill
+  was the pill raster's rim, curving in from the top while the island's corner is a 16 DIP arc.
+  The raster and its three-slice code are gone; the collapsed Halka pill is the collapsed
+  palette's gradient and border on the island's own outline. Checks: 1759 passed, 1 ignored,
+  clippy, fmt, structure. Berke's word on the matte look (vs the old glossy black) is open;
+  `docs/design/themes/halka/make-halka.ps1` still writes the dropped pill files.
+- **Next: theme worlds plan 3** (Firn, Kablo, Şerit, settings r2, Sıfırla for migrated
+  colours; spec `specs/2026-11-26-theme-worlds-design.md`). Write the plan first. No release
+  before plan 3.
 - Release held until parity and the theme worlds (Berke asked 2026-11-26). After plan 3: R7
   parity close (vs WPF 0.3.1, WPF out of `src/`), then public 0.4.0 (0.4.1 tests the update).
 - **New idea (Berke 2026-11-24), not started:** in the Hidden idle look, hover slides down a

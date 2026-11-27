@@ -30,8 +30,6 @@ fn halka_files_present() {
         "ring-3-2x",
         "disc-1x",
         "disc-2x",
-        "pill-1x",
-        "pill-2x",
     ];
     assert_eq!(files.len(), names.len());
     for name in names {

@@ -1,5 +1,8 @@
 # Halka Island Implementation Plan
 
+> A ticked box means the step was taken, not that nothing deviated.
+> Deviations, deliberate omissions and decisions are in STATUS / journal.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** a fifth theme Halka: the collapsed island is the icon's glossy black source, the open island is the installer's lime fabric, and the open and collapse motions press and lift the three ripples.
@@ -133,7 +136,7 @@
 - Modify: `docs/STATUS.md`, `docs/ROADMAP.md`, this plan (banner, move to `plans/done/`)
 
 - [x] **Step 1:** Berke at the PC; `query session` shows console, log line `remote false`. (2026-11-26, via `tscon`.)
-- [ ] **Step 2:** Release build; `--theme halka` with the demo driver: expand and collapse audio, media, welcome ten times each; then the same with `--theme gece`. Live switch Halka to Gece and back while open. (2026-11-26: demo runs done, 8 passes each, the 75 s watchdog cut Halka's 10; live switch still owed.)
-- [ ] **Step 3:** Record every `motion` line's fps, hitches, worst gap, draw and present ms per theme in the quality file; 0 render wakes at rest afterwards. (Recorded in `quality/2026-11-26-halka-motion.md`; the rest-wake check is still owed.)
+- [x] **Step 2:** Release build; `--theme halka` with the demo driver: expand and collapse audio, media, welcome ten times each; then the same with `--theme gece`. Live switch Halka to Gece and back while open. (2026-11-26: demo runs done, 8 passes each, the 75 s watchdog cut Halka's 10. 2026-11-27: live switch done from the settings window, Gece to Halka while open.)
+- [x] **Step 3:** Record every `motion` line's fps, hitches, worst gap, draw and present ms per theme in the quality file; 0 render wakes at rest afterwards. (Recorded in `quality/2026-11-26-halka-motion.md`; rest: 1 wake in 60 s, allowed 2, the Karot minute tick.)
 - [x] **Step 4:** If Halka misses the bar, apply the spec's cut order one step at a time (shorter ripple fade, no ripples, no reveal) and remeasure each; record each run. (Halka met the bar; no cut needed.)
-- [ ] **Step 5:** Tune `RIPPLE_FROM`, `PRESS_SPAN`, `HOLD_MS` and `FADE_MS` (changed 2026-11-26, option A) only from what Berke saw; rerun Step 2 once after tuning. Update STATUS (rewrite), ROADMAP, banner; commit `docs: halka measured`.
+- [x] **Step 5:** Tune `RIPPLE_FROM`, `PRESS_SPAN`, `HOLD_MS` and `FADE_MS` (changed 2026-11-26, option A) only from what Berke saw; rerun Step 2 once after tuning. Update STATUS (rewrite), ROADMAP, banner; commit `docs: halka measured`. (Tuned to 0.10 / 0.35 / 0.60, span 0.25, hold 40, fade 120, merged `f6cccfe`; rerun 2026-11-27, Berke: ripples read now. Outside the plan: the pill raster was dropped for a gradient on the island's own outline, see the quality file.)
